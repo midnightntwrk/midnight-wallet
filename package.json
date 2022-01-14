@@ -1,0 +1,14 @@
+{
+  "name": "midnight-wallet",
+  "version": "0.0.1",
+  "main": "dist/main.js",
+  "type": "module",
+  "scripts": {
+    "build": "rimraf ./target/dist && sbt dist",
+    "prepack": "$npm_execpath run build"
+  },
+  "devDependencies": {
+    "@types/rimraf": "^3",
+    "rimraf": "^3.0.2"
+  }
+}

@@ -9,7 +9,7 @@ import io.iohk.midnight.wallet.clients.{PlatformClient, ProverClient}
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.store.PrivateStateStore
 import io.iohk.midnight.wallet.transaction.TransactionBuilder
-import scala.scalajs.js.annotation.JSExportAll
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
 trait WalletAPI[F[_]]:
   def getPrivateState(contract: Contract): F[Option[ContractPrivateState]]
@@ -17,7 +17,7 @@ trait WalletAPI[F[_]]:
   def callContract(contractInput: ContractInput): F[Hash]
 
 object WalletAPI:
-  @JSExportAll
+  @JSExportTopLevel("WalletAPI")
   class Live[F[_]: Monad](
       privateStateStore: PrivateStateStore[F],
       transactionBuilder: TransactionBuilder[F],
@@ -25,9 +25,11 @@ object WalletAPI:
       prover: ProverClient[F],
       node: PlatformClient[F]
   ) extends WalletAPI[F]:
+    @JSExport
     override def getPrivateState(contract: Contract): F[Option[ContractPrivateState]] =
       privateStateStore.getState(contract)
 
+    @JSExport
     override def callContract(input: ContractInput): F[Hash] =
       for
         proofId <- prover.prove(circuitValuesExtractor.extractValues(input))

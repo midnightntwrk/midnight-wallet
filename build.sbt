@@ -1,6 +1,6 @@
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
-lazy val root = (project in file("."))
+lazy val wallet = (project in file("."))
   .enablePlugins(ScalaJSPlugin)
   .settings(
     scalaVersion := "3.1.0",
@@ -12,3 +12,17 @@ lazy val root = (project in file("."))
       "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.1"
     ).map(_ % Test)
   )
+
+lazy val dist = taskKey[Unit]("Builds the lib")
+dist := {
+  val log = streams.value.log
+  (wallet / Compile / fullOptJS).value
+  val targetJSDir = (wallet / Compile / fullLinkJS / scalaJSLinkerOutputDirectory).value
+  val targetDir = (wallet / Compile / target).value
+  val resDir = (wallet / Compile / resourceDirectory).value
+  val distDir = targetDir / "dist"
+  IO.createDirectory(distDir)
+  IO.copyDirectory(targetJSDir, distDir, overwrite = true)
+  IO.copyDirectory(resDir, distDir, overwrite = true)
+  log.info(s"Dist done at ${distDir.absolutePath}")
+}
