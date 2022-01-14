@@ -1,8 +1,8 @@
 package io.iohk.midnight.wallet.store
 
-import io.iohk.midnight.wallet.domain.{Contract, ContractPrivateState}
+import io.iohk.midnight.wallet.domain.{ContractId, ContractPrivateState}
 
 trait PrivateStateStore[F[_]]:
-  def getState(contract: Contract): F[Option[ContractPrivateState]]
+  def getState(contractId: ContractId): F[Option[ContractPrivateState]]
 
-  def setState(contract: Contract, state: ContractPrivateState): F[Unit]
+  def setState(contractId: ContractId, state: ContractPrivateState): F[Unit]

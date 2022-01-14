@@ -5,7 +5,7 @@ import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
 object Generators:
-  val contractGen = Gen.delay(Gen.const(Contract()))
+  val contractIdGen = Gen.delay(Gen.const(ContractId()))
 
   val contractPrivateStateGen = Gen.delay(Gen.const(ContractPrivateState()))
 
@@ -13,6 +13,10 @@ object Generators:
 
   val contractStateGen = (contractPrivateStateGen, contractPublicStateGen).mapN(ContractState.apply)
 
-  val transcriptGen = Gen.delay(Gen.const(Transcript()))
+  val transcriptGen = Gen.delay(Gen.const(PublicTranscript()))
 
-  val contractInputGen = (contractGen, transcriptGen, contractStateGen).mapN(ContractInput.apply)
+  val transitionFunctionGen = Gen.delay(Gen.const(TransitionFunction()))
+
+  val contractInputGen =
+    (contractIdGen, transcriptGen, contractStateGen, transitionFunctionGen)
+      .mapN(ContractInput.apply)

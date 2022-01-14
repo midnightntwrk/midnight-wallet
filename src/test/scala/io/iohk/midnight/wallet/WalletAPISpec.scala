@@ -1,61 +1,120 @@
 package io.iohk.midnight.wallet
 
-import cats.Id
+import cats.effect.{Clock, SyncIO}
+import cats.MonadThrow
 import io.iohk.midnight.wallet.api.WalletAPI
-import io.iohk.midnight.wallet.circuit.CircuitValuesExtractorStub
-import io.iohk.midnight.wallet.clients.{PlatformClientStub, ProverClientStub}
+import io.iohk.midnight.wallet.circuit.{CircuitValuesExtractor, CircuitValuesExtractorStub}
+import io.iohk.midnight.wallet.clients.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Generators.*
-import io.iohk.midnight.wallet.store.InMemoryPrivateStateStore
-import io.iohk.midnight.wallet.transaction.TransactionBuilderStub
-import org.scalacheck.Prop.{forAll, propBoolean}
+import io.iohk.midnight.wallet.services.ProverService
+import io.iohk.midnight.wallet.store.{InMemoryPrivateStateStore, PrivateStateStore}
+import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import org.scalacheck.Prop.propBoolean
 import org.scalacheck.Properties
+import org.scalacheck.effect.PropF.forAllF
+import scala.util.Try
 
 trait WalletAPISpec:
   val privateStateStore = InMemoryPrivateStateStore()
-  val transactionBuilder = TransactionBuilderStub()
   val circuitValuesExtractor = CircuitValuesExtractorStub()
   val proverClient = ProverClientStub()
+  val failingProverClient = FailingProverClient()
+  val alwaysInProgressProverClient = AlwaysInProgressProverClient()
   val platformClient = PlatformClientStub()
 
-  val walletCoreApi =
-    WalletAPI.Live[Id](
+  def buildWalletApi[F[_]: MonadThrow: Clock](
+      privateStateStore: PrivateStateStore[F],
+      circuitValuesExtractor: CircuitValuesExtractor,
+      proverClient: ProverClient[F],
+      platformClient: PlatformClient[F],
+  ): WalletAPI[F] =
+    WalletAPI.Live[F](
       privateStateStore,
-      transactionBuilder,
       circuitValuesExtractor,
-      proverClient,
-      platformClient
+      ProverService.Live[F](proverClient, 2),
+      platformClient,
     )
 
-object WalletAPICallContractSpec
-    extends Properties("WalletCoreAPI.callContract")
-    with WalletAPISpec:
-  property("a hash is returned") = forAll(contractInputGen) { (input: ContractInput) =>
-    walletCoreApi.callContract(input).isInstanceOf[Hash]
+  val walletApi = buildWalletApi[SyncIO](
+    privateStateStore,
+    circuitValuesExtractor,
+    proverClient,
+    platformClient,
+  )
+
+class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
+  test("a hash is returned") {
+    forAllF(contractInputGen) { (input: ContractInput) =>
+      walletApi.callContract(input).map(r => assert(r.isInstanceOf[Hash]))
+    }
   }
 
-  property("private state is updated") = forAll(contractInputGen) { (input: ContractInput) =>
-    walletCoreApi.callContract(input)
-    privateStateStore.getState(input.contract).contains(input.contractState.privateState)
+  test("private state is updated") {
+    forAllF(contractInputGen) { (input: ContractInput) =>
+      for
+        _ <- walletApi.callContract(input)
+        maybeState <- privateStateStore.getState(input.contractId)
+      yield assert(maybeState.contains(input.contractState.privateState))
+    }
   }
 
-  property("private state is separated") = forAll(contractInputGen, contractInputGen) {
-    (input1: ContractInput, input2: ContractInput) =>
-      walletCoreApi.callContract(input1)
-      walletCoreApi.callContract(input2)
-
-      privateStateStore.getState(input1.contract) != privateStateStore.getState(input2.contract)
+  test("private state is separated") {
+    forAllF(contractInputGen, contractInputGen) { (input1: ContractInput, input2: ContractInput) =>
+      for
+        _ <- walletApi.callContract(input1)
+        _ <- walletApi.callContract(input2)
+        state1 <- privateStateStore.getState(input1.contractId)
+        state2 <- privateStateStore.getState(input2.contractId)
+      yield assert(state1 != state2)
+    }
   }
 
-object WalletAPIGetPrivateStateSpec
-    extends Properties("WalletCoreAPI.getPrivateState")
-    with WalletAPISpec:
-  property("initial state is empty") = forAll(contractGen) { (contract: Contract) =>
-    walletCoreApi.getPrivateState(contract).isEmpty
+  test("fails when prover client fails") {
+    forAllF(contractInputGen) { (input: ContractInput) =>
+      val walletApi = buildWalletApi(
+        privateStateStore,
+        circuitValuesExtractor,
+        failingProverClient,
+        platformClient,
+      )
+
+      walletApi
+        .callContract(input)
+        .attempt
+        .map(assertEquals(_, Left(FailingProverClient.TheError)))
+    }
   }
 
-  property("state is updated") = forAll(contractGen) { (contract: Contract) =>
-    val contractState = ContractPrivateState()
-    privateStateStore.setState(contract, contractState)
-    walletCoreApi.getPrivateState(contract) == Some(contractState)
+  test("does not retry proof status forever") {
+    forAllF(contractInputGen) { (input: ContractInput) =>
+      val walletApi = buildWalletApi(
+        privateStateStore,
+        circuitValuesExtractor,
+        alwaysInProgressProverClient,
+        platformClient,
+      )
+
+      walletApi
+        .callContract(input)
+        .attempt
+        .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
+    }
+  }
+
+class WalletAPIGetPrivateStateSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
+  test("initial state is empty") {
+    forAllF(contractIdGen) { (contractId: ContractId) =>
+      walletApi.getPrivateState(contractId).map(maybeState => assert(maybeState.isEmpty))
+    }
+  }
+
+  test("state is updated") {
+    forAllF(contractIdGen) { (contractId: ContractId) =>
+      val contractState = ContractPrivateState()
+      for
+        _ <- privateStateStore.setState(contractId, contractState)
+        maybeState <- walletApi.getPrivateState(contractId)
+      yield assert(maybeState.contains(contractState))
+    }
   }

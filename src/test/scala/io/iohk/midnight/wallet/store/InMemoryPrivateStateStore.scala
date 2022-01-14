@@ -1,12 +1,14 @@
 package io.iohk.midnight.wallet.store
 
-import cats.Id
-import io.iohk.midnight.wallet.domain.{Contract, ContractPrivateState}
+import cats.effect.SyncIO
+import cats.syntax.all.*
+import io.iohk.midnight.wallet.domain.{ContractId, ContractPrivateState}
 
-class InMemoryPrivateStateStore(private var state: Map[Contract, ContractPrivateState] = Map.empty)
-    extends PrivateStateStore[Id]:
-  override def getState(contract: Contract): Option[ContractPrivateState] =
-    state.get(contract)
+class InMemoryPrivateStateStore(
+    private var state: Map[ContractId, ContractPrivateState] = Map.empty,
+) extends PrivateStateStore[SyncIO]:
+  override def getState(contractId: ContractId): SyncIO[Option[ContractPrivateState]] =
+    SyncIO(state.get(contractId))
 
-  override def setState(contract: Contract, contractState: ContractPrivateState): Unit =
-    state += (contract, contractState)
+  override def setState(contractId: ContractId, contractState: ContractPrivateState): SyncIO[Unit] =
+    SyncIO(state += (contractId, contractState))
