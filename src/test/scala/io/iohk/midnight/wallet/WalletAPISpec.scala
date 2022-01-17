@@ -22,6 +22,7 @@ trait WalletAPISpec:
   val failingProverClient = FailingProverClient()
   val alwaysInProgressProverClient = AlwaysInProgressProverClient()
   val platformClient = PlatformClientStub()
+  val failingPlatformClient = FailingPlatformClient()
 
   def buildWalletApi[F[_]: MonadThrow: Clock](
       privateStateStore: PrivateStateStore[F],
@@ -70,6 +71,17 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
     }
   }
 
+  test("transactions get submitted to the client") {
+    forAllF(contractInputGen, contractInputGen) { (input1: ContractInput, input2: ContractInput) =>
+      for
+        hash1 <- walletApi.callContract(input1)
+        hash2 <- walletApi.callContract(input2)
+        wasSubmitted1 = platformClient.wasSubmitted(hash1)
+        wasSubmitted2 = platformClient.wasSubmitted(hash2)
+      yield assert(wasSubmitted1 && wasSubmitted2)
+    }
+  }
+
   test("fails when prover client fails") {
     forAllF(contractInputGen) { (input: ContractInput) =>
       val walletApi = buildWalletApi(
@@ -99,6 +111,22 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
         .callContract(input)
         .attempt
         .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
+    }
+  }
+
+  test("fails when platform submission fails") {
+    forAllF(contractInputGen) { (input: ContractInput) =>
+      val walletApi = buildWalletApi(
+        privateStateStore,
+        circuitValuesExtractor,
+        proverClient,
+        failingPlatformClient,
+      )
+
+      walletApi
+        .callContract(input)
+        .attempt
+        .map(assertEquals(_, Left(FailingPlatformClient.PlatformClientError)))
     }
   }
 
