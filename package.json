@@ -1,14 +1,15 @@
 {
   "name": "midnight-wallet",
+  "private": true,
   "version": "0.0.1",
-  "main": "dist/main.js",
-  "type": "module",
+  "packageManager": "yarn@3.1.1",
+  "workspaces": [
+    "api",
+    "impl"
+  ],
   "scripts": {
-    "build": "rimraf ./target/dist && sbt dist",
-    "prepack": "$npm_execpath run build"
-  },
-  "devDependencies": {
-    "@types/rimraf": "^3",
-    "rimraf": "^3.0.2"
+    "build": "yarn workspaces foreach -pt run build",
+    "test": "yarn workspaces foreach run test",
+    "check_format": "yarn workspaces foreach run check_format"
   }
 }

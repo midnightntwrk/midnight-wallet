@@ -1,0 +1,17 @@
+{
+  "name": "impl",
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "build": "sbt dist",
+    "prepack": "$npm_execpath run build",
+    "test": "sbt test",
+    "check_format": "sbt scalafmtCheckAll"
+  },
+  "dependencies": {
+    "api": "workspace:^"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4"
+  }
+}

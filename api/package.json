@@ -1,0 +1,12 @@
+{
+  "name": "api",
+  "type": "module",
+  "module": "./dist/wallet.js",
+  "main": "./dist/wallet.js",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "typescript": "^4.5.4"
+  }
+}

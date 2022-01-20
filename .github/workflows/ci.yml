@@ -1,0 +1,26 @@
+name: Linting & Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup Node.js
+      uses: actions/setup-node@v2.5.1
+      with:
+        node-version-file: ".nvmrc"
+        cache: "yarn"
+    - name: Install dependencies
+      run: |
+        yarn install
+        yarn run build
+    - name: Check format
+      run: yarn run check_format
+    - name: Run tests
+      run: yarn run test
