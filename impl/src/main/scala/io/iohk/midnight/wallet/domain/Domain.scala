@@ -4,12 +4,6 @@ import scala.scalajs.js
 
 class ContractId
 
-class ContractPrivateState derives CanEqual
-
-class ContractPublicState
-
-case class ContractState(privateState: ContractPrivateState, publicState: ContractPublicState)
-
 class PublicTranscript
 
 class Proof
@@ -47,7 +41,6 @@ object Transaction:
 case class ContractInput(
     contractId: ContractId,
     publicTranscript: PublicTranscript,
-    contractState: ContractState,
     transitionFunction: TransitionFunction,
 )
 

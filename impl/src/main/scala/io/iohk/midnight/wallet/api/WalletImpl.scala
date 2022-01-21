@@ -8,10 +8,8 @@ class WalletImpl extends Wallet:
       deployTransactionHash: Hash,
       transitionFunction: TransitionFunction,
       publicTranscript: PublicTranscript,
-      privateStateUpdate: StateUpdate,
   ): Promise[CallResult] = ???
 
   override def deploy(
       contractSource: ContractSource,
-      initialState: ContractPrivateState,
   ): Promise[CallResult] = ???
