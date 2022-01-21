@@ -41,24 +41,25 @@ trait WalletAPISpec:
 
 class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
   test("a hash is returned") {
-    forAllF(contractInputGen) { (input: ContractInput) =>
+    forAllF(callContractInputGen) { (input: CallContractInput) =>
       walletApi.callContract(input).map(r => assert(r.isInstanceOf[Hash]))
     }
   }
 
   test("transactions get submitted to the client") {
-    forAllF(contractInputGen, contractInputGen) { (input1: ContractInput, input2: ContractInput) =>
-      for
-        hash1 <- walletApi.callContract(input1)
-        hash2 <- walletApi.callContract(input2)
-        wasSubmitted1 = platformClient.wasSubmitted(hash1)
-        wasSubmitted2 = platformClient.wasSubmitted(hash2)
-      yield assert(wasSubmitted1 && wasSubmitted2)
+    forAllF(callContractInputGen, callContractInputGen) {
+      (input1: CallContractInput, input2: CallContractInput) =>
+        for
+          hash1 <- walletApi.callContract(input1)
+          hash2 <- walletApi.callContract(input2)
+          wasSubmitted1 = platformClient.wasSubmitted(hash1)
+          wasSubmitted2 = platformClient.wasSubmitted(hash2)
+        yield assert(wasSubmitted1 && wasSubmitted2)
     }
   }
 
   test("fails when prover client fails") {
-    forAllF(contractInputGen) { (input: ContractInput) =>
+    forAllF(callContractInputGen) { (input: CallContractInput) =>
       val walletApi = buildWalletApi(
         circuitValuesExtractor,
         failingProverClient,
@@ -73,7 +74,7 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
   }
 
   test("does not retry proof status forever") {
-    forAllF(contractInputGen) { (input: ContractInput) =>
+    forAllF(callContractInputGen) { (input: CallContractInput) =>
       val walletApi = buildWalletApi(
         circuitValuesExtractor,
         alwaysInProgressProverClient,
@@ -88,7 +89,7 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
   }
 
   test("fails when platform submission fails") {
-    forAllF(contractInputGen) { (input: ContractInput) =>
+    forAllF(callContractInputGen) { (input: CallContractInput) =>
       val walletApi = buildWalletApi(
         circuitValuesExtractor,
         proverClient,
@@ -97,6 +98,40 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
 
       walletApi
         .callContract(input)
+        .attempt
+        .map(assertEquals(_, Left(FailingPlatformClient.PlatformClientError)))
+    }
+  }
+
+class WalletAPIDeployContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
+  test("a hash is returned") {
+    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
+      walletApi.deployContract(input).map(r => assert(r.isInstanceOf[Hash]))
+    }
+  }
+
+  test("transactions get submitted to the client") {
+    forAllF(deployContractInputGen, deployContractInputGen) {
+      (input1: DeployContractInput, input2: DeployContractInput) =>
+        for
+          hash1 <- walletApi.deployContract(input1)
+          hash2 <- walletApi.deployContract(input2)
+          wasSubmitted1 = platformClient.wasSubmitted(hash1)
+          wasSubmitted2 = platformClient.wasSubmitted(hash2)
+        yield assert(wasSubmitted1 && wasSubmitted2)
+    }
+  }
+
+  test("fails when platform submission fails") {
+    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
+      val walletApi = buildWalletApi(
+        circuitValuesExtractor,
+        proverClient,
+        failingPlatformClient,
+      )
+
+      walletApi
+        .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingPlatformClient.PlatformClientError)))
     }

@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.domain
 
 import scala.scalajs.js
 
-class ContractId
+class ContractSource
 
 class PublicTranscript
 
@@ -16,32 +16,64 @@ enum ProofStatus derives CanEqual:
 
 class Hash derives CanEqual
 
+type DeployTransactionHash = Hash
+
 class TransitionFunction
 
-case class Transaction(
+sealed trait Transaction:
+  val hash: Hash
+  val timestamp: js.Date
+
+case class CallTransaction(
     hash: Hash,
     timestamp: js.Date,
-    contractId: ContractId,
+    deployTransactionHash: DeployTransactionHash,
     transitionFunction: TransitionFunction,
     proof: Proof,
     publicTranscript: PublicTranscript,
-)
+) extends Transaction
 
-object Transaction:
-  def apply(input: ContractInput, proof: Proof, timestamp: js.Date): Transaction =
-    Transaction(
+object CallTransaction:
+  def apply(input: CallContractInput, proof: Proof, timestamp: js.Date): CallTransaction =
+    CallTransaction(
       Hash(),
       timestamp,
-      input.contractId,
+      input.contractHash,
       input.transitionFunction,
       proof,
       input.publicTranscript,
     )
 
-case class ContractInput(
-    contractId: ContractId,
+case class DeployTransaction(
+    hash: DeployTransactionHash,
+    timestamp: js.Date,
+    contractSource: ContractSource,
+    transitionFunctionCircuits: TransitionFunctionCircuits,
+) extends Transaction
+
+object DeployTransaction:
+  def apply(
+      input: DeployContractInput,
+      transitionFunctionCircuits: TransitionFunctionCircuits,
+      timestamp: js.Date,
+  ): DeployTransaction =
+    DeployTransaction(
+      Hash(),
+      timestamp,
+      input.contractSource,
+      transitionFunctionCircuits,
+    )
+
+case class CallContractInput(
+    contractHash: DeployTransactionHash,
     publicTranscript: PublicTranscript,
     transitionFunction: TransitionFunction,
 )
 
+case class DeployContractInput(
+    contractSource: ContractSource,
+)
+
 case class CircuitValues(x: Int, y: Int, z: Int)
+
+class TransitionFunctionCircuits
