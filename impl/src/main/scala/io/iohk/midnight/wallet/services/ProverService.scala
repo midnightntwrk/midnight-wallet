@@ -5,7 +5,8 @@ import cats.syntax.applicative.*
 import cats.syntax.applicativeError.*
 import cats.syntax.flatMap.*
 import io.iohk.midnight.wallet.clients.ProverClient
-import io.iohk.midnight.wallet.domain.{CircuitValues, Proof, ProofId, ProofStatus}
+import io.iohk.midnight.wallet.clients.ProverClient.ProofStatus
+import io.iohk.midnight.wallet.domain.*
 
 trait ProverService[F[_]]:
   def prove(circuitValues: CircuitValues): F[Proof]
