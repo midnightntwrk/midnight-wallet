@@ -5,7 +5,7 @@ import typings.api.*
 
 class WalletImpl extends Wallet:
   override def call(
-      deployTransactionHash: Hash,
+      contractHash: Hash,
       transitionFunction: TransitionFunction,
       publicTranscript: PublicTranscript,
   ): Promise[CallResult] = ???

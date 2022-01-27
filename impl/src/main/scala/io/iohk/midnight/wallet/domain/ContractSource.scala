@@ -1,3 +1,3 @@
 package io.iohk.midnight.wallet.domain
 
-class ContractSource
+case class ContractSource(value: String) extends AnyVal

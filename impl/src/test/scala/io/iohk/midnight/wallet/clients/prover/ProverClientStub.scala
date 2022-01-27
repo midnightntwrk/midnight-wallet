@@ -1,15 +1,18 @@
-package io.iohk.midnight.wallet.clients
+package io.iohk.midnight.wallet.clients.prover
 
 import cats.effect.SyncIO
 import cats.syntax.applicative.*
-import io.iohk.midnight.wallet.clients.FailingProverClient.TheError
-import io.iohk.midnight.wallet.clients.ProverClient.*
+import io.iohk.midnight.wallet.clients.prover.FailingProverClient.TheError
+import io.iohk.midnight.wallet.clients.prover.ProverClient
+import io.iohk.midnight.wallet.clients.prover.ProverClient.*
 import io.iohk.midnight.wallet.domain.*
 
 class ProverClientStub extends ProverClient[SyncIO]:
-  override def prove(circuitValues: CircuitValues): SyncIO[ProofId] = ProofId().pure
+  override def prove(circuitValues: CircuitValues): SyncIO[ProofId] =
+    ProofId("123").pure
 
-  override def proofStatus(proofId: ProofId): SyncIO[ProofStatus] = ProofStatus.Done(Proof()).pure
+  override def proofStatus(proofId: ProofId): SyncIO[ProofStatus] =
+    ProofStatus.Done(Proof("123")).pure
 
 class FailingProverClient extends ProverClient[SyncIO]:
   override def prove(circuitValues: CircuitValues): SyncIO[ProofId] =
@@ -22,6 +25,6 @@ object FailingProverClient:
   val TheError = new Exception("FailingProver")
 
 class AlwaysInProgressProverClient extends ProverClient[SyncIO]:
-  override def prove(circuitValues: CircuitValues): SyncIO[ProofId] = ProofId().pure
+  override def prove(circuitValues: CircuitValues): SyncIO[ProofId] = ProofId("123").pure
 
   override def proofStatus(proofId: ProofId): SyncIO[ProofStatus] = ProofStatus.InProgress.pure

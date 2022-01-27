@@ -6,7 +6,6 @@ lazy val wallet = (project in file("."))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(
     scalaVersion := "3.1.0",
-    scalacOptions += "-language:strictEquality",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     externalNpm := {
       val log = streams.value.log
@@ -16,10 +15,17 @@ lazy val wallet = (project in file("."))
 
       Process(s"ln -sfF ${rootNodeModules.getAbsolutePath}", baseDir).!!
 
-      log.info(s"Link done: ${baseDir.getAbsolutePath}/node_modules -> ${rootNodeModules.getAbsolutePath}")
+      log.info(
+        s"Link done: ${baseDir.getAbsolutePath}/node_modules -> ${rootNodeModules.getAbsolutePath}",
+      )
       baseDir
     },
     libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client3" %%% "core" % "3.3.18",
+      "com.softwaremill.sttp.client3" %%% "circe" % "3.3.18",
+      "com.softwaremill.sttp.client3" %%% "cats" % "3.3.18",
+      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-generic" % "0.14.1",
       "org.typelevel" %%% "cats-core" % "2.7.0",
       "org.typelevel" %%% "cats-effect" % "3.3.4",
     ),

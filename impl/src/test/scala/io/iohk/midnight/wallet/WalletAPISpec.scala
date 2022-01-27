@@ -1,13 +1,15 @@
 package io.iohk.midnight.wallet
 
-import cats.effect.{Clock, SyncIO}
 import cats.MonadThrow
+import cats.effect.{Clock, SyncIO}
+import cats.effect.std.Random
 import io.iohk.midnight.wallet.api.WalletAPI
 import io.iohk.midnight.wallet.api.WalletAPI.*
-import io.iohk.midnight.wallet.clients.*
+import io.iohk.midnight.wallet.clients.platform.*
+import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Generators.*
-import io.iohk.midnight.wallet.services.ProverService
+import io.iohk.midnight.wallet.services.{PlatformService, ProverService}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Prop.propBoolean
 import org.scalacheck.Properties
@@ -21,21 +23,22 @@ trait WalletAPISpec:
   val platformClient = PlatformClientStub()
   val failingPlatformClient = FailingPlatformClient()
 
-  def buildWalletApi[F[_]: MonadThrow: Clock](
+  def buildWalletApi[F[_]: MonadThrow: Clock: Random](
       proverClient: ProverClient[F],
       platformClient: PlatformClient[F],
   ): WalletAPI[F] =
     WalletAPI.Live[F](
       ProverService.Live[F](proverClient, 2),
-      platformClient,
+      PlatformService.Live[F](platformClient),
     )
 
+  implicit val random: Random[SyncIO] = Random.scalaUtilRandom[SyncIO].unsafeRunSync()
   val walletApi = buildWalletApi[SyncIO](proverClient, platformClient)
 
 class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      walletApi.callContract(input).map(r => assert(r.isInstanceOf[CallTransaction.Hash]))
+      walletApi.callContract(input).map(r => assert(r.isInstanceOf[Hash[CallTransaction]]))
     }
   }
 
@@ -87,7 +90,7 @@ class WalletAPICallContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, 
 class WalletAPIDeployContractSpec extends CatsEffectSuite, ScalaCheckEffectSuite, WalletAPISpec:
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      walletApi.deployContract(input).map(r => assert(r.isInstanceOf[DeployTransaction.Hash]))
+      walletApi.deployContract(input).map(r => assert(r.isInstanceOf[Hash[DeployTransaction]]))
     }
   }
 

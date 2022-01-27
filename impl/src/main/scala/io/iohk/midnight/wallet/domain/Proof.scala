@@ -1,5 +1,5 @@
 package io.iohk.midnight.wallet.domain
 
-class Proof
+case class Proof(value: String) extends AnyVal
 
-class ProofId
+case class ProofId(value: String) extends AnyVal

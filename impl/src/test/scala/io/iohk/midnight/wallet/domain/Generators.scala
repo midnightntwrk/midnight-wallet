@@ -6,13 +6,15 @@ import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
 object Generators:
-  val contractHashGen = Gen.delay(Gen.const(DeployTransaction.Hash()))
+  val contractHashGen = Gen.hexStr.map(Hash[DeployTransaction])
 
-  val transcriptGen = Gen.delay(Gen.const(PublicTranscript()))
+  val transcriptGen = Gen.alphaNumStr.map(PublicTranscript.apply)
 
-  val transitionFunctionGen = Gen.delay(Gen.const(TransitionFunction()))
+  val transitionFunctionGen = Gen.alphaNumStr.map(TransitionFunction.apply)
 
-  val contractSourceGen = Gen.delay(Gen.const(ContractSource()))
+  val contractSourceGen = Gen.alphaNumStr.map(ContractSource.apply)
+
+  val publicStateGen = Gen.alphaNumStr.map(PublicState.apply)
 
   val circuitValuesGen = Gen.delay(Gen.const(CircuitValues(1, 2, 5)))
 
@@ -21,6 +23,9 @@ object Generators:
       .mapN(CallContractInput.apply)
 
   val deployContractInputGen =
-    contractSourceGen.map(DeployContractInput.apply)
+    (contractSourceGen, publicStateGen).mapN(DeployContractInput.apply)
 
-  val transitionFunctionCircuits = Gen.delay((Gen.const(TransitionFunctionCircuits())))
+  val transitionFunctionCircuits =
+    Gen
+      .nonEmptyMap((Gen.alphaNumStr, Gen.alphaNumStr).tupled)
+      .map(TransitionFunctionCircuits.apply)

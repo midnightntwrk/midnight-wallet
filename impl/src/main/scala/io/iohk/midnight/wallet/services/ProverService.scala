@@ -4,8 +4,8 @@ import cats.MonadThrow
 import cats.syntax.applicative.*
 import cats.syntax.applicativeError.*
 import cats.syntax.flatMap.*
-import io.iohk.midnight.wallet.clients.ProverClient
-import io.iohk.midnight.wallet.clients.ProverClient.ProofStatus
+import io.iohk.midnight.wallet.clients.prover.ProverClient.ProofStatus
+import io.iohk.midnight.wallet.clients.prover.ProverClient
 import io.iohk.midnight.wallet.domain.*
 
 trait ProverService[F[_]]:
@@ -33,5 +33,6 @@ object ProverService:
           Error.PollingForProofMaxRetriesReached.raiseError
       }
 
-  enum Error extends Throwable:
-    case PollingForProofMaxRetriesReached
+  sealed trait Error extends Throwable
+  object Error:
+    case object PollingForProofMaxRetriesReached extends Error

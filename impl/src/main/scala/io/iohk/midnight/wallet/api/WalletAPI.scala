@@ -2,62 +2,85 @@ package io.iohk.midnight.wallet.api
 
 import cats.MonadThrow
 import cats.effect.Clock
+import cats.effect.std.Random
 import cats.syntax.applicative.*
 import cats.syntax.applicativeError.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import io.iohk.midnight.wallet.api.WalletAPI.*
-import io.iohk.midnight.wallet.clients.PlatformClient
 import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.services.ProverService
+import io.iohk.midnight.wallet.services.{PlatformService, ProverService}
+import java.time.Instant
+import scala.concurrent.duration.FiniteDuration
 import scala.scalajs.js.annotation.JSExport
-import scalajs.js
 
 trait WalletAPI[F[_]]:
-  def callContract(contractInput: CallContractInput): F[CallTransaction.Hash]
+  def callContract(contractInput: CallContractInput): F[Hash[CallTransaction]]
 
-  def deployContract(contractInput: DeployContractInput): F[DeployTransaction.Hash]
+  def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 
 object WalletAPI:
-  class Live[F[_]: MonadThrow: Clock](
+  class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
-      platformClient: PlatformClient[F],
+      platformService: PlatformService[F],
   ) extends WalletAPI[F]:
     @JSExport
-    override def callContract(input: CallContractInput): F[CallTransaction.Hash] =
+    override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
       for
         proof <- proverService.prove(input.circuitValues)
-        transaction <- Clock[F].realTimeDate.map(buildCallTransaction(_, input, proof))
-        _ <- platformClient.submitTransaction(transaction)
+        timestamp <- Clock[F].realTime
+        hash <- generateRandomHash[CallTransaction]
+        transaction = buildCallTransaction(hash, timestamp, input, proof)
+        _ <- platformService.submitTransaction(transaction)
       yield transaction.hash
 
-    private def buildCallTransaction(timestamp: js.Date, input: CallContractInput, proof: Proof) =
+    private def buildCallTransaction(
+        hash: Hash[CallTransaction],
+        timestamp: FiniteDuration,
+        input: CallContractInput,
+        proof: Proof,
+    ): CallTransaction =
       CallTransaction(
-        CallTransaction.Hash(),
-        timestamp,
+        hash,
+        Instant.ofEpochMilli(timestamp.toMillis),
         input.contractHash,
         input.transitionFunction,
-        proof,
+        Some(proof),
         input.publicTranscript,
       )
 
     @JSExport
-    override def deployContract(input: DeployContractInput): F[DeployTransaction.Hash] =
+    override def deployContract(input: DeployContractInput): F[Hash[DeployTransaction]] =
       for
-        transaction <- Clock[F].realTimeDate.map(buildDeployTransaction(_, input))
-        _ <- platformClient.submitTransaction(transaction)
+        timestamp <- Clock[F].realTime
+        hash <- generateRandomHash[DeployTransaction]
+        transaction = buildDeployTransaction(hash, timestamp, input)
+        _ <- platformService.submitTransaction(transaction)
       yield transaction.hash
 
-    private def buildDeployTransaction(timestamp: js.Date, input: DeployContractInput) =
+    private def buildDeployTransaction(
+        hash: Hash[DeployTransaction],
+        timestamp: FiniteDuration,
+        input: DeployContractInput,
+    ): DeployTransaction =
       DeployTransaction(
-        DeployTransaction.Hash(),
-        timestamp,
+        hash,
+        Instant.ofEpochMilli(timestamp.toMillis),
         input.contractSource,
-        TransitionFunctionCircuits(),
+        input.publicState,
+        TransitionFunctionCircuits(Map.empty),
       )
 
+    private def generateRandomHash[T]: F[Hash[T]] =
+      Random[F]
+        .nextBytes(32)
+        .map(new java.math.BigInteger(_))
+        .map(_.abs())
+        .map(String.format("%x", _))
+        .map(Hash[T].apply)
+
   case class CallContractInput(
-      contractHash: DeployTransaction.Hash,
+      contractHash: Hash[DeployTransaction],
       publicTranscript: PublicTranscript,
       transitionFunction: TransitionFunction,
       circuitValues: CircuitValues,
@@ -65,4 +88,5 @@ object WalletAPI:
 
   case class DeployContractInput(
       contractSource: ContractSource,
+      publicState: PublicState,
   )

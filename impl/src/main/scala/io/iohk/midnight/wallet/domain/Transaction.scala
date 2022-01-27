@@ -1,33 +1,23 @@
 package io.iohk.midnight.wallet.domain
 
-import io.iohk.midnight.wallet.domain
-import scala.scalajs.js
+import io.iohk.midnight.wallet.domain.Hash
+import java.time.Instant
 
-sealed trait Transaction:
-  val timestamp: js.Date
+sealed trait Transaction
 
 case class CallTransaction(
-    hash: CallTransaction.Hash,
-    timestamp: js.Date,
-    deployTransactionHash: DeployTransaction.Hash,
+    hash: Hash[CallTransaction],
+    timestamp: Instant,
+    contractHash: Hash[DeployTransaction],
     transitionFunction: TransitionFunction,
-    proof: Proof,
+    proof: Option[Proof],
     publicTranscript: PublicTranscript,
 ) extends Transaction
 
-object CallTransaction:
-  opaque type Hash = domain.Hash
-  object Hash:
-    def apply(): Hash = domain.Hash()
-
 case class DeployTransaction(
-    hash: DeployTransaction.Hash,
-    timestamp: js.Date,
+    hash: Hash[DeployTransaction],
+    timestamp: Instant,
     contractSource: ContractSource,
+    publicState: PublicState,
     transitionFunctionCircuits: TransitionFunctionCircuits,
 ) extends Transaction
-
-object DeployTransaction:
-  opaque type Hash = domain.Hash
-  object Hash:
-    def apply(): Hash = domain.Hash()

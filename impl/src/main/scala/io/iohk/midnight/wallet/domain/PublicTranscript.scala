@@ -1,3 +1,3 @@
 package io.iohk.midnight.wallet.domain
 
-class PublicTranscript
+case class PublicTranscript(value: String) extends AnyVal
