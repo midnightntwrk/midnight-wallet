@@ -5,7 +5,8 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 lazy val wallet = (project in file("."))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(
-    scalaVersion := "3.1.0",
+    scalaVersion := "2.13.8",
+    scalacOptions += "-Xsource:3",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     externalNpm := {
       val log = streams.value.log
@@ -21,6 +22,7 @@ lazy val wallet = (project in file("."))
       baseDir
     },
     libraryDependencies ++= Seq(
+      "com.beachape" %%% "enumeratum" % "1.7.0",
       "com.softwaremill.sttp.client3" %%% "core" % "3.3.18",
       "com.softwaremill.sttp.client3" %%% "circe" % "3.3.18",
       "com.softwaremill.sttp.client3" %%% "cats" % "3.3.18",
@@ -35,6 +37,7 @@ lazy val wallet = (project in file("."))
       "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
       "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
     ).map(_ % Test),
+    wartremoverErrors ++= Warts.unsafe,
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

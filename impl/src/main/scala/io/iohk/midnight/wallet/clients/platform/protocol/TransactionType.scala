@@ -1,6 +1,15 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
-object TransactionType extends Enumeration:
+import enumeratum.EnumEntry.Lowercase
+import enumeratum.*
+
+sealed trait TransactionType extends EnumEntry with Lowercase
+
+object TransactionType extends Enum[TransactionType] {
   val Discriminator: String = "type"
-  val Call = Value("call")
-  val Deploy = Value("deploy")
+
+  case object Call extends TransactionType
+  case object Deploy extends TransactionType
+
+  val values: IndexedSeq[TransactionType] = findValues
+}

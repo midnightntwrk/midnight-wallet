@@ -1,7 +1,15 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
-object ReceiptType extends Enumeration:
+import enumeratum.*
+
+sealed trait ReceiptType extends EnumEntry
+
+object ReceiptType extends Enum[ReceiptType] {
   val Discriminator: String = "type"
-  val Success = Value("Success")
-  val ContractFailure = Value("ContractFailure")
-  val ZKFailure = Value("ZKFailure")
+
+  case object Success extends ReceiptType
+  case object ContractFailure extends ReceiptType
+  case object ZKFailure extends ReceiptType
+
+  val values: IndexedSeq[ReceiptType] = findValues
+}

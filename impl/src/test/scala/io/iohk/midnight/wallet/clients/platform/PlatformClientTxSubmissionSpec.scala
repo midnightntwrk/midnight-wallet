@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.clients.platform
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalTxSubmission.*
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage
 
-class PlatformClientTxSubmissionSpec extends PlatformClientSpec:
+class PlatformClientTxSubmissionSpec extends PlatformClientSpec {
   test("send SubmitTx call") {
     assertSend(
       examples.SubmitTx.validObjectCall,
@@ -45,3 +45,4 @@ class PlatformClientTxSubmissionSpec extends PlatformClientSpec:
       examples.RejectTx.validObjectOther,
     )
   }
+}

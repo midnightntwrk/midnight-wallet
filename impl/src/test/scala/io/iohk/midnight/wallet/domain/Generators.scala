@@ -5,7 +5,7 @@ import io.iohk.midnight.wallet.api.WalletAPI.*
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
-object Generators:
+object Generators {
   val contractHashGen = Gen.hexStr.map(Hash[DeployTransaction])
 
   val transcriptGen = Gen.alphaNumStr.map(PublicTranscript.apply)
@@ -29,3 +29,4 @@ object Generators:
     Gen
       .nonEmptyMap((Gen.alphaNumStr, Gen.alphaNumStr).tupled)
       .map(TransitionFunctionCircuits.apply)
+}

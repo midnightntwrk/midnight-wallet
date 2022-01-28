@@ -3,11 +3,10 @@ package io.iohk.midnight.wallet.clients.platform.protocol
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
-import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage.*
 import io.iohk.midnight.wallet.domain.*
 
-object Encoders:
+object Encoders {
   implicit def hashEncoder[T]: Encoder[Hash[T]] =
     Encoder[String].contramap(_.toHexString)
 
@@ -33,7 +32,7 @@ object Encoders:
     deriveEncoder[CallTransaction].mapJson(
       _.deepMerge(
         Json.obj(
-          TransactionType.Discriminator := TransactionType.Call.toString,
+          TransactionType.Discriminator := TransactionType.Call.entryName,
         ),
       ),
     )
@@ -42,7 +41,7 @@ object Encoders:
     deriveEncoder[DeployTransaction].mapJson(
       _.deepMerge(
         Json.obj(
-          TransactionType.Discriminator := TransactionType.Deploy.toString,
+          TransactionType.Discriminator := TransactionType.Deploy.entryName,
         ),
       ),
     )
@@ -55,37 +54,37 @@ object Encoders:
       }
       .mapJson(
         _.deepMerge(
-          Json.obj(TransactionKind.Discriminator := TransactionKind.Lares.toString),
+          Json.obj(TransactionKind.Discriminator := TransactionKind.Lares.entryName),
         ),
       )
 
   implicit val submitTxEncoder: Encoder[LocalTxSubmission.SubmitTx] =
     deriveEncoder[LocalTxSubmission.SubmitTx].mapJson(
       _.deepMerge(
-        Json.obj(LocalTxSubmission.Type.Discriminator := LocalTxSubmission.Type.SubmitTx.toString),
+        Json.obj(LocalTxSubmission.Type.Discriminator := LocalTxSubmission.Type.SubmitTx.entryName),
       ),
     )
 
   implicit val localTxSubmissionDoneEncoder: Encoder[LocalTxSubmission.Done.type] =
     Encoder.instance(_ =>
-      Json.obj(LocalTxSubmission.Type.Discriminator := LocalTxSubmission.Type.Done.toString),
+      Json.obj(LocalTxSubmission.Type.Discriminator := LocalTxSubmission.Type.Done.entryName),
     )
 
   implicit val findIntersectEncoder: Encoder[LocalBlockSync.FindIntersect] =
     deriveEncoder[LocalBlockSync.FindIntersect].mapJson(
       _.deepMerge(
-        Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.FindIntersect.toString),
+        Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.FindIntersect.entryName),
       ),
     )
 
   implicit val requestNextEncoder: Encoder[LocalBlockSync.RequestNext.type] =
     Encoder.instance(_ =>
-      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.RequestNext.toString),
+      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.RequestNext.entryName),
     )
 
   implicit val localBlockSyncDoneEncoder: Encoder[LocalBlockSync.Done.type] =
     Encoder.instance(_ =>
-      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.Done.toString),
+      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.Done.entryName),
     )
 
   implicit val localTxSubmissionEncoder: Encoder[LocalTxSubmission] =
@@ -98,7 +97,7 @@ object Encoders:
       }
       .mapJson(
         _.deepMerge(
-          Json.obj(SendMessage.Type.Discriminator := SendMessage.Type.LocalTxSubmission.toString),
+          Json.obj(SendMessage.Type.Discriminator := SendMessage.Type.LocalTxSubmission.entryName),
         ),
       )
 
@@ -114,7 +113,7 @@ object Encoders:
       }
       .mapJson(
         _.deepMerge(
-          Json.obj(SendMessage.Type.Discriminator := SendMessage.Type.LocalBlockSync.toString),
+          Json.obj(SendMessage.Type.Discriminator := SendMessage.Type.LocalBlockSync.entryName),
         ),
       )
 
@@ -123,3 +122,4 @@ object Encoders:
       case lbs: LocalBlockSync    => Encoder[LocalBlockSync].apply(lbs)
       case lts: LocalTxSubmission => Encoder[LocalTxSubmission].apply(lts)
     }
+}

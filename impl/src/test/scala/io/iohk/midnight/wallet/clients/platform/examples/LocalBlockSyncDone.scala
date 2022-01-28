@@ -1,9 +1,10 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
-object LocalBlockSyncDone:
+object LocalBlockSyncDone {
 
   val validJson =
     """{
-    |  "protocol" : "LocalBlockSync",
-    |  "type" : "Done"
-    |}""".stripMargin
+      |  "protocol" : "LocalBlockSync",
+      |  "type" : "Done"
+      |}""".stripMargin
+}

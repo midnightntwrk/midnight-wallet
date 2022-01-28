@@ -1,46 +1,63 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
+import enumeratum.*
 import io.iohk.midnight.wallet.domain.*
 
 sealed trait ReceiveMessage
 
-object ReceiveMessage:
-  object Type extends Enumeration:
+object ReceiveMessage {
+  sealed trait Type extends EnumEntry
+  object Type extends Enum[Type] {
     val Discriminator = "protocol"
-    val LocalBlockSync = Value("LocalBlockSync")
-    val LocalTxSubmission = Value("LocalTxSubmission")
+    case object LocalBlockSync extends Type
+    case object LocalTxSubmission extends Type
+    val values: IndexedSeq[Type] = findValues
+  }
 
   sealed trait LocalBlockSync extends ReceiveMessage
-  object LocalBlockSync:
-    object Type extends Enumeration:
+  object LocalBlockSync {
+    sealed trait Type extends EnumEntry
+    object Type extends Enum[Type] {
       val Discriminator = "type"
-      val AwaitReply = Value("AwaitReply")
-      val RollForward = Value("RollForward")
-      val RollBackward = Value("RollBackward")
-      val IntersectFound = Value("IntersectFound")
-      val IntersectNotFound = Value("IntersectNotFound")
-
+      case object AwaitReply extends Type
+      case object RollForward extends Type
+      case object RollBackward extends Type
+      case object IntersectFound extends Type
+      case object IntersectNotFound extends Type
+      val values: IndexedSeq[Type] = findValues
+    }
     case object AwaitReply extends LocalBlockSync
     case class RollForward(payload: Block) extends LocalBlockSync
     case class RollBackward(payload: Hash[Block]) extends LocalBlockSync
     case class IntersectFound(payload: Hash[Block]) extends LocalBlockSync
     case object IntersectNotFound extends LocalBlockSync
+  }
 
   sealed abstract class LocalTxSubmission extends ReceiveMessage
-  object LocalTxSubmission:
-    object Type extends Enumeration:
+  object LocalTxSubmission {
+    sealed trait Type extends EnumEntry
+    object Type extends Enum[Type] {
       val Discriminator = "type"
-      val AcceptTx = Value("AcceptTx")
-      val RejectTx = Value("RejectTx")
+      case object AcceptTx extends Type
+      case object RejectTx extends Type
+      val values: IndexedSeq[Type] = findValues
+    }
 
     case object AcceptTx extends LocalTxSubmission
     case class RejectTx(payload: RejectTxDetails) extends LocalTxSubmission
     sealed trait RejectTxDetails
-    object RejectTxDetails:
-      object Type extends Enumeration:
+    object RejectTxDetails {
+      sealed trait Type extends EnumEntry
+      object Type extends Enum[Type] {
         val Discriminator = "type"
-        val Duplicate = Value("Duplicate")
-        val Other = Value("Other")
+        case object Duplicate extends Type
+        case object Other extends Type
+        val values: IndexedSeq[Type] = findValues
+      }
 
       case object Duplicate extends RejectTxDetails
+
       case class Other(reason: String) extends RejectTxDetails
+    }
+  }
+}

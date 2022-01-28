@@ -1,11 +1,10 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
-import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalBlockSync
-
-object AcceptTx:
+object AcceptTx {
 
   val validJson =
     """{
-    |  "protocol": "LocalTxSubmission",
-    |  "type": "AcceptTx"
-    |}""".stripMargin
+      |  "protocol": "LocalTxSubmission",
+      |  "type": "AcceptTx"
+      |}""".stripMargin
+}

@@ -1,9 +1,10 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
-object LocalTxSubmissionDone:
+object LocalTxSubmissionDone {
 
   val validJson =
     """{
-    |  "protocol" : "LocalTxSubmission",
-    |  "type" : "Done"
-    |}""".stripMargin
+      |  "protocol" : "LocalTxSubmission",
+      |  "type" : "Done"
+      |}""".stripMargin
+}

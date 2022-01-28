@@ -1,11 +1,10 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
-import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage.LocalTxSubmission
 import io.iohk.midnight.wallet.domain.*
 import java.time.Instant
 
-object SubmitTx:
+object SubmitTx {
 
   val validJsonCall =
     """{
@@ -82,3 +81,4 @@ object SubmitTx:
         ),
       ),
     )
+}

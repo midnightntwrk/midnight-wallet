@@ -3,8 +3,6 @@ package io.iohk.midnight.wallet.api
 import cats.MonadThrow
 import cats.effect.Clock
 import cats.effect.std.Random
-import cats.syntax.applicative.*
-import cats.syntax.applicativeError.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import io.iohk.midnight.wallet.api.WalletAPI.*
@@ -12,27 +10,26 @@ import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.services.{PlatformService, ProverService}
 import java.time.Instant
 import scala.concurrent.duration.FiniteDuration
-import scala.scalajs.js.annotation.JSExport
 
-trait WalletAPI[F[_]]:
+trait WalletAPI[F[_]] {
   def callContract(contractInput: CallContractInput): F[Hash[CallTransaction]]
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
+}
 
-object WalletAPI:
+object WalletAPI {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
       platformService: PlatformService[F],
-  ) extends WalletAPI[F]:
-    @JSExport
+  ) extends WalletAPI[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
-      for
+      for {
         proof <- proverService.prove(input.circuitValues)
         timestamp <- Clock[F].realTime
         hash <- generateRandomHash[CallTransaction]
         transaction = buildCallTransaction(hash, timestamp, input, proof)
         _ <- platformService.submitTransaction(transaction)
-      yield transaction.hash
+      } yield transaction.hash
 
     private def buildCallTransaction(
         hash: Hash[CallTransaction],
@@ -49,14 +46,13 @@ object WalletAPI:
         input.publicTranscript,
       )
 
-    @JSExport
     override def deployContract(input: DeployContractInput): F[Hash[DeployTransaction]] =
-      for
+      for {
         timestamp <- Clock[F].realTime
         hash <- generateRandomHash[DeployTransaction]
         transaction = buildDeployTransaction(hash, timestamp, input)
         _ <- platformService.submitTransaction(transaction)
-      yield transaction.hash
+      } yield transaction.hash
 
     private def buildDeployTransaction(
         hash: Hash[DeployTransaction],
@@ -76,8 +72,9 @@ object WalletAPI:
         .nextBytes(32)
         .map(new java.math.BigInteger(_))
         .map(_.abs())
-        .map(String.format("%x", _))
-        .map(Hash[T].apply)
+        .map(String.format("%064x", _))
+        .map(Hash[T])
+  }
 
   case class CallContractInput(
       contractHash: Hash[DeployTransaction],
@@ -90,3 +87,4 @@ object WalletAPI:
       contractSource: ContractSource,
       publicState: PublicState,
   )
+}

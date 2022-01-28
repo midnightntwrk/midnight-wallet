@@ -3,11 +3,7 @@ package io.iohk.midnight.wallet.clients.platform.protocol
 import cats.syntax.all.*
 import io.circe.Decoder
 import io.circe.generic.semiauto.*
-import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage
-import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalTxSubmission.{
-  RejectTx,
-  RejectTxDetails,
-}
+import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalTxSubmission.RejectTxDetails
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.{
   LocalBlockSync,
   LocalTxSubmission,
@@ -16,8 +12,8 @@ import io.iohk.midnight.wallet.domain.*
 import java.time.Instant
 import scala.util.Try
 
-object Decoders:
-  implicit lazy val transactionTypeDecoder: Decoder[TransactionType.Value] =
+object Decoders {
+  implicit lazy val transactionTypeDecoder: Decoder[TransactionType] =
     Decoder[String].emapTry(s => Try(TransactionType.withName(s)))
 
   implicit def hashDecoder[T]: Decoder[Hash[T]] =
@@ -48,7 +44,7 @@ object Decoders:
     Decoder[String].map(PublicTranscript.apply)
 
   implicit lazy val transactionDecoder: Decoder[Transaction] =
-    Decoder.instance(_.get[TransactionType.Value](TransactionType.Discriminator)).flatMap {
+    Decoder.instance(_.get[TransactionType](TransactionType.Discriminator)).flatMap {
       case TransactionType.Call   => Decoder[CallTransaction].widen
       case TransactionType.Deploy => Decoder[DeployTransaction].widen
     }
@@ -62,11 +58,11 @@ object Decoders:
   implicit lazy val receiptZKFailureDecoder: Decoder[Receipt.ZKFailure] =
     deriveDecoder
 
-  implicit lazy val receiptTypeDecoder: Decoder[ReceiptType.Value] =
+  implicit lazy val receiptTypeDecoder: Decoder[ReceiptType] =
     Decoder[String].emapTry(s => Try(ReceiptType.withName(s)))
 
   implicit lazy val receiptDecoder: Decoder[Receipt] =
-    Decoder.instance(_.get[ReceiptType.Value](ReceiptType.Discriminator)).flatMap {
+    Decoder.instance(_.get[ReceiptType](ReceiptType.Discriminator)).flatMap {
       case ReceiptType.Success         => Decoder[Receipt.Success.type].widen
       case ReceiptType.ContractFailure => Decoder[Receipt.ContractFailure].widen
       case ReceiptType.ZKFailure       => Decoder[Receipt.ZKFailure].widen
@@ -101,7 +97,7 @@ object Decoders:
       ).mapN(Block.apply)
     }
 
-  implicit lazy val localBlockSyncTypeDecoder: Decoder[LocalBlockSync.Type.Value] =
+  implicit lazy val localBlockSyncTypeDecoder: Decoder[LocalBlockSync.Type] =
     Decoder[String].emapTry(s => Try(LocalBlockSync.Type.withName(s)))
 
   implicit lazy val awaitReplyDecoder: Decoder[LocalBlockSync.AwaitReply.type] =
@@ -121,7 +117,7 @@ object Decoders:
 
   implicit lazy val localBlockSyncDecoder: Decoder[LocalBlockSync] =
     Decoder
-      .instance(_.get[LocalBlockSync.Type.Value](LocalBlockSync.Type.Discriminator))
+      .instance(_.get[LocalBlockSync.Type](LocalBlockSync.Type.Discriminator))
       .flatMap {
         case LocalBlockSync.Type.AwaitReply     => Decoder[LocalBlockSync.AwaitReply.type].widen
         case LocalBlockSync.Type.RollForward    => Decoder[LocalBlockSync.RollForward].widen
@@ -140,12 +136,12 @@ object Decoders:
   implicit lazy val rejectTxOtherDecoder: Decoder[RejectTxDetails.Other] =
     deriveDecoder
 
-  implicit lazy val rejectTxDetailsTypeDecoder: Decoder[RejectTxDetails.Type.Value] =
+  implicit lazy val rejectTxDetailsTypeDecoder: Decoder[RejectTxDetails.Type] =
     Decoder[String].emapTry(s => Try(RejectTxDetails.Type.withName(s)))
 
   implicit lazy val rejectTxDetailsDecoder: Decoder[LocalTxSubmission.RejectTxDetails] =
     Decoder
-      .instance(_.get[RejectTxDetails.Type.Value](RejectTxDetails.Type.Discriminator))
+      .instance(_.get[RejectTxDetails.Type](RejectTxDetails.Type.Discriminator))
       .flatMap {
         case RejectTxDetails.Type.Duplicate =>
           Decoder[LocalTxSubmission.RejectTxDetails.Duplicate.type].widen
@@ -155,22 +151,23 @@ object Decoders:
   implicit lazy val rejectTxDecoder: Decoder[LocalTxSubmission.RejectTx] =
     deriveDecoder
 
-  implicit val localTxSubmissionTypeDecoder: Decoder[LocalTxSubmission.Type.Value] =
+  implicit val localTxSubmissionTypeDecoder: Decoder[LocalTxSubmission.Type] =
     Decoder[String].emapTry(s => Try(LocalTxSubmission.Type.withName(s)))
 
   implicit lazy val localTxSubmissionDecoder: Decoder[LocalTxSubmission] =
     Decoder
-      .instance(_.get[LocalTxSubmission.Type.Value](LocalTxSubmission.Type.Discriminator))
+      .instance(_.get[LocalTxSubmission.Type](LocalTxSubmission.Type.Discriminator))
       .flatMap {
         case LocalTxSubmission.Type.AcceptTx => Decoder[LocalTxSubmission.AcceptTx.type].widen
         case LocalTxSubmission.Type.RejectTx => Decoder[LocalTxSubmission.RejectTx].widen
       }
 
-  implicit lazy val receiveMessageTypeDecoder: Decoder[ReceiveMessage.Type.Value] =
+  implicit lazy val receiveMessageTypeDecoder: Decoder[ReceiveMessage.Type] =
     Decoder[String].emapTry(s => Try(ReceiveMessage.Type.withName(s)))
 
   implicit lazy val receiveMessageDecoder: Decoder[ReceiveMessage] =
-    Decoder.instance(_.get[ReceiveMessage.Type.Value](ReceiveMessage.Type.Discriminator)).flatMap {
+    Decoder.instance(_.get[ReceiveMessage.Type](ReceiveMessage.Type.Discriminator)).flatMap {
       case ReceiveMessage.Type.LocalBlockSync    => Decoder[LocalBlockSync].widen
       case ReceiveMessage.Type.LocalTxSubmission => Decoder[LocalTxSubmission].widen
     }
+}

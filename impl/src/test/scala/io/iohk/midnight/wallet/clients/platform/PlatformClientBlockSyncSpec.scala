@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.clients.platform
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalBlockSync
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage
 
-class PlatformClientBlockSyncSpec extends PlatformClientSpec:
+class PlatformClientBlockSyncSpec extends PlatformClientSpec {
   test("receive AwaitReply") {
     assertReceive(
       examples.AwaitReply.validJson,
@@ -67,3 +67,4 @@ class PlatformClientBlockSyncSpec extends PlatformClientSpec:
       examples.LocalBlockSyncDone.validJson,
     )
   }
+}
