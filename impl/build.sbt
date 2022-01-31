@@ -38,7 +38,7 @@ lazy val wallet = (project in file("."))
       "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
       "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
     ).map(_ % Test),
-    wartremoverErrors ++= Warts.unsafe,
+    wartremoverErrors ++= Warts.unsafe.diff(Seq(Wart.Any, Wart.Nothing, Wart.DefaultArguments)),
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

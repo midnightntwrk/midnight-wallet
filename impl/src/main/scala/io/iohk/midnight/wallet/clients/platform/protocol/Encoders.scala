@@ -5,6 +5,7 @@ import io.circe.syntax.*
 import io.circe.{Encoder, Json}
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage.*
 import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.domain.Proof
 
 object Encoders {
   implicit def hashEncoder[T]: Encoder[Hash[T]] =

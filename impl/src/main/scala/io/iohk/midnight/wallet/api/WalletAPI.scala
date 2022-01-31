@@ -7,6 +7,7 @@ import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import io.iohk.midnight.wallet.api.WalletAPI.*
 import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.domain.Proof
 import io.iohk.midnight.wallet.services.{PlatformService, ProverService}
 import java.time.Instant
 import scala.concurrent.duration.FiniteDuration

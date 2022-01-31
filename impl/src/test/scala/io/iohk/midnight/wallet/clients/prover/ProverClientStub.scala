@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.clients.prover
 import cats.effect.SyncIO
 import cats.syntax.applicative.*
 import io.iohk.midnight.wallet.clients.prover.FailingProverClient.TheError
-import io.iohk.midnight.wallet.clients.prover.ProverClient.*
+import io.iohk.midnight.wallet.clients.prover.ProverClient.ProofStatus
 import io.iohk.midnight.wallet.domain.*
 
 class ProverClientStub extends ProverClient[SyncIO] {

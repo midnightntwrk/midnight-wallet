@@ -9,6 +9,7 @@ import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.{
   LocalTxSubmission,
 }
 import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.domain.Proof
 import java.time.Instant
 import scala.util.Try
 
