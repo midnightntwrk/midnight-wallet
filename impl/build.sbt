@@ -21,6 +21,7 @@ lazy val wallet = (project in file("."))
       )
       baseDir
     },
+    stIgnore += "rxjs",
     libraryDependencies ++= Seq(
       "com.beachape" %%% "enumeratum" % "1.7.0",
       "com.softwaremill.sttp.client3" %%% "core" % "3.3.18",

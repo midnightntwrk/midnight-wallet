@@ -9,7 +9,8 @@
     "check_format": "sbt scalafmtCheckAll"
   },
   "dependencies": {
-    "api": "workspace:^"
+    "api": "workspace:^",
+    "rxjs": "^7.5.1"
   },
   "devDependencies": {
     "typescript": "^4.5.4"
