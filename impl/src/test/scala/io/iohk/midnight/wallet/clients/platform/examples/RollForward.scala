@@ -50,7 +50,7 @@ object RollForward {
     LocalBlockSync.RollForward(
       Block(
         Block.Header(
-          Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38"),
+          Some(Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38")),
           Hash[Block]("a001ec24fa51f84d828b2ee2ffc071ca7fbad64b7b08ab0c07c09b558c936d7f"),
           Block
             .Height(BigInt("17019280400900805248"))
@@ -60,8 +60,10 @@ object RollForward {
         List(
           TransactionWithReceipt(
             DeployTransaction(
-              Hash[DeployTransaction](
-                "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+              Some(
+                Hash[DeployTransaction](
+                  "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+                ),
               ),
               Instant.parse("1969-12-31T23:59:53.999509747Z"),
               ContractSource(
@@ -213,7 +215,7 @@ object RollForward {
     LocalBlockSync.RollForward(
       Block(
         Block.Header(
-          Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38"),
+          Some(Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38")),
           Hash[Block]("a001ec24fa51f84d828b2ee2ffc071ca7fbad64b7b08ab0c07c09b558c936d7f"),
           Block
             .Height(BigInt("17019280400900804"))
@@ -223,8 +225,10 @@ object RollForward {
         List(
           TransactionWithReceipt(
             DeployTransaction(
-              Hash[DeployTransaction](
-                "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+              Some(
+                Hash[DeployTransaction](
+                  "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+                ),
               ),
               Instant.parse("1969-12-31T23:59:53.999509747Z"),
               ContractSource(
@@ -242,8 +246,10 @@ object RollForward {
           ),
           TransactionWithReceipt(
             CallTransaction(
-              Hash[CallTransaction](
-                "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+              Some(
+                Hash[CallTransaction](
+                  "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+                ),
               ),
               Instant.parse("1970-01-01T00:00:05.000338337Z"),
               Hash[DeployTransaction](
@@ -257,8 +263,10 @@ object RollForward {
           ),
           TransactionWithReceipt(
             CallTransaction(
-              Hash[CallTransaction](
-                "ff5e6698fe52cb03927b63bca0ffcd52010d750cf3c4e0d667d69dae112c8067",
+              Some(
+                Hash[CallTransaction](
+                  "ff5e6698fe52cb03927b63bca0ffcd52010d750cf3c4e0d667d69dae112c8067",
+                ),
               ),
               Instant.parse("1969-12-31T23:59:53.999328452Z"),
               Hash[DeployTransaction](
@@ -272,8 +280,10 @@ object RollForward {
           ),
           TransactionWithReceipt(
             CallTransaction(
-              Hash[CallTransaction](
-                "ec010f8d78002249653e586948d78e580fa201ff7ae43fe718266aff38949f2b",
+              Some(
+                Hash[CallTransaction](
+                  "ec010f8d78002249653e586948d78e580fa201ff7ae43fe718266aff38949f2b",
+                ),
               ),
               Instant.parse("1970-01-01T00:00:02.000163029Z"),
               Hash[DeployTransaction](
@@ -292,8 +302,10 @@ object RollForward {
           ),
           TransactionWithReceipt(
             DeployTransaction(
-              Hash[DeployTransaction](
-                "3bd0ee87a5412292873efc9c97445e748897ca5e19005ad26db64e2ac8a670f8",
+              Some(
+                Hash[DeployTransaction](
+                  "3bd0ee87a5412292873efc9c97445e748897ca5e19005ad26db64e2ac8a670f8",
+                ),
               ),
               Instant.parse("1969-12-31T23:59:53.999949120Z"),
               ContractSource(
@@ -312,8 +324,10 @@ object RollForward {
           ),
           TransactionWithReceipt(
             DeployTransaction(
-              Hash[DeployTransaction](
-                "a0d8210a830019c8f9ff5701e204732c2400e4166c00564e3cc7066c5fc5664b",
+              Some(
+                Hash[DeployTransaction](
+                  "a0d8210a830019c8f9ff5701e204732c2400e4166c00564e3cc7066c5fc5664b",
+                ),
               ),
               Instant.parse("1969-12-31T23:59:52.999482627Z"),
               ContractSource(

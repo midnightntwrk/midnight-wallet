@@ -27,9 +27,9 @@ object ReceiveMessage {
       val values: IndexedSeq[Type] = findValues
     }
     case object AwaitReply extends LocalBlockSync
-    case class RollForward(payload: Block) extends LocalBlockSync
-    case class RollBackward(payload: Hash[Block]) extends LocalBlockSync
-    case class IntersectFound(payload: Hash[Block]) extends LocalBlockSync
+    final case class RollForward(payload: Block) extends LocalBlockSync
+    final case class RollBackward(payload: Hash[Block]) extends LocalBlockSync
+    final case class IntersectFound(payload: Hash[Block]) extends LocalBlockSync
     case object IntersectNotFound extends LocalBlockSync
   }
 
@@ -44,8 +44,10 @@ object ReceiveMessage {
     }
 
     case object AcceptTx extends LocalTxSubmission
-    case class RejectTx(payload: RejectTxDetails) extends LocalTxSubmission
-    sealed trait RejectTxDetails
+    final case class RejectTx(payload: RejectTxDetails) extends LocalTxSubmission
+    sealed trait RejectTxDetails {
+      def reason: String
+    }
     object RejectTxDetails {
       sealed trait Type extends EnumEntry
       object Type extends Enum[Type] {
@@ -54,10 +56,10 @@ object ReceiveMessage {
         case object Other extends Type
         val values: IndexedSeq[Type] = findValues
       }
-
-      case object Duplicate extends RejectTxDetails
-
-      case class Other(reason: String) extends RejectTxDetails
+      case object Duplicate extends RejectTxDetails {
+        override def reason: String = "Duplicate"
+      }
+      final case class Other(reason: String) extends RejectTxDetails
     }
   }
 }

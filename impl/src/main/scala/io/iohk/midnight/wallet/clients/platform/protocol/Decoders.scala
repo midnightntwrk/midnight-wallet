@@ -75,7 +75,7 @@ object Decoders {
   implicit lazy val blockHeaderDecoder: Decoder[Block.Header] =
     Decoder.instance { c =>
       (
-        c.get[Hash[Block]]("blockHash"),
+        c.get[Option[Hash[Block]]]("blockHash"),
         c.get[Hash[Block]]("parentBlockHash"),
         c.get[Block.Height]("height"),
         c.get[Instant]("timestamp"),

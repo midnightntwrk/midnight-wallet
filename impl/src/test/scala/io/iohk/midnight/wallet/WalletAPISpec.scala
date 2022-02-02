@@ -5,10 +5,9 @@ import cats.effect.std.Random
 import cats.effect.{Clock, SyncIO}
 import io.iohk.midnight.wallet.api.WalletAPI
 import io.iohk.midnight.wallet.api.WalletAPI.*
-import io.iohk.midnight.wallet.clients.platform.*
 import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.Generators.*
-import io.iohk.midnight.wallet.services.{PlatformService, ProverService}
+import io.iohk.midnight.wallet.services.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
@@ -16,27 +15,26 @@ trait WalletAPISpec {
   val proverClient = new ProverClientStub()
   val failingProverClient = new FailingProverClient()
   val alwaysInProgressProverClient = new AlwaysInProgressProverClient()
-  val platformClient = new PlatformClientStub()
-  val failingPlatformClient = new FailingPlatformClient()
+  val syncService = new SyncServiceStub()
+  val failingSyncService = new FailingSyncService()
 
   def buildWalletApi[F[_]: MonadThrow: Clock: Random](
       proverClient: ProverClient[F],
-      platformClient: PlatformClient[F],
+      syncService: SyncService[F],
   ): WalletAPI[F] =
     new WalletAPI.Live[F](
       new ProverService.Live[F](proverClient, 2),
-      new PlatformService.Live[F](platformClient),
+      syncService,
     )
 
   implicit val random: Random[SyncIO] = Random.scalaUtilRandom[SyncIO].unsafeRunSync()
-  val walletApi = buildWalletApi[SyncIO](proverClient, platformClient)
+  val walletApi = buildWalletApi[SyncIO](proverClient, syncService)
 
   val ExpectedHashLength = 64
   def isHexString(str: String): Boolean =
     str.forall((('0' to '9') ++ ('a' to 'f')).contains(_))
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Any"))
 class WalletAPICallContractSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
@@ -56,15 +54,15 @@ class WalletAPICallContractSpec
         for {
           hash1 <- walletApi.callContract(input1)
           hash2 <- walletApi.callContract(input2)
-          wasSubmitted1 = platformClient.wasCallTxSubmitted(hash1)
-          wasSubmitted2 = platformClient.wasCallTxSubmitted(hash2)
+          wasSubmitted1 = syncService.wasCallTxSubmitted(hash1)
+          wasSubmitted2 = syncService.wasCallTxSubmitted(hash2)
         } yield assert(wasSubmitted1 && wasSubmitted2)
     }
   }
 
   test("fails when prover client fails") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(failingProverClient, platformClient)
+      val walletApi = buildWalletApi(failingProverClient, syncService)
 
       walletApi
         .callContract(input)
@@ -75,7 +73,7 @@ class WalletAPICallContractSpec
 
   test("does not retry proof status forever") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(alwaysInProgressProverClient, platformClient)
+      val walletApi = buildWalletApi(alwaysInProgressProverClient, syncService)
 
       walletApi
         .callContract(input)
@@ -86,17 +84,16 @@ class WalletAPICallContractSpec
 
   test("fails when platform submission fails") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(proverClient, failingPlatformClient)
+      val walletApi = buildWalletApi(proverClient, failingSyncService)
 
       walletApi
         .callContract(input)
         .attempt
-        .map(assertEquals(_, Left(FailingPlatformClient.PlatformClientError)))
+        .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }
   }
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Any"))
 class WalletAPIDeployContractSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
@@ -116,20 +113,20 @@ class WalletAPIDeployContractSpec
         for {
           hash1 <- walletApi.deployContract(input1)
           hash2 <- walletApi.deployContract(input2)
-          wasSubmitted1 = platformClient.wasDeployTxSubmitted(hash1)
-          wasSubmitted2 = platformClient.wasDeployTxSubmitted(hash2)
+          wasSubmitted1 = syncService.wasDeployTxSubmitted(hash1)
+          wasSubmitted2 = syncService.wasDeployTxSubmitted(hash2)
         } yield assert(wasSubmitted1 && wasSubmitted2)
     }
   }
 
   test("fails when platform submission fails") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      val walletApi = buildWalletApi(proverClient, failingPlatformClient)
+      val walletApi = buildWalletApi(proverClient, failingSyncService)
 
       walletApi
         .deployContract(input)
         .attempt
-        .map(assertEquals(_, Left(FailingPlatformClient.PlatformClientError)))
+        .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }
   }
 }

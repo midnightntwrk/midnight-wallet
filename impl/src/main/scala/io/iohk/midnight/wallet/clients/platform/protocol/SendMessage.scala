@@ -26,7 +26,7 @@ object SendMessage {
     }
 
     case object RequestNext extends LocalBlockSync
-    case class FindIntersect(payload: Seq[Hash[Block]]) extends LocalBlockSync
+    final case class FindIntersect(payload: Seq[Hash[Block]]) extends LocalBlockSync
     case object Done extends LocalBlockSync
   }
 
@@ -39,7 +39,7 @@ object SendMessage {
       case object Done extends Type
       val values: IndexedSeq[Type] = findValues
     }
-    case class SubmitTx(payload: Transaction) extends LocalTxSubmission
+    final case class SubmitTx(payload: Transaction) extends LocalTxSubmission
     case object Done extends LocalTxSubmission
   }
 }

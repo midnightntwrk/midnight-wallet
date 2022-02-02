@@ -7,8 +7,8 @@ import java.time.Instant
 
 sealed trait Transaction
 
-case class CallTransaction(
-    hash: Hash[CallTransaction],
+final case class CallTransaction(
+    hash: Option[Hash[CallTransaction]],
     timestamp: Instant,
     contractHash: Hash[DeployTransaction],
     transitionFunction: TransitionFunction,
@@ -16,8 +16,8 @@ case class CallTransaction(
     publicTranscript: PublicTranscript,
 ) extends Transaction
 
-case class DeployTransaction(
-    hash: Hash[DeployTransaction],
+final case class DeployTransaction(
+    hash: Option[Hash[DeployTransaction]],
     timestamp: Instant,
     contractSource: ContractSource,
     publicState: PublicState,

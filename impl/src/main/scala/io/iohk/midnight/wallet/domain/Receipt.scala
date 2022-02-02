@@ -8,6 +8,6 @@ object Receipt {
   case object Success extends Receipt {
     override def message: String = "Success"
   }
-  case class ContractFailure(code: Int, message: String) extends Receipt
-  case class ZKFailure(message: String) extends Receipt
+  final case class ContractFailure(code: Int, message: String) extends Receipt
+  final case class ZKFailure(message: String) extends Receipt
 }

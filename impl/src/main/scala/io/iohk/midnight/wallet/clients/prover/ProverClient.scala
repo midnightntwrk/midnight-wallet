@@ -67,7 +67,7 @@ object ProverClient {
 
   sealed trait ProofStatus
   object ProofStatus {
-    case class Done(proof: Proof) extends ProofStatus
+    final case class Done(proof: Proof) extends ProofStatus
     case object InProgress extends ProofStatus
   }
 }

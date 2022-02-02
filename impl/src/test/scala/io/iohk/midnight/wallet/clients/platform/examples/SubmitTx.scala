@@ -25,7 +25,9 @@ object SubmitTx {
   val validObjectCall =
     LocalTxSubmission.SubmitTx(
       CallTransaction(
-        Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
+        Some(
+          Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
+        ),
         Instant.parse("1969-12-31T23:59:59.999391332Z"),
         Hash[DeployTransaction]("2b00640f0a326ee59f56e7e7cef101a285df5e860c45d9ff8f940eecc57e4015"),
         TransitionFunction("jyfq"),
@@ -61,7 +63,11 @@ object SubmitTx {
   val validObjectDeploy =
     LocalTxSubmission.SubmitTx(
       DeployTransaction(
-        Hash[DeployTransaction]("8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe"),
+        Some(
+          Hash[DeployTransaction](
+            "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
+          ),
+        ),
         Instant.parse("1969-12-31T23:59:57.999536559Z"),
         ContractSource(
           "(((winslsi iqcw) (fato dnvuai hhgtq) itef (etbac oogasl ywbdiejp nqcuyo) (mpnyar)) ((ihfvj beitt wkimfnq vyzwjttu) (gwcmih) (ozsx hbbyy tljv) (geodfwv) (hzi hkcayl)) ((crdyzw yrujnv mkxwcoxq) (avnlnwws qjgm) (ovtene bvdbriax nwjwb fhqzzu) (hiworg)))",
