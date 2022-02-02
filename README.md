@@ -1,4 +1,6 @@
 # midnight-wallet
+![example event parameter](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg)
+
 Midnight's wallet core development. It is an implementation of wallet internals and allows preparing transactions, submitting them to a node and syncing blocks from the node.
 
 ## Technologies involved
@@ -42,7 +44,9 @@ The code is written in Scala 3 (using `scala.js`) and there is an API interface 
   - `domain` domain model of the wallet
   - `services` service layer, currently implements Prover Service (Snarky Server) and Platform Service
 
-## How to build
+## How to:
+
+### Build
 
 `yarn install`
 
@@ -53,6 +57,16 @@ The code is written in Scala 3 (using `scala.js`) and there is an API interface 
 In the root folder of the project run
 `rm -rf ~/.ivy2/local/org.scalablytyped`
 
-## How to test
+### Check format
+
+`yarn run check_format`
+
+### Test
 
 `yarn run test`
+
+### Generate Coverage report
+
+`yarn run test_coverage`
+
+`yarn run coverage_report`

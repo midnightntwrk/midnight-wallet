@@ -23,4 +23,6 @@ jobs:
     - name: Check format
       run: yarn run check_format
     - name: Run tests
-      run: yarn run test
+      run: yarn run test_coverage
+    - name: Generate coverage report
+      run: yarn run coverage_report

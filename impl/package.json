@@ -6,6 +6,8 @@
     "build": "sbt dist",
     "prepack": "$npm_execpath run build",
     "test": "sbt test",
+    "test_coverage": "sbt coverage test",
+    "coverage_report": "sbt coverageReport",
     "check_format": "sbt scalafmtCheckAll"
   },
   "dependencies": {

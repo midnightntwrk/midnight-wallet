@@ -47,6 +47,9 @@ lazy val wallet = (project in file("."))
 
     // Linting
     wartremoverErrors ++= Warts.unsafe.diff(Seq(Wart.Any, Wart.Nothing, Wart.DefaultArguments)),
+    coverageFailOnMinimum := true,
+    coverageMinimumStmtTotal := 90,
+    coverageMinimumBranchTotal := 90,
   )
 
 lazy val integrationTests = (project in file("integration-tests"))
