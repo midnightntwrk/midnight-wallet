@@ -1,11 +1,13 @@
 package io.iohk.midnight.wallet.clients.platform
 
 import cats.MonadThrow
-import cats.effect.{Async, Resource}
+import cats.effect.Resource
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
 import io.circe.parser.decode
 import io.circe.syntax.*
+import io.iohk.midnight.wallet.clients.platform.protocol.Decoders.receiveMessageDecoder
+import io.iohk.midnight.wallet.clients.platform.protocol.Encoders.sendMessageEncoder
 import io.iohk.midnight.wallet.clients.platform.protocol.{ReceiveMessage, SendMessage}
 import sttp.capabilities.WebSockets
 import sttp.client3.*
@@ -20,19 +22,15 @@ trait PlatformClient[F[_]] {
 
 object PlatformClient {
   class Live[F[_]: MonadThrow](webSocket: WebSocket[F]) extends PlatformClient[F] {
-    override def send(message: SendMessage): F[Unit] = {
-      import protocol.Encoders.sendMessageEncoder
-      webSocket.sendText(message.asJson.toString)
-    }
+    override def send(message: SendMessage): F[Unit] =
+      webSocket.sendText(message.asJson(sendMessageEncoder).toString)
 
-    override def receive(): F[ReceiveMessage] = {
-      import protocol.Decoders.receiveMessageDecoder
-      webSocket.receiveText().map(decode[ReceiveMessage]).rethrow
-    }
+    override def receive(): F[ReceiveMessage] =
+      webSocket.receiveText().map(decode(_)(receiveMessageDecoder)).rethrow
   }
 
   object Live {
-    def apply[F[_]: Async](
+    def apply[F[_]: MonadThrow](
         backend: SttpBackend[F, WebSockets],
         platformUri: Uri,
     ): Resource[F, Live[F]] = {

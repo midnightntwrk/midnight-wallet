@@ -118,7 +118,7 @@ object Encoders {
         ),
       )
 
-  implicit val sendMessageEncoder: Encoder[SendMessage] =
+  val sendMessageEncoder: Encoder[SendMessage] =
     Encoder.instance {
       case lbs: LocalBlockSync    => Encoder[LocalBlockSync].apply(lbs)
       case lts: LocalTxSubmission => Encoder[LocalTxSubmission].apply(lts)

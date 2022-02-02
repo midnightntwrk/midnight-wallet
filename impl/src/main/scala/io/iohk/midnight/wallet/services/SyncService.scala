@@ -67,7 +67,7 @@ object SyncService {
       // Request next block for the first time if the client requested to sync
       requestNext.as(Stream.repeatEval(blocksBuffer.take))
 
-    private val requestNext: F[Unit] =
+    private def requestNext: F[Unit] =
       platformClient.send(SendMessage.LocalBlockSync.RequestNext)
 
     private val loopReceive: F[Unit] =
@@ -81,6 +81,7 @@ object SyncService {
         case LocalTxSubmission.AcceptTx          => completeWith(Accepted)
         case LocalTxSubmission.RejectTx(details) => completeWith(Rejected(details.reason))
         case LocalBlockSync.RollForward(block)   => blocksBuffer.offer(block) >> requestNext
+        case LocalBlockSync.RollBackward(_)      => ().pure >> requestNext
         case LocalBlockSync.AwaitReply           => ().pure
         case other                               => UnexpectedMessageReceived(other).raiseError
       }

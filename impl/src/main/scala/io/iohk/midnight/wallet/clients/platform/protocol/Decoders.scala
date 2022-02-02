@@ -166,7 +166,7 @@ object Decoders {
   implicit lazy val receiveMessageTypeDecoder: Decoder[ReceiveMessage.Type] =
     Decoder[String].emapTry(s => Try(ReceiveMessage.Type.withName(s)))
 
-  implicit lazy val receiveMessageDecoder: Decoder[ReceiveMessage] =
+  lazy val receiveMessageDecoder: Decoder[ReceiveMessage] =
     Decoder.instance(_.get[ReceiveMessage.Type](ReceiveMessage.Type.Discriminator)).flatMap {
       case ReceiveMessage.Type.LocalBlockSync    => Decoder[LocalBlockSync].widen
       case ReceiveMessage.Type.LocalTxSubmission => Decoder[LocalTxSubmission].widen

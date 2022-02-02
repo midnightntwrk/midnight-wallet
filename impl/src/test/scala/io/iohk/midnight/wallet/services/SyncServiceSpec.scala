@@ -44,7 +44,7 @@ class SyncServiceSpec extends SyncServiceSpecBase {
   ): IO[Unit] =
     transactions
       .fproduct { tx =>
-        if (tx == SubmitTx.validObjectCall.payload) Accepted
+        if (tx == SubmitTx.validCallObject.payload) Accepted
         else Rejected(PlatformClientStub.rejectDetails.reason)
       }
       .parTraverse { case (tx, expected) =>
@@ -100,6 +100,6 @@ class SyncServiceSpec extends SyncServiceSpecBase {
 object SyncServiceSpec {
   val transactionsGen: Gen[Seq[Transaction]] =
     Gen.nonEmptyListOf(
-      Gen.oneOf(SubmitTx.validObjectDeploy.payload, SubmitTx.validObjectCall.payload),
+      Gen.oneOf(SubmitTx.validDeployObject.payload, SubmitTx.validCallObject.payload),
     )
 }

@@ -6,14 +6,14 @@ import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage
 class PlatformClientTxSubmissionSpec extends PlatformClientSpec {
   test("send SubmitTx call") {
     assertSend(
-      examples.SubmitTx.validObjectCall,
+      examples.SubmitTx.validCallObject,
       examples.SubmitTx.validJsonCall,
     )
   }
 
   test("send SubmitTx deploy") {
     assertSend(
-      examples.SubmitTx.validObjectDeploy,
+      examples.SubmitTx.validDeployObject,
       examples.SubmitTx.validJsonDeploy,
     )
   }
