@@ -33,7 +33,7 @@ object ProverClient {
         .map(_.body.workId)
 
     private def makeProofStatusUri(proofId: ProofId) =
-      baseUri.addPath(s"/proof_statuses/${proofId.value}")
+      baseUri.addPath("proof_statuses", proofId.value)
 
     override def proofStatus(proofId: ProofId): F[ProofStatus] =
       emptyRequest

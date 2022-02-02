@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.domain
 
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.api.WalletAPI.*
+import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
@@ -16,7 +17,7 @@ object Generators {
 
   val publicStateGen = Gen.alphaNumStr.map(PublicState.apply)
 
-  val circuitValuesGen = Gen.delay(Gen.const(CircuitValues(1, 2, 5)))
+  val circuitValuesGen = (arbitrary[Int], arbitrary[Int], arbitrary[Int]).mapN(CircuitValues.apply)
 
   val callContractInputGen =
     (contractHashGen, transcriptGen, transitionFunctionGen, circuitValuesGen)
@@ -29,4 +30,8 @@ object Generators {
     Gen
       .nonEmptyMap((Gen.alphaNumStr, Gen.alphaNumStr).tupled)
       .map(TransitionFunctionCircuits.apply)
+
+  val proofGen = Gen.alphaNumStr.map(Proof.apply)
+
+  val proofIdGen = Gen.alphaNumStr.map(ProofId.apply)
 }
