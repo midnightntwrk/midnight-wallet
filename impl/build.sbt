@@ -34,6 +34,7 @@ lazy val wallet = (project in file("."))
       "co.fs2" %%% "fs2-core" % "3.2.0",
       "io.circe" %%% "circe-core" % "0.14.1",
       "io.circe" %%% "circe-generic" % "0.14.1",
+      "io.circe" %%% "circe-generic-extras" % "0.14.1",
       "org.typelevel" %%% "cats-core" % "2.7.0",
       "org.typelevel" %%% "cats-effect" % "3.3.4",
     ),
