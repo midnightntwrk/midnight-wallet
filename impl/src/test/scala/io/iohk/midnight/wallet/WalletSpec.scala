@@ -3,10 +3,11 @@ package io.iohk.midnight.wallet
 import cats.MonadThrow
 import cats.effect.std.Random
 import cats.effect.{Clock, SyncIO}
+import cats.syntax.applicative.*
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.Generators.*
-import io.iohk.midnight.wallet.domain.UserId
+import io.iohk.midnight.wallet.domain.{Block, SemanticEvent, UserId}
 import io.iohk.midnight.wallet.services.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
@@ -26,6 +27,7 @@ trait WalletSpec {
     new Wallet.Live[F](
       new ProverService.Live[F](proverClient, 2),
       syncService,
+      (_: Block) => Seq.empty[SemanticEvent].pure[F],
       userId,
     )
 

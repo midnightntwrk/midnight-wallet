@@ -6,10 +6,11 @@ import cats.effect.std.Random
 import cats.syntax.applicative.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
+import fs2.Stream
 import io.iohk.midnight.wallet.Wallet.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Hashing.*
-import io.iohk.midnight.wallet.services.{ProverService, SyncService}
+import io.iohk.midnight.wallet.services.{LaresService, ProverService, SyncService}
 import io.iohk.midnight.wallet.util.ClockOps.*
 import io.iohk.midnight.wallet.util.HashOps.*
 import java.time.Instant
@@ -19,6 +20,8 @@ trait Wallet[F[_]] {
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 
+  def sync(): F[Stream[F, Seq[SemanticEvent]]]
+
   def getUserId(): F[UserId]
 }
 
@@ -26,6 +29,7 @@ object Wallet {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
       syncService: SyncService[F],
+      laresService: LaresService[F],
       userId: UserId,
   ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
@@ -70,6 +74,9 @@ object Wallet {
         input.publicState,
         TransitionFunctionCircuits(Map.empty),
       )
+
+    override def sync(): F[Stream[F, Seq[SemanticEvent]]] =
+      syncService.sync().map(_.evalMap(laresService.applyBlock))
 
     override def getUserId(): F[UserId] = userId.pure
   }

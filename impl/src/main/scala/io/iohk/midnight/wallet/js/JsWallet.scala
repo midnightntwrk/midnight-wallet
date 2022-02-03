@@ -1,11 +1,12 @@
 package io.iohk.midnight.wallet.js
 
 import cats.effect.unsafe.implicits.global
-import io.iohk.midnight.wallet.WalletBuilder
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
+import io.iohk.midnight.wallet.WalletBuilder
 import io.iohk.midnight.wallet.WalletBuilder.Config
 import io.iohk.midnight.wallet.domain.*
 import scala.scalajs.js
+import scala.scalajs.js.JSConverters.*
 import scala.scalajs.js.Promise
 import scala.scalajs.js.annotation.*
 import sttp.model.Uri
@@ -18,9 +19,15 @@ import typings.api.mod.{GUID, SemanticEvent}
 @JSExportTopLevel("Wallet")
 object JsWallet {
   @JSExport
-  def build(proverUri: String, platformUri: String): js.Promise[WalletBaseImpl] =
+  def build(proverUri: String, platformUri: String, laresUri: String): js.Promise[WalletBaseImpl] =
     WalletBuilder
-      .catsEffectWallet(Config.default(Uri.unsafeParse(proverUri), Uri.unsafeParse(platformUri)))
+      .catsEffectWallet(
+        Config.default(
+          Uri.unsafeParse(proverUri),
+          Uri.unsafeParse(platformUri),
+          Uri.unsafeParse(laresUri),
+        ),
+      )
       .allocated
       .map { case (wallet, finalizer) =>
         val walletInternal = new mod.WalletInternal {
@@ -62,7 +69,11 @@ object JsWallet {
 
           override def getGUID(): Promise[GUID] = wallet.getUserId().map(_.value).unsafeToPromise()
 
-          override def sync(f: js.Function1[js.Array[SemanticEvent], Unit]): Unit = ???
+          override def sync(f: js.Function1[js.Array[SemanticEvent], Unit]): Unit =
+            wallet
+              .sync()
+              .flatMap(_.map(_.map(_.value).toJSArray).compile.drain)
+              .unsafeRunAndForget()
 
           override def close(): Promise[Unit] = finalizer.unsafeToPromise()
         }
