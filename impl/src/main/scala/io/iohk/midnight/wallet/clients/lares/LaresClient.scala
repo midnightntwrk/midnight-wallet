@@ -7,17 +7,24 @@ import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.*
 import sttp.client3.SttpBackend
 import sttp.model.Uri
 
+import scala.annotation.unused
+
 trait LaresClient[F[_]] {
   def applyBlockLocally(req: ApplyBlockLocallyRequest): F[ApplyBlockLocallyResponse]
 }
 
 object LaresClient {
 
-  class Live[F[_]: Async](backend: SttpBackend[F, Any], uri: Uri) extends LaresClient[F] {
-    private val rpcClient = new JsonRpcClient[F](backend, uri)
-
+  class Live[F[_]](rpcClient: JsonRpcClient[F]) extends LaresClient[F] {
     override def applyBlockLocally(req: ApplyBlockLocallyRequest): F[ApplyBlockLocallyResponse] =
       rpcClient.doRequest[ApplyBlockLocallyRequest, ApplyBlockLocallyResponse](req)
+  }
+
+  object Live {
+    def apply[F[_]](backend: SttpBackend[F, Any], uri: Uri)(implicit @unused ev: Async[F]) = {
+      new Live(new JsonRpcClient[F](backend, uri))
+    }
+
   }
 
 }

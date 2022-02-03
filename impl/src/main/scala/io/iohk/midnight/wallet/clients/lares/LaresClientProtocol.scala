@@ -60,7 +60,6 @@ object LaresClientProtocol {
     implicit val publicStateDecoder: Decoder[PublicState] = Decoder[String].map(PublicState.apply)
     implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
       Decoder[String].map(PublicTranscript.apply)
-    implicit val transactionRequestDecoder: Decoder[TransactionRequest] = deriveDecoder
 
     implicit val applyBlockLocallyRequestJsonEncodableAsInstanceInstance
         : JsonRpcEncodableAsMethod[ApplyBlockLocallyRequest] = () => "applyBlockLocally"
