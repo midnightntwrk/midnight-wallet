@@ -17,12 +17,12 @@ import typings.api.mod.{GUID, SemanticEvent}
 @JSExportTopLevel("Wallet")
 object JsWallet {
   @JSExport
-  def build(proverUri: String, platformUri: String): js.Promise[mod.WalletInternal] =
+  def build(proverUri: String, platformUri: String): js.Promise[WalletBaseImpl] =
     WalletBuilder
       .catsEffectWallet(Uri.unsafeParse(proverUri), Uri.unsafeParse(platformUri))
       .allocated
       .map { case (walletAPI, finalizer) =>
-        new mod.WalletInternal {
+        val walletInternal = new mod.WalletInternal {
           override def call(
               deployTransactionHash: mod.Hash,
               transitionFunction: mod.TransitionFunction,
@@ -65,6 +65,8 @@ object JsWallet {
 
           override def close(): Promise[Unit] = finalizer.unsafeToPromise()
         }
+
+        new WalletBaseImpl(walletInternal)
       }
       .unsafeToPromise()
 }

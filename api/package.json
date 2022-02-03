@@ -4,7 +4,8 @@
   "module": "./dist/wallet.js",
   "main": "./dist/wallet.js",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "prepack": "$npm_execpath run build"
   },
   "devDependencies": {
     "typescript": "^4.5.4"
