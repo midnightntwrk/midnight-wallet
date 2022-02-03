@@ -50,14 +50,12 @@ object LaresClientProtocol {
     implicit val blockHeaderEncoder: Encoder[AppliedBlock.Header] = deriveEncoder
     implicit val appliedBlockBodyEncoder: Encoder[AppliedBlock.Body] = deriveEncoder
     implicit val appliedBlockEncoder: Encoder[AppliedBlock] = deriveEncoder
-    implicit val contractIdEncoder: Encoder[ContractId] = Encoder[String].contramap(_.value)
     implicit val contactSourceEncoder: Encoder[ContractSource] = Encoder[String].contramap(_.value)
     implicit val publicStateEncoder: Encoder[PublicState] = Encoder[String].contramap(_.value)
     implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =
       Encoder[String].contramap(_.value)
     implicit val userIdEncoder: Encoder[UserId] = Encoder[String].contramap(_.value)
 
-    implicit val contractIdDecoder: Decoder[ContractId] = Decoder[String].map(ContractId.apply)
     implicit val eventDecoder: Decoder[SemanticEvent] = Decoder[String].map(SemanticEvent.apply)
     implicit val publicStateDecoder: Decoder[PublicState] = Decoder[String].map(PublicState.apply)
     implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
