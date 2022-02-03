@@ -6,6 +6,7 @@ import cats.effect.{Clock, SyncIO}
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.Generators.*
+import io.iohk.midnight.wallet.domain.UserId
 import io.iohk.midnight.wallet.services.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
@@ -17,17 +18,19 @@ trait WalletSpec {
   val syncService = new SyncServiceStub()
   val failingSyncService = new FailingSyncService()
 
-  def buildWalletApi[F[_]: MonadThrow: Clock: Random](
+  def buildWallet[F[_]: MonadThrow: Clock: Random](
       proverClient: ProverClient[F],
       syncService: SyncService[F],
+      userId: UserId = UserId("test_user"),
   ): Wallet[F] =
     new Wallet.Live[F](
       new ProverService.Live[F](proverClient, 2),
       syncService,
+      userId,
     )
 
   implicit val random: Random[SyncIO] = Random.scalaUtilRandom[SyncIO].unsafeRunSync()
-  val walletApi = buildWalletApi[SyncIO](proverClient, syncService)
+  val wallet = buildWallet[SyncIO](proverClient, syncService)
 
   val ExpectedHashLength = 64
   def isHexString(str: String): Boolean =
@@ -37,7 +40,7 @@ trait WalletSpec {
 class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      walletApi.callContract(input).map { r =>
+      wallet.callContract(input).map { r =>
         assertEquals(r.value.length, ExpectedHashLength)
         assert(isHexString(r.value))
       }
@@ -48,8 +51,8 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
     forAllF(callContractInputGen, callContractInputGen) {
       (input1: CallContractInput, input2: CallContractInput) =>
         for {
-          hash1 <- walletApi.callContract(input1)
-          hash2 <- walletApi.callContract(input2)
+          hash1 <- wallet.callContract(input1)
+          hash2 <- wallet.callContract(input2)
           wasSubmitted1 = syncService.wasCallTxSubmitted(hash1)
           wasSubmitted2 = syncService.wasCallTxSubmitted(hash2)
         } yield assert(wasSubmitted1 && wasSubmitted2)
@@ -58,9 +61,9 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
 
   test("fails when prover client fails") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(failingProverClient, syncService)
+      val wallet = buildWallet(failingProverClient, syncService)
 
-      walletApi
+      wallet
         .callContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingProverClient.TheError)))
@@ -69,9 +72,9 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
 
   test("does not retry proof status forever") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(alwaysInProgressProverClient, syncService)
+      val wallet = buildWallet(alwaysInProgressProverClient, syncService)
 
-      walletApi
+      wallet
         .callContract(input)
         .attempt
         .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
@@ -80,9 +83,9 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
 
   test("fails when platform submission fails") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val walletApi = buildWalletApi(proverClient, failingSyncService)
+      val wallet = buildWallet(proverClient, failingSyncService)
 
-      walletApi
+      wallet
         .callContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
@@ -93,7 +96,7 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
 class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      walletApi.deployContract(input).map { r =>
+      wallet.deployContract(input).map { r =>
         assertEquals(r.value.length, ExpectedHashLength)
         assert(isHexString(r.value))
       }
@@ -104,8 +107,8 @@ class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuit
     forAllF(deployContractInputGen, deployContractInputGen) {
       (input1: DeployContractInput, input2: DeployContractInput) =>
         for {
-          hash1 <- walletApi.deployContract(input1)
-          hash2 <- walletApi.deployContract(input2)
+          hash1 <- wallet.deployContract(input1)
+          hash2 <- wallet.deployContract(input2)
           wasSubmitted1 = syncService.wasDeployTxSubmitted(hash1)
           wasSubmitted2 = syncService.wasDeployTxSubmitted(hash2)
         } yield assert(wasSubmitted1 && wasSubmitted2)
@@ -114,12 +117,22 @@ class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuit
 
   test("fails when platform submission fails") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      val walletApi = buildWalletApi(proverClient, failingSyncService)
+      val wallet = buildWallet(proverClient, failingSyncService)
 
-      walletApi
+      wallet
         .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }
+  }
+}
+
+class WalletUserIdSpec extends CatsEffectSuite with WalletSpec {
+  test("generate a UserId and keep it in memory") {
+    val wallet = buildWallet(proverClient, syncService)
+    for {
+      id1 <- wallet.getUserId()
+      id2 <- wallet.getUserId()
+    } yield assertEquals(id1, id2)
   }
 }

@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet
 import cats.MonadThrow
 import cats.effect.Clock
 import cats.effect.std.Random
+import cats.syntax.applicative.*
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import io.iohk.midnight.wallet.Wallet.*
@@ -17,12 +18,15 @@ trait Wallet[F[_]] {
   def callContract(contractInput: CallContractInput): F[Hash[CallTransaction]]
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
+
+  def getUserId(): F[UserId]
 }
 
 object Wallet {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
       syncService: SyncService[F],
+      userId: UserId,
   ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
       for {
@@ -66,6 +70,8 @@ object Wallet {
         input.publicState,
         TransitionFunctionCircuits(Map.empty),
       )
+
+    override def getUserId(): F[UserId] = userId.pure
   }
 
   final case class CallContractInput(

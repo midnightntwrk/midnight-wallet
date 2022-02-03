@@ -3,34 +3,47 @@ package io.iohk.midnight.wallet
 import cats.effect.kernel.Async
 import cats.effect.std.Random
 import cats.effect.{IO, Resource}
-import cats.syntax.functor.*
 import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.clients.prover.ProverClient
-import io.iohk.midnight.wallet.services.{ProverService, SyncService}
+import io.iohk.midnight.wallet.services.{ProverService, SyncService, UserIdGenerator}
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
 object WalletBuilder {
-  def build[F[_]: Async](
-      proverUri: Uri,
-      platformUri: Uri,
-  ): Resource[F, Wallet[F]] = {
+  def build[F[_]: Async](config: Config): Resource[F, Wallet[F]] = {
     val sttpBackend = FetchCatsBackend[F]()
-    val proverClient = new ProverClient.Live[F](sttpBackend, proverUri)
-    val proverService = new ProverService.Live[F](proverClient, 5)
+    val proverClient = new ProverClient.Live[F](sttpBackend, config.proverUri)
+    val proverService = new ProverService.Live[F](proverClient, config.proverMaxRetries)
 
-    PlatformClient
-      .Live[F](sttpBackend, platformUri)
-      .flatMap(SyncService.Live[F](_, 100))
-      .evalMap { syncService =>
-        Random
-          .scalaUtilRandom[F]
-          .map { implicit random =>
-            new Wallet.Live[F](proverService, syncService)
-          }
+    Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
+      for {
+        platformClient <- PlatformClient.Live[F](sttpBackend, config.platformUri)
+        syncService <- SyncService.Live[F](platformClient, config.syncBufferSize)
+        userId <- Resource.eval(UserIdGenerator.generate(config.userIdLength))
+      } yield {
+        new Wallet.Live[F](proverService, syncService, userId)
       }
+    }
   }
 
-  def catsEffectWallet(proverUri: Uri, platformUri: Uri): Resource[IO, Wallet[IO]] =
-    build[IO](proverUri, platformUri)
+  def catsEffectWallet(config: Config): Resource[IO, Wallet[IO]] = build[IO](config)
+
+  final case class Config(
+      proverUri: Uri,
+      platformUri: Uri,
+      proverMaxRetries: Int,
+      syncBufferSize: Int,
+      userIdLength: Int,
+  )
+
+  object Config {
+    def default(proverUri: Uri, platformUri: Uri): Config =
+      Config(
+        proverUri,
+        platformUri,
+        proverMaxRetries = 2000,
+        syncBufferSize = 10,
+        userIdLength = 10,
+      )
+  }
 }

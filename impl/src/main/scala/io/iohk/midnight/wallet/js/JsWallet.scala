@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.js
 import cats.effect.unsafe.implicits.global
 import io.iohk.midnight.wallet.WalletBuilder
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
+import io.iohk.midnight.wallet.WalletBuilder.Config
 import io.iohk.midnight.wallet.domain.*
 import scala.scalajs.js
 import scala.scalajs.js.Promise
@@ -19,16 +20,16 @@ object JsWallet {
   @JSExport
   def build(proverUri: String, platformUri: String): js.Promise[WalletBaseImpl] =
     WalletBuilder
-      .catsEffectWallet(Uri.unsafeParse(proverUri), Uri.unsafeParse(platformUri))
+      .catsEffectWallet(Config.default(Uri.unsafeParse(proverUri), Uri.unsafeParse(platformUri)))
       .allocated
-      .map { case (walletAPI, finalizer) =>
+      .map { case (wallet, finalizer) =>
         val walletInternal = new mod.WalletInternal {
           override def call(
               deployTransactionHash: mod.Hash,
               transitionFunction: mod.TransitionFunction,
               publicTranscript: mod.PublicTranscript,
           ): Promise[mod.CallResult] =
-            walletAPI
+            wallet
               .callContract(
                 CallContractInput(
                   Hash[DeployTransaction](deployTransactionHash),
@@ -48,7 +49,7 @@ object JsWallet {
               contractSource: mod.ContractSource,
               publicState: mod.PublicState,
           ): Promise[mod.CallResult] =
-            walletAPI
+            wallet
               .deployContract(
                 DeployContractInput(ContractSource(contractSource), PublicState(publicState)),
               )
@@ -59,7 +60,7 @@ object JsWallet {
               }
               .unsafeToPromise()
 
-          override def getGUID(): Promise[GUID] = ???
+          override def getGUID(): Promise[GUID] = wallet.getUserId().map(_.value).unsafeToPromise()
 
           override def sync(f: js.Function1[js.Array[SemanticEvent], Unit]): Unit = ???
 
