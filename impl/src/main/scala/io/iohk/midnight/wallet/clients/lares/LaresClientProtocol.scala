@@ -3,14 +3,14 @@ package io.iohk.midnight.wallet.clients.lares
 import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredEncoder
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import io.circe.{Decoder, Encoder, Json}
+import io.circe.syntax.EncoderOps
+import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
 import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.domain.AppliedBlock.{ResultMetadata, TransactionResult}
 
 object LaresClientProtocol {
 
-  case class ApplyBlockLocallyRequest(from: UserId, block: AppliedBlock)
+  case class ApplyBlockLocallyRequest(from: UserId, block: Block)
   case class ApplyBlockLocallyResponse(events: List[SemanticEvent])
 
   object Serialization {
@@ -44,12 +44,29 @@ object LaresClientProtocol {
     implicit val deployTxEncoder: Encoder[DeployTransaction] = deriveEncoder
     implicit val txEncoder: Encoder[Transaction] = deriveConfiguredEncoder
 
-    implicit val txResultMetadataEncoder: Encoder[ResultMetadata] = deriveEncoder
-    implicit val txResultEncoder: Encoder[TransactionResult] = deriveEncoder
     implicit val blockHeightEncoder: Encoder[Block.Height] = Encoder[BigInt].contramap(_.value)
-    implicit val blockHeaderEncoder: Encoder[AppliedBlock.Header] = deriveEncoder
-    implicit val appliedBlockBodyEncoder: Encoder[AppliedBlock.Body] = deriveEncoder
-    implicit val appliedBlockEncoder: Encoder[AppliedBlock] = deriveEncoder
+    implicit val blockHeaderEncoder: Encoder[Block.Header] = (h: Block.Header) =>
+      JsonObject(
+        "blockHash" -> h.hash.asJson,
+        "parentBlockHash" -> h.parentHash.asJson,
+        "height" -> h.height.asJson,
+        "timestamp" -> h.timestamp.asJson,
+      ).asJson
+
+    implicit val transactionWithReceiptEncoder: Encoder[TransactionWithReceipt] =
+      (transactionWithReceipt: TransactionWithReceipt) =>
+        JsonObject(
+          "kind" -> "lares".asJson,
+          "transaction" -> transactionWithReceipt.transaction.asJson,
+          "result" -> JsonObject("type" -> "resultType".asJson).asJson, // FIXME resultType
+        ).asJson
+
+    implicit val blockEncoder: Encoder[Block] = (b: Block) =>
+      JsonObject(
+        "header" -> b.header.asJson,
+        "body" -> JsonObject("transactionResults" -> b.transactions.asJson).asJson,
+      ).asJson
+
     implicit val contactSourceEncoder: Encoder[ContractSource] = Encoder[String].contramap(_.value)
     implicit val publicStateEncoder: Encoder[PublicState] = Encoder[String].contramap(_.value)
     implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =

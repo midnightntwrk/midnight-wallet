@@ -4,14 +4,14 @@ import cats.effect.IO
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.wallet.clients.JsonRpcClient
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
-import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.{
   ApplyBlockLocallyRequest,
   ApplyBlockLocallyResponse,
 }
-import io.iohk.midnight.wallet.domain.AppliedBlock.{Body, Header, ResultMetadata, TransactionResult}
-import io.iohk.midnight.wallet.domain.Block.Height
+import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.domain.Block.*
+import io.iohk.midnight.wallet.domain.Receipt.Success
 import munit.CatsEffectSuite
 import sttp.client3.impl.cats.CatsMonadError
 import sttp.client3.testing.SttpBackendStub
@@ -78,7 +78,7 @@ class LaresClientSpec extends CatsEffectSuite {
         |               "type": "deploy"
         |             },
         |             "result": {
-        |               "type": "deploy"
+        |               "type": "resultType"
         |             }
         |           },
         |           {
@@ -94,7 +94,7 @@ class LaresClientSpec extends CatsEffectSuite {
         |               "type": "call"
         |             },
         |             "result": {
-        |               "type": "call"
+        |               "type": "resultType"
         |             }
         |           }
         |         ]
@@ -120,43 +120,39 @@ class LaresClientSpec extends CatsEffectSuite {
     testRequest(
       request = ApplyBlockLocallyRequest(
         from = UserId("from"),
-        block = AppliedBlock(
+        block = Block(
           header = Header(
-            blockHash = Hash[Block]("blockHash"),
-            parentBlockHash = Hash[Block]("parentBlockHash"),
+            hash = Some(Hash[Block]("blockHash")),
+            parentHash = Hash[Block]("parentBlockHash"),
             height = Height(42).getOrElse(???),
             timestamp = timestamp,
           ),
-          body = Body(
-            List(
-              TransactionResult(
-                kind = "lares",
-                transaction = DeployTransaction(
-                  hash = Some(Hash[DeployTransaction]("deployHash")),
-                  timestamp = timestamp,
-                  contractSource = ContractSource("contractSource"),
-                  publicState = PublicState("publicState"),
-                  transitionFunctionCircuits = TransitionFunctionCircuits(
-                    Map(
-                      "transitionFunctionCircuit1" -> "transitionFunctionCircuit1Value",
-                      "transitionFunctionCircuit2" -> "transitionFunctionCircuit2Value",
-                    ),
+          transactions = List(
+            TransactionWithReceipt(
+              transaction = DeployTransaction(
+                hash = Some(Hash[DeployTransaction]("deployHash")),
+                timestamp = timestamp,
+                contractSource = ContractSource("contractSource"),
+                publicState = PublicState("publicState"),
+                transitionFunctionCircuits = TransitionFunctionCircuits(
+                  Map(
+                    "transitionFunctionCircuit1" -> "transitionFunctionCircuit1Value",
+                    "transitionFunctionCircuit2" -> "transitionFunctionCircuit2Value",
                   ),
                 ),
-                result = ResultMetadata(`type` = "deploy"),
               ),
-              TransactionResult(
-                kind = "lares",
-                transaction = CallTransaction(
-                  hash = Some(Hash[CallTransaction]("callHash")),
-                  timestamp = timestamp,
-                  contractHash = Hash[DeployTransaction]("deployTransactionHash"),
-                  transitionFunction = TransitionFunction("transitionFunction"),
-                  proof = Some(Proof("proof")),
-                  publicTranscript = PublicTranscript("publicTranscript"),
-                ),
-                result = ResultMetadata(`type` = "call"),
+              receipt = Success,
+            ),
+            TransactionWithReceipt(
+              transaction = CallTransaction(
+                hash = Some(Hash[CallTransaction]("callHash")),
+                timestamp = timestamp,
+                contractHash = Hash[DeployTransaction]("deployTransactionHash"),
+                transitionFunction = TransitionFunction("transitionFunction"),
+                proof = Some(Proof("proof")),
+                publicTranscript = PublicTranscript("publicTranscript"),
               ),
+              receipt = Success,
             ),
           ),
         ),
