@@ -2,6 +2,8 @@
   "name": "impl",
   "version": "0.0.1",
   "type": "module",
+  "module": "./target/dist/main.js",
+  "main": "./target/dist/main.js",
   "scripts": {
     "build": "sbt dist",
     "prepack": "$npm_execpath run build",

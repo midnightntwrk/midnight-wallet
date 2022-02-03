@@ -1,11 +1,11 @@
-package io.iohk.midnight.wallet.api
+package io.iohk.midnight.wallet
 
 import cats.MonadThrow
 import cats.effect.Clock
 import cats.effect.std.Random
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
-import io.iohk.midnight.wallet.api.WalletAPI.*
+import io.iohk.midnight.wallet.Wallet.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Hashing.*
 import io.iohk.midnight.wallet.services.{ProverService, SyncService}
@@ -13,17 +13,17 @@ import io.iohk.midnight.wallet.util.ClockOps.*
 import io.iohk.midnight.wallet.util.HashOps.*
 import java.time.Instant
 
-trait WalletAPI[F[_]] {
+trait Wallet[F[_]] {
   def callContract(contractInput: CallContractInput): F[Hash[CallTransaction]]
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 }
 
-object WalletAPI {
+object Wallet {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
       syncService: SyncService[F],
-  ) extends WalletAPI[F] {
+  ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
       for {
         proof <- proverService.prove(input.circuitValues)

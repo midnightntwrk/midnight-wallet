@@ -5,7 +5,8 @@
   "packageManager": "yarn@3.1.1",
   "workspaces": [
     "api",
-    "impl"
+    "impl",
+    "example"
   ],
   "scripts": {
     "build": "yarn workspaces foreach -pt run build",

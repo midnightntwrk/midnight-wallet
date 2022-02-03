@@ -59,7 +59,7 @@ class PlatformClientStub(
   // are valid. So let's pretend that only the example call tx is invalid
   // for the sake of testing
   private def isValid(transaction: Transaction): Boolean =
-    transaction == examples.SubmitTx.validCallObject.payload
+    transaction == examples.SubmitTx.validCallTx
 
   override def receive(): IO[ReceiveMessage] =
     responses.take

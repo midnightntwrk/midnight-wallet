@@ -23,6 +23,7 @@ lazy val wallet = (project in file("."))
       baseDir
     },
     stIgnore ++= List("rxjs"),
+    stEnableScalaJsDefined := Selection.All,
 
     // Dependencies
     libraryDependencies ++= Seq(
@@ -50,12 +51,14 @@ lazy val wallet = (project in file("."))
     coverageFailOnMinimum := true,
     coverageMinimumStmtTotal := 90,
     coverageMinimumBranchTotal := 90,
+    coverageExcludedPackages := "io.iohk.midnight.wallet.WalletBuilder;io.iohk.midnight.wallet.js",
   )
 
 lazy val integrationTests = (project in file("integration-tests"))
   .enablePlugins(ScalaJSPlugin)
   .dependsOn(wallet)
   .settings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     Test / jsEnv := new org.scalajs.jsenv.selenium.SeleniumJSEnv(
       new org.openqa.selenium.firefox.FirefoxOptions(),
     ),

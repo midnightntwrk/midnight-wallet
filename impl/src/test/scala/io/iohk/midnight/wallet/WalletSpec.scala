@@ -3,15 +3,14 @@ package io.iohk.midnight.wallet
 import cats.MonadThrow
 import cats.effect.std.Random
 import cats.effect.{Clock, SyncIO}
-import io.iohk.midnight.wallet.api.WalletAPI
-import io.iohk.midnight.wallet.api.WalletAPI.*
+import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.Generators.*
 import io.iohk.midnight.wallet.services.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
-trait WalletAPISpec {
+trait WalletSpec {
   val proverClient = new ProverClientStub()
   val failingProverClient = new FailingProverClient()
   val alwaysInProgressProverClient = new AlwaysInProgressProverClient()
@@ -21,8 +20,8 @@ trait WalletAPISpec {
   def buildWalletApi[F[_]: MonadThrow: Clock: Random](
       proverClient: ProverClient[F],
       syncService: SyncService[F],
-  ): WalletAPI[F] =
-    new WalletAPI.Live[F](
+  ): Wallet[F] =
+    new Wallet.Live[F](
       new ProverService.Live[F](proverClient, 2),
       syncService,
     )
@@ -35,10 +34,7 @@ trait WalletAPISpec {
     str.forall((('0' to '9') ++ ('a' to 'f')).contains(_))
 }
 
-class WalletAPICallContractSpec
-    extends CatsEffectSuite
-    with ScalaCheckEffectSuite
-    with WalletAPISpec {
+class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
       walletApi.callContract(input).map { r =>
@@ -94,10 +90,7 @@ class WalletAPICallContractSpec
   }
 }
 
-class WalletAPIDeployContractSpec
-    extends CatsEffectSuite
-    with ScalaCheckEffectSuite
-    with WalletAPISpec {
+class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
       walletApi.deployContract(input).map { r =>

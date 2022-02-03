@@ -6,7 +6,7 @@ type PublicTranscript = string
 
 type Failed = { reason: string }
 type Succeed = { hash: Hash }
-type CallResult = Failed | Succeed
+export type CallResult = Failed | Succeed
 
 type ContractSource = string
 type PublicState = string
@@ -31,6 +31,8 @@ export interface Wallet {
     sync(): Observable<Array<SemanticEvent>>
 
     getGUID(): Promise<GUID>
+
+    close(): Promise<void>
 }
 
 // A base implementation that wraps an internal implementation.
@@ -66,6 +68,10 @@ export class WalletBaseImpl implements Wallet {
     getGUID(): Promise<GUID> {
         return this.#wrapped.getGUID()
     }
+
+    close(): Promise<void> {
+        return this.#wrapped.close()
+    }
 }
 
 // The interface that finally implements the logic
@@ -84,4 +90,6 @@ export interface WalletInternal {
     sync(f: (event: Array<SemanticEvent>) => void): void
 
     getGUID(): Promise<GUID>
+
+    close(): Promise<void>
 }

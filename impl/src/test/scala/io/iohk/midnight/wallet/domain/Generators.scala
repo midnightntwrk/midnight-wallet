@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.domain
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.api.WalletAPI.*
+import io.iohk.midnight.wallet.Wallet.*
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*

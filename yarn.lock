@@ -15,7 +15,19 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"impl@workspace:impl":
+"example@workspace:example":
+  version: 0.0.0-use.local
+  resolution: "example@workspace:example"
+  dependencies:
+    api: "workspace:^"
+    impl: "workspace:^"
+    typescript: ^4.5.4
+  peerDependencies:
+    rxjs: ^7.5.1
+  languageName: unknown
+  linkType: soft
+
+"impl@workspace:^, impl@workspace:impl":
   version: 0.0.0-use.local
   resolution: "impl@workspace:impl"
   dependencies:
