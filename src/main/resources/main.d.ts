@@ -1,7 +1,7 @@
 declare module 'midnight-wallet';
 
-type Failed = { reason: string }
-type Succeed = { hash: string }
+type Failed = { type: 'Failed', reason: string }
+type Succeed = { type: 'Succeed', hash: string }
 export type CallResult = Failed | Succeed
 
 export class Wallet {
