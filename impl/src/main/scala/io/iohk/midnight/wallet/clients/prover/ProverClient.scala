@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.clients.prover
 import cats.Functor
 import cats.implicits.toFunctorOps
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, JsonObject}
 import io.iohk.midnight.wallet.clients.prover.ProverClient.ProofStatus
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Proof
@@ -37,7 +37,9 @@ object ProverClient {
 
     override def proofStatus(proofId: ProofId): F[ProofStatus] =
       emptyRequest
-        .get(makeProofStatusUri(proofId))
+        // FIXME: this should be a GET request - waiting for updates on snarike server side
+        .body(JsonObject.empty)
+        .post(makeProofStatusUri(proofId))
         .response(asJson[ProofStatus].getRight)
         .send(backend)
         .map(_.body)

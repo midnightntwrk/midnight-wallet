@@ -12,9 +12,10 @@ As these tests connect with the real external services, the corresponding servic
 locally and listening to the configured port to which the tests connect. The tests are intentionally
 configured to connect to the default port for the service.
 
-Currently, the only external service being tested is platform's node. See 
-[midnight-platform](https://github.com/input-output-hk/midnight-platform/) repo to find out how to 
-build the docker image and run a container.
+Currently, there are 2 external services being tested:
+- Platform's node (See [midnight-platform](https://github.com/input-output-hk/midnight-platform/) repo to find out how to 
+build the docker image and run a container)
+- Snarkie Server (See [snarkie](https://github.com/input-output-hk/snarkie) repo to build docker image and run container)
 
 ### Selenium
 There were 2 reasons to choose Selenium as the runtime for integration tests:

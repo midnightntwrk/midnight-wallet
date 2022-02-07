@@ -48,18 +48,19 @@ trait ProverClientSpec {
 
   def buildProveBodySttpBackend(proofId: ProofId, circuitValues: CircuitValues) =
     sttpBackendStub
-      .whenRequestMatches(r =>
-        r.body match {
-          case body: StringBody => body.s == circuitValuesBodyRequest(circuitValues)
-          case _                => false
-        },
-      )
+      .whenRequestMatches(compareStringBody(_, circuitValuesBodyRequest(circuitValues)))
       .thenRespond(workIdResponse(proofId))
 
   def buildEmptyBodyStatusSttpBackend(proof: Proof) =
     sttpBackendStub
-      .whenRequestMatches(_.body == NoBody)
+      .whenRequestMatches(compareStringBody(_, "{}"))
       .thenRespond(doneStatusResponse(proof))
+
+  private def compareStringBody(request: Request[_, _], expectedBody: String): Boolean =
+    request.body match {
+      case body: StringBody => body.s == expectedBody.filterNot(_.isWhitespace)
+      case _                => false
+    }
 
   def buildStatusPathSttpBackend(proofId: ProofId, proof: Proof) =
     sttpBackendStub
