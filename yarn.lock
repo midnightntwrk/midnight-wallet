@@ -3,78 +3,9 @@
 
 __metadata:
   version: 5
-  cacheKey: 8
-
-"api@workspace:^, api@workspace:api":
-  version: 0.0.0-use.local
-  resolution: "api@workspace:api"
-  dependencies:
-    typescript: ^4.5.4
-  peerDependencies:
-    rxjs: ^7.5.1
-  languageName: unknown
-  linkType: soft
-
-"example@workspace:example":
-  version: 0.0.0-use.local
-  resolution: "example@workspace:example"
-  dependencies:
-    api: "workspace:^"
-    impl: "workspace:^"
-    typescript: ^4.5.4
-  peerDependencies:
-    rxjs: ^7.5.1
-  languageName: unknown
-  linkType: soft
-
-"impl@workspace:^, impl@workspace:impl":
-  version: 0.0.0-use.local
-  resolution: "impl@workspace:impl"
-  dependencies:
-    api: "workspace:^"
-    rxjs: ^7.5.1
-    typescript: ^4.5.4
-  languageName: unknown
-  linkType: soft
 
 "midnight-wallet@workspace:.":
   version: 0.0.0-use.local
   resolution: "midnight-wallet@workspace:."
   languageName: unknown
   linkType: soft
-
-"rxjs@npm:^7.5.1":
-  version: 7.5.2
-  resolution: "rxjs@npm:7.5.2"
-  dependencies:
-    tslib: ^2.1.0
-  checksum: daf1fe7289de500b25d822fd96cde3c138c7902e8bf0e6aa12a3e70847a5cabeeb4d677f10e19387e1db44b12c5b1be0ff5c79b8cd63ed6ce891d765e566cf4d
-  languageName: node
-  linkType: hard
-
-"tslib@npm:^2.1.0":
-  version: 2.3.1
-  resolution: "tslib@npm:2.3.1"
-  checksum: de17a98d4614481f7fcb5cd53ffc1aaf8654313be0291e1bfaee4b4bb31a20494b7d218ff2e15017883e8ea9626599b3b0e0229c18383ba9dce89da2adf15cb9
-  languageName: node
-  linkType: hard
-
-"typescript@npm:^4.5.4":
-  version: 4.5.4
-  resolution: "typescript@npm:4.5.4"
-  bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
-  checksum: 59f3243f9cd6fe3161e6150ff6bf795fc843b4234a655dbd938a310515e0d61afd1ac942799e7415e4334255e41c2c49b7dd5d9fd38a17acd25a6779ca7e0961
-  languageName: node
-  linkType: hard
-
-"typescript@patch:typescript@^4.5.4#~builtin<compat/typescript>":
-  version: 4.5.4
-  resolution: "typescript@patch:typescript@npm%3A4.5.4#~builtin<compat/typescript>::version=4.5.4&hash=493e53"
-  bin:
-    tsc: bin/tsc
-    tsserver: bin/tsserver
-  checksum: 2e488dde7d2c4a2fa2e79cf2470600f8ce81bc0563c276b72df8ff412d74456ae532ba824650ae936ce207440c79720ddcfaa25e3cb4477572b8534fa4e34d49
-  languageName: node
-  linkType: hard

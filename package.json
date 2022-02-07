@@ -1,18 +1,16 @@
 {
   "name": "midnight-wallet",
-  "private": true,
   "version": "0.0.1",
+  "type": "commonjs",
+  "module": "./target/dist/main.js",
+  "main": "./target/dist/main.js",
   "packageManager": "yarn@3.1.1",
-  "workspaces": [
-    "api",
-    "impl",
-    "example"
-  ],
   "scripts": {
-    "build": "yarn workspaces foreach -pt run build",
-    "test": "yarn workspaces foreach run test",
-    "test_coverage": "yarn workspaces foreach run test_coverage",
-    "coverage_report": "yarn workspaces foreach run coverage_report",
-    "check_format": "yarn workspaces foreach run check_format"
+    "build": "sbt dist",
+    "prepack": "$npm_execpath run build",
+    "test": "sbt test",
+    "test_coverage": "sbt coverage test",
+    "coverage_report": "sbt coverageReport",
+    "check_format": "sbt scalafmtCheckAll"
   }
 }
