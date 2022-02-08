@@ -160,8 +160,9 @@ class LaresClientSpec extends CatsEffectSuite {
       ),
       encodedRequest = encodedReq,
       encodedResponse = encodedResp,
-      response =
-        ApplyBlockLocallyResponse(events = List(SemanticEvent("event1"), SemanticEvent("event2"))),
+      response = ApplyBlockLocallyResponse(events =
+        List(SemanticEvent("\"event1\""), SemanticEvent("\"event2\"")),
+      ),
     )
   }
 

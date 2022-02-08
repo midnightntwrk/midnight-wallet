@@ -4,7 +4,7 @@ import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredEncoder
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.EncoderOps
-import io.circe.{Decoder, Encoder, JsonObject}
+import io.circe.{Decoder, Encoder, Json, JsonObject}
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
 import io.iohk.midnight.wallet.domain.*
 
@@ -73,7 +73,8 @@ object LaresClientProtocol {
       Encoder[String].contramap(_.value)
     implicit val userIdEncoder: Encoder[UserId] = Encoder[String].contramap(_.value)
 
-    implicit val eventDecoder: Decoder[SemanticEvent] = Decoder[String].map(SemanticEvent.apply)
+    implicit val eventDecoder: Decoder[SemanticEvent] =
+      Decoder[Json].map(json => SemanticEvent.apply(json.toString()))
     implicit val publicStateDecoder: Decoder[PublicState] = Decoder[String].map(PublicState.apply)
     implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
       Decoder[String].map(PublicTranscript.apply)
