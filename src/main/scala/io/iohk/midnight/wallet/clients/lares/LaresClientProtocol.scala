@@ -4,7 +4,7 @@ import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredEncoder
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.EncoderOps
-import io.circe.{Decoder, Encoder, Json, JsonObject}
+import io.circe.{Decoder, Encoder, JsonObject}
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
 import io.iohk.midnight.wallet.domain.*
 
@@ -22,6 +22,8 @@ object LaresClientProtocol {
       Encoder[Map[String, String]].contramap(_.values)
     implicit val transitionFunctionEncoder: Encoder[TransitionFunction] =
       Encoder[String].contramap(_.value)
+    implicit val nonceEncoder: Encoder[Nonce] =
+      Encoder[String].contramap(_.value)
 
     implicit val customConfig: Configuration =
       Configuration.default
@@ -38,9 +40,7 @@ object LaresClientProtocol {
         )
 
     implicit val callTxEncoder: Encoder[CallTransaction] =
-      deriveConfiguredEncoder[CallTransaction].mapJsonObject(
-        _.+:("nonce" -> Json.fromString("nonce")),
-      )
+      deriveConfiguredEncoder[CallTransaction]
     implicit val deployTxEncoder: Encoder[DeployTransaction] = deriveEncoder
     implicit val txEncoder: Encoder[Transaction] = deriveConfiguredEncoder
 

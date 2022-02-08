@@ -32,6 +32,9 @@ object Decoders {
   implicit lazy val proofDecoder: Decoder[Proof] =
     Decoder[String].map(Proof.apply)
 
+  implicit lazy val nonceDecoder: Decoder[Nonce] =
+    Decoder[String].map(Nonce.apply)
+
   implicit lazy val callTransactionDecoder: Decoder[CallTransaction] =
     deriveDecoder
 

@@ -21,6 +21,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) {
   @JSExport
   def call(
       deployTransactionHash: String,
+      nonce: String,
       transitionFunction: String,
       publicTranscript: String,
   ): Promise[CallResult] =
@@ -28,6 +29,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) {
       .callContract(
         CallContractInput(
           Hash[DeployTransaction](deployTransactionHash),
+          Nonce(nonce),
           PublicTranscript(publicTranscript),
           TransitionFunction(transitionFunction),
           CircuitValues.hardcoded,

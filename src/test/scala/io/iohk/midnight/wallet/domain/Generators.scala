@@ -19,8 +19,10 @@ object Generators {
 
   val circuitValuesGen = (arbitrary[Int], arbitrary[Int], arbitrary[Int]).mapN(CircuitValues.apply)
 
+  val nonceGen = Gen.hexStr.map(Nonce.apply)
+
   val callContractInputGen =
-    (contractHashGen, transcriptGen, transitionFunctionGen, circuitValuesGen)
+    (contractHashGen, nonceGen, transcriptGen, transitionFunctionGen, circuitValuesGen)
       .mapN(CallContractInput.apply)
 
   val deployContractInputGen =

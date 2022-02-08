@@ -29,6 +29,9 @@ object Encoders {
   implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =
     Encoder[String].contramap(_.value)
 
+  implicit val nonceEncoder: Encoder[Nonce] =
+    Encoder[String].contramap(_.value)
+
   implicit val callTransactionEncoder: Encoder[CallTransaction] =
     deriveEncoder[CallTransaction].mapJson(
       _.deepMerge(

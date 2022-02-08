@@ -84,8 +84,8 @@ class LaresClientSpec extends CatsEffectSuite {
         |           {
         |             "kind": "lares",
         |             "transaction": {
-        |               "nonce": "nonce",
         |               "hash": "callHash",
+        |               "nonce": "deadbeef",
         |               "timestamp": "1969-12-31T23:59:59.999231476Z",
         |               "deployTransactionHash": "deployTransactionHash",
         |               "transitionFunction": "transitionFunction",
@@ -146,6 +146,7 @@ class LaresClientSpec extends CatsEffectSuite {
             TransactionWithReceipt(
               transaction = CallTransaction(
                 hash = Some(Hash[CallTransaction]("callHash")),
+                nonce = Nonce("deadbeef"),
                 timestamp = timestamp,
                 contractHash = Hash[DeployTransaction]("deployTransactionHash"),
                 transitionFunction = TransitionFunction("transitionFunction"),

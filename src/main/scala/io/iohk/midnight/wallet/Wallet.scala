@@ -54,6 +54,7 @@ object Wallet {
     ): CallTransaction =
       CallTransaction(
         None,
+        input.nonce,
         timestamp,
         input.contractHash,
         input.transitionFunction,
@@ -93,6 +94,7 @@ object Wallet {
 
   final case class CallContractInput(
       contractHash: Hash[DeployTransaction],
+      nonce: Nonce,
       publicTranscript: PublicTranscript,
       transitionFunction: TransitionFunction,
       circuitValues: CircuitValues,

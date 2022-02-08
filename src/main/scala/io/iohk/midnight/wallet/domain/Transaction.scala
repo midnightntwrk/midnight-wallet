@@ -6,6 +6,7 @@ sealed trait Transaction
 
 final case class CallTransaction(
     hash: Option[Hash[CallTransaction]],
+    nonce: Nonce,
     timestamp: Instant,
     contractHash: Hash[DeployTransaction],
     transitionFunction: TransitionFunction,

@@ -7,6 +7,7 @@ export type CallResult = Failed | Succeed
 export class Wallet {
     call(
         deployTransactionHash: string,
+        nonce: string,
         transitionFunction: string,
         publicTranscript: string
     ): Promise<CallResult>

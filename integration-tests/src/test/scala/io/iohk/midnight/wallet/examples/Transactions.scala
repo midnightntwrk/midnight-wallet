@@ -5,6 +5,7 @@ import io.iohk.midnight.wallet.domain.{
   ContractSource,
   DeployTransaction,
   Hash,
+  Nonce,
   Proof,
   PublicState,
   PublicTranscript,
@@ -20,8 +21,9 @@ object Transactions {
       Some(
         Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
       ),
+      Nonce("42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c"),
       Instant.parse("1969-12-31T23:59:59.999391332Z"),
-      Hash[DeployTransaction]("2b00640f0a326ee59f56e7e7cef101a285df5e860c45d9ff8f940eecc57e4015"),
+      Hash[DeployTransaction]("8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe"),
       TransitionFunction("jyfq"),
       Some(
         Proof(

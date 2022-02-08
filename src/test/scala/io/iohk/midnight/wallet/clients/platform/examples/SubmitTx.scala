@@ -14,6 +14,7 @@ object SubmitTx {
       |    "kind" : "lares",
       |    "type" : "call",
       |    "hash" : "3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1",
+      |    "nonce" : "42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c",
       |    "timestamp" : "1969-12-31T23:59:59.999391Z",
       |    "contractHash" : "2b00640f0a326ee59f56e7e7cef101a285df5e860c45d9ff8f940eecc57e4015",
       |    "transitionFunction" : "jyfq",
@@ -27,6 +28,7 @@ object SubmitTx {
       Some(
         Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
       ),
+      Nonce("42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c"),
       Instant.parse("1969-12-31T23:59:59.999391Z"),
       Hash[DeployTransaction]("2b00640f0a326ee59f56e7e7cef101a285df5e860c45d9ff8f940eecc57e4015"),
       TransitionFunction("jyfq"),

@@ -118,6 +118,7 @@ object RollForward {
       |          "kind": "lares",
       |          "transaction": {
       |            "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+      |            "nonce": "42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c",
       |            "timestamp": "1970-01-01T00:00:05.000338337Z",
       |            "type": "call",
       |            "contractHash": "6acdd89eaa541e5f1ec1d180db28bec37b664cffb054209e00c009af71b920f5",
@@ -134,6 +135,7 @@ object RollForward {
       |          "kind": "lares",
       |          "transaction": {
       |            "hash": "ff5e6698fe52cb03927b63bca0ffcd52010d750cf3c4e0d667d69dae112c8067",
+      |            "nonce": "42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c",
       |            "timestamp": "1969-12-31T23:59:53.999328452Z",
       |            "type": "call",
       |            "contractHash": "b2df87e43900da7ef6c7033101918a63e2e7720197a4fda1109fbdd5008c0d3d",
@@ -150,6 +152,7 @@ object RollForward {
       |          "kind": "lares",
       |          "transaction": {
       |            "hash": "ec010f8d78002249653e586948d78e580fa201ff7ae43fe718266aff38949f2b",
+      |            "nonce": "42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c",
       |            "timestamp": "1970-01-01T00:00:02.000163029Z",
       |            "type": "call",
       |            "contractHash": "f4af74842040ff011c27c2c2186c9fe800ca927f28a2927f00413399fe5833aa",
@@ -251,6 +254,7 @@ object RollForward {
                   "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
                 ),
               ),
+              Nonce("42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c"),
               Instant.parse("1970-01-01T00:00:05.000338337Z"),
               Hash[DeployTransaction](
                 "6acdd89eaa541e5f1ec1d180db28bec37b664cffb054209e00c009af71b920f5",
@@ -268,6 +272,7 @@ object RollForward {
                   "ff5e6698fe52cb03927b63bca0ffcd52010d750cf3c4e0d667d69dae112c8067",
                 ),
               ),
+              Nonce("42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c"),
               Instant.parse("1969-12-31T23:59:53.999328452Z"),
               Hash[DeployTransaction](
                 "b2df87e43900da7ef6c7033101918a63e2e7720197a4fda1109fbdd5008c0d3d",
@@ -285,6 +290,7 @@ object RollForward {
                   "ec010f8d78002249653e586948d78e580fa201ff7ae43fe718266aff38949f2b",
                 ),
               ),
+              Nonce("42321d49eaaa7f7c89d2d466b8a8f9a79c18446296dbd9c0f255c7d799a8e67c"),
               Instant.parse("1970-01-01T00:00:02.000163029Z"),
               Hash[DeployTransaction](
                 "f4af74842040ff011c27c2c2186c9fe800ca927f28a2927f00413399fe5833aa",
