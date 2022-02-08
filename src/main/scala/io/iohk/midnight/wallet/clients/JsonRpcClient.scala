@@ -1,8 +1,8 @@
 package io.iohk.midnight.wallet.clients
 
 import cats.effect.Async
-import cats.syntax.applicative.*
-import cats.syntax.applicativeError.*
+import cats.effect.std.Console
+import cats.syntax.all.*
 import io.circe.generic.auto.exportDecoder
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
@@ -10,27 +10,29 @@ import io.iohk.midnight.wallet.clients.JsonRpcClient.*
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcClientErrors.*
 import sttp.client3.*
 import sttp.client3.circe.*
-import sttp.client3.impl.cats.implicits.monadError
 import sttp.model.{StatusCode, Uri}
-import sttp.monad.syntax.MonadErrorOps
-
 import scala.annotation.unused
 import scala.util.control.NoStackTrace
 
-class JsonRpcClient[F[_]: Async](backend: SttpBackend[F, Any], uri: Uri) {
+class JsonRpcClient[F[_]: Async: Console](backend: SttpBackend[F, Any], uri: Uri) {
 
-  def doRequest[Req: JsonRpcEncodableAsMethod: Encoder, Resp: Decoder](req: Req): F[Resp] =
-    emptyRequest
-      .body(prepareRequest(req))
-      .post(uri)
-      .response(asJsonEither[JsonRpcErrorResponse, JsonRpcResponse[Resp]])
-      .send(backend)
-      .map(_.body)
-      .flatMap {
-        case Left(DeserializationException(body, _)) => DeserializationError(body).raiseError
-        case Left(HttpError(body, code))             => ServerError(code, body.error).raiseError
-        case Right(resp)                             => resp.result.pure
-      }
+  def doRequest[Req: JsonRpcEncodableAsMethod: Encoder, Resp: Decoder](req: Req): F[Resp] = {
+    val jsonRpcRequest = prepareRequest(req)
+
+    Console[F].println(s"==> RPC request: ${jsonRpcRequest.toString}") >>
+      emptyRequest
+        .body(jsonRpcRequest)
+        .post(uri)
+        .response(asJsonEither[JsonRpcErrorResponse, JsonRpcResponse[Resp]])
+        .send(backend)
+        .map(_.body)
+        .flatTap(r => Console[F].println(s"==> RPC response: ${r.toString}"))
+        .flatMap {
+          case Left(DeserializationException(body, _)) => DeserializationError(body).raiseError
+          case Left(HttpError(body, code))             => ServerError(code, body.error).raiseError
+          case Right(resp)                             => resp.result.pure
+        }
+  }
 
   private def prepareRequest[Req: JsonRpcEncodableAsMethod](req: Req): JsonRpcRequest[Req] =
     JsonRpcRequest(
