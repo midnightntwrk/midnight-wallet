@@ -9,13 +9,17 @@ import io.iohk.midnight.wallet.clients.platform.examples.SubmitTx
 import io.iohk.midnight.wallet.domain.{Block, Transaction, TransactionWithReceipt}
 import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.{Accepted, Rejected}
 import io.iohk.midnight.wallet.services.SyncServiceSpec.transactionsGen
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.util.HashOps.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
 
-trait SyncServiceSpecBase extends CatsEffectSuite with ScalaCheckEffectSuite {
+trait SyncServiceSpecBase
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with BetterOutputSuite {
   def testService(
       title: String,
   )(theTest: (SyncService[IO], PlatformClientStub) => PropF[IO]): Unit =

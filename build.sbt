@@ -4,6 +4,7 @@ Global / onChangedBuildSource := ReloadOnSourceChanges
 
 ThisBuild / scalaVersion := "2.13.8"
 ThisBuild / scalacOptions += "-Xsource:3"
+Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b")
 
 lazy val wallet = (project in file("."))
   .enablePlugins(ScalaJSPlugin)

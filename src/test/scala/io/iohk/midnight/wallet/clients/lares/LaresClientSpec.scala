@@ -12,6 +12,7 @@ import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Block.*
 import io.iohk.midnight.wallet.domain.Receipt.Success
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.CatsEffectSuite
 import sttp.client3.impl.cats.CatsMonadError
 import sttp.client3.testing.SttpBackendStub
@@ -21,7 +22,7 @@ import sttp.model.{MediaType, Method}
 
 import java.time.Instant
 
-class LaresClientSpec extends CatsEffectSuite {
+class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
 

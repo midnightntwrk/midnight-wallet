@@ -2,11 +2,15 @@ package io.iohk.midnight.wallet.services
 
 import cats.effect.IO
 import cats.effect.std.Random
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
 
-class UserIdGeneratorSpec extends CatsEffectSuite with ScalaCheckEffectSuite {
+class UserIdGeneratorSpec
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with BetterOutputSuite {
   test("generate a UserId") {
     val random = Random.scalaUtilRandom[IO]
 

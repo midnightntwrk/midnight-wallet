@@ -9,6 +9,7 @@ import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.Generators.*
 import io.iohk.midnight.wallet.domain.{Block, SemanticEvent, UserId}
 import io.iohk.midnight.wallet.services.*
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
@@ -39,7 +40,12 @@ trait WalletSpec {
     str.forall((('0' to '9') ++ ('a' to 'f')).contains(_))
 }
 
-class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
+class WalletCallContractSpec
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with WalletSpec
+    with BetterOutputSuite {
+
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
       wallet.callContract(input).map { r =>
@@ -95,7 +101,11 @@ class WalletCallContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite 
   }
 }
 
-class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuite with WalletSpec {
+class WalletDeployContractSpec
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with WalletSpec
+    with BetterOutputSuite {
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
       wallet.deployContract(input).map { r =>
@@ -129,7 +139,7 @@ class WalletDeployContractSpec extends CatsEffectSuite with ScalaCheckEffectSuit
   }
 }
 
-class WalletUserIdSpec extends CatsEffectSuite with WalletSpec {
+class WalletUserIdSpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
   test("generate a UserId and keep it in memory") {
     val wallet = buildWallet(proverClient, syncService)
     for {

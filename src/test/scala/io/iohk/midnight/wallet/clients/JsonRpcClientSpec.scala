@@ -6,6 +6,7 @@ import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcClientErrors.*
 import io.iohk.midnight.wallet.clients.JsonRpcClient.{JsonRpcEncodableAsMethod, JsonRpcError}
 import io.iohk.midnight.wallet.clients.JsonRpcClientSpec.TestDomain.*
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.CatsEffectSuite
 import sttp.client3.impl.cats.CatsMonadError
 import sttp.client3.testing.SttpBackendStub
@@ -13,7 +14,7 @@ import sttp.client3.{Request, StringBody}
 import sttp.model.Uri.*
 import sttp.model.{MediaType, Method, StatusCode}
 
-class JsonRpcClientSpec extends CatsEffectSuite {
+class JsonRpcClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
 

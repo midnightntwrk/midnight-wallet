@@ -5,6 +5,7 @@ import cats.effect.IO
 import io.iohk.midnight.wallet.clients.prover.ProverClient.ProofStatus
 import io.iohk.midnight.wallet.domain.{CircuitValues, Proof, ProofId}
 import io.iohk.midnight.wallet.domain.Generators.*
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 import sttp.client3.*
@@ -83,7 +84,8 @@ trait ProverClientSpec {
 class ProverClientProveSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
-    with ProverClientSpec {
+    with ProverClientSpec
+    with BetterOutputSuite {
   test("a proof Id is returned") {
     forAllF(circuitValuesGen, proofIdGen) { (circuitValues: CircuitValues, proofId: ProofId) =>
       val proverClient = buildProverClient(
@@ -110,7 +112,8 @@ class ProverClientProveSpec
 class ProverClientProofStatusSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
-    with ProverClientSpec {
+    with ProverClientSpec
+    with BetterOutputSuite {
   test("in progress status is returned") {
     forAllF(proofIdGen) { (proofId: ProofId) =>
       val proverClient = buildProverClient(
