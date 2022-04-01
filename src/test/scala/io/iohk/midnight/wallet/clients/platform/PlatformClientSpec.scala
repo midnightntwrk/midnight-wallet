@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.clients.platform
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.wallet.clients.platform.protocol.{ReceiveMessage, SendMessage}
 import io.iohk.midnight.wallet.util.BetterOutputSuite
+import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import munit.CatsEffectSuite
 import sttp.capabilities.WebSockets
 import sttp.client3.impl.cats.CatsMonadError
@@ -14,20 +15,22 @@ import sttp.ws.{WebSocket, WebSocketFrame}
 trait PlatformClientSpec extends CatsEffectSuite with BetterOutputSuite {
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
 
-  def buildClient[S](webSocket: WebSocket[IO]): Resource[IO, PlatformClient[IO]] = {
+  def buildClientFromWebSocket[S](webSocket: WebSocket[IO]): Resource[IO, PlatformClient[IO]] = {
     val sttpBackend =
       SttpBackendStub[IO, WebSockets](catsMonadError).whenAnyRequest.thenRespond(webSocket)
     PlatformClient.Live[IO](sttpBackend, uri"wss://test.com")
   }
 
-  def buildClient(initialReceive: List[String]): Resource[IO, PlatformClient[IO]] = {
+  def buildClientWithInitialReceive(
+      initialReceive: List[String],
+  ): Resource[IO, PlatformClient[IO]] = {
     val webSocketStub =
       WebSocketStub.initialReceive(initialReceive.map(WebSocketFrame.text)).build[IO]
-    buildClient(webSocketStub)
+    buildClientFromWebSocket(webSocketStub)
   }
 
   def assertReceive(message: String, expected: ReceiveMessage): IO[Unit] = {
-    val clientResource = buildClient(List(message))
+    val clientResource = buildClientWithInitialReceive(List(message))
     clientResource.use(_.receive().map(assertEquals(_, expected)))
   }
 
@@ -35,7 +38,7 @@ trait PlatformClientSpec extends CatsEffectSuite with BetterOutputSuite {
     // This websocket stub just echoes back what it got, to be able to see what the client sent
     val echoWebSocket = WebSocketStub.noInitialReceive.thenRespond(List(_)).build[IO]
 
-    buildClient(echoWebSocket).use { client =>
+    buildClientFromWebSocket(echoWebSocket).use { client =>
       for {
         _ <- client.send(message)
         received <- echoWebSocket.receive()

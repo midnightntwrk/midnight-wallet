@@ -3,10 +3,7 @@ package io.iohk.midnight.wallet
 import cats.MonadThrow
 import cats.effect.Clock
 import cats.effect.std.Random
-import cats.syntax.applicative.*
-import cats.syntax.applicativeError.*
-import cats.syntax.flatMap.*
-import cats.syntax.functor.*
+import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.Wallet.*
 import io.iohk.midnight.wallet.domain.*
@@ -87,7 +84,19 @@ object Wallet {
       )
 
     override def sync(): F[Stream[F, Seq[SemanticEvent]]] =
-      syncService.sync().map(_.evalMap(laresService.applyBlock))
+      syncService
+        .sync()
+        .map(
+          _.evalMap(laresService.applyBlock)
+            .evalTap { case (_, txRequests) => submitTxRequests(txRequests) }
+            .map(_._1),
+        )
+
+    private def submitTxRequests(txRequests: Seq[TransactionRequest]): F[Unit] =
+      txRequests
+        .map(CallContractInput.fromTxRequest)
+        .traverse(callContract)
+        .void
 
     override def getUserId(): F[UserId] = userId.pure
   }
@@ -99,6 +108,16 @@ object Wallet {
       transitionFunction: TransitionFunction,
       circuitValues: CircuitValues,
   )
+  object CallContractInput {
+    def fromTxRequest(txRequest: TransactionRequest): CallContractInput =
+      CallContractInput(
+        txRequest.contractId,
+        txRequest.nonce,
+        txRequest.publicTranscript,
+        txRequest.function,
+        CircuitValues.hardcoded,
+      )
+  }
 
   final case class DeployContractInput(
       contractSource: ContractSource,
@@ -106,5 +125,5 @@ object Wallet {
   )
 
   sealed trait Error extends Exception
-  case class TransactionRejected(reason: String) extends Error
+  final case class TransactionRejected(reason: String) extends Error
 }

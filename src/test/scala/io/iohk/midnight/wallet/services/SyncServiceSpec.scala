@@ -2,15 +2,21 @@ package io.iohk.midnight.wallet.services
 
 import cats.effect.IO
 import cats.effect.std.Random
-import cats.syntax.all.*
+import cats.syntax.eq.*
+import cats.syntax.functor.*
+import cats.syntax.parallel.*
+import cats.syntax.traverse.*
 import fs2.Stream
 import io.iohk.midnight.wallet.clients.platform.PlatformClientStub
 import io.iohk.midnight.wallet.clients.platform.examples.SubmitTx
 import io.iohk.midnight.wallet.domain.{Block, Transaction, TransactionWithReceipt}
+import io.iohk.midnight.wallet.js.JSLogging.loggingEv
+import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse
 import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.{Accepted, Rejected}
 import io.iohk.midnight.wallet.services.SyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.util.HashOps.*
+import io.iohk.midnight.wallet.util.implicits.Equality.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
@@ -47,8 +53,8 @@ class SyncServiceSpec extends SyncServiceSpecBase {
       syncService: SyncService[IO],
   ): IO[Unit] =
     transactions
-      .fproduct { tx =>
-        if (tx == SubmitTx.validCallObject.payload) Accepted
+      .fproduct[SubmissionResponse] { tx =>
+        if (tx === SubmitTx.validCallObject.payload) Accepted
         else Rejected(PlatformClientStub.rejectDetails.reason)
       }
       .parTraverse { case (tx, expected) =>

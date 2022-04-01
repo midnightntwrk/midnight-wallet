@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.clients.prover
 
 import cats.Functor
 import cats.effect.IO
+import cats.syntax.eq.*
 import io.iohk.midnight.wallet.clients.prover.ProverClient.ProofStatus
 import io.iohk.midnight.wallet.domain.{CircuitValues, Proof, ProofId}
 import io.iohk.midnight.wallet.domain.Generators.*
@@ -21,56 +22,51 @@ trait ProverClientSpec {
   private def doneStatusResponse(proof: Proof) =
     s"""{"result":"done","proof":"${proof.value}"}"""
 
-  def circuitValuesBodyRequest(circuitValues: CircuitValues) =
+  protected def circuitValuesBodyRequest(circuitValues: CircuitValues) =
     s"""{"x":${circuitValues.x.toString},"y":${circuitValues.y.toString},"z":${circuitValues.z.toString}}"""
 
-  val sttpBackendStub = SttpBackendStub
+  protected val sttpBackendStub = SttpBackendStub
     .apply[IO, Any](new CatsMonadError[IO])
 
-  def buildProveSttpBackend(proofId: ProofId) =
+  protected def buildProveSttpBackend(proofId: ProofId) =
     sttpBackendStub
       .whenRequestMatches(_.uri.path.lastOption.contains("prove"))
       .thenRespond(workIdResponse(proofId))
 
-  val buildProveSttpBackend2 =
-    sttpBackendStub
-      .whenRequestMatches(_.uri.path.lastOption.contains("prove"))
-      .thenRespondOk()
-
-  val inProgressSttpBackend =
+  protected val inProgressSttpBackend =
     sttpBackendStub
       .whenRequestMatches(_.uri.path.contains("proof_statuses"))
       .thenRespond(inProgressStatusResponse)
 
-  def buildDoneStatusSttpBackend(proof: Proof) =
+  protected def buildDoneStatusSttpBackend(proof: Proof) =
     sttpBackendStub
       .whenRequestMatches(_.uri.path.contains("proof_statuses"))
       .thenRespond(doneStatusResponse(proof))
 
-  def buildProveBodySttpBackend(proofId: ProofId, circuitValues: CircuitValues) =
+  protected def buildProveBodySttpBackend(proofId: ProofId, circuitValues: CircuitValues) =
     sttpBackendStub
       .whenRequestMatches(compareStringBody(_, circuitValuesBodyRequest(circuitValues)))
       .thenRespond(workIdResponse(proofId))
 
-  def buildEmptyBodyStatusSttpBackend(proof: Proof) =
+  protected def buildEmptyBodyStatusSttpBackend(proof: Proof) =
     sttpBackendStub
       .whenRequestMatches(compareStringBody(_, "{}"))
       .thenRespond(doneStatusResponse(proof))
 
-  private def compareStringBody(request: Request[_, _], expectedBody: String): Boolean =
+  private def compareStringBody(request: Request[?, ?], expectedBody: String): Boolean =
     request.body match {
-      case body: StringBody => body.s == expectedBody.filterNot(_.isWhitespace)
+      case body: StringBody => body.s === expectedBody.filterNot(_.isWhitespace)
       case _                => false
     }
 
-  def buildStatusPathSttpBackend(proofId: ProofId, proof: Proof) =
+  protected def buildStatusPathSttpBackend(proofId: ProofId, proof: Proof) =
     sttpBackendStub
       .whenRequestMatches(
-        _.uri.toString == testingBaseUri.addPath("proof_statuses", proofId.value).toString,
+        _.uri.toString === testingBaseUri.addPath("proof_statuses", proofId.value).toString,
       )
       .thenRespond(doneStatusResponse(proof))
 
-  val testingBaseUri = Uri("testing")
+  protected val testingBaseUri = Uri("testing")
 
   def buildProverClient[F[_]: Functor](
       backend: SttpBackend[F, Any],
@@ -93,7 +89,7 @@ class ProverClientProveSpec
       )
       proverClient
         .prove(circuitValues)
-        .map(r => assert(r.value == proofId.value))
+        .map(r => assert(r.value === proofId.value))
     }
   }
 
@@ -104,7 +100,7 @@ class ProverClientProveSpec
       )
       proverClient
         .prove(circuitValues)
-        .map(r => assert(r.value == proofId.value))
+        .map(r => assert(r.value === proofId.value))
     }
   }
 }

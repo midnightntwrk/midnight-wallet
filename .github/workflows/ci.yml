@@ -2,27 +2,18 @@ name: Linting & Testing
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, develop ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Setup Node.js
-      uses: actions/setup-node@v2.5.1
-      with:
-        node-version-file: ".nvmrc"
-        cache: "yarn"
-    - name: Install dependencies
-      run: |
-        yarn install
-        yarn run build
     - name: Check format
-      run: yarn run check_format
+      run: sbt scalafmtCheckAll
+    - name: Run scapegoat
+      run: sbt scapegoat
     - name: Run tests
-      run: yarn run test_coverage
-    - name: Generate coverage report
-      run: yarn run coverage_report
+      run: sbt coverage test coverageReport

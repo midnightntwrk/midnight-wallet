@@ -1,17 +1,19 @@
 package io.iohk.midnight.wallet
 
-import cats.MonadThrow
+import cats.effect.IO
 import cats.effect.std.Random
-import cats.effect.{Clock, SyncIO}
-import cats.syntax.applicative.*
+import cats.syntax.all.*
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.clients.prover.*
+import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Generators.*
-import io.iohk.midnight.wallet.domain.{Block, SemanticEvent, UserId}
 import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.util.BetterOutputSuite
+import io.iohk.midnight.wallet.util.implicits.Equality.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
+import scala.concurrent.duration.DurationInt
 
 trait WalletSpec {
   val proverClient = new ProverClientStub()
@@ -19,21 +21,25 @@ trait WalletSpec {
   val alwaysInProgressProverClient = new AlwaysInProgressProverClient()
   val syncService = new SyncServiceStub()
   val failingSyncService = new FailingSyncService()
+  val emptyLaresService: LaresService[IO] =
+    (_: Block) => (Seq.empty[SemanticEvent], Seq.empty[TransactionRequest]).pure[IO]
 
-  def buildWallet[F[_]: MonadThrow: Clock: Random](
-      proverClient: ProverClient[F],
-      syncService: SyncService[F],
+  def buildWallet(
+      proverClient: ProverClient[IO],
+      syncService: SyncService[IO],
+      laresService: LaresService[IO] = emptyLaresService,
       userId: UserId = UserId("test_user"),
-  ): Wallet[F] =
-    new Wallet.Live[F](
-      new ProverService.Live[F](proverClient, 2),
-      syncService,
-      (_: Block) => Seq.empty[SemanticEvent].pure[F],
-      userId,
-    )
+  ): IO[Wallet[IO]] =
+    Random.scalaUtilRandom[IO].map { implicit random =>
+      new Wallet.Live[IO](
+        new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
+        syncService,
+        laresService,
+        userId,
+      )
+    }
 
-  implicit val random: Random[SyncIO] = Random.scalaUtilRandom[SyncIO].unsafeRunSync()
-  val wallet = buildWallet[SyncIO](proverClient, syncService)
+  val walletIO = buildWallet(proverClient, syncService)
 
   val ExpectedHashLength = 64
   def isHexString(str: String): Boolean =
@@ -48,7 +54,7 @@ class WalletCallContractSpec
 
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      wallet.callContract(input).map { r =>
+      walletIO.flatMap(_.callContract(input)).map { r =>
         assertEquals(r.value.length, ExpectedHashLength)
         assert(isHexString(r.value))
       }
@@ -59,6 +65,7 @@ class WalletCallContractSpec
     forAllF(callContractInputGen, callContractInputGen) {
       (input1: CallContractInput, input2: CallContractInput) =>
         for {
+          wallet <- walletIO
           hash1 <- wallet.callContract(input1)
           hash2 <- wallet.callContract(input2)
           wasSubmitted1 = syncService.wasCallTxSubmitted(hash1)
@@ -72,7 +79,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(failingProverClient, syncService)
 
       wallet
-        .callContract(input)
+        .flatMap(_.callContract(input))
         .attempt
         .map(assertEquals(_, Left(FailingProverClient.TheError)))
     }
@@ -83,7 +90,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(alwaysInProgressProverClient, syncService)
 
       wallet
-        .callContract(input)
+        .flatMap(_.callContract(input))
         .attempt
         .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
     }
@@ -94,7 +101,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(proverClient, failingSyncService)
 
       wallet
-        .callContract(input)
+        .flatMap(_.callContract(input))
         .attempt
         .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }
@@ -108,7 +115,7 @@ class WalletDeployContractSpec
     with BetterOutputSuite {
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      wallet.deployContract(input).map { r =>
+      walletIO.flatMap(_.deployContract(input)).map { r =>
         assertEquals(r.value.length, ExpectedHashLength)
         assert(isHexString(r.value))
       }
@@ -119,6 +126,7 @@ class WalletDeployContractSpec
     forAllF(deployContractInputGen, deployContractInputGen) {
       (input1: DeployContractInput, input2: DeployContractInput) =>
         for {
+          wallet <- walletIO
           hash1 <- wallet.deployContract(input1)
           hash2 <- wallet.deployContract(input2)
           wasSubmitted1 = syncService.wasDeployTxSubmitted(hash1)
@@ -129,10 +137,8 @@ class WalletDeployContractSpec
 
   test("fails when platform submission fails") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      val wallet = buildWallet(proverClient, failingSyncService)
-
-      wallet
-        .deployContract(input)
+      buildWallet(proverClient, failingSyncService)
+        .flatMap(_.deployContract(input))
         .attempt
         .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }
@@ -141,10 +147,49 @@ class WalletDeployContractSpec
 
 class WalletUserIdSpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
   test("generate a UserId and keep it in memory") {
-    val wallet = buildWallet(proverClient, syncService)
     for {
+      wallet <- buildWallet(proverClient, syncService)
       id1 <- wallet.getUserId()
       id2 <- wallet.getUserId()
     } yield assertEquals(id1, id2)
+  }
+}
+
+class WalletSyncSpec
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with WalletSpec
+    with BetterOutputSuite {
+  test("submit transaction requests") {
+    forAllF(blockGen, Gen.containerOf[Seq, TransactionRequest](txRequestGen)) {
+      (block: Block, txRequests: Seq[TransactionRequest]) =>
+        val syncService = new SyncServiceStub(Seq(block))
+        val laresService: LaresService[IO] = _ => (Seq.empty[SemanticEvent], txRequests).pure[IO]
+
+        for {
+          wallet <- buildWallet(proverClient, syncService, laresService)
+          _ <- wallet.sync().flatMap(_.compile.drain)
+        } yield txRequests.foreach { txRequest =>
+          assert(
+            syncService.submittedCallTransactions.exists { tx =>
+              tx.contractHash === txRequest.contractId && tx.nonce === txRequest.nonce
+            },
+            txRequest.contractId,
+          )
+        }
+    }
+  }
+
+  test("fail if tx submission fails") {
+    forAllF(blockGen, Gen.nonEmptyContainerOf[Seq, TransactionRequest](txRequestGen)) {
+      (block: Block, txRequests: Seq[TransactionRequest]) =>
+        val syncService = new FailingTxSubmissionSyncService(Seq(block))
+        val laresService: LaresService[IO] = _ => (Seq.empty[SemanticEvent], txRequests).pure[IO]
+
+        buildWallet(proverClient, syncService, laresService)
+          .flatMap(_.sync().flatMap(_.compile.drain))
+          .attempt
+          .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
+    }
   }
 }

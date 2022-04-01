@@ -5,7 +5,9 @@ import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.domain.{Block, CallTransaction, DeployTransaction}
 import io.iohk.midnight.wallet.examples.Transactions
 import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.Accepted
+import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import munit.CatsEffectSuite
+
 import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend

@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.clients.platform
 
 import cats.MonadThrow
 import cats.effect.Resource
-import cats.effect.std.Console
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
@@ -11,6 +10,7 @@ import io.circe.syntax.*
 import io.iohk.midnight.wallet.clients.platform.protocol.Decoders.receiveMessageDecoder
 import io.iohk.midnight.wallet.clients.platform.protocol.Encoders.sendMessageEncoder
 import io.iohk.midnight.wallet.clients.platform.protocol.{ReceiveMessage, SendMessage}
+import org.typelevel.log4cats.Logger
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri
@@ -23,9 +23,10 @@ trait PlatformClient[F[_]] {
 }
 
 object PlatformClient {
-  class Live[F[_]: MonadThrow: Console](webSocket: WebSocket[F]) extends PlatformClient[F] {
+  @SuppressWarnings(Array("org.wartremover.warts.ToString")) // FIXME: LLW-163
+  class Live[F[_]: MonadThrow: Logger](webSocket: WebSocket[F]) extends PlatformClient[F] {
     override def send(message: SendMessage): F[Unit] = {
-      Console[F].println(s"==> sending: ${message.toString}") >>
+      Logger[F].debug(s"==> sending: ${message.toString}") >>
         webSocket.sendText(message.asJson(sendMessageEncoder).toString)
     }
 
@@ -34,11 +35,11 @@ object PlatformClient {
         .receiveText()
         .map(decode(_)(receiveMessageDecoder))
         .rethrow
-        .flatTap(message => Console[F].println(s"==> receiving: ${message.toString}"))
+        .flatTap(message => Logger[F].debug(s"==> receiving: ${message.toString}"))
   }
 
   object Live {
-    def apply[F[_]: MonadThrow: Console](
+    def apply[F[_]: MonadThrow: Logger](
         backend: SttpBackend[F, WebSockets],
         platformUri: Uri,
     ): Resource[F, Live[F]] = {

@@ -1,15 +1,36 @@
 import scala.sys.process.Process
 
+val nixBuild = sys.props.isDefinedAt("nix")
+
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
 ThisBuild / scalaVersion := "2.13.8"
-ThisBuild / scalacOptions += "-Xsource:3"
+
+ThisProject / scalacOptions ~= { prev =>
+  if (Env.devModeEnabled) prev.filterNot(_ == "-Xfatal-warnings") else prev
+}
+
+ThisBuild / scapegoatVersion := "1.4.12"
+ThisBuild / scapegoatDisabledInspections := Seq("IncorrectlyNamedExceptions")
+
+ThisProject / scalacOptions += "-Xsource:3"
+
 Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b")
 
+lazy val warts = Warts.allBut(
+  Wart.Any,
+  Wart.DefaultArguments,
+  Wart.ImplicitParameter,
+  Wart.JavaSerializable,
+  Wart.Nothing,
+  Wart.Product,
+  Wart.Serializable,
+)
+
 lazy val wallet = (project in file("."))
-  .enablePlugins(ScalaJSPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.CommonJSModule) },
+    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // Dependencies
     libraryDependencies ++= Seq(
@@ -23,6 +44,7 @@ lazy val wallet = (project in file("."))
       "io.circe" %%% "circe-generic-extras" % "0.14.1",
       "org.typelevel" %%% "cats-core" % "2.7.0",
       "org.typelevel" %%% "cats-effect" % "3.3.4",
+      "org.typelevel" %%% "log4cats-core" % "2.1.0",
     ),
 
     // Test dependencies
@@ -31,10 +53,20 @@ lazy val wallet = (project in file("."))
       "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.1",
       "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
       "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
+      "org.typelevel" %%% "kittens" % "2.3.2",
     ).map(_ % Test),
 
+    // ScalablyTyped config
+    externalNpm := {
+      if (!nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
+      baseDirectory.value
+    },
+    stEnableScalaJsDefined := Selection.All,
+    Global / stQuiet := true,
+
     // Linting
-    wartremoverErrors ++= Warts.unsafe.diff(Seq(Wart.Any, Wart.Nothing, Wart.DefaultArguments)),
+    wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
+    wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
     coverageFailOnMinimum := true,
     coverageMinimumStmtTotal := 90,
     coverageMinimumBranchTotal := 90,
@@ -59,11 +91,12 @@ dist := {
   val log = streams.value.log
   (wallet / Compile / fullOptJS).value
   val targetJSDir = (wallet / Compile / fullLinkJS / scalaJSLinkerOutputDirectory).value
-  val targetDir = (wallet / Compile / target).value
   val resDir = (wallet / Compile / resourceDirectory).value
-  val distDir = targetDir / "dist"
+  val distDir = baseDirectory.value / "dist"
   IO.createDirectory(distDir)
   IO.copyDirectory(targetJSDir, distDir, overwrite = true)
   IO.copyDirectory(resDir, distDir, overwrite = true)
   log.info(s"Dist done at ${distDir.absolutePath}")
 }
+
+addCommandAlias("verify", ";scalafmtCheckAll ;scapegoat ;coverage ;test ;coverageReport")

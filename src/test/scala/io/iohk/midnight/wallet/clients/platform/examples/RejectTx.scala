@@ -5,7 +5,7 @@ import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalTxS
 
 object RejectTx {
 
-  val validJsonDuplicate =
+  val validJsonDuplicate: String =
     """{
       |  "protocol": "LocalTxSubmission",
       |  "type": "RejectTx",
@@ -14,7 +14,7 @@ object RejectTx {
       |  }
       |}""".stripMargin
 
-  val validJsonOther =
+  val validJsonOther: String =
     """{
       |  "protocol": "LocalTxSubmission",
       |  "type": "RejectTx",
@@ -24,6 +24,6 @@ object RejectTx {
       |  }
       |}""".stripMargin
 
-  val validObjectOther =
+  val validObjectOther: LocalTxSubmission.RejectTx =
     LocalTxSubmission.RejectTx(RejectTxDetails.Other("􅟢7£R"))
 }

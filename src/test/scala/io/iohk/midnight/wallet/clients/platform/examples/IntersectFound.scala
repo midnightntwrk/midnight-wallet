@@ -5,7 +5,7 @@ import io.iohk.midnight.wallet.domain.{Block, Hash}
 
 object IntersectFound {
 
-  val validJson =
+  val validJson: String =
     """{
       |  "protocol": "LocalBlockSync",
       |  "type": "IntersectFound",

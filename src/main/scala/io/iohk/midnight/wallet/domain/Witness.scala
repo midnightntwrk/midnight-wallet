@@ -2,4 +2,4 @@ package io.iohk.midnight.wallet.domain
 
 import io.circe.Json
 
-final case class PublicState(value: Json) extends AnyVal
+final case class Witness(value: Json) extends AnyVal

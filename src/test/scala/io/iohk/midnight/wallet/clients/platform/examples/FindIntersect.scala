@@ -5,7 +5,7 @@ import io.iohk.midnight.wallet.domain.{Block, Hash}
 
 object FindIntersect {
 
-  val validJson =
+  val validJson: String =
     """{
       |  "protocol" : "LocalBlockSync",
       |  "type" : "FindIntersect",
@@ -18,7 +18,7 @@ object FindIntersect {
       |  ]
       |}""".stripMargin
 
-  val validObject =
+  val validObject: LocalBlockSync.FindIntersect =
     LocalBlockSync.FindIntersect(
       Seq(
         Hash[Block]("0fef6d9d541901ff7a01babc95422d0278a252edfd23e8bc34b39a6c8d79279b"),

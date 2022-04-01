@@ -1,12 +1,13 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
+import io.circe.Json
 import io.iohk.midnight.wallet.clients.platform.protocol.SendMessage.LocalTxSubmission
 import io.iohk.midnight.wallet.domain.*
 import java.time.Instant
 
 object SubmitTx {
 
-  val validJsonCall =
+  val validJsonCall: String =
     """{
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
@@ -19,11 +20,11 @@ object SubmitTx {
       |    "contractHash" : "2b00640f0a326ee59f56e7e7cef101a285df5e860c45d9ff8f940eecc57e4015",
       |    "transitionFunction" : "jyfq",
       |    "proof" : "eaa2c823a6db",
-      |    "publicTranscript" : "((ezccs) ((vjffpyut pwhf htpicj lhey)) uhvjawi ((fvwlj obep waflvy lvhzwj) (ycff iqtr bxbbj) (kdsh nailyhu)) ((heptdrbx nvuya qzsmwxvy qhue) (jjfafrt hnnu hsfl) (bsln oouvn fscpka zzjdhkp)))"
+      |    "publicTranscript" : "\"((ezccs) ((vjffpyut pwhf htpicj lhey)) uhvjawi ((fvwlj obep waflvy lvhzwj) (ycff iqtr bxbbj) (kdsh nailyhu)) ((heptdrbx nvuya qzsmwxvy qhue) (jjfafrt hnnu hsfl) (bsln oouvn fscpka zzjdhkp)))\""
       |  }
       |}""".stripMargin
 
-  val validCallTx =
+  val validCallTx: CallTransaction =
     CallTransaction(
       Some(
         Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
@@ -34,13 +35,15 @@ object SubmitTx {
       TransitionFunction("jyfq"),
       Some(Proof("eaa2c823a6db")),
       PublicTranscript(
-        "((ezccs) ((vjffpyut pwhf htpicj lhey)) uhvjawi ((fvwlj obep waflvy lvhzwj) (ycff iqtr bxbbj) (kdsh nailyhu)) ((heptdrbx nvuya qzsmwxvy qhue) (jjfafrt hnnu hsfl) (bsln oouvn fscpka zzjdhkp)))",
+        Json.fromString(
+          "((ezccs) ((vjffpyut pwhf htpicj lhey)) uhvjawi ((fvwlj obep waflvy lvhzwj) (ycff iqtr bxbbj) (kdsh nailyhu)) ((heptdrbx nvuya qzsmwxvy qhue) (jjfafrt hnnu hsfl) (bsln oouvn fscpka zzjdhkp)))",
+        ),
       ),
     )
 
-  val validCallObject = LocalTxSubmission.SubmitTx(validCallTx)
+  val validCallObject: LocalTxSubmission.SubmitTx = LocalTxSubmission.SubmitTx(validCallTx)
 
-  val validJsonDeploy =
+  val validJsonDeploy: String =
     """{
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
@@ -50,7 +53,7 @@ object SubmitTx {
       |    "hash" : "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
       |    "timestamp" : "1969-12-31T23:59:57.999536Z",
       |    "contractSource" : "(((winslsi iqcw) (fato dnvuai hhgtq) itef (etbac oogasl ywbdiejp nqcuyo) (mpnyar)) ((ihfvj beitt wkimfnq vyzwjttu) (gwcmih) (ozsx hbbyy tljv) (geodfwv) (hzi hkcayl)) ((crdyzw yrujnv mkxwcoxq) (avnlnwws qjgm) (ovtene bvdbriax nwjwb fhqzzu) (hiworg)))",
-      |    "publicState" : "(((mufu kggff jjhk zgxymchm urffrrf) (ngeub ttvcjta) tmkirsvs (qzg rqfq btmqyxh) (ikpcme bnjdvmd jbmdi)))",
+      |    "publicState" : "\"(((mufu kggff jjhk zgxymchm urffrrf) (ngeub ttvcjta) tmkirsvs (qzg rqfq btmqyxh) (ikpcme bnjdvmd jbmdi)))\"",
       |    "transitionFunctionCircuits" : {
       |      "ozcvtjnz" : "ad",
       |      "clbdy" : "85dce76fc6a8",
@@ -62,7 +65,7 @@ object SubmitTx {
       |  }
       |}""".stripMargin
 
-  val validDeployTx =
+  val validDeployTx: DeployTransaction =
     DeployTransaction(
       Some(
         Hash[DeployTransaction](
@@ -74,7 +77,9 @@ object SubmitTx {
         "(((winslsi iqcw) (fato dnvuai hhgtq) itef (etbac oogasl ywbdiejp nqcuyo) (mpnyar)) ((ihfvj beitt wkimfnq vyzwjttu) (gwcmih) (ozsx hbbyy tljv) (geodfwv) (hzi hkcayl)) ((crdyzw yrujnv mkxwcoxq) (avnlnwws qjgm) (ovtene bvdbriax nwjwb fhqzzu) (hiworg)))",
       ),
       PublicState(
-        "(((mufu kggff jjhk zgxymchm urffrrf) (ngeub ttvcjta) tmkirsvs (qzg rqfq btmqyxh) (ikpcme bnjdvmd jbmdi)))",
+        Json.fromString(
+          "(((mufu kggff jjhk zgxymchm urffrrf) (ngeub ttvcjta) tmkirsvs (qzg rqfq btmqyxh) (ikpcme bnjdvmd jbmdi)))",
+        ),
       ),
       TransitionFunctionCircuits(
         Map(
@@ -88,6 +93,6 @@ object SubmitTx {
       ),
     )
 
-  val validDeployObject =
+  val validDeployObject: LocalTxSubmission.SubmitTx =
     LocalTxSubmission.SubmitTx(validDeployTx)
 }

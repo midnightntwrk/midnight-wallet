@@ -1,26 +1,30 @@
 package io.iohk.midnight.wallet.clients.lares
 
+import cats.derived.auto.eq.*
 import cats.effect.IO
-import io.circe.{Decoder, Encoder}
+import cats.syntax.eq.*
+import io.circe.{Decoder, Encoder, Json, parser}
 import io.iohk.midnight.wallet.clients.JsonRpcClient
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
+import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.{
   ApplyBlockLocallyRequest,
   ApplyBlockLocallyResponse,
 }
-import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Block.*
 import io.iohk.midnight.wallet.domain.Receipt.Success
+import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import io.iohk.midnight.wallet.util.BetterOutputSuite
+import io.iohk.midnight.wallet.util.implicits.Equality.*
+import java.time.Instant
 import munit.CatsEffectSuite
+import scala.scalajs.js
 import sttp.client3.impl.cats.CatsMonadError
 import sttp.client3.testing.SttpBackendStub
 import sttp.client3.{Request, StringBody}
 import sttp.model.Uri.*
 import sttp.model.{MediaType, Method}
-
-import java.time.Instant
 
 class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
@@ -28,7 +32,7 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
   def matchesReq(expectedRequest: String): Request[?, ?] => Boolean =
     req =>
-      req.method == Method.POST && req.body == StringBody(
+      req.method === Method.POST && req.body === StringBody(
         expectedRequest.filterNot(_.isWhitespace),
         "utf-8",
         MediaType.ApplicationJson,
@@ -39,7 +43,7 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
       encodedRequest: String,
       encodedResponse: String,
       response: Resp,
-  ) = {
+  ): IO[Unit] = {
     val rpcClient = new JsonRpcClient[IO](
       SttpBackendStub[IO, Any](catsMonadError)
         .whenRequestMatches(matchesReq(encodedRequest))
@@ -111,7 +115,8 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
         |  "result": {
         |    "events": [
         |      "event1", "event2"
-        |    ]
+        |    ],
+        |    "transactionRequests": []
         |  },
         |  "id": 1
         |}""".stripMargin
@@ -134,7 +139,7 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
                 hash = Some(Hash[DeployTransaction]("deployHash")),
                 timestamp = timestamp,
                 contractSource = ContractSource("contractSource"),
-                publicState = PublicState("publicState"),
+                publicState = PublicState(Json.fromString("publicState")),
                 transitionFunctionCircuits = TransitionFunctionCircuits(
                   Map(
                     "transitionFunctionCircuit1" -> "transitionFunctionCircuit1Value",
@@ -152,7 +157,7 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
                 contractHash = Hash[DeployTransaction]("deployTransactionHash"),
                 transitionFunction = TransitionFunction("transitionFunction"),
                 proof = Some(Proof("proof")),
-                publicTranscript = PublicTranscript("publicTranscript"),
+                publicTranscript = PublicTranscript(Json.fromString("publicTranscript")),
               ),
               receipt = Success,
             ),
@@ -161,10 +166,34 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
       ),
       encodedRequest = encodedReq,
       encodedResponse = encodedResp,
-      response = ApplyBlockLocallyResponse(events =
-        List(SemanticEvent("\"event1\""), SemanticEvent("\"event2\"")),
+      response = ApplyBlockLocallyResponse(
+        events = List(SemanticEvent("event1"), SemanticEvent("event2")),
+        transactionRequests = List.empty,
       ),
     )
   }
 
+  test("Decode SemanticEvents") {
+    parser
+      .parse("""{"int": 1, "object": {"key": {"key": "value"}}, "null": null, "array": ["elem"]}""")
+      .flatMap(_.as[SemanticEvent])
+      .map { case SemanticEvent(event) =>
+        assertEquals(event.selectDynamic[Int]("int"), 1)
+        assertEquals(
+          event
+            .selectDynamic[js.Any]("object")
+            .selectDynamic[js.Any]("key")
+            .selectDynamic[String]("key"),
+          "value",
+        )
+        assertEquals(Option(event.selectDynamic[js.Any]("null")), None)
+        assertEquals(event.selectDynamic[js.Array[String]]("array")(0), "elem")
+      }
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+  private implicit class JsDynamicExtension(value: Any) {
+    def selectDynamic[T](key: String): T =
+      value.asInstanceOf[js.Dynamic].selectDynamic(key).asInstanceOf[T]
+  }
 }

@@ -1,23 +1,19 @@
-declare module 'midnight-wallet';
+import { Wallet as WalletAPI, TxSubmissionResult } from '@midnight/wallet-api'
 
-type Failed = { type: 'Failed', reason: string }
-type Succeed = { type: 'Succeed', hash: string }
-export type CallResult = Failed | Succeed
-
-export class Wallet {
+export class Wallet implements WalletAPI {
     call(
         deployTransactionHash: string,
         nonce: string,
         transitionFunction: string,
         publicTranscript: string
-    ): Promise<CallResult>
+    ): Promise<TxSubmissionResult>
 
     deploy(
         contractSource: string,
         publicState: string
-    ): Promise<CallResult>
+    ): Promise<TxSubmissionResult>
 
-    sync(f: (event: Array<string>) => void): void
+    sync(f: (event: Array<any>) => void): void
 
     getGUID(): Promise<string>
 
@@ -25,5 +21,10 @@ export class Wallet {
 }
 
 export class WalletBuilder {
-    static build(proverUri: string, platformUri: string, laresUri: string): Promise<Wallet>
+    static build(
+        snarkieUri: string,
+        platformUri: string,
+        laresUri: string,
+        includeCookies: boolean
+    ): Promise<Wallet>
 }

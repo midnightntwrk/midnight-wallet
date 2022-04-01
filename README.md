@@ -1,72 +1,119 @@
 # midnight-wallet
 ![example event parameter](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg)
 
-Midnight's wallet core development. It is an implementation of wallet internals and allows preparing transactions, submitting them to a node and syncing blocks from the node.
+This is an implementation of [wallet-api](https://github.com/input-output-hk/midnight-wallet-api),
+used by dapp developers and [client-sdk](https://github.com/input-output-hk/midnight-client-sdk) to:
+ 
+- Build transactions, interacting with [snarkie](https://github.com/input-output-hk/snarkie) to
+obtain zk-proofs if necessary
+- Submit transactions to a node
+- Obtain blocks from a node and submit them to wallet-backend
+- Stream semantic events from submitting blocks to wallet-backend
 
-## Technologies involved
+## Requirements 
 
-The code is written in Scala 3 (using `scala.js`) and there is an API interface in typescript.
+To build this project [download the latest `sbt`](https://www.scala-sbt.org/download.html).
+The version used to build the project is defined in the file 
+[`project/build.properties`](project/build.properties) and 
+it's automatically picked up by any sbt version that is installed.
 
-**Requirements:**
-- sbt `1.6.1` ([download sbt](https://www.scala-sbt.org/download.html))
+sbt itself depends on Java JDK. This project is currently only tested using 
+[AdoptOpenJDK 11](https://adoptium.net/?variant=openjdk11).
 
-- node `v16.13.2` (`lts/gallium`) 
-  - The node version can be managed with [nvm](https://github.com/nvm-sh/nvm) or [ASDF](https://github.com/asdf-vm/asdf/).
-  - with nvm, running `nvm use` should be enough since there is a `.nvmrc` file
-- yarn `3.1.1`
+To run the unit tests install [Node.js](https://nodejs.org/en/). The version is defined in the file 
+[.nvmrc](.nvmrc) so it can be picked up by tools such as `asdf` or `nvm`.
 
-## Dependencies of the project
+## External services
 
 - [midnight-platform](https://github.com/input-output-hk/midnight-platform): the midnight node and consensus
-- [Racket Server](https://github.com/input-output-hk/lares): implementations of the Kachina approach to smart contracts. It might evolve to multiple components (wallet BE, lares runtime)
+- [Racket Server](https://github.com/input-output-hk/lares): implementations of the Kachina approach to smart contracts. It might evolve to multiple components (wallet-backend, lares runtime)
 - [snarkie](https://github.com/input-output-hk/snarkie): creates/verifies zero-knowledge proofs
 
-### Depends on midnight-wallet
-- [midnight-client-sdk](https://github.com/input-output-hk/midnight-client-sdk): an SDK for Midnight Platform client-side code (DApps, UI)
-
-
-`midnight-wallet`:
-   - implements an interface used by the `midnight-client-sdk`, which interacts with both the DApps and UI and with the Racket Server (`Lares`)
-   - builds transactions as per request of the `midnight-client-sdk` and interacts with `snarky` to obtain zk-proofs if required
-   - submits transactions to `midnight-platform`
-   - obtains blocks from `midnight-platform` and submits them to the Racket Server (`Lares`)
-   - returns semantic events from submitting blocks to the Racket Server (`Lares`) to `midnight-client-sdk`
-
-
-
 ## Directory structure
-- `api` contains the interface required by `midnight-client-sdk`
-  - `wallet.ts` defines in typescript the API which is later compiled to scala
-- `impl`
-  - `api` implementation of the API used by `midnight-client-sdk`
-    - `WalletImp.scala` implements the interface complied from typescript to scala.js
-  - `clients` implementation of interaction with Midnight Platform and Racket Server (Lares)
-  - `domain` domain model of the wallet
-  - `services` service layer, currently implements Prover Service (Snarky Server) and Platform Service
+`build.sbt` - sbt project definition, Scala version, dependencies, build configuration
 
-## How to:
+`project`
+- `build.properties` - defines sbt version
+- `plugins.sbt` - sbt plugins
 
-### Build
+`src/main/scala/io/iohk/midnight/wallet`
+  - `clients` - Implementation of interaction with external services
+  - `domain` - Domain model of the wallet
+  - `js` - Interoperability with Javascript
+  - `services` - Service layer that depends on clients and exposes only domain types
+  - `util` - Utilities that can be used by many layers and aren't domain specific
+  - `Wallet.scala` - Implementation of the main business logic
+  - `WalletBuilder.scala` - Dependency injection and instantiation of the `Wallet` class
+ 
+`src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
+classes and `Stub` suffix is added to create stubs that can be used by other unit tests
 
-`yarn install`
+`integration-tests` - A subproject specially for developing integration tests 
 
-`yarn run build`
+## Build
 
-**Disclaimer and temporary fix:** to be able to properly build the project we need to remove a directory every time there are changes in the interface (`wallet.ts`) since the scala code generated does not get regenerated after changes. The problematic directory is the local ivy repository.
+`yarn install && yarn run build` or directly `sbt dist`.
 
-In the root folder of the project run
-`rm -rf ~/.ivy2/local/org.scalablytyped`
+The generated JavaScript code is written to `target/dist`.
 
-### Check format
+## Test
 
-`yarn run check_format`
+#### Unit tests
 
-### Test
+`sbt test`
 
-`yarn run test`
+#### Integration tests
 
-### Generate Coverage report
+See the integration-tests [README](integration-tests/README.md) for instructions.
 
-`yarn run test_coverage`
+## Generate Coverage report
 
-`yarn run coverage_report`
+`sbt coverage test coverageReport`
+
+An HTML report is written to `target/scala-2.13/scoverage-report/index.html`
+
+## Contributing
+
+All new features must branch off the default branch `develop`.
+
+It's recommended to enable automatic scalafmt formatting in your text editor upon save, in order to 
+avoid CI errors due to incorrect format.
+
+To develop quickly, without the linting tools getting in the way, the 
+environment variable `MIDNIGHT_DEV=true` can be used to make all lint errors be treated as warnings.
+
+To execute the same verifications that are enabled on the CI, there's an sbt task `verify` which 
+does the following:
+
+- Compile the code with strict scala compiler flags through the use of 
+[sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
+- Check the code with [wartremover](https://www.wartremover.org/)
+- Check the code with [scapegoat](https://github.com/scapegoat-scala/sbt-scapegoat)
+- Run the unit tests to verify that the minimum code coverage is reached
+
+## Build Nix
+
+`nix-build`
+
+## Maintenance
+
+The nix build captures or "vendors" the scala dependencies, and represents
+these dependencies through a hash. This hash will need to be updated
+when changing sbt dependencies. Fortunately there's a script to make this easy:
+
+`./update-nix.sh`
+
+to verify the hash is correct
+
+`./update-nix.sh --check`
+
+Notes:
+- The hash represents the content of the vendored libraries, and
+  if a previous vendored directory exists, nix will not check
+  if the directory is the "latest". To avoid this situation,
+  please use `./update-nix.sh --check`
+- The environment flag `MIDNIGHT_DEV` (`EXPORT MIDNIGHT_DEV=true`) could be used to disable compilation and linter checks to speed up development cycle.
+  It SHOULD NOT be used on CI server.
+
+Mandatory Condition:
+- yarn2nix only maintains the expected lock file format on yarn 1. For this reason, the yarn.lock file must maintain the expected format on yarn 1.

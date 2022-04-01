@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.clients.platform.examples
 
+import io.circe.Json
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalBlockSync
 import io.iohk.midnight.wallet.domain.Receipt.*
 import io.iohk.midnight.wallet.domain.*
@@ -46,7 +47,7 @@ object RollForward {
     |  }
     |}""".stripMargin
 
-  val veryBigHeightObject =
+  val veryBigHeightObject: LocalBlockSync.RollForward =
     LocalBlockSync.RollForward(
       Block(
         Block.Header(
@@ -69,7 +70,7 @@ object RollForward {
               ContractSource(
                 "(((ntdkmey qirpm) (vktdzt)) ((wzslgw bjytykow clrbmexk zhh kvve) (kqlm xxn) (grioz) (dmijarh rpl fbubzqo)) ((isk catqjlp) (lhlsukj dnrnuzep) (irqr txol pvlt cknazte) (flxxjvl ieit xcxy vjxbe pxyvv) (isxsnmfd lebsuq)))",
               ),
-              PublicState("(jzwuc)"),
+              PublicState(Json.fromString("(jzwuc)")),
               TransitionFunctionCircuits(
                 Map(
                   "tzgpxu" -> "6232e241fc01f4",
@@ -83,7 +84,7 @@ object RollForward {
       ),
     )
 
-  val validJson =
+  val validJson: String =
     """{
       |  "protocol": "LocalBlockSync",
       |  "type": "RollForward",
@@ -103,7 +104,7 @@ object RollForward {
       |            "timestamp": "1969-12-31T23:59:53.999509747Z",
       |            "type": "deploy",
       |            "contractSource": "(((ntdkmey qirpm) (vktdzt)) ((wzslgw bjytykow clrbmexk zhh kvve) (kqlm xxn) (grioz) (dmijarh rpl fbubzqo)) ((isk catqjlp) (lhlsukj dnrnuzep) (irqr txol pvlt cknazte) (flxxjvl ieit xcxy vjxbe pxyvv) (isxsnmfd lebsuq)))",
-      |            "publicState": "(jzwuc)",
+      |            "publicState": "\"(jzwuc)\"",
       |            "transitionFunctionCircuits": {
       |              "tzgpxu": "6232e241fc01f4",
       |              "yjrwyne": "e050935684748401"
@@ -124,7 +125,7 @@ object RollForward {
       |            "contractHash": "6acdd89eaa541e5f1ec1d180db28bec37b664cffb054209e00c009af71b920f5",
       |            "transitionFunction": "frti",
       |            "proof": "b9162804002be5",
-      |            "publicTranscript": "(((nvki csuu agaivib yskmjy czjbr) (noomw ipkjwmm iblzcvh)))"
+      |            "publicTranscript": "\"(((nvki csuu agaivib yskmjy czjbr) (noomw ipkjwmm iblzcvh)))\""
       |          },
       |          "result": {
       |            "type": "ZKFailure",
@@ -141,7 +142,7 @@ object RollForward {
       |            "contractHash": "b2df87e43900da7ef6c7033101918a63e2e7720197a4fda1109fbdd5008c0d3d",
       |            "transitionFunction": "swbible",
       |            "proof": "c33fde2301a0",
-      |            "publicTranscript": "(((wxsu oycpjo)) rhivvwld)"
+      |            "publicTranscript": "\"(((wxsu oycpjo)) rhivvwld)\""
       |          },
       |          "result": {
       |            "type": "ZKFailure",
@@ -158,7 +159,7 @@ object RollForward {
       |            "contractHash": "f4af74842040ff011c27c2c2186c9fe800ca927f28a2927f00413399fe5833aa",
       |            "transitionFunction": "ohjzia",
       |            "proof": "",
-      |            "publicTranscript": "(((czx) (hveob lzaivnr masgam oqm fpim)) uhjz ((ehud udm) (fejtf)) wioogh ((qrozkap zxgk) (qwam pppb) (ygli pqdj zono)))"
+      |            "publicTranscript": "\"(((czx) (hveob lzaivnr masgam oqm fpim)) uhjz ((ehud udm) (fejtf)) wioogh ((qrozkap zxgk) (qwam pppb) (ygli pqdj zono)))\""
       |          },
       |          "result": {
       |            "type": "ContractFailure",
@@ -173,7 +174,7 @@ object RollForward {
       |            "timestamp": "1969-12-31T23:59:53.999949120Z",
       |            "type": "deploy",
       |            "contractSource": "(((pled xvvfl) (mbihktp ouaef xintf lahb uvzktkt)))",
-      |            "publicState": "(((ftoag) (cetaingp xjncx)) ((vwskt)))",
+      |            "publicState": "\"(((ftoag) (cetaingp xjncx)) ((vwskt)))\"",
       |            "transitionFunctionCircuits": {
       |              "bkiub": "7962f578f4b8da79",
       |              "rwew": "2a06c9012bf82a8a",
@@ -192,7 +193,7 @@ object RollForward {
       |            "timestamp": "1969-12-31T23:59:52.999482627Z",
       |            "type": "deploy",
       |            "contractSource": "(((evsimv bemylguz qhdli) (dvxa rles lkb) (odh oqnl acbj bhvebbz lhpfpvhy) (psumgf yfvbqmr)) ykcthemd)",
-      |            "publicState": "(((yeloh imoivojk bjkc yfppohpi)) rirton (nra (fpvoaxq sngjuy cxin snkxnwj yko) cxku))",
+      |            "publicState": "\"(((yeloh imoivojk bjkc yfppohpi)) rirton (nra (fpvoaxq sngjuy cxin snkxnwj yko) cxku))\"",
       |            "transitionFunctionCircuits": {
       |              "kcyt": "ee",
       |              "nafna": "01e0826ab00001",
@@ -214,7 +215,7 @@ object RollForward {
       |  }
       |}""".stripMargin
 
-  val validObject =
+  val validObject: LocalBlockSync.RollForward =
     LocalBlockSync.RollForward(
       Block(
         Block.Header(
@@ -237,7 +238,7 @@ object RollForward {
               ContractSource(
                 "(((ntdkmey qirpm) (vktdzt)) ((wzslgw bjytykow clrbmexk zhh kvve) (kqlm xxn) (grioz) (dmijarh rpl fbubzqo)) ((isk catqjlp) (lhlsukj dnrnuzep) (irqr txol pvlt cknazte) (flxxjvl ieit xcxy vjxbe pxyvv) (isxsnmfd lebsuq)))",
               ),
-              PublicState("(jzwuc)"),
+              PublicState(Json.fromString("(jzwuc)")),
               TransitionFunctionCircuits(
                 Map(
                   "tzgpxu" -> "6232e241fc01f4",
@@ -261,7 +262,9 @@ object RollForward {
               ),
               TransitionFunction("frti"),
               Some(Proof("b9162804002be5")),
-              PublicTranscript("(((nvki csuu agaivib yskmjy czjbr) (noomw ipkjwmm iblzcvh)))"),
+              PublicTranscript(
+                Json.fromString("(((nvki csuu agaivib yskmjy czjbr) (noomw ipkjwmm iblzcvh)))"),
+              ),
             ),
             ZKFailure("󡝊򿭨𝅳S!a<…7"),
           ),
@@ -279,7 +282,7 @@ object RollForward {
               ),
               TransitionFunction("swbible"),
               Some(Proof("c33fde2301a0")),
-              PublicTranscript("(((wxsu oycpjo)) rhivvwld)"),
+              PublicTranscript(Json.fromString("(((wxsu oycpjo)) rhivvwld)")),
             ),
             ZKFailure("5[>"),
           ),
@@ -298,7 +301,9 @@ object RollForward {
               TransitionFunction("ohjzia"),
               Some(Proof("")),
               PublicTranscript(
-                "(((czx) (hveob lzaivnr masgam oqm fpim)) uhjz ((ehud udm) (fejtf)) wioogh ((qrozkap zxgk) (qwam pppb) (ygli pqdj zono)))",
+                Json.fromString(
+                  "(((czx) (hveob lzaivnr masgam oqm fpim)) uhjz ((ehud udm) (fejtf)) wioogh ((qrozkap zxgk) (qwam pppb) (ygli pqdj zono)))",
+                ),
               ),
             ),
             ContractFailure(
@@ -317,7 +322,7 @@ object RollForward {
               ContractSource(
                 "(((pled xvvfl) (mbihktp ouaef xintf lahb uvzktkt)))",
               ),
-              PublicState("(((ftoag) (cetaingp xjncx)) ((vwskt)))"),
+              PublicState(Json.fromString("(((ftoag) (cetaingp xjncx)) ((vwskt)))")),
               TransitionFunctionCircuits(
                 Map(
                   "bkiub" -> "7962f578f4b8da79",
@@ -340,7 +345,9 @@ object RollForward {
                 "(((evsimv bemylguz qhdli) (dvxa rles lkb) (odh oqnl acbj bhvebbz lhpfpvhy) (psumgf yfvbqmr)) ykcthemd)",
               ),
               PublicState(
-                "(((yeloh imoivojk bjkc yfppohpi)) rirton (nra (fpvoaxq sngjuy cxin snkxnwj yko) cxku))",
+                Json.fromString(
+                  "(((yeloh imoivojk bjkc yfppohpi)) rirton (nra (fpvoaxq sngjuy cxin snkxnwj yko) cxku))",
+                ),
               ),
               TransitionFunctionCircuits(
                 Map(

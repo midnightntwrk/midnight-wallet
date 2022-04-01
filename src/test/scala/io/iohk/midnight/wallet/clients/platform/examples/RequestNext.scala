@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.clients.platform.examples
 
 object RequestNext {
 
-  val validJson =
+  val validJson: String =
     """{
       |  "protocol" : "LocalBlockSync",
       |  "type" : "RequestNext"

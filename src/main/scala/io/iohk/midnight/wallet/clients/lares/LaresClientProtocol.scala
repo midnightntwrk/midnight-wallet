@@ -4,14 +4,19 @@ import io.circe.generic.extras.Configuration
 import io.circe.generic.extras.semiauto.deriveConfiguredEncoder
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.syntax.EncoderOps
-import io.circe.{Decoder, Encoder, Json, JsonObject}
+import io.circe.*
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
 import io.iohk.midnight.wallet.domain.*
+import scala.scalajs.js
+import scala.scalajs.js.JSConverters.*
 
 object LaresClientProtocol {
 
-  case class ApplyBlockLocallyRequest(from: UserId, block: Block)
-  case class ApplyBlockLocallyResponse(events: List[SemanticEvent])
+  final case class ApplyBlockLocallyRequest(from: UserId, block: Block)
+  final case class ApplyBlockLocallyResponse(
+      events: List[SemanticEvent],
+      transactionRequests: List[TransactionRequest],
+  )
 
   object Serialization {
 
@@ -68,16 +73,25 @@ object LaresClientProtocol {
       ).asJson
 
     implicit val contactSourceEncoder: Encoder[ContractSource] = Encoder[String].contramap(_.value)
-    implicit val publicStateEncoder: Encoder[PublicState] = Encoder[String].contramap(_.value)
+    implicit val publicStateEncoder: Encoder[PublicState] = Encoder[Json].contramap(_.value)
     implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =
-      Encoder[String].contramap(_.value)
+      Encoder[Json].contramap(_.value)
     implicit val userIdEncoder: Encoder[UserId] = Encoder[String].contramap(_.value)
 
     implicit val eventDecoder: Decoder[SemanticEvent] =
-      Decoder[Json].map(json => SemanticEvent.apply(json.toString()))
-    implicit val publicStateDecoder: Decoder[PublicState] = Decoder[String].map(PublicState.apply)
+      Decoder[Json].map(dynamicFromJson).map(SemanticEvent.apply)
+    implicit val publicStateDecoder: Decoder[PublicState] = Decoder[Json].map(PublicState.apply)
     implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
-      Decoder[String].map(PublicTranscript.apply)
+      Decoder[Json].map(PublicTranscript.apply)
+
+    implicit val nonceDecoder: Decoder[Nonce] = Decoder[String].map(Nonce.apply)
+    implicit val transitionFunctionDecoder: Decoder[TransitionFunction] =
+      Decoder[String].map(TransitionFunction.apply)
+    implicit val witnessDecoder: Decoder[Witness] = Decoder[Json].map(Witness.apply)
+
+    implicit def hashDecoder[T]: Decoder[Hash[T]] = Decoder[String].map(Hash[T].apply)
+
+    implicit val txRequestDecoder: Decoder[TransactionRequest] = deriveDecoder
 
     implicit val applyBlockLocallyRequestJsonEncodableAsInstanceInstance
         : JsonRpcEncodableAsMethod[ApplyBlockLocallyRequest] = () => "applyBlockLocally"
@@ -85,6 +99,25 @@ object LaresClientProtocol {
     implicit val applyBlockLocallyResponseDecoder: Decoder[ApplyBlockLocallyResponse] =
       deriveDecoder
 
+    @SuppressWarnings(
+      Array(
+        "org.wartremover.warts.Null",
+        "org.wartremover.warts.Recursion",
+        "MethodReturningAny",
+        "NullParameter",
+      ),
+    )
+    def dynamicFromJson(json: Json): Any =
+      json.fold[js.Any](
+        jsonNull = null,
+        jsonBoolean = identity,
+        jsonNumber = _.toDouble,
+        jsonString = identity,
+        jsonArray = _.map(dynamicFromJson).toJSArray,
+        jsonObject = { obj =>
+          val mapped = obj.toList.map { case (key, json) => (key, dynamicFromJson(json)) }
+          js.special.objectLiteral(mapped*)
+        },
+      )
   }
-
 }

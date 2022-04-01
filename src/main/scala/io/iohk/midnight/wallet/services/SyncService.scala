@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.services
 
 import cats.effect.kernel.GenConcurrent
-import cats.effect.std.{Console, Queue, Semaphore}
+import cats.effect.std.{Queue, Semaphore}
 import cats.effect.syntax.spawn.*
 import cats.effect.{Deferred, Resource}
 import cats.syntax.all.*
@@ -21,6 +21,7 @@ import io.iohk.midnight.wallet.services.SyncService.Error.{
 }
 import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse
 import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.{Accepted, Rejected}
+import org.typelevel.log4cats.Logger
 
 trait SyncService[F[_]] {
   def submitTransaction(transaction: Transaction): F[SubmissionResponse]
@@ -44,7 +45,7 @@ object SyncService {
     * @param semaphore
     *   Needed to make tx submission and enqueuing pending request atomic
     */
-  class Live[F[_]: GenConcurrentThrow: Console](
+  class Live[F[_]: GenConcurrentThrow: Logger](
       platformClient: PlatformClient[F],
       pendingSubmissions: Queue[F, Deferred[F, SubmissionResponse]],
       blocksBuffer: Queue[F, Block],
@@ -75,7 +76,7 @@ object SyncService {
         .receive()
         .flatMap(processReceivedMessage)
         .attempt
-        .map(_.leftMap(error => Console[F].errorln(error.getMessage)))
+        .map(_.leftMap(error => Logger[F].error(error.getMessage)))
         .foreverM
 
     private def processReceivedMessage(message: ReceiveMessage): F[Unit] =
@@ -98,7 +99,7 @@ object SyncService {
   }
 
   object Live {
-    def apply[F[_]: GenConcurrentThrow: Console](
+    def apply[F[_]: GenConcurrentThrow: Logger](
         platformClient: PlatformClient[F],
         blocksBufferSize: Int,
     ): Resource[F, Live[F]] = {
@@ -129,12 +130,13 @@ object SyncService {
   }
 
   sealed abstract class Error(message: String) extends Exception(message)
+  @SuppressWarnings(Array("org.wartremover.warts.ToString")) // FIXME: LLW-163
   object Error {
-    case class UnexpectedMessageReceived(message: ReceiveMessage)
+    final case class UnexpectedMessageReceived(message: ReceiveMessage)
         extends Error(s"Unexpected message received: ${message.toString}")
-    case class EmptyPendingSubmissions(response: SubmissionResponse)
+    final case class EmptyPendingSubmissions(response: SubmissionResponse)
         extends Error(s"${response.toString} was received but no request was pending")
-    case class DeferredFailed(response: SubmissionResponse)
+    final case class DeferredFailed(response: SubmissionResponse)
         extends Error(s"Deferred fail to complete for ${response.toString}")
   }
 }

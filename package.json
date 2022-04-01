@@ -1,16 +1,28 @@
 {
-  "name": "midnight-wallet",
-  "version": "0.0.1",
-  "type": "commonjs",
-  "module": "./target/dist/main.js",
-  "main": "./target/dist/main.js",
-  "packageManager": "yarn@3.1.1",
-  "scripts": {
-    "build": "sbt dist",
-    "prepack": "$npm_execpath run build",
-    "test": "sbt test",
-    "test_coverage": "sbt coverage test",
-    "coverage_report": "sbt coverageReport",
-    "check_format": "sbt scalafmtCheckAll"
-  }
+    "name": "@midnight/wallet",
+    "version": "0.0.5",
+    "main": "dist/main.js",
+    "types": "dist/main.d.ts",
+    "module": "dist/main.js",
+    "type": "module",
+    "packageManager": "yarn@3.1.1",
+    "author": "IOHK",
+    "license": "Apache-2.0",
+    "scripts": {
+        "build": "sbt dist",
+        "test": "sbt test",
+        "test_coverage": "sbt coverage test",
+        "coverage_report": "sbt coverageReport",
+        "check_format": "sbt scalafmtCheckAll"
+    },
+    "files": [
+        "dist/"
+    ],
+    "publishConfig": {
+        "registry": "https://nexus.p42.at/repository/npm-midnight/"
+    },
+    "dependencies": {
+        "@midnight/wallet-api": "^0.0.2",
+        "typescript": "^4.6.2"
+    }
 }

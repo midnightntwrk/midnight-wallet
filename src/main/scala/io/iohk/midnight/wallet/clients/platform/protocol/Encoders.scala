@@ -15,7 +15,7 @@ object Encoders {
     Encoder[String].contramap(_.value)
 
   implicit val publicStateEncoder: Encoder[PublicState] =
-    Encoder[String].contramap(_.value)
+    Encoder[String].contramap(_.value.noSpaces)
 
   implicit val transitionFunctionEncoder: Encoder[TransitionFunction] =
     Encoder[String].contramap(_.value)
@@ -27,7 +27,7 @@ object Encoders {
     Encoder[String].contramap(_.value)
 
   implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =
-    Encoder[String].contramap(_.value)
+    Encoder[String].contramap(_.value.noSpaces)
 
   implicit val nonceEncoder: Encoder[Nonce] =
     Encoder[String].contramap(_.value)

@@ -1,12 +1,16 @@
 package io.iohk.midnight.wallet.clients
 
+import cats.derived.auto.eq.*
 import cats.effect.IO
+import cats.syntax.eq.*
 import io.circe.generic.semiauto.{deriveDecoder, deriveEncoder}
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcClientErrors.*
 import io.iohk.midnight.wallet.clients.JsonRpcClient.{JsonRpcEncodableAsMethod, JsonRpcError}
 import io.iohk.midnight.wallet.clients.JsonRpcClientSpec.TestDomain.*
+import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import io.iohk.midnight.wallet.util.BetterOutputSuite
+import io.iohk.midnight.wallet.util.implicits.Equality.*
 import munit.CatsEffectSuite
 import sttp.client3.impl.cats.CatsMonadError
 import sttp.client3.testing.SttpBackendStub
@@ -74,8 +78,8 @@ class JsonRpcClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
 object JsonRpcClientSpec {
   object TestDomain {
-    case class TestRequest(intValue: Int, stringValue: String)
-    case class TestResponse(intValue: Int, stringValue: String)
+    final case class TestRequest(intValue: Int, stringValue: String)
+    final case class TestResponse(intValue: Int, stringValue: String)
 
     implicit val encoder: Encoder[TestRequest] = deriveEncoder
     implicit val reqEncodable: JsonRpcEncodableAsMethod[TestRequest] = () => "test"
@@ -83,13 +87,13 @@ object JsonRpcClientSpec {
 
     val matchesTestReq: Request[?, ?] => Boolean =
       req =>
-        req.method == Method.POST && req.body == StringBody(
+        req.method === Method.POST && req.body === StringBody(
           testReq.filterNot(_.isWhitespace),
           "utf-8",
           MediaType.ApplicationJson,
         )
 
-    val testReq =
+    val testReq: String =
       """
         |{
         |  "jsonrpc": "2.0",
@@ -102,7 +106,7 @@ object JsonRpcClientSpec {
         |}
         |""".stripMargin
 
-    val testResponse =
+    val testResponse: String =
       """
         |{
         |  "jsonrpc": "2.0",
@@ -114,7 +118,7 @@ object JsonRpcClientSpec {
         |}
         |""".stripMargin
 
-    val errorResp =
+    val errorResp: String =
       """
         |{
         |  "jsonrpc": "2.0",
@@ -127,7 +131,7 @@ object JsonRpcClientSpec {
         |}
         |""".stripMargin
 
-    val errorWithoutDataResp =
+    val errorWithoutDataResp: String =
       """
         |{
         |  "jsonrpc": "2.0",

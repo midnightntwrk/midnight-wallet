@@ -1,15 +1,14 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
 import cats.syntax.all.*
-import io.circe.Decoder
 import io.circe.generic.semiauto.*
+import io.circe.{Decoder, parser}
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.LocalTxSubmission.RejectTxDetails
 import io.iohk.midnight.wallet.clients.platform.protocol.ReceiveMessage.{
   LocalBlockSync,
   LocalTxSubmission,
 }
 import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.domain.Proof
 import java.time.Instant
 import scala.util.Try
 
@@ -42,10 +41,10 @@ object Decoders {
     deriveDecoder
 
   implicit lazy val publicStateDecoder: Decoder[PublicState] =
-    Decoder[String].map(PublicState.apply)
+    Decoder[String].emapTry(parser.parse(_).toTry).map(PublicState.apply)
 
   implicit lazy val publicTranscriptDecoder: Decoder[PublicTranscript] =
-    Decoder[String].map(PublicTranscript.apply)
+    Decoder[String].emapTry(parser.parse(_).toTry).map(PublicTranscript.apply)
 
   implicit lazy val transactionDecoder: Decoder[Transaction] =
     Decoder.instance(_.get[TransactionType](TransactionType.Discriminator)).flatMap {
