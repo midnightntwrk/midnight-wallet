@@ -16,11 +16,6 @@
       actionLib.simpleJob
       (actionLib.common.task
         start.value."midnight-wallet/ci".start)
-      #std.nix.build
-      #CIC-159
-      (std.script "bash" ''
-        set -x
-        echo "WIP..."
-      '')
+      std.nix.build
     ];
 }

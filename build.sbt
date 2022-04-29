@@ -106,7 +106,7 @@ dist := {
   IO.copyDirectory(resDir, distDir, overwrite = true)
 
   val gitHeadCommitFile = distDir / "git-head-commit"
-  IO.write(gitHeadCommitFile, "git rev-parse HEAD" !!)
+  IO.write(gitHeadCommitFile, if (scala.sys.env.contains("rev")) scala.sys.env("rev") else "git rev-parse HEAD" !!)
 
   log.info(s"Dist done at ${distDir.absolutePath}")
 }
