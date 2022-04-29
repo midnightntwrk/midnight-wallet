@@ -6,13 +6,15 @@ import io.circe.parser
 import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.WalletBuilder.Config
 import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.js.facades.rxjs.{Observable, Subscriber}
+import io.iohk.midnight.wallet.util.{StreamObservable, StreamObserver, Subscription}
 import io.iohk.midnight.wallet.{Wallet, WalletBuilder}
-import scala.scalajs.js
-import scala.scalajs.js.JSConverters.*
-import scala.scalajs.js.Promise
-import scala.scalajs.js.annotation.*
 import sttp.model.Uri
 import typings.midnightWalletApi.mod as api
+
+import scala.scalajs.js
+import scala.scalajs.js.Promise
+import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
@@ -67,11 +69,33 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet {
   override def getGUID(): Promise[String] =
     wallet.getUserId().map(_.value).unsafeToPromise()
 
-  override def sync(f: js.Function1[js.Array[Any], Unit]): Unit =
-    wallet
-      .sync()
-      .flatMap(_.map(events => f(events.map(_.value).toJSArray)).compile.drain)
-      .unsafeRunAndForget()
+  override def sync(): Promise[Observable[Seq[SemanticEvent]]] = {
+    (for {
+      stream <- wallet.sync()
+      observable <- IO(
+        new Observable[Seq[SemanticEvent]](
+          js.ThisFunction.fromFunction2[Observable[Seq[SemanticEvent]], Subscriber[
+            Seq[SemanticEvent],
+          ], js.Function0[Unit]]((_, subscriber) => {
+            val Subscription(startConsuming, cancellation) =
+              new StreamObservable[IO, Seq[SemanticEvent]](stream)
+                .subscribe(new StreamObserver[IO, Seq[SemanticEvent]] {
+                  override def next(value: Seq[SemanticEvent]): IO[Unit] =
+                    IO(subscriber.next(value))
+
+                  override def error(error: Throwable): IO[Unit] =
+                    IO(subscriber.error(error.getMessage))
+
+                  override def complete(): IO[Unit] = IO(subscriber.complete())
+                })
+
+            startConsuming.unsafeRunAndForget()
+            () => cancellation.unsafeRunAndForget()
+          }),
+        ),
+      )
+    } yield observable).unsafeToPromise()
+  }
 
   override def close(): Promise[Unit] = finalizer.unsafeToPromise()
 }

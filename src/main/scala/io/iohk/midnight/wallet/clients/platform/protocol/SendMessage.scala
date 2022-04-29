@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
+import cats.Show
 import enumeratum.*
 import io.iohk.midnight.wallet.domain.{Block, Hash, Transaction}
 
@@ -42,4 +43,7 @@ object SendMessage {
     final case class SubmitTx(payload: Transaction) extends LocalTxSubmission
     case object Done extends LocalTxSubmission
   }
+
+  implicit val showSendMessage: Show[SendMessage] = Show.fromToString[SendMessage]
+
 }

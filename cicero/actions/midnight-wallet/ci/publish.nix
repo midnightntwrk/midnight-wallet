@@ -27,16 +27,15 @@
       rec {
         template = std.data-merge.append [{
           destination = "secrets/npm_auth";
-          data = env.NPM_TOKEN;
+          data = env.NPM_AUTH_TOKEN;
         }];
-        env.NPM_TOKEN = ''{{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}'';
+        env.NPM_AUTH_TOKEN = ''{{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}'';
       }
 
       (std.script "bash" ''
         set -x
-        yarn set version 3.1.1
         yarn install
-        yarn npm publish
+        yarn publish
       '')
     ];
 }

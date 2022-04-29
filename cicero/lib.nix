@@ -11,7 +11,8 @@ in actionLib // {
       clone_url:     string
       sha:           string
       statuses_url?: string
-      ref?:          string
+      ref?: "refs/heads/\(default_branch)"
+      default_branch?: string
     '';
 
     output = action: start: {
@@ -20,14 +21,12 @@ in actionLib // {
         inherit (start) clone_url sha;
       } // lib.optionalAttrs (start ? statuses_url) {
         inherit (start) statuses_url;
-      } // lib.optionalAttrs (start ? ref) {
-        inherit (start) ref;
-      };
+      } // lib.optionalAttrs (start ? ref) { inherit (start) ref; };
     };
 
     task = start: action: next:
       std.chain action [
-        (std.base {})
+        (std.base { })
 
         (std.github.reportStatus start.statuses_url or null)
 

@@ -6,14 +6,16 @@ import cats.effect.{IO, Resource}
 import io.iohk.midnight.wallet.clients.lares.LaresClient
 import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.clients.prover.ProverClient
-import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.js.JSLogging.*
+import io.iohk.midnight.wallet.services.*
+import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
 import org.scalajs.dom.RequestCredentials
 import org.typelevel.log4cats.Logger
+import sttp.client3.FetchOptions
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
+
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
-import sttp.client3.FetchOptions
 
 object WalletBuilder {
   def build[F[_]: Async: Logger](config: Config): Resource[F, Wallet[F]] = {
@@ -26,6 +28,8 @@ object WalletBuilder {
     val proverClient = new ProverClient.Live[F](sttpBackend, config.proverUri)
     val proverService =
       new ProverService.Live[F](proverClient, config.proverMaxRetries, config.proverRetryDelay)
+
+    implicit val clientTracer: ClientRequestResponseTracer[F] = ClientRequestResponseTracer[F]()
 
     Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
       for {

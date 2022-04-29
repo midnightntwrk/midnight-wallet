@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.clients.platform.protocol
 
+import cats.Show
 import enumeratum.*
 import io.iohk.midnight.wallet.domain.*
 
@@ -62,4 +63,6 @@ object ReceiveMessage {
       final case class Other(reason: String) extends RejectTxDetails
     }
   }
+
+  implicit val showReceiveMessage: Show[ReceiveMessage] = Show.fromToString[ReceiveMessage]
 }

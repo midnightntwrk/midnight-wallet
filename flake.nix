@@ -50,7 +50,7 @@
             ./src
           ];
 
-          depsSha256 = "sha256-BOh0+iICsQ7fxHJ2io7cqTrhNrUpLJSaZ+UxJYyMUQk=";
+          depsSha256 = "sha256-YAsGrvdspRBN+ztAw9j35MtNtz142yG9QnIGNmvaHQk=";
 
           # this is the command used to to create the fixed-output-derivation
           depsWarmupCommand = ''
@@ -58,6 +58,7 @@
             ln -s ${nodeModules}/node_modules .
             sbt clean
             sbt dist --debug
+            rm node_modules
           '';
 
 

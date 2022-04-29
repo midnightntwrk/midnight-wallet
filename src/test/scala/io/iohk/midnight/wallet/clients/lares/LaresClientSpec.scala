@@ -3,9 +3,7 @@ package io.iohk.midnight.wallet.clients.lares
 import cats.derived.auto.eq.*
 import cats.effect.IO
 import cats.syntax.eq.*
-import io.circe.{Decoder, Encoder, Json, parser}
-import io.iohk.midnight.wallet.clients.JsonRpcClient
-import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcEncodableAsMethod
+import io.circe.{Json, parser}
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.{
   ApplyBlockLocallyRequest,
@@ -15,6 +13,7 @@ import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Block.*
 import io.iohk.midnight.wallet.domain.Receipt.Success
 import io.iohk.midnight.wallet.js.JSLogging.loggingEv
+import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.util.implicits.Equality.*
 import java.time.Instant
@@ -29,6 +28,7 @@ import sttp.model.{MediaType, Method}
 class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
+  implicit val clientTracer: ClientRequestResponseTracer[IO] = ClientRequestResponseTracer[IO]()
 
   def matchesReq(expectedRequest: String): Request[?, ?] => Boolean =
     req =>
@@ -38,19 +38,18 @@ class LaresClientSpec extends CatsEffectSuite with BetterOutputSuite {
         MediaType.ApplicationJson,
       )
 
-  def testRequest[Req: JsonRpcEncodableAsMethod: Encoder, Resp: Decoder](
-      request: Req,
+  def testRequest(
+      request: ApplyBlockLocallyRequest,
       encodedRequest: String,
       encodedResponse: String,
-      response: Resp,
+      response: ApplyBlockLocallyResponse,
   ): IO[Unit] = {
-    val rpcClient = new JsonRpcClient[IO](
+    val backend =
       SttpBackendStub[IO, Any](catsMonadError)
         .whenRequestMatches(matchesReq(encodedRequest))
-        .thenRespond[String](encodedResponse),
-      uri = uri"http://test.com",
-    )
-    assertIO(rpcClient.doRequest[Req, Resp](request), response)
+        .thenRespond[String](encodedResponse)
+    val laresClient = LaresClient.Live[IO](backend, uri"http://test.com")
+    assertIO(laresClient.applyBlockLocally(request), response)
   }
 
   test("applyBlockLocally") {

@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.clients.platform
 
 import cats.effect.std.Queue
 import cats.effect.{Clock, IO, Ref}
+import cats.implicits.toShow
 import cats.syntax.applicative.*
 import cats.syntax.applicativeError.*
 import cats.syntax.apply.*
@@ -43,7 +44,6 @@ class PlatformClientStub(
     clientIsAwaitingReply: Ref[IO, Boolean],
 )(implicit H: Hashing[IO])
     extends PlatformClient[IO] {
-  @SuppressWarnings(Array("org.wartremover.warts.ToString")) // FIXME: LLW-163
   override def send(message: SendMessage): IO[Unit] =
     message match {
       case RequestNext =>
@@ -59,7 +59,7 @@ class PlatformClientStub(
         else responses.offer(RejectTx(rejectDetails))
 
       case msg =>
-        new Exception(s"Unexpected message ${msg.toString}").raiseError[IO, Unit]
+        new Exception(s"Unexpected message ${msg.show}").raiseError[IO, Unit]
     }
 
   // We don't have a real validation logic, currently all transactions

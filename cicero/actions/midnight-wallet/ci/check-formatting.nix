@@ -1,21 +1,22 @@
 { name, std, lib, actionLib, ... } @ args:
 
 {
-  inputs.start = ''
-    "midnight-wallet/ci": start: {
+  inputs.build = ''
+    "midnight-wallet/ci/build": {
+      ok: true
       ${actionLib.common.inputStartCue}
     }
   '';
 
-  output = { start }:
+  output = { build }:
     actionLib.common.output args
-      start.value."midnight-wallet/ci".start;
+      build.value."midnight-wallet/ci/build";
 
-  job = { start }:
+  job = { build }:
     std.chain args [
       actionLib.simpleJob
       (actionLib.common.task
-        start.value."midnight-wallet/ci".start)
+        build.value."midnight-wallet/ci/build")
       (std.script "bash" ''
         sbt scalafmtCheckAll
       '')

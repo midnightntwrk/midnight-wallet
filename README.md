@@ -91,6 +91,10 @@ does the following:
 - Check the code with [scapegoat](https://github.com/scapegoat-scala/sbt-scapegoat)
 - Run the unit tests to verify that the minimum code coverage is reached
 
+## Publish artifact
+
+To publish this artifact manually, set the environment variable `NPM_TOKEN` with a token that has the appropriate permissions, then use `yarn publish`.
+
 ## Build Nix
 
 `nix-build`
@@ -112,8 +116,5 @@ Notes:
   if a previous vendored directory exists, nix will not check
   if the directory is the "latest". To avoid this situation,
   please use `./update-nix.sh --check`
-- The environment flag `MIDNIGHT_DEV` (`EXPORT MIDNIGHT_DEV=true`) could be used to disable compilation and linter checks to speed up development cycle.
+- The environment flag `MIDNIGHT_DEV` (`export MIDNIGHT_DEV=true`) could be used to disable compilation and linter checks to speed up development cycle.
   It SHOULD NOT be used on CI server.
-
-Mandatory Condition:
-- yarn2nix only maintains the expected lock file format on yarn 1. For this reason, the yarn.lock file must maintain the expected format on yarn 1.

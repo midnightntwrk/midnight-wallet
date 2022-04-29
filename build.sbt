@@ -1,4 +1,4 @@
-import scala.sys.process.Process
+import scala.sys.process._
 
 val nixBuild = sys.props.isDefinedAt("nix")
 
@@ -12,8 +12,13 @@ ThisProject / scalacOptions ~= { prev =>
 
 ThisBuild / scapegoatVersion := "1.4.12"
 ThisBuild / scapegoatDisabledInspections := Seq("IncorrectlyNamedExceptions")
+ThisBuild / scapegoatIgnoredFiles := Seq(".*/io/iohk/midnight/wallet/js/facades/.*")
 
-ThisProject / scalacOptions += "-Xsource:3"
+ThisProject / scalacOptions ++= Seq(
+  "-Xsource:3",
+  "-Wunused:nowarn",
+  "-P:kind-projector:underscore-placeholders",
+)
 
 Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b")
 
@@ -30,6 +35,7 @@ lazy val warts = Warts.allBut(
 lazy val wallet = (project in file("."))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(
+    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // Dependencies
@@ -38,12 +44,12 @@ lazy val wallet = (project in file("."))
       "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
       "com.softwaremill.sttp.client3" %%% "circe" % "3.4.1",
       "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
-      "co.fs2" %%% "fs2-core" % "3.2.0",
+      "co.fs2" %%% "fs2-core" % "3.2.5",
       "io.circe" %%% "circe-core" % "0.14.1",
       "io.circe" %%% "circe-generic" % "0.14.1",
       "io.circe" %%% "circe-generic-extras" % "0.14.1",
       "org.typelevel" %%% "cats-core" % "2.7.0",
-      "org.typelevel" %%% "cats-effect" % "3.3.4",
+      "org.typelevel" %%% "cats-effect" % "3.3.8",
       "org.typelevel" %%% "log4cats-core" % "2.1.0",
     ),
 
@@ -61,16 +67,18 @@ lazy val wallet = (project in file("."))
       if (!nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
+    stIgnore += "rxjs",
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
 
     // Linting
     wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
     wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
+    wartremoverExcluded += baseDirectory.value / "src" / "main" / "scala" / "io" / "iohk" / "midnight" / "wallet" / "js" / "facades",
     coverageFailOnMinimum := true,
     coverageMinimumStmtTotal := 90,
     coverageMinimumBranchTotal := 90,
-    coverageExcludedPackages := "io.iohk.midnight.wallet.WalletBuilder;io.iohk.midnight.wallet.js",
+    coverageExcludedPackages := "io.iohk.midnight.wallet.WalletBuilder;io.iohk.midnight.wallet.js;io.iohk.midnight.wallet.js.facades.rxjs",
   )
 
 lazy val integrationTests = (project in file("integration-tests"))
@@ -96,6 +104,10 @@ dist := {
   IO.createDirectory(distDir)
   IO.copyDirectory(targetJSDir, distDir, overwrite = true)
   IO.copyDirectory(resDir, distDir, overwrite = true)
+
+  val gitHeadCommitFile = distDir / "git-head-commit"
+  IO.write(gitHeadCommitFile, "git rev-parse HEAD" !!)
+
   log.info(s"Dist done at ${distDir.absolutePath}")
 }
 

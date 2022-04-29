@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.clients.platform
 
 import cats.MonadThrow
 import cats.effect.Resource
+import cats.implicits.toShow
 import cats.syntax.flatMap.*
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
@@ -10,7 +11,7 @@ import io.circe.syntax.*
 import io.iohk.midnight.wallet.clients.platform.protocol.Decoders.receiveMessageDecoder
 import io.iohk.midnight.wallet.clients.platform.protocol.Encoders.sendMessageEncoder
 import io.iohk.midnight.wallet.clients.platform.protocol.{ReceiveMessage, SendMessage}
-import org.typelevel.log4cats.Logger
+import io.iohk.midnight.wallet.tracer.{ClientRequestResponseTrace, ClientRequestResponseTracer}
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri
@@ -23,11 +24,12 @@ trait PlatformClient[F[_]] {
 }
 
 object PlatformClient {
-  @SuppressWarnings(Array("org.wartremover.warts.ToString")) // FIXME: LLW-163
-  class Live[F[_]: MonadThrow: Logger](webSocket: WebSocket[F]) extends PlatformClient[F] {
+  class Live[F[_]: MonadThrow](webSocket: WebSocket[F])(implicit
+      tracer: ClientRequestResponseTracer[F],
+  ) extends PlatformClient[F] {
     override def send(message: SendMessage): F[Unit] = {
-      Logger[F].debug(s"==> sending: ${message.toString}") >>
-        webSocket.sendText(message.asJson(sendMessageEncoder).toString)
+      tracer(ClientRequestResponseTrace.ClientRequest(message.show)) >>
+        webSocket.sendText(message.asJson(sendMessageEncoder).spaces2)
     }
 
     override def receive(): F[ReceiveMessage] =
@@ -35,11 +37,11 @@ object PlatformClient {
         .receiveText()
         .map(decode(_)(receiveMessageDecoder))
         .rethrow
-        .flatTap(message => Logger[F].debug(s"==> receiving: ${message.toString}"))
+        .flatTap(message => tracer(ClientRequestResponseTrace.ClientResponse(message.show)))
   }
 
   object Live {
-    def apply[F[_]: MonadThrow: Logger](
+    def apply[F[_]: MonadThrow: ClientRequestResponseTracer](
         backend: SttpBackend[F, WebSockets],
         platformUri: Uri,
     ): Resource[F, Live[F]] = {

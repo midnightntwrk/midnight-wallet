@@ -1,4 +1,5 @@
 import { Wallet as WalletAPI, TxSubmissionResult } from '@midnight/wallet-api'
+import { Observable } from 'rxjs'
 
 export class Wallet implements WalletAPI {
     call(
@@ -13,7 +14,7 @@ export class Wallet implements WalletAPI {
         publicState: string
     ): Promise<TxSubmissionResult>
 
-    sync(f: (event: Array<any>) => void): void
+    sync(): Promise<Observable<Array<any>>>
 
     getGUID(): Promise<string>
 

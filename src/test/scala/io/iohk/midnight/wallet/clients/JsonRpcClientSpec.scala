@@ -9,6 +9,7 @@ import io.iohk.midnight.wallet.clients.JsonRpcClient.JsonRpcClientErrors.*
 import io.iohk.midnight.wallet.clients.JsonRpcClient.{JsonRpcEncodableAsMethod, JsonRpcError}
 import io.iohk.midnight.wallet.clients.JsonRpcClientSpec.TestDomain.*
 import io.iohk.midnight.wallet.js.JSLogging.loggingEv
+import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.util.implicits.Equality.*
 import munit.CatsEffectSuite
@@ -21,6 +22,7 @@ import sttp.model.{MediaType, Method, StatusCode}
 class JsonRpcClientSpec extends CatsEffectSuite with BetterOutputSuite {
 
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
+  implicit val clientTracer: ClientRequestResponseTracer[IO] = ClientRequestResponseTracer[IO]()
 
   test("Should get correct response") {
     val rpcClient = new JsonRpcClient[IO](

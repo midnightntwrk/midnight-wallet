@@ -4,19 +4,22 @@ import cats.effect.IO
 import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.domain.{Block, CallTransaction, DeployTransaction}
 import io.iohk.midnight.wallet.examples.Transactions
-import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.Accepted
 import io.iohk.midnight.wallet.js.JSLogging.loggingEv
+import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.Accepted
+import io.iohk.midnight.wallet.tracer.{Tracer, WalletTrace, WalletTracerFactory}
 import munit.CatsEffectSuite
-
-import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
+
+import scala.concurrent.duration.DurationInt
 
 class SyncServiceIntegrationSpec extends CatsEffectSuite {
 
   val platformUri = uri"ws://localhost:5100/"
   val blocksBufferSize = 100
   val timeout = 30.seconds
+
+  implicit val clientTracer: Tracer[IO, WalletTrace] = WalletTracerFactory.noOp[IO, WalletTrace]
 
   def integrationTest(title: String)(theTest: SyncService[IO] => IO[Unit]): Unit =
     test(title) {

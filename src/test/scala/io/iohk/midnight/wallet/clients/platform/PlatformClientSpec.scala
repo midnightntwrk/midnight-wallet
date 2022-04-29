@@ -2,8 +2,9 @@ package io.iohk.midnight.wallet.clients.platform
 
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.wallet.clients.platform.protocol.{ReceiveMessage, SendMessage}
-import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.js.JSLogging.loggingEv
+import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.util.BetterOutputSuite
 import munit.CatsEffectSuite
 import sttp.capabilities.WebSockets
 import sttp.client3.impl.cats.CatsMonadError
@@ -14,6 +15,7 @@ import sttp.ws.{WebSocket, WebSocketFrame}
 
 trait PlatformClientSpec extends CatsEffectSuite with BetterOutputSuite {
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
+  implicit val clientTracer: ClientRequestResponseTracer[IO] = ClientRequestResponseTracer[IO]()
 
   def buildClientFromWebSocket[S](webSocket: WebSocket[IO]): Resource[IO, PlatformClient[IO]] = {
     val sttpBackend =

@@ -4,7 +4,7 @@ import cats.effect.kernel.Async
 import io.iohk.midnight.wallet.clients.JsonRpcClient
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.*
 import io.iohk.midnight.wallet.clients.lares.LaresClientProtocol.Serialization.*
-import org.typelevel.log4cats.Logger
+import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
 import sttp.client3.SttpBackend
 import sttp.model.Uri
 
@@ -20,8 +20,9 @@ object LaresClient {
   }
 
   object Live {
-    def apply[F[_]: Async: Logger](backend: SttpBackend[F, Any], uri: Uri): Live[F] = {
-      new Live(new JsonRpcClient[F](backend, uri))
-    }
+    def apply[F[_]: Async: ClientRequestResponseTracer](
+        backend: SttpBackend[F, Any],
+        uri: Uri,
+    ): Live[F] = new Live(new JsonRpcClient[F](backend, uri))
   }
 }

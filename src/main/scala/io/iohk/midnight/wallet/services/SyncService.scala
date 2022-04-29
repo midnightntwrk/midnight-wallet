@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.services
 
+import cats.Show
 import cats.effect.kernel.GenConcurrent
 import cats.effect.std.{Queue, Semaphore}
 import cats.effect.syntax.spawn.*
@@ -127,16 +128,18 @@ object SyncService {
   object SubmissionResponse {
     case object Accepted extends SubmissionResponse
     final case class Rejected(reason: String) extends SubmissionResponse
+
+    implicit val showSubmissionResponse: Show[SubmissionResponse] =
+      Show.fromToString[SubmissionResponse]
   }
 
   sealed abstract class Error(message: String) extends Exception(message)
-  @SuppressWarnings(Array("org.wartremover.warts.ToString")) // FIXME: LLW-163
   object Error {
     final case class UnexpectedMessageReceived(message: ReceiveMessage)
-        extends Error(s"Unexpected message received: ${message.toString}")
+        extends Error(s"Unexpected message received: ${message.show}")
     final case class EmptyPendingSubmissions(response: SubmissionResponse)
-        extends Error(s"${response.toString} was received but no request was pending")
+        extends Error(s"${response.show} was received but no request was pending")
     final case class DeferredFailed(response: SubmissionResponse)
-        extends Error(s"Deferred fail to complete for ${response.toString}")
+        extends Error(s"Deferred fail to complete for ${response.show}")
   }
 }
