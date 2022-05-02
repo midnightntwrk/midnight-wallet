@@ -1,10 +1,9 @@
 name: Linting & Testing
 
-on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main, develop ]
+env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+on: [push, pull_request]
 
 jobs:
   build:
