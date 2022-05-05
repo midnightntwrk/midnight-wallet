@@ -28,52 +28,54 @@
 
         packageJSON = __fromJSON (__readFile ./package.json);
       in rec {
-        nodeModules = pkgs.mkYarnModules {
-          name = "midnight-wallet-${packageJSON.version}";
-          pname = packageJSON.name;
-          version = packageJSON.version;
-          packageJSON = ./package.json;
-          yarnLock = ./yarn.lock;
-        };
+        packages = {
+          midnight-wallet-node-modules = pkgs.mkYarnModules {
+            name = "midnight-wallet-${packageJSON.version}";
+            pname = packageJSON.name;
+            version = packageJSON.version;
+            packageJSON = ./package.json;
+            yarnLock = ./yarn.lock;
+          };
 
-        packages.midnight-wallet = pkgs.sbt.mkDerivation rec {
-          pname = "midnight-wallet";
-          version = packageJSON.version;
+          midnight-wallet = pkgs.sbt.mkDerivation rec {
+            pname = "midnight-wallet";
+            version = packageJSON.version;
 
-          src = inclusive.lib.inclusive ./. [
-            ./build.sbt
-            ./integration-tests
-            ./package.json
-            ./project
-            ./src
-          ];
+            src = inclusive.lib.inclusive ./. [
+              ./build.sbt
+              ./integration-tests
+              ./package.json
+              ./project
+              ./src
+            ];
 
-          depsSha256 = "sha256-sa8Nqvf9jKM80x8Wv5j6f6NDP7Mu6LN3V6N8LJ6IgYo=";
+            depsSha256 = "sha256-sa8Nqvf9jKM80x8Wv5j6f6NDP7Mu6LN3V6N8LJ6IgYo=";
 
-          # this is the command used to to create the fixed-output-derivation
-          depsWarmupCommand = ''
-            export rev=${nixpkgs.lib.escapeShellArg rev}
-            export PATH="${nodeModules}/deps/midnight-wallet/node_modules/.bin:$PATH"
-            ln -s ${nodeModules}/node_modules .
-            sbt clean
-            sbt dist --debug
-            rm node_modules
-          '';
+            # this is the command used to to create the fixed-output-derivation
+            depsWarmupCommand = ''
+              export rev=${nixpkgs.lib.escapeShellArg rev}
+              export PATH="${packages.midnight-wallet-node-modules}/deps/midnight-wallet/node_modules/.bin:$PATH"
+              ln -s ${packages.midnight-wallet-node-modules}/node_modules .
+              sbt clean
+              sbt dist --debug
+              rm node_modules
+            '';
 
-          nativeBuildInputs = with pkgs; [ yarn nodejs ];
+            nativeBuildInputs = with pkgs; [ yarn nodejs ];
 
-          preBuild = "ln -s ${nodeModules}/node_modules .";
+            preBuild = "ln -s ${packages.midnight-wallet-node-modules}/node_modules .";
 
-          doCheck = true;
-          checkPhase = "sbt test";
+            doCheck = true;
+            checkPhase = "sbt test";
 
-          installPhase = ''
-            export PATH="${nodeModules}/deps/midnight-wallet/node_modules/.bin:$PATH"
-            sbt dist
-            mv dist $out
-          '';
+            installPhase = ''
+              export PATH="${packages.midnight-wallet-node-modules}/deps/midnight-wallet/node_modules/.bin:$PATH"
+              sbt dist
+              mv dist $out
+            '';
 
-          rev = self.rev or "dirty";
+            rev = self.rev or "dirty";
+          };
         };
 
         defaultPackage = packages.midnight-wallet;

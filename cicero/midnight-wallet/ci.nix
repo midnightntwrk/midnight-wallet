@@ -82,7 +82,10 @@
 
     (std.script "bash" ''
       set -x
-      yarn install
+
+      nix build .#midnight-wallet-node-modules
+      ln -s "$(realpath result)"/node_modules .
+
       yarn publish
     '')
   ];
