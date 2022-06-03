@@ -23,6 +23,21 @@
         pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
           (final: prev: { jre = prev.jdk11; })
           sbt-derivation.overlay
+          (final: prev: {
+            # https://github.com/zaninime/sbt-derivation/issues/7
+            sbt = prev.sbt // {
+              mkDerivation = args: (prev.sbt.mkDerivation args).overrideAttrs (oldAttrs: {
+                deps = oldAttrs.deps.overrideAttrs (depsOld: {
+                  postBuild = ''
+                    ${depsOld.postBuild or ""}
+                    >&2 echo "fixing-up the compiler interface"
+                    find .nix -name 'org.scala-sbt-compiler-interface*' -type f -print0 \
+                    | xargs -r0 strip-nondeterminism
+                  '';
+                });
+              });
+            };
+          })
           yarn2nix.overlay
         ]);
 
@@ -49,7 +64,7 @@
               ./src
             ];
 
-            depsSha256 = "sha256-sa8Nqvf9jKM80x8Wv5j6f6NDP7Mu6LN3V6N8LJ6IgYo=";
+            depsSha256 = "sha256-0nS5xlI3XIPmIbuaZnIS+lbnsA6b57FZml/wl/h/nbE=";
 
             # this is the command used to to create the fixed-output-derivation
             depsWarmupCommand = ''
