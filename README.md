@@ -36,25 +36,31 @@ To run the unit tests install [Node.js](https://nodejs.org/en/). The version is 
 - `build.properties` - defines sbt version
 - `plugins.sbt` - sbt plugins
 
-`src/main/scala/io/iohk/midnight/wallet`
+`wallet-core/src/main/scala/io/iohk/midnight/wallet`
   - `clients` - Implementation of interaction with external services
-  - `domain` - Domain model of the wallet
   - `js` - Interoperability with Javascript
   - `services` - Service layer that depends on clients and exposes only domain types
   - `util` - Utilities that can be used by many layers and aren't domain specific
   - `Wallet.scala` - Implementation of the main business logic
   - `WalletBuilder.scala` - Dependency injection and instantiation of the `Wallet` class
+
+`domain/src/main/scala/io/iohk/midnight/wallet`
+  - `domain` - Domain model of the wallet
+    - `services` - Interfaces of services that wallet core uses, that can be independently developed and reused
+
+`ogmios-sync/src/main/scala/io/iohk/midnight/wallet/ogmios`
+  - `sync` - Implementation of the `SyncService` from `domain` module using the Ogmios protocol
  
-`src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
+`[wallet-core|domain|ogmios-sync]/src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
 classes and `Stub` suffix is added to create stubs that can be used by other unit tests
 
-`integration-tests` - A subproject specially for developing integration tests 
+`integration-tests` - A subproject specifically for developing integration tests 
 
 ## Build
 
-`yarn install && yarn run build` or directly `sbt dist`.
+`sbt dist`
 
-The generated JavaScript code is written to `target/dist`.
+The generated JavaScript code is written to `wallet-core/target/dist`.
 
 ## Test
 
@@ -70,11 +76,11 @@ See the integration-tests [README](integration-tests/README.md) for instructions
 
 `sbt coverage test coverageReport`
 
-An HTML report is written to `target/scala-2.13/scoverage-report/index.html`
+An HTML report is written to each module's `target/scala-2.13/scoverage-report/index.html`
 
 ## Contributing
 
-All new features must branch off the default branch `develop`.
+All new features must branch off the default branch `main`.
 
 It's recommended to enable automatic scalafmt formatting in your text editor upon save, in order to 
 avoid CI errors due to incorrect format.
@@ -93,7 +99,7 @@ does the following:
 
 ## Publish artifact
 
-To publish this artifact manually, set the environment variable `NPM_TOKEN` with a token that has the appropriate permissions, then use `yarn publish`.
+To publish this artifact manually, set the environment variable `NPM_TOKEN` with a token that has the appropriate permissions, then use `sbt dist && cd wallet-core && yarn publish`.
 
 ## Build Nix
 

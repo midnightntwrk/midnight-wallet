@@ -2,6 +2,8 @@ name: Linting & Testing
 
 env:
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+  MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
+  MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
 
 on: [push, pull_request]
 
@@ -15,4 +17,4 @@ jobs:
     - name: Run scapegoat
       run: sbt scapegoat
     - name: Run tests
-      run: sbt coverage test coverageReport
+      run: sbt coverage walletCore/test domain/test ogmiosSync/test coverageReport

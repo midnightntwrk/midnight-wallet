@@ -18,3 +18,4 @@ result
 .bsp/
 .idea/
 .nix/
+.envrc

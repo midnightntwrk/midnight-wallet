@@ -4,7 +4,6 @@ import cats.effect.IO
 import io.iohk.midnight.wallet.clients.prover.ProverClient
 import io.iohk.midnight.wallet.domain.CircuitValues
 import munit.CatsEffectSuite
-
 import scala.concurrent.duration.DurationInt
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
@@ -25,7 +24,7 @@ class ProverServiceIntegrationSpec extends CatsEffectSuite {
         snarkieServerUri,
       ),
       maxRetries,
-      retryDelay
+      retryDelay,
       // FIXME: For now I'm asserting length since it's always the same for the mocked responses
     ).prove(CircuitValues(1, 2, 5)).map(p => assert(p.value.length == 2080))
   }
