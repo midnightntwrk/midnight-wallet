@@ -20,10 +20,13 @@ lazy val commonSettings = Seq(
     // Treat linting errors as warnings for quick development
     if (Env.devModeEnabled) prev.filterNot(_ == "-Xfatal-warnings") else prev
   },
-  scalacOptions ++= Seq(
-    "-Xsource:3", // Allow Scala 3 syntax like * wildcards for imports
-    "-Wunused:nowarn",
-  ),
+  scalacOptions ++=
+    Seq("-Wunused:nowarn") ++ {
+      CrossVersion.partialVersion(scalaVersion.value) match {
+        case Some((2, _)) => Seq("-Xsource:3") // Allow Scala 3 syntax like * wildcards for imports
+        case _            => Seq.empty
+      }
+    },
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
   // Private Nexus repository config
@@ -45,8 +48,6 @@ lazy val commonSettings = Seq(
   ).map(_ % Test),
 
   // Linting
-  ThisBuild / scapegoatVersion := "1.4.12",
-  scapegoatDisabledInspections := Seq("IncorrectlyNamedExceptions"),
   wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
   wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
   coverageFailOnMinimum := true,
@@ -104,7 +105,6 @@ lazy val walletCore = (project in file("wallet-core"))
     Global / stQuiet := true,
 
     // Linting
-    scapegoatIgnoredFiles := Seq(".*/io/iohk/midnight/wallet/js/facades/.*"),
     wartremoverExcluded += baseDirectory.value / "src" / "main" / "scala" / "io" / "iohk" / "midnight" / "wallet" / "js" / "facades",
     coverageExcludedPackages := "io.iohk.midnight.wallet.WalletBuilder;io.iohk.midnight.wallet.js;io.iohk.midnight.wallet.js.facades.rxjs",
     coverageMinimumStmtTotal := 90,
@@ -117,6 +117,8 @@ lazy val ogmiosSync = (project in file("ogmios-sync"))
   .settings(commonSettings: _*)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    crossScalaVersions := Seq("2.13.8", "3.1.2"),
+    conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
       "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
@@ -159,4 +161,4 @@ dist := {
   log.info(s"Dist done at ${distDir.absolutePath}")
 }
 
-addCommandAlias("verify", ";scalafmtCheckAll ;scapegoat ;coverage ;test ;coverageReport")
+addCommandAlias("verify", ";scalafmtCheckAll ;coverage ;test ;coverageReport")
