@@ -161,4 +161,7 @@ dist := {
   log.info(s"Dist done at ${distDir.absolutePath}")
 }
 
-addCommandAlias("verify", ";scalafmtCheckAll ;coverage ;test ;coverageReport")
+addCommandAlias(
+  "verify",
+  ";scalafmtCheckAll ;coverage ;walletCore/test ;domain/test ;ogmiosSync/test ;coverageReport",
+)

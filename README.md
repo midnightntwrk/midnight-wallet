@@ -56,6 +56,37 @@ classes and `Stub` suffix is added to create stubs that can be used by other uni
 
 `integration-tests` - A subproject specifically for developing integration tests 
 
+
+## Credentials
+
+To be able to fetch our internal dependencies, it is required to have our nexus credentials. To get them, you have to contact our devops team. Once you have them, you need to set three `env` variables:
+```
+$ export MIDNIGHT_REPO_USER=your_user
+
+$ export MIDNIGHT_REPO_PASS=your_password
+```
+
+From these credentials you can generate an `NPM_TOKEN` that is also required. From your home directory run:
+
+```
+npm login --scope=@midnight --registry=https://nexus.p42.at/repository/npm-midnight/
+```
+You will be required to input the nexus user and password plus the email associated. After that, check that the following file exists and copy the token:
+
+```
+$ cat ~/.npmrc
+@midnight:registry=https://nexus.p42.at/repository/npm-midnight/
+//nexus.p42.at/repository/npm-midnight/:_authToken=NpmToken.YOUR_NPM_TOKEN
+
+```
+Use it to set the npm token for the project:
+```
+$ export NPM_TOKEN=YOUR_NPM_TOKEN
+```
+
+
+We strongly suggest using [direnv](https://direnv.net/) to simplify setting these variables.
+
 ## Build
 
 `sbt dist`
@@ -66,7 +97,7 @@ The generated JavaScript code is written to `wallet-core/target/dist`.
 
 #### Unit tests
 
-`sbt test`
+`sbt walletCore/test domain/test ogmiosSync/test`
 
 #### Integration tests
 
@@ -74,7 +105,7 @@ See the integration-tests [README](integration-tests/README.md) for instructions
 
 ## Generate Coverage report
 
-`sbt coverage test coverageReport`
+`sbt coverage walletCore/test domain/test ogmiosSync/test coverageReport`
 
 An HTML report is written to each module's `target/scala-2.13/scoverage-report/index.html`
 
@@ -99,7 +130,7 @@ does the following:
 
 ## Publish artifact
 
-To publish this artifact manually, set the environment variable `NPM_TOKEN` with a token that has the appropriate permissions, then use `sbt dist && cd wallet-core && yarn publish`.
+In order to publish, the version inside `wallet-core/package.json` should be bumped and the change merged into main.
 
 ## Build Nix
 
