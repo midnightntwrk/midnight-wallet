@@ -53,11 +53,11 @@ lazy val commonSettings = Seq(
   coverageFailOnMinimum := true,
 )
 
-lazy val domain = (project in file("domain"))
-  .enablePlugins(ScalaJSPlugin)
+lazy val domain = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("domain"))
   .settings(commonSettings: _*)
   .settings(
-    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
       "io.circe" %%% "circe-core" % "0.14.1",
@@ -67,10 +67,13 @@ lazy val domain = (project in file("domain"))
     coverageMinimumStmtTotal := 64,
     coverageMinimumBranchTotal := 100,
   )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
+  )
 
 lazy val walletCore = (project in file("wallet-core"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(domain)
+  .dependsOn(domain.js)
   .settings(commonSettings: _*)
   .settings(
     scalacOptions += "-P:kind-projector:underscore-placeholders",
@@ -111,12 +114,12 @@ lazy val walletCore = (project in file("wallet-core"))
     coverageMinimumBranchTotal := 90,
   )
 
-lazy val ogmiosSync = (project in file("ogmios-sync"))
-  .enablePlugins(ScalaJSPlugin)
+lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("ogmios-sync"))
   .dependsOn(domain)
   .settings(commonSettings: _*)
   .settings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     crossScalaVersions := Seq("2.13.8", "3.1.2"),
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
@@ -131,6 +134,9 @@ lazy val ogmiosSync = (project in file("ogmios-sync"))
     ),
     coverageMinimumStmtTotal := 100,
     coverageMinimumBranchTotal := 100,
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
 
 lazy val integrationTests = (project in file("integration-tests"))
@@ -163,5 +169,5 @@ dist := {
 
 addCommandAlias(
   "verify",
-  ";scalafmtCheckAll ;coverage ;walletCore/test ;domain/test ;ogmiosSync/test ;coverageReport",
+  ";scalafmtCheckAll ;coverage ;walletCore/test ;domainJS/test ;ogmiosSyncJS/test ;coverageReport",
 )

@@ -34,7 +34,7 @@
     std.nix.develop
 
     (std.wrapScript "bash" (next: ''
-      sbt scalafmtCheckAll coverage walletCore/test domain/test ogmiosSync/test coverageReport
+      sbt scalafmtCheckAll coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport
       ${lib.escapeShellArgs next}
     ''))
 

@@ -21,9 +21,9 @@ jobs:
     - name: Check format
       run: sbt scalafmtCheckAll
     - name: Run tests
-      run: sbt coverage walletCore/test domain/test ogmiosSync/test coverageReport
+      run: sbt coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport
     - name: Cross build and test sync module to Scala 3
-      run: sbt '++ 3.1.2 ogmiosSync/test'
+      run: sbt '++ 3.1.2 ogmiosSyncJS/test'
 
   publish:
     name: Publish
