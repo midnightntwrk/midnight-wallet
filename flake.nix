@@ -41,15 +41,15 @@
           yarn2nix.overlay
         ]);
 
-        packageJSON = __fromJSON (__readFile ./package.json);
+        packageJSON = __fromJSON (__readFile ./wallet-core/package.json);
       in rec {
         packages = {
           midnight-wallet-node-modules = pkgs.mkYarnModules {
             name = "midnight-wallet-${packageJSON.version}";
             pname = packageJSON.name;
             version = packageJSON.version;
-            packageJSON = ./package.json;
-            yarnLock = ./yarn.lock;
+            packageJSON = ./wallet-core/package.json;
+            yarnLock = ./wallet-core/yarn.lock;
           };
 
           midnight-wallet = pkgs.sbt.mkDerivation rec {
@@ -58,10 +58,10 @@
 
             src = inclusive.lib.inclusive ./. [
               ./build.sbt
-              ./integration-tests
-              ./package.json
               ./project
-              ./src
+              ./integration-tests
+              ./wallet-core/package.json
+              ./wallet-core/src
             ];
 
             depsSha256 = "sha256-0nS5xlI3XIPmIbuaZnIS+lbnsA6b57FZml/wl/h/nbE=";

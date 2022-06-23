@@ -33,13 +33,13 @@
 
     std.nix.develop
 
-    # TODO Fail on scapegoat. Currently it just logs.
     (std.wrapScript "bash" (next: ''
-      sbt scalafmtCheckAll scapegoat coverage coverageReport
+      sbt scalafmtCheckAll coverage walletCore/test domain/test ogmiosSync/test coverageReport
       ${lib.escapeShellArgs next}
     ''))
 
-    std.nix.build
+    # We should use nix build, but right now it's not possible
+    # std.nix.build
 
     {
       template = std.data-merge.append [
@@ -82,6 +82,8 @@
 
     (std.script "bash" ''
       set -x
+
+      cd wallet-core
 
       nix build .#midnight-wallet-node-modules
       ln -s "$(realpath result)"/node_modules .
