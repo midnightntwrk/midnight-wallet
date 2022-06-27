@@ -22,7 +22,7 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/wallet-api": "^0.0.3",
+        "@midnight/wallet-api": "^0.0.5",
         "typescript": "^4.6.2"
     }
 }

@@ -24,7 +24,7 @@ class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutp
     (for {
       acc <- Ref.of[IO, Seq[Seq[SemanticEvent]]](Seq.empty[Seq[SemanticEvent]])
       isFinished <- Deferred[IO, Unit]
-      observable <- IO.fromPromise(IO(jsWallet.sync()))
+      observable = jsWallet.sync()
       _ = {
         observable.subscribe(new Subscriber[Seq[SemanticEvent]] {
           override def next: js.Function1[Seq[SemanticEvent], Unit] =
@@ -44,7 +44,7 @@ class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutp
     (for {
       isFinished <- Deferred[IO, Unit]
       isUnsubscribed <- Deferred[IO, Unit]
-      observable <- IO.fromPromise(IO(jsInfiniteWallet.sync()))
+      observable = jsInfiniteWallet.sync()
       cancellation = {
         observable.subscribe(new Subscriber[Seq[SemanticEvent]] {
           override def next: js.Function1[Seq[SemanticEvent], Unit] = _ => ()
@@ -66,7 +66,7 @@ class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutp
       errorMsg <- Ref.of[IO, Option[String]](None)
       isFinished <- Deferred[IO, Unit]
       isFailed <- Deferred[IO, Unit]
-      observable <- IO.fromPromise(IO(jsFailingWallet.sync()))
+      observable = jsFailingWallet.sync()
       _ = {
         observable.subscribe(new Subscriber[Seq[SemanticEvent]] {
           override def next: js.Function1[Seq[SemanticEvent], Unit] = _ => ()

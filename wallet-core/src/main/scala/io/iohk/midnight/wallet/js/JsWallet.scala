@@ -69,32 +69,27 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet {
   override def getGUID(): Promise[String] =
     wallet.getUserId().map(_.value).unsafeToPromise()
 
-  override def sync(): Promise[Observable[Seq[SemanticEvent]]] = {
-    (for {
-      stream <- wallet.sync()
-      observable <- IO(
-        new Observable[Seq[SemanticEvent]](
-          js.ThisFunction.fromFunction2[Observable[Seq[SemanticEvent]], Subscriber[
-            Seq[SemanticEvent],
-          ], js.Function0[Unit]]((_, subscriber) => {
-            val Subscription(startConsuming, cancellation) =
-              new StreamObservable[IO, Seq[SemanticEvent]](stream)
-                .subscribe(new StreamObserver[IO, Seq[SemanticEvent]] {
-                  override def next(value: Seq[SemanticEvent]): IO[Unit] =
-                    IO(subscriber.next(value))
+  override def sync(): Observable[Seq[SemanticEvent]] = {
+    new Observable[Seq[SemanticEvent]](
+      js.ThisFunction.fromFunction2[Observable[Seq[SemanticEvent]], Subscriber[
+        Seq[SemanticEvent],
+      ], js.Function0[Unit]]((_, subscriber) => {
+        val Subscription(startConsuming, cancellation) =
+          new StreamObservable[IO, Seq[SemanticEvent]](wallet.sync())
+            .subscribe(new StreamObserver[IO, Seq[SemanticEvent]] {
+              override def next(value: Seq[SemanticEvent]): IO[Unit] =
+                IO(subscriber.next(value))
 
-                  override def error(error: Throwable): IO[Unit] =
-                    IO(subscriber.error(error.getMessage))
+              override def error(error: Throwable): IO[Unit] =
+                IO(subscriber.error(error.getMessage))
 
-                  override def complete(): IO[Unit] = IO(subscriber.complete())
-                })
+              override def complete(): IO[Unit] = IO(subscriber.complete())
+            })
 
-            startConsuming.unsafeRunAndForget()
-            () => cancellation.unsafeRunAndForget()
-          }),
-        ),
-      )
-    } yield observable).unsafeToPromise()
+        startConsuming.unsafeRunAndForget()
+        () => cancellation.unsafeRunAndForget()
+      }),
+    )
   }
 
   override def close(): Promise[Unit] = finalizer.unsafeToPromise()

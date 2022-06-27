@@ -8,13 +8,16 @@ import io.iohk.midnight.wallet.clients.lares.LaresClient
 import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.clients.prover.ProverClient
 import io.iohk.midnight.wallet.js.JSLogging.*
+import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.util.json.SttpJsonWebSocketClient
 import org.scalajs.dom.RequestCredentials
 import org.typelevel.log4cats.Logger
 import sttp.client3.FetchOptions
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
+
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object WalletBuilder {
@@ -34,12 +37,14 @@ object WalletBuilder {
     Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
       for {
         platformClient <- PlatformClient.Live[F](sttpBackend, config.platformUri)
-        syncService <- SyncService.Live[F](platformClient, config.syncBufferSize)
+        submitTxService <- SubmitTxService.Live[F](platformClient)
+        syncPlatformClient <- SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+        syncService = OgmiosSyncService(syncPlatformClient)
         userId <- Resource.eval(UserIdGenerator.generate(config.userIdLength))
         laresClient = LaresClient.Live[F](sttpBackend, config.laresUri)
         laresService = new LaresService.Live[F](userId, laresClient)
       } yield {
-        new Wallet.Live[F](proverService, syncService, laresService, userId)
+        new Wallet.Live[F](proverService, submitTxService, syncService, laresService, userId)
       }
     }
   }

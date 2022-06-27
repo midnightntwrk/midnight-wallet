@@ -16,7 +16,7 @@ import java.time.Instant
 
 object Transactions {
 
-  val validCallTx =
+  val validCallTx: CallTransaction =
     CallTransaction(
       Some(
         Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
@@ -35,7 +35,7 @@ object Transactions {
       ),
     )
 
-  val validDeployTx =
+  val validDeployTx: DeployTransaction =
     DeployTransaction(
       Some(
         Hash[DeployTransaction](

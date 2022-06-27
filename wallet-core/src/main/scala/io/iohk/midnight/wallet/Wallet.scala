@@ -8,10 +8,12 @@ import fs2.Stream
 import io.iohk.midnight.wallet.Wallet.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Hashing.*
-import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse
-import io.iohk.midnight.wallet.services.{LaresService, ProverService, SyncService}
+import io.iohk.midnight.wallet.domain.services.SyncService
+import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse
+import io.iohk.midnight.wallet.services.{LaresService, ProverService, SubmitTxService}
 import io.iohk.midnight.wallet.util.ClockOps.*
 import io.iohk.midnight.wallet.util.HashOps.*
+
 import java.time.Instant
 
 trait Wallet[F[_]] {
@@ -19,7 +21,7 @@ trait Wallet[F[_]] {
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 
-  def sync(): F[Stream[F, Seq[SemanticEvent]]]
+  def sync(): Stream[F, Seq[SemanticEvent]]
 
   def getUserId(): F[UserId]
 }
@@ -27,6 +29,7 @@ trait Wallet[F[_]] {
 object Wallet {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
+      submitTxService: SubmitTxService[F],
       syncService: SyncService[F],
       laresService: LaresService[F],
       userId: UserId,
@@ -37,7 +40,7 @@ object Wallet {
         timestamp <- Clock[F].realTimeInstant
         transaction = buildCallTransaction(timestamp, input, proof)
         hash <- transaction.calculateHash
-        response <- syncService.submitTransaction(transaction.copy(hash = Some(hash)))
+        response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
         result <- response match {
           case SubmissionResponse.Accepted         => hash.pure
           case SubmissionResponse.Rejected(reason) => TransactionRejected(reason).raiseError
@@ -64,7 +67,7 @@ object Wallet {
         timestamp <- Clock[F].realTimeInstant
         transaction = buildDeployTransaction(timestamp, input)
         hash <- transaction.calculateHash
-        response <- syncService.submitTransaction(transaction.copy(hash = Some(hash)))
+        response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
         result <- response match {
           case SubmissionResponse.Accepted         => hash.pure
           case SubmissionResponse.Rejected(reason) => TransactionRejected(reason).raiseError
@@ -83,14 +86,12 @@ object Wallet {
         TransitionFunctionCircuits(Map.empty),
       )
 
-    override def sync(): F[Stream[F, Seq[SemanticEvent]]] =
+    override def sync(): Stream[F, Seq[SemanticEvent]] =
       syncService
         .sync()
-        .map(
-          _.evalMap(laresService.applyBlock)
-            .evalTap { case (_, txRequests) => submitTxRequests(txRequests) }
-            .map(_._1),
-        )
+        .evalMap(laresService.applyBlock)
+        .evalTap { case (_, txRequests) => submitTxRequests(txRequests) }
+        .map(_._1)
 
     private def submitTxRequests(txRequests: Seq[TransactionRequest]): F[Unit] =
       txRequests

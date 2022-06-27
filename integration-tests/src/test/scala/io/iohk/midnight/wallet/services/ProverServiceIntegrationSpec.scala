@@ -11,11 +11,10 @@ import sttp.model.Uri
 class ProverServiceIntegrationSpec extends CatsEffectSuite {
 
   // Default Snarkie server port in midnight-testnet setup is 5101
-  val snarkieServerUri = Uri("localhost:5101")
+  private val snarkieServerUri = Uri("localhost:5101")
   // There is by default a 5 seconds delay in the Snarkie Server to generate the proof
-  val maxRetries = 10
-  val retryDelay = 1.seconds
-  val timeout = 10.seconds
+  private val maxRetries = 10
+  private val retryDelay = 1.seconds
 
   test("Request proof building and status") {
     new ProverService.Live[IO](

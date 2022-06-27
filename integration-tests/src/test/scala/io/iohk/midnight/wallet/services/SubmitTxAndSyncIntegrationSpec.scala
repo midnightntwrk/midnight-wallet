@@ -3,39 +3,51 @@ package io.iohk.midnight.wallet.services
 import cats.effect.IO
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.clients.platform.PlatformClient
+import io.iohk.midnight.wallet.domain.services.SyncService
 import io.iohk.midnight.wallet.domain.{Block, CallTransaction, DeployTransaction}
 import io.iohk.midnight.wallet.examples.Transactions
 import io.iohk.midnight.wallet.js.JSLogging.loggingEv
-import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse.Accepted
+import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
+import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse.Accepted
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.util.json.SttpJsonWebSocketClient
 import munit.CatsEffectSuite
+
 import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 
-class SyncServiceIntegrationSpec extends CatsEffectSuite {
+class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
-  val platformUri = uri"ws://localhost:5100/"
-  val blocksBufferSize = 100
-  val timeout = 30.seconds
+  private val platformUri = uri"ws://localhost:5100/"
+  private val timeout = 30.seconds
+  private val sttpBackend = FetchCatsBackend[IO]()
 
-  implicit val clientTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
+  private implicit val clientTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
 
-  def integrationTest(title: String)(theTest: SyncService[IO] => IO[Unit]): Unit =
+  def integrationTest(
+      title: String,
+  )(theTest: (SubmitTxService[IO], SyncService[IO]) => IO[Unit]): Unit = {
     test(title) {
       PlatformClient
-        .Live[IO](FetchCatsBackend[IO](), platformUri)
-        .flatMap(SyncService.Live[IO](_, blocksBufferSize))
-        .use(theTest)
+        .Live[IO](sttpBackend, platformUri)
+        .flatMap(SubmitTxService.Live[IO](_))
+        .both(
+          SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
+            .map(OgmiosSyncService(_)),
+        )
+        .use { case (submitTxService, syncService) =>
+          theTest(submitTxService, syncService)
+        }
         .timeout(timeout)
     }
+  }
 
-  integrationTest("Submit txs and sync blocks") { syncService =>
+  integrationTest("Submit txs and sync blocks") { (submitTxService, syncService) =>
     for {
-      r1 <- syncService.submitTransaction(Transactions.validDeployTx)
-      r2 <- syncService.submitTransaction(Transactions.validCallTx)
-      blockStream <- syncService.sync()
-      blocks <- blockStream.take(2).compile.toList
+      r1 <- submitTxService.submitTransaction(Transactions.validDeployTx)
+      r2 <- submitTxService.submitTransaction(Transactions.validCallTx)
+      blocks <- syncService.sync().take(2).compile.toList
     } yield {
       assertEquals(r1, Accepted)
       assertEquals(r2, Accepted)

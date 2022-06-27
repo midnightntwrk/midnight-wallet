@@ -7,12 +7,14 @@ import io.iohk.midnight.wallet.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.clients.prover.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Generators.*
+import io.iohk.midnight.wallet.domain.services.SyncService
 import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.util.BetterOutputSuite
 import io.iohk.midnight.wallet.util.implicits.Equality.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.concurrent.duration.DurationInt
 
 trait WalletSpec {
@@ -26,13 +28,14 @@ trait WalletSpec {
 
   def buildWallet(
       proverClient: ProverClient[IO],
-      syncService: SyncService[IO],
+      syncService: SubmitTxService[IO] & SyncService[IO],
       laresService: LaresService[IO] = emptyLaresService,
       userId: UserId = UserId("test_user"),
   ): IO[Wallet[IO]] =
     Random.scalaUtilRandom[IO].map { implicit random =>
       new Wallet.Live[IO](
         new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
+        syncService,
         syncService,
         laresService,
         userId,
@@ -168,7 +171,7 @@ class WalletSyncSpec
 
         for {
           wallet <- buildWallet(proverClient, syncService, laresService)
-          _ <- wallet.sync().flatMap(_.compile.drain)
+          _ <- wallet.sync().compile.drain
         } yield txRequests.foreach { txRequest =>
           assert(
             syncService.submittedCallTransactions.exists { tx =>
@@ -187,7 +190,7 @@ class WalletSyncSpec
         val laresService: LaresService[IO] = _ => (Seq.empty[SemanticEvent], txRequests).pure[IO]
 
         buildWallet(proverClient, syncService, laresService)
-          .flatMap(_.sync().flatMap(_.compile.drain))
+          .flatMap(_.sync().compile.drain)
           .attempt
           .map(assertEquals(_, Left(FailingSyncService.SyncServiceError)))
     }

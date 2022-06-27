@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/wallet-api@^0.0.3":
-  version "0.0.3"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-0.0.3.tgz#0977154da48ccf1ac6abf8eaea78bf0c00c51864"
-  integrity sha512-Z83rKFMhEb5x590WSzgEfnPU7D72k0KlwhSc32OwG6flqDwXzy8M4N9uJ25qTIyz1xzBJoak6d5/hq0E3LG6OA==
+"@midnight/wallet-api@^0.0.5":
+  version "0.0.5"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-0.0.5.tgz#175f296e425fcffcbdc0f5c9cd802491d8c4d451"
+  integrity sha512-CWKscEOWkS0YgcuTQf1cxEOyOD1jhd5b8a1h+uyeuno8zMzIHMtUevgZpuBX9AsB9dza+H7NJHRw2XHXmPGvqg==
   dependencies:
     rxjs "^7.5.5"
 

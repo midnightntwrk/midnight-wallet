@@ -18,7 +18,7 @@ class WalletSyncStub(events: Seq[Seq[SemanticEvent]]) extends Wallet[IO] {
       contractInput: Wallet.DeployContractInput,
   ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
-  override def sync(): IO[fs2.Stream[IO, Seq[SemanticEvent]]] = IO(fs2.Stream.emits(events))
+  override def sync(): fs2.Stream[IO, Seq[SemanticEvent]] = fs2.Stream.emits(events)
 
   override def getUserId(): IO[UserId] = IO.raiseError(new NotImplementedError)
 }
@@ -31,9 +31,8 @@ class WalletSyncFailingStub(events: Seq[Seq[SemanticEvent]], error: Throwable) e
       contractInput: Wallet.DeployContractInput,
   ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
-  override def sync(): IO[fs2.Stream[IO, Seq[SemanticEvent]]] = IO(
-    fs2.Stream.emits(events) ++ fs2.Stream.raiseError[IO](error),
-  )
+  override def sync(): fs2.Stream[IO, Seq[SemanticEvent]] =
+    fs2.Stream.emits(events) ++ fs2.Stream.raiseError[IO](error)
 
   override def getUserId(): IO[UserId] = IO.raiseError(new NotImplementedError)
 }
@@ -46,11 +45,10 @@ class WalletSyncInfiniteStub extends Wallet[IO] {
       contractInput: Wallet.DeployContractInput,
   ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
-  override def sync(): IO[fs2.Stream[IO, Seq[SemanticEvent]]] = IO(
+  override def sync(): fs2.Stream[IO, Seq[SemanticEvent]] =
     fs2.Stream.iterateEval(Seq(SemanticEvent(0)))(events =>
       IO(events.map(event => SemanticEvent(event.value.asInstanceOf[Int] + 1))),
-    ),
-  )
+    )
 
   override def getUserId(): IO[UserId] = IO.raiseError(new NotImplementedError)
 }

@@ -3,7 +3,8 @@ package io.iohk.midnight.wallet.services
 import cats.effect.IO
 import fs2.Stream
 import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.services.SyncService.SubmissionResponse
+import io.iohk.midnight.wallet.domain.services.SyncService
+import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse
 
 @SuppressWarnings(
   Array("org.wartremover.warts.DefaultArguments", "org.wartremover.warts.Var"),
@@ -12,7 +13,8 @@ class SyncServiceStub(
     blocks: Seq[Block] = Seq.empty[Block],
     var submittedCallTransactions: Set[CallTransaction] = Set.empty,
     var submittedDeployTransactions: Set[DeployTransaction] = Set.empty,
-) extends SyncService[IO] {
+) extends SubmitTxService[IO]
+    with SyncService[IO] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResponse] =
     IO {
       transaction match {
@@ -25,7 +27,7 @@ class SyncServiceStub(
       }
     }
 
-  override def sync(): IO[Stream[IO, Block]] = IO.pure(Stream.emits(blocks))
+  override def sync(): Stream[IO, Block] = Stream.emits(blocks)
 
   def wasCallTxSubmitted(hash: Hash[CallTransaction]): Boolean =
     submittedCallTransactions.exists(_.hash.contains(hash))
@@ -34,22 +36,23 @@ class SyncServiceStub(
     submittedDeployTransactions.exists(_.hash.contains(hash))
 }
 
-class FailingSyncService extends SyncService[IO] {
+class FailingSyncService extends SubmitTxService[IO] with SyncService[IO] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResponse] =
     IO.raiseError(FailingSyncService.SyncServiceError)
 
-  override def sync(): IO[Stream[IO, Block]] =
-    IO.raiseError(FailingSyncService.SyncServiceError)
+  override def sync(): Stream[IO, Block] =
+    Stream.raiseError[IO](FailingSyncService.SyncServiceError)
 }
 
 class FailingTxSubmissionSyncService(blocks: Seq[Block] = Seq.empty[Block])
-    extends SyncService[IO] {
+    extends SubmitTxService[IO]
+    with SyncService[IO] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResponse] =
     IO.raiseError(FailingSyncService.SyncServiceError)
 
-  override def sync(): IO[Stream[IO, Block]] = IO.pure(Stream.emits(blocks))
+  override def sync(): Stream[IO, Block] = Stream.emits(blocks)
 }
 
 object FailingSyncService {
-  val SyncServiceError: Exception = new Exception("FailingSyncService")
+  val SyncServiceError: Throwable = new Throwable("FailingSyncService")
 }

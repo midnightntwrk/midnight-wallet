@@ -74,23 +74,6 @@ object Encoders {
       Json.obj(LocalTxSubmission.Type.Discriminator := LocalTxSubmission.Type.Done.entryName),
     )
 
-  implicit val findIntersectEncoder: Encoder[LocalBlockSync.FindIntersect] =
-    deriveEncoder[LocalBlockSync.FindIntersect].mapJson(
-      _.deepMerge(
-        Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.FindIntersect.entryName),
-      ),
-    )
-
-  implicit val requestNextEncoder: Encoder[LocalBlockSync.RequestNext.type] =
-    Encoder.instance(_ =>
-      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.RequestNext.entryName),
-    )
-
-  implicit val localBlockSyncDoneEncoder: Encoder[LocalBlockSync.Done.type] =
-    Encoder.instance(_ =>
-      Json.obj(LocalBlockSync.Type.Discriminator := LocalBlockSync.Type.Done.entryName),
-    )
-
   implicit val localTxSubmissionEncoder: Encoder[LocalTxSubmission] =
     Encoder
       .instance[LocalTxSubmission] {
@@ -105,25 +88,8 @@ object Encoders {
         ),
       )
 
-  implicit val localBlockSyncEncoder: Encoder[LocalBlockSync] =
-    Encoder
-      .instance[LocalBlockSync] {
-        case findIntersect: LocalBlockSync.FindIntersect =>
-          Encoder[LocalBlockSync.FindIntersect].apply(findIntersect)
-        case LocalBlockSync.RequestNext =>
-          Encoder[LocalBlockSync.RequestNext.type].apply(LocalBlockSync.RequestNext)
-        case LocalBlockSync.Done =>
-          Encoder[LocalBlockSync.Done.type].apply(LocalBlockSync.Done)
-      }
-      .mapJson(
-        _.deepMerge(
-          Json.obj(SendMessage.Type.Discriminator := SendMessage.Type.LocalBlockSync.entryName),
-        ),
-      )
-
   val sendMessageEncoder: Encoder[SendMessage] =
-    Encoder.instance {
-      case lbs: LocalBlockSync    => Encoder[LocalBlockSync].apply(lbs)
-      case lts: LocalTxSubmission => Encoder[LocalTxSubmission].apply(lts)
+    Encoder.instance { case lts: LocalTxSubmission =>
+      Encoder[LocalTxSubmission].apply(lts)
     }
 }
