@@ -18,10 +18,10 @@
   };
 
   outputs = { self, nixpkgs, utils, inclusive, yarn2nix, sbt-derivation, cicero, ... }:
-    utils.lib.eachSystem [ "x86_64-linux" ] (system:
+    utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
-          (final: prev: { jre = prev.jdk11; })
+          (final: prev: { jre = prev.jdk17; })
           sbt-derivation.overlay
           (final: prev: {
             # https://github.com/zaninime/sbt-derivation/issues/7
@@ -76,7 +76,7 @@
               rm node_modules
             '';
 
-            nativeBuildInputs = with pkgs; [ yarn nodejs ];
+            nativeBuildInputs = with pkgs; [ yarn nodejs-16_x ];
 
             preBuild = "ln -s ${packages.midnight-wallet-node-modules}/node_modules .";
 

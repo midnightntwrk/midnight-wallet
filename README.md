@@ -10,18 +10,28 @@ obtain zk-proofs if necessary
 - Obtain blocks from a node and submit them to wallet-backend
 - Stream semantic events from submitting blocks to wallet-backend
 
-## Requirements 
+## Requirements
 
-To build this project [download the latest `sbt`](https://www.scala-sbt.org/download.html).
+### Using Nix
+
+
+```nix
+nix develop
+```
+
+### Manual
+
+If for some reason Nix can't be used to build this project:
+
+1. [Download the latest version of `sbt`](https://www.scala-sbt.org/download.html).
 The version used to build the project is defined in the file 
 [`project/build.properties`](project/build.properties) and 
 it's automatically picked up by any sbt version that is installed.
 
-sbt itself depends on Java JDK. This project is currently only tested using 
-[AdoptOpenJDK 11](https://adoptium.net/?variant=openjdk11).
+2. sbt itself depends on Java JDK. Download the corresponding version defined in the file [`flake.nix`](flake.nix).
 
-To run the unit tests install [Node.js](https://nodejs.org/en/). The version is defined in the file 
-[.nvmrc](.nvmrc) so it can be picked up by tools such as `asdf` or `nvm`.
+3. To run the unit tests, install [Node.js](https://nodejs.org/en/). The version is defined in the file
+[`flake.nix`](flake.nix), and there's also a file [`.nvmrc`](.nvmrc) so it can be picked up by tools such as `asdf` or `nvm`.
 
 ## External services
 
@@ -97,7 +107,7 @@ The generated JavaScript code is written to `wallet-core/target/dist`.
 
 #### Unit tests
 
-`sbt walletCore/test domain/test ogmiosSync/test`
+`sbt walletCore/test domainJS/test ogmiosSyncJS/test`
 
 #### Integration tests
 
@@ -105,7 +115,7 @@ See the integration-tests [README](integration-tests/README.md) for instructions
 
 ## Generate Coverage report
 
-`sbt coverage walletCore/test domain/test ogmiosSync/test coverageReport`
+`sbt coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport`
 
 An HTML report is written to each module's `target/scala-2.13/scoverage-report/index.html`
 
