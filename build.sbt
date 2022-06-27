@@ -12,6 +12,8 @@ lazy val warts = Warts.allBut(
   Wart.Recursion,
   Wart.Serializable,
 )
+lazy val nexus = "https://nexus.p42.at/repository"
+lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
 lazy val commonSettings = Seq(
   // Scala compiler options
@@ -120,6 +122,16 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
   .dependsOn(domain)
   .settings(commonSettings: _*)
   .settings(
+    // Publish information
+    organization := "io.iohk.midnight",
+    name := "ogmios-sync",
+    version := "0.0.8",
+    repoUrl := {
+      if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
+      else "releases" at s"$nexus/maven-releases"
+    },
+    versionScheme := Some("early-semver"),
+    publishTo := Some(repoUrl.value),
     crossScalaVersions := Seq("2.13.8", "3.1.2"),
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(

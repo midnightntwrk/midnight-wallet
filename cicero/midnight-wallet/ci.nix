@@ -83,6 +83,8 @@
     (std.script "bash" ''
       set -x
 
+      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish'
+
       cd wallet-core
 
       nix build .#midnight-wallet-node-modules
