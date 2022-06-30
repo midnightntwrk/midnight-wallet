@@ -68,6 +68,14 @@
 
             # for `yarn publish`, looked up by yarn
             NPM_AUTH_TOKEN={{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}
+
+            # see README.md
+            {{with secret "kv/data/cicero/nexus" -}}
+              {{with .Data.data -}}
+                MIDNIGHT_REPO_USER={{.user}}{{"\n" -}}
+                MIDNIGHT_REPO_PASS={{.password}}
+              {{- end}}
+            {{- end}}
           '';
         }
       ];
