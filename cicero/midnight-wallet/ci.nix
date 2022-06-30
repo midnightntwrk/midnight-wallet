@@ -34,7 +34,15 @@
     std.nix.develop
 
     (std.wrapScript "bash" (next: ''
+      set -x
+
+      pushd wallet-core
+      nix build .#midnight-wallet-node-modules
+      ln -s "$(realpath result)"/node_modules .
+      popd
+
       sbt scalafmtCheckAll coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport
+
       ${lib.escapeShellArgs next}
     ''))
 
@@ -93,11 +101,7 @@
 
       sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish'
 
-      cd wallet-core
-
-      nix build .#midnight-wallet-node-modules
-      ln -s "$(realpath result)"/node_modules .
-
+      pushd wallet-core
       yarn publish
     '')
   ];
