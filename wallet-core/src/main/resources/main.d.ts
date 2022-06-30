@@ -14,7 +14,7 @@ export class Wallet implements WalletAPI {
         publicState: string
     ): Promise<TxSubmissionResult>
 
-    sync(): Promise<Observable<Array<any>>>
+    sync(): Observable<Array<any>>
 
     getGUID(): Promise<string>
 
