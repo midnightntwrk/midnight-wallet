@@ -24,15 +24,3 @@ jobs:
       run: sbt coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport
     - name: Cross build and test sync module to Scala 3
       run: sbt '++ 3.1.2 ogmiosSyncJS/test'
-
-  publish:
-    name: Publish
-    needs: [build]
-    if: github.event_name != 'pull_request' && (startsWith(github.ref, 'refs/tags/v'))
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v2
-    - name: Publish ogmios-sync
-      run: sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish'
-    - name: Publish wallet-core
-      run: sbt dist && cd wallet-core && yarn publish

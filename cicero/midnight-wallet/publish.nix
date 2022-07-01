@@ -2,26 +2,17 @@
 
 {
   inputs.start = ''
-    "${name}": start: {
+    "midnight-wallet/ci": start: {
       clone_url:     string
       sha:           string
       statuses_url?: string
-      ref?: "refs/heads/\(default_branch)"
+      ref: =~"^refs/tags/v\\d+(\\.\\d+){0,2}$"
       default_branch?: string
     }
   '';
 
-  output = { start }: let
-    cfg = start.value.${name}.start;
-  in {
-    success.${name} = {
-      ok = true;
-      rev = cfg.sha;
-    } // lib.optionalAttrs (cfg ? ref) { inherit (cfg) ref default_branch; };
-  };
-
   job = { start }: let
-    cfg = start.value.${name}.start;
+    cfg = start.value."midnight-wallet/ci".start;
   in std.chain args [
     actionLib.simpleJob
 
@@ -32,9 +23,6 @@
     (std.git.clone cfg)
 
     std.nix.develop
-
-    # We should use nix build, but right now it's not possible
-    # std.nix.build
 
     {
       template = std.data-merge.append [
@@ -83,17 +71,14 @@
       };
     }
 
-    (std.wrapScript "bash" (next: ''
+    (std.script "bash" ''
       set -x
 
+      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish' || :
+
+      sbt dist
       pushd wallet-core
-      nix build .#midnight-wallet-node-modules
-      ln -s "$(realpath result)"/node_modules .
-      popd
-
-      sbt scalafmtCheckAll coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport
-
-      ${lib.escapeShellArgs next}
-    ''))
+      yarn publish || :
+    '')
   ];
 }
