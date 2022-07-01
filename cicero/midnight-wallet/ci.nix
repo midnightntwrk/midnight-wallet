@@ -99,10 +99,11 @@
     (std.script "bash" ''
       set -x
 
-      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish'
+      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish' || :
 
+      sbt dist
       pushd wallet-core
-      yarn publish
+      yarn publish || :
     '')
   ];
 }
