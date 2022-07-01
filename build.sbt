@@ -125,7 +125,7 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
     // Publish information
     organization := "io.iohk.midnight",
     name := "ogmios-sync",
-    version := "0.0.10",
+    version := "0.0.11",
     repoUrl := {
       if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
       else "releases" at s"$nexus/maven-releases"
