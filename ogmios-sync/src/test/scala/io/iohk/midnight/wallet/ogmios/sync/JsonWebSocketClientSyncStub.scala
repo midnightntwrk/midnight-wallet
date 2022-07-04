@@ -8,7 +8,7 @@ import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive.RollForward
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.{Receive, Send}
-import io.iohk.midnight.wallet.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
 import java.time.Instant
 
 /** A dummy implementation of a websocket client for syncing. It holds a queue of blocks, simulating

@@ -2,9 +2,14 @@ package io.iohk.midnight.wallet.ogmios.sync.protocol
 
 import cats.Show
 import io.iohk.midnight.wallet.domain.{Block, Hash}
-import io.iohk.midnight.wallet.util.Enumeration
+import io.iohk.midnight.wallet.ogmios.sync.util.Enumeration
 
 private[sync] object LocalBlockSync {
+
+  object Protocol {
+    val Discriminator: String = "protocol"
+    val Name: String = "LocalBlockSync"
+  }
 
   sealed trait Send
   object Send {

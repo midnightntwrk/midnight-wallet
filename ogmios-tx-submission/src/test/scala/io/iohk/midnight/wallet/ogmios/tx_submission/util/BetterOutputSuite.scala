@@ -1,7 +1,8 @@
-package io.iohk.midnight.wallet.util
+package io.iohk.midnight.wallet.ogmios.tx_submission.util
 
 import munit.FunSuite
 
+// [TODO NLLW-361]
 trait BetterOutputSuite extends FunSuite {
 
   def suitePrefix: String = getClass.getSimpleName

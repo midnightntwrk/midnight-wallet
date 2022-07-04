@@ -14,7 +14,7 @@ import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
 import io.iohk.midnight.wallet.ogmios.sync.examples
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.util.{BetterOutputSuite, TestingTracer}
+import io.iohk.midnight.wallet.ogmios.sync.util.{BetterOutputSuite, TestingTracer}
 
 import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}

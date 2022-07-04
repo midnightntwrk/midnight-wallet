@@ -10,7 +10,7 @@ import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse.Accepted
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.util.json.SttpJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync.util.json.SttpJsonWebSocketClient
 import munit.CatsEffectSuite
 
 import scala.concurrent.duration.DurationInt

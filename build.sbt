@@ -15,9 +15,13 @@ lazy val warts = Warts.allBut(
 lazy val nexus = "https://nexus.p42.at/repository"
 lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
+lazy val scala213 = "2.13.8"
+lazy val scala31 = "3.1.2"
+lazy val supportedScalaVersions = List(scala213, scala31)
+
 lazy val commonSettings = Seq(
   // Scala compiler options
-  scalaVersion := "2.13.8",
+  scalaVersion := scala213,
   scalacOptions ~= { prev =>
     // Treat linting errors as warnings for quick development
     if (Env.devModeEnabled) prev.filterNot(_ == "-Xfatal-warnings") else prev
@@ -55,10 +59,21 @@ lazy val commonSettings = Seq(
   coverageFailOnMinimum := true,
 )
 
+lazy val commonPublishSettings = Seq(
+  organization := "io.iohk.midnight",
+  version := "0.0.11",
+  repoUrl := {
+    if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
+    else "releases" at s"$nexus/maven-releases"
+  },
+  versionScheme := Some("early-semver"),
+  publishTo := Some(repoUrl.value),
+)
+
 lazy val domain = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("domain"))
-  .settings(commonSettings: _*)
+  .settings(commonSettings)
   .settings(
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
@@ -76,7 +91,7 @@ lazy val domain = crossProject(JVMPlatform, JSPlatform)
 lazy val walletCore = (project in file("wallet-core"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(ogmiosSync.js)
-  .settings(commonSettings: _*)
+  .settings(commonSettings)
   .settings(
     scalacOptions += "-P:kind-projector:underscore-placeholders",
     addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
@@ -120,19 +135,11 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("ogmios-sync"))
   .dependsOn(domain)
-  .settings(commonSettings: _*)
+  .settings(commonSettings)
+  .settings(commonPublishSettings)
   .settings(
-    // Publish information
-    organization := "io.iohk.midnight",
     name := "ogmios-sync",
-    version := "0.0.11",
-    repoUrl := {
-      if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
-      else "releases" at s"$nexus/maven-releases"
-    },
-    versionScheme := Some("early-semver"),
-    publishTo := Some(repoUrl.value),
-    crossScalaVersions := Seq("2.13.8", "3.1.2"),
+    crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
@@ -151,10 +158,36 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
 
+lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("ogmios-tx-submission"))
+  .dependsOn(domain)
+  .settings(commonSettings)
+  .settings(commonPublishSettings)
+  .settings(
+    name := "ogmios-submit-tx",
+    crossScalaVersions := supportedScalaVersions,
+    conflictWarning := ConflictWarning.disable,
+    libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
+      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
+      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-parser" % "0.14.1",
+      "io.circe" %%% "circe-generic" % "0.14.1",
+      "org.typelevel" %%% "cats-core" % "2.7.0",
+      "org.typelevel" %%% "cats-effect" % "3.3.11",
+    ),
+    coverageMinimumStmtTotal := 100,
+    coverageMinimumBranchTotal := 100,
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+  )
+
 lazy val integrationTests = (project in file("integration-tests"))
   .enablePlugins(ScalaJSPlugin)
   .dependsOn(walletCore)
-  .settings(commonSettings: _*)
+  .settings(commonSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     Test / jsEnv := new org.scalajs.jsenv.selenium.SeleniumJSEnv(

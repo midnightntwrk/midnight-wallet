@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.ogmios.sync.protocol
 
-import io.iohk.midnight.wallet.util.Enumeration
+import io.iohk.midnight.wallet.ogmios.sync.util.Enumeration
 
 private[sync] sealed abstract class ReceiptType(val entryName: String)
     extends Enumeration.Value(entryName)

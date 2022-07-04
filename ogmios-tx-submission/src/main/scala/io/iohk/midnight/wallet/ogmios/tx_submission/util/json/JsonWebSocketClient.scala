@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.util.json
+package io.iohk.midnight.wallet.ogmios.tx_submission.util.json
 
 import cats.MonadThrow
 import cats.effect.Resource
@@ -12,7 +12,8 @@ import sttp.client3.*
 import sttp.model.Uri
 import sttp.ws.WebSocket
 
-trait JsonWebSocketClient[F[_]] {
+// [TODO NLLW-361]
+private[tx_submission] trait JsonWebSocketClient[F[_]] {
   def send[T: Encoder](message: T): F[Unit]
 
   def receive[T: Decoder](): F[T]
@@ -35,7 +36,7 @@ private class SttpJsonWebSocketClient[F[_]: MonadThrow](webSocket: WebSocket[F])
       .rethrow
 }
 
-object SttpJsonWebSocketClient {
+private[tx_submission] object SttpJsonWebSocketClient {
   def apply[F[_]: MonadThrow: ClientRequestResponseTracer](
       backend: SttpBackend[F, WebSockets],
       nodeUri: Uri,

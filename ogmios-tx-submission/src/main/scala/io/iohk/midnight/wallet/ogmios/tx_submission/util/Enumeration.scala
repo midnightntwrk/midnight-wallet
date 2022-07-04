@@ -1,9 +1,10 @@
-package io.iohk.midnight.wallet.util
+package io.iohk.midnight.wallet.ogmios.tx_submission.util
 
 import cats.syntax.eq.*
 import io.circe.Decoder
 
-trait Enumeration[T <: Enumeration.Value] {
+// [TODO NLLW-361]
+private[tx_submission] trait Enumeration[T <: Enumeration.Value] {
   def Discriminator: String
   def allValues: Seq[T]
 
@@ -13,7 +14,7 @@ trait Enumeration[T <: Enumeration.Value] {
       .toRight(s"Invalid value \"$name\" for discriminator \"$Discriminator\"")
 }
 
-object Enumeration {
+private[tx_submission] object Enumeration {
   abstract class Value(val name: String)
 
   implicit def enumerationDecoder[T <: Enumeration.Value](implicit

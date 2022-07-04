@@ -11,7 +11,7 @@ import io.iohk.midnight.wallet.js.JSLogging.*
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.util.json.SttpJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync.util.json.SttpJsonWebSocketClient // [TODO NLLW-361] this should live in a common module
 import org.scalajs.dom.RequestCredentials
 import org.typelevel.log4cats.Logger
 import sttp.client3.FetchOptions

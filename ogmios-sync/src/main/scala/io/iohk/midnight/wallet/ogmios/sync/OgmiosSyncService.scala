@@ -11,7 +11,7 @@ import io.iohk.midnight.wallet.ogmios.sync.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
 
 /** Implementation of the SyncService
   *

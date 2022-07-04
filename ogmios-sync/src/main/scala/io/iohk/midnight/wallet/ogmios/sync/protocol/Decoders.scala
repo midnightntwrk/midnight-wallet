@@ -4,7 +4,7 @@ import cats.syntax.all.*
 import io.circe.generic.semiauto.*
 import io.circe.Decoder
 import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.ogmios.core.protocol.TransactionType
+import io.iohk.midnight.wallet.ogmios.sync.protocol.TransactionType
 import java.time.Instant
 
 private[sync] object Decoders {

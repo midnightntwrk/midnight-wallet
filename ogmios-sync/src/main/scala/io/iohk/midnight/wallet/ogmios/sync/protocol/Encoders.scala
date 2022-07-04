@@ -4,7 +4,6 @@ import io.circe.generic.semiauto.*
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
 import io.iohk.midnight.wallet.domain.Hash
-import io.iohk.midnight.wallet.ogmios.core.protocol.MessageProtocol
 
 private[sync] object Encoders {
   private object Internals {
@@ -47,7 +46,7 @@ private[sync] object Encoders {
       .mapJson(
         _.deepMerge(
           Json.obj(
-            MessageProtocol.Type.Discriminator := MessageProtocol.Type.LocalBlockSync.entryName,
+            LocalBlockSync.Protocol.Discriminator := LocalBlockSync.Protocol.Name,
           ),
         ),
       )
