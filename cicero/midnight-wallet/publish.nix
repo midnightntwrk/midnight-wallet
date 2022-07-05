@@ -74,7 +74,7 @@
     (std.script "bash" ''
       set -x
 
-      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish' || :
+      sbt '+ ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
 
       sbt dist
       pushd wallet-core
