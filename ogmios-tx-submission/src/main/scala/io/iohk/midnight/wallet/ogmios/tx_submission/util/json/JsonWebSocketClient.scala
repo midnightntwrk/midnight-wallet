@@ -36,7 +36,7 @@ private class SttpJsonWebSocketClient[F[_]: MonadThrow](webSocket: WebSocket[F])
       .rethrow
 }
 
-private[tx_submission] object SttpJsonWebSocketClient {
+object SttpJsonWebSocketClient {
   def apply[F[_]: MonadThrow: ClientRequestResponseTracer](
       backend: SttpBackend[F, WebSockets],
       nodeUri: Uri,

@@ -90,7 +90,7 @@ lazy val domain = crossProject(JVMPlatform, JSPlatform)
 
 lazy val walletCore = (project in file("wallet-core"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(ogmiosSync.js)
+  .dependsOn(ogmiosSync.js, ogmiosTxSubmission.js)
   .settings(commonSettings)
   .settings(
     scalacOptions += "-P:kind-projector:underscore-placeholders",

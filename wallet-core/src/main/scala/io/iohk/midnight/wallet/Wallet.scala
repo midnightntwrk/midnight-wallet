@@ -9,12 +9,13 @@ import io.iohk.midnight.wallet.Wallet.*
 import io.iohk.midnight.wallet.domain.*
 import io.iohk.midnight.wallet.domain.Hashing.*
 import io.iohk.midnight.wallet.domain.services.SyncService
-import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse
-import io.iohk.midnight.wallet.services.{LaresService, ProverService, SubmitTxService}
+import io.iohk.midnight.wallet.services.{LaresService, ProverService}
 import io.iohk.midnight.wallet.util.ClockOps.*
 import io.iohk.midnight.wallet.util.HashOps.*
 
 import java.time.Instant
+import io.iohk.midnight.wallet.domain.services.TxSubmissionService
+import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult
 
 trait Wallet[F[_]] {
   def callContract(contractInput: CallContractInput): F[Hash[CallTransaction]]
@@ -29,7 +30,7 @@ trait Wallet[F[_]] {
 object Wallet {
   class Live[F[_]: MonadThrow: Clock: Random](
       proverService: ProverService[F],
-      submitTxService: SubmitTxService[F],
+      submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
       laresService: LaresService[F],
       userId: UserId,
@@ -42,8 +43,8 @@ object Wallet {
         hash <- transaction.calculateHash
         response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
         result <- response match {
-          case SubmissionResponse.Accepted         => hash.pure
-          case SubmissionResponse.Rejected(reason) => TransactionRejected(reason).raiseError
+          case SubmissionResult.Accepted         => hash.pure
+          case SubmissionResult.Rejected(reason) => TransactionRejected(reason).raiseError
         }
       } yield result
 
@@ -69,8 +70,9 @@ object Wallet {
         hash <- transaction.calculateHash
         response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
         result <- response match {
-          case SubmissionResponse.Accepted         => hash.pure
-          case SubmissionResponse.Rejected(reason) => TransactionRejected(reason).raiseError
+          case SubmissionResult.Accepted => hash.pure
+          case SubmissionResult.Rejected(reason) =>
+            TransactionRejected(reason).raiseError
         }
       } yield result
 

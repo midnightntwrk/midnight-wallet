@@ -5,15 +5,13 @@ import cats.effect.std.Random
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.tracer.logging.ConsoleTracer
 import io.iohk.midnight.wallet.clients.lares.LaresClient
-import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.clients.prover.ProverClient
-import io.iohk.midnight.wallet.js.JSLogging.*
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.services.*
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.sync.util.json.SttpJsonWebSocketClient // [TODO NLLW-361] this should live in a common module
+import io.iohk.midnight.wallet.ogmios.tx_submission
+import io.iohk.midnight.wallet.ogmios.sync
 import org.scalajs.dom.RequestCredentials
-import org.typelevel.log4cats.Logger
 import sttp.client3.FetchOptions
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
@@ -21,7 +19,7 @@ import sttp.model.Uri
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
 object WalletBuilder {
-  def build[F[_]: Async: Logger](config: Config): Resource[F, Wallet[F]] = {
+  def build[F[_]: Async](config: Config): Resource[F, Wallet[F]] = {
     val fetchOptions =
       if (config.includeCookies)
         FetchOptions.Default.copy(credentials = Some(RequestCredentials.include))
@@ -36,10 +34,12 @@ object WalletBuilder {
 
     Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
       for {
-        platformClient <- PlatformClient.Live[F](sttpBackend, config.platformUri)
-        submitTxService <- SubmitTxService.Live[F](platformClient)
-        syncPlatformClient <- SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-        syncService = OgmiosSyncService(syncPlatformClient)
+        txSubmissionWSClient <- tx_submission.util.json
+          .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+        submitTxService <- tx_submission.OgmiosTxSubmissionService(txSubmissionWSClient)
+        syncWSClient <- sync.util.json
+          .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+        syncService = OgmiosSyncService(syncWSClient)
         userId <- Resource.eval(UserIdGenerator.generate(config.userIdLength))
         laresClient = LaresClient.Live[F](sttpBackend, config.laresUri)
         laresService = new LaresService.Live[F](userId, laresClient)

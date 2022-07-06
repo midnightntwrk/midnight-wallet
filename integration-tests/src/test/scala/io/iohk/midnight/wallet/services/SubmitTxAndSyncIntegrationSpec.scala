@@ -1,21 +1,22 @@
 package io.iohk.midnight.wallet.services
 
+import cats.syntax.all.*
 import cats.effect.IO
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.clients.platform.PlatformClient
 import io.iohk.midnight.wallet.domain.services.SyncService
 import io.iohk.midnight.wallet.domain.{Block, CallTransaction, DeployTransaction}
 import io.iohk.midnight.wallet.examples.Transactions
-import io.iohk.midnight.wallet.js.JSLogging.loggingEv
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
-import io.iohk.midnight.wallet.services.SubmitTxService.SubmissionResponse.Accepted
 import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.sync.util.json.SttpJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync
+import io.iohk.midnight.wallet.ogmios.tx_submission
 import munit.CatsEffectSuite
 
 import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
+import io.iohk.midnight.wallet.domain.services.TxSubmissionService
+import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult
 
 class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
@@ -25,17 +26,18 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
   private implicit val clientTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
 
+  private val syncServiceResource =
+    sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, platformUri).map(OgmiosSyncService(_))
+  private val txSumbissionServiceResource = tx_submission.util.json
+    .SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
+    .flatMap(tx_submission.OgmiosTxSubmissionService(_))
+  private val servicesResource = (txSumbissionServiceResource, syncServiceResource).parTupled
+
   def integrationTest(
       title: String,
-  )(theTest: (SubmitTxService[IO], SyncService[IO]) => IO[Unit]): Unit = {
+  )(theTest: (TxSubmissionService[IO], SyncService[IO]) => IO[Unit]): Unit = {
     test(title) {
-      PlatformClient
-        .Live[IO](sttpBackend, platformUri)
-        .flatMap(SubmitTxService.Live[IO](_))
-        .both(
-          SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
-            .map(OgmiosSyncService(_)),
-        )
+      servicesResource
         .use { case (submitTxService, syncService) =>
           theTest(submitTxService, syncService)
         }
@@ -49,8 +51,8 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
       r2 <- submitTxService.submitTransaction(Transactions.validCallTx)
       blocks <- syncService.sync().take(2).compile.toList
     } yield {
-      assertEquals(r1, Accepted)
-      assertEquals(r2, Accepted)
+      assertEquals(r1, SubmissionResult.Accepted)
+      assertEquals(r2, SubmissionResult.Accepted)
       blocks match {
         case List(block0, block1) =>
           assertEquals(block0.header.height, Block.Height.Genesis)
