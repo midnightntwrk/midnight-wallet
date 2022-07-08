@@ -3,22 +3,12 @@
 {
   inputs.start = ''
     "${name}": start: {
-      clone_url:     string
-      sha:           string
-      statuses_url?: string
-      ref?: "refs/heads/\(default_branch)"
-      default_branch?: string
+      ${actionLib.common.inputStartCue}
     }
   '';
 
-  output = { start }: let
-    cfg = start.value.${name}.start;
-  in {
-    success.${name} = {
-      ok = true;
-      rev = cfg.sha;
-    } // lib.optionalAttrs (cfg ? ref) { inherit (cfg) ref default_branch; };
-  };
+  output = { start }:
+    actionLib.common.output args start.value.${name}.start;
 
   job = { start }: let
     cfg = start.value.${name}.start;

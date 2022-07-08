@@ -1,18 +1,15 @@
 { name, std, lib, actionLib, ... } @ args:
 
 {
-  inputs.start = ''
-    "midnight-wallet/ci": start: {
-      clone_url:     string
-      sha:           string
-      statuses_url?: string
-      ref: =~"^refs/tags/v\\d+(\\.\\d+){0,2}$"
-      default_branch?: string
+  inputs.ci = ''
+    "midnight-wallet/ci": {
+      ok: true
+      ${actionLib.common.tagsInputStartCue}
     }
   '';
 
-  job = { start }: let
-    cfg = start.value."midnight-wallet/ci".start;
+  job = { ci }: let
+    cfg = ci.value."midnight-wallet/ci";
   in std.chain args [
     actionLib.simpleJob
 
