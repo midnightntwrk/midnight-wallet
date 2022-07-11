@@ -18,9 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v2
-    - name: Check format
-      run: sbt scalafmtCheckAll
-    - name: Run tests
-      run: sbt coverage walletCore/test domainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test coverageReport
-    - name: Cross build and test sync module to Scala 3
-      run: sbt '++ 3.1.2 ogmiosSyncJS/test'
+    - name: Check format and run tests
+      run: sbt verify
+    - name: Cross build to Scala 3 and test
+      run: sbt '++ 3.1.2 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'

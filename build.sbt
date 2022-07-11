@@ -214,5 +214,5 @@ dist := {
 
 addCommandAlias(
   "verify",
-  ";scalafmtCheckAll ;coverage ;walletCore/test ;domainJS/test ;ogmiosSyncJS/test ;coverageReport",
+  ";scalafmtCheckAll ;coverage ;walletCore/test ;domainJS/test ;ogmiosSyncJS/test ;ogmiosTxSubmissionJS/test ;coverageReport",
 )

@@ -81,7 +81,8 @@
       ln -s "$(realpath result)"/node_modules .
       popd
 
-      sbt scalafmtCheckAll coverage walletCore/test domainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test coverageReport
+      sbt verify
+      sbt '++ 3.1.2 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
 
       ${lib.escapeShellArgs next}
     ''))
