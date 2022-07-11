@@ -61,7 +61,7 @@ lazy val commonSettings = Seq(
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "0.0.13",
+  version := "0.0.14",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
@@ -74,7 +74,11 @@ lazy val domain = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("domain"))
   .settings(commonSettings)
+  .settings(commonPublishSettings)
   .settings(
+    name := "wallet-domain",
+    crossScalaVersions := supportedScalaVersions,
+    conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
       "io.circe" %%% "circe-core" % "0.14.1",
@@ -165,7 +169,7 @@ lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "ogmios-submit-tx",
+    name := "ogmios-tx-submission",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
