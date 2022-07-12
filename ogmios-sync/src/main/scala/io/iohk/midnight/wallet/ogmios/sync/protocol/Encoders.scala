@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.ogmios.sync.protocol
 import io.circe.generic.semiauto.*
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
-import io.iohk.midnight.wallet.domain.Hash
+import io.iohk.midnight.wallet.blockchain.data.Hash
 
 private[sync] object Encoders {
   private object Internals {

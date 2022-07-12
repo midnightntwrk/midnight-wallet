@@ -3,7 +3,19 @@ package io.iohk.midnight.wallet.ogmios.tx_submission.protocol
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
-import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.blockchain.data.{
+  CallTransaction,
+  ContractSource,
+  DeployTransaction,
+  Hash,
+  Nonce,
+  Proof,
+  PublicState,
+  PublicTranscript,
+  Transaction,
+  TransitionFunction,
+  TransitionFunctionCircuits,
+}
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.TransactionType
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
 

@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.ogmios.sync.util
 import cats.effect.{IO, Resource}
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.sync.util.json.{JsonWebSocketClient, SttpJsonWebSocketClient}
 import munit.CatsEffectSuite
 import sttp.capabilities.WebSockets

@@ -71,10 +71,10 @@
     (std.script "bash" ''
       set -x
 
-      sbt '+ domainJS/publish; + domainJVM/publish; + ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
+      sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
 
       sbt dist
-      pushd wallet-core
+      pushd wallet-engine
       yarn publish || :
     '')
   ];

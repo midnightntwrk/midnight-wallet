@@ -5,15 +5,14 @@ import cats.effect.std.Random
 import cats.syntax.functor.*
 import cats.syntax.traverse.*
 import fs2.Stream
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace
-import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.domain.Block.Height
-import io.iohk.midnight.wallet.domain.services.SyncService
+import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTrace
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionWithReceipt}
+import io.iohk.midnight.wallet.blockchain.data.Block.Height
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMessageReceived
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
 import io.iohk.midnight.wallet.ogmios.sync.examples
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTrace.UnexpectedMessage
 import io.iohk.midnight.wallet.ogmios.sync.util.{BetterOutputSuite, TestingTracer}
 
 import java.util.concurrent.TimeUnit
@@ -40,7 +39,7 @@ trait SyncServiceSpecBase
   ): Stream[IO, Unit] =
     Stream.eval(transactions.traverse(tx => nodeClientStub.emitBlock(Seq(tx))).void)
 
-  def doSync(amount: Int, syncService: SyncService[IO]): Stream[IO, (Transaction, Height)] =
+  def doSync(amount: Int, syncService: OgmiosSyncService[IO]): Stream[IO, (Transaction, Height)] =
     syncService
       .sync()
       .take(amount.toLong)
@@ -67,7 +66,7 @@ trait SyncServiceSpecBase
       initialResponses: Seq[Receive] = Seq.empty,
   )(
       theTest: (
-          SyncService[IO],
+          OgmiosSyncService[IO],
           JsonWebSocketClientSyncStub,
           TestingTracer[IO, ClientRequestResponseTrace],
       ) => PropF[IO],

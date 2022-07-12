@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.ogmios.tx_submission.protocol
 
-import io.iohk.midnight.wallet.domain.Transaction
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.ogmios.tx_submission.util.Enumeration
 
 private[tx_submission] object LocalTxSubmission {

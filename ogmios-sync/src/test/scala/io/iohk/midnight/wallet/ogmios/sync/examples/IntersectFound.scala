@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.ogmios.sync.examples
 
-import io.iohk.midnight.wallet.domain.{Block, Hash}
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash}
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
 
 object IntersectFound {

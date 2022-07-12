@@ -76,7 +76,7 @@
     (std.wrapScript "bash" (next: ''
       set -x
 
-      pushd wallet-core
+      pushd wallet-engine
       nix build .#midnight-wallet-node-modules
       ln -s "$(realpath result)"/node_modules .
       popd

@@ -4,27 +4,28 @@ import cats.effect.IO
 import cats.syntax.eq.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
-import io.iohk.midnight.wallet.domain.Transaction
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult.{
+import io.iohk.midnight.wallet.blockchain.data.Transaction
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionSpec.transactionsGen
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.Error.EmptyPendingSubmissions
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult.{
   Accepted,
   Rejected,
 }
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionSpec.transactionsGen
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.Error.EmptyPendingSubmissions
 import io.iohk.midnight.wallet.ogmios.tx_submission.examples.SubmitTx
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive.AcceptTx
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace.UnexpectedMessage
 import io.iohk.midnight.wallet.util.implicits.Equality.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.util.{BetterOutputSuite, TestingTracer}
+
 import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.concurrent.duration.FiniteDuration
 
 trait TxSubmissionSpecBase
@@ -36,7 +37,7 @@ trait TxSubmissionSpecBase
 
   def submitTransactionsAndVerifyResponses(
       transactions: Seq[Transaction],
-      syncService: TxSubmissionService[IO],
+      syncService: OgmiosTxSubmissionService[IO],
   ): IO[Unit] =
     transactions
       .fproduct[SubmissionResult] { tx =>
@@ -53,7 +54,7 @@ trait TxSubmissionSpecBase
       initialResponses: Seq[Receive] = Seq.empty,
   )(
       theTest: (
-          TxSubmissionService[IO],
+          OgmiosTxSubmissionService[IO],
           JsonWebSocketClientTxSubmissionStub,
           TestingTracer[IO, ClientRequestResponseTrace],
       ) => PropF[IO],
@@ -71,7 +72,6 @@ trait TxSubmissionSpecBase
     }
 }
 
-@SuppressWarnings(Array("org.wartremover.warts.Product", "org.wartremover.warts.Serializable"))
 class OgmiosTxSubmissionSpec extends TxSubmissionSpecBase {
   testService("Submits txs and receives corresponding responses") { (syncService, _, _) =>
     forAllF(transactionsGen) { transactions =>

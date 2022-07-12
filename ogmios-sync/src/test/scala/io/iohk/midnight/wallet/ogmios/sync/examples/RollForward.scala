@@ -1,9 +1,24 @@
 package io.iohk.midnight.wallet.ogmios.sync.examples
 
 import io.circe.Json
-import io.iohk.midnight.wallet.domain.*
-import io.iohk.midnight.wallet.domain.Receipt.*
+import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.{
+  Block,
+  CallTransaction,
+  ContractSource,
+  DeployTransaction,
+  Hash,
+  Nonce,
+  Proof,
+  PublicState,
+  PublicTranscript,
+  TransactionWithReceipt,
+  TransitionFunction,
+  TransitionFunctionCircuits,
+}
+import io.iohk.midnight.wallet.blockchain.data.Receipt.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
+
 import java.time.Instant
 
 @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -144,7 +159,7 @@ object RollForward {
     LocalBlockSync.Receive.RollForward(
       Block(
         Block.Header(
-          Some(Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38")),
+          Hash[Block]("5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38"),
           Hash[Block]("a001ec24fa51f84d828b2ee2ffc071ca7fbad64b7b08ab0c07c09b558c936d7f"),
           Block
             .Height(BigInt("17019280400900804"))
@@ -194,7 +209,7 @@ object RollForward {
             ZKFailure("󡝊򿭨𝅳S!a<…7"),
           ),
           TransactionWithReceipt(
-            CallTransaction(
+            data.CallTransaction(
               Some(
                 Hash[CallTransaction](
                   "ff5e6698fe52cb03927b63bca0ffcd52010d750cf3c4e0d667d69dae112c8067",
@@ -212,7 +227,7 @@ object RollForward {
             ZKFailure("5[>"),
           ),
           TransactionWithReceipt(
-            CallTransaction(
+            data.CallTransaction(
               Some(
                 Hash[CallTransaction](
                   "ec010f8d78002249653e586948d78e580fa201ff7ae43fe718266aff38949f2b",

@@ -3,8 +3,24 @@ package io.iohk.midnight.wallet.ogmios.sync.protocol
 import cats.syntax.all.*
 import io.circe.generic.semiauto.*
 import io.circe.Decoder
-import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.blockchain.data.{
+  Block,
+  CallTransaction,
+  ContractSource,
+  DeployTransaction,
+  Hash,
+  Nonce,
+  Proof,
+  PublicState,
+  PublicTranscript,
+  Receipt,
+  Transaction,
+  TransactionWithReceipt,
+  TransitionFunction,
+  TransitionFunctionCircuits,
+}
 import io.iohk.midnight.wallet.ogmios.sync.protocol.TransactionType
+
 import java.time.Instant
 
 private[sync] object Decoders {
@@ -73,7 +89,7 @@ private[sync] object Decoders {
     implicit val blockHeaderDecoder: Decoder[Block.Header] =
       Decoder.instance { c =>
         (
-          c.get[Option[Hash[Block]]]("blockHash"),
+          c.get[Hash[Block]]("blockHash"),
           c.get[Hash[Block]]("parentBlockHash"),
           c.get[Block.Height]("height"),
           c.get[Instant]("timestamp"),

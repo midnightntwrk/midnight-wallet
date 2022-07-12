@@ -1,12 +1,14 @@
 package io.iohk.midnight.wallet.services
 
 import cats.effect.IO
-import io.iohk.midnight.wallet.clients.prover.ProverClient
-import io.iohk.midnight.wallet.domain.CircuitValues
+import io.iohk.midnight.wallet.blockchain.data.CircuitValues
+import io.iohk.midnight.wallet.core.clients.prover.ProverClient
+import io.iohk.midnight.wallet.core.services.ProverService
 import munit.CatsEffectSuite
-import scala.concurrent.duration.DurationInt
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
+
+import scala.concurrent.duration.DurationInt
 
 class ProverServiceIntegrationSpec extends CatsEffectSuite {
 

@@ -3,14 +3,13 @@ package io.iohk.midnight.wallet.ogmios.sync
 import cats.MonadThrow
 import cats.syntax.all.*
 import fs2.Stream
-import io.iohk.midnight.wallet.domain.Block
-import io.iohk.midnight.wallet.domain.services.SyncService
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMessageReceived
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
 
 /** Implementation of the SyncService
@@ -21,9 +20,9 @@ import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
   */
 class OgmiosSyncService[F[_]: MonadThrow](webSocketClient: JsonWebSocketClient[F])(implicit
     tracer: ClientRequestResponseTracer[F],
-) extends SyncService[F] {
+) {
 
-  override def sync(): Stream[F, Block] =
+  def sync(): Stream[F, Block] =
     Stream.repeatEval(requestNextBlock)
 
   private def requestNextBlock: F[Block] =
@@ -49,7 +48,7 @@ class OgmiosSyncService[F[_]: MonadThrow](webSocketClient: JsonWebSocketClient[F
 object OgmiosSyncService {
   def apply[F[_]: MonadThrow: ClientRequestResponseTracer](
       webSocketClient: JsonWebSocketClient[F],
-  ): SyncService[F] = new OgmiosSyncService[F](webSocketClient)
+  ): OgmiosSyncService[F] = new OgmiosSyncService[F](webSocketClient)
 
   sealed abstract class Error(message: String) extends Exception(message)
   object Error {

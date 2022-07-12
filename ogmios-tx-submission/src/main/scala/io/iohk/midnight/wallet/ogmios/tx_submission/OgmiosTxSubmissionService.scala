@@ -5,24 +5,21 @@ import cats.effect.std.{Queue, Semaphore}
 import cats.effect.syntax.spawn.*
 import cats.effect.{Deferred, GenConcurrent, Resource}
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.domain.Transaction
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult.{
-  Accepted,
-  Rejected,
-}
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.Error.{
   DeferredFailed,
   EmptyPendingSubmissions,
 }
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.GenConcurrentThrow
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.{
+  GenConcurrentThrow,
+  SubmissionResult,
+}
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.tx_submission.util.json.JsonWebSocketClient
 
 /** Implementation of the TxSubmissionService
@@ -40,9 +37,8 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
     webSocketClient: JsonWebSocketClient[F],
     pendingSubmissions: Queue[F, Deferred[F, SubmissionResult]],
     semaphore: Semaphore[F],
-)(implicit tracer: ClientRequestResponseTracer[F])
-    extends TxSubmissionService[F] {
-  override def submitTransaction(transaction: Transaction): F[SubmissionResult] =
+)(implicit tracer: ClientRequestResponseTracer[F]) {
+  def submitTransaction(transaction: Transaction): F[SubmissionResult] =
     for {
       // To ensure the correct response is given to the corresponding submission request,
       // the send to node and the queue of the request must be done 1 fiber at a time,
@@ -55,7 +51,7 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
       result <- deferred.get
     } yield result
 
-  val loopReceive: F[Unit] =
+  private val loopReceive: F[Unit] =
     webSocketClient
       .receive[LocalTxSubmission.Receive]()
       .flatMap(processReceivedMessage)
@@ -68,8 +64,9 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
 
   private def processReceivedMessage(message: LocalTxSubmission.Receive): F[Unit] =
     message match {
-      case LocalTxSubmission.Receive.AcceptTx          => completeWith(Accepted)
-      case LocalTxSubmission.Receive.RejectTx(details) => completeWith(Rejected(details.reason))
+      case LocalTxSubmission.Receive.AcceptTx => completeWith(SubmissionResult.Accepted)
+      case LocalTxSubmission.Receive.RejectTx(details) =>
+        completeWith(SubmissionResult.Rejected(details.reason))
     }
 
   private def completeWith(response: SubmissionResult): F[Unit] =
@@ -91,9 +88,15 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
 object OgmiosTxSubmissionService {
   type GenConcurrentThrow[F[_]] = GenConcurrent[F, Throwable]
 
+  sealed trait SubmissionResult
+  object SubmissionResult {
+    case object Accepted extends SubmissionResult
+    final case class Rejected(reason: String) extends SubmissionResult
+  }
+
   def apply[F[_]: GenConcurrentThrow: ClientRequestResponseTracer](
       webSocketClient: JsonWebSocketClient[F],
-  ): Resource[F, TxSubmissionService[F]] = {
+  ): Resource[F, OgmiosTxSubmissionService[F]] = {
     // For the pending submissions an unbounded queue is fine because it's up
     // to the client to decide if it wants to fill up the memory with these requests.
     val submissionsQueue = Queue.unbounded[F, Deferred[F, SubmissionResult]]

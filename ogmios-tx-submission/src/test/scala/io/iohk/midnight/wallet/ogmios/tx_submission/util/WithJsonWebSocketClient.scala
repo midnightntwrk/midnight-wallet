@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.ogmios.tx_submission.util
 import cats.effect.{IO, Resource}
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.tx_submission.util.json.{
   JsonWebSocketClient,
   SttpJsonWebSocketClient,

@@ -1,7 +1,20 @@
 package io.iohk.midnight.wallet.ogmios.sync.examples
 
 import io.circe.Json
-import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.{
+  CallTransaction,
+  ContractSource,
+  DeployTransaction,
+  Hash,
+  Nonce,
+  Proof,
+  PublicState,
+  PublicTranscript,
+  TransitionFunction,
+  TransitionFunctionCircuits,
+}
+
 import java.time.Instant
 
 object SubmitTx {
@@ -24,7 +37,7 @@ object SubmitTx {
       |}""".stripMargin
 
   val validCallTx: CallTransaction =
-    CallTransaction(
+    data.CallTransaction(
       Some(
         Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
       ),

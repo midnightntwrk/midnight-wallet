@@ -6,7 +6,7 @@ import cats.syntax.all.*
 import io.circe.parser.decode
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder}
-import io.iohk.midnight.wallet.tracer.*
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.*
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri

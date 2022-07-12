@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.examples
 
-import io.iohk.midnight.wallet.domain.{
+import io.iohk.midnight.wallet.blockchain.data.{
   CallTransaction,
   ContractSource,
   DeployTransaction,

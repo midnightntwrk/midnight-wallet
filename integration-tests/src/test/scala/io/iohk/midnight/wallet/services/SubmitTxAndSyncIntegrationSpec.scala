@@ -1,22 +1,20 @@
 package io.iohk.midnight.wallet.services
 
-import cats.syntax.all.*
 import cats.effect.IO
+import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.domain.services.SyncService
-import io.iohk.midnight.wallet.domain.{Block, CallTransaction, DeployTransaction}
+import io.iohk.midnight.wallet.blockchain.data.{Block, CallTransaction, DeployTransaction}
 import io.iohk.midnight.wallet.examples.Transactions
+import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
-import io.iohk.midnight.wallet.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.sync
-import io.iohk.midnight.wallet.ogmios.tx_submission
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
+import io.iohk.midnight.wallet.ogmios.{sync, tx_submission}
 import munit.CatsEffectSuite
-
-import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService
-import io.iohk.midnight.wallet.domain.services.TxSubmissionService.SubmissionResult
+
+import scala.concurrent.duration.DurationInt
 
 class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
@@ -24,7 +22,10 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
   private val timeout = 30.seconds
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val clientTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
+  private implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[IO] =
+    Tracer.discardTracer[IO]
+  private implicit val clientTxSubmissionTracer
+      : ogmios.tx_submission.tracer.ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
 
   private val syncServiceResource =
     sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, platformUri).map(OgmiosSyncService(_))
@@ -35,7 +36,7 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
   def integrationTest(
       title: String,
-  )(theTest: (TxSubmissionService[IO], SyncService[IO]) => IO[Unit]): Unit = {
+  )(theTest: (OgmiosTxSubmissionService[IO], OgmiosSyncService[IO]) => IO[Unit]): Unit = {
     test(title) {
       servicesResource
         .use { case (submitTxService, syncService) =>

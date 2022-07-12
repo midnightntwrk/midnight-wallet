@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.ogmios.sync.protocol
 
 import cats.Show
-import io.iohk.midnight.wallet.domain.{Block, Hash}
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash}
 import io.iohk.midnight.wallet.ogmios.sync.util.Enumeration
 
 private[sync] object LocalBlockSync {

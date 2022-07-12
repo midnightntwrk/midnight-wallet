@@ -18,6 +18,8 @@ lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 lazy val scala213 = "2.13.8"
 lazy val scala31 = "3.1.2"
 lazy val supportedScalaVersions = List(scala213, scala31)
+lazy val catsVersion = "2.7.0"
+lazy val catsEffectVersion = "3.3.11"
 
 lazy val commonSettings = Seq(
   // Scala compiler options
@@ -70,20 +72,19 @@ lazy val commonPublishSettings = Seq(
   publishTo := Some(repoUrl.value),
 )
 
-lazy val domain = crossProject(JVMPlatform, JSPlatform)
+lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
-  .in(file("domain"))
+  .in(file("blockchain"))
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "wallet-domain",
+    name := "wallet-blockchain",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
-      "co.fs2" %%% "fs2-core" % "3.2.5",
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "io.circe" %%% "circe-core" % "0.14.1",
-      "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
-      "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
     ),
     coverageMinimumStmtTotal := 64,
     coverageMinimumBranchTotal := 100,
@@ -93,31 +94,110 @@ lazy val domain = crossProject(JVMPlatform, JSPlatform)
   )
 
 lazy val walletCore = (project in file("wallet-core"))
-  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(ogmiosSync.js, ogmiosTxSubmission.js)
+  .enablePlugins(ScalaJSPlugin)
+  .dependsOn(blockchain.js)
   .settings(commonSettings)
   .settings(
-    scalacOptions += "-P:kind-projector:underscore-placeholders",
-    addCompilerPlugin("org.typelevel" % "kind-projector" % "0.13.2" cross CrossVersion.full),
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // Dependencies
     libraryDependencies ++= Seq(
       "com.beachape" %%% "enumeratum" % "1.7.0",
-      "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
       "com.softwaremill.sttp.client3" %%% "circe" % "3.4.1",
       "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
       "co.fs2" %%% "fs2-core" % "3.2.5",
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-generic" % "0.14.1",
       "io.circe" %%% "circe-generic-extras" % "0.14.1",
-      "org.typelevel" %%% "cats-core" % "2.7.0",
-      "org.typelevel" %%% "cats-effect" % "3.3.8",
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % "2.1.0",
+      "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
+      "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
     ),
 
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
+
+    // Linting
+    wartremoverExcluded += baseDirectory.value / "src" / "main" / "scala" / "io" / "iohk" / "midnight" / "wallet" / "core" / "js" / "facades",
+    coverageExcludedPackages := "io.iohk.midnight.wallet.core.js;",
+    coverageMinimumStmtTotal := 90,
+    coverageMinimumBranchTotal := 90,
+  )
+
+lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("ogmios-sync"))
+  .dependsOn(blockchain)
+  .settings(commonSettings)
+  .settings(commonPublishSettings)
+  .settings(
+    name := "ogmios-sync",
+    crossScalaVersions := supportedScalaVersions,
+    conflictWarning := ConflictWarning.disable,
+    libraryDependencies ++= Seq(
+      "co.fs2" %%% "fs2-core" % "3.2.5",
+      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
+      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-parser" % "0.14.1",
+      "io.circe" %%% "circe-generic" % "0.14.1",
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
+      "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
+    ),
+    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.sync.tracer;", // TODO: NLLW-361
+    coverageMinimumStmtTotal := 100,
+    coverageMinimumBranchTotal := 100,
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+  )
+
+lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("ogmios-tx-submission"))
+  .dependsOn(blockchain)
+  .settings(commonSettings)
+  .settings(commonPublishSettings)
+  .settings(
+    name := "ogmios-tx-submission",
+    crossScalaVersions := supportedScalaVersions,
+    conflictWarning := ConflictWarning.disable,
+    libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
+      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-parser" % "0.14.1",
+      "io.circe" %%% "circe-generic" % "0.14.1",
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
+      "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
+    ),
+    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tx_submission.tracer;", // TODO: NLLW-361
+    coverageMinimumStmtTotal := 100,
+    coverageMinimumBranchTotal := 100,
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+  )
+
+lazy val integrationTests = (project in file("integration-tests"))
+  .enablePlugins(ScalaJSPlugin)
+  .dependsOn(walletEngine)
+  .settings(commonSettings)
+  .settings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    Test / jsEnv := new org.scalajs.jsenv.selenium.SeleniumJSEnv(
+      new org.openqa.selenium.firefox.FirefoxOptions(),
+    ),
+  )
+
+lazy val walletEngine = (project in file("wallet-engine"))
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+  .dependsOn(walletCore, ogmiosSync.js, ogmiosTxSubmission.js)
+  .settings(commonSettings)
+  .settings(
+    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // ScalablyTyped config
     externalNpm := {
@@ -129,83 +209,18 @@ lazy val walletCore = (project in file("wallet-core"))
     Global / stQuiet := true,
 
     // Linting
-    wartremoverExcluded += baseDirectory.value / "src" / "main" / "scala" / "io" / "iohk" / "midnight" / "wallet" / "js" / "facades",
-    coverageExcludedPackages := "io.iohk.midnight.wallet.WalletBuilder;io.iohk.midnight.wallet.js;io.iohk.midnight.wallet.js.facades.rxjs",
+    coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;",
     coverageMinimumStmtTotal := 90,
     coverageMinimumBranchTotal := 90,
-  )
-
-lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("ogmios-sync"))
-  .dependsOn(domain)
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
-  .settings(
-    name := "ogmios-sync",
-    crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    libraryDependencies ++= Seq(
-      "co.fs2" %%% "fs2-core" % "3.2.5",
-      "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
-      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-parser" % "0.14.1",
-      "io.circe" %%% "circe-generic" % "0.14.1",
-      "org.typelevel" %%% "cats-core" % "2.7.0",
-      "org.typelevel" %%% "cats-effect" % "3.3.11",
-    ),
-    coverageMinimumStmtTotal := 100,
-    coverageMinimumBranchTotal := 100,
-  )
-  .jsSettings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-  )
-
-lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("ogmios-tx-submission"))
-  .dependsOn(domain)
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
-  .settings(
-    name := "ogmios-tx-submission",
-    crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.client3" %%% "core" % "3.4.1",
-      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-parser" % "0.14.1",
-      "io.circe" %%% "circe-generic" % "0.14.1",
-      "org.typelevel" %%% "cats-core" % "2.7.0",
-      "org.typelevel" %%% "cats-effect" % "3.3.11",
-    ),
-    coverageMinimumStmtTotal := 100,
-    coverageMinimumBranchTotal := 100,
-  )
-  .jsSettings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-  )
-
-lazy val integrationTests = (project in file("integration-tests"))
-  .enablePlugins(ScalaJSPlugin)
-  .dependsOn(walletCore)
-  .settings(commonSettings)
-  .settings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    Test / jsEnv := new org.scalajs.jsenv.selenium.SeleniumJSEnv(
-      new org.openqa.selenium.firefox.FirefoxOptions(),
-    ),
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")
 dist := {
   val log = streams.value.log
-  (walletCore / Compile / fullOptJS).value
-  val targetJSDir = (walletCore / Compile / fullLinkJS / scalaJSLinkerOutputDirectory).value
-  val resDir = (walletCore / Compile / resourceDirectory).value
-  val distDir = walletCore.base / "dist"
+  (walletEngine / Compile / fullOptJS).value
+  val targetJSDir = (walletEngine / Compile / fullLinkJS / scalaJSLinkerOutputDirectory).value
+  val resDir = (walletEngine / Compile / resourceDirectory).value
+  val distDir = walletEngine.base / "dist"
   IO.createDirectory(distDir)
   IO.copyDirectory(targetJSDir, distDir, overwrite = true)
   IO.copyDirectory(resDir, distDir, overwrite = true)
@@ -218,5 +233,5 @@ dist := {
 
 addCommandAlias(
   "verify",
-  ";scalafmtCheckAll ;coverage ;walletCore/test ;domainJS/test ;ogmiosSyncJS/test ;ogmiosTxSubmissionJS/test ;coverageReport",
+  ";scalafmtCheckAll ;coverage ;walletCore/test ;blockchainJS/test ;ogmiosSyncJS/test ;ogmiosTxSubmissionJS/test ;walletEngine/test ;coverageReport",
 )

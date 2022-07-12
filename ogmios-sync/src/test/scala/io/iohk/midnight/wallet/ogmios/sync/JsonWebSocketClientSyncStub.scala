@@ -5,10 +5,12 @@ import cats.effect.std.{Queue, Random}
 import cats.effect.{Clock, IO, Ref}
 import cats.syntax.all.*
 import io.circe.{Decoder, Encoder}
-import io.iohk.midnight.wallet.domain.*
+import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionWithReceipt}
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive.RollForward
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.{Receive, Send}
 import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
+
 import java.time.Instant
 
 /** A dummy implementation of a websocket client for syncing. It holds a queue of blocks, simulating
@@ -48,12 +50,15 @@ class JsonWebSocketClientSyncStub(
   private def generateBlock(transactions: Seq[Transaction]): IO[Block] =
     for {
       blockHeader <- generateBlockHeader
-      block = Block(blockHeader, transactions.map(TransactionWithReceipt(_, Receipt.Success)))
+      block = data.Block(
+        blockHeader,
+        transactions.map(TransactionWithReceipt(_, data.Receipt.Success)),
+      )
     } yield block
 
   private def generateBlockHeader: IO[Block.Header] =
     (
-      calculateHash().map(Some(_)),
+      calculateHash(),
       currentHeight.getAndUpdate(_.increment),
       Clock[IO].realTime.map(_.toMillis).map(Instant.ofEpochMilli),
     )
