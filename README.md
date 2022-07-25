@@ -35,7 +35,7 @@ it's automatically picked up by any sbt version that is installed.
 
 ## External services
 
-- [midnight-platform](https://github.com/input-output-hk/midnight-platform): the midnight node and consensus
+- [midnight-platform](https://github.com/input-output-hk/midnight-platform): the Midnight node and consensus
 - [Racket Server](https://github.com/input-output-hk/lares): implementations of the Kachina approach to smart contracts. It might evolve to multiple components (wallet-backend, lares runtime)
 - [snarkie](https://github.com/input-output-hk/snarkie): creates/verifies zero-knowledge proofs
 
@@ -54,14 +54,14 @@ it's automatically picked up by any sbt version that is installed.
   - `Wallet.scala` - Implementation of the main business logic
   - `WalletBuilder.scala` - Dependency injection and instantiation of the `Wallet` class
 
-`domain/src/main/scala/io/iohk/midnight/wallet`
-  - `domain` - Domain model of the wallet
+`blockchain/src/main/scala/io/iohk/midnight/wallet`
+  - `blockchain` - Domain model of the wallet
     - `services` - Interfaces of services that wallet core uses, that can be independently developed and reused
 
 `ogmios-sync/src/main/scala/io/iohk/midnight/wallet/ogmios`
-  - `sync` - Implementation of the `SyncService` from `domain` module using the Ogmios protocol
+  - `sync` - Implementation of the `SyncService` from `blockchain` module using the Ogmios protocol
  
-`[wallet-core|domain|ogmios-sync]/src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
+`[wallet-core|wallet-engine|blockchain|ogmios-sync|ogmios-tx-submission]/src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
 classes and `Stub` suffix is added to create stubs that can be used by other unit tests
 
 `integration-tests` - A subproject specifically for developing integration tests 
@@ -107,7 +107,7 @@ The generated JavaScript code is written to `wallet-core/target/dist`.
 
 #### Unit tests
 
-`sbt walletCore/test domainJS/test ogmiosSyncJS/test`
+`sbt walletCore/test blockchainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test walletEngine/test`
 
 #### Integration tests
 
@@ -115,7 +115,7 @@ See the integration-tests [README](integration-tests/README.md) for instructions
 
 ## Generate Coverage report
 
-`sbt coverage walletCore/test domainJS/test ogmiosSyncJS/test coverageReport`
+`sbt coverage walletCore/test blockchainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test walletEngine/test coverageReport`
 
 An HTML report is written to each module's `target/scala-2.13/scoverage-report/index.html`
 
@@ -137,6 +137,7 @@ does the following:
 - Check the code with [wartremover](https://www.wartremover.org/)
 - Check the code with [scapegoat](https://github.com/scapegoat-scala/sbt-scapegoat)
 - Run the unit tests to verify that the minimum code coverage is reached
+- Generates coverage reports
 
 ## Publish artifact
 
