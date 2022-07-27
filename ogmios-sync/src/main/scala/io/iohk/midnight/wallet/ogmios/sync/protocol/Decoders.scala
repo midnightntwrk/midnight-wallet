@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.ogmios.sync.protocol
 
 import cats.syntax.all.*
 import io.circe.generic.semiauto.*
-import io.circe.Decoder
+import io.circe.{Decoder, Json, parser}
 import io.iohk.midnight.wallet.blockchain.data.{
   Block,
   CallTransaction,
@@ -49,13 +49,14 @@ private[sync] object Decoders {
     implicit val deployTransactionDecoder: Decoder[DeployTransaction] =
       deriveDecoder
 
-    // should be parsed as a json in the future
     implicit val publicStateDecoder: Decoder[PublicState] =
-      Decoder[String].map(PublicState.fromString)
+      Decoder[String].map(str => PublicState(parseJsonFromString(str)))
 
-    // should be parsed as a json in the future
     implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
-      Decoder[String].map(PublicTranscript.fromString)
+      Decoder[String].map(str => PublicTranscript(parseJsonFromString(str)))
+
+    private def parseJsonFromString(str: String): Json =
+      parser.parse(str).getOrElse(Json.fromString(str))
 
     implicit val transactionDecoder: Decoder[Transaction] =
       Decoder.instance(_.get[TransactionType](TransactionType.Discriminator)).flatMap {

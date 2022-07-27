@@ -44,7 +44,7 @@ object RollForward {
       |            "timestamp": "1969-12-31T23:59:53.999509747Z",
       |            "type": "deploy",
       |            "contractSource": "(((ntdkmey qirpm) (vktdzt)) ((wzslgw bjytykow clrbmexk zhh kvve) (kqlm xxn) (grioz) (dmijarh rpl fbubzqo)) ((isk catqjlp) (lhlsukj dnrnuzep) (irqr txol pvlt cknazte) (flxxjvl ieit xcxy vjxbe pxyvv) (isxsnmfd lebsuq)))",
-      |            "publicState": "(jzwuc)",
+      |            "publicState": "{\"authority\":\"03e4ce211a412041a7e33dfd8971c651d5f8a33710756f40abb5a33e5461a2ca\"}",
       |            "transitionFunctionCircuits": {
       |              "tzgpxu": "6232e241fc01f4",
       |              "yjrwyne": "e050935684748401"
@@ -82,7 +82,7 @@ object RollForward {
       |            "contractHash": "b2df87e43900da7ef6c7033101918a63e2e7720197a4fda1109fbdd5008c0d3d",
       |            "transitionFunction": "swbible",
       |            "proof": "c33fde2301a0",
-      |            "publicTranscript": "(((wxsu oycpjo)) rhivvwld)"
+      |            "publicTranscript": "[[[\"public.authority\"],\"246fea3ef7c77464f836539054c6e4d9fab15505ca6e21de6c1ad4d2a5f6f687\"]]"
       |          },
       |          "result": {
       |            "type": "ZKFailure",
@@ -178,7 +178,13 @@ object RollForward {
               ContractSource(
                 "(((ntdkmey qirpm) (vktdzt)) ((wzslgw bjytykow clrbmexk zhh kvve) (kqlm xxn) (grioz) (dmijarh rpl fbubzqo)) ((isk catqjlp) (lhlsukj dnrnuzep) (irqr txol pvlt cknazte) (flxxjvl ieit xcxy vjxbe pxyvv) (isxsnmfd lebsuq)))",
               ),
-              PublicState(Json.fromString("(jzwuc)")),
+              PublicState(
+                Json.obj(
+                  "authority" -> Json.fromString(
+                    "03e4ce211a412041a7e33dfd8971c651d5f8a33710756f40abb5a33e5461a2ca",
+                  ),
+                ),
+              ),
               TransitionFunctionCircuits(
                 Map(
                   "tzgpxu" -> "6232e241fc01f4",
@@ -222,7 +228,16 @@ object RollForward {
               ),
               TransitionFunction("swbible"),
               Some(Proof("c33fde2301a0")),
-              PublicTranscript(Json.fromString("(((wxsu oycpjo)) rhivvwld)")),
+              PublicTranscript(
+                Json.arr(
+                  Json.arr(
+                    Json.arr(Json.fromString("public.authority")),
+                    Json.fromString(
+                      "246fea3ef7c77464f836539054c6e4d9fab15505ca6e21de6c1ad4d2a5f6f687",
+                    ),
+                  ),
+                ),
+              ),
             ),
             ZKFailure("5[>"),
           ),
