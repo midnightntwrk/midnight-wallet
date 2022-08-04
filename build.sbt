@@ -63,7 +63,7 @@ lazy val commonSettings = Seq(
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "0.0.16",
+  version := "0.0.17",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
@@ -204,7 +204,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
-    stIgnore += "rxjs",
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
 

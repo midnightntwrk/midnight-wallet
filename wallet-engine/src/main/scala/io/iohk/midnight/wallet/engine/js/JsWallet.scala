@@ -3,16 +3,7 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.circe.parser
-import io.iohk.midnight.wallet.blockchain.data.{
-  CircuitValues,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  PublicState,
-  PublicTranscript,
-  TransitionFunction,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.core.domain.SemanticEvent
@@ -24,7 +15,8 @@ import sttp.model.Uri
 import typings.midnightWalletApi.mod as api
 
 import scala.scalajs.js
-import scala.scalajs.js.Promise
+import scala.scalajs.js.JSConverters.*
+import scala.scalajs.js.{Promise, Array as JsArray}
 import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
@@ -80,16 +72,16 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet {
   override def getGUID(): Promise[String] =
     wallet.getUserId().map(_.value).unsafeToPromise()
 
-  override def sync(): Observable[Seq[SemanticEvent]] = {
-    new Observable[Seq[SemanticEvent]](
-      js.ThisFunction.fromFunction2[Observable[Seq[SemanticEvent]], Subscriber[
-        Seq[SemanticEvent],
+  override def sync(): Observable[JsArray[Any]] = {
+    new Observable[JsArray[Any]](
+      js.ThisFunction.fromFunction2[Observable[JsArray[Any]], Subscriber[
+        JsArray[Any],
       ], js.Function0[Unit]]((_, subscriber) => {
         val Subscription(startConsuming, cancellation) =
           new StreamObservable[IO, Seq[SemanticEvent]](wallet.sync())
             .subscribe(new StreamObserver[IO, Seq[SemanticEvent]] {
               override def next(value: Seq[SemanticEvent]): IO[Unit] =
-                IO(subscriber.next(value))
+                IO(subscriber.next(value.map(_.value).toJSArray))
 
               override def error(error: Throwable): IO[Unit] =
                 IO(subscriber.error(error.getMessage))
