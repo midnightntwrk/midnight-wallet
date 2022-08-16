@@ -69,7 +69,7 @@ classes and `Stub` suffix is added to create stubs that can be used by other uni
 
 ## Credentials
 
-To be able to fetch our internal dependencies, it is required to have our nexus credentials. To get them, you have to contact our devops team. Once you have them, you need to set three `env` variables:
+To be able to fetch our internal dependencies, it is required to have our Nexus credentials. To get them, you have to contact our devops team. Once you have them, you need to set three `env` variables:
 ```
 $ export MIDNIGHT_REPO_USER=your_user
 
@@ -81,7 +81,7 @@ From these credentials you can generate an `NPM_TOKEN` that is also required. Fr
 ```
 npm login --scope=@midnight --registry=https://nexus.p42.at/repository/npm-midnight/
 ```
-You will be required to input the nexus user and password plus the email associated. After that, check that the following file exists and copy the token:
+You will be required to input the Nexus user and password plus the email associated. After that, check that the following file exists and copy the token:
 
 ```
 $ cat ~/.npmrc
@@ -141,7 +141,7 @@ does the following:
 
 ## Publish artifact
 
-In order to publish, the version inside `wallet-core/package.json` should be bumped and the change merged into main.
+In order to publish, the versions both inside `wallet-engine/package.json` and `commonPublishSettings` in `build.sbt` should be bumped and the change merged into main. Then, create a tag on GitHub on top of a 'version bump' commit. The tag itself must follow the versioning pattern: `vX.X.X`.
 
 ## Build Nix
 
