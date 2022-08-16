@@ -9,8 +9,8 @@ import scala.annotation.nowarn
 @JSExportTopLevel("Init")
 object Init {
 
-  @js.native @JSImport("node-fetch", JSImport.Namespace)
-  @nowarn val nodeFetch: js.Dynamic = js.native
+  @js.native @JSImport("cross-fetch", JSImport.Namespace)
+  @nowarn val crossFetch: js.Dynamic = js.native
 
   @js.native @JSImport("isomorphic-ws", JSImport.Namespace)
   @nowarn val ws: js.Dynamic = js.native
@@ -23,9 +23,9 @@ object Init {
     * description of the approach.
     */
   private val g = scalajs.js.Dynamic.global.globalThis
-  g.fetch = nodeFetch.default
-  g.Headers = nodeFetch.Headers
-  g.Request = nodeFetch.Request
+  g.fetch = crossFetch.default
+  g.Headers = crossFetch.Headers
+  g.Request = crossFetch.Request
   g.WebSocket = ws.default
 
 }
