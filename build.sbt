@@ -199,6 +199,12 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .settings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
+    // Test dependencies
+    libraryDependencies ++= Seq(
+      "org.http4s" %%% "http4s-dsl" % "0.23.11",
+      "org.http4s" %%% "http4s-ember-server" % "0.23.11",
+    ).map(_ % Test),
+
     // ScalablyTyped config
     externalNpm := {
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
