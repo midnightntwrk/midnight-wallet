@@ -63,7 +63,7 @@ lazy val commonSettings = Seq(
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "0.0.18",
+  version := "0.0.19",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
