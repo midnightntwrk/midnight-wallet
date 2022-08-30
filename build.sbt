@@ -210,7 +210,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
-    stIgnore ++= List("node-fetch", "isomorphic-ws", "ws"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws"),
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
 
