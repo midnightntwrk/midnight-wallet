@@ -1,18 +1,7 @@
-package io.iohk.midnight.wallet.examples
+package io.iohk.midnight.wallet.engine.services
 
 import io.circe.Json
-import io.iohk.midnight.wallet.blockchain.data.{
-  CallTransaction,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  Proof,
-  PublicState,
-  PublicTranscript,
-  TransitionFunction,
-  TransitionFunctionCircuits,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 
 import java.time.Instant
 

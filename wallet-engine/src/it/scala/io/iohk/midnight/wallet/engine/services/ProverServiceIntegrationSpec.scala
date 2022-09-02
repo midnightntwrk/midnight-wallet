@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.services
+package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
 import io.iohk.midnight.wallet.blockchain.data.CircuitValues
@@ -27,6 +27,6 @@ class ProverServiceIntegrationSpec extends CatsEffectSuite {
       maxRetries,
       retryDelay,
       // FIXME: For now I'm asserting length since it's always the same for the mocked responses
-    ).prove(CircuitValues(1, 2, 5)).map(p => assert(p.value.length == 2080))
+    ).prove(CircuitValues(1, 2, 5)).map(p => assertEquals(p.value.length, 2080))
   }
 }

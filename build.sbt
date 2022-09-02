@@ -181,21 +181,12 @@ lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
 
-lazy val integrationTests = (project in file("integration-tests"))
-  .enablePlugins(ScalaJSPlugin)
-  .dependsOn(walletEngine)
-  .settings(commonSettings)
-  .settings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    Test / jsEnv := new org.scalajs.jsenv.selenium.SeleniumJSEnv(
-      new org.openqa.selenium.firefox.FirefoxOptions(),
-    ),
-  )
-
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(walletCore, ogmiosSync.js, ogmiosTxSubmission.js)
-  .settings(commonSettings)
+  .configs(IntegrationTest)
+  .settings(commonSettings, Defaults.itSettings)
+  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
   .settings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
@@ -204,6 +195,12 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "org.http4s" %%% "http4s-dsl" % "0.23.11",
       "org.http4s" %%% "http4s-ember-server" % "0.23.11",
     ).map(_ % Test),
+
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
+      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
+      "org.scala-js" %% "scalajs-test-bridge" % "1.9.0"
+    ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
     externalNpm := {

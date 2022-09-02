@@ -1,10 +1,9 @@
-package io.iohk.midnight.wallet.services
+package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.blockchain.data.{Block, CallTransaction, DeployTransaction}
-import io.iohk.midnight.wallet.examples.Transactions
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService

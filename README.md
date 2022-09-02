@@ -64,9 +64,6 @@ it's automatically picked up by any sbt version that is installed.
 `[wallet-core|wallet-engine|blockchain|ogmios-sync|ogmios-tx-submission]/src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
 classes and `Stub` suffix is added to create stubs that can be used by other unit tests
 
-`integration-tests` - A subproject specifically for developing integration tests 
-
-
 ## Credentials
 
 To be able to fetch our internal dependencies, it is required to have our Nexus credentials. To get them, you have to contact our devops team. Once you have them, you need to set three `env` variables:
@@ -111,8 +108,19 @@ The generated JavaScript code is written to `wallet-core/target/dist`.
 
 #### Integration tests
 
-See the integration-tests [README](integration-tests/README.md) for instructions.
+##### Dependencies - External services
+As these tests connect with the real external services, the corresponding services must be running
+locally and listening to the configured port to which the tests connect. The tests are intentionally
+configured to connect to the default port for the service.
 
+Currently, there are 2 external services being tested:
+- Platform's node (See [midnight-platform](https://github.com/input-output-hk/midnight-platform/) repo to find out how to
+  build the docker image and run a container)
+- Snarkie Server (See [snarkie](https://github.com/input-output-hk/snarkie) repo to build docker image and run container)
+
+##### How to run
+
+When dependencies are installed and running, from the root project directory run `sbt 'walletEngine/IntegrationTest/test'`
 ## Generate Coverage report
 
 `sbt coverage walletCore/test blockchainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test walletEngine/test coverageReport`
