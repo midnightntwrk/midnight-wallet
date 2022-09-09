@@ -7,8 +7,7 @@ used by dapp developers and [client-sdk](https://github.com/input-output-hk/midn
 - Build transactions, interacting with [snarkie](https://github.com/input-output-hk/snarkie) to
 obtain zk-proofs if necessary
 - Submit transactions to a node
-- Obtain blocks from a node and submit them to wallet-backend
-- Stream semantic events from submitting blocks to wallet-backend
+- Obtain blocks from a node
 
 ## Requirements
 
@@ -36,7 +35,6 @@ it's automatically picked up by any sbt version that is installed.
 ## External services
 
 - [midnight-platform](https://github.com/input-output-hk/midnight-platform): the Midnight node and consensus
-- [Racket Server](https://github.com/input-output-hk/lares): implementations of the Kachina approach to smart contracts. It might evolve to multiple components (wallet-backend, lares runtime)
 - [snarkie](https://github.com/input-output-hk/snarkie): creates/verifies zero-knowledge proofs
 
 ## Directory structure
@@ -49,17 +47,21 @@ it's automatically picked up by any sbt version that is installed.
 `wallet-core/src/main/scala/io/iohk/midnight/wallet`
   - `clients` - Implementation of interaction with external services
   - `js` - Interoperability with Javascript
-  - `services` - Service layer that depends on clients and exposes only domain types
+  - `services` - Interfaces of services that wallet core uses, that can be independently developed and reused
   - `util` - Utilities that can be used by many layers and aren't domain specific
   - `Wallet.scala` - Implementation of the main business logic
+
+`wallet-engine/src/main/scala/io/iohk/midnight/wallet/engine`
   - `WalletBuilder.scala` - Dependency injection and instantiation of the `Wallet` class
 
 `blockchain/src/main/scala/io/iohk/midnight/wallet`
-  - `blockchain` - Domain model of the wallet
-    - `services` - Interfaces of services that wallet core uses, that can be independently developed and reused
+  - `blockchain` - Blockchain model used by the wallet
 
 `ogmios-sync/src/main/scala/io/iohk/midnight/wallet/ogmios`
-  - `sync` - Implementation of the `SyncService` from `blockchain` module using the Ogmios protocol
+  - `sync` - Implementation of the `SyncService` from `wallet-core` module using the Ogmios protocol
+
+`ogmios-tx-submission/src/main/scala/io/iohk/midnight/wallet/ogmios`
+  - `tx_submission` - Implementation of the `TxSubmissionService` from `wallet-core` module using the Ogmios protocol
  
 `[wallet-core|wallet-engine|blockchain|ogmios-sync|ogmios-tx-submission]/src/test` - Same projet structure as `main` sources. `Spec` suffix is added to test corresponding
 classes and `Stub` suffix is added to create stubs that can be used by other unit tests

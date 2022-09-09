@@ -9,10 +9,9 @@ import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.ogmios.tx_submission
 import io.iohk.midnight.wallet.ogmios.sync
-import io.iohk.midnight.wallet.core.clients.lares.LaresClient
 import io.iohk.midnight.wallet.core.clients.prover.ProverClient
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.core.{Wallet, tracer}
+import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import org.scalajs.dom.RequestCredentials
@@ -34,7 +33,6 @@ object WalletBuilder {
     val proverService =
       new ProverService.Live[F](proverClient, config.proverMaxRetries, config.proverRetryDelay)
 
-    implicit val clientTracer: tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
     implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[F] =
       ConsoleTracer.apply
     implicit val clientTxSubmissionTracer
@@ -62,10 +60,8 @@ object WalletBuilder {
           override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
         }
         userId <- Resource.eval(UserIdGenerator.generate(config.userIdLength))
-        laresClient = LaresClient.Live[F](sttpBackend, config.laresUri)
-        laresService = new LaresService.Live[F](userId, laresClient)
       } yield {
-        new Wallet.Live[F](proverService, submitTxService, syncService, laresService, userId)
+        new Wallet.Live[F](proverService, submitTxService, syncService, userId)
       }
     }
   }
@@ -75,7 +71,6 @@ object WalletBuilder {
   final case class Config(
       proverUri: Uri,
       platformUri: Uri,
-      laresUri: Uri,
       includeCookies: Boolean,
       proverMaxRetries: Int,
       proverRetryDelay: FiniteDuration,
@@ -84,11 +79,10 @@ object WalletBuilder {
   )
 
   object Config {
-    def default(proverUri: Uri, platformUri: Uri, laresUri: Uri, includeCookies: Boolean): Config =
+    def default(proverUri: Uri, platformUri: Uri, includeCookies: Boolean): Config =
       Config(
         proverUri,
         platformUri,
-        laresUri,
         includeCookies,
         proverMaxRetries = 20,
         proverRetryDelay = 1.second,

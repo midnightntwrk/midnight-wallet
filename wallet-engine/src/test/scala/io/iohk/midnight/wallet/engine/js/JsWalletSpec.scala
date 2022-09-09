@@ -1,7 +1,6 @@
 package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.{Deferred, IO, Ref}
-import io.iohk.midnight.wallet.core.domain.SemanticEvent
 import io.iohk.midnight.wallet.core.js.facades.rxjs.{Operators, Subscriber}
 import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
 import munit.CatsEffectSuite
@@ -12,9 +11,7 @@ import scala.scalajs.js
 import scala.scalajs.js.Array as JsArray
 
 trait JsWalletFixtures {
-  val semanticEvents: Seq[Seq[SemanticEvent]] =
-    Seq.range(0, 100).grouped(10).map(_.map(SemanticEvent)).toSeq
-  val events: Seq[Seq[Any]] = semanticEvents.map(_.map(_.value))
+  val semanticEvents: Seq[Seq[Any]] = Seq.range(0, 100).grouped(10).toSeq
   val error = new RuntimeException("error")
   val jsWallet: JsWallet = new JsWallet(new WalletSyncStub(semanticEvents), IO.unit)
   val jsFailingWallet: JsWallet =
@@ -38,7 +35,7 @@ class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutp
       }
       _ <- isFinished.get
     } yield {
-      assertIO(acc.get, events)
+      assertIO(acc.get, semanticEvents)
     }).flatten
   }
 
@@ -61,7 +58,7 @@ class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutp
       }
       _ <- isFinished.get
     } yield {
-      assertIO(acc.get, events)
+      assertIO(acc.get, semanticEvents)
     }).flatten
   }
 

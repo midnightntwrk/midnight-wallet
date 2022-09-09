@@ -6,7 +6,6 @@ import io.circe.parser
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
-import io.iohk.midnight.wallet.core.domain.SemanticEvent
 import io.iohk.midnight.wallet.core.js.facades.rxjs.{Observable, Subscriber}
 import io.iohk.midnight.wallet.core.util.{StreamObservable, StreamObserver, Subscription}
 import io.iohk.midnight.wallet.engine.WalletBuilder
@@ -78,10 +77,10 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet {
         JsArray[Any],
       ], js.Function0[Unit]]((_, subscriber) => {
         val Subscription(startConsuming, cancellation) =
-          new StreamObservable[IO, Seq[SemanticEvent]](wallet.sync())
-            .subscribe(new StreamObserver[IO, Seq[SemanticEvent]] {
-              override def next(value: Seq[SemanticEvent]): IO[Unit] =
-                IO(subscriber.next(value.map(_.value).toJSArray))
+          new StreamObservable[IO, Seq[Any]](wallet.sync())
+            .subscribe(new StreamObserver[IO, Seq[Any]] {
+              override def next(value: Seq[Any]): IO[Unit] =
+                IO(subscriber.next(value.toJSArray))
 
               override def error(error: Throwable): IO[Unit] =
                 IO(subscriber.error(error.getMessage))
@@ -104,7 +103,6 @@ object JsWallet {
   def build(
       proverUri: String,
       platformUri: String,
-      laresUri: String,
       includeCookies: Boolean,
   ): js.Promise[api.Wallet] =
     WalletBuilder
@@ -112,7 +110,6 @@ object JsWallet {
         Config.default(
           Uri.unsafeParse(proverUri),
           Uri.unsafeParse(platformUri),
-          Uri.unsafeParse(laresUri),
           includeCookies,
         ),
       )

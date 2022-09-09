@@ -20,16 +20,10 @@ import io.iohk.midnight.wallet.blockchain.data.{
   TransitionFunctionCircuits,
 }
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
-import io.iohk.midnight.wallet.core.domain.{SemanticEvent, TransactionRequest, UserId}
+import io.iohk.midnight.wallet.core.domain.UserId
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.core.services.{
-  LaresService,
-  ProverService,
-  SyncService,
-  TxSubmissionService,
-}
+import io.iohk.midnight.wallet.core.services.{ProverService, SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.core.util.ClockOps.*
-
 import java.time.Instant
 
 trait Wallet[F[_]] {
@@ -37,7 +31,7 @@ trait Wallet[F[_]] {
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 
-  def sync(): Stream[F, Seq[SemanticEvent]]
+  def sync(): Stream[F, Seq[Any]]
 
   def getUserId(): F[UserId]
 }
@@ -47,7 +41,6 @@ object Wallet {
       proverService: ProverService[F],
       submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
-      laresService: LaresService[F],
       userId: UserId,
   ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
@@ -103,18 +96,8 @@ object Wallet {
         TransitionFunctionCircuits(Map.empty),
       )
 
-    override def sync(): Stream[F, Seq[SemanticEvent]] =
-      syncService
-        .sync()
-        .evalMap(laresService.applyBlock)
-        .evalTap { case (_, txRequests) => submitTxRequests(txRequests) }
-        .map(_._1)
-
-    private def submitTxRequests(txRequests: Seq[TransactionRequest]): F[Unit] =
-      txRequests
-        .map(CallContractInput.fromTxRequest)
-        .traverse(callContract)
-        .void
+    override def sync(): Stream[F, Seq[Any]] =
+      syncService.sync().map(_ => Seq.empty) // Just to keep the dependency to syncService
 
     override def getUserId(): F[UserId] = userId.pure
   }
@@ -126,16 +109,6 @@ object Wallet {
       transitionFunction: TransitionFunction,
       circuitValues: CircuitValues,
   )
-  object CallContractInput {
-    def fromTxRequest(txRequest: TransactionRequest): CallContractInput =
-      CallContractInput(
-        txRequest.contractId,
-        txRequest.nonce,
-        txRequest.publicTranscript,
-        txRequest.function,
-        CircuitValues.hardcoded,
-      )
-  }
 
   final case class DeployContractInput(
       contractSource: ContractSource,

@@ -123,10 +123,4 @@ object Generators {
   val blockGen: Gen[Block] =
     (blockHeaderGen, Gen.containerOf[Seq, TransactionWithReceipt](txWithReceiptGen))
       .mapN(Block.apply)
-
-  val witnessGen: Gen[Witness] = Gen.alphaNumStr.map(Json.fromString).map(Witness.apply)
-
-  val txRequestGen: Gen[TransactionRequest] =
-    (hashGen[DeployTransaction], publicTranscriptGen, witnessGen, transitionFunctionGen, nonceGen)
-      .mapN(TransactionRequest.apply)
 }
