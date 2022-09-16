@@ -59,7 +59,6 @@
             src = inclusive.lib.inclusive ./. [
               ./build.sbt
               ./project
-              ./integration-tests
               ./wallet-engine/package.json
               ./wallet-engine/src
             ];
