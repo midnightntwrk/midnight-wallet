@@ -5,8 +5,8 @@ import cats.syntax.all.*
 import com.comcast.ip4s.Port
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.engine.util.TestWebSocketBuilder
-import io.iohk.midnight.wallet.ogmios
-import io.iohk.midnight.wallet.ogmios.sync
+import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import munit.CatsEffectSuite
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -20,17 +20,17 @@ class JsonWebSocketClientSpec extends CatsEffectSuite {
 
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[IO] =
+  private implicit val clientTracer: ClientRequestResponseTracer[IO] =
     Tracer.discardTracer[IO]
 
   test("Creating the websocket client should be lazy (i.e. do nothing until Resource is used)") {
     // if creation would already open the socket, the following line would throw an exception
-    val _ = sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, uri"ws://nonexisting:1234/")
+    val _ = SttpJsonWebSocketClient[IO](sttpBackend, uri"ws://nonexisting:1234/")
     IO.delay(assert(true))
   }
   test("Sending should also be lazy") {
     TestWebSocketBuilder.build[IO](port).use { server =>
-      sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, wsUri).use { ws =>
+      SttpJsonWebSocketClient[IO](sttpBackend, wsUri).use { ws =>
         // the following line should not send a message via the websocket since the returned IO is not run
         val _ = ws.send("foo")
         for {

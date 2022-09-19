@@ -71,7 +71,7 @@
     (std.script "bash" ''
       set -x
 
-      sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
+      sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ogmiosCoreJS/publish; + ogmiosCoreJVM/publish; + ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
 
       sbt dist
       pushd wallet-engine

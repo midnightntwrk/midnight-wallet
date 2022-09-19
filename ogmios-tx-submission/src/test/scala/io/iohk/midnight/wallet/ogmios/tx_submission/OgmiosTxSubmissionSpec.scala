@@ -15,10 +15,10 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.Su
 import io.iohk.midnight.wallet.ogmios.tx_submission.examples.SubmitTx
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive.AcceptTx
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.util.implicits.Equality.*
-import io.iohk.midnight.wallet.ogmios.tx_submission.util.{BetterOutputSuite, TestingTracer}
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
+import io.iohk.midnight.wallet.ogmios.util.{BetterOutputSuite, TestingTracer}
 
 import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}

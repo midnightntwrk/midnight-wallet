@@ -7,13 +7,12 @@ import cats.syntax.functor.*
 import io.iohk.midnight.tracer.logging.ConsoleTracer
 import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
-import io.iohk.midnight.wallet.ogmios.tx_submission
-import io.iohk.midnight.wallet.ogmios.sync
 import io.iohk.midnight.wallet.core.clients.prover.ProverClient
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
 import org.scalajs.dom.RequestCredentials
 import sttp.client3.FetchOptions
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -33,16 +32,13 @@ object WalletBuilder {
     val proverService =
       new ProverService.Live[F](proverClient, config.proverMaxRetries, config.proverRetryDelay)
 
-    implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[F] =
-      ConsoleTracer.apply
-    implicit val clientTxSubmissionTracer
-        : ogmios.tx_submission.tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
+    implicit val clientTracer: ogmios.tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
 
     Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
       for {
-        txSubmissionWSClient <- tx_submission.util.json
+        txSubmissionWSClient <- ogmios.network
           .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-        ogmiosSubmitTxService <- tx_submission.OgmiosTxSubmissionService(txSubmissionWSClient)
+        ogmiosSubmitTxService <- OgmiosTxSubmissionService(txSubmissionWSClient)
         submitTxService = new TxSubmissionService[F] {
           override def submitTransaction(
               transaction: Transaction,
@@ -53,8 +49,7 @@ object WalletBuilder {
                 TxSubmissionService.SubmissionResult.Rejected(reason)
             }
         }
-        syncWSClient <- sync.util.json
-          .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+        syncWSClient <- ogmios.network.SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
         ogmiosSyncService = OgmiosSyncService(syncWSClient)
         syncService = new SyncService[F] {
           override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()

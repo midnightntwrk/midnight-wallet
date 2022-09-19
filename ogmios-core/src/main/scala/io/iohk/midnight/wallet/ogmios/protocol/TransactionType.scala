@@ -1,12 +1,10 @@
-package io.iohk.midnight.wallet.ogmios.tx_submission.protocol
+package io.iohk.midnight.wallet.ogmios.protocol
 
-import io.iohk.midnight.wallet.ogmios.tx_submission.util.Enumeration
+import io.iohk.midnight.wallet.ogmios.util.Enumeration
 
-// [TODO NLLW-361]
-private[tx_submission] sealed abstract class TransactionType(val entryName: String)
-    extends Enumeration.Value(entryName)
+sealed abstract class TransactionType(val entryName: String) extends Enumeration.Value(entryName)
 
-private[tx_submission] object TransactionType {
+object TransactionType {
   val Discriminator: String = "type"
   case object Call extends TransactionType("call")
   case object Deploy extends TransactionType("deploy")

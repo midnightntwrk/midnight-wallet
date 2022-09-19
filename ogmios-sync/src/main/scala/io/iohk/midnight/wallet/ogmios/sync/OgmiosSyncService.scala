@@ -8,9 +8,9 @@ import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMes
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
-import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.ogmios.sync.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 
 /** Implementation of the SyncService
   *

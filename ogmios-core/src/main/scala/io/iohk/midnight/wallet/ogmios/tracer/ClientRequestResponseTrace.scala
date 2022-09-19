@@ -1,9 +1,9 @@
-package io.iohk.midnight.wallet.ogmios.tx_submission.tracer
+package io.iohk.midnight.wallet.ogmios.tracer
 
 import io.iohk.midnight.tracer.logging.LoggingTrace
 import io.iohk.midnight.tracer.logging.LoggingTrace.Level
 
-// TODO: NLLW-361
+// [TODO] PM-5039 replace with new events
 sealed trait ClientRequestResponseTrace extends LoggingTrace {
   override def level: Level = Level.Debug
 }

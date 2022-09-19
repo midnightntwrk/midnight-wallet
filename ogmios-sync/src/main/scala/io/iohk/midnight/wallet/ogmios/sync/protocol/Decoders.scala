@@ -19,7 +19,7 @@ import io.iohk.midnight.wallet.blockchain.data.{
   TransitionFunction,
   TransitionFunctionCircuits,
 }
-import io.iohk.midnight.wallet.ogmios.sync.protocol.TransactionType
+import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
 
 import java.time.Instant
 

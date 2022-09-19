@@ -9,7 +9,7 @@ import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionWithReceipt}
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive.RollForward
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.{Receive, Send}
-import io.iohk.midnight.wallet.ogmios.sync.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 
 import java.time.Instant
 

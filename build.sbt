@@ -124,14 +124,14 @@ lazy val walletCore = (project in file("wallet-core"))
     coverageMinimumBranchTotal := 90,
   )
 
-lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
+lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
-  .in(file("ogmios-sync"))
+  .in(file("ogmios-core"))
   .dependsOn(blockchain)
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "ogmios-sync",
+    name := "ogmios-core",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
@@ -145,7 +145,24 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
       "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
       "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
     ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.sync.tracer;", // TODO: NLLW-361
+    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tracer;",
+    coverageMinimumStmtTotal := 100,
+    coverageMinimumBranchTotal := 100,
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+  )
+
+lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("ogmios-sync"))
+  .dependsOn(ogmiosCore % "compile->compile;test->test")
+  .settings(commonSettings)
+  .settings(commonPublishSettings)
+  .settings(
+    name := "ogmios-sync",
+    crossScalaVersions := supportedScalaVersions,
+    conflictWarning := ConflictWarning.disable,
     coverageMinimumStmtTotal := 100,
     coverageMinimumBranchTotal := 100,
   )
@@ -156,24 +173,13 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
 lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("ogmios-tx-submission"))
-  .dependsOn(blockchain)
+  .dependsOn(blockchain, ogmiosCore % "compile->compile;test->test")
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
     name := "ogmios-tx-submission",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
-    libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-parser" % "0.14.1",
-      "io.circe" %%% "circe-generic" % "0.14.1",
-      "org.typelevel" %%% "cats-core" % catsVersion,
-      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
-      "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
-      "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
-    ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tx_submission.tracer;", // TODO: NLLW-361
     coverageMinimumStmtTotal := 100,
     coverageMinimumBranchTotal := 100,
   )
@@ -195,11 +201,10 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "org.http4s" %%% "http4s-dsl" % "0.23.11",
       "org.http4s" %%% "http4s-ember-server" % "0.23.11",
     ).map(_ % Test),
-
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
       // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-      "org.scala-js" %% "scalajs-test-bridge" % "1.9.0"
+      "org.scala-js" %% "scalajs-test-bridge" % "1.9.0",
     ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
@@ -236,5 +241,5 @@ dist := {
 
 addCommandAlias(
   "verify",
-  ";scalafmtCheckAll ;coverage ;walletCore/test ;blockchainJS/test ;ogmiosSyncJS/test ;ogmiosTxSubmissionJS/test ;walletEngine/test ;coverageReport",
+  ";scalafmtCheckAll ;coverage ;walletCore/test ;blockchainJS/test ;ogmiosCoreJS/test ;ogmiosSyncJS/test ;ogmiosTxSubmissionJS/test ;walletEngine/test ;coverageReport",
 )

@@ -18,9 +18,9 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.tx_submission.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 
 /** Implementation of the TxSubmissionService
   *

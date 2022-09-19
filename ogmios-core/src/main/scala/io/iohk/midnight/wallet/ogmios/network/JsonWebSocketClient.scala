@@ -1,19 +1,18 @@
-package io.iohk.midnight.wallet.ogmios.tx_submission.util.json
+package io.iohk.midnight.wallet.ogmios.network
 
 import cats.effect.Resource
 import cats.syntax.all.*
 import io.circe.parser.decode
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder}
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracer.*
+import io.iohk.midnight.wallet.ogmios.tracer.*
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri
 import sttp.ws.WebSocket
 import cats.effect.kernel.Sync
 
-// [TODO NLLW-361]
-private[tx_submission] trait JsonWebSocketClient[F[_]] {
+trait JsonWebSocketClient[F[_]] {
   def send[T: Encoder](message: T): F[Unit]
 
   def receive[T: Decoder](): F[T]
@@ -25,8 +24,8 @@ private class SttpJsonWebSocketClient[F[_]: Sync](webSocket: WebSocket[F])(impli
   override def send[T: Encoder](message: T): F[Unit] = {
     val encodedMessage = message.asJson.spaces2
     tracer(ClientRequestResponseTrace.ClientRequest(encodedMessage)) >>
-      webSocket.sendText(
-        encodedMessage,
+      Sync[F].defer(
+        webSocket.sendText(encodedMessage),
       ) // using Sync[F].defer to prevent the underlying (future-based) code to run eagerly
   }
 

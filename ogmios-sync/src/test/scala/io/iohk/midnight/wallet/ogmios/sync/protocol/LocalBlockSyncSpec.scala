@@ -7,7 +7,7 @@ import io.iohk.midnight.wallet.ogmios.sync.examples.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.{Receive, Send}
-import io.iohk.midnight.wallet.ogmios.sync.util.WithJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.util.WithJsonWebSocketClient
 
 class LocalBlockSyncSpec extends WithJsonWebSocketClient {
   test("receive AwaitReply") {

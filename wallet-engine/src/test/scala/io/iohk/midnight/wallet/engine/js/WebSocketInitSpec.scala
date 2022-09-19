@@ -2,8 +2,8 @@ package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.IO
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.ogmios
-import io.iohk.midnight.wallet.ogmios.sync
+import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import munit.CatsEffectSuite
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -20,12 +20,12 @@ class WebSocketInitSpec extends CatsEffectSuite {
 
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[IO] =
+  private implicit val clientSyncTracer: ClientRequestResponseTracer[IO] =
     Tracer.discardTracer[IO]
 
   test("Open websocket") {
     TestWebSocketBuilder.build[IO](port).use { _ =>
-      sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, wsUri).use { _ =>
+      SttpJsonWebSocketClient[IO](sttpBackend, wsUri).use { _ =>
         IO.delay(assert(true))
       }
     }

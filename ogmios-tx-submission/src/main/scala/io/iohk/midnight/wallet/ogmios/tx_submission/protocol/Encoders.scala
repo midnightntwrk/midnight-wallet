@@ -16,7 +16,7 @@ import io.iohk.midnight.wallet.blockchain.data.{
   TransitionFunction,
   TransitionFunctionCircuits,
 }
-import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.TransactionType
+import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
 
 private[tx_submission] object Encoders {

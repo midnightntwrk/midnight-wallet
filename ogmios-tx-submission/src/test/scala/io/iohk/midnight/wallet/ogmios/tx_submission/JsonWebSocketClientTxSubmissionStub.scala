@@ -14,8 +14,8 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.R
   RejectTxDetails,
 }
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
-import io.iohk.midnight.wallet.util.implicits.Equality.*
-import io.iohk.midnight.wallet.ogmios.tx_submission.util.json.JsonWebSocketClient
+import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 
 class JsonWebSocketClientTxSubmissionStub(responses: Queue[IO, Receive])
     extends JsonWebSocketClient[IO] {
