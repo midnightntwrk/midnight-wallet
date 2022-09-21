@@ -59,6 +59,8 @@ lazy val commonSettings = Seq(
   wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
   wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
   coverageFailOnMinimum := true,
+  coverageMinimumStmtTotal := 100,
+  coverageMinimumBranchTotal := 100
 )
 
 lazy val commonPublishSettings = Seq(
@@ -86,8 +88,7 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "io.circe" %%% "circe-core" % "0.14.1",
     ),
-    coverageMinimumStmtTotal := 64,
-    coverageMinimumBranchTotal := 100,
+    coverageExcludedPackages := "io.iohk.midnight.wallet.blockchain.*;"
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -119,9 +120,7 @@ lazy val walletCore = (project in file("wallet-core"))
 
     // Linting
     wartremoverExcluded += baseDirectory.value / "src" / "main" / "scala" / "io" / "iohk" / "midnight" / "wallet" / "core" / "js" / "facades",
-    coverageExcludedPackages := "io.iohk.midnight.wallet.core.js;",
-    coverageMinimumStmtTotal := 90,
-    coverageMinimumBranchTotal := 90,
+    coverageExcludedPackages := "io.iohk.midnight.wallet.core.js.*;io.iohk.midnight.wallet.core.tracer;"
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
@@ -145,9 +144,7 @@ lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
       "io.iohk.midnight" %%% "tracing-core" % "1.0.1",
       "io.iohk.midnight" %%% "tracing-log" % "1.0.1",
     ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tracer;",
-    coverageMinimumStmtTotal := 100,
-    coverageMinimumBranchTotal := 100,
+    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tracer;"
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -162,9 +159,7 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "ogmios-sync",
     crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    coverageMinimumStmtTotal := 100,
-    coverageMinimumBranchTotal := 100,
+    conflictWarning := ConflictWarning.disable
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -179,9 +174,7 @@ lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
   .settings(
     name := "ogmios-tx-submission",
     crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    coverageMinimumStmtTotal := 100,
-    coverageMinimumBranchTotal := 100,
+    conflictWarning := ConflictWarning.disable
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -217,9 +210,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
     Global / stQuiet := true,
 
     // Linting
-    coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;",
-    coverageMinimumStmtTotal := 90,
-    coverageMinimumBranchTotal := 90,
+    coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;"
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

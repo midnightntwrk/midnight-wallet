@@ -2,7 +2,14 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
 import cats.effect.std.Random
-import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
+import cats.syntax.eq.*
+import io.iohk.midnight.wallet.blockchain.data.Block.Height.Genesis
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash}
+import io.iohk.midnight.wallet.core.Wallet.{
+  CallContractInput,
+  DeployContractInput,
+  TransactionRejected,
+}
 import io.iohk.midnight.wallet.core.clients.prover.*
 import io.iohk.midnight.wallet.core.domain.Generators.{callContractInputGen, deployContractInputGen}
 import io.iohk.midnight.wallet.core.domain.UserId
@@ -11,6 +18,7 @@ import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
+import java.time.Instant
 import scala.concurrent.duration.DurationInt
 
 trait WalletSpec {
@@ -40,6 +48,7 @@ trait WalletSpec {
   val walletIO = buildWallet(proverClient, txSubmissionService, syncService)
 
   val ExpectedHashLength = 64
+
   def isHexString(str: String): Boolean =
     str.forall((('0' to '9') ++ ('a' to 'f')).contains(_))
 }
@@ -104,6 +113,44 @@ class WalletCallContractSpec
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
     }
   }
+
+  test("fails when platform submission got rejected") {
+    forAllF(callContractInputGen) { (input: CallContractInput) =>
+      val wallet = buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
+
+      wallet
+        .flatMap(_.callContract(input))
+        .attempt
+        .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
+    }
+  }
+
+  test("sync gives empty stream") {
+    // For this test case we need to feed sync service with at least one block to test this case.
+    val singleBlockSyncService = new SyncServiceStub(
+      blocks = Seq(
+        Block(
+          header = Block.Header(
+            hash = Hash("some-hash"),
+            parentHash = Hash("some-hash"),
+            height = Genesis,
+            timestamp = Instant.now(),
+          ),
+          transactions = Seq.empty,
+        ),
+      ),
+    )
+
+    buildWallet(proverClient, txSubmissionService, singleBlockSyncService)
+      .flatMap(_.sync().compile.to(List))
+      .attempt
+      .map {
+        case Left(error) => fail("failed", error)
+        case Right(syncResult) =>
+          assert(syncResult.length === 1)
+          assert(syncResult.contains(Seq.empty))
+      }
+  }
 }
 
 class WalletDeployContractSpec
@@ -139,6 +186,15 @@ class WalletDeployContractSpec
         .flatMap(_.deployContract(input))
         .attempt
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
+    }
+  }
+
+  test("fails when platform submission got rejected") {
+    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
+      buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
+        .flatMap(_.deployContract(input))
+        .attempt
+        .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }
   }
 

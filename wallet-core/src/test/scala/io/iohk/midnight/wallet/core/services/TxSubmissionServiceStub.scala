@@ -45,3 +45,12 @@ class FailingTxSubmissionServiceStub() extends TxSubmissionService[IO] {
 object FailingTxSubmissionServiceStub {
   val TxSubmissionServiceError: Throwable = new Throwable("FailingTxSubmissionServiceStub")
 }
+
+class RejectedTxSubmissionServiceStub() extends TxSubmissionService[IO] {
+  override def submitTransaction(transaction: Transaction): IO[SubmissionResult] =
+    IO.pure(SubmissionResult.Rejected(RejectedTxSubmissionServiceStub.errorMsg))
+}
+
+object RejectedTxSubmissionServiceStub {
+  val errorMsg = "RejectedTxSubmissionServiceStub"
+}

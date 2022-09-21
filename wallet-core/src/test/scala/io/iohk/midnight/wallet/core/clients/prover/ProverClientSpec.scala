@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.core.clients.prover
 import cats.Functor
 import cats.effect.IO
 import cats.syntax.eq.*
+import io.circe.DecodingFailure
 import io.iohk.midnight.wallet.blockchain.data.{CircuitValues, Proof, ProofId}
 import io.iohk.midnight.wallet.core.clients.prover.ProverClient.ProofStatus
 import io.iohk.midnight.wallet.core.domain.Generators.*
@@ -16,6 +17,7 @@ import sttp.model.*
 
 trait ProverClientSpec {
   private val inProgressStatusResponse = """{"result":"in_progress"}"""
+  val failedDeserializationStatusResponse = """{"result":"W_R_O_N_G"}"""
 
   private def workIdResponse(proofId: ProofId) = s"""{"work_id":"${proofId.value}"}"""
 
@@ -37,6 +39,11 @@ trait ProverClientSpec {
     sttpBackendStub
       .whenRequestMatches(_.uri.path.contains("proof_statuses"))
       .thenRespond(inProgressStatusResponse)
+
+  protected val wrongProofStatusSttpBackend =
+    sttpBackendStub
+      .whenRequestMatches(_.uri.path.contains("proof_statuses"))
+      .thenRespond(failedDeserializationStatusResponse)
 
   protected def buildDoneStatusSttpBackend(proof: Proof) =
     sttpBackendStub
@@ -119,6 +126,23 @@ class ProverClientProofStatusSpec
         .proofStatus(proofId)
         .map(assertEquals(_, ProofStatus.InProgress))
     }
+  }
+
+  test("fails on proof status deserialization") {
+    val proverClient = buildProverClient(
+      wrongProofStatusSttpBackend,
+    )
+
+    val failedProofStatusDeserialization: IO[ProofStatus] = proverClient
+      .proofStatus(ProofId("id"))
+
+    assertIO(
+      interceptIO[DeserializationException[DecodingFailure]](failedProofStatusDeserialization),
+      DeserializationException(
+        body = failedDeserializationStatusResponse,
+        error = DecodingFailure("Proof status must be one of (in_progress, done)", List()),
+      ),
+    )
   }
 
   test("done status and proof are returned") {
