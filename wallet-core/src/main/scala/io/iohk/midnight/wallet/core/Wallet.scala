@@ -116,5 +116,5 @@ object Wallet {
   )
 
   sealed trait Error extends Exception
-  final case class TransactionRejected(reason: String) extends Error
+  final case class TransactionRejected(reason: String) extends Error // FIXME not an exception
 }

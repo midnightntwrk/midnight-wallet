@@ -107,7 +107,7 @@ object JsWallet {
   ): js.Promise[api.Wallet] =
     WalletBuilder
       .catsEffectWallet(
-        Config.default(
+        Config.default( // [TODO PM-5110] Improve config creation
           Uri.unsafeParse(proverUri),
           Uri.unsafeParse(platformUri),
           includeCookies,
