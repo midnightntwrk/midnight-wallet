@@ -1,31 +1,13 @@
-import { Wallet as WalletAPI, TxSubmissionResult } from '@midnight/wallet-api'
-import { Observable } from 'rxjs'
+import { FilterService, Wallet } from '@midnight/wallet-api'
 
-export class Wallet implements WalletAPI {
-    call(
-        deployTransactionHash: string,
-        nonce: string,
-        transitionFunction: string,
-        publicTranscript: string
-    ): Promise<TxSubmissionResult>
-
-    deploy(
-        contractSource: string,
-        publicState: string
-    ): Promise<TxSubmissionResult>
-
-    sync(): Observable<Array<any>>
-
-    getGUID(): Promise<string>
-
-    close(): Promise<void>
+export interface CloseableWallet {
+    close(): void
 }
 
 export class WalletBuilder {
     static build(
-        snarkieUri: string,
-        platformUri: string,
-        laresUri: string,
+        proverUri: string,
+        nodeUri: string,
         includeCookies: boolean
-    ): Promise<Wallet>
+    ): Promise<FilterService & Wallet & CloseableWallet>
 }

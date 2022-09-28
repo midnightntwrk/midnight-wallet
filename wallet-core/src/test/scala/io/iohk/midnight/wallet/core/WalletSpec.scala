@@ -12,7 +12,6 @@ import io.iohk.midnight.wallet.core.Wallet.{
 }
 import io.iohk.midnight.wallet.core.clients.prover.*
 import io.iohk.midnight.wallet.core.domain.Generators.{callContractInputGen, deployContractInputGen}
-import io.iohk.midnight.wallet.core.domain.UserId
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
@@ -34,14 +33,12 @@ trait WalletSpec {
       proverClient: ProverClient[IO],
       txSubmissionService: TxSubmissionService[IO],
       syncService: SyncService[IO],
-      userId: UserId = UserId("test_user"),
   ): IO[Wallet[IO]] =
     Random.scalaUtilRandom[IO].map { implicit random =>
       new Wallet.Live[IO](
         new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
         txSubmissionService,
         syncService,
-        userId,
       )
     }
 
@@ -124,33 +121,6 @@ class WalletCallContractSpec
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }
   }
-
-  test("sync gives empty stream") {
-    // For this test case we need to feed sync service with at least one block to test this case.
-    val singleBlockSyncService = new SyncServiceStub(
-      blocks = Seq(
-        Block(
-          header = Block.Header(
-            hash = Hash("some-hash"),
-            parentHash = Hash("some-hash"),
-            height = Genesis,
-            timestamp = Instant.now(),
-          ),
-          transactions = Seq.empty,
-        ),
-      ),
-    )
-
-    buildWallet(proverClient, txSubmissionService, singleBlockSyncService)
-      .flatMap(_.sync().compile.to(List))
-      .attempt
-      .map {
-        case Left(error) => fail("failed", error)
-        case Right(syncResult) =>
-          assert(syncResult.length === 1)
-          assert(syncResult.contains(Seq.empty))
-      }
-  }
 }
 
 class WalletDeployContractSpec
@@ -197,15 +167,32 @@ class WalletDeployContractSpec
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }
   }
-
 }
 
-class WalletUserIdSpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
-  test("generate a UserId and keep it in memory") {
-    for {
-      wallet <- buildWallet(proverClient, txSubmissionService, syncService)
-      id1 <- wallet.getUserId()
-      id2 <- wallet.getUserId()
-    } yield assertEquals(id1, id2)
+class WalletSyncSpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
+  test("sync gives empty stream") {
+    // For this test case we need to feed sync service with at least one block to test this case.
+    val singleBlockSyncService = new SyncServiceStub(
+      blocks = Seq(
+        Block(
+          header = Block.Header(
+            hash = Hash("some-hash"),
+            parentHash = Hash("some-hash"),
+            height = Genesis,
+            timestamp = Instant.now(),
+          ),
+          body = Block.Body(Seq.empty),
+        ),
+      ),
+    )
+
+    buildWallet(proverClient, txSubmissionService, singleBlockSyncService)
+      .flatMap(_.sync().compile.to(List))
+      .attempt
+      .map {
+        case Left(error) => fail("failed", error)
+        case Right(syncResult) =>
+          assert(syncResult.length === 1)
+      }
   }
 }

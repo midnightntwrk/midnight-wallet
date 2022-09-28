@@ -6,24 +6,12 @@ import cats.effect.std.Random
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data
-import io.iohk.midnight.wallet.blockchain.data.{
-  CallTransaction,
-  CircuitValues,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  Proof,
-  PublicState,
-  PublicTranscript,
-  TransitionFunction,
-  TransitionFunctionCircuits,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
-import io.iohk.midnight.wallet.core.domain.UserId
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.core.services.{ProverService, SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.core.util.ClockOps.*
+
 import java.time.Instant
 
 trait Wallet[F[_]] {
@@ -31,9 +19,7 @@ trait Wallet[F[_]] {
 
   def deployContract(contractInput: DeployContractInput): F[Hash[DeployTransaction]]
 
-  def sync(): Stream[F, Seq[Any]]
-
-  def getUserId(): F[UserId]
+  def sync(): Stream[F, Block]
 }
 
 object Wallet {
@@ -41,15 +27,14 @@ object Wallet {
       proverService: ProverService[F],
       submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
-      userId: UserId,
   ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
       for {
         proof <- proverService.prove(input.circuitValues)
         timestamp <- Clock[F].realTimeInstant
-        transaction = buildCallTransaction(timestamp, input, proof)
-        hash <- transaction.calculateHash
-        response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
+        hash <- Transaction.calculateHash[F, data.CallTransaction]
+        transaction = buildCallTransaction(hash, timestamp, input, proof)
+        response <- submitTxService.submitTransaction(transaction)
         result <- response match {
           case SubmissionResult.Accepted         => hash.pure
           case SubmissionResult.Rejected(reason) => TransactionRejected(reason).raiseError
@@ -57,26 +42,27 @@ object Wallet {
       } yield result
 
     private def buildCallTransaction(
+        hash: Hash[data.CallTransaction],
         timestamp: Instant,
         input: CallContractInput,
         proof: Proof,
     ): CallTransaction =
       data.CallTransaction(
-        None,
-        input.nonce,
+        hash,
         timestamp,
-        input.contractHash,
-        input.transitionFunction,
-        Some(proof),
+        input.address,
+        input.func,
+        proof,
+        input.nonce,
         input.publicTranscript,
       )
 
     override def deployContract(input: DeployContractInput): F[Hash[DeployTransaction]] =
       for {
         timestamp <- Clock[F].realTimeInstant
-        transaction = buildDeployTransaction(timestamp, input)
-        hash <- transaction.calculateHash
-        response <- submitTxService.submitTransaction(transaction.copy(hash = Some(hash)))
+        hash <- Transaction.calculateHash[F, data.DeployTransaction]
+        transaction = buildDeployTransaction(hash, timestamp, input)
+        response <- submitTxService.submitTransaction(transaction)
         result <- response match {
           case SubmissionResult.Accepted => hash.pure
           case SubmissionResult.Rejected(reason) =>
@@ -85,34 +71,32 @@ object Wallet {
       } yield result
 
     private def buildDeployTransaction(
+        hash: Hash[data.DeployTransaction],
         timestamp: Instant,
         input: DeployContractInput,
     ): DeployTransaction =
       DeployTransaction(
-        None,
+        hash,
         timestamp,
-        input.contractSource,
-        input.publicState,
-        TransitionFunctionCircuits(Map.empty),
+        input.contract,
+        input.transitionFunctionCircuits,
       )
 
-    override def sync(): Stream[F, Seq[Any]] =
-      syncService.sync().map(_ => Seq.empty) // Just to keep the dependency to syncService
-
-    override def getUserId(): F[UserId] = userId.pure
+    override def sync(): Stream[F, Block] =
+      syncService.sync()
   }
 
   final case class CallContractInput(
-      contractHash: Hash[DeployTransaction],
+      address: Address,
+      func: FunctionName,
       nonce: Nonce,
-      publicTranscript: PublicTranscript,
-      transitionFunction: TransitionFunction,
+      publicTranscript: Transcript,
       circuitValues: CircuitValues,
   )
 
   final case class DeployContractInput(
-      contractSource: ContractSource,
-      publicState: PublicState,
+      contract: Contract,
+      transitionFunctionCircuits: TransitionFunctionCircuits,
   )
 
   sealed trait Error extends Exception

@@ -3,19 +3,7 @@ package io.iohk.midnight.wallet.ogmios.tx_submission.protocol
 import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
-import io.iohk.midnight.wallet.blockchain.data.{
-  CallTransaction,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  Proof,
-  PublicState,
-  PublicTranscript,
-  Transaction,
-  TransitionFunction,
-  TransitionFunctionCircuits,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
 
@@ -24,26 +12,34 @@ private[tx_submission] object Encoders {
     implicit def hashEncoder[T]: Encoder[Hash[T]] =
       Encoder[String].contramap(_.toHexString)
 
-    implicit val contractSourceEncoder: Encoder[ContractSource] =
+    implicit val functionNameEncoder: Encoder[FunctionName] =
       Encoder[String].contramap(_.value)
 
-    implicit val publicStateEncoder: Encoder[PublicState] =
-      Encoder[String].contramap(_.value.noSpaces)
-
-    implicit val transitionFunctionEncoder: Encoder[TransitionFunction] =
+    implicit val addressEncoder: Encoder[Address] =
       Encoder[String].contramap(_.value)
 
-    implicit val transitionFunctionCircuitsEncoder: Encoder[TransitionFunctionCircuits] =
-      Encoder[Map[String, String]].contramap(_.values)
+    implicit val nonceEncoder: Encoder[Nonce] =
+      Encoder[String].contramap(_.value)
 
     implicit val proofEncoder: Encoder[Proof] =
       Encoder[String].contramap(_.value)
 
-    implicit val publicTranscriptEncoder: Encoder[PublicTranscript] =
-      Encoder[String].contramap(_.value.noSpaces)
+    implicit val transitionFunctionCircuitsEncoder: Encoder[TransitionFunctionCircuits] =
+      Encoder[Seq[String]].contramap(_.value)
 
-    implicit val nonceEncoder: Encoder[Nonce] =
-      Encoder[String].contramap(_.value)
+    implicit val arbitraryJsonEncoder: Encoder[ArbitraryJson] =
+      _.value
+
+    implicit val queryEncoder: Encoder[Query] = deriveEncoder[Query]
+
+    implicit val transcriptEncoder: Encoder[Transcript] =
+      Encoder[Seq[Query]].contramap(_.value)
+
+    implicit val privateOracleEncoder: Encoder[PrivateOracle] = deriveEncoder[PrivateOracle]
+
+    implicit val publicOracleEncoder: Encoder[PublicOracle] = deriveEncoder[PublicOracle]
+
+    implicit val contractEncoder: Encoder[Contract] = deriveEncoder[Contract]
 
     implicit val callTransactionEncoder: Encoder[CallTransaction] =
       deriveEncoder[CallTransaction].mapJson(
@@ -69,11 +65,6 @@ private[tx_submission] object Encoders {
           case call: CallTransaction     => Encoder[CallTransaction].apply(call)
           case deploy: DeployTransaction => Encoder[DeployTransaction].apply(deploy)
         }
-        .mapJson(
-          _.deepMerge(
-            Json.obj(TransactionKind.Discriminator := TransactionKind.Lares.entryName),
-          ),
-        )
 
     implicit val submitTxEncoder: Encoder[SubmitTx] =
       deriveEncoder[LocalTxSubmission.Send.SubmitTx].mapJson(

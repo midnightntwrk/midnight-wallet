@@ -54,9 +54,8 @@ object WalletBuilder {
         syncService = new SyncService[F] {
           override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
         }
-        userId <- Resource.eval(UserIdGenerator.generate(config.userIdLength))
       } yield {
-        new Wallet.Live[F](proverService, submitTxService, syncService, userId)
+        new Wallet.Live[F](proverService, submitTxService, syncService)
       }
     }
   }
@@ -74,10 +73,10 @@ object WalletBuilder {
   )
 
   object Config {
-    def default(proverUri: Uri, platformUri: Uri, includeCookies: Boolean): Config =
+    def default(proverUri: Uri, nodeUri: Uri, includeCookies: Boolean): Config =
       Config(
         proverUri,
-        platformUri,
+        nodeUri,
         includeCookies,
         proverMaxRetries = 20,
         proverRetryDelay = 1.second,

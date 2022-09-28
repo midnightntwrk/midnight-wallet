@@ -20,6 +20,7 @@ lazy val scala31 = "3.1.2"
 lazy val supportedScalaVersions = List(scala213, scala31)
 lazy val catsVersion = "2.7.0"
 lazy val catsEffectVersion = "3.3.11"
+lazy val circeVersion = "0.14.2"
 
 lazy val commonSettings = Seq(
   // Scala compiler options
@@ -86,7 +87,7 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
-      "io.circe" %%% "circe-core" % "0.14.1",
+      "io.circe" %%% "circe-parser" % circeVersion,
     ),
     coverageExcludedPackages := "io.iohk.midnight.wallet.blockchain.*;"
   )
@@ -107,7 +108,7 @@ lazy val walletCore = (project in file("wallet-core"))
       "com.softwaremill.sttp.client3" %%% "circe" % "3.4.1",
       "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
       "co.fs2" %%% "fs2-core" % "3.2.5",
-      "io.circe" %%% "circe-generic-extras" % "0.14.1",
+      "io.circe" %%% "circe-generic-extras" % circeVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % "2.1.0",
@@ -136,9 +137,9 @@ lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
     libraryDependencies ++= Seq(
       "co.fs2" %%% "fs2-core" % "3.2.5",
       "com.softwaremill.sttp.client3" %%% "cats" % "3.4.1",
-      "io.circe" %%% "circe-core" % "0.14.1",
-      "io.circe" %%% "circe-parser" % "0.14.1",
-      "io.circe" %%% "circe-generic" % "0.14.1",
+      "io.circe" %%% "circe-core" % circeVersion,
+      "io.circe" %%% "circe-parser" % circeVersion,
+      "io.circe" %%% "circe-generic" % circeVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "io.iohk.midnight" %%% "tracing-core" % "1.0.1",

@@ -2,65 +2,71 @@ package io.iohk.midnight.wallet.core.domain
 
 import cats.syntax.all.*
 import io.circe.Json
-import io.iohk.midnight.wallet.blockchain.data.{
-  Block,
-  CallTransaction,
-  CircuitValues,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  Proof,
-  ProofId,
-  PublicState,
-  PublicTranscript,
-  Receipt,
-  Transaction,
-  TransactionWithReceipt,
-  TransitionFunction,
-  TransitionFunctionCircuits,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
-
-import java.time.Instant
 import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
+import java.time.Instant
+
 object Generators {
   def hashGen[T]: Gen[Hash[T]] = Gen.hexStr.map(Hash[T].apply)
-
-  val publicTranscriptGen: Gen[PublicTranscript] =
-    Gen.alphaNumStr.map(Json.fromString).map(PublicTranscript.apply)
-
-  val transitionFunctionGen: Gen[TransitionFunction] = Gen.alphaNumStr.map(TransitionFunction.apply)
-
-  val contractSourceGen: Gen[ContractSource] = Gen.alphaNumStr.map(ContractSource.apply)
-
-  val publicStateGen: Gen[PublicState] = Gen.alphaNumStr.map(Json.fromString).map(PublicState.apply)
 
   val circuitValuesGen: Gen[CircuitValues] =
     (arbitrary[Int], arbitrary[Int], arbitrary[Int]).mapN(CircuitValues.apply)
 
+  val addressGen: Gen[Address] = Gen.hexStr.map(Address.apply)
+
+  val functionNameGen: Gen[FunctionName] = Gen.alphaStr.map(FunctionName.apply)
+
+  val jsonFieldGen: Gen[(String, Json)] = for {
+    name <- Gen.alphaStr
+    value <- Gen.alphaNumStr
+  } yield (name, Json.fromString(value))
+
+  val jsonGen: Gen[ArbitraryJson] = for {
+    fields <- Gen.nonEmptyListOf(jsonFieldGen)
+  } yield ArbitraryJson(Json.obj(fields*))
+
   val nonceGen: Gen[Nonce] = Gen.hexStr.map(Nonce.apply)
+
+  val queryGen: Gen[Query] =
+    (
+      functionNameGen,
+      jsonGen,
+      jsonGen,
+    ).mapN(Query.apply)
+
+  val transcriptGen: Gen[Transcript] = Gen.nonEmptyListOf(queryGen).map(Transcript.apply)
 
   val callContractInputGen: Gen[CallContractInput] =
     (
-      hashGen[DeployTransaction],
+      addressGen,
+      functionNameGen,
       nonceGen,
-      publicTranscriptGen,
-      transitionFunctionGen,
+      transcriptGen,
       circuitValuesGen,
     )
       .mapN(CallContractInput.apply)
 
-  val deployContractInputGen: Gen[DeployContractInput] =
-    (contractSourceGen, publicStateGen).mapN(DeployContractInput.apply)
-
   val transitionFunctionCircuitsGen: Gen[TransitionFunctionCircuits] =
     Gen
-      .nonEmptyMap((Gen.alphaNumStr, Gen.alphaNumStr).tupled)
+      .nonEmptyListOf(Gen.alphaNumStr)
       .map(TransitionFunctionCircuits.apply)
+
+  val publicOracleGen: Gen[PublicOracle] = transcriptGen.map(PublicOracle.apply)
+
+  val privateOracleGen: Gen[PrivateOracle] = transcriptGen.map(PrivateOracle.apply)
+
+  val contractGen: Gen[Contract] =
+    (
+      Gen.option(publicOracleGen),
+      Gen.option(privateOracleGen),
+    ).mapN(Contract.apply)
+
+  val deployContractInputGen: Gen[DeployContractInput] =
+    (contractGen, transitionFunctionCircuitsGen).mapN(DeployContractInput.apply)
 
   val proofGen: Gen[Proof] = Gen.alphaNumStr.map(Proof.apply)
 
@@ -76,51 +82,34 @@ object Generators {
 
   val deployTransactionGen: Gen[DeployTransaction] =
     (
-      hashGen[DeployTransaction].map(Option(_)),
+      hashGen[DeployTransaction],
       instantGen,
-      contractSourceGen,
-      publicStateGen,
+      contractGen,
       transitionFunctionCircuitsGen,
     )
       .mapN(DeployTransaction.apply)
 
   val callTransactionGen: Gen[CallTransaction] =
     (
-      hashGen[CallTransaction].map(Option(_)),
-      nonceGen,
+      hashGen[CallTransaction],
       instantGen,
-      hashGen[DeployTransaction],
-      transitionFunctionGen,
-      proofGen.map(Option(_)),
-      publicTranscriptGen,
+      addressGen,
+      functionNameGen,
+      proofGen,
+      nonceGen,
+      transcriptGen,
     )
       .mapN(CallTransaction.apply)
 
   val transactionGen: Gen[Transaction] =
     Gen.oneOf(deployTransactionGen, callTransactionGen)
 
-  val successReceiptGen: Gen[Receipt.Success.type] = Gen.const(Receipt.Success)
+  val transactionResultGen: Gen[TransactionResult] =
+    (transactionGen, Gen.const("Successful")).mapN(TransactionResult.apply)
 
-  val contractFailureReceiptGen: Gen[Receipt.ContractFailure] =
-    (Gen.choose(Int.MinValue, Int.MaxValue), Gen.alphaNumStr).mapN(Receipt.ContractFailure.apply)
-
-  val zkFailureReceiptGen: Gen[Receipt.ZKFailure] = Gen.alphaNumStr.map(Receipt.ZKFailure.apply)
-
-  val ledgerFailureReceiptGen: Gen[Receipt.LedgerFailure] =
-    Gen.alphaNumStr.map(Receipt.LedgerFailure.apply)
-
-  val receiptGen: Gen[Receipt] =
-    Gen.oneOf(
-      successReceiptGen,
-      contractFailureReceiptGen,
-      zkFailureReceiptGen,
-      ledgerFailureReceiptGen,
-    )
-
-  val txWithReceiptGen: Gen[TransactionWithReceipt] =
-    (transactionGen, receiptGen).mapN(TransactionWithReceipt.apply)
+  val blockBodyGen: Gen[Block.Body] = Gen.listOf(transactionResultGen).map(Block.Body.apply)
 
   val blockGen: Gen[Block] =
-    (blockHeaderGen, Gen.containerOf[Seq, TransactionWithReceipt](txWithReceiptGen))
+    (blockHeaderGen, blockBodyGen)
       .mapN(Block.apply)
 }

@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/wallet-api@^0.0.5":
-  version "0.0.5"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-0.0.5.tgz#175f296e425fcffcbdc0f5c9cd802491d8c4d451"
-  integrity sha512-CWKscEOWkS0YgcuTQf1cxEOyOD1jhd5b8a1h+uyeuno8zMzIHMtUevgZpuBX9AsB9dza+H7NJHRw2XHXmPGvqg==
+"@midnight/wallet-api@^1.0.2":
+  version "1.0.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.2.tgz#4ed816f7a094db2333e71a7175a47fa1d80828a7"
+  integrity sha512-KuFYPOFaEqqF+jdic9sYKr8l5X4QQgXnQo9NoN0W3oXRAL681UhUfciZtTp5lGbU0rqeZ3ouVwoc8wMQXZJf0g==
   dependencies:
     rxjs "^7.5.5"
 
@@ -29,9 +29,9 @@ node-fetch@2.6.7:
     whatwg-url "^5.0.0"
 
 rxjs@^7.5.5:
-  version "7.5.5"
-  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.5.tgz#2ebad89af0f560f460ad5cc4213219e1f7dd4e9f"
-  integrity sha512-sy+H0pQofO95VDmFLzyaw9xNJU4KTRSwQIGM6+iG3SypAtCiLDzpeG8sJrNCWn2Up9km+KhkvTdbkrdy+yzZdw==
+  version "7.5.6"
+  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.6.tgz#0446577557862afd6903517ce7cae79ecb9662bc"
+  integrity sha512-dnyv2/YsXhnm461G+R/Pe5bWP41Nm6LBXEYWI6eiFP4fiwx6WRI/CD0zbdVAudd9xwLEF2IDcKXLHit0FYjUzw==
   dependencies:
     tslib "^2.1.0"
 
@@ -45,10 +45,10 @@ tslib@^2.1.0:
   resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.4.0.tgz#7cecaa7f073ce680a05847aa77be941098f36dc3"
   integrity sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==
 
-typescript@^4.6.2:
-  version "4.7.3"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.7.3.tgz#8364b502d5257b540f9de4c40be84c98e23a129d"
-  integrity sha512-WOkT3XYvrpXx4vMMqlD+8R8R37fZkjyLGlxavMc4iB8lrl8L0DeTcHbYgw/v0N/z9wAFsgBhcsF0ruoySS22mA==
+typescript@^4.8.3:
+  version "4.8.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.8.3.tgz#d59344522c4bc464a65a730ac695007fdb66dd88"
+  integrity sha512-goMHfm00nWPa8UvR/CPSvykqf6dVV8x/dp0c5mFTMTIu0u0FlGWRioyy7Nn0PGAdHxpJZnuO/ut+PpQ8UiHAig==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

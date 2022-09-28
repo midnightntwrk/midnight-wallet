@@ -1,12 +1,14 @@
 package io.iohk.midnight.wallet.core.services
 
 import cats.effect.IO
+import cats.syntax.eq.*
 import io.iohk.midnight.wallet.blockchain.data.{
   CallTransaction,
   DeployTransaction,
   Hash,
   Transaction,
 }
+import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 
 @SuppressWarnings(
@@ -31,10 +33,10 @@ class TxSubmissionServiceStub(
     }
 
   def wasCallTxSubmitted(hash: Hash[CallTransaction]): Boolean =
-    submittedCallTransactions.exists(_.hash.contains(hash))
+    submittedCallTransactions.exists(_.hash === hash)
 
   def wasDeployTxSubmitted(hash: Hash[DeployTransaction]): Boolean =
-    submittedDeployTransactions.exists(_.hash.contains(hash))
+    submittedDeployTransactions.exists(_.hash === hash)
 }
 
 class FailingTxSubmissionServiceStub() extends TxSubmissionService[IO] {

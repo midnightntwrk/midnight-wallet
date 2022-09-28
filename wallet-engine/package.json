@@ -8,13 +8,6 @@
     "packageManager": "yarn@1.22.18",
     "author": "IOHK",
     "license": "Apache-2.0",
-    "scripts": {
-        "build": "sbt dist",
-        "test": "sbt test",
-        "test_coverage": "sbt coverage test",
-        "coverage_report": "sbt coverageReport",
-        "check_format": "sbt scalafmtCheckAll"
-    },
     "files": [
         "dist/"
     ],
@@ -22,10 +15,12 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/wallet-api": "^0.0.5",
+        "@midnight/wallet-api": "^1.0.2",
         "cross-fetch": "^3.1.5",
         "isomorphic-ws": "^5.0.0",
-        "typescript": "^4.6.2",
         "ws": "^8.8.1"
+    },
+    "devDependencies": {
+        "typescript": "^4.8.3"
     }
 }

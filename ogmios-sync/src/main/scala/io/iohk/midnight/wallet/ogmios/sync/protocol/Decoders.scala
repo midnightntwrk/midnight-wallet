@@ -1,24 +1,9 @@
 package io.iohk.midnight.wallet.ogmios.sync.protocol
 
 import cats.syntax.all.*
+import io.circe.Decoder
 import io.circe.generic.semiauto.*
-import io.circe.{Decoder, Json, parser}
-import io.iohk.midnight.wallet.blockchain.data.{
-  Block,
-  CallTransaction,
-  ContractSource,
-  DeployTransaction,
-  Hash,
-  Nonce,
-  Proof,
-  PublicState,
-  PublicTranscript,
-  Receipt,
-  Transaction,
-  TransactionWithReceipt,
-  TransitionFunction,
-  TransitionFunctionCircuits,
-}
+import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
 
 import java.time.Instant
@@ -28,20 +13,34 @@ private[sync] object Decoders {
     implicit def hashDecoder[T]: Decoder[Hash[T]] =
       Decoder[String].map(Hash[T])
 
-    implicit val contractSourceDecoder: Decoder[ContractSource] =
-      Decoder[String].map(ContractSource.apply)
+    implicit val nonceDecoder: Decoder[Nonce] =
+      Decoder[String].map(Nonce.apply)
 
-    implicit val transitionFunctionDecoder: Decoder[TransitionFunction] =
-      Decoder[String].map(TransitionFunction.apply)
+    implicit val addressDecoder: Decoder[Address] =
+      Decoder[String].map(Address.apply)
 
-    implicit val transitionFunctionCircuitsDecoder: Decoder[TransitionFunctionCircuits] =
-      Decoder[Map[String, String]].map(TransitionFunctionCircuits.apply)
+    implicit val functionNameDecoder: Decoder[FunctionName] =
+      Decoder[String].map(FunctionName.apply)
 
     implicit val proofDecoder: Decoder[Proof] =
       Decoder[String].map(Proof.apply)
 
-    implicit val nonceDecoder: Decoder[Nonce] =
-      Decoder[String].map(Nonce.apply)
+    implicit val transitionFunctionCircuitsDecoder: Decoder[TransitionFunctionCircuits] =
+      Decoder[Seq[String]].map(TransitionFunctionCircuits.apply)
+
+    implicit val arbitraryJsonDecoder: Decoder[ArbitraryJson] =
+      json => Right(ArbitraryJson(json.value))
+
+    implicit val queryDecoder: Decoder[Query] = deriveDecoder
+
+    implicit val transcriptDecoder: Decoder[Transcript] =
+      Decoder[Seq[Query]].map(Transcript.apply)
+
+    implicit val privateOracleDecoder: Decoder[PrivateOracle] = deriveDecoder
+
+    implicit val publicOracleDecoder: Decoder[PublicOracle] = deriveDecoder
+
+    implicit val contractDecoder: Decoder[Contract] = deriveDecoder
 
     implicit val callTransactionDecoder: Decoder[CallTransaction] =
       deriveDecoder
@@ -49,39 +48,10 @@ private[sync] object Decoders {
     implicit val deployTransactionDecoder: Decoder[DeployTransaction] =
       deriveDecoder
 
-    implicit val publicStateDecoder: Decoder[PublicState] =
-      Decoder[String].map(str => PublicState(parseJsonFromString(str)))
-
-    implicit val publicTranscriptDecoder: Decoder[PublicTranscript] =
-      Decoder[String].map(str => PublicTranscript(parseJsonFromString(str)))
-
-    private def parseJsonFromString(str: String): Json =
-      parser.parse(str).getOrElse(Json.fromString(str))
-
     implicit val transactionDecoder: Decoder[Transaction] =
       Decoder.instance(_.get[TransactionType](TransactionType.Discriminator)).flatMap {
         case TransactionType.Call   => Decoder[CallTransaction].widen
         case TransactionType.Deploy => Decoder[DeployTransaction].widen
-      }
-
-    implicit val successDecoder: Decoder[Receipt.Success.type] =
-      Decoder.const(Receipt.Success)
-
-    implicit val receiptContractFailureDecoder: Decoder[Receipt.ContractFailure] =
-      deriveDecoder
-
-    implicit val receiptZKFailureDecoder: Decoder[Receipt.ZKFailure] =
-      deriveDecoder
-
-    implicit val ledgerFailureDecoder: Decoder[Receipt.LedgerFailure] =
-      deriveDecoder
-
-    implicit val receiptDecoder: Decoder[Receipt] =
-      Decoder.instance(_.get[ReceiptType](ReceiptType.Discriminator)).flatMap {
-        case ReceiptType.Success         => Decoder[Receipt.Success.type].widen
-        case ReceiptType.ContractFailure => Decoder[Receipt.ContractFailure].widen
-        case ReceiptType.ZKFailure       => Decoder[Receipt.ZKFailure].widen
-        case ReceiptType.LedgerFailure   => Decoder[Receipt.LedgerFailure].widen
       }
 
     implicit val blockHeightDecoder: Decoder[Block.Height] =
@@ -97,19 +67,24 @@ private[sync] object Decoders {
         ).mapN(Block.Header.apply)
       }
 
-    implicit val transactionWithReceiptDecoder: Decoder[TransactionWithReceipt] =
+    implicit val transactionResultDecoder: Decoder[TransactionResult] =
       Decoder.instance { c =>
         (
           c.get[Transaction]("transaction"),
-          c.get[Receipt]("result"),
-        ).mapN(TransactionWithReceipt.apply)
+          c.get[TransactionResult.Result]("result"),
+        ).mapN(TransactionResult.apply)
+      }
+
+    implicit val blockBodyDecoder: Decoder[Block.Body] =
+      Decoder.instance {
+        _.get[Seq[TransactionResult]]("transactionResults").map(Block.Body.apply)
       }
 
     implicit val blockDecoder: Decoder[Block] =
       Decoder.instance { c =>
         (
           c.get[Block.Header]("header"),
-          c.downField("body").get[Seq[TransactionWithReceipt]]("transactionResults"),
+          c.get[Block.Body]("body"),
         ).mapN(Block.apply)
       }
 

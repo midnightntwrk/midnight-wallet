@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.blockchain.data
 
 import java.time.Instant
 
-final case class Block(header: Block.Header, transactions: Seq[TransactionWithReceipt])
+final case class Block(header: Block.Header, body: Block.Body)
 
 object Block {
   final case class Header(
@@ -11,6 +11,8 @@ object Block {
       height: Block.Height,
       timestamp: Instant,
   )
+
+  final case class Body(transactionResults: Seq[TransactionResult])
 
   sealed abstract case class Height(value: BigInt) {
     def increment: Height = new Height(value + 1) {}

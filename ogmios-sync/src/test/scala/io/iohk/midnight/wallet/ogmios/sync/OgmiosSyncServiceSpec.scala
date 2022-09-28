@@ -5,22 +5,20 @@ import cats.effect.std.Random
 import cats.syntax.functor.*
 import cats.syntax.traverse.*
 import fs2.Stream
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionWithReceipt}
 import io.iohk.midnight.wallet.blockchain.data.Block.Height
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionResult}
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMessageReceived
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
-import io.iohk.midnight.wallet.ogmios.sync.examples
 import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace
 import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
 import io.iohk.midnight.wallet.ogmios.util.{BetterOutputSuite, TestingTracer}
-
-import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
 
+import java.util.concurrent.TimeUnit
 import scala.annotation.tailrec
 import scala.concurrent.duration.FiniteDuration
 
@@ -43,7 +41,7 @@ trait SyncServiceSpecBase
     syncService
       .sync()
       .take(amount.toLong)
-      .collect { case Block(header, Seq(TransactionWithReceipt(tx, _))) =>
+      .collect { case Block(header, Block.Body(Seq(TransactionResult(tx, _)))) =>
         (tx, header.height)
       }
 
