@@ -12,7 +12,7 @@ object Block {
       timestamp: Instant,
   )
 
-  final case class Body(transactionResults: Seq[TransactionResult])
+  final case class Body(transactionResults: Seq[Transaction])
 
   sealed abstract case class Height(value: BigInt) {
     def increment: Height = new Height(value + 1) {}

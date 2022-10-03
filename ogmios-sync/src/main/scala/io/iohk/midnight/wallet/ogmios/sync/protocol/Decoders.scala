@@ -36,9 +36,7 @@ private[sync] object Decoders {
     implicit val transcriptDecoder: Decoder[Transcript] =
       Decoder[Seq[Query]].map(Transcript.apply)
 
-    implicit val privateOracleDecoder: Decoder[PrivateOracle] = deriveDecoder
-
-    implicit val publicOracleDecoder: Decoder[PublicOracle] = deriveDecoder
+    implicit val oracleDecoder: Decoder[Oracle] = deriveDecoder
 
     implicit val contractDecoder: Decoder[Contract] = deriveDecoder
 
@@ -60,24 +58,17 @@ private[sync] object Decoders {
     implicit val blockHeaderDecoder: Decoder[Block.Header] =
       Decoder.instance { c =>
         (
-          c.get[Hash[Block]]("blockHash"),
-          c.get[Hash[Block]]("parentBlockHash"),
+          c.get[Hash[Block]]("hash"),
+          c.get[Hash[Block]]("parentHash"),
           c.get[Block.Height]("height"),
           c.get[Instant]("timestamp"),
         ).mapN(Block.Header.apply)
       }
 
-    implicit val transactionResultDecoder: Decoder[TransactionResult] =
-      Decoder.instance { c =>
-        (
-          c.get[Transaction]("transaction"),
-          c.get[TransactionResult.Result]("result"),
-        ).mapN(TransactionResult.apply)
-      }
-
     implicit val blockBodyDecoder: Decoder[Block.Body] =
       Decoder.instance {
-        _.get[Seq[TransactionResult]]("transactionResults").map(Block.Body.apply)
+        _.get[Seq[Transaction]]("transactionResults")
+          .map(Block.Body.apply)
       }
 
     implicit val blockDecoder: Decoder[Block] =

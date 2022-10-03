@@ -9,8 +9,8 @@ import io.circe
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.ArbitraryJson
 import typings.midnightWalletApi.contractMod.Contract
-import typings.midnightWalletApi.midnightWalletApiStrings.{Call, Deploy, Private, Public}
-import typings.midnightWalletApi.oraclesMod.{PrivateOracle, PublicOracle}
+import typings.midnightWalletApi.midnightWalletApiStrings.{Call, Deploy}
+import typings.midnightWalletApi.oraclesMod.Oracle
 import typings.midnightWalletApi.transactionMod.{CallTransaction, DeployTransaction, Transaction}
 import typings.midnightWalletApi.transcriptMod.{Query, Transcript}
 
@@ -82,8 +82,8 @@ object Transformers {
 
     private def transformContract(contract: data.Contract): Contract =
       (
-        contract.publicOracle.map(transformPublicOracle),
-        contract.privateOracle.map(transformPrivateOracle),
+        contract.publicOracle.map(transformOracle),
+        contract.privateOracle.map(transformOracle),
       ) match {
         case (Some(publicOracle), Some(privateOracle)) =>
           Contract().setPrivateOracle(privateOracle).setPublicOracle(publicOracle)
@@ -92,11 +92,8 @@ object Transformers {
         case (None, None)                => Contract()
       }
 
-    private def transformPublicOracle(publicOracle: data.PublicOracle): PublicOracle =
-      PublicOracle(transformTranscript(publicOracle.transcript), Public)
-
-    private def transformPrivateOracle(privateOracle: data.PrivateOracle): PrivateOracle =
-      PrivateOracle(transformTranscript(privateOracle.transcript), Private)
+    private def transformOracle(oracle: data.Oracle): Oracle =
+      Oracle(transformTranscript(oracle.transcript))
   }
 
   object ApiToData {
@@ -105,11 +102,11 @@ object Transformers {
         contract.publicOracle.toOption
           .map(_.transcript)
           .traverse(transformTranscript[F])
-          .map(_.map(data.PublicOracle)),
+          .map(_.map(data.Oracle)),
         contract.privateOracle.toOption
           .map(_.transcript)
           .traverse(transformTranscript[F])
-          .map(_.map(data.PrivateOracle)),
+          .map(_.map(data.Oracle)),
       ).mapN(data.Contract)
 
     def transformTranscript[F[_]: MonadThrow](transcript: Transcript): F[data.Transcript] =

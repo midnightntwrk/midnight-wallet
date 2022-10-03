@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.core
 
 import cats.MonadThrow
 import cats.effect.Clock
-import cats.effect.std.Random
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data
@@ -23,7 +22,7 @@ trait Wallet[F[_]] {
 }
 
 object Wallet {
-  class Live[F[_]: MonadThrow: Clock: Random](
+  class Live[F[_]: MonadThrow: Clock](
       proverService: ProverService[F],
       submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
@@ -32,11 +31,10 @@ object Wallet {
       for {
         proof <- proverService.prove(input.circuitValues)
         timestamp <- Clock[F].realTimeInstant
-        hash <- Transaction.calculateHash[F, data.CallTransaction]
-        transaction = buildCallTransaction(hash, timestamp, input, proof)
+        transaction = buildCallTransaction(input.hash, timestamp, input, proof)
         response <- submitTxService.submitTransaction(transaction)
         result <- response match {
-          case SubmissionResult.Accepted         => hash.pure
+          case SubmissionResult.Accepted         => input.hash.pure
           case SubmissionResult.Rejected(reason) => TransactionRejected(reason).raiseError
         }
       } yield result
@@ -60,11 +58,10 @@ object Wallet {
     override def deployContract(input: DeployContractInput): F[Hash[DeployTransaction]] =
       for {
         timestamp <- Clock[F].realTimeInstant
-        hash <- Transaction.calculateHash[F, data.DeployTransaction]
-        transaction = buildDeployTransaction(hash, timestamp, input)
+        transaction = buildDeployTransaction(input.hash, timestamp, input)
         response <- submitTxService.submitTransaction(transaction)
         result <- response match {
-          case SubmissionResult.Accepted => hash.pure
+          case SubmissionResult.Accepted => input.hash.pure
           case SubmissionResult.Rejected(reason) =>
             TransactionRejected(reason).raiseError
         }
@@ -87,6 +84,7 @@ object Wallet {
   }
 
   final case class CallContractInput(
+      hash: Hash[CallTransaction],
       address: Address,
       func: FunctionName,
       nonce: Nonce,
@@ -95,6 +93,7 @@ object Wallet {
   )
 
   final case class DeployContractInput(
+      hash: Hash[DeployTransaction],
       contract: Contract,
       transitionFunctionCircuits: TransitionFunctionCircuits,
   )

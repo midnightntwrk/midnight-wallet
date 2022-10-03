@@ -6,7 +6,7 @@ import cats.syntax.functor.*
 import cats.syntax.traverse.*
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data.Block.Height
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionResult}
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMessageReceived
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
@@ -41,7 +41,7 @@ trait SyncServiceSpecBase
     syncService
       .sync()
       .take(amount.toLong)
-      .collect { case Block(header, Block.Body(Seq(TransactionResult(tx, _)))) =>
+      .collect { case Block(header, Block.Body(Seq(tx))) =>
         (tx, header.height)
       }
 

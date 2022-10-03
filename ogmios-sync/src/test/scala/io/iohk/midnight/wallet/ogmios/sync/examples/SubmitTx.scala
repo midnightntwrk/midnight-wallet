@@ -29,7 +29,7 @@ object SubmitTx {
       Instant.parse("1969-12-31T23:59:57.999536Z"),
       Contract(
         Some(
-          PublicOracle(
+          Oracle(
             Transcript(
               Seq(
                 Query(
@@ -42,7 +42,7 @@ object SubmitTx {
           ),
         ),
         Some(
-          PrivateOracle(
+          Oracle(
             Transcript(
               Seq(
                 Query(

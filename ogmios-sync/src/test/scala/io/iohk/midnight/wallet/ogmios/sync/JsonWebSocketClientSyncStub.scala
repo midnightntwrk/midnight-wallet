@@ -6,7 +6,7 @@ import cats.effect.{Clock, IO, Ref}
 import cats.syntax.all.*
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.wallet.blockchain.data
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction, TransactionResult}
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive.RollForward
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.{Receive, Send}
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
@@ -48,13 +48,7 @@ class JsonWebSocketClientSyncStub(
   def isClientAwaitingReply: IO[Boolean] = clientIsAwaitingReply.get
 
   private def generateBlock(transactions: Seq[Transaction]): IO[Block] =
-    for {
-      blockHeader <- generateBlockHeader
-      block = data.Block(
-        blockHeader,
-        Block.Body(transactions.map(TransactionResult(_, "Successful"))),
-      )
-    } yield block
+    generateBlockHeader.map(data.Block(_, Block.Body(transactions)))
 
   private def generateBlockHeader: IO[Block.Header] =
     (

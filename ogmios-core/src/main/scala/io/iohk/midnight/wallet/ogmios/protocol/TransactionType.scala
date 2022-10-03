@@ -6,8 +6,8 @@ sealed abstract class TransactionType(val entryName: String) extends Enumeration
 
 object TransactionType {
   val Discriminator: String = "type"
-  case object Call extends TransactionType("call")
-  case object Deploy extends TransactionType("deploy")
+  case object Call extends TransactionType("Call")
+  case object Deploy extends TransactionType("Deploy")
 
   implicit val enumInstance: Enumeration[TransactionType] = new Enumeration[TransactionType] {
     override val Discriminator: String = TransactionType.Discriminator

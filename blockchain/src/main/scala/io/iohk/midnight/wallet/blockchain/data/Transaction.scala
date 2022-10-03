@@ -1,9 +1,5 @@
 package io.iohk.midnight.wallet.blockchain.data
 
-import cats.Functor
-import cats.effect.std.Random
-import cats.syntax.functor.*
-
 import java.time.Instant
 
 sealed trait Transaction {
@@ -31,14 +27,4 @@ final case class DeployTransaction(
     transitionFunctionCircuits: TransitionFunctionCircuits,
 ) extends Transaction {
   override type TxType = DeployTransaction
-}
-
-object Transaction {
-  def calculateHash[F[_]: Functor: Random, TxType <: Transaction]: F[Hash[TxType]] =
-    Random[F]
-      .nextBytes(32)
-      .map(new java.math.BigInteger(_))
-      .map(_.abs())
-      .map(String.format("%064x", _))
-      .map(Hash[TxType])
 }

@@ -20,7 +20,7 @@ object SubmitTx {
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
       |  "payload" : {
-      |    "type" : "call",
+      |    "type" : "Call",
       |    "hash" : "3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1",
       |    "timestamp" : "1969-12-31T23:59:59.999391Z",
       |    "address" : "Address",
@@ -60,7 +60,7 @@ object SubmitTx {
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
       |  "payload" : {
-      |    "type" : "deploy",
+      |    "type" : "Deploy",
       |    "hash" : "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
       |    "timestamp" : "1969-12-31T23:59:57.999536Z",
       |    "contract" : {
@@ -105,8 +105,8 @@ object SubmitTx {
       ),
       Instant.parse("1969-12-31T23:59:57.999536Z"),
       Contract(
-        Some(PublicOracle(Transcript(Seq(query)))),
-        Some(PrivateOracle(Transcript(Seq(query)))),
+        Some(Oracle(Transcript(Seq(query)))),
+        Some(Oracle(Transcript(Seq(query)))),
       ),
       TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
     )

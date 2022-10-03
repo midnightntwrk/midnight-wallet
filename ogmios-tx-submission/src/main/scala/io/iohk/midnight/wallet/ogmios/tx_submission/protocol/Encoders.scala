@@ -35,9 +35,7 @@ private[tx_submission] object Encoders {
     implicit val transcriptEncoder: Encoder[Transcript] =
       Encoder[Seq[Query]].contramap(_.value)
 
-    implicit val privateOracleEncoder: Encoder[PrivateOracle] = deriveEncoder[PrivateOracle]
-
-    implicit val publicOracleEncoder: Encoder[PublicOracle] = deriveEncoder[PublicOracle]
+    implicit val oracleEncoder: Encoder[Oracle] = deriveEncoder[Oracle]
 
     implicit val contractEncoder: Encoder[Contract] = deriveEncoder[Contract]
 

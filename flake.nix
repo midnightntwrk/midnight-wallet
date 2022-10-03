@@ -95,7 +95,7 @@
         defaultPackage = packages.midnight-wallet;
 
         devShell = pkgs.mkShell {
-          inputsFrom = [ defaultPackage ];
+          packages = [ pkgs.sbt pkgs.yarn pkgs.nodejs-16_x ];
         };
       }) // {
         ciceroActions = cicero.lib.callActionsWithExtraArgs rec {

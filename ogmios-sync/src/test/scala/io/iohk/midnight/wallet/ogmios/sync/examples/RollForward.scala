@@ -15,54 +15,48 @@ object RollForward {
       |  "type": "RollForward",
       |  "payload": {
       |    "header": {
-      |      "blockHash": "5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38",
-      |      "parentBlockHash": "a001ec24fa51f84d828b2ee2ffc071ca7fbad64b7b08ab0c07c09b558c936d7f",
+      |      "hash": "5e51016f56030e0159ff9f01f02effa719ffb75c0115b7377d98551e6f8c7a38",
+      |      "parentHash": "a001ec24fa51f84d828b2ee2ffc071ca7fbad64b7b08ab0c07c09b558c936d7f",
       |      "height": 17019280400900804,
       |      "timestamp": "1969-12-31T23:59:59.999231476Z"
       |    },
       |    "body": {
       |      "transactionResults": [
       |        {
-      |          "transaction": {
-      |            "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
-      |            "timestamp": "1969-12-31T23:59:53.999509747Z",
-      |            "type": "deploy",
-      |            "contract": {
-      |               "publicOracle": {
-      |                 "transcript": [{
-      |                   "functionName": "identity",
-      |                   "arg": {},
-      |                   "result": {}
-      |                 }]
-      |               },
-      |               "privateOracle": {
-      |                 "transcript": [{
-      |                   "functionName": "identity",
-      |                   "arg": {},
-      |                   "result": {}
-      |                 }]
-      |               }
-      |            },
-      |            "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
+      |          "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+      |          "timestamp": "1969-12-31T23:59:53.999509747Z",
+      |          "type": "Deploy",
+      |          "contract": {
+      |             "publicOracle": {
+      |               "transcript": [{
+      |                 "functionName": "identity",
+      |                 "arg": {},
+      |                 "result": {}
+      |               }]
+      |             },
+      |             "privateOracle": {
+      |               "transcript": [{
+      |                 "functionName": "identity",
+      |                 "arg": {},
+      |                 "result": {}
+      |               }]
+      |             }
       |          },
-      |          "result": "Successful"
+      |          "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
       |        },
       |        {
-      |          "transaction": {
-      |            "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
-      |            "timestamp": "1970-01-01T00:00:05.000338337Z",
-      |            "type": "call",
-      |            "address": "Address",
-      |            "functionName": "Func",
-      |            "proof": "Proof",
-      |            "nonce": "Nonce",
-      |            "publicTranscript": [{
-      |                   "functionName": "identity",
-      |                   "arg": {},
-      |                   "result": {}
-      |                 }]
-      |          },
-      |          "result": "Successful"
+      |          "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+      |          "timestamp": "1970-01-01T00:00:05.000338337Z",
+      |          "type": "Call",
+      |          "address": "Address",
+      |          "functionName": "Func",
+      |          "proof": "Proof",
+      |          "nonce": "Nonce",
+      |          "publicTranscript": [{
+      |            "functionName": "identity",
+      |            "arg": {},
+      |            "result": {}
+      |          }]
       |        }
       |      ]
       |    }
@@ -82,65 +76,59 @@ object RollForward {
         ),
         Block.Body(
           Seq(
-            TransactionResult(
-              DeployTransaction(
-                Hash[DeployTransaction](
-                  "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
-                ),
-                Instant.parse("1969-12-31T23:59:53.999509747Z"),
-                Contract(
-                  Some(
-                    PublicOracle(
-                      Transcript(
-                        Seq(
-                          Query(
-                            FunctionName("identity"),
-                            ArbitraryJson(Json.obj()),
-                            ArbitraryJson(Json.obj()),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Some(
-                    PrivateOracle(
-                      Transcript(
-                        Seq(
-                          Query(
-                            FunctionName("identity"),
-                            ArbitraryJson(Json.obj()),
-                            ArbitraryJson(Json.obj()),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
+            DeployTransaction(
+              Hash[DeployTransaction](
+                "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
               ),
-              "Successful",
+              Instant.parse("1969-12-31T23:59:53.999509747Z"),
+              Contract(
+                Some(
+                  Oracle(
+                    Transcript(
+                      Seq(
+                        Query(
+                          FunctionName("identity"),
+                          ArbitraryJson(Json.obj()),
+                          ArbitraryJson(Json.obj()),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Some(
+                  Oracle(
+                    Transcript(
+                      Seq(
+                        Query(
+                          FunctionName("identity"),
+                          ArbitraryJson(Json.obj()),
+                          ArbitraryJson(Json.obj()),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
             ),
-            TransactionResult(
-              CallTransaction(
-                Hash[CallTransaction](
-                  "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
-                ),
-                Instant.parse("1970-01-01T00:00:05.000338337Z"),
-                Address("Address"),
-                FunctionName("Func"),
-                Proof("Proof"),
-                Nonce("Nonce"),
-                Transcript(
-                  Seq(
-                    Query(
-                      FunctionName("identity"),
-                      ArbitraryJson(Json.obj()),
-                      ArbitraryJson(Json.obj()),
-                    ),
+            CallTransaction(
+              Hash[CallTransaction](
+                "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+              ),
+              Instant.parse("1970-01-01T00:00:05.000338337Z"),
+              Address("Address"),
+              FunctionName("Func"),
+              Proof("Proof"),
+              Nonce("Nonce"),
+              Transcript(
+                Seq(
+                  Query(
+                    FunctionName("identity"),
+                    ArbitraryJson(Json.obj()),
+                    ArbitraryJson(Json.obj()),
                   ),
                 ),
               ),
-              "Successful",
             ),
           ),
         ),

@@ -1,7 +1,6 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
-import cats.effect.std.Random
 import cats.syntax.eq.*
 import io.iohk.midnight.wallet.blockchain.data.Block.Height.Genesis
 import io.iohk.midnight.wallet.blockchain.data.{Block, Hash}
@@ -33,16 +32,15 @@ trait WalletSpec {
       proverClient: ProverClient[IO],
       txSubmissionService: TxSubmissionService[IO],
       syncService: SyncService[IO],
-  ): IO[Wallet[IO]] =
-    Random.scalaUtilRandom[IO].map { implicit random =>
-      new Wallet.Live[IO](
-        new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
-        txSubmissionService,
-        syncService,
-      )
-    }
+  ): Wallet[IO] =
+    new Wallet.Live[IO](
+      new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
+      txSubmissionService,
+      syncService,
+    )
 
-  val walletIO = buildWallet(proverClient, txSubmissionService, syncService)
+  def defaultWallet(): Wallet[IO] =
+    buildWallet(proverClient, txSubmissionService, syncService)
 
   val ExpectedHashLength = 64
 
@@ -58,18 +56,19 @@ class WalletCallContractSpec
 
   test("a hash is returned") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      walletIO.flatMap(_.callContract(input)).map { r =>
-        assertEquals(r.value.length, ExpectedHashLength)
-        assert(isHexString(r.value))
-      }
+      defaultWallet()
+        .callContract(input)
+        .map { r =>
+          assertEquals(r.value, input.hash.value)
+        }
     }
   }
 
   test("transactions get submitted to the client") {
     forAllF(callContractInputGen, callContractInputGen) {
       (input1: CallContractInput, input2: CallContractInput) =>
+        val wallet = defaultWallet()
         for {
-          wallet <- walletIO
           hash1 <- wallet.callContract(input1)
           hash2 <- wallet.callContract(input2)
           wasSubmitted1 = txSubmissionService.wasCallTxSubmitted(hash1)
@@ -83,7 +82,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(failingProverClient, txSubmissionService, syncService)
 
       wallet
-        .flatMap(_.callContract(input))
+        .callContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingProverClient.TheError)))
     }
@@ -94,7 +93,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(alwaysInProgressProverClient, txSubmissionService, syncService)
 
       wallet
-        .flatMap(_.callContract(input))
+        .callContract(input)
         .attempt
         .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
     }
@@ -105,7 +104,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(proverClient, failingTxSubmissionService, syncService)
 
       wallet
-        .flatMap(_.callContract(input))
+        .callContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
     }
@@ -116,7 +115,7 @@ class WalletCallContractSpec
       val wallet = buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
 
       wallet
-        .flatMap(_.callContract(input))
+        .callContract(input)
         .attempt
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }
@@ -130,9 +129,8 @@ class WalletDeployContractSpec
     with BetterOutputSuite {
   test("a hash is returned") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      walletIO.flatMap(_.deployContract(input)).map { r =>
-        assertEquals(r.value.length, ExpectedHashLength)
-        assert(isHexString(r.value))
+      defaultWallet().deployContract(input).map { r =>
+        assertEquals(r.value, input.hash.value)
       }
     }
   }
@@ -140,8 +138,8 @@ class WalletDeployContractSpec
   test("transactions get submitted to the client") {
     forAllF(deployContractInputGen, deployContractInputGen) {
       (input1: DeployContractInput, input2: DeployContractInput) =>
+        val wallet = defaultWallet()
         for {
-          wallet <- walletIO
           hash1 <- wallet.deployContract(input1)
           hash2 <- wallet.deployContract(input2)
           wasSubmitted1 = txSubmissionService.wasDeployTxSubmitted(hash1)
@@ -153,7 +151,7 @@ class WalletDeployContractSpec
   test("fails when platform submission fails") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
       buildWallet(proverClient, failingTxSubmissionService, syncService)
-        .flatMap(_.deployContract(input))
+        .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
     }
@@ -162,7 +160,7 @@ class WalletDeployContractSpec
   test("fails when platform submission got rejected") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
       buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
-        .flatMap(_.deployContract(input))
+        .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }
@@ -187,7 +185,9 @@ class WalletSyncSpec extends CatsEffectSuite with WalletSpec with BetterOutputSu
     )
 
     buildWallet(proverClient, txSubmissionService, singleBlockSyncService)
-      .flatMap(_.sync().compile.to(List))
+      .sync()
+      .compile
+      .to(List)
       .attempt
       .map {
         case Left(error) => fail("failed", error)

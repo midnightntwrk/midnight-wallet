@@ -2,12 +2,12 @@
 # yarn lockfile v1
 
 
-"@midnight/wallet-api@^1.0.2":
-  version "1.0.2"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.2.tgz#4ed816f7a094db2333e71a7175a47fa1d80828a7"
-  integrity sha512-KuFYPOFaEqqF+jdic9sYKr8l5X4QQgXnQo9NoN0W3oXRAL681UhUfciZtTp5lGbU0rqeZ3ouVwoc8wMQXZJf0g==
+"@midnight/wallet-api@1.0.3":
+  version "1.0.3"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.3.tgz#7604fac82617a6089ae1fa32cd81a6d4e62d38e8"
+  integrity sha512-F1Pi/AEDbipSgWjXlBBVpuPBlNp9lHmtk1bNL4kvJi20N40cS7mEE2XJ5smSsZKI4Xy4ssOwDGR+HGM9Ktjf3A==
   dependencies:
-    rxjs "^7.5.5"
+    rxjs "7.5.5"
 
 cross-fetch@^3.1.5:
   version "3.1.5"
@@ -28,10 +28,10 @@ node-fetch@2.6.7:
   dependencies:
     whatwg-url "^5.0.0"
 
-rxjs@^7.5.5:
-  version "7.5.6"
-  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.6.tgz#0446577557862afd6903517ce7cae79ecb9662bc"
-  integrity sha512-dnyv2/YsXhnm461G+R/Pe5bWP41Nm6LBXEYWI6eiFP4fiwx6WRI/CD0zbdVAudd9xwLEF2IDcKXLHit0FYjUzw==
+rxjs@7.5.5:
+  version "7.5.5"
+  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.5.tgz#2ebad89af0f560f460ad5cc4213219e1f7dd4e9f"
+  integrity sha512-sy+H0pQofO95VDmFLzyaw9xNJU4KTRSwQIGM6+iG3SypAtCiLDzpeG8sJrNCWn2Up9km+KhkvTdbkrdy+yzZdw==
   dependencies:
     tslib "^2.1.0"
 

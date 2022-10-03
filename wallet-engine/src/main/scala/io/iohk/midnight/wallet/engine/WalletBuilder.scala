@@ -1,7 +1,6 @@
 package io.iohk.midnight.wallet.engine
 
 import cats.effect.kernel.Async
-import cats.effect.std.Random
 import cats.effect.{IO, Resource}
 import cats.syntax.functor.*
 import io.iohk.midnight.tracer.logging.ConsoleTracer
@@ -34,29 +33,27 @@ object WalletBuilder {
 
     implicit val clientTracer: ogmios.tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
 
-    Resource.eval(Random.scalaUtilRandom[F]).flatMap { implicit random =>
-      for {
-        txSubmissionWSClient <- ogmios.network
-          .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-        ogmiosSubmitTxService <- OgmiosTxSubmissionService(txSubmissionWSClient)
-        submitTxService = new TxSubmissionService[F] {
-          override def submitTransaction(
-              transaction: Transaction,
-          ): F[TxSubmissionService.SubmissionResult] =
-            ogmiosSubmitTxService.submitTransaction(transaction).map {
-              case SubmissionResult.Accepted => TxSubmissionService.SubmissionResult.Accepted
-              case SubmissionResult.Rejected(reason) =>
-                TxSubmissionService.SubmissionResult.Rejected(reason)
-            }
-        }
-        syncWSClient <- ogmios.network.SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-        ogmiosSyncService = OgmiosSyncService(syncWSClient)
-        syncService = new SyncService[F] {
-          override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
-        }
-      } yield {
-        new Wallet.Live[F](proverService, submitTxService, syncService)
+    for {
+      txSubmissionWSClient <- ogmios.network
+        .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+      ogmiosSubmitTxService <- OgmiosTxSubmissionService(txSubmissionWSClient)
+      submitTxService = new TxSubmissionService[F] {
+        override def submitTransaction(
+            transaction: Transaction,
+        ): F[TxSubmissionService.SubmissionResult] =
+          ogmiosSubmitTxService.submitTransaction(transaction).map {
+            case SubmissionResult.Accepted => TxSubmissionService.SubmissionResult.Accepted
+            case SubmissionResult.Rejected(reason) =>
+              TxSubmissionService.SubmissionResult.Rejected(reason)
+          }
       }
+      syncWSClient <- ogmios.network.SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+      ogmiosSyncService = OgmiosSyncService(syncWSClient)
+      syncService = new SyncService[F] {
+        override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
+      }
+    } yield {
+      new Wallet.Live[F](proverService, submitTxService, syncService)
     }
   }
 

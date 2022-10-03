@@ -42,6 +42,7 @@ object Generators {
 
   val callContractInputGen: Gen[CallContractInput] =
     (
+      hashGen[CallTransaction],
       addressGen,
       functionNameGen,
       nonceGen,
@@ -55,18 +56,17 @@ object Generators {
       .nonEmptyListOf(Gen.alphaNumStr)
       .map(TransitionFunctionCircuits.apply)
 
-  val publicOracleGen: Gen[PublicOracle] = transcriptGen.map(PublicOracle.apply)
-
-  val privateOracleGen: Gen[PrivateOracle] = transcriptGen.map(PrivateOracle.apply)
+  val oracleGen: Gen[Oracle] = transcriptGen.map(Oracle.apply)
 
   val contractGen: Gen[Contract] =
     (
-      Gen.option(publicOracleGen),
-      Gen.option(privateOracleGen),
+      Gen.option(oracleGen),
+      Gen.option(oracleGen),
     ).mapN(Contract.apply)
 
   val deployContractInputGen: Gen[DeployContractInput] =
-    (contractGen, transitionFunctionCircuitsGen).mapN(DeployContractInput.apply)
+    (hashGen[DeployTransaction], contractGen, transitionFunctionCircuitsGen)
+      .mapN(DeployContractInput.apply)
 
   val proofGen: Gen[Proof] = Gen.alphaNumStr.map(Proof.apply)
 
@@ -104,10 +104,7 @@ object Generators {
   val transactionGen: Gen[Transaction] =
     Gen.oneOf(deployTransactionGen, callTransactionGen)
 
-  val transactionResultGen: Gen[TransactionResult] =
-    (transactionGen, Gen.const("Successful")).mapN(TransactionResult.apply)
-
-  val blockBodyGen: Gen[Block.Body] = Gen.listOf(transactionResultGen).map(Block.Body.apply)
+  val blockBodyGen: Gen[Block.Body] = Gen.listOf(transactionGen).map(Block.Body.apply)
 
   val blockGen: Gen[Block] =
     (blockHeaderGen, blockBodyGen)

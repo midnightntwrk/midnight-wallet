@@ -11,6 +11,7 @@ import io.iohk.midnight.wallet.blockchain.data.{
   Nonce,
   TransitionFunctionCircuits,
 }
+import io.iohk.midnight.wallet.blockchain.data.Hash as DataHash
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.core.js.facades.rxjs.{Observable, Subscriber}
@@ -18,7 +19,6 @@ import io.iohk.midnight.wallet.core.util.Subscription
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import io.iohk.midnight.wallet.engine.js.JsWallet.StreamObservableOps
-
 import scala.scalajs.js
 import scala.scalajs.js.|
 import scala.scalajs.js.ThisFunction.fromFunction2
@@ -52,9 +52,10 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
   private def buildWalletInput(
       tx: Transaction,
   ): IO[Either[CallContractInput, DeployContractInput]] = {
-    if (callType == tx.`type`) {
+    val txType = tx.asInstanceOf[js.Dynamic].`type`.asInstanceOf[CALL_TX | DEPLOY_TX]
+    if (callType == txType) {
       buildCallContractInput(tx.asInstanceOf[CallTransaction]).map(Left(_))
-    } else if (deployType == tx.`type`) {
+    } else if (deployType == txType) {
       buildDeployContractInput(tx.asInstanceOf[DeployTransaction]).map(Right(_))
     } else {
       IO.raiseError(new Error("Tx match wasn't CallTx neither DeployTx"))
@@ -66,6 +67,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
       .transformTranscript[IO](callTx.publicTranscript)
       .map {
         CallContractInput(
+          DataHash(callTx.hash),
           Address(callTx.address),
           FunctionName(callTx.functionName),
           Nonce(callTx.nonce),
@@ -79,6 +81,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
       .transformContract[IO](deployTx.contract)
       .map {
         DeployContractInput(
+          DataHash(deployTx.hash),
           _,
           TransitionFunctionCircuits(deployTx.transitionFunctionCircuits.toSeq),
         )
@@ -93,9 +96,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
       .unsafeToObservable()
 
   private def transformTxResults(block: Block): Seq[Transaction] =
-    block.body.transactionResults
-      .map(_.transaction)
-      .map(Transformers.DataToApi.transformTransaction)
+    block.body.transactionResults.map(Transformers.DataToApi.transformTransaction)
 
   def close(): Unit =
     finalizer.unsafeRunAndForget()
