@@ -233,6 +233,7 @@
         "haskell-nix": "haskell-nix",
         "inclusive": "inclusive_3",
         "nix": "nix_3",
+        "nixos-shell": "nixos-shell",
         "nixpkgs": [
           "nixpkgs"
         ],
@@ -241,15 +242,16 @@
         "utils": "utils_8"
       },
       "locked": {
-        "lastModified": 1649196348,
-        "narHash": "sha256-O7l+mW7BhBTV9F+Cbejyk9KlINKVgJBWjEXqZ2koSyE=",
+        "lastModified": 1662568055,
+        "narHash": "sha256-6Nye+GgeIzg2tJw+D+dAZOPW5dZtTGB0sLeYdcgd/Cs=",
         "owner": "input-output-hk",
         "repo": "cicero",
-        "rev": "28070fe28e7751d4cbdac4e494724ba0778a7efb",
+        "rev": "c2634107fdbfd1c1184e49fd73a2cdca55c8b172",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
+        "ref": "v1-maintenance",
         "repo": "cicero",
         "type": "github"
       }
@@ -1257,17 +1259,17 @@
         "nixpkgs-regression": "nixpkgs-regression_3"
       },
       "locked": {
-        "lastModified": 1645437800,
-        "narHash": "sha256-MAMIKi3sIQ0b3jzYyOb5VY29GRgv7JXl1VXoUM9xUZw=",
+        "lastModified": 1650397666,
+        "narHash": "sha256-gWYNlEyleqkPfxtGXeq6ggjzJwcXJVdieJxA1Obly9s=",
         "owner": "NixOS",
         "repo": "nix",
-        "rev": "f22b9e72f51f97f8f2d334748d3e97123940a146",
+        "rev": "69c6fb12eea414382f0b945c0d6c574c43c7c9a3",
         "type": "github"
       },
       "original": {
         "owner": "NixOS",
+        "ref": "2.8.0",
         "repo": "nix",
-        "rev": "f22b9e72f51f97f8f2d334748d3e97123940a146",
         "type": "github"
       }
     },
@@ -1340,6 +1342,27 @@
       "original": {
         "owner": "nix-community",
         "repo": "nixpkgs.lib",
+        "type": "github"
+      }
+    },
+    "nixos-shell": {
+      "inputs": {
+        "nixpkgs": [
+          "cicero",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1646257415,
+        "narHash": "sha256-whHBBcthLhEIy2VTaioRZOSZoZR7pk4Qr4DVxwU0r9Y=",
+        "owner": "Mic92",
+        "repo": "nixos-shell",
+        "rev": "55de7d4d449ff30cdde8b8fe484a86eef477245e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Mic92",
+        "repo": "nixos-shell",
         "type": "github"
       }
     },

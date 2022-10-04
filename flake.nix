@@ -12,7 +12,7 @@
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
     cicero = {
-      url = "github:input-output-hk/cicero";
+      url = "github:input-output-hk/cicero/v1-maintenance";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
@@ -95,7 +95,7 @@
         defaultPackage = packages.midnight-wallet;
 
         devShell = pkgs.mkShell {
-          packages = [ pkgs.sbt pkgs.yarn pkgs.nodejs-16_x ];
+          inputsFrom = [ defaultPackage ];
         };
       }) // {
         ciceroActions = cicero.lib.callActionsWithExtraArgs rec {

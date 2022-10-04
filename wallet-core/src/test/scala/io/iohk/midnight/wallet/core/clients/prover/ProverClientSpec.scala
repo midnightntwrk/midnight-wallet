@@ -6,7 +6,7 @@ import cats.syntax.eq.*
 import io.circe.DecodingFailure
 import io.iohk.midnight.wallet.blockchain.data.{CircuitValues, Proof, ProofId}
 import io.iohk.midnight.wallet.core.clients.prover.ProverClient.ProofStatus
-import io.iohk.midnight.wallet.core.domain.Generators.*
+import io.iohk.midnight.wallet.blockchain.data.Generators.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF

@@ -4,16 +4,16 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.blockchain.data.{Block, CallTransaction, DeployTransaction}
-import io.iohk.midnight.wallet.ogmios
+import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
+import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
+import io.iohk.midnight.wallet.ogmios.tx_submission
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.ogmios.{sync, tx_submission}
 import munit.CatsEffectSuite
+import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
-
-import scala.concurrent.duration.DurationInt
 
 class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
@@ -21,21 +21,24 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
   private val timeout = 30.seconds
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val clientSyncTracer: ogmios.sync.tracer.ClientRequestResponseTracer[IO] =
-    Tracer.discardTracer[IO]
-  private implicit val clientTxSubmissionTracer
-      : ogmios.tx_submission.tracer.ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
+  private implicit val reqRespTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
 
   private val syncServiceResource =
-    sync.util.json.SttpJsonWebSocketClient[IO](sttpBackend, platformUri).map(OgmiosSyncService(_))
-  private val txSumbissionServiceResource = tx_submission.util.json
-    .SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
-    .flatMap(tx_submission.OgmiosTxSubmissionService(_))
-  private val servicesResource = (txSumbissionServiceResource, syncServiceResource).parTupled
+    SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
+      .map(OgmiosSyncService(_))
+
+  private val txSumbissionServiceResource =
+    SttpJsonWebSocketClient[IO](sttpBackend, platformUri)
+      .flatMap(tx_submission.OgmiosTxSubmissionService(_))
+
+  private val servicesResource =
+    (txSumbissionServiceResource, syncServiceResource).parTupled
 
   def integrationTest(
       title: String,
-  )(theTest: (OgmiosTxSubmissionService[IO], OgmiosSyncService[IO]) => IO[Unit]): Unit = {
+  )(
+      theTest: (OgmiosTxSubmissionService[IO], OgmiosSyncService[IO]) => IO[Unit],
+  ): Unit = {
     test(title) {
       servicesResource
         .use { case (submitTxService, syncService) =>

@@ -9,7 +9,7 @@ on:
   pull_request:
     branches: ['**']
   push:
-    branches: ['**']
+    branches: ['main']
     tags: [v*]
 
 jobs:

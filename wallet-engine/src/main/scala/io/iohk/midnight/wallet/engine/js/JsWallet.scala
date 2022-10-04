@@ -3,6 +3,8 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import fs2.Stream
+import io.iohk.midnight.js.interop.facades.rxjs.Observable
+import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
 import io.iohk.midnight.wallet.blockchain.data.{
   Address,
   Block,
@@ -10,19 +12,15 @@ import io.iohk.midnight.wallet.blockchain.data.{
   FunctionName,
   Nonce,
   TransitionFunctionCircuits,
+  Hash as DataHash,
 }
-import io.iohk.midnight.wallet.blockchain.data.Hash as DataHash
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
-import io.iohk.midnight.wallet.core.js.facades.rxjs.{Observable, Subscriber}
-import io.iohk.midnight.wallet.core.util.Subscription
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
-import io.iohk.midnight.wallet.engine.js.JsWallet.StreamObservableOps
 import scala.scalajs.js
-import scala.scalajs.js.|
-import scala.scalajs.js.ThisFunction.fromFunction2
 import scala.scalajs.js.annotation.*
+import scala.scalajs.js.|
 import sttp.model.Uri
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
@@ -121,15 +119,4 @@ object JsWallet {
       .allocated
       .map { case (wallet, finalizer) => new JsWallet(wallet, finalizer) }
       .unsafeToPromise()
-
-  implicit class StreamObservableOps[T](stream: Stream[IO, T]) {
-    def unsafeToObservable(): Observable[T] =
-      new Observable[T](
-        fromFunction2[Observable[T], Subscriber[T], js.Function0[Unit]]((_, subscriber) => {
-          val subscription = Subscription.fromStream(stream, subscriber)
-          subscription.startConsuming.unsafeRunAndForget()
-          () => subscription.cancellation.unsafeRunAndForget()
-        }),
-      )
-  }
 }
