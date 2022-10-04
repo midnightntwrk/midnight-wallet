@@ -24,13 +24,16 @@ import typings.midnightMockedNodeApi.transactionMod.Transaction
   * @param finalizer
   *   An effect that will be called upon `close()` execution
   */
+@JSExportTopLevel("OgmiosSyncService")
 class JsOgmiosSyncService(syncService: OgmiosSyncService[IO], finalizer: IO[Unit]) {
+  @JSExport
   def sync(): Observable[Block[Transaction]] =
     syncService
       .sync()
       .map(Transformer.transformBlock)
       .unsafeToObservable()
 
+  @JSExport
   def close(): js.Promise[Unit] =
     finalizer.unsafeToPromise()
 }

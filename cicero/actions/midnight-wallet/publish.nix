@@ -76,6 +76,8 @@
       sbt dist
       pushd wallet-engine
       yarn publish || :
+      pushd ../ogmios-sync/js
+      yarn publish || :
     '')
   ];
 }
