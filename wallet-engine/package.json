@@ -1,6 +1,6 @@
 {
     "name": "@midnight/wallet",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "main": "dist/main.js",
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
