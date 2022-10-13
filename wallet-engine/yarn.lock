@@ -2,10 +2,15 @@
 # yarn lockfile v1
 
 
-"@midnight/wallet-api@1.0.4":
-  version "1.0.4"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.4.tgz#e35f207a26a08baa7c8f8ac959d9f647dd437827"
-  integrity sha512-0mC3y+hx/1VJYZgBcxzWTxGe8cfAd2diFReg01cXeJLoBhD4R354aysKuPm3enoN7vpr6BZCbC3TmBT8lZ2HKg==
+"@midnight/mocked-node-api@0.2.4":
+  version "0.2.4"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.2.4.tgz#659ffb6b4881404febd922dd960f67cdfabfa782"
+  integrity sha512-/8n6yM3TZnDeygi2shfi8Y7/brPdC1G7mRZhJxEp3g+dtmAo+b2ovMXODPZ3XkWbYV052q/E8dLj3Q1psDiY2Q==
+
+"@midnight/wallet-api@1.0.5":
+  version "1.0.5"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.5.tgz#bcd16ffc17f20deca93d52b6673ed62237e9cd6a"
+  integrity sha512-HXkyx8iEpBscdafYQVF8OuP4CGQ7zLIu65sEkf3ggceimoBHbrBaT8pg1zC7KfhRK21OP/O+or2dnO1AI8Iy3w==
   dependencies:
     rxjs "7.5.5"
 

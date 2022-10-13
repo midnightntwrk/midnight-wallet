@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.ogmios.tx_submission.examples
 
 import io.circe.Json
+import io.circe.syntax.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
@@ -63,33 +64,8 @@ object SubmitTx {
       |    "type" : "Deploy",
       |    "hash" : "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
       |    "timestamp" : "1969-12-31T23:59:57.999536Z",
-      |    "contract" : {
-      |      "publicOracle" : {
-      |        "transcript" : [
-      |          {
-      |            "functionName" : "identity",
-      |            "arg" : {
-      |              "arg1" : "argument"
-      |            },
-      |            "result" : {
-      |              "final" : "success"
-      |            }
-      |          }
-      |        ]
-      |      },
-      |      "privateOracle" : {
-      |        "transcript" : [
-      |          {
-      |            "functionName" : "identity",
-      |            "arg" : {
-      |              "arg1" : "argument"
-      |            },
-      |            "result" : {
-      |              "final" : "success"
-      |            }
-      |          }
-      |        ]
-      |      }
+      |    "publicOracle" : {
+      |      "test" : 1
       |    },
       |    "transitionFunctionCircuits" : [
       |      "6232e241fc01f4",
@@ -104,10 +80,7 @@ object SubmitTx {
         "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
       ),
       Instant.parse("1969-12-31T23:59:57.999536Z"),
-      Contract(
-        Some(Oracle(Transcript(Seq(query)))),
-        Some(Oracle(Transcript(Seq(query)))),
-      ),
+      PublicOracle(ArbitraryJson(Json.obj("test" := 1))),
       TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
     )
 

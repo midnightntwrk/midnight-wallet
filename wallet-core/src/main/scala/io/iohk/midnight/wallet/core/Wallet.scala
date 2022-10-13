@@ -75,7 +75,7 @@ object Wallet {
       DeployTransaction(
         hash,
         timestamp,
-        input.contract,
+        input.publicOracle,
         input.transitionFunctionCircuits,
       )
 
@@ -94,7 +94,7 @@ object Wallet {
 
   final case class DeployContractInput(
       hash: Hash[DeployTransaction],
-      contract: Contract,
+      publicOracle: PublicOracle,
       transitionFunctionCircuits: TransitionFunctionCircuits,
   )
 

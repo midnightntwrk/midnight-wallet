@@ -18,15 +18,14 @@ import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+import scala.scalajs.js
+import scala.scalajs.js.annotation.*
 import sttp.model.Uri
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
 import typings.midnightWalletApi.hashMod.Hash
 import typings.midnightWalletApi.transactionMod.*
 import typings.midnightWalletApi.walletMod as api
-
-import scala.scalajs.js
-import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
@@ -42,6 +41,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
         .map(_.value)
         .unsafeToPromise(),
     )
+
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.Equals"))
   private def buildWalletInput(
       tx: Transaction,
@@ -72,7 +72,7 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
 
   private def buildDeployContractInput(deployTx: DeployTransaction): IO[DeployContractInput] =
     Transformers.ApiToData
-      .transformContract[IO](deployTx.contract)
+      .transformPublicOracle[IO](deployTx.publicOracle)
       .map {
         DeployContractInput(
           DataHash(deployTx.hash),

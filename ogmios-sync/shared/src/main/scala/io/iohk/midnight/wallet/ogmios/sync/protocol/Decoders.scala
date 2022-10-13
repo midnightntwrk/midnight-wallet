@@ -36,9 +36,8 @@ private[sync] object Decoders {
     implicit val transcriptDecoder: Decoder[Transcript] =
       Decoder[Seq[Query]].map(Transcript.apply)
 
-    implicit val oracleDecoder: Decoder[Oracle] = deriveDecoder
-
-    implicit val contractDecoder: Decoder[Contract] = deriveDecoder
+    implicit val oracleDecoder: Decoder[PublicOracle] =
+      Decoder[ArbitraryJson].map(PublicOracle.apply)
 
     implicit val callTransactionDecoder: Decoder[CallTransaction] =
       deriveDecoder

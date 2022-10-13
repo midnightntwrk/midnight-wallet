@@ -1,31 +1,17 @@
 package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.syntax.show.*
+import io.circe
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.util.implicits.ShowInstances.instantShow
-import typings.midnightMockedNodeApi.blockMod.{Block, BlockBody, BlockHeader}
-import typings.midnightMockedNodeApi.contractMod.Contract
-import typings.midnightMockedNodeApi.oracleMod.{PrivateOracle, PublicOracle}
-import typings.midnightMockedNodeApi.queryMod.Query
-import typings.midnightMockedNodeApi.transactionMod.{
-  CallTransaction,
-  DeployTransaction,
-  Transaction,
-}
-import typings.midnightMockedNodeApi.transcriptMod.Transcript
-
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
+import typings.midnightMockedNodeApi.blockMod.{Block, BlockBody, BlockHeader}
+import typings.midnightMockedNodeApi.queryMod.Query
+import typings.midnightMockedNodeApi.transactionMod.*
+import typings.midnightMockedNodeApi.transcriptMod.Transcript
 
 private object Transformer {
-  // There's a ScalablyTyped issue that generates incorrect imports,
-  // effectively restricting us from using constants defined in wallet-api
-  // See https://github.com/ScalablyTyped/Converter/issues/476
-  private val CallTxType = "Call"
-  private val DeployTxType = "Deploy"
-  private val PublicOracleType = "Public"
-  private val PrivateOracleType = "Private"
-
   def transformBlock(block: data.Block): Block[Transaction] =
     Block(transformBlockBody(block.body), transformBlockHeader(block.header))
 
@@ -46,39 +32,45 @@ private object Transformer {
       tx.nonce.value,
       tx.proof.value,
       transformTranscript(tx.publicTranscript),
-      new js.Date(tx.timestamp.show),
-      CallTxType,
+      tx.timestamp.show,
+      CALL_TX,
     )
 
   private def transformTranscript(transcript: data.Transcript): Transcript =
     transcript.value.map(transformQuery).toJSArray
 
   private def transformQuery(q: data.Query): Query =
-    Query(q.arg, q.functionName.value, q.result)
+    Query(dynamicFromJson(q.arg.value), q.functionName.value, dynamicFromJson(q.result.value))
+
+  @SuppressWarnings(
+    Array(
+      "org.wartremover.warts.Null",
+      "org.wartremover.warts.Recursion",
+      "MethodReturningAny",
+      "NullParameter",
+    ),
+  )
+  def dynamicFromJson(json: circe.Json): js.Any =
+    json.fold[js.Any](
+      jsonNull = null,
+      jsonBoolean = identity,
+      jsonNumber = _.toDouble,
+      jsonString = identity,
+      jsonArray = _.map(dynamicFromJson).toJSArray,
+      jsonObject = { obj =>
+        val mapped = obj.toList.map { case (key, json) => (key, dynamicFromJson(json)) }
+        js.special.objectLiteral(mapped*)
+      },
+    )
 
   private def transformDeployTx(tx: data.DeployTransaction): DeployTransaction =
     DeployTransaction(
-      transformContract(tx.contract),
       tx.hash.value,
-      new js.Date(tx.timestamp.show),
+      dynamicFromJson(tx.publicOracle.arbitraryJson.value),
+      tx.timestamp.show,
       tx.transitionFunctionCircuits.value.toJSArray,
-      DeployTxType,
+      DEPLOY_TX,
     )
-
-  private def transformContract(contract: data.Contract): Contract = {
-    val result = Contract()
-    contract.publicOracle.foreach { publicOracle =>
-      result.setPublicOracle(
-        PublicOracle(transformTranscript(publicOracle.transcript), PublicOracleType),
-      )
-    }
-    contract.privateOracle.foreach { privateOracle =>
-      result.setPrivateOracle(
-        PrivateOracle(transformTranscript(privateOracle.transcript), PrivateOracleType),
-      )
-    }
-    result
-  }
 
   private def transformBlockHeader(header: data.Block.Header): BlockHeader =
     BlockHeader(

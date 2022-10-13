@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.engine.services
 
 import io.circe.Json
+import io.circe.syntax.*
 import io.iohk.midnight.wallet.blockchain.data.*
 
 import java.time.Instant
@@ -34,7 +35,7 @@ object Transactions {
         "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
       ),
       Instant.parse("1969-12-31T23:59:57.999536559Z"),
-      Contract(None, None),
+      PublicOracle(ArbitraryJson(Json.obj("test" := 1))),
       TransitionFunctionCircuits(
         Seq(
           "85dce76fc6a8",

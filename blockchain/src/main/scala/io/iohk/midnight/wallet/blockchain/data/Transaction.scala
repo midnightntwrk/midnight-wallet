@@ -23,7 +23,7 @@ final case class CallTransaction(
 final case class DeployTransaction(
     override val hash: Hash[DeployTransaction],
     override val timestamp: Instant,
-    contract: Contract,
+    publicOracle: PublicOracle,
     transitionFunctionCircuits: TransitionFunctionCircuits,
 ) extends Transaction {
   override type TxType = DeployTransaction

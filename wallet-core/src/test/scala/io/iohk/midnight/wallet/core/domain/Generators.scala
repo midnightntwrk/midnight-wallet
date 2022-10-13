@@ -20,6 +20,6 @@ object Generators {
       .mapN(CallContractInput.apply)
 
   val deployContractInputGen: Gen[DeployContractInput] =
-    (hashGen[DeployTransaction], contractGen, transitionFunctionCircuitsGen)
+    (hashGen[DeployTransaction], publicOracleGen, transitionFunctionCircuitsGen)
       .mapN(DeployContractInput.apply)
 }

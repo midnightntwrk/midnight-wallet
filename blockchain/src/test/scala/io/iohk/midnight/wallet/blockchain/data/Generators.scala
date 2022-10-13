@@ -42,10 +42,7 @@ object Generators {
       .nonEmptyListOf(Gen.alphaNumStr)
       .map(TransitionFunctionCircuits.apply)
 
-  val oracleGen: Gen[Oracle] = transcriptGen.map(Oracle.apply)
-
-  val contractGen: Gen[Contract] =
-    (Gen.option(oracleGen), Gen.option(oracleGen)).mapN(Contract.apply)
+  val publicOracleGen: Gen[PublicOracle] = jsonGen.map(PublicOracle.apply)
 
   val proofGen: Gen[Proof] = Gen.alphaNumStr.map(Proof.apply)
 
@@ -63,7 +60,7 @@ object Generators {
     (
       hashGen[DeployTransaction],
       instantGen,
-      contractGen,
+      publicOracleGen,
       transitionFunctionCircuitsGen,
     )
       .mapN(DeployTransaction.apply)

@@ -7,13 +7,15 @@ import cats.syntax.traverse.*
 import cats.{ApplicativeThrow, MonadThrow}
 import io.circe
 import io.iohk.midnight.wallet.blockchain.data
-import io.iohk.midnight.wallet.blockchain.data.ArbitraryJson
-import typings.midnightWalletApi.contractMod.Contract
-import typings.midnightWalletApi.transactionMod.{CALL_TX, DEPLOY_TX}
-import typings.midnightWalletApi.oraclesMod.Oracle
-import typings.midnightWalletApi.transactionMod.{CallTransaction, DeployTransaction, Transaction}
+import io.iohk.midnight.wallet.blockchain.data.{ArbitraryJson, PublicOracle}
+import typings.midnightWalletApi.transactionMod.{
+  CALL_TX,
+  CallTransaction,
+  DEPLOY_TX,
+  DeployTransaction,
+  Transaction,
+}
 import typings.midnightWalletApi.transcriptMod.{Query, Transcript}
-
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
 import scala.scalajs.js.{Date, JSON}
@@ -73,44 +75,20 @@ object Transformers {
         deployTx: data.DeployTransaction,
     ): DeployTransaction =
       DeployTransaction(
-        transformContract(deployTx.contract),
         deployTx.hash.value,
+        dynamicFromJson(deployTx.publicOracle.arbitraryJson.value),
         new Date(deployTx.timestamp.toEpochMilli.toDouble),
         deployTx.transitionFunctionCircuits.value.toJSArray,
         DEPLOY_TX,
       )
-
-    private def transformContract(contract: data.Contract): Contract =
-      (
-        contract.publicOracle.map(transformOracle),
-        contract.privateOracle.map(transformOracle),
-      ) match {
-        case (Some(publicOracle), Some(privateOracle)) =>
-          Contract().setPrivateOracle(privateOracle).setPublicOracle(publicOracle)
-        case (Some(publicOracle), None)  => Contract().setPublicOracle(publicOracle)
-        case (None, Some(privateOracle)) => Contract().setPrivateOracle(privateOracle)
-        case (None, None)                => Contract()
-      }
-
-    private def transformOracle(oracle: data.Oracle): Oracle =
-      Oracle(transformTranscript(oracle.transcript))
   }
 
   object ApiToData {
-    def transformContract[F[_]: MonadThrow](contract: Contract): F[data.Contract] =
-      (
-        contract.publicOracle.toOption
-          .map(_.transcript)
-          .traverse(transformTranscript[F])
-          .map(_.map(data.Oracle)),
-        contract.privateOracle.toOption
-          .map(_.transcript)
-          .traverse(transformTranscript[F])
-          .map(_.map(data.Oracle)),
-      ).mapN(data.Contract)
-
     def transformTranscript[F[_]: MonadThrow](transcript: Transcript): F[data.Transcript] =
       transcript.toSeq.traverse(transformQuery[F]).map(data.Transcript)
+
+    def transformPublicOracle[F[_]: MonadThrow](publicOracle: Any): F[data.PublicOracle] =
+      buildArbitraryJson(publicOracle).map(PublicOracle)
 
     private def transformQuery[F[_]: MonadThrow](query: Query): F[data.Query] =
       (buildArbitraryJson(query.argument), buildArbitraryJson(query.result))

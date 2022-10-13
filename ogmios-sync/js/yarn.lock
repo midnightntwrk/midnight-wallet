@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/mocked-node-api@0.1.0":
-  version "0.1.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.1.0.tgz#9761e8e76d7405ce0c539d6b53c0c65974b92d84"
-  integrity sha512-c5IEjQI32/J9UWuqF/xF7TQ/RTFDb9K3BXXpO/MzoUzmH+hzZNJ38Pg/4LquhtbD9NnSpTbrFQMW/VdwLYyutQ==
+"@midnight/mocked-node-api@0.2.4":
+  version "0.2.4"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.2.4.tgz#659ffb6b4881404febd922dd960f67cdfabfa782"
+  integrity sha512-/8n6yM3TZnDeygi2shfi8Y7/brPdC1G7mRZhJxEp3g+dtmAo+b2ovMXODPZ3XkWbYV052q/E8dLj3Q1psDiY2Q==
 
 cross-fetch@^3.1.5:
   version "3.1.5"
@@ -26,10 +26,10 @@ node-fetch@2.6.7:
   dependencies:
     whatwg-url "^5.0.0"
 
-rxjs@^7.5.6:
-  version "7.5.7"
-  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.7.tgz#2ec0d57fdc89ece220d2e702730ae8f1e49def39"
-  integrity sha512-z9MzKh/UcOqB3i20H6rtrlaE/CgjLOvheWK/9ILrbhROGTweAi1BaFsTT9FbwZi5Trr1qNRs+MXkhmR06awzQA==
+rxjs@7.5.5:
+  version "7.5.5"
+  resolved "https://registry.yarnpkg.com/rxjs/-/rxjs-7.5.5.tgz#2ebad89af0f560f460ad5cc4213219e1f7dd4e9f"
+  integrity sha512-sy+H0pQofO95VDmFLzyaw9xNJU4KTRSwQIGM6+iG3SypAtCiLDzpeG8sJrNCWn2Up9km+KhkvTdbkrdy+yzZdw==
   dependencies:
     tslib "^2.1.0"
 

@@ -67,6 +67,15 @@ lazy val commonSettings = Seq(
   coverageMinimumBranchTotal := 100,
 )
 
+lazy val useNodeModuleResolution = {
+  import org.scalajs.jsenv.nodejs.NodeJSEnv
+  jsEnv := new NodeJSEnv(
+    NodeJSEnv
+      .Config()
+      .withArgs(List("--experimental-specifier-resolution=node")),
+  )
+}
+
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
   version := "1.1.0",
@@ -186,6 +195,7 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
     },
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "rxjs", "ws"),
     Global / stQuiet := true,
+    useNodeModuleResolution,
   )
 
 lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
@@ -212,10 +222,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .settings(
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
-    jsEnv := new org.scalajs.jsenv.nodejs.NodeJSEnv(
-      org.scalajs.jsenv.nodejs.NodeJSEnv.Config()
-        .withArgs(List("--experimental-specifier-resolution=node"))
-    ),
 
     // Test dependencies
     libraryDependencies ++= Seq(
@@ -233,9 +239,10 @@ lazy val walletEngine = (project in file("wallet-engine"))
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
+    useNodeModuleResolution,
 
     // Linting
     coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;",
@@ -284,5 +291,6 @@ addCommandAlias(
     "ogmiosSyncJS/test",
     "ogmiosTxSubmissionJS/test",
     "walletEngine/test",
+    "coverageAggregate",
   ).mkString(";", " ;", ""),
 )

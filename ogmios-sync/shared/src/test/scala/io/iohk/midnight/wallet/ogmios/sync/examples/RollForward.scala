@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.ogmios.sync.examples
 
 import io.circe.Json
+import io.circe.syntax.*
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
 
@@ -26,21 +27,8 @@ object RollForward {
       |          "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
       |          "timestamp": "1969-12-31T23:59:53.999509747Z",
       |          "type": "Deploy",
-      |          "contract": {
-      |             "publicOracle": {
-      |               "transcript": [{
-      |                 "functionName": "identity",
-      |                 "arg": {},
-      |                 "result": {}
-      |               }]
-      |             },
-      |             "privateOracle": {
-      |               "transcript": [{
-      |                 "functionName": "identity",
-      |                 "arg": {},
-      |                 "result": {}
-      |               }]
-      |             }
+      |          "publicOracle": {
+      |            "test": 1
       |          },
       |          "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
       |        },
@@ -81,34 +69,7 @@ object RollForward {
                 "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
               ),
               Instant.parse("1969-12-31T23:59:53.999509747Z"),
-              Contract(
-                Some(
-                  Oracle(
-                    Transcript(
-                      Seq(
-                        Query(
-                          FunctionName("identity"),
-                          ArbitraryJson(Json.obj()),
-                          ArbitraryJson(Json.obj()),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                Some(
-                  Oracle(
-                    Transcript(
-                      Seq(
-                        Query(
-                          FunctionName("identity"),
-                          ArbitraryJson(Json.obj()),
-                          ArbitraryJson(Json.obj()),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+              PublicOracle(ArbitraryJson(Json.obj("test" := 1))),
               TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
             ),
             CallTransaction(
