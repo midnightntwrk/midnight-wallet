@@ -18,16 +18,15 @@ import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
-import scala.scalajs.js
-import scala.scalajs.js.annotation.*
-import scala.scalajs.js.|
 import sttp.model.Uri
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
 import typings.midnightWalletApi.hashMod.Hash
-import typings.midnightWalletApi.midnightWalletApiStrings.{Call, Deploy}
 import typings.midnightWalletApi.transactionMod.*
 import typings.midnightWalletApi.walletMod as api
+
+import scala.scalajs.js
+import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
@@ -35,9 +34,6 @@ import typings.midnightWalletApi.walletMod as api
 @SuppressWarnings(Array("org.wartremover.warts.Product", "org.wartremover.warts.Serializable"))
 @JSExportTopLevel("Wallet")
 class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with FilterService {
-
-  private val callType: CALL_TX | DEPLOY_TX = Call
-  private val deployType: CALL_TX | DEPLOY_TX = Deploy
 
   override def submitTxReq(tx: Transaction): Observable[Hash] =
     Observable.from(
@@ -50,10 +46,10 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
   private def buildWalletInput(
       tx: Transaction,
   ): IO[Either[CallContractInput, DeployContractInput]] = {
-    val txType = tx.asInstanceOf[js.Dynamic].`type`.asInstanceOf[CALL_TX | DEPLOY_TX]
-    if (callType == txType) {
+    val txType = tx.asInstanceOf[js.Dynamic].`type`.asInstanceOf[String]
+    if (CALL_TX == txType) {
       buildCallContractInput(tx.asInstanceOf[CallTransaction]).map(Left(_))
-    } else if (deployType == txType) {
+    } else if (DEPLOY_TX == txType) {
       buildDeployContractInput(tx.asInstanceOf[DeployTransaction]).map(Right(_))
     } else {
       IO.raiseError(new Error("Tx match wasn't CallTx neither DeployTx"))

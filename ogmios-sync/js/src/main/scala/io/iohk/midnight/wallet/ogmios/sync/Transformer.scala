@@ -1,8 +1,8 @@
 package io.iohk.midnight.wallet.ogmios.sync
 
+import cats.syntax.show.*
 import io.iohk.midnight.wallet.blockchain.data
-import scala.scalajs.js
-import scala.scalajs.js.JSConverters.JSRichIterableOnce
+import io.iohk.midnight.wallet.blockchain.util.implicits.ShowInstances.instantShow
 import typings.midnightMockedNodeApi.blockMod.{Block, BlockBody, BlockHeader}
 import typings.midnightMockedNodeApi.contractMod.Contract
 import typings.midnightMockedNodeApi.oracleMod.{PrivateOracle, PublicOracle}
@@ -13,6 +13,9 @@ import typings.midnightMockedNodeApi.transactionMod.{
   Transaction,
 }
 import typings.midnightMockedNodeApi.transcriptMod.Transcript
+
+import scala.scalajs.js
+import scala.scalajs.js.JSConverters.JSRichIterableOnce
 
 private object Transformer {
   // There's a ScalablyTyped issue that generates incorrect imports,
@@ -43,7 +46,7 @@ private object Transformer {
       tx.nonce.value,
       tx.proof.value,
       transformTranscript(tx.publicTranscript),
-      new js.Date(tx.timestamp.toString),
+      new js.Date(tx.timestamp.show),
       CallTxType,
     )
 
@@ -57,7 +60,7 @@ private object Transformer {
     DeployTransaction(
       transformContract(tx.contract),
       tx.hash.value,
-      new js.Date(tx.timestamp.toString),
+      new js.Date(tx.timestamp.show),
       tx.transitionFunctionCircuits.value.toJSArray,
       DeployTxType,
     )
@@ -82,6 +85,6 @@ private object Transformer {
       header.hash.value,
       header.height.value.toDouble,
       header.parentHash.value,
-      new js.Date(header.timestamp.toString),
+      new js.Date(header.timestamp.show),
     )
 }

@@ -36,6 +36,7 @@ class JsonWebSocketClientTxSubmissionStub(responses: Queue[IO, Receive])
   private def isValid(transaction: Transaction): Boolean =
     transaction === examples.SubmitTx.validCallTx
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   override def receive[T: Decoder](): IO[T] =
     responses.take.map(_.asInstanceOf[T])
 }

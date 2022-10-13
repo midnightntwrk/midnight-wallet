@@ -39,6 +39,7 @@ class JsonWebSocketClientSyncStub(
         new Exception(s"Unexpected message ${msg.show}").raiseError[IO, Unit]
     }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   override def receive[T: Decoder](): IO[T] =
     responses.take.map(_.asInstanceOf[T])
 

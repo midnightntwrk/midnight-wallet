@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/wallet-api@1.0.3":
-  version "1.0.3"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.3.tgz#7604fac82617a6089ae1fa32cd81a6d4e62d38e8"
-  integrity sha512-F1Pi/AEDbipSgWjXlBBVpuPBlNp9lHmtk1bNL4kvJi20N40cS7mEE2XJ5smSsZKI4Xy4ssOwDGR+HGM9Ktjf3A==
+"@midnight/wallet-api@1.0.4":
+  version "1.0.4"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.4.tgz#e35f207a26a08baa7c8f8ac959d9f647dd437827"
+  integrity sha512-0mC3y+hx/1VJYZgBcxzWTxGe8cfAd2diFReg01cXeJLoBhD4R354aysKuPm3enoN7vpr6BZCbC3TmBT8lZ2HKg==
   dependencies:
     rxjs "7.5.5"
 
@@ -46,9 +46,9 @@ tslib@^2.1.0:
   integrity sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==
 
 typescript@^4.8.3:
-  version "4.8.3"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.8.3.tgz#d59344522c4bc464a65a730ac695007fdb66dd88"
-  integrity sha512-goMHfm00nWPa8UvR/CPSvykqf6dVV8x/dp0c5mFTMTIu0u0FlGWRioyy7Nn0PGAdHxpJZnuO/ut+PpQ8UiHAig==
+  version "4.8.4"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.8.4.tgz#c464abca159669597be5f96b8943500b238e60e6"
+  integrity sha512-QCh+85mCy+h0IGff8r5XWzOVSbBO+KfeYrMQh7NJ58QujwcE22u+NUSmUxqF+un70P9GXKxa2HCNiTTMJknyjQ==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"

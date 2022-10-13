@@ -212,6 +212,10 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .settings(
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
+    jsEnv := new org.scalajs.jsenv.nodejs.NodeJSEnv(
+      org.scalajs.jsenv.nodejs.NodeJSEnv.Config()
+        .withArgs(List("--experimental-specifier-resolution=node"))
+    ),
 
     // Test dependencies
     libraryDependencies ++= Seq(

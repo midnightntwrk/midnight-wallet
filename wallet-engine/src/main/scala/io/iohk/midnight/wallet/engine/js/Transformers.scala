@@ -9,7 +9,7 @@ import io.circe
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.ArbitraryJson
 import typings.midnightWalletApi.contractMod.Contract
-import typings.midnightWalletApi.midnightWalletApiStrings.{Call, Deploy}
+import typings.midnightWalletApi.transactionMod.{CALL_TX, DEPLOY_TX}
 import typings.midnightWalletApi.oraclesMod.Oracle
 import typings.midnightWalletApi.transactionMod.{CallTransaction, DeployTransaction, Transaction}
 import typings.midnightWalletApi.transcriptMod.{Query, Transcript}
@@ -35,7 +35,7 @@ object Transformers {
         callTx.proof.value,
         transformTranscript(callTx.publicTranscript),
         new Date(callTx.timestamp.toEpochMilli.toDouble),
-        Call,
+        CALL_TX,
       )
 
     private def transformTranscript(transcript: data.Transcript): Transcript =
@@ -77,7 +77,7 @@ object Transformers {
         deployTx.hash.value,
         new Date(deployTx.timestamp.toEpochMilli.toDouble),
         deployTx.transitionFunctionCircuits.value.toJSArray,
-        Deploy,
+        DEPLOY_TX,
       )
 
     private def transformContract(contract: data.Contract): Contract =
