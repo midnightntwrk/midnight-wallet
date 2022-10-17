@@ -3,15 +3,11 @@ package io.iohk.midnight.wallet.blockchain.data
 import cats.syntax.all.*
 import io.circe.Json
 import java.time.Instant
-import org.scalacheck.Arbitrary.arbitrary
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
 object Generators {
   def hashGen[T]: Gen[Hash[T]] = Gen.hexStr.map(Hash[T].apply)
-
-  val circuitValuesGen: Gen[CircuitValues] =
-    (arbitrary[Int], arbitrary[Int], arbitrary[Int]).mapN(CircuitValues.apply)
 
   val addressGen: Gen[Address] = Gen.hexStr.map(Address.apply)
 

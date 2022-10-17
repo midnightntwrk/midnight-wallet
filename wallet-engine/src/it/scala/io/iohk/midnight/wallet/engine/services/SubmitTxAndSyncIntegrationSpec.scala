@@ -63,7 +63,7 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
         case l =>
           fail(s"Expected 2 blocks but got ${l.toString()}")
       }
-      val includedTxs = blocks.flatMap(_.body.transactionResults.map(_.transaction))
+      val includedTxs = blocks.flatMap(_.body.transactionResults)
       val deployTxs = includedTxs.collect { case d: DeployTransaction => d }
       val callTxs = includedTxs.collect { case c: CallTransaction => c }
       assert(deployTxs.contains(Transactions.validDeployTx))

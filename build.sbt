@@ -125,15 +125,10 @@ lazy val walletCore = project
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
-      "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
-      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
     ),
 
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
-
-    // Linting
-    coverageExcludedPackages := "io.iohk.midnight.wallet.core.tracer",
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
@@ -244,7 +239,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
     Global / stQuiet := true,
     useNodeModuleResolution,
 
-    // Linting
+    // Coverage
     coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;",
   )
 

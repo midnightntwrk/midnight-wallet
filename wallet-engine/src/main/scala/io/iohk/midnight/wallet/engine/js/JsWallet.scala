@@ -8,9 +8,9 @@ import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
 import io.iohk.midnight.wallet.blockchain.data.{
   Address,
   Block,
-  CircuitValues,
   FunctionName,
   Nonce,
+  Proof,
   TransitionFunctionCircuits,
   Hash as DataHash,
 }
@@ -18,6 +18,7 @@ import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
 import sttp.model.Uri
@@ -65,8 +66,8 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
           Address(callTx.address),
           FunctionName(callTx.functionName),
           Nonce(callTx.nonce),
+          Proof(callTx.proof),
           _,
-          CircuitValues(1, 2, 3),
         )
       }
 
@@ -100,14 +101,12 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
 object JsWallet {
   @JSExport
   def build(
-      proverUri: String,
       nodeUri: String,
       includeCookies: Boolean,
   ): js.Promise[api.Wallet] =
     WalletBuilder
       .catsEffectWallet(
         Config.default( // [TODO PM-5110] Improve config creation
-          Uri.unsafeParse(proverUri),
           Uri.unsafeParse(nodeUri),
           includeCookies,
         ),

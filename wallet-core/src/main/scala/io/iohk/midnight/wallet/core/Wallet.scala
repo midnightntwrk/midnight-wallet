@@ -8,7 +8,7 @@ import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet.{CallContractInput, DeployContractInput}
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.core.services.{ProverService, SyncService, TxSubmissionService}
+import io.iohk.midnight.wallet.core.services.{SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.core.util.ClockOps.*
 
 import java.time.Instant
@@ -23,15 +23,13 @@ trait Wallet[F[_]] {
 
 object Wallet {
   class Live[F[_]: MonadThrow: Clock](
-      proverService: ProverService[F],
       submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
   ) extends Wallet[F] {
     override def callContract(input: CallContractInput): F[Hash[CallTransaction]] =
       for {
-        proof <- proverService.prove(input.circuitValues)
         timestamp <- Clock[F].realTimeInstant
-        transaction = buildCallTransaction(input.hash, timestamp, input, proof)
+        transaction = buildCallTransaction(input.hash, timestamp, input, input.proof)
         response <- submitTxService.submitTransaction(transaction)
         result <- response match {
           case SubmissionResult.Accepted         => input.hash.pure
@@ -88,8 +86,8 @@ object Wallet {
       address: Address,
       func: FunctionName,
       nonce: Nonce,
+      proof: Proof,
       publicTranscript: Transcript,
-      circuitValues: CircuitValues,
   )
 
   final case class DeployContractInput(

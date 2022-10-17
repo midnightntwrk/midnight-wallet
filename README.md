@@ -1,11 +1,12 @@
 # midnight-wallet
-![example event parameter](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg)
+[![CI](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml)
+
+
 
 This is an implementation of [wallet-api](https://github.com/input-output-hk/midnight-wallet-api),
 used by dapp developers and [client-sdk](https://github.com/input-output-hk/midnight-client-sdk) to:
  
-- Build transactions, interacting with [snarkie](https://github.com/input-output-hk/snarkie) to
-obtain zk-proofs if necessary
+- Build transactions
 - Submit transactions to a node
 - Obtain blocks from a node
 
@@ -34,8 +35,8 @@ it's automatically picked up by any sbt version that is installed.
 
 ## External services
 
-- [midnight-platform](https://github.com/input-output-hk/midnight-platform): the Midnight node and consensus
-- [snarkie](https://github.com/input-output-hk/snarkie): creates/verifies zero-knowledge proofs
+- [midnight-mocked-node](https://github.com/input-output-hk/midnight-mocked-node): the Midnight node that we are
+  currently using.
 
 ## Directory structure
 `build.sbt` - sbt project definition, Scala version, dependencies, build configuration
@@ -115,10 +116,8 @@ As these tests connect with the real external services, the corresponding servic
 locally and listening to the configured port to which the tests connect. The tests are intentionally
 configured to connect to the default port for the service.
 
-Currently, there are 2 external services being tested:
-- Platform's node (See [midnight-platform](https://github.com/input-output-hk/midnight-platform/) repo to find out how to
-  build the docker image and run a container)
-- Snarkie Server (See [snarkie](https://github.com/input-output-hk/snarkie) repo to build docker image and run container)
+Currently, there is 1 external service being tested:
+- Midnight Mocked Node (See [midnight-mocked-node](https://github.com/input-output-hk/midnight-mocked-node/) repo to find out how to run it)
 
 ##### How to run
 

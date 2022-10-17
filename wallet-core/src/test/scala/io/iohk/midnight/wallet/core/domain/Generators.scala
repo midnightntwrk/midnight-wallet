@@ -14,8 +14,8 @@ object Generators {
       addressGen,
       functionNameGen,
       nonceGen,
+      proofGen,
       transcriptGen,
-      circuitValuesGen,
     )
       .mapN(CallContractInput.apply)
 

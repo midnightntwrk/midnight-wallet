@@ -9,7 +9,6 @@ import io.iohk.midnight.wallet.core.Wallet.{
   DeployContractInput,
   TransactionRejected,
 }
-import io.iohk.midnight.wallet.core.clients.prover.*
 import io.iohk.midnight.wallet.core.domain.Generators.{callContractInputGen, deployContractInputGen}
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
@@ -17,30 +16,24 @@ import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
 import java.time.Instant
-import scala.concurrent.duration.DurationInt
 
 trait WalletSpec {
-  val proverClient = new ProverClientStub()
-  val failingProverClient = new FailingProverClient()
-  val alwaysInProgressProverClient = new AlwaysInProgressProverClient()
   val txSubmissionService = new TxSubmissionServiceStub()
   val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
   val syncService = new SyncServiceStub()
   val failingSyncService = new FailingSyncServiceStub()
 
   def buildWallet(
-      proverClient: ProverClient[IO],
       txSubmissionService: TxSubmissionService[IO],
       syncService: SyncService[IO],
   ): Wallet[IO] =
     new Wallet.Live[IO](
-      new ProverService.Live[IO](proverClient, maxRetries = 1, retryDelay = 10.millis),
       txSubmissionService,
       syncService,
     )
 
   def defaultWallet(): Wallet[IO] =
-    buildWallet(proverClient, txSubmissionService, syncService)
+    buildWallet(txSubmissionService, syncService)
 
   val ExpectedHashLength = 64
 
@@ -77,31 +70,9 @@ class WalletCallContractSpec
     }
   }
 
-  test("fails when prover client fails") {
-    forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val wallet = buildWallet(failingProverClient, txSubmissionService, syncService)
-
-      wallet
-        .callContract(input)
-        .attempt
-        .map(assertEquals(_, Left(FailingProverClient.TheError)))
-    }
-  }
-
-  test("does not retry proof status forever") {
-    forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val wallet = buildWallet(alwaysInProgressProverClient, txSubmissionService, syncService)
-
-      wallet
-        .callContract(input)
-        .attempt
-        .map(assertEquals(_, Left(ProverService.Error.PollingForProofMaxRetriesReached)))
-    }
-  }
-
   test("fails when platform submission fails") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val wallet = buildWallet(proverClient, failingTxSubmissionService, syncService)
+      val wallet = buildWallet(failingTxSubmissionService, syncService)
 
       wallet
         .callContract(input)
@@ -112,7 +83,7 @@ class WalletCallContractSpec
 
   test("fails when platform submission got rejected") {
     forAllF(callContractInputGen) { (input: CallContractInput) =>
-      val wallet = buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
+      val wallet = buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
 
       wallet
         .callContract(input)
@@ -150,7 +121,7 @@ class WalletDeployContractSpec
 
   test("fails when platform submission fails") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      buildWallet(proverClient, failingTxSubmissionService, syncService)
+      buildWallet(failingTxSubmissionService, syncService)
         .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
@@ -159,7 +130,7 @@ class WalletDeployContractSpec
 
   test("fails when platform submission got rejected") {
     forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      buildWallet(proverClient, new RejectedTxSubmissionServiceStub(), syncService)
+      buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
         .deployContract(input)
         .attempt
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
@@ -184,7 +155,7 @@ class WalletSyncSpec extends CatsEffectSuite with WalletSpec with BetterOutputSu
       ),
     )
 
-    buildWallet(proverClient, txSubmissionService, singleBlockSyncService)
+    buildWallet(txSubmissionService, singleBlockSyncService)
       .sync()
       .compile
       .to(List)
