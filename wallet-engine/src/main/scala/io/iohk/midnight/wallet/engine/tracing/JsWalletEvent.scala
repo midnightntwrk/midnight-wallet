@@ -9,9 +9,7 @@ object JsWalletEvent {
   /** The construction of a new wallet was requested for the given parameters.
     */
   final case class WalletBuildRequested(
-      proverUri: String,
       platformUri: String,
-      includeCookies: Boolean,
   ) extends JsWalletEvent
 
   /** The final config that will be used for the wallet construction has been created.

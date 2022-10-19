@@ -6,8 +6,6 @@ export interface CloseableWallet {
 
 export class WalletBuilder {
     static build(
-        proverUri: string,
-        nodeUri: string,
-        includeCookies: boolean
+        nodeUri: string
     ): Promise<FilterService & Wallet & CloseableWallet>
 }

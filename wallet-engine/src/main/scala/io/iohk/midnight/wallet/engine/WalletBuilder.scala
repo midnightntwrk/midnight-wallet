@@ -11,19 +11,12 @@ import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
-import org.scalajs.dom.RequestCredentials
-import sttp.client3.FetchOptions
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
 object WalletBuilder {
   def build[F[_]: Async](config: Config): Resource[F, Wallet[F]] = {
-    val fetchOptions =
-      if (config.includeCookies)
-        FetchOptions.Default.copy(credentials = Some(RequestCredentials.include))
-      else
-        FetchOptions.Default
-    val sttpBackend = FetchCatsBackend[F](fetchOptions)
+    val sttpBackend = FetchCatsBackend[F]()
 
     implicit val clientTracer: ogmios.tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
 
@@ -55,18 +48,14 @@ object WalletBuilder {
 
   final case class Config(
       platformUri: Uri,
-      includeCookies: Boolean,
-      proverMaxRetries: Int,
       syncBufferSize: Int,
       userIdLength: Int,
   )
 
   object Config {
-    def default(nodeUri: Uri, includeCookies: Boolean): Config =
+    def default(nodeUri: Uri): Config =
       Config(
         nodeUri,
-        includeCookies,
-        proverMaxRetries = 20,
         syncBufferSize = 10,
         userIdLength = 10,
       )

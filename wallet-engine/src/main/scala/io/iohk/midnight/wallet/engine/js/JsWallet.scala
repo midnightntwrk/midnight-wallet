@@ -53,13 +53,11 @@ object JsWallet {
   @JSExport
   def build(
       nodeUri: String,
-      includeCookies: Boolean,
   ): js.Promise[api.Wallet] =
     WalletBuilder
       .catsEffectWallet(
         Config.default( // [TODO PM-5110] Improve config creation
           Uri.unsafeParse(nodeUri),
-          includeCookies,
         ),
       )
       .allocated
