@@ -15,11 +15,11 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/mocked-node-api": "0.2.4",
+        "@midnight/mocked-node-api": "^0.3.0",
         "cross-fetch": "^3.1.5",
         "isomorphic-ws": "^5.0.0",
-        "ws": "^8.8.1",
-        "rxjs": "7.5.5"
+        "rxjs": "7.5.5",
+        "ws": "^8.8.1"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

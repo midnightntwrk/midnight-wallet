@@ -3,19 +3,14 @@ package io.iohk.midnight.wallet.core
 import cats.effect.IO
 import cats.syntax.eq.*
 import io.iohk.midnight.wallet.blockchain.data.Block.Height.Genesis
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash}
-import io.iohk.midnight.wallet.core.Wallet.{
-  CallContractInput,
-  DeployContractInput,
-  TransactionRejected,
-}
-import io.iohk.midnight.wallet.core.domain.Generators.{callContractInputGen, deployContractInputGen}
+import io.iohk.midnight.wallet.blockchain.data.Generators.transactionGen
+import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
+import io.iohk.midnight.wallet.core.Wallet.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
+import java.time.Instant
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
-
-import java.time.Instant
 
 trait WalletSpec {
   val txSubmissionService = new TxSubmissionServiceStub()
@@ -48,90 +43,44 @@ class WalletCallContractSpec
     with BetterOutputSuite {
 
   test("a hash is returned") {
-    forAllF(callContractInputGen) { (input: CallContractInput) =>
+    forAllF(transactionGen) { (tx: Transaction) =>
       defaultWallet()
-        .callContract(input)
+        .submitTransaction(tx)
         .map { r =>
-          assertEquals(r.value, input.hash.value)
+          assertEquals(r.value, tx.header.hash.value)
         }
     }
   }
 
   test("transactions get submitted to the client") {
-    forAllF(callContractInputGen, callContractInputGen) {
-      (input1: CallContractInput, input2: CallContractInput) =>
-        val wallet = defaultWallet()
-        for {
-          hash1 <- wallet.callContract(input1)
-          hash2 <- wallet.callContract(input2)
-          wasSubmitted1 = txSubmissionService.wasCallTxSubmitted(hash1)
-          wasSubmitted2 = txSubmissionService.wasCallTxSubmitted(hash2)
-        } yield assert(wasSubmitted1 && wasSubmitted2)
+    forAllF(transactionGen, transactionGen) { (tx1: Transaction, tx2: Transaction) =>
+      val wallet = defaultWallet()
+      for {
+        hash1 <- wallet.submitTransaction(tx1)
+        hash2 <- wallet.submitTransaction(tx2)
+        wasSubmitted1 = txSubmissionService.wasTxSubmitted(hash1)
+        wasSubmitted2 = txSubmissionService.wasTxSubmitted(hash2)
+      } yield assert(wasSubmitted1 && wasSubmitted2)
     }
   }
 
-  test("fails when platform submission fails") {
-    forAllF(callContractInputGen) { (input: CallContractInput) =>
+  test("fails when node submission fails") {
+    forAllF(transactionGen) { (tx: Transaction) =>
       val wallet = buildWallet(failingTxSubmissionService, syncService)
 
       wallet
-        .callContract(input)
+        .submitTransaction(tx)
         .attempt
         .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
     }
   }
 
-  test("fails when platform submission got rejected") {
-    forAllF(callContractInputGen) { (input: CallContractInput) =>
+  test("fails when node submission got rejected") {
+    forAllF(transactionGen) { (tx: Transaction) =>
       val wallet = buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
 
       wallet
-        .callContract(input)
-        .attempt
-        .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
-    }
-  }
-}
-
-class WalletDeployContractSpec
-    extends CatsEffectSuite
-    with ScalaCheckEffectSuite
-    with WalletSpec
-    with BetterOutputSuite {
-  test("a hash is returned") {
-    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      defaultWallet().deployContract(input).map { r =>
-        assertEquals(r.value, input.hash.value)
-      }
-    }
-  }
-
-  test("transactions get submitted to the client") {
-    forAllF(deployContractInputGen, deployContractInputGen) {
-      (input1: DeployContractInput, input2: DeployContractInput) =>
-        val wallet = defaultWallet()
-        for {
-          hash1 <- wallet.deployContract(input1)
-          hash2 <- wallet.deployContract(input2)
-          wasSubmitted1 = txSubmissionService.wasDeployTxSubmitted(hash1)
-          wasSubmitted2 = txSubmissionService.wasDeployTxSubmitted(hash2)
-        } yield assert(wasSubmitted1 && wasSubmitted2)
-    }
-  }
-
-  test("fails when platform submission fails") {
-    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      buildWallet(failingTxSubmissionService, syncService)
-        .deployContract(input)
-        .attempt
-        .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
-    }
-  }
-
-  test("fails when platform submission got rejected") {
-    forAllF(deployContractInputGen) { (input: DeployContractInput) =>
-      buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
-        .deployContract(input)
+        .submitTransaction(tx)
         .attempt
         .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
     }

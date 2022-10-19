@@ -6,51 +6,57 @@ import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
 
-import java.time.Instant
-
 object SubmitTx {
-
-  private val query: Query = Query(
-    FunctionName("identity"),
-    ArbitraryJson(Json.obj("arg1" -> Json.fromString("argument"))),
-    ArbitraryJson(Json.obj("final" -> Json.fromString("success"))),
-  )
 
   val validJsonCall: String =
     """{
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
       |  "payload" : {
-      |    "type" : "Call",
-      |    "hash" : "3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1",
-      |    "timestamp" : "1969-12-31T23:59:59.999391Z",
-      |    "address" : "Address",
-      |    "functionName" : "Func",
-      |    "proof" : "Proof",
-      |    "nonce" : "Nonce",
-      |    "publicTranscript" : [
-      |      {
-      |        "functionName" : "identity",
-      |        "arg" : {
-      |          "arg1" : "argument"
-      |        },
-      |        "result" : {
-      |          "final" : "success"
+      |    "header" : {
+      |      "hash" : "3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"
+      |    },
+      |    "body" : {
+      |      "type" : "Call",
+      |      "address" : "Address",
+      |      "functionName" : "Func",
+      |      "proof" : "Proof",
+      |      "nonce" : "Nonce",
+      |      "publicTranscript" : [
+      |        {
+      |          "functionName" : "identity",
+      |          "arg" : {
+      |            "arg1" : "argument"
+      |          },
+      |          "result" : {
+      |            "final" : "success"
+      |          }
       |        }
-      |      }
-      |    ]
+      |      ]
+      |    }
       |  }
       |}""".stripMargin
 
-  val validCallTx: CallTransaction =
-    data.CallTransaction(
-      Hash[CallTransaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
-      Instant.parse("1969-12-31T23:59:59.999391Z"),
-      Address("Address"),
-      FunctionName("Func"),
-      Proof("Proof"),
-      Nonce("Nonce"),
-      Transcript(Seq(query)),
+  private val query: Json = Json.obj(
+    "functionName" := "identity",
+    "arg" := Json.obj("arg1" := "argument"),
+    "result" := Json.obj("final" := "success"),
+  )
+  val validCallTx: Transaction =
+    data.Transaction(
+      data.Transaction.Header(
+        Hash[Transaction]("3b5b0fae80579c039ff3159a76ad01dc166fe8ffede5dd01013306065d2905c1"),
+      ),
+      ArbitraryJson(
+        Json.obj(
+          "type" := "Call",
+          "address" := "Address",
+          "functionName" := "Func",
+          "proof" := "Proof",
+          "nonce" := "Nonce",
+          "publicTranscript" := Json.arr(query),
+        ),
+      ),
     )
 
   val validCallObject: LocalTxSubmission.Send.SubmitTx =
@@ -61,27 +67,39 @@ object SubmitTx {
       |  "protocol" : "LocalTxSubmission",
       |  "type" : "SubmitTx",
       |  "payload" : {
-      |    "type" : "Deploy",
-      |    "hash" : "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
-      |    "timestamp" : "1969-12-31T23:59:57.999536Z",
-      |    "publicOracle" : {
-      |      "test" : 1
+      |    "header" : {
+      |      "hash" : "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe"
       |    },
-      |    "transitionFunctionCircuits" : [
-      |      "6232e241fc01f4",
-      |      "e050935684748401"
-      |    ]
+      |    "body" : {
+      |      "type" : "Deploy",
+      |      "publicOracle" : {
+      |        "test" : 1
+      |      },
+      |      "transitionFunctionCircuits" : [
+      |        "6232e241fc01f4",
+      |        "e050935684748401"
+      |      ]
+      |    }
       |  }
       |}""".stripMargin
 
-  val validDeployTx: DeployTransaction =
-    DeployTransaction(
-      Hash[DeployTransaction](
-        "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
+  val validDeployTx: Transaction =
+    Transaction(
+      Transaction.Header(
+        Hash[Transaction](
+          "8b6655003a00d300cbd6c160d2f869013a64e55908271bcfc4ff79c22844a5fe",
+        ),
       ),
-      Instant.parse("1969-12-31T23:59:57.999536Z"),
-      PublicOracle(ArbitraryJson(Json.obj("test" := 1))),
-      TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
+      ArbitraryJson(
+        Json.obj(
+          "type" := "Deploy",
+          "publicOracle" := Json.obj("test" := 1),
+          "transitionFunctionCircuits" := Json.arr(
+            "6232e241fc01f4".asJson,
+            "e050935684748401".asJson,
+          ),
+        ),
+      ),
     )
 
   val validDeployObject: LocalTxSubmission.Send.SubmitTx =

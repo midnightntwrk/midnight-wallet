@@ -6,22 +6,14 @@ import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.Wallet
 
 class WalletSyncStub(blocks: Seq[Block]) extends Wallet[IO] {
-  override def callContract(contractInput: Wallet.CallContractInput): IO[Hash[CallTransaction]] =
+  override def submitTransaction(transaction: Transaction): IO[Hash[Transaction]] =
     IO.raiseError(new NotImplementedError)
-
-  override def deployContract(
-      contractInput: Wallet.DeployContractInput,
-  ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
   override def sync(): Stream[IO, Block] = Stream.emits(blocks)
 }
 class WalletSyncFailingStub(blocks: Seq[Block], error: Throwable) extends Wallet[IO] {
-  override def callContract(contractInput: Wallet.CallContractInput): IO[Hash[CallTransaction]] =
+  override def submitTransaction(transaction: Transaction): IO[Hash[Transaction]] =
     IO.raiseError(new NotImplementedError)
-
-  override def deployContract(
-      contractInput: Wallet.DeployContractInput,
-  ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
   override def sync(): Stream[IO, Block] =
     Stream.emits(blocks) ++ Stream.raiseError[IO](error)
@@ -29,12 +21,8 @@ class WalletSyncFailingStub(blocks: Seq[Block], error: Throwable) extends Wallet
 }
 
 class WalletSyncInfiniteStub extends Wallet[IO] {
-  override def callContract(contractInput: Wallet.CallContractInput): IO[Hash[CallTransaction]] =
+  override def submitTransaction(transaction: Transaction): IO[Hash[Transaction]] =
     IO.raiseError(new NotImplementedError)
-
-  override def deployContract(
-      contractInput: Wallet.DeployContractInput,
-  ): IO[Hash[DeployTransaction]] = IO.raiseError(new NotImplementedError)
 
   override def sync(): Stream[IO, Block] =
     Stream.never[IO]

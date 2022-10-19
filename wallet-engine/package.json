@@ -15,13 +15,13 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/wallet-api": "1.0.5",
+        "@midnight/wallet-api": "^1.1.0",
         "cross-fetch": "^3.1.5",
         "isomorphic-ws": "^5.0.0",
         "ws": "^8.8.1"
     },
     "devDependencies": {
-        "typescript": "^4.8.3",
-        "@midnight/mocked-node-api": "0.2.4"
+        "@midnight/mocked-node-api": "0.2.4",
+        "typescript": "^4.8.3"
     }
 }

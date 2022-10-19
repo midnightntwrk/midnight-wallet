@@ -4,8 +4,6 @@ import cats.syntax.all.*
 import io.circe.Decoder
 import io.circe.generic.semiauto.*
 import io.iohk.midnight.wallet.blockchain.data.*
-import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
-
 import java.time.Instant
 
 private[sync] object Decoders {
@@ -13,43 +11,14 @@ private[sync] object Decoders {
     implicit def hashDecoder[T]: Decoder[Hash[T]] =
       Decoder[String].map(Hash[T])
 
-    implicit val nonceDecoder: Decoder[Nonce] =
-      Decoder[String].map(Nonce.apply)
-
-    implicit val addressDecoder: Decoder[Address] =
-      Decoder[String].map(Address.apply)
-
-    implicit val functionNameDecoder: Decoder[FunctionName] =
-      Decoder[String].map(FunctionName.apply)
-
-    implicit val proofDecoder: Decoder[Proof] =
-      Decoder[String].map(Proof.apply)
-
-    implicit val transitionFunctionCircuitsDecoder: Decoder[TransitionFunctionCircuits] =
-      Decoder[Seq[String]].map(TransitionFunctionCircuits.apply)
-
     implicit val arbitraryJsonDecoder: Decoder[ArbitraryJson] =
       json => Right(ArbitraryJson(json.value))
 
-    implicit val queryDecoder: Decoder[Query] = deriveDecoder
-
-    implicit val transcriptDecoder: Decoder[Transcript] =
-      Decoder[Seq[Query]].map(Transcript.apply)
-
-    implicit val oracleDecoder: Decoder[PublicOracle] =
-      Decoder[ArbitraryJson].map(PublicOracle.apply)
-
-    implicit val callTransactionDecoder: Decoder[CallTransaction] =
-      deriveDecoder
-
-    implicit val deployTransactionDecoder: Decoder[DeployTransaction] =
-      deriveDecoder
+    implicit val transactionHeaderDecoder: Decoder[Transaction.Header] =
+      deriveDecoder[Transaction.Header]
 
     implicit val transactionDecoder: Decoder[Transaction] =
-      Decoder.instance(_.get[TransactionType](TransactionType.Discriminator)).flatMap {
-        case TransactionType.Call   => Decoder[CallTransaction].widen
-        case TransactionType.Deploy => Decoder[DeployTransaction].widen
-      }
+      deriveDecoder[Transaction]
 
     implicit val blockHeightDecoder: Decoder[Block.Height] =
       Decoder[BigInt].emap(Block.Height.apply)

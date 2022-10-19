@@ -6,10 +6,9 @@ import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.util.implicits.ShowInstances.instantShow
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
+import typings.midnightMockedNodeApi.anon.Hash
 import typings.midnightMockedNodeApi.blockMod.{Block, BlockBody, BlockHeader}
-import typings.midnightMockedNodeApi.queryMod.Query
 import typings.midnightMockedNodeApi.transactionMod.*
-import typings.midnightMockedNodeApi.transcriptMod.Transcript
 
 private object Transformer {
   def transformBlock(block: data.Block): Block[Transaction] =
@@ -19,28 +18,7 @@ private object Transformer {
     BlockBody(body.transactionResults.map(transformTx).toJSArray)
 
   private def transformTx(tx: data.Transaction): Transaction =
-    tx match {
-      case callTx: data.CallTransaction     => transformCallTx(callTx)
-      case deployTx: data.DeployTransaction => transformDeployTx(deployTx)
-    }
-
-  private def transformCallTx(tx: data.CallTransaction): CallTransaction =
-    CallTransaction(
-      tx.address.value,
-      tx.functionName.value,
-      tx.hash.value,
-      tx.nonce.value,
-      tx.proof.value,
-      transformTranscript(tx.publicTranscript),
-      tx.timestamp.show,
-      CALL_TX,
-    )
-
-  private def transformTranscript(transcript: data.Transcript): Transcript =
-    transcript.value.map(transformQuery).toJSArray
-
-  private def transformQuery(q: data.Query): Query =
-    Query(dynamicFromJson(q.arg.value), q.functionName.value, dynamicFromJson(q.result.value))
+    Transaction(dynamicFromJson(tx.body.value), Hash(tx.header.hash.value))
 
   @SuppressWarnings(
     Array(
@@ -61,15 +39,6 @@ private object Transformer {
         val mapped = obj.toList.map { case (key, json) => (key, dynamicFromJson(json)) }
         js.special.objectLiteral(mapped*)
       },
-    )
-
-  private def transformDeployTx(tx: data.DeployTransaction): DeployTransaction =
-    DeployTransaction(
-      tx.hash.value,
-      dynamicFromJson(tx.publicOracle.arbitraryJson.value),
-      tx.timestamp.show,
-      tx.transitionFunctionCircuits.value.toJSArray,
-      DEPLOY_TX,
     )
 
   private def transformBlockHeader(header: data.Block.Header): BlockHeader =

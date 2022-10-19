@@ -7,10 +7,10 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.2.4.tgz#659ffb6b4881404febd922dd960f67cdfabfa782"
   integrity sha512-/8n6yM3TZnDeygi2shfi8Y7/brPdC1G7mRZhJxEp3g+dtmAo+b2ovMXODPZ3XkWbYV052q/E8dLj3Q1psDiY2Q==
 
-"@midnight/wallet-api@1.0.5":
-  version "1.0.5"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.0.5.tgz#bcd16ffc17f20deca93d52b6673ed62237e9cd6a"
-  integrity sha512-HXkyx8iEpBscdafYQVF8OuP4CGQ7zLIu65sEkf3ggceimoBHbrBaT8pg1zC7KfhRK21OP/O+or2dnO1AI8Iy3w==
+"@midnight/wallet-api@^1.1.0":
+  version "1.1.0"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-1.1.0.tgz#20758953c0e11fc1ca12fc8bd7ccebfc6718fdec"
+  integrity sha512-YSR9VdNzSAvAvpxeB9B+br7FH9tgjqfHF1hGoIbM/zv/650TxfIAd//TWc6WlKGjs4SQyn0YHsV5l/qakbfjnw==
   dependencies:
     rxjs "7.5.5"
 

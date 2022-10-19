@@ -4,7 +4,6 @@ import io.circe.generic.semiauto.deriveEncoder
 import io.circe.syntax.*
 import io.circe.{Encoder, Json}
 import io.iohk.midnight.wallet.blockchain.data.*
-import io.iohk.midnight.wallet.ogmios.protocol.TransactionType
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
 
 private[tx_submission] object Encoders {
@@ -12,56 +11,14 @@ private[tx_submission] object Encoders {
     implicit def hashEncoder[T]: Encoder[Hash[T]] =
       Encoder[String].contramap(_.toHexString)
 
-    implicit val functionNameEncoder: Encoder[FunctionName] =
-      Encoder[String].contramap(_.value)
-
-    implicit val addressEncoder: Encoder[Address] =
-      Encoder[String].contramap(_.value)
-
-    implicit val nonceEncoder: Encoder[Nonce] =
-      Encoder[String].contramap(_.value)
-
-    implicit val proofEncoder: Encoder[Proof] =
-      Encoder[String].contramap(_.value)
-
-    implicit val transitionFunctionCircuitsEncoder: Encoder[TransitionFunctionCircuits] =
-      Encoder[Seq[String]].contramap(_.value)
-
     implicit val arbitraryJsonEncoder: Encoder[ArbitraryJson] =
       _.value
 
-    implicit val queryEncoder: Encoder[Query] = deriveEncoder[Query]
-
-    implicit val transcriptEncoder: Encoder[Transcript] =
-      Encoder[Seq[Query]].contramap(_.value)
-
-    implicit val oracleEncoder: Encoder[PublicOracle] =
-      Encoder[ArbitraryJson].contramap(_.arbitraryJson)
-
-    implicit val callTransactionEncoder: Encoder[CallTransaction] =
-      deriveEncoder[CallTransaction].mapJson(
-        _.deepMerge(
-          Json.obj(
-            TransactionType.Discriminator := TransactionType.Call.entryName,
-          ),
-        ),
-      )
-
-    implicit val deployTransactionEncoder: Encoder[DeployTransaction] =
-      deriveEncoder[DeployTransaction].mapJson(
-        _.deepMerge(
-          Json.obj(
-            TransactionType.Discriminator := TransactionType.Deploy.entryName,
-          ),
-        ),
-      )
+    implicit val transactionHeaderEncoder: Encoder[Transaction.Header] =
+      deriveEncoder[Transaction.Header]
 
     implicit val transactionEncoder: Encoder[Transaction] =
-      Encoder
-        .instance[Transaction] {
-          case call: CallTransaction     => Encoder[CallTransaction].apply(call)
-          case deploy: DeployTransaction => Encoder[DeployTransaction].apply(deploy)
-        }
+      deriveEncoder[Transaction]
 
     implicit val submitTxEncoder: Encoder[SubmitTx] =
       deriveEncoder[LocalTxSubmission.Send.SubmitTx].mapJson(

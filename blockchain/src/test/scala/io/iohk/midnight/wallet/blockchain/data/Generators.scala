@@ -9,10 +9,6 @@ import org.scalacheck.cats.implicits.*
 object Generators {
   def hashGen[T]: Gen[Hash[T]] = Gen.hexStr.map(Hash[T].apply)
 
-  val addressGen: Gen[Address] = Gen.hexStr.map(Address.apply)
-
-  val functionNameGen: Gen[FunctionName] = Gen.alphaStr.map(FunctionName.apply)
-
   val jsonFieldGen: Gen[(String, Json)] = for {
     name <- Gen.alphaStr
     value <- Gen.alphaNumStr
@@ -22,28 +18,6 @@ object Generators {
     fields <- Gen.nonEmptyListOf(jsonFieldGen)
   } yield ArbitraryJson(Json.obj(fields*))
 
-  val nonceGen: Gen[Nonce] = Gen.hexStr.map(Nonce.apply)
-
-  val queryGen: Gen[Query] =
-    (
-      functionNameGen,
-      jsonGen,
-      jsonGen,
-    ).mapN(Query.apply)
-
-  val transcriptGen: Gen[Transcript] = Gen.nonEmptyListOf(queryGen).map(Transcript.apply)
-
-  val transitionFunctionCircuitsGen: Gen[TransitionFunctionCircuits] =
-    Gen
-      .nonEmptyListOf(Gen.alphaNumStr)
-      .map(TransitionFunctionCircuits.apply)
-
-  val publicOracleGen: Gen[PublicOracle] = jsonGen.map(PublicOracle.apply)
-
-  val proofGen: Gen[Proof] = Gen.alphaNumStr.map(Proof.apply)
-
-  val proofIdGen: Gen[ProofId] = Gen.alphaNumStr.map(ProofId.apply)
-
   val heightGen: Gen[Block.Height] =
     Gen.posNum[BigInt].map(Block.Height.apply).collect { case Right(n) => n }
 
@@ -52,29 +26,11 @@ object Generators {
   val blockHeaderGen: Gen[Block.Header] =
     (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
 
-  val deployTransactionGen: Gen[DeployTransaction] =
-    (
-      hashGen[DeployTransaction],
-      instantGen,
-      publicOracleGen,
-      transitionFunctionCircuitsGen,
-    )
-      .mapN(DeployTransaction.apply)
-
-  val callTransactionGen: Gen[CallTransaction] =
-    (
-      hashGen[CallTransaction],
-      instantGen,
-      addressGen,
-      functionNameGen,
-      proofGen,
-      nonceGen,
-      transcriptGen,
-    )
-      .mapN(CallTransaction.apply)
+  val transactionHeaderGen: Gen[Transaction.Header] =
+    hashGen[Transaction].map(Transaction.Header.apply)
 
   val transactionGen: Gen[Transaction] =
-    Gen.oneOf(deployTransactionGen, callTransactionGen)
+    (transactionHeaderGen, jsonGen).mapN(Transaction.apply)
 
   val blockBodyGen: Gen[Block.Body] = Gen.listOf(transactionGen).map(Block.Body.apply)
 

@@ -24,27 +24,33 @@ object RollForward {
       |    "body": {
       |      "transactionResults": [
       |        {
-      |          "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
-      |          "timestamp": "1969-12-31T23:59:53.999509747Z",
-      |          "type": "Deploy",
-      |          "publicOracle": {
-      |            "test": 1
+      |          "header": {
+      |            "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7"
       |          },
-      |          "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
+      |          "body": {
+      |            "type": "Deploy",
+      |            "publicOracle": {
+      |              "test": 1
+      |            },
+      |            "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
+      |          }
       |        },
       |        {
-      |          "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
-      |          "timestamp": "1970-01-01T00:00:05.000338337Z",
-      |          "type": "Call",
-      |          "address": "Address",
-      |          "functionName": "Func",
-      |          "proof": "Proof",
-      |          "nonce": "Nonce",
-      |          "publicTranscript": [{
-      |            "functionName": "identity",
-      |            "arg": {},
-      |            "result": {}
-      |          }]
+      |          "header": {
+      |            "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e"
+      |          },
+      |          "body": {
+      |            "type": "Call",
+      |            "address": "Address",
+      |            "functionName": "Func",
+      |            "proof": "Proof",
+      |            "nonce": "Nonce",
+      |            "publicTranscript": [{
+      |              "functionName": "identity",
+      |              "arg": {},
+      |              "result": {}
+      |            }]
+      |          }
       |        }
       |      ]
       |    }
@@ -64,29 +70,40 @@ object RollForward {
         ),
         Block.Body(
           Seq(
-            DeployTransaction(
-              Hash[DeployTransaction](
-                "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+            Transaction(
+              Transaction.Header(
+                Hash[Transaction](
+                  "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
+                ),
               ),
-              Instant.parse("1969-12-31T23:59:53.999509747Z"),
-              PublicOracle(ArbitraryJson(Json.obj("test" := 1))),
-              TransitionFunctionCircuits(Seq("6232e241fc01f4", "e050935684748401")),
+              ArbitraryJson(
+                Json.obj(
+                  "type" := "Deploy",
+                  "publicOracle" := Json.obj("test" := 1),
+                  "transitionFunctionCircuits" := Json
+                    .arr("6232e241fc01f4".asJson, "e050935684748401".asJson),
+                ),
+              ),
             ),
-            CallTransaction(
-              Hash[CallTransaction](
-                "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+            Transaction(
+              Transaction.Header(
+                Hash[Transaction](
+                  "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
+                ),
               ),
-              Instant.parse("1970-01-01T00:00:05.000338337Z"),
-              Address("Address"),
-              FunctionName("Func"),
-              Proof("Proof"),
-              Nonce("Nonce"),
-              Transcript(
-                Seq(
-                  Query(
-                    FunctionName("identity"),
-                    ArbitraryJson(Json.obj()),
-                    ArbitraryJson(Json.obj()),
+              ArbitraryJson(
+                Json.obj(
+                  "type" := "Call",
+                  "address" := "Address",
+                  "functionName" := "Func",
+                  "proof" := "Proof",
+                  "nonce" := "Nonce",
+                  "publicTranscript" := Json.arr(
+                    Json.obj(
+                      "functionName" := "identity",
+                      "arg" := Json.obj(),
+                      "result" := Json.obj(),
+                    ),
                   ),
                 ),
               ),
