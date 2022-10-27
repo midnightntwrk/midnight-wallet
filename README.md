@@ -2,10 +2,9 @@
 [![CI](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml)
 
 
-
 This is an implementation of [wallet-api](https://github.com/input-output-hk/midnight-wallet-api),
 used by dapp developers and [client-sdk](https://github.com/input-output-hk/midnight-client-sdk) to:
- 
+
 - Build transactions
 - Submit transactions to a node
 - Obtain blocks from a node

@@ -11,33 +11,15 @@
     inclusive.url = "github:input-output-hk/nix-inclusive";
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
-    cicero = {
-      url = "github:input-output-hk/cicero/v1-maintenance";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    tullia.url = "github:input-output-hk/tullia";
   };
 
-  outputs = { self, nixpkgs, utils, inclusive, yarn2nix, sbt-derivation, cicero, ... }:
+  outputs = { self, nixpkgs, utils, inclusive, yarn2nix, sbt-derivation, tullia, ... }:
     utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system}.extend (nixpkgs.lib.composeManyExtensions [
           (final: prev: { jre = prev.jdk17; })
-          sbt-derivation.overlay
-          (final: prev: {
-            # https://github.com/zaninime/sbt-derivation/issues/7
-            sbt = prev.sbt // {
-              mkDerivation = args: (prev.sbt.mkDerivation args).overrideAttrs (oldAttrs: {
-                deps = oldAttrs.deps.overrideAttrs (depsOld: {
-                  postBuild = ''
-                    ${depsOld.postBuild or ""}
-                    >&2 echo "fixing-up the compiler interface"
-                    find .nix -name 'org.scala-sbt-compiler-interface*' -type f -print0 \
-                    | xargs -r0 strip-nondeterminism
-                  '';
-                });
-              });
-            };
-          })
+          sbt-derivation.overlays.default
           yarn2nix.overlay
         ]);
 
@@ -97,11 +79,10 @@
         devShell = pkgs.mkShell {
           inputsFrom = [ defaultPackage ];
         };
-      }) // {
-        ciceroActions = cicero.lib.callActionsWithExtraArgs rec {
-          inherit (cicero.lib) std;
-          inherit (nixpkgs) lib;
-          actionLib = import cicero/lib.nix { inherit cicero lib; };
-        } cicero/actions;
-      };
+      } //
+        tullia.fromSimple system {
+          tasks = import tullia/tasks.nix;
+          actions = import tullia/actions.nix;
+        }
+    );
 }
