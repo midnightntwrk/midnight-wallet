@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.engine.services.InMemoryServerResource.NodeConfig
 import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
@@ -11,13 +12,17 @@ import io.iohk.midnight.wallet.ogmios.tx_submission
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import munit.CatsEffectSuite
-import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 
+import scala.concurrent.duration.DurationInt
+
 class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
-  private val nodeUri = uri"ws://localhost:5205/"
+  private val nodePort = 5205
+  private val nodeHost = "localhost"
+  private val nodeUri = uri"ws://$nodeHost:$nodePort/"
+
   private val timeout = 30.seconds
   private val sttpBackend = FetchCatsBackend[IO]()
 
@@ -31,8 +36,11 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
     SttpJsonWebSocketClient[IO](sttpBackend, nodeUri)
       .flatMap(tx_submission.OgmiosTxSubmissionService(_))
 
-  private val servicesResource =
-    (txSumbissionServiceResource, syncServiceResource).parTupled
+  private val inMemoryServerResource =
+    InMemoryServerResource.acquire[IO](NodeConfig(nodeHost, nodePort))
+
+  private val environmentResources =
+    (inMemoryServerResource, txSumbissionServiceResource, syncServiceResource).parTupled
 
   def integrationTest(
       title: String,
@@ -40,8 +48,8 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
       theTest: (OgmiosTxSubmissionService[IO], OgmiosSyncService[IO]) => IO[Unit],
   ): Unit = {
     test(title) {
-      servicesResource
-        .use { case (submitTxService, syncService) =>
+      environmentResources
+        .use { case (_ /* started node */, submitTxService, syncService) =>
           theTest(submitTxService, syncService)
         }
         .timeout(timeout)

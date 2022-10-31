@@ -32,11 +32,6 @@ it's automatically picked up by any sbt version that is installed.
 3. To run the unit tests, install [Node.js](https://nodejs.org/en/). The version is defined in the file
 [`flake.nix`](flake.nix), and there's also a file [`.nvmrc`](.nvmrc) so it can be picked up by tools such as `asdf` or `nvm`.
 
-## External services
-
-- [midnight-mocked-node](https://github.com/input-output-hk/midnight-mocked-node): the Midnight node that we are
-  currently using.
-
 ## Directory structure
 `build.sbt` - sbt project definition, Scala version, dependencies, build configuration
 
@@ -110,17 +105,8 @@ The generated JavaScript code is written to `wallet-core/target/dist`.
 
 #### Integration tests
 
-##### Dependencies - External services
-As these tests connect with the real external services, the corresponding services must be running
-locally and listening to the configured port to which the tests connect. The tests are intentionally
-configured to connect to the default port for the service.
+`sbt 'walletEngine / IntegrationTest / test'`
 
-Currently, there is 1 external service being tested:
-- Midnight Mocked Node (See [midnight-mocked-node](https://github.com/input-output-hk/midnight-mocked-node/) repo to find out how to run it)
-
-##### How to run
-
-When dependencies are installed and running, from the root project directory run `sbt 'walletEngine/IntegrationTest/test'`
 ## Generate Coverage report
 
 `sbt coverage walletCore/test blockchainJS/test ogmiosSyncJS/test ogmiosTxSubmissionJS/test walletEngine/test coverageReport`
