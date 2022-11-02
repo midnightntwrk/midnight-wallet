@@ -1,5 +1,5 @@
 {
-  build = {config, ...}: {
+  CI = {config, ...}: {
     preset = {
       nix.enable = true;
       github-ci = {
@@ -72,7 +72,7 @@
     };
   };
 
-  publish = {config, ...}: {
+  CD = {config, ...}: {
     preset = {
       nix.enable = true;
       github-ci = {
