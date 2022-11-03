@@ -46,12 +46,6 @@
           destination = "secrets/npm.env";
           env = true;
           data = ''
-            # for `yarn install`, referenced in .npmrc
-            NPM_TOKEN={{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}
-
-            # for `yarn publish`, looked up by yarn
-            NPM_AUTH_TOKEN={{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}
-
             {{with secret "kv/data/cicero/nexus" -}}
               {{with .Data.data -}}
                 MIDNIGHT_REPO_USER={{.user}}{{"\n" -}}
@@ -118,12 +112,6 @@
           destination = "secrets/npm.env";
           env = true;
           data = ''
-            # for `yarn install`, referenced in .npmrc
-            NPM_TOKEN={{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}
-
-            # for `yarn publish`, looked up by yarn
-            NPM_AUTH_TOKEN={{with secret "kv/data/cicero/nexus"}}{{.Data.data.token}}{{end}}
-
             {{with secret "kv/data/cicero/nexus" -}}
               {{with .Data.data -}}
                 MIDNIGHT_REPO_USER={{.user}}{{"\n" -}}

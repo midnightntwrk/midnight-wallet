@@ -18,5 +18,5 @@ result
 .bsp/
 .idea/
 .nix/
-.envrc
+.env
 .direnv/
