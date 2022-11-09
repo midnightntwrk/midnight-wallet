@@ -18,9 +18,8 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
 
 /** Implementation of the TxSubmissionService
   *
@@ -37,7 +36,8 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
     webSocketClient: JsonWebSocketClient[F],
     pendingSubmissions: Queue[F, Deferred[F, SubmissionResult]],
     semaphore: Semaphore[F],
-)(implicit tracer: ClientRequestResponseTracer[F]) {
+)(implicit tracer: OgmiosTxSubmissionTracer[F]) {
+
   def submitTransaction(transaction: Transaction): F[SubmissionResult] =
     for {
       // To ensure the correct response is given to the corresponding submission request,
@@ -47,19 +47,17 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
       deferred <- Deferred.apply[F, SubmissionResult]
       _ <- pendingSubmissions.offer(deferred)
       _ <- webSocketClient.send[LocalTxSubmission.Send](SubmitTx(transaction))
+      _ <- tracer.txSubmitted(transaction)
       _ <- semaphore.release
       result <- deferred.get
+      _ <- tracer.resultReceived(transaction, result)
     } yield result
 
   private val loopReceive: F[Unit] =
     webSocketClient
       .receive[LocalTxSubmission.Receive]()
       .flatMap(processReceivedMessage)
-      .attempt
-      .flatTap {
-        case Left(error) => tracer(UnexpectedMessage(error.getMessage))
-        case _           => ().pure
-      }
+      .onError(tracer.processingMsgFailed)
       .foreverM
 
   private def processReceivedMessage(message: LocalTxSubmission.Receive): F[Unit] =
@@ -94,9 +92,9 @@ object OgmiosTxSubmissionService {
     final case class Rejected(reason: String) extends SubmissionResult
   }
 
-  def apply[F[_]: GenConcurrentThrow: ClientRequestResponseTracer](
+  def apply[F[_]: GenConcurrentThrow](
       webSocketClient: JsonWebSocketClient[F],
-  ): Resource[F, OgmiosTxSubmissionService[F]] = {
+  )(implicit tracer: OgmiosTxSubmissionTracer[F]): Resource[F, OgmiosTxSubmissionService[F]] = {
     // For the pending submissions an unbounded queue is fine because it's up
     // to the client to decide if it wants to fill up the memory with these requests.
     val submissionsQueue = Queue.unbounded[F, Deferred[F, SubmissionResult]]

@@ -3,7 +3,6 @@ package io.iohk.midnight.wallet.ogmios.util
 import cats.effect.{IO, Resource}
 import io.circe.{Decoder, Encoder}
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.network.{JsonWebSocketClient, SttpJsonWebSocketClient}
 import munit.CatsEffectSuite
 import sttp.capabilities.WebSockets
@@ -12,10 +11,12 @@ import sttp.client3.testing.SttpBackendStub
 import sttp.model.Uri.*
 import sttp.ws.testing.WebSocketStub
 import sttp.ws.{WebSocket, WebSocketFrame}
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
 
 trait WithJsonWebSocketClient extends CatsEffectSuite with BetterOutputSuite {
   implicit val catsMonadError: CatsMonadError[IO] = new CatsMonadError[IO]
-  implicit val clientTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer
+  implicit val clientTracer: JsonWebSocketClientTracer[IO] =
+    JsonWebSocketClientTracer.from(Tracer.discardTracer)
 
   def buildClientFromWebSocket(
       webSocket: WebSocket[IO],

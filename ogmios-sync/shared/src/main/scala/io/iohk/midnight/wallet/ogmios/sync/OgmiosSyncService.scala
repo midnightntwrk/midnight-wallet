@@ -8,9 +8,8 @@ import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMes
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 
 trait OgmiosSyncService[F[_]] {
   def sync(): Stream[F, Block]
@@ -23,14 +22,14 @@ trait OgmiosSyncService[F[_]] {
   *   websockets
   */
 class OgmiosSyncServiceImpl[F[_]: MonadThrow](webSocketClient: JsonWebSocketClient[F])(implicit
-    tracer: ClientRequestResponseTracer[F],
+    tracer: OgmiosSyncTracer[F],
 ) extends OgmiosSyncService[F] {
 
   def sync(): Stream[F, Block] =
     Stream.repeatEval(requestNextBlock)
 
   private def requestNextBlock: F[Block] =
-    send >> receive.flatMap(processResponse)
+    send >> tracer.nextBlockRequested >> receive.flatMap(processResponse)
 
   private def send: F[Unit] =
     webSocketClient.send[LocalBlockSync.Send](LocalBlockSync.Send.RequestNext)
@@ -40,17 +39,20 @@ class OgmiosSyncServiceImpl[F[_]: MonadThrow](webSocketClient: JsonWebSocketClie
 
   private def processResponse(msg: LocalBlockSync.Receive): F[Block] =
     msg match {
-      case LocalBlockSync.Receive.RollForward(block) => block.pure[F]
-      case LocalBlockSync.Receive.RollBackward(_)    => requestNextBlock
-      case LocalBlockSync.Receive.AwaitReply         => receive.flatMap(processResponse)
+      case LocalBlockSync.Receive.RollForward(block) =>
+        tracer.rollForwardReceived(block).as(block)
+      case LocalBlockSync.Receive.RollBackward(hash) =>
+        tracer.rollBackwardReceived(hash) >> requestNextBlock
+      case LocalBlockSync.Receive.AwaitReply =>
+        tracer.awaitReplyReceived >> receive.flatMap(processResponse)
       case other =>
         val error = UnexpectedMessageReceived(other)
-        tracer(UnexpectedMessage(error.getMessage)) >> error.raiseError
+        tracer.unexpectedMessage(other) >> error.raiseError
     }
 }
 
 object OgmiosSyncService {
-  def apply[F[_]: MonadThrow: ClientRequestResponseTracer](
+  def apply[F[_]: MonadThrow: OgmiosSyncTracer](
       webSocketClient: JsonWebSocketClient[F],
   ): OgmiosSyncService[F] = new OgmiosSyncServiceImpl[F](webSocketClient)
 

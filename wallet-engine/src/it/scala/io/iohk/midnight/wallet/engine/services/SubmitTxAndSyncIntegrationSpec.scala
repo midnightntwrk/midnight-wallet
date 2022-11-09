@@ -5,10 +5,7 @@ import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.engine.services.InMemoryServerResource.NodeConfig
-import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
-import io.iohk.midnight.wallet.ogmios.tx_submission
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import munit.CatsEffectSuite
@@ -16,6 +13,10 @@ import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 
 import scala.concurrent.duration.DurationInt
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
+import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 
 class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
@@ -26,7 +27,13 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
   private val timeout = 30.seconds
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val reqRespTracer: ClientRequestResponseTracer[IO] = Tracer.discardTracer[IO]
+  private implicit val webSocketTracer: JsonWebSocketClientTracer[IO] =
+    new JsonWebSocketClientTracer(Tracer.discardTracer[IO])
+  private implicit val ogmiosSyncTracer: OgmiosSyncTracer[IO] = new OgmiosSyncTracer(
+    Tracer.discardTracer[IO],
+  )
+  private implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[IO] =
+    new OgmiosTxSubmissionTracer(Tracer.discardTracer[IO])
 
   private val syncServiceResource =
     SttpJsonWebSocketClient[IO](sttpBackend, nodeUri)
@@ -34,7 +41,7 @@ class SubmitTxAndSyncIntegrationSpec extends CatsEffectSuite {
 
   private val txSumbissionServiceResource =
     SttpJsonWebSocketClient[IO](sttpBackend, nodeUri)
-      .flatMap(tx_submission.OgmiosTxSubmissionService(_))
+      .flatMap(OgmiosTxSubmissionService(_))
 
   private val inMemoryServerResource =
     InMemoryServerResource.acquire[IO](NodeConfig(nodeHost, nodePort))

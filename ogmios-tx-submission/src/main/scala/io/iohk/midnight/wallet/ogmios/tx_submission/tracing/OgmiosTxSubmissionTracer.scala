@@ -1,0 +1,98 @@
+package io.iohk.midnight.wallet.ogmios.tx_submission.tracing
+
+import cats.effect.kernel.Sync
+import cats.syntax.show.*
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.TracerSyntax.*
+import io.iohk.midnight.tracer.logging.AsContextAwareLog
+import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
+import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
+import io.iohk.midnight.tracer.logging.Event
+import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.tracer.logging.ContextAwareLog
+import io.iohk.midnight.wallet.blockchain.data.Transaction
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
+
+class OgmiosTxSubmissionTracer[F[_]](val tracer: Tracer[F, OgmiosTxSubmissionEvent]) {
+
+  def txSubmitted(tx: Transaction): F[Unit] = tracer(OgmiosTxSubmissionEvent.TxSubmitted(tx))
+  def resultReceived(tx: Transaction, result: OgmiosTxSubmissionService.SubmissionResult): F[Unit] =
+    result match {
+      case OgmiosTxSubmissionService.SubmissionResult.Accepted         => txAccepted(tx)
+      case OgmiosTxSubmissionService.SubmissionResult.Rejected(reason) => txRejected(tx, reason)
+    }
+  def txAccepted(tx: Transaction): F[Unit] = tracer(OgmiosTxSubmissionEvent.TxAccepted(tx))
+  def txRejected(tx: Transaction, reason: String): F[Unit] = tracer(
+    OgmiosTxSubmissionEvent.TxRejected(tx, reason),
+  )
+  def processingMsgFailed: PartialFunction[Throwable, F[Unit]] = { case e: Throwable =>
+    tracer(
+      OgmiosTxSubmissionEvent.ProcessingReceivedMessageFailed(e),
+    )
+  }
+
+}
+
+object OgmiosTxSubmissionTracer {
+
+  import OgmiosTxSubmissionEvent.*
+  import OgmiosTxSubmissionEvent.DefaultInstances.*
+
+  private val Component: Event.Component = Event.Component("ogmios_tx_submission")
+
+  implicit val txSubmissionEventToContextAwareLog: AsContextAwareLog[OgmiosTxSubmissionEvent] =
+    new AsContextAwareLog[OgmiosTxSubmissionEvent] {
+      override def apply(event: OgmiosTxSubmissionEvent): ContextAwareLog = event match {
+        case e: TxSubmitted                     => e.asContextAwareLog
+        case e: TxAccepted                      => e.asContextAwareLog
+        case e: TxRejected                      => e.asContextAwareLog
+        case e: ProcessingReceivedMessageFailed => e.asContextAwareLog
+      }
+    }
+
+  implicit val txSubmittedToContextAwareLog: AsContextAwareLog[TxSubmitted] =
+    AsContextAwareLog.instance[TxSubmitted](
+      id = TxSubmitted.id,
+      component = Component,
+      level = LogLevel.Debug,
+      message = evt => s"Transaction [${evt.tx.header.hash.show}] has been submitted.",
+      context = _.stringLogContext,
+    )
+
+  implicit val txAcceptedToContextAwareLog: AsContextAwareLog[TxAccepted] =
+    AsContextAwareLog.instance[TxAccepted](
+      id = TxAccepted.id,
+      component = Component,
+      level = LogLevel.Info,
+      message = evt => s"Transaction [${evt.tx.header.hash.show}] has been accepted.",
+      context = _.stringLogContext,
+    )
+
+  implicit val txRejectedToContextAwareLog: AsContextAwareLog[TxRejected] =
+    AsContextAwareLog.instance[TxRejected](
+      id = TxRejected.id,
+      component = Component,
+      level = LogLevel.Info,
+      message = evt => s"Transaction [${evt.tx.header.hash.show}] has been rejected.",
+      context = _.stringLogContext,
+    )
+
+  implicit val processingFailedToContextAwareLog
+      : AsContextAwareLog[ProcessingReceivedMessageFailed] =
+    AsContextAwareLog.instance[ProcessingReceivedMessageFailed](
+      id = ProcessingReceivedMessageFailed.id,
+      component = Component,
+      level = LogLevel.Warn,
+      message = _ => "Processing received message failed with an exception.",
+      context = _.stringLogContext,
+    )
+
+  def from[F[_]: Sync](
+      simple: Tracer[F, ContextAwareLog],
+  ): OgmiosTxSubmissionTracer[F] = {
+    val txSubmissionTracer: Tracer[F, OgmiosTxSubmissionEvent] =
+      simple >=> (e => Sync[F].delay(e.asContextAwareLog))
+    new OgmiosTxSubmissionTracer[F](txSubmissionTracer)
+  }
+
+}

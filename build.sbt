@@ -23,7 +23,7 @@ val catsEffectVersion = "3.3.11"
 val circeVersion = "0.14.2"
 val fs2Version = "3.2.5"
 val log4CatsVersion = "2.4.0"
-val midnightTracingVersion = "1.0.1"
+val midnightTracingVersion = "1.0.9"
 val sttpClientVersion = "3.4.1"
 
 lazy val commonSettings = Seq(
@@ -78,7 +78,7 @@ lazy val useNodeModuleResolution = {
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "1.3.2",
+  version := "1.3.3",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"

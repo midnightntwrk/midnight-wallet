@@ -7,12 +7,11 @@ import cats.syntax.traverse.*
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data.Block.Height
 import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
-import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService.Error.UnexpectedMessageReceived
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTrace.UnexpectedMessage
-import io.iohk.midnight.wallet.ogmios.util.{BetterOutputSuite, TestingTracer}
+import io.iohk.midnight.wallet.ogmios.sync.examples
+import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
+
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
@@ -20,6 +19,10 @@ import org.scalacheck.effect.PropF.forAllF
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
+import io.iohk.midnight.tracer.logging.ContextAwareLog
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent
+import io.iohk.midnight.tracer.logging.InMemoryLogTracer
 
 trait SyncServiceSpecBase
     extends CatsEffectSuite
@@ -54,7 +57,7 @@ trait SyncServiceSpecBase
       theTest: (
           OgmiosSyncService[IO],
           JsonWebSocketClientSyncStub,
-          TestingTracer[IO, ClientRequestResponseTrace],
+          InMemoryLogTracer[IO, ContextAwareLog],
       ) => PropF[IO],
   ): Unit =
     test(title) {
@@ -64,9 +67,9 @@ trait SyncServiceSpecBase
           JsonWebSocketClientSyncStub(initialResponses = initialResponses)
         }
         .fproduct { webSocketClient =>
-          implicit val tracer: TestingTracer[IO, ClientRequestResponseTrace] =
-            new TestingTracer[IO, ClientRequestResponseTrace]
-          (OgmiosSyncService[IO](webSocketClient), tracer)
+          val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO]
+          implicit val syncTracer: OgmiosSyncTracer[IO] = OgmiosSyncTracer.from(inMemoryTracer)
+          (OgmiosSyncService[IO](webSocketClient), inMemoryTracer)
         }
         .flatMap { case (nodeClient, (syncService, tracer)) =>
           theTest(syncService, nodeClient, tracer).checkOne()
@@ -88,34 +91,37 @@ class OgmiosSyncServiceSpec extends SyncServiceSpecBase {
   testService(
     "Receives RollBackward and continue syncing",
     initialResponses = Seq(Receive.RollBackward(Hash("")), Receive.IntersectNotFound),
-  ) { (syncService, webSocketClientStub, _) =>
+  ) { (syncService, webSocketClientStub, tracer) =>
     // RollBackward => RequestNext => clientIsAwaitingReply set to true
     val isClientAwaitingReply =
       syncService.sync().compile.drain.attempt >> webSocketClientStub.isClientAwaitingReply
-    assertIO(isClientAwaitingReply, true)
+    val containsExpectedLogs: IO[Boolean] =
+      tracer.getById(OgmiosSyncEvent.RollBackwardReceived.id).map(_.nonEmpty)
+
+    assertIOBoolean(isClientAwaitingReply, "isClientAwaitingReply")
+    >> assertIOBoolean (containsExpectedLogs, "containsExpectedLogs")
   }
 
   testService(
     "Handles AwaitReply",
     initialResponses = Seq(Receive.AwaitReply, Receive.IntersectNotFound),
-  ) { (syncService, webSocketClientStub, _) =>
+  ) { (syncService, webSocketClientStub, tracer) =>
     val isClientAwaitingReply =
       syncService.sync().compile.drain.attempt >> webSocketClientStub.isClientAwaitingReply
-    assertIO(isClientAwaitingReply, true)
+    val containsExpectedLogs: IO[Boolean] =
+      tracer.getById(OgmiosSyncEvent.AwaitReplyReceived.id).map(_.nonEmpty)
+
+    assertIOBoolean(isClientAwaitingReply, "isClientAwaitingReply")
+    >> assertIOBoolean (containsExpectedLogs, "containsExpectedLogs")
   }
 
   testService("Receives unexpected message", initialResponses = Seq(Receive.IntersectNotFound)) {
     (syncService, _, tracer) =>
-      syncService.sync().compile.drain.attempt >>
-        tracer.traced
-          .map(
-            assertEquals(
-              _,
-              Vector(
-                UnexpectedMessage(UnexpectedMessageReceived(Receive.IntersectNotFound).getMessage),
-              ),
-            ),
-          )
+      val containsExpectedLogs =
+        syncService.sync().compile.drain.attempt >> tracer
+          .getById(OgmiosSyncEvent.UnexpectedMessage.id)
+          .map(_.nonEmpty)
+      assertIOBoolean(containsExpectedLogs)
   }
 }
 

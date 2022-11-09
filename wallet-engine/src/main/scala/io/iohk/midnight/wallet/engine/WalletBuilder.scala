@@ -9,16 +9,28 @@ import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.ogmios
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
+
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.ContextAwareLog
 
 object WalletBuilder {
   def build[F[_]: Async](config: Config): Resource[F, Wallet[F]] = {
     val sttpBackend = FetchCatsBackend[F]()
 
-    implicit val clientTracer: ogmios.tracer.ClientRequestResponseTracer[F] = ConsoleTracer.apply
+    implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] = ConsoleTracer.contextAware
+    implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
+      JsonWebSocketClientTracer.from(contextAwareLogTracer)
+    implicit val ogmiosSyncTracer: OgmiosSyncTracer[F] =
+      OgmiosSyncTracer.from(contextAwareLogTracer)
+    implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[F] =
+      OgmiosTxSubmissionTracer.from(contextAwareLogTracer)
 
     for {
       txSubmissionWSClient <- ogmios.network

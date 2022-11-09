@@ -6,13 +6,13 @@ import com.comcast.ip4s.Port
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.wallet.engine.util.TestWebSocketBuilder
 import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
-import io.iohk.midnight.wallet.ogmios.tracer.ClientRequestResponseTracer
 import munit.CatsEffectSuite
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
 import scala.concurrent.duration.*
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
 
 class JsonWebSocketClientSpec extends CatsEffectSuite {
 
@@ -20,8 +20,8 @@ class JsonWebSocketClientSpec extends CatsEffectSuite {
 
   private val sttpBackend = FetchCatsBackend[IO]()
 
-  private implicit val clientTracer: ClientRequestResponseTracer[IO] =
-    Tracer.discardTracer[IO]
+  private implicit val clientTracer: JsonWebSocketClientTracer[IO] =
+    JsonWebSocketClientTracer.from(Tracer.discardTracer)
 
   test("Creating the websocket client should be lazy (i.e. do nothing until Resource is used)") {
     // if creation would already open the socket, the following line would throw an exception

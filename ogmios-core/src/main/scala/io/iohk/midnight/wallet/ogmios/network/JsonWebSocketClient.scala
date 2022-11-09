@@ -2,10 +2,9 @@ package io.iohk.midnight.wallet.ogmios.network
 
 import cats.effect.Resource
 import cats.syntax.all.*
-import io.circe.parser.decode
+import io.circe.parser
 import io.circe.syntax.*
 import io.circe.{Decoder, Encoder}
-import io.iohk.midnight.wallet.ogmios.tracer.*
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri
@@ -19,26 +18,34 @@ trait JsonWebSocketClient[F[_]] {
 }
 
 private class SttpJsonWebSocketClient[F[_]: Sync](webSocket: WebSocket[F])(implicit
-    tracer: ClientRequestResponseTracer[F],
+    tracer: JsonWebSocketClientTracer[F],
 ) extends JsonWebSocketClient[F] {
   override def send[T: Encoder](message: T): F[Unit] = {
     val encodedMessage = message.asJson.spaces2
-    tracer(ClientRequestResponseTrace.ClientRequest(encodedMessage)) >>
-      Sync[F].defer(
+    Sync[F]
+      .defer(
         webSocket.sendText(encodedMessage),
       ) // using Sync[F].defer to prevent the underlying (future-based) code to run eagerly
+      .flatTap(_ => tracer.requestSent(encodedMessage))
+      .onError(tracer.sendingFailed)
   }
 
-  override def receive[T: Decoder](): F[T] =
-    webSocket
-      .receiveText()
-      .flatTap(message => tracer(ClientRequestResponseTrace.ClientResponse(message)))
-      .map(decode(_))
-      .rethrow
+  override def receive[T: Decoder](): F[T] = {
+    def receiveText: F[String] =
+      webSocket
+        .receiveText()
+        .flatTap(tracer.responseReceived)
+        .onError(tracer.receiveFailed)
+
+    def decode(json: String): F[T] =
+      Sync[F].fromEither(parser.decode(json)).onError(tracer.decodingFailed)
+
+    receiveText.flatMap(decode)
+  }
 }
 
 object SttpJsonWebSocketClient {
-  def apply[F[_]: Sync: ClientRequestResponseTracer](
+  def apply[F[_]: Sync: JsonWebSocketClientTracer](
       backend: SttpBackend[F, WebSockets],
       nodeUri: Uri,
   ): Resource[F, JsonWebSocketClient[F]] = {
