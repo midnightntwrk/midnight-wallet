@@ -51,9 +51,8 @@ object WalletBuilder {
       syncService = new SyncService[F] {
         override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
       }
-    } yield {
-      new Wallet.Live[F](submitTxService, syncService)
-    }
+      wallet <- Resource.eval(Wallet.Live[F](submitTxService, syncService))
+    } yield wallet
   }
 
   def catsEffectWallet(config: Config): Resource[IO, Wallet[IO]] = build[IO](config)

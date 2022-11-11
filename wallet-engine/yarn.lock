@@ -16,6 +16,11 @@
     "@midnight/protocols" "^0.3.0"
     "@midnight/session-types" "^0.3.0"
 
+"@midnight/ledger@^1.0.0":
+  version "1.0.0"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.0.0.tgz#dbb10a9dd1f97d783cc7c8cde82dda2e3ac15531"
+  integrity sha512-Ds0yfLx5lhmVecdxAm9wY2BCs4DjCMur7E7XX4IfdhEpgr0+ihXT2EuJDTXYrF+PdLOOiH4l7AFHDmj67TIV7g==
+
 "@midnight/mocked-node-api@0.2.4":
   version "0.2.4"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.2.4.tgz#659ffb6b4881404febd922dd960f67cdfabfa782"

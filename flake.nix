@@ -16,6 +16,13 @@
       url = "github:kamadorueda/alejandra";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    midnight-ledger = {
+      url = "github:input-output-hk/midnight-ledger-prototype/master";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        tullia.follows = "tullia";
+      };
+    };
   };
 
   outputs = {
@@ -27,6 +34,7 @@
     sbt-derivation,
     tullia,
     alejandra,
+    midnight-ledger,
     ...
   }:
     utils.lib.eachDefaultSystem (
@@ -36,6 +44,7 @@
           sbt-derivation.overlays.default
           yarn2nix.overlay
         ]);
+        ledgerPkgs = midnight-ledger.packages.${system};
 
         packageJSON = __fromJSON (__readFile ./wallet-engine/package.json);
       in
@@ -72,7 +81,7 @@
                 rm node_modules
               '';
 
-              nativeBuildInputs = with pkgs; [yarn nodejs-16_x];
+              nativeBuildInputs = with pkgs; [yarn nodejs-16_x ledgerPkgs.ledger-napi];
 
               preBuild = "ln -s ${packages.midnight-wallet-node-modules}/node_modules .";
 

@@ -109,12 +109,12 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
 
 lazy val walletCore = project
   .in(file("wallet-core"))
-  .enablePlugins(ScalaJSPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterPlugin)
   .dependsOn(blockchain.js % "compile->compile;test->test")
   .dependsOn(jsInterop)
   .settings(commonSettings)
   .settings(
-    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
+    scalaJSLinkerConfig ~= { _.withSourceMap(false) },
 
     // Dependencies
     libraryDependencies ++= Seq(
@@ -129,6 +129,10 @@ lazy val walletCore = project
 
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
+
+    // Npm dependencies
+    useYarn := true,
+    Compile / npmDependencies ++= Seq("@midnight/ledger" -> "1.0.0"),
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
@@ -234,7 +238,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api", "@midnight/ledger"),
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
     useNodeModuleResolution,

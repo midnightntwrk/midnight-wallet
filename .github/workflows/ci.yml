@@ -1,7 +1,6 @@
 name: CI/CD
 
 env:
-  DOT_NPMRC: ${{ secrets.DOT_NPMRC }}
   MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
   MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
 
@@ -20,6 +19,11 @@ jobs:
     - uses: cachix/install-nix-action@v17
       with:
         nix_path: nixpkgs=channel:nixos-22.05
+        extra_nix_config: |
+          access-tokens = github.com=${{ secrets.GH_TOKEN }}
+          netrc-file = $HOME/.netrc
+    - name: Prepare .netrc to access other repos
+      run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > $HOME/.netrc && chmod 755 $HOME/.netrc
     - uses: bduff9/use-npmrc@v1.1
       with:
         dot-npmrc: ${{ secrets.DOT_NPMRC }}

@@ -44,6 +44,9 @@ class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with 
   private def transformTxResults(block: Block): Seq[Transaction] =
     block.body.transactionResults.map(Transformers.DataToApi.transformTransaction)
 
+  def balance(): Observable[js.BigInt] =
+    wallet.balance().unsafeToObservable()
+
   def close(): Unit =
     finalizer.unsafeRunAndForget()
 }

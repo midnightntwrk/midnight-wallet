@@ -1,11 +1,16 @@
+import { Observable } from 'rxjs'
 import { FilterService, Wallet } from '@midnight/wallet-api'
 
-export interface CloseableWallet {
+export interface HasBalance {
+    balance(): Observable<bigint>
+}
+
+export interface Closeable {
     close(): void
 }
 
 export class WalletBuilder {
     static build(
         nodeUri: string
-    ): Promise<FilterService & Wallet & CloseableWallet>
+    ): Promise<FilterService & Wallet & HasBalance & Closeable>
 }
