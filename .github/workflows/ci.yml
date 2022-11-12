@@ -22,11 +22,11 @@ jobs:
         extra_nix_config: |
           access-tokens = github.com=${{ secrets.GH_TOKEN }}
           netrc-file = $HOME/.netrc
-    - name: Prepare .netrc to access other repos
-      run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > $HOME/.netrc && chmod 755 $HOME/.netrc
     - uses: bduff9/use-npmrc@v1.1
       with:
         dot-npmrc: ${{ secrets.DOT_NPMRC }}
+    - name: Prepare .netrc to access other repos
+      run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > $HOME/.netrc && chmod 755 $HOME/.netrc
     - name: Check format and run tests
       run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt verify
     - name: Wallet Engine integration tests

@@ -11,9 +11,8 @@
     inclusive.url = "github:input-output-hk/nix-inclusive";
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
-    tullia.url = "github:input-output-hk/tullia";
-    alejandra = {
-      url = "github:kamadorueda/alejandra";
+    tullia = {
+      url = "github:input-output-hk/tullia";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {
@@ -33,7 +32,6 @@
     yarn2nix,
     sbt-derivation,
     tullia,
-    alejandra,
     midnight-ledger,
     ...
   }:
@@ -98,7 +96,7 @@
             };
           };
 
-          formatter = alejandra.packages.${system}.default;
+          formatter = pkgs.alejandra;
 
           defaultPackage = packages.midnight-wallet;
 

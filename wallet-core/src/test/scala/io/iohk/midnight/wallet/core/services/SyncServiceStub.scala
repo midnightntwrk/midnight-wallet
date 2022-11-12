@@ -11,7 +11,6 @@ class SyncServiceStub(
     blocks: Seq[Block] = Seq.empty[Block],
 ) extends SyncService[IO] {
   override def sync(): Stream[IO, Block] = Stream.emits(blocks)
-
 }
 
 class FailingSyncServiceStub extends SyncService[IO] {

@@ -1,19 +1,14 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
-import cats.syntax.eq.*
-import io.iohk.midnight.wallet.blockchain.data.Block.Height.Genesis
-import io.iohk.midnight.wallet.blockchain.data.Generators.transactionGen
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
 import io.iohk.midnight.wallet.core.Wallet.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import java.time.Instant
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
-import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js
 import typings.midnightLedger.mod.*
+import typings.node.bufferMod.global.BufferEncoding
 
 trait WalletSpec {
   val txSubmissionService = new TxSubmissionServiceStub()
@@ -26,91 +21,80 @@ trait WalletSpec {
       syncService: SyncService[IO] = syncService,
       initialState: ZSwapLocalState = new ZSwapLocalState(),
   ): IO[Wallet[IO]] =
-    Wallet.Live[IO](
-      txSubmissionService,
-      syncService,
-      initialState,
-    )
-
-  val ExpectedHashLength = 64
-
-  def isHexString(str: String): Boolean =
-    str.forall((('0' to '9') ++ ('a' to 'f')).contains(_))
+    Wallet.Live[IO](txSubmissionService, syncService, initialState)
 }
 
-class WalletCallContractSpec
+class WalletTxSubmissionSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
     with WalletSpec
     with BetterOutputSuite {
 
-  test("a hash is returned") {
-    forAllF(transactionGen) { (tx: Transaction) =>
-      buildWallet()
-        .flatMap(_.submitTransaction(tx))
-        .map(r => assertEquals(r.value, tx.header.hash.value))
-    }
+  test("The transaction hash is returned") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    buildWallet()
+      .flatMap(_.submitTransaction(tx))
+      .map { r =>
+        assertEquals(
+          r.serialize().toString(BufferEncoding.hex),
+          tx.transactionHash().serialize().toString(BufferEncoding.hex),
+        )
+      }
   }
 
-  test("transactions get submitted to the client") {
-    forAllF(transactionGen, transactionGen) { (tx1: Transaction, tx2: Transaction) =>
-      for {
-        wallet <- buildWallet()
-        hash1 <- wallet.submitTransaction(tx1)
-        hash2 <- wallet.submitTransaction(tx2)
-        wasSubmitted1 = txSubmissionService.wasTxSubmitted(hash1)
-        wasSubmitted2 = txSubmissionService.wasTxSubmitted(hash2)
-      } yield assert(wasSubmitted1 && wasSubmitted2)
-    }
+  test("Transactions get submitted to the client") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx1, _) = Generators.ledgerTransactionGen.sample.get
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx2, _) = Generators.ledgerTransactionGen.sample.get
+    for {
+      wallet <- buildWallet()
+      hash1 <- wallet.submitTransaction(tx1)
+      hash2 <- wallet.submitTransaction(tx2)
+      wasSubmitted1 = txSubmissionService.wasTxSubmitted(hash1)
+      wasSubmitted2 = txSubmissionService.wasTxSubmitted(hash2)
+    } yield assert(wasSubmitted1 && wasSubmitted2)
   }
 
-  test("fails when node submission fails") {
-    forAllF(transactionGen) { (tx: Transaction) =>
-      val wallet = buildWallet(failingTxSubmissionService, syncService)
+  test("Fails when submission fails") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val wallet = buildWallet(failingTxSubmissionService, syncService)
 
-      wallet
-        .flatMap(_.submitTransaction(tx))
-        .attempt
-        .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
-    }
+    wallet
+      .flatMap(_.submitTransaction(tx))
+      .attempt
+      .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
   }
 
-  test("fails when node submission got rejected") {
-    forAllF(transactionGen) { (tx: Transaction) =>
-      val wallet = buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
+  test("Fails when submission is rejected") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val wallet = buildWallet(new RejectedTxSubmissionServiceStub(), syncService)
 
-      wallet
-        .flatMap(_.submitTransaction(tx))
-        .attempt
-        .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
-    }
+    wallet
+      .flatMap(_.submitTransaction(tx))
+      .attempt
+      .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
   }
 }
 
 class WalletSyncSpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
-  test("sync gives empty stream") {
-    // For this test case we need to feed sync service with at least one block to test this case.
-    val singleBlockSyncService = new SyncServiceStub(
-      blocks = Seq(
-        Block(
-          header = Block.Header(
-            hash = Hash("some-hash"),
-            parentHash = Hash("some-hash"),
-            height = Genesis,
-            timestamp = Instant.now(),
-          ),
-          body = Block.Body(Seq.empty),
-        ),
-      ),
-    )
-
-    buildWallet(txSubmissionService, singleBlockSyncService)
+  test("Syncs transactions") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val blocks = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.blockGen)).sample.get
+    buildWallet(txSubmissionService, new SyncServiceStub(blocks))
       .flatMap(_.sync().compile.to(List))
-      .attempt
-      .map {
-        case Left(error) => fail("failed", error)
-        case Right(syncResult) =>
-          assert(syncResult.length === 1)
+      .map { result =>
+        val obtained = result.map(_.transactionHash().serialize().toString(BufferEncoding.hex))
+        val expected = blocks.flatMap(_.body.transactionResults.map(_.header.hash.value))
+        assertEquals(obtained, expected)
       }
   }
 }
@@ -130,7 +114,7 @@ class WalletBalanceSpec
   test("Sum transaction outputs to this wallet") {
     // Taking just a sample because tx building is slow
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val coins = Gen.nonEmptyListOf(Generators.coinInfoGen).sample.get
+    val coins = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.coinInfoGen)).sample.get
     val (tx, state) = Generators.buildTransaction(coins)
     val expected = coins.map(_.value).fold(js.BigInt(0))(_ + _)
     buildWallet(initialState = state.applyLocal(tx))
@@ -142,7 +126,7 @@ class WalletBalanceSpec
   test("Not sum transaction outputs to another wallet") {
     // Taking just a sample because tx building is slow
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.transactionGen.sample.get
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
     val anotherState = new ZSwapLocalState()
     buildWallet(initialState = anotherState.applyLocal(tx))
       .map(_.balance())

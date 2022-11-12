@@ -1,26 +1,18 @@
 package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.effect.{IO, Ref}
-import cats.syntax.all.*
 import fs2.Stream
 import io.circe.parser
 import io.iohk.midnight.js.interop.facades.rxjs.Observable
-import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.blockchain.data.Generators.*
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
-import org.scalacheck.Gen
-import org.scalacheck.cats.implicits.*
 import scala.scalajs.js
 
 class JsOgmiosSyncServiceSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
     with BetterOutputSuite {
-
-  private val blockGen =
-    (blockHeaderGen, Gen.nonEmptyListOf(transactionGen).map(Block.Body.apply))
-      .mapN(Block.apply)
 
   test("Should sync") {
     // There's some issue that makes it super slow to run a forAll so just sampling 1

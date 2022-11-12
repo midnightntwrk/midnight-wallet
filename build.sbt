@@ -238,7 +238,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
       if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
       baseDirectory.value
     },
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api", "@midnight/ledger"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
     useNodeModuleResolution,

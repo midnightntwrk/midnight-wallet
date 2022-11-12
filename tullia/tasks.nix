@@ -33,6 +33,10 @@
             login git
             password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
 
+            machine api.github.com
+            login git
+            password {{with secret "kv/data/cicero/github"}}{{.Data.data.token}}{{end}}
+
             machine nexus.p42.at
             {{with secret "kv/data/cicero/nexus" -}}
               {{with .Data.data -}}

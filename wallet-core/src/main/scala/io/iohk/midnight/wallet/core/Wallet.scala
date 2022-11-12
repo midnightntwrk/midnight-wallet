@@ -3,19 +3,22 @@ package io.iohk.midnight.wallet.core
 import cats.effect.{Ref, Temporal}
 import cats.syntax.all.*
 import fs2.Stream
-import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.core.services.{SyncService, TxSubmissionService}
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js.BigInt
-import typings.midnightLedger.mod.ZSwapLocalState
+import typings.midnightLedger.mod.{
+  ZSwapLocalState,
+  Transaction as LedgerTransaction,
+  TransactionHash as LedgerTransactionHash,
+}
 
 trait Wallet[F[_]] {
-  def submitTransaction(transaction: Transaction): F[Hash[Transaction]]
+  def submitTransaction(transaction: LedgerTransaction): F[LedgerTransactionHash]
 
   def balance(): Stream[F, BigInt]
 
-  def sync(): Stream[F, Block]
+  def sync(): Stream[F, LedgerTransaction]
 }
 
 object Wallet {
@@ -26,11 +29,11 @@ object Wallet {
   ) extends Wallet[F] {
     val Zero: BigInt = BigInt(0)
 
-    override def submitTransaction(transaction: Transaction): F[Hash[Transaction]] =
+    override def submitTransaction(ledgerTx: LedgerTransaction): F[LedgerTransactionHash] =
       for {
-        response <- submitTxService.submitTransaction(transaction)
+        response <- submitTxService.submitTransaction(LedgerSerialization.toTransaction(ledgerTx))
         result <- response match {
-          case SubmissionResult.Accepted         => transaction.header.hash.pure
+          case SubmissionResult.Accepted         => ledgerTx.transactionHash().pure
           case SubmissionResult.Rejected(reason) => TransactionRejected(reason).raiseError
         }
       } yield result
@@ -43,8 +46,13 @@ object Wallet {
         .map(_.map(_.value))
         .map(_.fold(Zero)(_ + _))
 
-    override def sync(): Stream[F, Block] =
-      syncService.sync()
+    override def sync(): Stream[F, LedgerTransaction] =
+      syncService
+        .sync()
+        .map(_.body.transactionResults)
+        .flatMap(Stream.emits)
+        .map(LedgerSerialization.fromTransaction)
+        .flatMap(Stream.fromEither(_))
   }
 
   object Live {
@@ -54,8 +62,8 @@ object Wallet {
         initialState: ZSwapLocalState = new ZSwapLocalState(),
     ): F[Live[F]] =
       Ref
-        .of[F, ZSwapLocalState](initialState)
-        .map(new Live[F](_, submitTxService, syncService))
+        .of(initialState)
+        .map(new Live(_, submitTxService, syncService))
   }
 
   sealed trait Error extends Exception
