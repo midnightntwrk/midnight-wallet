@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
 import io.iohk.midnight.js.interop.facades.rxjs.Observable
 import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
@@ -9,7 +9,6 @@ import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
-import sttp.model.Uri
 import typings.midnightLedger.mod.{
   Transaction as LedgerTransaction,
   TransactionHash as LedgerTransactionHash,
@@ -51,14 +50,16 @@ object JsWallet {
   @JSExport
   def build(
       nodeUri: String,
+      initialState: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
-    WalletBuilder
-      .catsEffectWallet(
-        Config.default( // [TODO PM-5110] Improve config creation
-          Uri.unsafeParse(nodeUri),
-        ),
-      )
+    Resource
+      .eval(IO.fromEither(Config.parse(nodeUri, initialState.toOption)))
+      .flatMap(WalletBuilder.catsEffectWallet)
       .allocated
-      .map { case (wallet, finalizer) => new JsWallet(wallet, finalizer) }
+      .map((new JsWallet(_, _)).tupled)
       .unsafeToPromise()
+
+  @JSExport
+  def generateInitialState(): String =
+    WalletBuilder.generateInitialState()
 }

@@ -11,6 +11,9 @@ export interface Closeable {
 
 export class WalletBuilder {
     static build(
-        nodeUri: string
+        nodeUri: string,
+        initialState?: string
     ): Promise<FilterService & Wallet & HasBalance & Closeable>
+
+    static generateInitialState(): string
 }

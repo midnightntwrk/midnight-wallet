@@ -59,7 +59,7 @@ object Wallet {
     def apply[F[_]: Temporal](
         submitTxService: TxSubmissionService[F],
         syncService: SyncService[F],
-        initialState: ZSwapLocalState = new ZSwapLocalState(),
+        initialState: ZSwapLocalState,
     ): F[Live[F]] =
       Ref
         .of(initialState)
