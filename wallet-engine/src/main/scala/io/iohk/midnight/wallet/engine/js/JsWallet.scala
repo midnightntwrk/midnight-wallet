@@ -1,18 +1,15 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.{IO, Resource}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
 import io.iohk.midnight.js.interop.facades.rxjs.Observable
-import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
+import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
-import typings.midnightLedger.mod.{
-  Transaction as LedgerTransaction,
-  TransactionHash as LedgerTransactionHash,
-}
+import typings.midnightLedger.mod.*
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
 import typings.midnightWalletApi.walletMod as api
@@ -23,20 +20,14 @@ import typings.midnightWalletApi.walletMod as api
 @JSExportTopLevel("Wallet")
 class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with FilterService {
 
-  override def submitTxReq(tx: LedgerTransaction): Observable[LedgerTransactionHash] =
-    Observable.from(
-      wallet
-        .submitTransaction(tx)
-        .unsafeToPromise(),
-    )
+  override def connect(): Observable[ZSwapCoinPublicKey] =
+    wallet.publicKey().unsafeToObservable()
 
-  override def installTxReqFilter(
-      filter: Filter[LedgerTransaction],
-  ): Observable[LedgerTransaction] =
-    wallet
-      .sync()
-      .filter(filter.apply)
-      .unsafeToObservable()
+  override def submitTx(tx: Transaction): Observable[TransactionIdentifier] =
+    wallet.submitTransaction(tx).unsafeToObservable()
+
+  override def installTxFilter(filter: Filter[Transaction]): Observable[Transaction] =
+    wallet.sync().filter(filter.apply).unsafeToObservable()
 
   def balance(): Observable[js.BigInt] =
     wallet.balance().unsafeToObservable()

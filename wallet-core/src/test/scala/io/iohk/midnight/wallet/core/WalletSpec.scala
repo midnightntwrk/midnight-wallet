@@ -30,7 +30,7 @@ class WalletTxSubmissionSpec
     with WalletSpec
     with BetterOutputSuite {
 
-  test("The transaction hash is returned") {
+  test("The first transaction identifier is returned") {
     // Taking just a sample because tx building is slow
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
     val (tx, _) = Generators.ledgerTransactionGen.sample.get
@@ -38,8 +38,8 @@ class WalletTxSubmissionSpec
       .flatMap(_.submitTransaction(tx))
       .map { r =>
         assertEquals(
-          r.serialize().toString(BufferEncoding.hex),
-          tx.transactionHash().serialize().toString(BufferEncoding.hex),
+          Option(r.serialize().toString(BufferEncoding.hex)),
+          tx.identifiers().headOption.map(_.serialize().toString(BufferEncoding.hex)),
         )
       }
   }
@@ -52,10 +52,10 @@ class WalletTxSubmissionSpec
     val (tx2, _) = Generators.ledgerTransactionGen.sample.get
     for {
       wallet <- buildWallet()
-      hash1 <- wallet.submitTransaction(tx1)
-      hash2 <- wallet.submitTransaction(tx2)
-      wasSubmitted1 = txSubmissionService.wasTxSubmitted(hash1)
-      wasSubmitted2 = txSubmissionService.wasTxSubmitted(hash2)
+      _ <- wallet.submitTransaction(tx1)
+      _ <- wallet.submitTransaction(tx2)
+      wasSubmitted1 = txSubmissionService.wasTxSubmitted(tx1)
+      wasSubmitted2 = txSubmissionService.wasTxSubmitted(tx2)
     } yield assert(wasSubmitted1 && wasSubmitted2)
   }
 
@@ -132,5 +132,16 @@ class WalletBalanceSpec
       .map(_.balance())
       .flatMap(_.head.compile.last)
       .map(assertEquals(_, Some(js.BigInt(0))))
+  }
+}
+
+class WalletPublicKeySpec extends CatsEffectSuite with WalletSpec with BetterOutputSuite {
+  test("Return the public key") {
+    val initialState = new ZSwapLocalState()
+    val expected = initialState.coinPublicKey.serialize().toString(BufferEncoding.hex)
+    buildWallet(initialState = initialState)
+      .flatMap(_.publicKey())
+      .map(_.serialize().toString(BufferEncoding.hex))
+      .map(assertEquals(_, expected))
   }
 }

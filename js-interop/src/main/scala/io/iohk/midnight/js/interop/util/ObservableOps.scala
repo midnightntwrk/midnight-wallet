@@ -32,4 +32,19 @@ object ObservableOps {
         override def complete(): F[Unit] =
           Async[F].delay(subscriber.complete())
       })
+
+  implicit class FromIO[T](io: IO[T])(implicit ioRuntime: IORuntime) {
+    def unsafeToObservable(): Observable[T] =
+      new Observable[T](
+        fromFunction2[Observable[T], Subscriber[T], js.Function0[Unit]]((_, subscriber) => {
+          io.attempt
+            .map {
+              case Right(t) => subscriber.next(t); subscriber.complete()
+              case Left(e)  => subscriber.error(e.getMessage)
+            }
+            .unsafeRunAndForget()
+          () => ()
+        }),
+      )
+  }
 }

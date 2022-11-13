@@ -89,10 +89,10 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.3.0.tgz#2cea2449bbe6e0779f7dd3123b0270eaff7a248c"
   integrity sha512-Ukev5q4MNxj3TvTyaooVIR+gjFyE71X4BXHiRnTYftSKSEFz539n6hGZwvXlP4EMFWBnvh5ENVQMjL/FFa5HNA==
 
-"@midnight/wallet-api@^2.0.0":
-  version "2.0.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.0.0.tgz#83529a1d2b4f811dc30a55bea79342b802886783"
-  integrity sha512-ZkNg37bLfLwN2uVqBCH6qIXE+ev/RCp6uvScR+okYSIomHxnuxl+lpn6jsa/Y5EQzhmgLXMx7q7IeQmHAM3s1g==
+"@midnight/wallet-api@^2.1.0":
+  version "2.1.0"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.1.0.tgz#5731c8ac1ada81da2ccbe12cb155011f73ed422d"
+  integrity sha512-v3ldLfRTRR+h65mssdAVuE5IYkGIoEdsvU78tt8e3QSvhhHX+5uSBtPvNqKKH1yGO7l+382K6Ghoo1rAruAK7Q==
   dependencies:
     "@midnight/ledger" "^0.1.3"
     rxjs "7.5.5"
