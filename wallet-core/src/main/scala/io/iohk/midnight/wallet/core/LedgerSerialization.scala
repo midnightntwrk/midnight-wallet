@@ -18,38 +18,39 @@ import typings.midnightLedger.mod.{
 import typings.node.bufferMod.global.{Buffer, BufferEncoding}
 
 object LedgerSerialization {
-  private val Encoding = BufferEncoding.hex
+  private val HashEncoding = BufferEncoding.hex
+  private val BodyEncoding = BufferEncoding.base64
 
   def serializeState(state: ZSwapLocalState): String =
-    state.serialize().toString(Encoding)
+    state.serialize().toString(BodyEncoding)
 
   def parseState(raw: String): Either[Throwable, ZSwapLocalState] = {
-    val buffer = Buffer.from(raw, Encoding)
+    val buffer = Buffer.from(raw, BodyEncoding)
     Either
       .catchNonFatal(ZSwapLocalState.deserialize(buffer))
       .leftMap(InvalidInitialState.apply)
   }
 
   def serializePublicKey(pk: ZSwapCoinPublicKey): String =
-    pk.serialize().toString(Encoding)
+    pk.serialize().toString(BodyEncoding)
 
   def serializeIdentifier(id: TransactionIdentifier): String =
-    id.serialize().toString(Encoding)
+    id.serialize().toString(BodyEncoding)
 
   def fromTransaction(tx: Transaction): Either[Throwable, LedgerTransaction] =
     Decoder[String]
       .decodeJson(tx.body.value)
-      .map(Buffer.from(_, Encoding))
+      .map(Buffer.from(_, BodyEncoding))
       .flatMap(buffer => Either.catchNonFatal(LedgerTransaction.deserialize(buffer)))
       .leftMap(InvalidSerializedTransaction.apply)
 
   def toHash(txHash: LedgerTransactionHash): Hash[Transaction] =
-    Hash[Transaction](txHash.serialize().toString(Encoding))
+    Hash[Transaction](txHash.serialize().toString(HashEncoding))
 
   def toTransaction(tx: LedgerTransaction): Transaction =
     Transaction(
       Header(toHash(tx.transactionHash())),
-      ArbitraryJson(Json.fromString(tx.serialize().toString(Encoding))),
+      ArbitraryJson(Json.fromString(tx.serialize().toString(BodyEncoding))),
     )
 
   abstract class Error(cause: Throwable) extends Exception(cause)
