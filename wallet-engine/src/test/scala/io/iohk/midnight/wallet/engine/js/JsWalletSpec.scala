@@ -8,11 +8,26 @@ import typings.midnightLedger.mod.Transaction
 trait JsWalletFixtures {
   val txs = Seq.empty[Transaction]
   val jsWallet: JsWallet =
-    new JsWallet(new WalletSyncStub(txs), IO.unit)
+    new JsWallet(
+      new WalletStateStub(),
+      new WalletFilterServiceStub(txs),
+      new WalletTxSubmissionStub(),
+      IO.unit,
+    )
   val jsFailingWallet: JsWallet =
-    new JsWallet(new WalletSyncFailingStub(txs, new RuntimeException("error")), IO.unit)
+    new JsWallet(
+      new WalletStateStub(),
+      new WalletFilterServiceFailingStub(txs, new RuntimeException("error")),
+      new WalletTxSubmissionStub(),
+      IO.unit,
+    )
   val jsInfiniteWallet: JsWallet =
-    new JsWallet(new WalletSyncInfiniteStub, IO.unit)
+    new JsWallet(
+      new WalletStateStub(),
+      new WalletFilterServiceInfiniteStub(),
+      new WalletTxSubmissionStub(),
+      IO.unit,
+    )
 }
 
 class JsWalletSpec extends CatsEffectSuite with JsWalletFixtures with BetterOutputSuite {}

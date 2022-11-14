@@ -3,9 +3,10 @@ package io.iohk.midnight.wallet.core.services
 import cats.effect.IO
 import cats.syntax.eq.*
 import io.iohk.midnight.wallet.blockchain.data.Transaction
+import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
+import io.iohk.midnight.wallet.core.LedgerSerialization
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import typings.midnightLedger.mod.Transaction as LedgerTransaction
-import typings.node.bufferMod.global.BufferEncoding
 
 @SuppressWarnings(
   Array("org.wartremover.warts.DefaultArguments", "org.wartremover.warts.Var"),
@@ -20,7 +21,7 @@ class TxSubmissionServiceStub(
 
   def wasTxSubmitted(tx: LedgerTransaction): Boolean =
     submittedTransactions.exists(
-      _.header.hash.value === tx.transactionHash().serialize().toString(BufferEncoding.hex),
+      _.header.hash === LedgerSerialization.toHash(tx.transactionHash()),
     )
 }
 

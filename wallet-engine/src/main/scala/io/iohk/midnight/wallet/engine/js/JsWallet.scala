@@ -4,7 +4,7 @@ import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.js.interop.facades.rxjs.Observable
 import io.iohk.midnight.js.interop.util.ObservableOps.*
-import io.iohk.midnight.wallet.core.Wallet
+import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import scala.scalajs.js
@@ -18,22 +18,31 @@ import typings.midnightWalletApi.walletMod as api
   * corresponding Javascript one
   */
 @JSExportTopLevel("Wallet")
-class JsWallet(wallet: Wallet[IO], finalizer: IO[Unit]) extends api.Wallet with FilterService {
+class JsWallet(
+    walletState: WalletState[IO],
+    walletFilterService: WalletFilterService[IO],
+    walletTxSubmission: WalletTxSubmission[IO],
+    finalizer: IO[Unit],
+) extends api.Wallet
+    with FilterService {
 
   override def connect(): Observable[ZSwapCoinPublicKey] =
-    wallet.publicKey().unsafeToObservable()
+    walletState.publicKey().unsafeToObservable()
 
   override def submitTx(tx: Transaction): Observable[TransactionIdentifier] =
-    wallet.submitTransaction(tx).unsafeToObservable()
+    walletTxSubmission.submitTransaction(tx).unsafeToObservable()
 
   override def installTxFilter(filter: Filter[Transaction]): Observable[Transaction] =
-    wallet.sync().filter(filter.apply).unsafeToObservable()
+    walletFilterService.installTransactionFilter(filter.apply).unsafeToObservable()
 
   def balance(): Observable[js.BigInt] =
-    wallet.balance().unsafeToObservable()
+    walletState.balance().unsafeToObservable()
 
-  def close(): Unit =
-    finalizer.unsafeRunAndForget()
+  def start(): Unit =
+    walletState.start().unsafeRunAndForget()
+
+  def close(): js.Promise[Unit] =
+    finalizer.unsafeToPromise()
 }
 
 @JSExportTopLevel("WalletBuilder")
@@ -47,12 +56,14 @@ object JsWallet {
       .eval(IO.fromEither(Config.parse(nodeUri, initialState.toOption)))
       .flatMap(WalletBuilder.catsEffectWallet)
       .allocated
-      .map((new JsWallet(_, _)).tupled)
+      .map { case ((state, filterService, txSubmission), finalizer) =>
+        new JsWallet(state, filterService, txSubmission, finalizer)
+      }
       .unsafeToPromise()
 
   @JSExport
   def calculateCost(tx: Transaction): js.BigInt =
-    Wallet.calculateCost(tx)
+    WalletState.calculateCost(tx)
 
   @JSExport
   def generateInitialState(): String =

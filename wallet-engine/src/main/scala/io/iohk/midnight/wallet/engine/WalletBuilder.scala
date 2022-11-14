@@ -6,8 +6,8 @@ import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, ContextAwareLog}
 import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
-import io.iohk.midnight.wallet.core.{LedgerSerialization, Wallet}
 import io.iohk.midnight.wallet.core.services.*
+import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidUri
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
@@ -16,46 +16,82 @@ import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
+import sttp.capabilities.WebSockets
+import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 import typings.midnightLedger.mod.ZSwapLocalState
 
 object WalletBuilder {
-  def build[F[_]: Async](config: Config): Resource[F, Wallet[F]] = {
+  def build[F[_]: Async](
+      config: Config,
+  ): Resource[F, (WalletState[F], WalletFilterService[F], WalletTxSubmission[F])] = {
     val sttpBackend = FetchCatsBackend[F]()
+    for {
+      submitTxService <- buildOgmiosTxSubmissionService(sttpBackend, config)
+      stateSyncService <- buildOgmiosSyncService(sttpBackend, config)
+      filterSyncService <- buildOgmiosSyncService(sttpBackend, config)
+      walletState <- Resource.eval(WalletState.Live[F](stateSyncService, config.initialState))
+      walletFilterService <- Resource.pure(new WalletFilterService.Live[F](filterSyncService))
+      walletTxSubmission <- Resource.pure(new WalletTxSubmission.Live[F](submitTxService))
+    } yield (walletState, walletFilterService, walletTxSubmission)
+  }
 
-    implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] = ConsoleTracer.contextAware
+  private def buildOgmiosSyncService[F[_]: Async](
+      sttpBackend: SttpBackend[F, WebSockets],
+      config: Config,
+  ): Resource[F, SyncService[F]] = {
+    implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] =
+      ConsoleTracer.contextAware
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
       JsonWebSocketClientTracer.from(contextAwareLogTracer)
     implicit val ogmiosSyncTracer: OgmiosSyncTracer[F] =
       OgmiosSyncTracer.from(contextAwareLogTracer)
+
+    ogmios.network
+      .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+      .map(OgmiosSyncService.apply[F])
+      .map { ogmiosSync =>
+        new SyncService[F] {
+          override def sync(): fs2.Stream[F, Block] = ogmiosSync.sync()
+        }
+      }
+  }
+
+  private def buildOgmiosTxSubmissionService[F[_]: Async](
+      sttpBackend: SttpBackend[F, WebSockets],
+      config: Config,
+  ): Resource[F, TxSubmissionService[F]] = {
+    implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] =
+      ConsoleTracer.contextAware
+    implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
+      JsonWebSocketClientTracer.from(contextAwareLogTracer)
     implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[F] =
       OgmiosTxSubmissionTracer.from(contextAwareLogTracer)
 
-    for {
-      txSubmissionWSClient <- ogmios.network
-        .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-      ogmiosSubmitTxService <- OgmiosTxSubmissionService(txSubmissionWSClient)
-      submitTxService = new TxSubmissionService[F] {
-        override def submitTransaction(
-            transaction: Transaction,
-        ): F[TxSubmissionService.SubmissionResult] =
-          ogmiosSubmitTxService.submitTransaction(transaction).map {
-            case SubmissionResult.Accepted => TxSubmissionService.SubmissionResult.Accepted
-            case SubmissionResult.Rejected(reason) =>
-              TxSubmissionService.SubmissionResult.Rejected(reason)
+    ogmios.network
+      .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
+      .flatMap(OgmiosTxSubmissionService(_))
+      .map { ogmiosSubmitTxService =>
+        new TxSubmissionService[F] {
+          override def submitTransaction(
+              transaction: Transaction,
+          ): F[TxSubmissionService.SubmissionResult] = {
+            ogmiosSubmitTxService.submitTransaction(transaction).map {
+              case SubmissionResult.Accepted =>
+                TxSubmissionService.SubmissionResult.Accepted
+              case SubmissionResult.Rejected(reason) =>
+                TxSubmissionService.SubmissionResult.Rejected(reason)
+            }
           }
+        }
       }
-      syncWSClient <- ogmios.network.SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-      ogmiosSyncService = OgmiosSyncService(syncWSClient)
-      syncService = new SyncService[F] {
-        override def sync(): fs2.Stream[F, Block] = ogmiosSyncService.sync()
-      }
-      wallet <- Resource.eval(Wallet.Live[F](submitTxService, syncService, config.initialState))
-    } yield wallet
   }
 
-  def catsEffectWallet(config: Config): Resource[IO, Wallet[IO]] = build[IO](config)
+  def catsEffectWallet(
+      config: Config,
+  ): Resource[IO, (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])] =
+    build[IO](config)
 
   def generateInitialState(): String =
     LedgerSerialization.serializeState(new ZSwapLocalState())

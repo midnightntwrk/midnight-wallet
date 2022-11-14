@@ -290,6 +290,7 @@ addCommandAlias(
     "ogmiosSyncJS/test",
     "ogmiosTxSubmissionJS/test",
     "walletEngine/test",
+    "IntegrationTest/test",
     "coverageAggregate",
   ).mkString(";", " ;", ""),
 )

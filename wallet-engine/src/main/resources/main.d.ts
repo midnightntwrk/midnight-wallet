@@ -6,15 +6,16 @@ export interface HasBalance {
     balance(): Observable<bigint>
 }
 
-export interface Closeable {
-    close(): void
+export interface Resource {
+    start(): void
+    close(): Promise<void>
 }
 
 export class WalletBuilder {
     static build(
         nodeUri: string,
         initialState?: string
-    ): Promise<FilterService & Wallet & HasBalance & Closeable>
+    ): Promise<FilterService & Wallet & HasBalance & Resource>
 
     static calculateCost(tx: Transaction): bigint
 
