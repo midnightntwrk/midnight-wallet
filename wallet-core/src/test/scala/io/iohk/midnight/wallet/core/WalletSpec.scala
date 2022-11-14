@@ -1,6 +1,8 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
+import cats.syntax.all.*
+import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.Wallet.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
@@ -116,7 +118,7 @@ class WalletBalanceSpec
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
     val coins = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.coinInfoGen)).sample.get
     val (tx, state) = Generators.buildTransaction(coins)
-    val expected = coins.map(_.value).fold(js.BigInt(0))(_ + _)
+    val expected = coins.map(_.value).combineAll(sum)
     buildWallet(initialState = state.applyLocal(tx))
       .map(_.balance())
       .flatMap(_.head.compile.last)
@@ -132,6 +134,13 @@ class WalletBalanceSpec
       .map(_.balance())
       .flatMap(_.head.compile.last)
       .map(assertEquals(_, Some(js.BigInt(0))))
+  }
+
+  test("Calculate cost as the sum of tx imbalances") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    assertEquals(Wallet.calculateCost(tx), tx.imbalances().map(_.imbalance).combineAll(sum))
   }
 }
 

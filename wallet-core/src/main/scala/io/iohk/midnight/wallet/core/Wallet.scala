@@ -3,16 +3,12 @@ package io.iohk.midnight.wallet.core
 import cats.effect.{Ref, Temporal}
 import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.core.services.{SyncService, TxSubmissionService}
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js.BigInt
-import typings.midnightLedger.mod.{
-  TransactionIdentifier,
-  ZSwapCoinPublicKey,
-  ZSwapLocalState,
-  Transaction,
-}
+import typings.midnightLedger.mod.*
 
 trait Wallet[F[_]] {
   def submitTransaction(transaction: Transaction): F[TransactionIdentifier]
@@ -30,7 +26,6 @@ object Wallet {
       submitTxService: TxSubmissionService[F],
       syncService: SyncService[F],
   ) extends Wallet[F] {
-    val Zero: BigInt = BigInt(0)
 
     override def submitTransaction(ledgerTx: Transaction): F[TransactionIdentifier] =
       for {
@@ -49,9 +44,7 @@ object Wallet {
       Stream
         .fixedDelay(1.second)
         .evalMap(_ => localState.get)
-        .map(_.coins)
-        .map(_.map(_.value))
-        .map(_.fold(Zero)(_ + _))
+        .map(_.coins.map(_.value).combineAll(sum))
 
     override def publicKey(): F[ZSwapCoinPublicKey] =
       localState.get.map(_.coinPublicKey)
@@ -64,6 +57,12 @@ object Wallet {
         .map(LedgerSerialization.fromTransaction)
         .flatMap(Stream.fromEither(_))
   }
+
+  def calculateCost(transaction: Transaction): BigInt =
+    transaction
+      .imbalances()
+      .map(_.imbalance)
+      .combineAll(sum)
 
   object Live {
     def apply[F[_]: Temporal](

@@ -51,6 +51,10 @@ object JsWallet {
       .unsafeToPromise()
 
   @JSExport
+  def calculateCost(tx: Transaction): js.BigInt =
+    Wallet.calculateCost(tx)
+
+  @JSExport
   def generateInitialState(): String =
     WalletBuilder.generateInitialState()
 }
