@@ -57,7 +57,4 @@ object WalletState {
 
   def calculateCost(tx: Transaction): BigInt =
     tx.imbalances().map(_.imbalance).combineAll(sum)
-
-  sealed trait Error extends Exception
-  final case class TransactionRejected(reason: String) extends Error // FIXME not an exception
 }

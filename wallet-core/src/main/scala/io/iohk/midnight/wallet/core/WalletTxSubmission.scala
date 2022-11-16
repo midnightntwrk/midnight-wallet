@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.core
 
 import cats.MonadThrow
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.core.WalletState.TransactionRejected
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import typings.midnightLedger.mod.*
@@ -32,6 +31,9 @@ object WalletTxSubmission {
         }
   }
 
-  sealed trait Error extends Exception
-  final case object NoTransactionIdentifiers extends Error
+  abstract class Error(msg: String) extends Exception(msg)
+  final case object NoTransactionIdentifiers
+      extends Error("Transaction did not contain an identifier")
+  final case class TransactionRejected(reason: String)
+      extends Error(reason) // FIXME not an exception
 }

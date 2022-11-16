@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
-import io.iohk.midnight.wallet.core.WalletState.TransactionRejected
+import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
