@@ -9,7 +9,7 @@ import scala.scalajs.js
 import typings.midnightLedger.mod.{Transaction as LedgerTransaction, *}
 
 object Generators {
-  private val tokenType: FieldElement = FieldElement.fromBigint(js.BigInt(0))
+  private val tokenType: TokenType = nativeToken()
 
   val coinInfoGen: Gen[CoinInfo] =
     Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))

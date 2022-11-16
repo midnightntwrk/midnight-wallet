@@ -13,8 +13,8 @@ import typings.midnightMockedNodeInMemoryServer.anon.PartialConfig
 import typings.midnightMockedNodeInMemoryServer.mod.InMemoryServer
 
 class EndToEndSpec extends CatsEffectSuite {
-  private val coin = new CoinInfo(js.BigInt(1000), FieldElement.fromBigint(js.BigInt(0)))
-  private val tokenType = FieldElement.fromBigint(js.BigInt(0))
+  private val tokenType = nativeToken()
+  private val coin = new CoinInfo(js.BigInt(1000), tokenType)
   private val state = new ZSwapLocalState().watchFor(coin)
 
   private val output = ZSwapOutputWithRandomness.`new`(coin, state.coinPublicKey)

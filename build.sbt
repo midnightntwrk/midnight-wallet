@@ -132,7 +132,7 @@ lazy val walletCore = project
 
     // Npm dependencies
     useYarn := true,
-    Compile / npmDependencies ++= Seq("@midnight/ledger" -> "1.0.0"),
+    Compile / npmDependencies ++= Seq("@midnight/ledger" -> "1.1.5"),
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)

@@ -16,15 +16,10 @@
     "@midnight/protocols" "^0.3.0"
     "@midnight/session-types" "^0.3.0"
 
-"@midnight/ledger@^0.1.3":
-  version "0.1.3"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-0.1.3.tgz#e077a6a31bba0086cef9d6269e59caf21bbfefc2"
-  integrity sha512-ESJlbTn5ARJNJVfyuQK6/KeyZ0AIYi2eSl2xUjbwXDSXzxdc26NaQGf4nli03ArJkM37YL/Fg3HmXl3llkbpTw==
-
-"@midnight/ledger@^1.0.0":
-  version "1.0.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.0.0.tgz#dbb10a9dd1f97d783cc7c8cde82dda2e3ac15531"
-  integrity sha512-Ds0yfLx5lhmVecdxAm9wY2BCs4DjCMur7E7XX4IfdhEpgr0+ihXT2EuJDTXYrF+PdLOOiH4l7AFHDmj67TIV7g==
+"@midnight/ledger@^1.1.5":
+  version "1.1.5"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.5.tgz#b064c19739ef135b901953c705e613a595bcf9f4"
+  integrity sha512-jHq6uYYAKw2V+6H50RxJrC2eEMwktjyyk2B0tP2BKmY+/l1jkVsPFv+CEveFfxUt42xs8YcX+yL7sV56vqYC8Q==
 
 "@midnight/mocked-node-api@0.2.4":
   version "0.2.4"
@@ -89,12 +84,12 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.3.0.tgz#2cea2449bbe6e0779f7dd3123b0270eaff7a248c"
   integrity sha512-Ukev5q4MNxj3TvTyaooVIR+gjFyE71X4BXHiRnTYftSKSEFz539n6hGZwvXlP4EMFWBnvh5ENVQMjL/FFa5HNA==
 
-"@midnight/wallet-api@^2.1.0":
-  version "2.1.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.1.0.tgz#5731c8ac1ada81da2ccbe12cb155011f73ed422d"
-  integrity sha512-v3ldLfRTRR+h65mssdAVuE5IYkGIoEdsvU78tt8e3QSvhhHX+5uSBtPvNqKKH1yGO7l+382K6Ghoo1rAruAK7Q==
+"@midnight/wallet-api@^2.1.2":
+  version "2.1.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.1.2.tgz#cb727727981b7f22585f0314288c1f50691e9521"
+  integrity sha512-2QsCoy0YLmKVVEKaLXYe/YfHPNiW5N2dDBLfU3WueRcu0HG/vHsQEkVeBzkE7rgGesaYDsrfCa6TDjmpsXf6Cw==
   dependencies:
-    "@midnight/ledger" "^0.1.3"
+    "@midnight/ledger" "^1.1.5"
     rxjs "7.5.5"
 
 abort-controller@^3.0.0:
