@@ -4,13 +4,15 @@ import cats.effect.kernel.Sync
 import cats.syntax.show.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
+import io.iohk.midnight.tracer.logging.{
+  AsContextAwareLog,
+  ContextAwareLog,
+  Event,
+  LogLevel,
+  StringLogContext,
+}
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
-import io.iohk.midnight.tracer.logging.Event
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.ContextAwareLog
-import io.iohk.midnight.tracer.logging.StringLogContext
 import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent.*
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.blockchain.data.Hash

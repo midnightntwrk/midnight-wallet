@@ -8,5 +8,5 @@ export interface OgmiosSyncService {
 }
 
 export class OgmiosSyncServiceBuilder {
-    static build(nodeUri: string): Promise<OgmiosSyncService>
+    static build(nodeUri: string, minLogLevel?: string): Promise<OgmiosSyncService>
 }

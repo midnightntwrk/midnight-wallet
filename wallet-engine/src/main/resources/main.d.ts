@@ -14,7 +14,8 @@ export interface Resource {
 export class WalletBuilder {
     static build(
         nodeUri: string,
-        initialState?: string
+        initialState?: string,
+        minLogLevel?: string
     ): Promise<FilterService & Wallet & HasBalance & Resource>
 
     static calculateCost(tx: Transaction): bigint

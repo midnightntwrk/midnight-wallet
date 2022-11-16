@@ -1,9 +1,11 @@
 package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
+import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
+
 import scala.scalajs.js
 import sttp.client3.UriContext
 import typings.midnightLedger.mod.*
@@ -34,7 +36,7 @@ class EndToEndSpec extends CatsEffectSuite {
     node.run()
 
     Wallet
-      .build[IO](Config(uri"ws://localhost:5205", state))
+      .build[IO](Config(uri"ws://localhost:5205", state, LogLevel.Trace))
       .use { case (walletState, _, txSubmission) =>
         for {
           fiber <- walletState.start().start

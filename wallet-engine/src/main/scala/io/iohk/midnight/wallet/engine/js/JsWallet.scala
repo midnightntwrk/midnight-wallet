@@ -7,12 +7,13 @@ import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
-import scala.scalajs.js
-import scala.scalajs.js.annotation.*
 import typings.midnightLedger.mod.*
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
 import typings.midnightWalletApi.walletMod as api
+
+import scala.scalajs.js
+import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
@@ -51,9 +52,10 @@ object JsWallet {
   def build(
       nodeUri: String,
       initialState: js.UndefOr[String],
+      minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
     Resource
-      .eval(IO.fromEither(Config.parse(nodeUri, initialState.toOption)))
+      .eval(IO.fromEither(Config.parse(nodeUri, initialState.toOption, minLogLevel.toOption)))
       .flatMap(WalletBuilder.catsEffectWallet)
       .allocated
       .map { case ((state, filterService, txSubmission), finalizer) =>

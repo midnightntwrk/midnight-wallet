@@ -9,27 +9,44 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
   test("Fail if node URI is invalid") {
     val uri = "%"
     val initialState = WalletBuilder.generateInitialState()
-    val config = Config.parse(uri, Some(initialState))
+    val minLogLevel = "Warn"
+    val config = Config.parse(uri, Some(initialState), Some(minLogLevel))
+
     config match {
-      case Right(_) | Left(Config.Error.InvalidUri(_)) =>
-      case Left(t)                                     => fail("Expected invalid URI error", t)
+      case Left(Config.Error.InvalidUri(_)) =>
+      case _                                => fail("Expected invalid URI error")
     }
   }
 
   test("Fail if initial state is invalid") {
     val uri = "ws://localhost:5205"
     val initialState = "Invalid initial state"
-    val config = WalletBuilder.Config.parse(uri, Some(initialState))
+    val minLogLevel = "Warn"
+    val config = WalletBuilder.Config.parse(uri, Some(initialState), Some(minLogLevel))
+
     config match {
-      case Right(_) | Left(LedgerSerialization.Error.InvalidInitialState(_)) =>
-      case Left(t) => fail("Expected invalid initial sate error", t)
+      case Left(LedgerSerialization.Error.InvalidInitialState(_)) =>
+      case _ => fail("Expected invalid initial sate error")
+    }
+  }
+
+  test("Fail if log level is invalid") {
+    val uri = "ws://localhost:5205"
+    val initialState = WalletBuilder.generateInitialState()
+    val minLogLevel = "bla_bla"
+    val config = WalletBuilder.Config.parse(uri, Some(initialState), Some(minLogLevel))
+
+    config match {
+      case Left(Config.Error.InvalidLogLevel(_)) =>
+      case _                                     => fail("Expected invalid log level error")
     }
   }
 
   test("Generate valid initial state") {
     val uri = "ws://localhost:5205"
     val initialState = WalletBuilder.generateInitialState()
-    val config = WalletBuilder.Config.parse(uri, Some(initialState))
+    val minLogLevel = "Warn"
+    val config = WalletBuilder.Config.parse(uri, Some(initialState), Some(minLogLevel))
     assert(config.isRight)
   }
 }

@@ -8,8 +8,8 @@ addSbtPlugin("org.scalablytyped.converter" % "sbt-converter" % "1.0.0-beta39")
 
 /*
 Fixing a version conflict between transitive dependencies
-* org.scala-lang.modules:scala-xml_2.12:2.1.0 (early-semver) is selected over 1.3.0
+ * org.scala-lang.modules:scala-xml_2.12:2.1.0 (early-semver) is selected over 1.3.0
     +- org.scoverage:scalac-scoverage-reporter_2.12:2.0.1 (depends on 2.1.0)
     +- org.scalablytyped.converter:scalajs_2.12:1.0.0-beta39 (depends on 1.3.0)
  */
-dependencyOverrides +="org.scala-lang.modules" %% "scala-xml" % "2.1.0"
+dependencyOverrides += "org.scala-lang.modules" %% "scala-xml" % "2.1.0"

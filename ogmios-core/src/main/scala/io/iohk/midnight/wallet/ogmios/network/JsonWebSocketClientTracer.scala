@@ -2,15 +2,11 @@ package io.iohk.midnight.wallet.ogmios.network
 
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.ContextAwareLog
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
+import io.iohk.midnight.tracer.logging.{AsContextAwareLog, ContextAwareLog, Event, LogLevel}
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import JsonWebSocketClientEvent.*
-
 import cats.effect.kernel.Sync
-import io.iohk.midnight.tracer.logging.Event
 import io.circe
 
 class JsonWebSocketClientTracer[F[_]](val tracer: Tracer[F, JsonWebSocketClientEvent]) {

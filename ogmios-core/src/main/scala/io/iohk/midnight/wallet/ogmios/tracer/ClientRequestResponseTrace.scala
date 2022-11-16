@@ -1,11 +1,11 @@
 package io.iohk.midnight.wallet.ogmios.tracer
 
-import io.iohk.midnight.tracer.logging.LoggingTrace
-import io.iohk.midnight.tracer.logging.LoggingTrace.Level
+import io.iohk.midnight.tracer.logging.LogLevel.{Debug, Error}
+import io.iohk.midnight.tracer.logging.{LogLevel, LoggingTrace}
 
 // [TODO] PM-5039 replace with new events
 sealed trait ClientRequestResponseTrace extends LoggingTrace {
-  override def level: Level = Level.Debug
+  override def level: LogLevel = Debug
 }
 
 object ClientRequestResponseTrace {
@@ -20,6 +20,6 @@ object ClientRequestResponseTrace {
 
   final case class UnexpectedMessage(unexpected: String) extends ClientRequestResponseTrace {
     override val message: String = s"Unexpected message received: $unexpected"
-    override val level: Level = Level.Error
+    override val level: LogLevel = Error
   }
 }

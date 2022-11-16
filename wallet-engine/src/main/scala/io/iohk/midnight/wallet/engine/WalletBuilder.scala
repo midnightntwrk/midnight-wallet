@@ -4,11 +4,11 @@ import cats.effect.kernel.Async
 import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging.{ConsoleTracer, ContextAwareLog}
+import io.iohk.midnight.tracer.logging.{ConsoleTracer, ContextAwareLog, LogLevel}
 import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
-import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidUri
+import io.iohk.midnight.wallet.core.services.*
+import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.{InvalidLogLevel, InvalidUri}
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
@@ -42,7 +42,7 @@ object WalletBuilder {
       config: Config,
   ): Resource[F, SyncService[F]] = {
     implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] =
-      ConsoleTracer.contextAware
+      ConsoleTracer.contextAware(config.minLogLevel)
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
       JsonWebSocketClientTracer.from(contextAwareLogTracer)
     implicit val ogmiosSyncTracer: OgmiosSyncTracer[F] =
@@ -63,7 +63,7 @@ object WalletBuilder {
       config: Config,
   ): Resource[F, TxSubmissionService[F]] = {
     implicit val contextAwareLogTracer: Tracer[F, ContextAwareLog] =
-      ConsoleTracer.contextAware
+      ConsoleTracer.contextAware(config.minLogLevel)
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
       JsonWebSocketClientTracer.from(contextAwareLogTracer)
     implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[F] =
@@ -96,23 +96,40 @@ object WalletBuilder {
   def generateInitialState(): String =
     LedgerSerialization.serializeState(new ZSwapLocalState())
 
-  final case class Config(platformUri: Uri, initialState: ZSwapLocalState)
+  final case class Config(platformUri: Uri, initialState: ZSwapLocalState, minLogLevel: LogLevel)
 
   object Config {
-    def parse(nodeUri: String, initialState: Option[String]): Either[Throwable, Config] =
-      Uri
-        .parse(nodeUri)
-        .leftMap(InvalidUri.apply)
-        .flatMap { uri =>
-          initialState
-            .map(LedgerSerialization.parseState)
-            .getOrElse(Right(new ZSwapLocalState()))
-            .map(new Config(uri, _))
-        }
+    def parse(
+        nodeUri: String,
+        initialState: Option[String],
+        minLogLevel: Option[String],
+    ): Either[Throwable, Config] = for {
+      parsedUri <- Uri.parse(nodeUri).leftMap(InvalidUri)
+      parsedLogLevel <- parseLogLevel(minLogLevel)
+      parsedInitialState <- parseInitialState(initialState)
+    } yield new Config(parsedUri, parsedInitialState, parsedLogLevel)
+
+    private def parseInitialState(
+        maybeInitialState: Option[String],
+    ): Either[Throwable, ZSwapLocalState] = {
+      maybeInitialState.map(LedgerSerialization.parseState).getOrElse(Right(new ZSwapLocalState()))
+    }
+
+    private def parseLogLevel(maybeLogLevel: Option[String]): Either[Throwable, LogLevel] = {
+      maybeLogLevel match {
+        case Some(providedLogLevel) =>
+          LogLevel
+            .fromString(providedLogLevel)
+            .toRight[Throwable](new InvalidLogLevel(s"Invalid log level: $providedLogLevel"))
+        case None =>
+          Right(LogLevel.Warn)
+      }
+    }
 
     abstract class Error(msg: String) extends Exception(msg)
     object Error {
       final case class InvalidUri(msg: String) extends Error(msg)
+      final case class InvalidLogLevel(msg: String) extends Error(msg)
     }
   }
 }

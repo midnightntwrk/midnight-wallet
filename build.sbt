@@ -23,7 +23,7 @@ val catsEffectVersion = "3.3.11"
 val circeVersion = "0.14.2"
 val fs2Version = "3.2.5"
 val log4CatsVersion = "2.4.0"
-val midnightTracingVersion = "1.0.9"
+val midnightTracingVersion = "1.1.6"
 val sttpClientVersion = "3.4.1"
 
 lazy val commonSettings = Seq(
