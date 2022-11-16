@@ -1,6 +1,6 @@
 {
     "name": "@midnight/ogmios-sync",
-    "version": "0.0.5",
+    "version": "0.0.6",
     "types": "dist/main.d.ts",
     "main": "dist/main.js",
     "module": "dist/main.js",
