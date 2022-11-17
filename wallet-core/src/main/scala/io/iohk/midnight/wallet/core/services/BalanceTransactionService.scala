@@ -59,7 +59,7 @@ object BalanceTransactionService {
             Right((originalTx.merge(balancingTx).merge[Transaction], state))
           } else tryBalanceTx(restOfCoins, coinsForAttempt, state, originalTx)
         }
-        case Nil => Left(NotSufficientResources)
+        case Nil => Left(NotSufficientFunds)
       }
     }
 
@@ -133,7 +133,8 @@ object BalanceTransactionService {
     }
   }
 
-  sealed trait Error extends Throwable
+  sealed abstract class Error(message: String) extends Throwable(message)
 
-  final case object NotSufficientResources extends Error
+  final case object NotSufficientFunds
+      extends Error("Not sufficient funds to balance the cost of transaction")
 }

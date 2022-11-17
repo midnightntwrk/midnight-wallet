@@ -4,7 +4,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
-import io.iohk.midnight.wallet.core.services.BalanceTransactionService.NotSufficientResources
+import io.iohk.midnight.wallet.core.services.BalanceTransactionService.NotSufficientFunds
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.{FailingWalletStateStub, Generators, WalletState}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite, TestOptions}
@@ -92,7 +92,7 @@ class BalanceTransactionServiceSpec
       }
   }
 
-  test("fails when not enough resources to balance transaction cost") {
+  test("fails when not enough funds to balance transaction cost") {
     val imbalancedTx = ledgerTransactionGen.sample.get._1
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating not enough coins
@@ -101,7 +101,7 @@ class BalanceTransactionServiceSpec
     buildBalanceTxService(stateWithCoins)
       .flatMap(_.balanceTransaction(imbalancedTx))
       .attempt
-      .map(assertEquals(_, Left(NotSufficientResources)))
+      .map(assertEquals(_, Left(NotSufficientFunds)))
   }
 
   test("fails when cannot get a state") {
