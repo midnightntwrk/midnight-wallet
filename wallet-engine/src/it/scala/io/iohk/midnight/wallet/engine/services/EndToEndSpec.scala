@@ -7,29 +7,31 @@ import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
 import scala.scalajs.js
+import scala.scalajs.js.JSConverters.*
 import sttp.client3.UriContext
 import typings.midnightLedger.mod.*
 import typings.midnightMockedNodeApi.anon.Hash
-import typings.midnightMockedNodeApi.transactionMod
+import typings.midnightMockedNodeApi.transactionMod.Transaction as ApiTransaction
 import typings.midnightMockedNodeApp.anon.PartialConfigany
 import typings.midnightMockedNodeApp.configMod.GenesisValue
 import typings.midnightMockedNodeApp.mod.InMemoryServer
 
-class EndToEndSpec extends CatsEffectSuite {
-  private val tokenType = nativeToken()
-  private val coin = new CoinInfo(js.BigInt(1_000_000), tokenType)
-  private val spendCoin = new CoinInfo(js.BigInt(10_000), tokenType)
-  private val changeCoin = new CoinInfo(js.BigInt(800_000), tokenType)
-  private val initialState = new ZSwapLocalState().watchFor(coin).watchFor(changeCoin)
-  private val pubKey = initialState.coinPublicKey
-  private val ledgerState = new LedgerState()
+trait EndToEndSpecSetup {
+  val nodeHost = "localhost"
+  val nodePort = 5205L
+  val tokenType = nativeToken()
+  val coin = new CoinInfo(js.BigInt(1_000_000), tokenType)
+  val spendCoin = new CoinInfo(js.BigInt(10_000), tokenType)
+  val initialState = new ZSwapLocalState().watchFor(coin)
+  val pubKey = initialState.coinPublicKey
+  val recipientKey = new ZSwapLocalState().coinPublicKey
+  val ledgerState = new LedgerState()
 
-  private val mintTx = {
-    val output = ZSwapOutputWithRandomness.`new`(coin, pubKey)
+  def buildSendTx(coin: CoinInfo, recipient: ZSwapCoinPublicKey): Transaction = {
+    val output = ZSwapOutputWithRandomness.`new`(coin, recipient)
     val deltas = new ZSwapDeltas()
     deltas.insert(tokenType, -coin.value)
     val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
-
     new TransactionBuilder(ledgerState)
       .addOffer(offer, output.randomness)
       .merge[TransactionBuilder]
@@ -37,59 +39,45 @@ class EndToEndSpec extends CatsEffectSuite {
       .transaction
   }
 
-  private def spendTx(state: ZSwapLocalState): Transaction = {
-    val input = state.spend(coin)
-    val spendOutput =
-      ZSwapOutputWithRandomness.`new`(spendCoin, new ZSwapLocalState().coinPublicKey)
-    val changeOutput = ZSwapOutputWithRandomness.`new`(changeCoin, pubKey)
-    val deltas = new ZSwapDeltas()
-    deltas.insert(tokenType, coin.value - spendCoin.value - changeCoin.value)
-    val offer =
-      new ZSwapOffer(
-        js.Array(input.input),
-        js.Array(spendOutput.output, changeOutput.output),
-        js.Array(),
-        deltas,
-      )
-    new TransactionBuilder(ledgerState)
-      .addOffer(
-        offer,
-        input.randomness.merge(spendOutput.randomness).merge(changeOutput.randomness),
-      )
-      .merge[TransactionBuilder]
-      .intoTransaction()
-      .transaction
-  }
-
-  test("Wallet balance") {
-    val ledgerTx = LedgerSerialization.toTransaction(mintTx)
-    val tx = transactionMod.Transaction(ledgerTx.body, Hash(ledgerTx.header.hash.value))
+  def buildNode(initialTxs: Transaction*): InMemoryServer = {
+    val ledgerTxs = initialTxs.map(LedgerSerialization.toTransaction)
+    val txs: Seq[Any] = ledgerTxs.map { ledgerTx =>
+      ApiTransaction(ledgerTx.body, Hash(ledgerTx.header.hash.value))
+    }
     val nodeConfig =
       PartialConfigany()
-        .setGenesis(GenesisValue("value", js.Array(tx)))
-        .setHost("localhost")
-        .setPort(5205)
-    val node = new InMemoryServer(nodeConfig)
+        .setGenesis(GenesisValue("value", txs.toJSArray))
+        .setHost(nodeHost)
+        .setPort(nodePort.toDouble)
+    new InMemoryServer(nodeConfig)
+  }
+}
+
+class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
+  test("Submit tx spending wallet balance") {
+    val mintTx = buildSendTx(coin, pubKey)
+    val spendTx = buildSendTx(spendCoin, recipientKey)
+    val fee = js.BigInt(1787) // This value was extracted after first run since it's not predictable
+    val node = buildNode(mintTx)
     node.run()
 
     Wallet
-      .build[IO](Config(uri"ws://localhost:5205", initialState, LogLevel.Debug))
+      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
       .use { case (walletState, _, txSubmission) =>
         for {
           initialBalance <- walletState.balance().head.compile.lastOrError
           fiber <- walletState.start().start
-          balanceBefore <- walletState.balance().head.compile.lastOrError
-          state <- walletState.localState()
-          transaction = spendTx(state)
-          _ <- walletState.updateLocalState(state)
-          _ <- txSubmission.submitTransaction(transaction)
-          balanceAfter <- walletState.balance().head.compile.lastOrError
-          _ <- IO(node.close())
+          balanceBeforeSend <- walletState.balance().head.compile.lastOrError
+          _ <- txSubmission.submitTransaction(spendTx)
+          balanceAfterSend <- walletState.balance().head.compile.lastOrError
           _ <- fiber.cancel
-        } yield assertEquals(
-          List(initialBalance, balanceBefore, balanceAfter),
-          List(js.BigInt(0), coin.value, changeCoin.value),
-        )
+          _ <- IO(node.close())
+        } yield {
+          assertEquals(
+            List(initialBalance, balanceBeforeSend, balanceAfterSend),
+            List(js.BigInt(0), coin.value, coin.value - spendCoin.value - fee),
+          )
+        }
       }
   }
 }
