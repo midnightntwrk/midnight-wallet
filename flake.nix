@@ -16,7 +16,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {
-      url = "github:input-output-hk/midnight-ledger-prototype/master";
+      url = "github:input-output-hk/midnight-ledger-prototype/v1.1.5";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         tullia.follows = "tullia";
@@ -101,7 +101,7 @@
           defaultPackage = packages.midnight-wallet;
 
           devShell = pkgs.mkShell {
-            inputsFrom = [defaultPackage];
+            packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x ledgerPkgs.ledger-napi];
           };
         }
         // tullia.fromSimple system {

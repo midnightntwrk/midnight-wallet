@@ -13,17 +13,10 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.R
 import io.iohk.midnight.wallet.ogmios.util.WithJsonWebSocketClient
 
 class LocalTxSubmissionSpec extends WithJsonWebSocketClient {
-  test("send SubmitTx call") {
+  test("send SubmitTx") {
     assertSend[Send](
       examples.SubmitTx.validCallObject,
       examples.SubmitTx.validJsonCall,
-    )
-  }
-
-  test("send SubmitTx deploy") {
-    assertSend[Send](
-      examples.SubmitTx.validDeployObject,
-      examples.SubmitTx.validJsonDeploy,
     )
   }
 

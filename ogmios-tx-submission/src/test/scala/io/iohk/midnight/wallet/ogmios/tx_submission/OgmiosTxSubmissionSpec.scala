@@ -4,30 +4,29 @@ import cats.effect.IO
 import cats.syntax.eq.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
+import io.iohk.midnight.tracer.logging.{ContextAwareLog, InMemoryLogTracer}
 import io.iohk.midnight.wallet.blockchain.data.Transaction
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionSpec.transactionsGen
+import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult.{
   Accepted,
   Rejected,
 }
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.tx_submission.examples.SubmitTx
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive.AcceptTx
-import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.{
+  OgmiosTxSubmissionEvent,
+  OgmiosTxSubmissionTracer,
+}
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
-
 import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
-
 import scala.concurrent.duration.FiniteDuration
-import io.iohk.midnight.tracer.logging.ContextAwareLog
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionEvent
-import io.iohk.midnight.tracer.logging.InMemoryLogTracer
 
 trait TxSubmissionSpecBase
     extends CatsEffectSuite
@@ -94,7 +93,5 @@ class OgmiosTxSubmissionSpec extends TxSubmissionSpecBase {
 
 object OgmiosTxSubmissionSpec {
   val transactionsGen: Gen[Seq[Transaction]] =
-    Gen.nonEmptyListOf(
-      Gen.oneOf(SubmitTx.validDeployObject.payload, SubmitTx.validCallObject.payload),
-    )
+    Gen.nonEmptyListOf(Gen.const(SubmitTx.validCallObject.payload))
 }

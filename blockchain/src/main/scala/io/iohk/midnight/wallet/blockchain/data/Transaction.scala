@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.blockchain.data
 
 import cats.Show
 
-final case class Transaction(header: Transaction.Header, body: ArbitraryJson)
+final case class Transaction(header: Transaction.Header, body: String)
 
 object Transaction {
 

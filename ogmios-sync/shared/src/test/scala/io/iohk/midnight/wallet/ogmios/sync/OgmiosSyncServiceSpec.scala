@@ -5,24 +5,19 @@ import cats.effect.std.Random
 import cats.syntax.functor.*
 import cats.syntax.traverse.*
 import fs2.Stream
+import io.iohk.midnight.tracer.logging.{ContextAwareLog, InMemoryLogTracer}
 import io.iohk.midnight.wallet.blockchain.data.Block.Height
 import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
-import io.iohk.midnight.wallet.ogmios.sync.examples
+import io.iohk.midnight.wallet.ogmios.sync.tracing.{OgmiosSyncEvent, OgmiosSyncTracer}
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
-
+import java.util.concurrent.TimeUnit
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
-
-import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
-import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
-import io.iohk.midnight.tracer.logging.ContextAwareLog
-import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent
-import io.iohk.midnight.tracer.logging.InMemoryLogTracer
 
 trait SyncServiceSpecBase
     extends CatsEffectSuite
@@ -127,10 +122,5 @@ class OgmiosSyncServiceSpec extends SyncServiceSpecBase {
 
 object OgmiosSyncServiceSpec {
   val transactionsGen: Gen[Seq[Transaction]] =
-    Gen.nonEmptyListOf(
-      Gen.oneOf(
-        examples.SubmitTx.validDeployTx,
-        examples.SubmitTx.validCallTx,
-      ),
-    )
+    Gen.nonEmptyListOf(Gen.const(examples.SubmitTx.validTx))
 }

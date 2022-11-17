@@ -11,9 +11,6 @@ private[sync] object Decoders {
     implicit def hashDecoder[T]: Decoder[Hash[T]] =
       Decoder[String].map(Hash[T])
 
-    implicit val arbitraryJsonDecoder: Decoder[ArbitraryJson] =
-      json => Right(ArbitraryJson(json.value))
-
     implicit val transactionHeaderDecoder: Decoder[Transaction.Header] =
       deriveDecoder[Transaction.Header]
 

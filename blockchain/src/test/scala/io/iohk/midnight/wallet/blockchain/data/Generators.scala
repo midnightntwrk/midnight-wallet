@@ -1,7 +1,6 @@
 package io.iohk.midnight.wallet.blockchain.data
 
 import cats.syntax.all.*
-import io.circe.Json
 import java.time.Instant
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
@@ -28,11 +27,8 @@ object Generators {
   private val transactionHeaderGen: Gen[Transaction.Header] =
     hashGen[Transaction].map(Transaction.Header.apply)
 
-  private val transactionBodyGen: Gen[ArbitraryJson] =
-    hexStringGen.map(Json.fromString).map(ArbitraryJson.apply)
-
   private val transactionGen: Gen[Transaction] =
-    (transactionHeaderGen, transactionBodyGen).mapN(Transaction.apply)
+    (transactionHeaderGen, hexStringGen).mapN(Transaction.apply)
 
   private val blockBodyGen: Gen[Block.Body] =
     Gen.listOf(transactionGen).map(Block.Body.apply)

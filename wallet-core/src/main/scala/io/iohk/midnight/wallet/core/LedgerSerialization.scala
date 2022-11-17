@@ -1,9 +1,8 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
-import io.circe.{Decoder, Json}
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Header
-import io.iohk.midnight.wallet.blockchain.data.{ArbitraryJson, Hash, Transaction}
+import io.iohk.midnight.wallet.blockchain.data.{Hash, Transaction}
 import io.iohk.midnight.wallet.core.LedgerSerialization.Error.{
   InvalidInitialState,
   InvalidSerializedTransaction,
@@ -37,12 +36,12 @@ object LedgerSerialization {
   def serializeIdentifier(id: TransactionIdentifier): String =
     id.serialize().toString(BodyEncoding)
 
-  def fromTransaction(tx: Transaction): Either[Throwable, LedgerTransaction] =
-    Decoder[String]
-      .decodeJson(tx.body.value)
-      .map(Buffer.from(_, BodyEncoding))
-      .flatMap(buffer => Either.catchNonFatal(LedgerTransaction.deserialize(buffer)))
+  def fromTransaction(tx: Transaction): Either[Throwable, LedgerTransaction] = {
+    val buffer = Buffer.from(tx.body, BodyEncoding)
+    Either
+      .catchNonFatal(LedgerTransaction.deserialize(buffer))
       .leftMap(InvalidSerializedTransaction.apply)
+  }
 
   def toHash(txHash: LedgerTransactionHash): Hash[Transaction] =
     Hash[Transaction](txHash.serialize().toString(HashEncoding))
@@ -50,7 +49,7 @@ object LedgerSerialization {
   def toTransaction(tx: LedgerTransaction): Transaction =
     Transaction(
       Header(toHash(tx.transactionHash())),
-      ArbitraryJson(Json.fromString(tx.serialize().toString(BodyEncoding))),
+      tx.serialize().toString(BodyEncoding),
     )
 
   abstract class Error(cause: Throwable) extends Exception(cause)

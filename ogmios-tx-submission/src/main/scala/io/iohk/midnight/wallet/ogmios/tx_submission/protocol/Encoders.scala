@@ -11,9 +11,6 @@ private[tx_submission] object Encoders {
     implicit def hashEncoder[T]: Encoder[Hash[T]] =
       Encoder[String].contramap(_.toHexString)
 
-    implicit val arbitraryJsonEncoder: Encoder[ArbitraryJson] =
-      _.value
-
     implicit val transactionHeaderEncoder: Encoder[Transaction.Header] =
       deriveEncoder[Transaction.Header]
 

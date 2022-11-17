@@ -1,13 +1,9 @@
 package io.iohk.midnight.wallet.ogmios.sync.examples
 
-import io.circe.Json
-import io.circe.syntax.*
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
-
 import java.time.Instant
 
-@SuppressWarnings(Array("org.wartremover.warts.Throw"))
 object RollForward {
 
   val validJson: String =
@@ -27,36 +23,14 @@ object RollForward {
       |          "header": {
       |            "hash": "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7"
       |          },
-      |          "body": {
-      |            "type": "Deploy",
-      |            "publicOracle": {
-      |              "test": 1
-      |            },
-      |            "transitionFunctionCircuits": ["6232e241fc01f4", "e050935684748401"]
-      |          }
-      |        },
-      |        {
-      |          "header": {
-      |            "hash": "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e"
-      |          },
-      |          "body": {
-      |            "type": "Call",
-      |            "address": "Address",
-      |            "functionName": "Func",
-      |            "proof": "Proof",
-      |            "nonce": "Nonce",
-      |            "publicTranscript": [{
-      |              "functionName": "identity",
-      |              "arg": {},
-      |              "result": {}
-      |            }]
-      |          }
+      |          "body": "AAAAAAAAAAABAAAAAAAAAK"
       |        }
       |      ]
       |    }
       |  }
       |}""".stripMargin
 
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   val validObject: LocalBlockSync.Receive.RollForward =
     LocalBlockSync.Receive.RollForward(
       Block(
@@ -76,37 +50,7 @@ object RollForward {
                   "bf01a04df7212606c575d2b2b353805d8900e1696607aa63875bcf54809e7dc7",
                 ),
               ),
-              ArbitraryJson(
-                Json.obj(
-                  "type" := "Deploy",
-                  "publicOracle" := Json.obj("test" := 1),
-                  "transitionFunctionCircuits" := Json
-                    .arr("6232e241fc01f4".asJson, "e050935684748401".asJson),
-                ),
-              ),
-            ),
-            Transaction(
-              Transaction.Header(
-                Hash[Transaction](
-                  "b56301fff26c8bef150180614360257aaa2dfd3ff83c76fbeaf1e800ffd7013e",
-                ),
-              ),
-              ArbitraryJson(
-                Json.obj(
-                  "type" := "Call",
-                  "address" := "Address",
-                  "functionName" := "Func",
-                  "proof" := "Proof",
-                  "nonce" := "Nonce",
-                  "publicTranscript" := Json.arr(
-                    Json.obj(
-                      "functionName" := "identity",
-                      "arg" := Json.obj(),
-                      "result" := Json.obj(),
-                    ),
-                  ),
-                ),
-              ),
+              "AAAAAAAAAAABAAAAAAAAAK",
             ),
           ),
         ),

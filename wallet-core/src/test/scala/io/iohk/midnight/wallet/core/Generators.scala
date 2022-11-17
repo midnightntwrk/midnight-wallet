@@ -12,7 +12,7 @@ import typings.midnightLedger.mod.{Transaction as LedgerTransaction, *}
 import scala.annotation.tailrec
 
 object Generators {
-  private val tokenType: TokenType = nativeToken()
+  private val tokenType = nativeToken()
 
   val coinInfoGen: Gen[CoinInfo] =
     Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))

@@ -26,9 +26,7 @@ class WalletStateStub extends WalletState[IO] {
   override def start(): IO[Unit] = IO.unit
   override def publicKey(): IO[ZSwapCoinPublicKey] = IO.pure(state.coinPublicKey)
   override def balance(): Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
-
   override def localState(): IO[ZSwapLocalState] = IO.pure(state)
-
   override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
 }
 

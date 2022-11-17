@@ -2,12 +2,10 @@ package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.effect.{IO, Ref}
 import fs2.Stream
-import io.circe.parser
 import io.iohk.midnight.js.interop.facades.rxjs.Observable
 import io.iohk.midnight.wallet.blockchain.data.Generators.*
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
-import scala.scalajs.js
 
 class JsOgmiosSyncServiceSpec
     extends CatsEffectSuite
@@ -33,12 +31,7 @@ class JsOgmiosSyncServiceSpec
         .foreach { case (obtainedTx, expectedTx) =>
           val header = obtainedTx.header
           assertEquals(header.hash, expectedTx.header.hash.value)
-          @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-          val body = obtainedTx.body.asInstanceOf[js.Any]
-          assertEquals(
-            parser.parse(js.JSON.stringify(body)),
-            Right(expectedTx.body.value),
-          )
+          assertEquals(obtainedTx.body, expectedTx.body)
         }
     }
   }
