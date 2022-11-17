@@ -12,7 +12,7 @@
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
     tullia = {
-      url = "github:input-output-hk/tullia";
+      url = "github:input-output-hk/tullia?rev=f75ad427298eb8adf1a14cf08a5c48d3d3aa8ca1";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {

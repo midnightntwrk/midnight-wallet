@@ -2,20 +2,24 @@
   CI = {config, ...}: {
     preset = {
       nix.enable = true;
-      github-ci = {
+
+      github = let
         enable = config.actionRun.facts != {};
-        repo = "input-output-hk/midnight-wallet";
-        sha = config.preset.github-ci.lib.getRevision "GitHub event" "";
+        repository = "input-output-hk/midnight-wallet";
+        revision = config.preset.github.lib.readRevision "GitHub event" "";
+      in {
+        ci = {
+          inherit enable repository revision;
+        };
+        status = {
+          inherit enable repository revision;
+          enableActionName = false;
+        };
       };
     };
 
     command.text = ''
       set -x
-
-      pushd wallet-engine
-      nix build .#midnight-wallet-node-modules
-      ln -s "$(realpath result)"/node_modules .
-      popd
 
       nix develop -L -c sbt verify
       nix develop -L -c sbt '++ 3.1.2 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
@@ -80,10 +84,19 @@
   CD = {config, ...}: {
     preset = {
       nix.enable = true;
-      github-ci = {
+
+      github = let
         enable = config.actionRun.facts != {};
-        repo = "input-output-hk/midnight-wallet";
-        sha = config.preset.github-ci.lib.getRevision "GitHub tag pushed" "";
+        repository = "input-output-hk/midnight-wallet";
+        revision = config.preset.github.lib.readRevision "GitHub tag pushed" "";
+      in {
+        ci = {
+          inherit enable repository revision;
+        };
+        status = {
+          inherit enable repository revision;
+          enableActionName = false;
+        };
       };
     };
 
