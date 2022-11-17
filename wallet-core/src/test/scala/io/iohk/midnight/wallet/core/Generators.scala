@@ -5,14 +5,31 @@ import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.blockchain.data.Generators.{hashGen, heightGen, instantGen}
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
+
 import scala.scalajs.js
 import typings.midnightLedger.mod.{Transaction as LedgerTransaction, *}
+
+import scala.annotation.tailrec
 
 object Generators {
   private val tokenType: TokenType = nativeToken()
 
   val coinInfoGen: Gen[CoinInfo] =
     Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))
+  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+  def generateCoinsFor(amount: js.BigInt): List[CoinInfo] = {
+    val coinsNumber = Gen.chooseNum(2, 5).sample.get
+    val part = amount / js.BigInt(coinsNumber)
+
+    @tailrec
+    def loop(amount: js.BigInt, acc: List[CoinInfo]): List[CoinInfo] = {
+      val newAmount = amount - part
+      if (newAmount > js.BigInt(0)) loop(newAmount, new CoinInfo(part, nativeToken()) :: acc)
+      else new CoinInfo(amount, nativeToken()) :: acc
+    }
+
+    loop(amount, List.empty)
+  }
 
   val ledgerTransactionGen: Gen[(LedgerTransaction, ZSwapLocalState)] =
     Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, coinInfoGen)).map(buildTransaction(_))

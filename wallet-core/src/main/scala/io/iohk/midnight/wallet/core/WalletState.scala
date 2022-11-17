@@ -15,6 +15,10 @@ trait WalletState[F[_]] {
   def publicKey(): F[ZSwapCoinPublicKey]
 
   def balance(): Stream[F, BigInt]
+
+  def localState(): F[ZSwapLocalState]
+
+  def updateLocalState(newState: ZSwapLocalState): F[Unit]
 }
 
 object WalletState {
@@ -43,6 +47,11 @@ object WalletState {
         .map(_.coins)
         .map(_.map(_.value))
         .map(_.combineAll(sum))
+
+    override def localState(): F[ZSwapLocalState] = localState.get
+
+    override def updateLocalState(newState: ZSwapLocalState): F[Unit] =
+      localState.set(newState)
   }
 
   object Live {

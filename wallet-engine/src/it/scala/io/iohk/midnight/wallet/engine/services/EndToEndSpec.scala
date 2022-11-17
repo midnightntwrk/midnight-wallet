@@ -1,42 +1,56 @@
 package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
+import cats.syntax.all.*
+import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
-
-import scala.scalajs.js
 import sttp.client3.UriContext
 import typings.midnightLedger.mod.*
 import typings.midnightMockedNodeInMemoryServer.anon.PartialConfig
 import typings.midnightMockedNodeInMemoryServer.mod.InMemoryServer
 
+import scala.scalajs.js
+
 class EndToEndSpec extends CatsEffectSuite {
   private val tokenType = nativeToken()
-  private val coin = new CoinInfo(js.BigInt(1000), tokenType)
-  private val state = new ZSwapLocalState().watchFor(coin)
+  private def generateTransaction(
+      amount: js.BigInt,
+      startingState: ZSwapLocalState = new ZSwapLocalState(),
+  ): (Transaction, ZSwapLocalState) = {
+    val coin = new CoinInfo(amount, tokenType)
 
-  private val output = ZSwapOutputWithRandomness.`new`(coin, state.coinPublicKey)
+    val state = startingState.watchFor(coin)
 
-  private val deltas = new ZSwapDeltas()
-  deltas.insert(tokenType, -coin.value)
+    val output = ZSwapOutputWithRandomness.`new`(coin, state.coinPublicKey)
 
-  private val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
+    val deltas = new ZSwapDeltas()
+    deltas.insert(tokenType, -coin.value)
 
-  private val tx =
-    new TransactionBuilder(new LedgerState())
-      .addOffer(offer, output.randomness)
-      .merge[TransactionBuilder]
-      .intoTransaction()
-      .transaction
+    val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
+
+    val tx =
+      new TransactionBuilder(new LedgerState())
+        .addOffer(offer, output.randomness)
+        .merge[TransactionBuilder]
+        .intoTransaction()
+        .transaction
+    (tx, state)
+  }
+
+  private val (mintTx, state) = generateTransaction(js.BigInt(10000))
+  private val stateWithCoins = state.applyLocal(mintTx)
+  private val (tx, watchingState) = generateTransaction(js.BigInt(1000), stateWithCoins)
+  private val balanceBeforeSpending = watchingState.coins.map(_.value).combineAll(sum)
 
   test("Wallet balance") {
     val node = new InMemoryServer(PartialConfig().setHost("localhost").setPort(5205))
     node.run()
 
     Wallet
-      .build[IO](Config(uri"ws://localhost:5205", state, LogLevel.Trace))
+      .build[IO](Config(uri"ws://localhost:5205", watchingState, LogLevel.Trace))
       .use { case (walletState, _, txSubmission) =>
         for {
           fiber <- walletState.start().start
@@ -44,7 +58,7 @@ class EndToEndSpec extends CatsEffectSuite {
           balance <- walletState.balance().dropWhile(_ <= js.BigInt(0)).head.compile.lastOrError
           _ <- IO(node.close())
           _ <- fiber.cancel
-        } yield assertEquals(balance, coin.value)
+        } yield assert(balance < balanceBeforeSpending)
       }
   }
 }

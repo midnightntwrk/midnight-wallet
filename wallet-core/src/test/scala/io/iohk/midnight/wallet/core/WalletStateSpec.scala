@@ -7,12 +7,18 @@ import io.iohk.midnight.wallet.core.services.SyncServiceStub
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
-import scala.scalajs.js
-import typings.midnightLedger.mod.ZSwapLocalState
 
+import scala.scalajs.js
+import typings.midnightLedger.mod.{Transaction, ZSwapLocalState}
 class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
   def buildWallet(initialState: ZSwapLocalState = new ZSwapLocalState()): IO[WalletState[IO]] =
     WalletState.Live[IO](new SyncServiceStub(), initialState)
+
+  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+  private def generateLedgerTx(): (Transaction, ZSwapLocalState) = {
+    // Taking just a sample because tx building is slow
+    Generators.ledgerTransactionGen.sample.get
+  }
 
   test("Start with balance zero") {
     buildWallet()
@@ -34,9 +40,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   }
 
   test("Not sum transaction outputs to another wallet") {
-    // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val (tx, _) = generateLedgerTx()
     val anotherState = new ZSwapLocalState()
     buildWallet(initialState = anotherState.applyLocal(tx))
       .map(_.balance())
@@ -54,9 +58,23 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   }
 
   test("Calculate cost as the sum of tx imbalances") {
-    // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val (tx, _) = generateLedgerTx()
     assertEquals(WalletState.calculateCost(tx), tx.imbalances().map(_.imbalance).combineAll(sum))
+  }
+
+  test("Return the state") {
+    val (tx, state) = generateLedgerTx()
+    buildWallet(initialState = state.applyLocal(tx))
+      .flatMap(_.localState())
+      .map(updatedState => assert(updatedState.coins.length > state.coins.length))
+  }
+
+  test("Update the state") {
+    val (tx, state) = generateLedgerTx()
+    val newState = state.applyLocal(tx)
+    buildWallet(initialState = state)
+      .flatTap(_.updateLocalState(newState))
+      .flatMap(_.localState())
+      .map(updatedState => assert(updatedState.coins.length > state.coins.length))
   }
 }

@@ -20,11 +20,11 @@
         "utils": "utils_2"
       },
       "locked": {
-        "lastModified": 1668031817,
-        "narHash": "sha256-p21sl25brZKzxYQDFoextJEdu0FsMve/so3LePWIVJg=",
+        "lastModified": 1668645107,
+        "narHash": "sha256-ejbiUFVFcllv7SC/JiSIMkgIzQrGiH2H4yGn408Qw5A=",
         "owner": "input-output-hk",
         "repo": "abcirdc",
-        "rev": "4b4359e67f6c088a6afbef90eac2981f85ba080b",
+        "rev": "8f8e061981f315efe56f2118c217a6993fec75f8",
         "type": "github"
       },
       "original": {
@@ -494,11 +494,11 @@
         "utils": "utils_3"
       },
       "locked": {
-        "lastModified": 1668095197,
-        "narHash": "sha256-7G8VR7ScxluZljJuSr4flENIxs1yBlrJ9Q24cQmZUGk=",
+        "lastModified": 1668620871,
+        "narHash": "sha256-EH7EagOO23T9YXgXSxArYXEueTXliRYPHVVZU9k5hYk=",
         "owner": "input-output-hk",
         "repo": "midnight-ledger-prototype",
-        "rev": "8f3af06547e0b2b6fcb8cd3d6f64c12621bc3850",
+        "rev": "46129c319269cddd82edaa4a20cf8d5c090bfd3f",
         "type": "github"
       },
       "original": {

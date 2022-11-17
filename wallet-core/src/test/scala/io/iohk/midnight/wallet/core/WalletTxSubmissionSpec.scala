@@ -1,10 +1,11 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.IO
+import cats.effect.{IO, Ref}
 import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import typings.midnightLedger.mod.ZSwapLocalState
 
 class WalletTxSubmissionSpec
     extends CatsEffectSuite
@@ -12,11 +13,16 @@ class WalletTxSubmissionSpec
     with BetterOutputSuite {
   private val txSubmissionService = new TxSubmissionServiceStub()
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
+  private val balanceTransactionService = new BalanceTransactionServiceStub()
+  private val failingBalanceTransactionServiceStub = new FailingBalanceTransactionServiceStub()
+  private val walletState =
+    new WalletState.Live[IO](Ref.unsafe(new ZSwapLocalState()), new SyncServiceStub())
 
   def buildWallet(
       txSubmissionService: TxSubmissionService[IO] = txSubmissionService,
+      balanceTransactionService: BalanceTransactionService[IO] = balanceTransactionService,
   ): WalletTxSubmission[IO] =
-    new WalletTxSubmission.Live[IO](txSubmissionService)
+    new WalletTxSubmission.Live[IO](txSubmissionService, balanceTransactionService, walletState)
 
   test("The first transaction identifier is returned") {
     // Taking just a sample because tx building is slow
@@ -70,5 +76,17 @@ class WalletTxSubmissionSpec
       .submitTransaction(tx)
       .attempt
       .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
+  }
+
+  test("Fails when balancing fails") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val wallet = buildWallet(balanceTransactionService = failingBalanceTransactionServiceStub)
+
+    wallet
+      .submitTransaction(tx)
+      .attempt
+      .map(assertEquals(_, Left(FailingBalanceTransactionServiceStub.error)))
   }
 }
