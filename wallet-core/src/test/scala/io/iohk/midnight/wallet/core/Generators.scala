@@ -54,6 +54,15 @@ object Generators {
       .leftMap(_.intoTransaction().transaction)
   }
 
+  def generateStateWithCoins(coins: List[CoinInfo]): ZSwapLocalState = {
+    val (mintTx, state) = buildTransaction(coins)
+    state.applyLocal(mintTx)
+  }
+
+  def generateStateWithFunds(amount: js.BigInt): ZSwapLocalState = generateStateWithCoins(
+    generateCoinsFor(amount),
+  )
+
   val transactionGen: Gen[Transaction] =
     ledgerTransactionGen.map(_._1).map(LedgerSerialization.toTransaction)
 

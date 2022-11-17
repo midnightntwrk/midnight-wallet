@@ -6,7 +6,7 @@ import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
 import io.iohk.midnight.wallet.core.services.BalanceTransactionService.NotSufficientResources
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import io.iohk.midnight.wallet.core.{Generators, WalletState}
+import io.iohk.midnight.wallet.core.{FailingWalletStateStub, Generators, WalletState}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite, TestOptions}
 import typings.midnightLedger.mod.*
 
@@ -53,8 +53,7 @@ class BalanceTransactionServiceSpec
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating reasonable amount of coins
     val coins = Generators.generateCoinsFor(imbalance * imbalance)
-    val (mintTx, state) = Generators.buildTransaction(coins)
-    val stateWithCoins = state.applyLocal(mintTx)
+    val stateWithCoins = Generators.generateStateWithCoins(coins)
     (stateWithCoins, imbalancedTx, coins)
   }
 
@@ -97,9 +96,7 @@ class BalanceTransactionServiceSpec
     val imbalancedTx = ledgerTransactionGen.sample.get._1
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating not enough coins
-    val coins = Generators.generateCoinsFor(imbalance)
-    val (mintTx, state) = Generators.buildTransaction(coins)
-    val stateWithCoins = state.applyLocal(mintTx)
+    val stateWithCoins = Generators.generateStateWithFunds(imbalance)
 
     buildBalanceTxService(stateWithCoins)
       .flatMap(_.balanceTransaction(imbalancedTx))
@@ -108,14 +105,7 @@ class BalanceTransactionServiceSpec
   }
 
   test("fails when cannot get a state") {
-    val error = new Throwable("Wallet State Error")
-    val walletState = new WalletState[IO] {
-      override def start(): IO[Unit] = ???
-      override def publicKey(): IO[ZSwapCoinPublicKey] = ???
-      override def balance(): fs2.Stream[IO, js.BigInt] = ???
-      override def localState(): IO[ZSwapLocalState] = IO.raiseError(error)
-      override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = ???
-    }
+    val walletState = new FailingWalletStateStub()
 
     val balanceTransactionService = new BalanceTransactionService.Live[IO](walletState)
     val imbalancedTx = ledgerTransactionGen.sample.get._1
@@ -123,6 +113,6 @@ class BalanceTransactionServiceSpec
     balanceTransactionService
       .balanceTransaction(imbalancedTx)
       .attempt
-      .map(assertEquals(_, Left(error)))
+      .map(assertEquals(_, Left(FailingWalletStateStub.error)))
   }
 }

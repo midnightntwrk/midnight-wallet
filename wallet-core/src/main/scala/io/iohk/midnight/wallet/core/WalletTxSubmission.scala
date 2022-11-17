@@ -20,23 +20,23 @@ object WalletTxSubmission {
     override def submitTransaction(ledgerTx: Transaction): F[TransactionIdentifier] = {
       for {
         balancedTxAndState <- balanceTransactionService.balanceTransaction(ledgerTx)
-        balancedTx = balancedTxAndState._1
-        state = balancedTxAndState._2
+        (balancedTx, state) = balancedTxAndState
+        _ <- walletState.updateLocalState(state)
         response <- txSubmissionService
           .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
         result <- response match {
           case SubmissionResult.Accepted =>
-            walletState.updateLocalState(state).flatMap { _ =>
-              ledgerTx
-                .identifiers()
-                .headOption
-                .fold(
-                  // $COVERAGE-OFF$ Can't generate a test transaction for this scenario
-                  NoTransactionIdentifiers.raiseError[F, TransactionIdentifier],
-                  // $COVERAGE-ON$
-                )(_.pure)
-            }
-          case SubmissionResult.Rejected(reason) => TransactionRejected(reason).raiseError
+            ledgerTx
+              .identifiers()
+              .headOption
+              .fold(
+                // $COVERAGE-OFF$ Can't generate a test transaction for this scenario
+                NoTransactionIdentifiers.raiseError[F, TransactionIdentifier],
+                // $COVERAGE-ON$
+              )(_.pure)
+          case SubmissionResult.Rejected(reason) =>
+            // we should clear the pending spends here, but we don't have an API now
+            TransactionRejected(reason).raiseError
         }
       } yield result
     }

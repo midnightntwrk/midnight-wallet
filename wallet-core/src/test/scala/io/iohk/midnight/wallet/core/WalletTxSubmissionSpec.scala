@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.{IO, Ref}
+import cats.implicits.catsSyntaxEq
 import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
@@ -21,6 +22,7 @@ class WalletTxSubmissionSpec
   def buildWallet(
       txSubmissionService: TxSubmissionService[IO] = txSubmissionService,
       balanceTransactionService: BalanceTransactionService[IO] = balanceTransactionService,
+      walletState: WalletState[IO] = walletState,
   ): WalletTxSubmission[IO] =
     new WalletTxSubmission.Live[IO](txSubmissionService, balanceTransactionService, walletState)
 
@@ -36,6 +38,23 @@ class WalletTxSubmissionSpec
           Option(LedgerSerialization.serializeIdentifier(identifier)),
           tx.identifiers().headOption.map(LedgerSerialization.serializeIdentifier),
         )
+      }
+  }
+
+  test("The wallet state was updated") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val imbalance = tx.imbalances().pop().imbalance
+    val stateWithFunds = Generators.generateStateWithFunds(imbalance * imbalance)
+    val walletState = new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub())
+    val wallet =
+      buildWallet(balanceTransactionService = new BalanceTransactionService.Live[IO](walletState))
+    wallet
+      .submitTransaction(tx)
+      .flatMap(_ => walletState.localState())
+      .map { updatedState =>
+        assert(updatedState.pendingSpends.keys().length === 1)
       }
   }
 
@@ -88,5 +107,17 @@ class WalletTxSubmissionSpec
       .submitTransaction(tx)
       .attempt
       .map(assertEquals(_, Left(FailingBalanceTransactionServiceStub.error)))
+  }
+
+  test("Fails when updating state fails") {
+    // Taking just a sample because tx building is slow
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val wallet = buildWallet(walletState = new FailingWalletStateStub())
+
+    wallet
+      .submitTransaction(tx)
+      .attempt
+      .map(assertEquals(_, Left(FailingWalletStateStub.error)))
   }
 }
