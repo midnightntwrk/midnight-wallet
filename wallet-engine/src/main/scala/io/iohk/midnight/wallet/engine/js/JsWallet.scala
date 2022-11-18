@@ -34,7 +34,9 @@ class JsWallet(
     walletTxSubmission.submitTransaction(tx).unsafeToObservable()
 
   override def installTxFilter(filter: Filter[Transaction]): Observable[Transaction] =
-    walletFilterService.installTransactionFilter(filter.apply).unsafeToObservable()
+    walletFilterService
+      .installTransactionFilter(filter.apply(_)) // IMPORTANT: Don't convert this to method value
+      .unsafeToObservable()
 
   def balance(): Observable[js.BigInt] =
     walletState.balance().unsafeToObservable()

@@ -19,6 +19,6 @@ object WalletFilterService {
         .flatMap(Stream.emits)
         .map(LedgerSerialization.fromTransaction)
         .flatMap(Stream.fromEither(_))
-        .filter(filter)
+        .filter(filter.apply(_)) // IMPORTANT: Don't convert this to method value
   }
 }
