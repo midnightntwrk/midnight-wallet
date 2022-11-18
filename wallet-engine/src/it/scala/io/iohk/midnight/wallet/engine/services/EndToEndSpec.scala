@@ -80,4 +80,31 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
         }
       }
   }
+
+  test("Filter transactions") {
+    val mintTx = buildSendTx(coin, pubKey)
+    val spendTx = buildSendTx(spendCoin, recipientKey)
+    val expectedIdentifier = spendTx.identifiers().head
+    val node = buildNode(mintTx)
+    node.run()
+
+    Wallet
+      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
+      .use { case (walletState, filterService, txSubmission) =>
+        for {
+          fiber <- walletState.start().start
+          _ <- walletState.balance().head.compile.lastOrError
+          _ <- txSubmission.submitTransaction(spendTx)
+          filteredTx <- filterService
+            .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
+            .head
+            .compile
+            .lastOrError
+          _ <- fiber.cancel
+          _ <- IO(node.close())
+        } yield {
+          assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
+        }
+      }
+  }
 }
