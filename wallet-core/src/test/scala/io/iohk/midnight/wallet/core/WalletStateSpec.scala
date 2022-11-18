@@ -14,10 +14,9 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   def buildWallet(initialState: ZSwapLocalState = new ZSwapLocalState()): IO[WalletState[IO]] =
     WalletState.Live[IO](new SyncServiceStub(), initialState)
 
-  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-  private def generateLedgerTx(): (Transaction, ZSwapLocalState) = {
+  private def generateLedgerTxAndState(): (Transaction, ZSwapLocalState) = {
     // Taking just a sample because tx building is slow
-    val data = Generators.ledgerTransactionGen.sample.get
+    val data = Generators.generateLedgerTransaction()
     (data.transaction, data.state)
   }
 
@@ -34,6 +33,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val coins = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.coinInfoGen)).sample.get
     val (tx, state) = Generators.buildTransaction(coins)
     val expected = coins.map(_.value).combineAll(sum)
+
     buildWallet(initialState = state.applyLocal(tx))
       .map(_.balance())
       .flatMap(_.head.compile.last)
@@ -41,7 +41,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   }
 
   test("Not sum transaction outputs to another wallet") {
-    val (tx, _) = generateLedgerTx()
+    val (tx, _) = generateLedgerTxAndState()
     val anotherState = new ZSwapLocalState()
     buildWallet(initialState = anotherState.applyLocal(tx))
       .map(_.balance())
@@ -59,19 +59,19 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   }
 
   test("Calculate cost as the sum of tx imbalances") {
-    val (tx, _) = generateLedgerTx()
+    val (tx, _) = generateLedgerTxAndState()
     assertEquals(WalletState.calculateCost(tx), tx.imbalances().map(_.imbalance).combineAll(sum))
   }
 
   test("Return the state") {
-    val (tx, state) = generateLedgerTx()
+    val (tx, state) = generateLedgerTxAndState()
     buildWallet(initialState = state.applyLocal(tx))
       .flatMap(_.localState())
       .map(updatedState => assert(updatedState.coins.length > state.coins.length))
   }
 
   test("Update the state") {
-    val (tx, state) = generateLedgerTx()
+    val (tx, state) = generateLedgerTxAndState()
     val newState = state.applyLocal(tx)
     buildWallet(initialState = state)
       .flatTap(_.updateLocalState(newState))

@@ -3,7 +3,6 @@ package io.iohk.midnight.wallet.core.services
 import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
-import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
 import io.iohk.midnight.wallet.core.services.BalanceTransactionService.NotSufficientFunds
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.{FailingWalletStateStub, Generators, WalletState}
@@ -14,7 +13,7 @@ import scala.annotation.tailrec
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.Equals"))
+@SuppressWarnings(Array("org.wartremover.warts.Equals"))
 class BalanceTransactionServiceSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
@@ -49,7 +48,7 @@ class BalanceTransactionServiceSpec
     imbalances.map(_.imbalance).combineAll(sum)
 
   private def generateData(): (ZSwapLocalState, Transaction, List[CoinInfo]) = {
-    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
+    val imbalancedTx = Generators.generateLedgerTransaction().transaction
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating reasonable amount of coins
     val coins = Generators.generateCoinsFor(imbalance * imbalance)
@@ -93,7 +92,7 @@ class BalanceTransactionServiceSpec
   }
 
   test("fails when not enough funds to balance transaction cost") {
-    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
+    val imbalancedTx = Generators.generateLedgerTransaction().transaction
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating not enough coins
     val stateWithCoins = Generators.generateStateWithFunds(imbalance)
@@ -108,7 +107,7 @@ class BalanceTransactionServiceSpec
     val walletState = new FailingWalletStateStub()
 
     val balanceTransactionService = new BalanceTransactionService.Live[IO](walletState)
-    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
+    val imbalancedTx = Generators.generateLedgerTransaction().transaction
 
     balanceTransactionService
       .balanceTransaction(imbalancedTx)

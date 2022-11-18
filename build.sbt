@@ -124,7 +124,7 @@ lazy val walletCore = project
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
-      "net.exoego" %%% "scala-js-nodejs-v16" % "0.14.0"
+      "net.exoego" %%% "scala-js-nodejs-v16" % "0.14.0",
     ),
 
     // Test dependencies
@@ -137,7 +137,7 @@ lazy val walletCore = project
     },
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
-    useNodeModuleResolution
+    useNodeModuleResolution,
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
@@ -219,7 +219,7 @@ lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
 
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(walletCore, ogmiosSync.js, ogmiosTxSubmission.js)
+  .dependsOn(walletCore % "compile->compile;test->test", ogmiosSync.js, ogmiosTxSubmission.js)
   .configs(IntegrationTest)
   .settings(commonSettings, Defaults.itSettings)
   .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
@@ -247,9 +247,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
     stEnableScalaJsDefined := Selection.All,
     Global / stQuiet := true,
     useNodeModuleResolution,
-
-    // Coverage
-    coverageExcludedPackages := "io.iohk.midnight.wallet.engine.WalletBuilder;io.iohk.midnight.wallet.engine.js;",
   )
 
 lazy val jsInterop = project

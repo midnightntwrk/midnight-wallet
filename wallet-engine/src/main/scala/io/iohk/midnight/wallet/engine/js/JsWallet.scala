@@ -7,6 +7,7 @@ import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+
 import typings.midnightLedger.mod.*
 import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightWalletApi.filterServiceMod.FilterService
@@ -52,7 +53,7 @@ class JsWallet(
 }
 
 @JSExportTopLevel("WalletBuilder")
-object JsWallet {
+object JsWalletBuilder {
   @JSExport
   def build(
       nodeUri: String,

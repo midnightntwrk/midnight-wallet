@@ -11,6 +11,7 @@ import typings.midnightLedger.mod.{Transaction as LedgerTransaction, *}
 
 import scala.annotation.tailrec
 
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object Generators {
   private val tokenType = nativeToken()
 
@@ -22,7 +23,7 @@ object Generators {
 
   val coinInfoGen: Gen[CoinInfo] =
     Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))
-  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+
   def generateCoinsFor(amount: js.BigInt): List[CoinInfo] = {
     val coinsNumber = Gen.chooseNum(2, 5).sample.get
     val part = amount / js.BigInt(coinsNumber)
@@ -43,7 +44,6 @@ object Generators {
       TransactionWithContext(tx, state, coins)
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
   def generateLedgerTransaction(): TransactionWithContext =
     Generators.ledgerTransactionGen.sample.get
 
@@ -72,9 +72,20 @@ object Generators {
     state.applyLocal(mintTx)
   }
 
-  def generateStateWithFunds(amount: js.BigInt): ZSwapLocalState = generateStateWithCoins(
-    generateCoinsFor(amount),
-  )
+  def generateStateWithFunds(amount: js.BigInt): ZSwapLocalState =
+    generateStateWithCoins(generateCoinsFor(amount))
+
+  val ledgerTransactionsList: Seq[LedgerTransaction] =
+    Gen
+      .chooseNum(1, 5)
+      .flatMap(Gen.listOfN(_, ledgerTransactionGen.map(_.transaction)))
+      .sample
+      .get
+
+  val zSwapCoinPublicKeyGen: Gen[ZSwapCoinPublicKey] =
+    ledgerTransactionGen.map(_.state).map(_.coinPublicKey)
+
+  val balanceGen: Gen[js.BigInt] = Gen.posNum[Int].map(js.BigInt(_))
 
   val transactionGen: Gen[Transaction] =
     ledgerTransactionGen.map(_.transaction).map(LedgerSerialization.toTransaction)

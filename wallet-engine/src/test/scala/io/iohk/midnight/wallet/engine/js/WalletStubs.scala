@@ -30,6 +30,22 @@ class WalletStateStub extends WalletState[IO] {
   override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
 }
 
+class WalletStatePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey) extends WalletState[IO] {
+  override def start(): IO[Unit] = IO.unit
+  override def publicKey(): IO[ZSwapCoinPublicKey] = IO.pure(zSwapCoinPublicKey)
+  override def balance(): Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
+  override def localState(): IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
+  override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
+}
+
+class WalletStateBalanceStub(balance: Seq[js.BigInt]) extends WalletState[IO] {
+  override def start(): IO[Unit] = IO.unit
+  override def publicKey(): IO[ZSwapCoinPublicKey] = IO.raiseError(new NotImplementedError())
+  override def balance(): Stream[IO, js.BigInt] = Stream.emits(balance)
+  override def localState(): IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
+  override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
+}
+
 class WalletTxSubmissionStub extends WalletTxSubmission[IO] {
   override def submitTransaction(
       transaction: Transaction,
@@ -39,4 +55,13 @@ class WalletTxSubmissionStub extends WalletTxSubmission[IO] {
       .identifiers()
       .headOption
       .fold[IO[TransactionIdentifier]](IO.raiseError(new Exception("Invalid tx")))(IO.pure)
+}
+
+class WalletTxSubmissionIdentifierStub(txIdentifier: TransactionIdentifier)
+    extends WalletTxSubmission[IO] {
+  override def submitTransaction(
+      transaction: Transaction,
+      newCoins: List[CoinInfo],
+  ): IO[TransactionIdentifier] =
+    IO.pure(txIdentifier)
 }
