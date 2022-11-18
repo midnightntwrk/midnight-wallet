@@ -14,6 +14,12 @@ import scala.annotation.tailrec
 object Generators {
   private val tokenType = nativeToken()
 
+  final case class TransactionWithContext(
+      transaction: LedgerTransaction,
+      state: ZSwapLocalState,
+      coins: List[CoinInfo],
+  )
+
   val coinInfoGen: Gen[CoinInfo] =
     Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
@@ -31,8 +37,15 @@ object Generators {
     loop(amount, List.empty)
   }
 
-  val ledgerTransactionGen: Gen[(LedgerTransaction, ZSwapLocalState)] =
-    Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, coinInfoGen)).map(buildTransaction(_))
+  val ledgerTransactionGen: Gen[TransactionWithContext] =
+    Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, coinInfoGen)).map { coins =>
+      val (tx, state) = buildTransaction(coins)
+      TransactionWithContext(tx, state, coins)
+    }
+
+  @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+  def generateLedgerTransaction(): TransactionWithContext =
+    Generators.ledgerTransactionGen.sample.get
 
   def buildTransaction(
       coins: List[CoinInfo],
@@ -64,7 +77,7 @@ object Generators {
   )
 
   val transactionGen: Gen[Transaction] =
-    ledgerTransactionGen.map(_._1).map(LedgerSerialization.toTransaction)
+    ledgerTransactionGen.map(_.transaction).map(LedgerSerialization.toTransaction)
 
   private val blockHeaderGen: Gen[Block.Header] =
     (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)

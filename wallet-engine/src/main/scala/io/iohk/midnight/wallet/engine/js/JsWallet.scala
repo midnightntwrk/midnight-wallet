@@ -30,8 +30,11 @@ class JsWallet(
   override def connect(): Observable[ZSwapCoinPublicKey] =
     walletState.publicKey().unsafeToObservable()
 
-  override def submitTx(tx: Transaction): Observable[TransactionIdentifier] =
-    walletTxSubmission.submitTransaction(tx).unsafeToObservable()
+  override def submitTx(
+      tx: Transaction,
+      newCoins: js.Array[CoinInfo],
+  ): Observable[TransactionIdentifier] =
+    walletTxSubmission.submitTransaction(tx, newCoins.toList).unsafeToObservable()
 
   override def installTxFilter(filter: Filter[Transaction]): Observable[Transaction] =
     walletFilterService

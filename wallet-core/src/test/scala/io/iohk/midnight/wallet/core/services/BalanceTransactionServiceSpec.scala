@@ -49,7 +49,7 @@ class BalanceTransactionServiceSpec
     imbalances.map(_.imbalance).combineAll(sum)
 
   private def generateData(): (ZSwapLocalState, Transaction, List[CoinInfo]) = {
-    val imbalancedTx = ledgerTransactionGen.sample.get._1
+    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating reasonable amount of coins
     val coins = Generators.generateCoinsFor(imbalance * imbalance)
@@ -93,7 +93,7 @@ class BalanceTransactionServiceSpec
   }
 
   test("fails when not enough funds to balance transaction cost") {
-    val imbalancedTx = ledgerTransactionGen.sample.get._1
+    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
     val imbalance = sumImbalance(imbalancedTx.imbalances())
     // generating not enough coins
     val stateWithCoins = Generators.generateStateWithFunds(imbalance)
@@ -108,7 +108,7 @@ class BalanceTransactionServiceSpec
     val walletState = new FailingWalletStateStub()
 
     val balanceTransactionService = new BalanceTransactionService.Live[IO](walletState)
-    val imbalancedTx = ledgerTransactionGen.sample.get._1
+    val imbalancedTx = ledgerTransactionGen.sample.get.transaction
 
     balanceTransactionService
       .balanceTransaction(imbalancedTx)

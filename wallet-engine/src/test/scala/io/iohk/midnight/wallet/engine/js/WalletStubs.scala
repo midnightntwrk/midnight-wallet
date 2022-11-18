@@ -33,6 +33,7 @@ class WalletStateStub extends WalletState[IO] {
 class WalletTxSubmissionStub extends WalletTxSubmission[IO] {
   override def submitTransaction(
       transaction: Transaction,
+      newCoins: List[CoinInfo],
   ): IO[TransactionIdentifier] =
     transaction
       .identifiers()

@@ -7,7 +7,10 @@ import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResul
 import typings.midnightLedger.mod.*
 
 trait WalletTxSubmission[F[_]] {
-  def submitTransaction(transaction: Transaction): F[TransactionIdentifier]
+  def submitTransaction(
+      transaction: Transaction,
+      newCoins: List[CoinInfo],
+  ): F[TransactionIdentifier]
 }
 
 object WalletTxSubmission {
@@ -17,11 +20,15 @@ object WalletTxSubmission {
       walletState: WalletState[F],
   ) extends WalletTxSubmission[F] {
 
-    override def submitTransaction(ledgerTx: Transaction): F[TransactionIdentifier] = {
+    override def submitTransaction(
+        ledgerTx: Transaction,
+        newCoins: List[CoinInfo],
+    ): F[TransactionIdentifier] = {
       for {
         balancedTxAndState <- balanceTransactionService.balanceTransaction(ledgerTx)
         (balancedTx, state) = balancedTxAndState
-        _ <- walletState.updateLocalState(state)
+        stateWithPendingNewCoins = newCoins.foldLeft(state)(_.watchFor(_))
+        _ <- walletState.updateLocalState(stateWithPendingNewCoins)
         response <- txSubmissionService
           .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
         result <- response match {

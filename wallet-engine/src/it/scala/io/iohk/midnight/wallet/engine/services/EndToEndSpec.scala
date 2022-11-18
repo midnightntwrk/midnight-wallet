@@ -68,7 +68,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           initialBalance <- walletState.balance().head.compile.lastOrError
           fiber <- walletState.start().start
           balanceBeforeSend <- walletState.balance().head.compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx)
+          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
           balanceAfterSend <- walletState.balance().head.compile.lastOrError
           _ <- fiber.cancel
           _ <- IO(node.close())
@@ -94,7 +94,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
         for {
           fiber <- walletState.start().start
           _ <- walletState.balance().head.compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx)
+          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
           filteredTx <- filterService
             .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
             .head

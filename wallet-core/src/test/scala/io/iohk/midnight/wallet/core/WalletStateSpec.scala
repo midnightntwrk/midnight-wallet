@@ -17,7 +17,8 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
   private def generateLedgerTx(): (Transaction, ZSwapLocalState) = {
     // Taking just a sample because tx building is slow
-    Generators.ledgerTransactionGen.sample.get
+    val data = Generators.ledgerTransactionGen.sample.get
+    (data.transaction, data.state)
   }
 
   test("Start with balance zero") {

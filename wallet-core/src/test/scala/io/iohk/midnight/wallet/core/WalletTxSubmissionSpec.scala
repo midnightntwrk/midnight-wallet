@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.{IO, Ref}
-import cats.implicits.catsSyntaxEq
+import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
 import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
@@ -28,11 +28,10 @@ class WalletTxSubmissionSpec
 
   test("The first transaction identifier is returned") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val wallet = buildWallet()
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .map { identifier =>
         assertEquals(
           Option(LedgerSerialization.serializeIdentifier(identifier)),
@@ -43,31 +42,28 @@ class WalletTxSubmissionSpec
 
   test("The wallet state was updated") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val imbalance = tx.imbalances().pop().imbalance
     val stateWithFunds = Generators.generateStateWithFunds(imbalance * imbalance)
     val walletState = new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub())
     val wallet =
       buildWallet(balanceTransactionService = new BalanceTransactionService.Live[IO](walletState))
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .flatMap(_ => walletState.localState())
       .map { updatedState =>
-        assert(updatedState.pendingSpends.keys().length === 1)
+        assert(updatedState.pendingSpends.keys().length > 0)
       }
   }
 
   test("Transactions get submitted to the client") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx1, _) = Generators.ledgerTransactionGen.sample.get
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx2, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx1, _, coins1) = Generators.generateLedgerTransaction()
+    val TransactionWithContext(tx2, _, coins2) = Generators.generateLedgerTransaction()
     val wallet = buildWallet()
     for {
-      _ <- wallet.submitTransaction(tx1)
-      _ <- wallet.submitTransaction(tx2)
+      _ <- wallet.submitTransaction(tx1, coins1)
+      _ <- wallet.submitTransaction(tx2, coins2)
       wasSubmitted1 = txSubmissionService.wasTxSubmitted(tx1)
       wasSubmitted2 = txSubmissionService.wasTxSubmitted(tx2)
     } yield assert(wasSubmitted1 && wasSubmitted2)
@@ -75,48 +71,44 @@ class WalletTxSubmissionSpec
 
   test("Fails when submission fails") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val wallet = buildWallet(failingTxSubmissionService)
 
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .attempt
       .map(assertEquals(_, Left(FailingTxSubmissionServiceStub.TxSubmissionServiceError)))
   }
 
   test("Fails when submission is rejected") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val wallet = buildWallet(new RejectedTxSubmissionServiceStub())
 
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .attempt
       .map(assertEquals(_, Left(TransactionRejected(RejectedTxSubmissionServiceStub.errorMsg))))
   }
 
   test("Fails when balancing fails") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val wallet = buildWallet(balanceTransactionService = failingBalanceTransactionServiceStub)
 
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .attempt
       .map(assertEquals(_, Left(FailingBalanceTransactionServiceStub.error)))
   }
 
   test("Fails when updating state fails") {
     // Taking just a sample because tx building is slow
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val (tx, _) = Generators.ledgerTransactionGen.sample.get
+    val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val wallet = buildWallet(walletState = new FailingWalletStateStub())
 
     wallet
-      .submitTransaction(tx)
+      .submitTransaction(tx, coins)
       .attempt
       .map(assertEquals(_, Left(FailingWalletStateStub.error)))
   }
