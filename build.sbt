@@ -78,7 +78,7 @@ lazy val useNodeModuleResolution = {
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "2.4.0",
+  version := "2.4.1",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
