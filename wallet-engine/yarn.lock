@@ -2,91 +2,84 @@
 # yarn lockfile v1
 
 
-"@midnight/bloc@0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.4.0.tgz#996fb9ed2b7a29c56c2a0ffb38941f4528e50153"
-  integrity sha512-1NqKhs2OTPalm5fhg2DcWuxeIrUfjOtwHcn0VKKGYtfQmoZSYizY2xRYGaNo4+qRbqu82yvh0S/5J+E81W7GVA==
+"@midnight/bloc@0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.4.1.tgz#dcc9ea880bf4106e2911737be9a18e77e13e5dfe"
+  integrity sha512-bqnYH5v4j4dphGfba4RiImXfBmoOCwvw1YkEjLF0TJ//XNBeGdIO6OvkSPExOjCb9i5iIJ2LwzunsAgRi6zeJQ==
 
-"@midnight/consensus@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/consensus/-/consensus-0.4.0.tgz#ff8361ac2f1980788526b32fcb156daa179bac8d"
-  integrity sha512-X/iR0GCNETFXZbN+Rv3rC1UGfpUQwB2aBRitEL1oPsVKScljpaDtNUlPTDuXmbawj+HA+Idm62ZeId1WwTW46A==
+"@midnight/consensus@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/consensus/-/consensus-0.4.1.tgz#3667be8eb861c835f2b7b2b799a23d592fbebb51"
+  integrity sha512-oKQFblJiSTzbDdXBfclgXh7G3lYfcZUGN4j0UoGAWP8GHuMtwmMsM0UXxQ3LJeqC4q4MLiOJV7moeWaVVqWNtw==
   dependencies:
-    "@midnight/mocked-node-api" "^0.4.0"
-    "@midnight/protocols" "^0.4.0"
-    "@midnight/session-types" "^0.4.0"
+    "@midnight/mocked-node-api" "^0.4.1"
+    "@midnight/protocols" "^0.4.1"
+    "@midnight/session-types" "^0.4.1"
 
-"@midnight/ledger@^1.1.5":
-  version "1.1.5"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.5.tgz#b064c19739ef135b901953c705e613a595bcf9f4"
-  integrity sha512-jHq6uYYAKw2V+6H50RxJrC2eEMwktjyyk2B0tP2BKmY+/l1jkVsPFv+CEveFfxUt42xs8YcX+yL7sV56vqYC8Q==
+"@midnight/ledger@1.1.7":
+  version "1.1.7"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.7.tgz#5506dc8e4dcd1719890e95a03927ba53e0e86463"
+  integrity sha512-LoZFPR48QCft9CH83UTzEmAIpGR3dadMWChKF3TN5cwYBaNUWtezboaTgoZKNrvFrh/Ywr/yAt25MMspkmnthw==
 
-"@midnight/mocked-node-api@0.4.0", "@midnight/mocked-node-api@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.4.0.tgz#b45b274d4f40014e8d94b77207fbe2a7c2fdeba9"
-  integrity sha512-DXel+CHyqbk0mkVueXEzzpSuVpSJvF4tkXe+Ym8vPUTL4AvegZecVpOYu1mCsIv+4NDrM0LgXxETYuAVmh20Rw==
+"@midnight/mocked-node-api@0.4.1", "@midnight/mocked-node-api@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.4.1.tgz#e482ee97312f461728ee195d72a0ca23efb78d9c"
+  integrity sha512-AwicwxNHup17Hz9WB1sUPK0CYo+WY8P2YGuMCDHF+0pJOGDGB1GYRhJM2z3lh+nB06GMAPiP8FE0rswFKc+xAQ==
 
-"@midnight/mocked-node-app@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-app/-/mocked-node-app-0.4.0.tgz#ea4e28e56323afbc30fd5690ef7808ff9e0d9232"
-  integrity sha512-RZg7I8l4pyJS3AQ8WN9bC0OcShCGagAcP9SKi3szQSj9/K/uGGtQWBGjsFKuLh0TZ8XBD604XWH0kuSBhDwsbA==
+"@midnight/mocked-node-app@0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-app/-/mocked-node-app-0.4.1.tgz#7abaf377034054fc6a8799e77a2ad7d7772b5c3b"
+  integrity sha512-fwyXawCwwfK7162y7VUj4giRPRQ40RiEwgh6oEe4bYVAlD9eEa9z/RmZI3SMjslZ5e11wN0LPRxOmTkrstlauA==
   dependencies:
-    "@midnight/mocked-node-api" "^0.4.0"
-    "@midnight/mocked-node-in-memory" "^0.4.0"
-    "@midnight/mocked-node-server" "^0.4.0"
+    "@midnight/mocked-node-api" "^0.4.1"
+    "@midnight/mocked-node-in-memory" "^0.4.1"
+    "@midnight/mocked-node-server" "^0.4.1"
     dotenv "^16.0.1"
     fp-ts "^2.12.2"
     io-ts "^2.2.17"
-    pino "^8.4.2"
-
-"@midnight/mocked-node-in-memory@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.4.0.tgz#b2afc31e3e5aa76c14b5c6be4243d96034b8da87"
-  integrity sha512-/xlsGD/9uJSuu+1Q/5hMNyQCrpWm1tInLtkO0wn2G4uAHBDEOUpTgaLGqUNWU11C9AI9dwZ1NClbNdsxMcqBsw==
-  dependencies:
-    "@midnight/bloc" "0.4.0"
-    "@midnight/ledger" "^1.1.5"
-    "@midnight/mocked-node-api" "^0.4.0"
-    fp-ts "^2.12.2"
-    pino "^8.4.2"
-    rxjs "7.5.5"
-
-"@midnight/mocked-node-server@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-server/-/mocked-node-server-0.4.0.tgz#3201fee4c7faf70b08de99cfd5fc4b639da6996c"
-  integrity sha512-7WVgoihZlyEe8WpLdEDTjlZVWiqqmE9Qq0Hl6mUz3BoZxZ+5s69pw70YF3VlRoMvgpOGg+MoitRe3TVBDy+6gA==
-  dependencies:
-    "@midnight/consensus" "^0.4.0"
-    "@midnight/mocked-node-api" "^0.4.0"
-    "@midnight/protocols" "^0.4.0"
-    "@midnight/session-types" "^0.4.0"
-    fp-ts "^2.12.3"
-    io-ts "^2.2.18"
     io-ts-types "^0.5.17"
     monocle-ts "^2.3.13"
     newtype-ts "^0.3.5"
-    rxjs "7.5.5"
-    ws "^8.8.1"
+    pino "^8.4.2"
 
-"@midnight/protocols@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/protocols/-/protocols-0.4.0.tgz#16bb183581d3d5e2e43ec4091bfb0062caaa4761"
-  integrity sha512-wCXHOpAc7HEJj4ds6keSgl7EfRBPkrUlTNo8cgS1ZEPvd0fuZieBtm/os8aRFtEJLdKUYlomh2jcGkV0uRoNuA==
+"@midnight/mocked-node-in-memory@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.4.1.tgz#38732cb9a2b58696ddfe9c3127c856a2d140590c"
+  integrity sha512-cs9hsNDMBfo5g8sPcLtZ7o6aXUmESCgi7V7fy9lmLFpyyEGy5A9vhqAlgzz9Pyan8oTudjLPiUCDWSieCNVlLA==
   dependencies:
-    "@midnight/mocked-node-api" "^0.4.0"
-    "@midnight/session-types" "^0.4.0"
+    "@midnight/bloc" "0.4.1"
+    "@midnight/ledger" "1.1.7"
+    "@midnight/mocked-node-api" "^0.4.1"
 
-"@midnight/session-types@^0.4.0":
-  version "0.4.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.4.0.tgz#9a487aa6d83b6aa135ec256159d7b09d72a6fbed"
-  integrity sha512-W4hC4L57n4LCvOEqFOctED7/C+GEdFTZH97MXBuTiUz+qvErisY7+6RYZF034Lr/mencgN7auXVvwKhBUJRhCQ==
-
-"@midnight/wallet-api@^2.1.2":
-  version "2.1.2"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.1.2.tgz#cb727727981b7f22585f0314288c1f50691e9521"
-  integrity sha512-2QsCoy0YLmKVVEKaLXYe/YfHPNiW5N2dDBLfU3WueRcu0HG/vHsQEkVeBzkE7rgGesaYDsrfCa6TDjmpsXf6Cw==
+"@midnight/mocked-node-server@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-server/-/mocked-node-server-0.4.1.tgz#67dda8c380a6b93ddca7b04626596b1fa4576ddf"
+  integrity sha512-EFwg9kNYwP8iMrtCp/PE3bzj8gfikT8fLfGpND3dUPecEcKPvVCQwPYpY3VSuGUH9o91Kisif0s5vBkDljwuJQ==
   dependencies:
-    "@midnight/ledger" "^1.1.5"
+    "@midnight/consensus" "^0.4.1"
+    "@midnight/mocked-node-api" "^0.4.1"
+    "@midnight/protocols" "^0.4.1"
+    "@midnight/session-types" "^0.4.1"
+
+"@midnight/protocols@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/protocols/-/protocols-0.4.1.tgz#11f2d16fc2afbff3b1e85abbdc61ec95e7a2d743"
+  integrity sha512-tkdikyRX2JzEZg8fr1cq/X1FDlkK20Ac7UjlFmwQuJc2LURrY+oLP//qGnv7sV+7NJl5vUHJDiKuwWmn4irCfg==
+  dependencies:
+    "@midnight/mocked-node-api" "^0.4.1"
+    "@midnight/session-types" "^0.4.1"
+
+"@midnight/session-types@^0.4.1":
+  version "0.4.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.4.1.tgz#257d90a88c6b59d75c4519a9c5c016d1fb4d653f"
+  integrity sha512-weWJCPa5XQ15ORYxVqDyeCA3f2ypeQqtfGrCLlLdbFxCwY9wGMGxUQYgK5K+pXi9AkC/GfJweejV9+gT+rK4WQ==
+
+"@midnight/wallet-api@^2.1.3":
+  version "2.1.3"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.1.3.tgz#eac8f5d26c63391c6ce62f89a1cac3daa3aabe6d"
+  integrity sha512-XWjNM2r89DcBypWa2pysWwTzOfBKEswMDN4dxodZj6yPazyF4Layf5T6gu5A2dx5qmjO+samU+HjsN4HjDIjWQ==
+  dependencies:
+    "@midnight/ledger" "1.1.7"
     rxjs "7.5.5"
 
 abort-controller@^3.0.0:
@@ -141,7 +134,7 @@ fast-redact@^3.1.1:
   resolved "https://registry.yarnpkg.com/fast-redact/-/fast-redact-3.1.2.tgz#d58e69e9084ce9fa4c1a6fa98a3e1ecf5d7839aa"
   integrity sha512-+0em+Iya9fKGfEQGcd62Yv6onjBmmhV1uh86XVfOU8VwAe6kaFdQCWI9s0/Nnugx5Vd9tdbZ7e6gE2tR9dzXdw==
 
-fp-ts@^2.12.2, fp-ts@^2.12.3:
+fp-ts@^2.12.2:
   version "2.13.1"
   resolved "https://registry.yarnpkg.com/fp-ts/-/fp-ts-2.13.1.tgz#1bf2b24136cca154846af16752dc29e8fa506f2a"
   integrity sha512-0eu5ULPS2c/jsa1lGFneEFFEdTbembJv8e4QKXeVJ3lm/5hyve06dlKZrpxmMwJt6rYen7sxmHHK2CLaXvWuWQ==
@@ -156,7 +149,7 @@ io-ts-types@^0.5.17:
   resolved "https://registry.yarnpkg.com/io-ts-types/-/io-ts-types-0.5.19.tgz#9c04fa73f15992436605218a5686b610efa7a5d3"
   integrity sha512-kQOYYDZG5vKre+INIDZbLeDJe+oM+4zLpUkjXyTMyUfoCpjJNyi29ZLkuEAwcPufaYo3yu/BsemZtbdD+NtRfQ==
 
-io-ts@^2.2.17, io-ts@^2.2.18:
+io-ts@^2.2.17:
   version "2.2.19"
   resolved "https://registry.yarnpkg.com/io-ts/-/io-ts-2.2.19.tgz#4ba5e120472a0a07ff693fdb3d7075ea1c1b77c3"
   integrity sha512-ED0GQwvKRr5C2jqOOJCkuJW2clnbzqFexQ8V7Qsb+VB36S1Mk/OKH7k0FjSe4mjKy9qBRA3OqgVGyFMUEKIubw==
@@ -285,14 +278,14 @@ tr46@~0.0.3:
   integrity sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw==
 
 tslib@^2.1.0:
-  version "2.4.0"
-  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.4.0.tgz#7cecaa7f073ce680a05847aa77be941098f36dc3"
-  integrity sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ==
+  version "2.4.1"
+  resolved "https://registry.yarnpkg.com/tslib/-/tslib-2.4.1.tgz#0d0bfbaac2880b91e22df0768e55be9753a5b17e"
+  integrity sha512-tGyy4dAjRIEwI7BzsB0lynWgOpfqjUdq91XXAlIWD2OwKBH7oCl/GZG/HT4BOHrTlPMOASlMQ7veyTqpmRcrNA==
 
 typescript@^4.8.3:
-  version "4.8.4"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.8.4.tgz#c464abca159669597be5f96b8943500b238e60e6"
-  integrity sha512-QCh+85mCy+h0IGff8r5XWzOVSbBO+KfeYrMQh7NJ58QujwcE22u+NUSmUxqF+un70P9GXKxa2HCNiTTMJknyjQ==
+  version "4.9.3"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.9.3.tgz#3aea307c1746b8c384435d8ac36b8a2e580d85db"
+  integrity sha512-CIfGzTelbKNEnLpLdGFgdyKhG23CKdKgQPOBc+OUNrkJ2vr+KSzsSV5kq5iWhEQbok+quxgGzrAtGWCyU7tHnA==
 
 webidl-conversions@^3.0.0:
   version "3.0.1"
@@ -308,6 +301,6 @@ whatwg-url@^5.0.0:
     webidl-conversions "^3.0.0"
 
 ws@^8.8.1:
-  version "8.8.1"
-  resolved "https://registry.yarnpkg.com/ws/-/ws-8.8.1.tgz#5dbad0feb7ade8ecc99b830c1d77c913d4955ff0"
-  integrity sha512-bGy2JzvzkPowEJV++hF07hAD6niYSr0JzBNo/J29WsB57A2r7Wlc1UFcTR9IzrPvuNVO4B8LGqF8qcpsVOhJCA==
+  version "8.11.0"
+  resolved "https://registry.yarnpkg.com/ws/-/ws-8.11.0.tgz#6a0d36b8edfd9f96d8b25683db2f8d7de6e8e143"
+  integrity sha512-HPG3wQd9sNQoT9xHyNCXoDUa+Xw/VevmY9FoHyQ+g+rrMn4j6FB4np7Z0OhdTgjx6MgQLK7jwSy1YecU1+4Asg==

@@ -78,7 +78,7 @@ lazy val useNodeModuleResolution = {
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "2.3.0",
+  version := "2.4.0",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
@@ -108,12 +108,12 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
 
 lazy val walletCore = project
   .in(file("wallet-core"))
-  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(blockchain.js % "compile->compile;test->test")
   .dependsOn(jsInterop)
   .settings(commonSettings)
   .settings(
-    scalaJSLinkerConfig ~= { _.withSourceMap(false) },
+    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // Dependencies
     libraryDependencies ++= Seq(
@@ -124,14 +124,20 @@ lazy val walletCore = project
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
+      "net.exoego" %%% "scala-js-nodejs-v16" % "0.14.0"
     ),
 
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
 
-    // Npm dependencies
-    useYarn := true,
-    Compile / npmDependencies ++= Seq("@midnight/ledger" -> "1.1.5"),
+    // ScalablyTyped config
+    externalNpm := {
+      if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
+      baseDirectory.value
+    },
+    stEnableScalaJsDefined := Selection.All,
+    Global / stQuiet := true,
+    useNodeModuleResolution
   )
 
 lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)

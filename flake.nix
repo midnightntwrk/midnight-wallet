@@ -16,7 +16,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {
-      url = "github:input-output-hk/midnight-ledger-prototype/v1.1.5";
+      url = "github:input-output-hk/midnight-ledger-prototype/v1.1.7";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         tullia.follows = "tullia";

@@ -7,6 +7,7 @@ import io.iohk.midnight.wallet.core.LedgerSerialization.Error.{
   InvalidInitialState,
   InvalidSerializedTransaction,
 }
+import io.scalajs.nodejs.buffer.Buffer
 import typings.midnightLedger.mod.{
   TransactionIdentifier,
   ZSwapCoinPublicKey,
@@ -14,14 +15,14 @@ import typings.midnightLedger.mod.{
   Transaction as LedgerTransaction,
   TransactionHash as LedgerTransactionHash,
 }
-import typings.node.bufferMod.global.{Buffer, BufferEncoding}
 
+@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object LedgerSerialization {
-  private val HashEncoding = BufferEncoding.hex
-  private val BodyEncoding = BufferEncoding.base64
+  private val HashEncoding = "hex"
+  private val BodyEncoding = "base64"
 
   def serializeState(state: ZSwapLocalState): String =
-    state.serialize().toString(BodyEncoding)
+    state.serialize().asInstanceOf[Buffer].toString(BodyEncoding)
 
   def parseState(raw: String): Either[Throwable, ZSwapLocalState] = {
     val buffer = Buffer.from(raw, BodyEncoding)
@@ -31,10 +32,10 @@ object LedgerSerialization {
   }
 
   def serializePublicKey(pk: ZSwapCoinPublicKey): String =
-    pk.serialize().toString(BodyEncoding)
+    pk.serialize().asInstanceOf[Buffer].toString(BodyEncoding)
 
   def serializeIdentifier(id: TransactionIdentifier): String =
-    id.serialize().toString(BodyEncoding)
+    id.serialize().asInstanceOf[Buffer].toString(BodyEncoding)
 
   def fromTransaction(tx: Transaction): Either[Throwable, LedgerTransaction] = {
     val buffer = Buffer.from(tx.body, BodyEncoding)
@@ -44,12 +45,12 @@ object LedgerSerialization {
   }
 
   def toHash(txHash: LedgerTransactionHash): Hash[Transaction] =
-    Hash[Transaction](txHash.serialize().toString(HashEncoding))
+    Hash[Transaction](txHash.serialize().asInstanceOf[Buffer].toString(HashEncoding))
 
   def toTransaction(tx: LedgerTransaction): Transaction =
     Transaction(
       Header(toHash(tx.transactionHash())),
-      tx.serialize().toString(BodyEncoding),
+      tx.serialize().asInstanceOf[Buffer].toString(BodyEncoding),
     )
 
   abstract class Error(cause: Throwable) extends Exception(cause)
