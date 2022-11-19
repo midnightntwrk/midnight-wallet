@@ -20,11 +20,11 @@
         "utils": "utils_2"
       },
       "locked": {
-        "lastModified": 1668442702,
-        "narHash": "sha256-Nhip85VtbpNURBmO+02hRi6mxnaHBRzJvX29C543WvU=",
+        "lastModified": 1668801338,
+        "narHash": "sha256-TpR1xp433/1BjyjEELPVroal1SSK6uMc2ptWWPz6CSk=",
         "owner": "input-output-hk",
         "repo": "abcirdc",
-        "rev": "9fe252f60e957299bc674bde3704e052755d9438",
+        "rev": "de4f43d400f6463155ab273b716e228f63918fbe",
         "type": "github"
       },
       "original": {
@@ -494,16 +494,16 @@
         "utils": "utils_3"
       },
       "locked": {
-        "lastModified": 1668713055,
-        "narHash": "sha256-61zGHMw2GKPxouRdDHX8rJ3FSvLTCzCs0rH6ItOPAMY=",
+        "lastModified": 1668802558,
+        "narHash": "sha256-6r2ubsQvn2eHIs46eFl+d8REqWEEOoQDP09kUaCtRMs=",
         "owner": "input-output-hk",
         "repo": "midnight-ledger-prototype",
-        "rev": "4c41a8c070a9ccde3cce1324151005cd5365cabf",
+        "rev": "1ea0063ecec0a2c1d11dec5aead08f15106f9fa3",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
-        "ref": "v1.1.7",
+        "ref": "v1.1.9",
         "repo": "midnight-ledger-prototype",
         "type": "github"
       }

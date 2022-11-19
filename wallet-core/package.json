@@ -1,12 +1,12 @@
 {
     "name": "@midnight/wallet-core",
-    "version": "2.5.0",
+    "version": "2.5.1",
     "packageManager": "yarn@1.22.18",
     "author": "IOHK",
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight/ledger": "1.1.7"
+        "@midnight/ledger": "1.1.9"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

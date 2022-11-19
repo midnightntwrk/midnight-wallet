@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/mocked-node-api@0.4.1":
-  version "0.4.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.4.1.tgz#e482ee97312f461728ee195d72a0ca23efb78d9c"
-  integrity sha512-AwicwxNHup17Hz9WB1sUPK0CYo+WY8P2YGuMCDHF+0pJOGDGB1GYRhJM2z3lh+nB06GMAPiP8FE0rswFKc+xAQ==
+"@midnight/mocked-node-api@0.4.3":
+  version "0.4.3"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.4.3.tgz#70b4ea65c6cbbf189d6c899704ab7dbdd440cec9"
+  integrity sha512-Jwv8rvpJvwRbgwH3E46+3e3XLu/OuJoSyTX8f2OdZDxCdO8fTecG/nQ2iGC1U2jCZiPaYVFBivMvpsmDi6L+vw==
 
 cross-fetch@^3.1.5:
   version "3.1.5"
