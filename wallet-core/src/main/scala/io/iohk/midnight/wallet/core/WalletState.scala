@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.{Ref, Temporal}
+import cats.effect.kernel.Deferred
+import cats.effect.{Ref, Resource, Temporal}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
@@ -25,6 +26,7 @@ object WalletState {
   class Live[F[_]: Temporal](
       localState: Ref[F, ZSwapLocalState],
       syncService: SyncService[F],
+      deferred: Deferred[F, Either[Throwable, Unit]],
   ) extends WalletState[F] {
     override def start(): F[Unit] =
       syncService
@@ -34,6 +36,7 @@ object WalletState {
         .map(LedgerSerialization.fromTransaction)
         .flatMap(Stream.fromEither(_))
         .evalMap(tx => localState.update(_.applyLocal(tx)))
+        .interruptWhen(deferred)
         .compile
         .drain
 
@@ -52,16 +55,22 @@ object WalletState {
 
     override def updateLocalState(newState: ZSwapLocalState): F[Unit] =
       localState.set(newState)
+
+    private def stop(): F[Unit] = deferred.complete(Right(())).void
   }
 
   object Live {
     def apply[F[_]: Temporal](
         syncService: SyncService[F],
         initialState: ZSwapLocalState = new ZSwapLocalState(),
-    ): F[Live[F]] =
-      Ref
-        .of(initialState)
-        .map(new Live(_, syncService))
+    ): Resource[F, Live[F]] = {
+      val wallet = for {
+        deferred <- Deferred[F, Either[Throwable, Unit]]
+        ref <- Ref.of(initialState)
+      } yield new Live[F](ref, syncService, deferred)
+
+      Resource.make(wallet)(_.stop())
+    }
   }
 
   def calculateCost(tx: Transaction): BigInt =

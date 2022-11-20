@@ -1,17 +1,18 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.IO
+import cats.effect.{IO, Resource}
 import cats.syntax.foldable.*
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.services.SyncServiceStub
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
-
 import scala.scalajs.js
 import typings.midnightLedger.mod.{Transaction, ZSwapLocalState}
 class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
-  def buildWallet(initialState: ZSwapLocalState = new ZSwapLocalState()): IO[WalletState[IO]] =
+  def buildWallet(
+      initialState: ZSwapLocalState = new ZSwapLocalState(),
+  ): Resource[IO, WalletState[IO]] =
     WalletState.Live[IO](new SyncServiceStub(), initialState)
 
   private def generateLedgerTxAndState(): (Transaction, ZSwapLocalState) = {
@@ -21,10 +22,10 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   }
 
   test("Start with balance zero") {
-    buildWallet()
-      .map(_.balance())
-      .flatMap(_.head.compile.last)
-      .map(assertEquals(_, Some(js.BigInt(0))))
+    buildWallet().use(
+      _.balance().head.compile.last
+        .map(assertEquals(_, Some(js.BigInt(0)))),
+    )
   }
 
   test("Sum transaction outputs to this wallet") {
@@ -34,28 +35,29 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val (tx, state) = Generators.buildTransaction(coins)
     val expected = coins.map(_.value).combineAll(sum)
 
-    buildWallet(initialState = state.applyLocal(tx))
-      .map(_.balance())
-      .flatMap(_.head.compile.last)
-      .map(assertEquals(_, Some(expected)))
+    buildWallet(initialState = state.applyLocal(tx)).use(
+      _.balance().head.compile.last
+        .map(assertEquals(_, Some(expected))),
+    )
   }
 
   test("Not sum transaction outputs to another wallet") {
     val (tx, _) = generateLedgerTxAndState()
     val anotherState = new ZSwapLocalState()
-    buildWallet(initialState = anotherState.applyLocal(tx))
-      .map(_.balance())
-      .flatMap(_.head.compile.last)
-      .map(assertEquals(_, Some(js.BigInt(0))))
+    buildWallet(initialState = anotherState.applyLocal(tx)).use(
+      _.balance().head.compile.last
+        .map(assertEquals(_, Some(js.BigInt(0)))),
+    )
   }
 
   test("Return the public key") {
     val initialState = new ZSwapLocalState()
     val expected = LedgerSerialization.serializePublicKey(initialState.coinPublicKey)
-    buildWallet(initialState = initialState)
-      .flatMap(_.publicKey())
-      .map(LedgerSerialization.serializePublicKey)
-      .map(assertEquals(_, expected))
+    buildWallet(initialState = initialState).use(
+      _.publicKey()
+        .map(LedgerSerialization.serializePublicKey)
+        .map(assertEquals(_, expected)),
+    )
   }
 
   test("Calculate cost as the sum of tx imbalances") {
@@ -65,17 +67,20 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
 
   test("Return the state") {
     val (tx, state) = generateLedgerTxAndState()
-    buildWallet(initialState = state.applyLocal(tx))
-      .flatMap(_.localState())
-      .map(updatedState => assert(updatedState.coins.length > state.coins.length))
+    buildWallet(initialState = state.applyLocal(tx)).use(
+      _.localState()
+        .map(updatedState => assert(updatedState.coins.length > state.coins.length)),
+    )
   }
 
   test("Update the state") {
     val (tx, state) = generateLedgerTxAndState()
     val newState = state.applyLocal(tx)
-    buildWallet(initialState = state)
-      .flatTap(_.updateLocalState(newState))
-      .flatMap(_.localState())
-      .map(updatedState => assert(updatedState.coins.length > state.coins.length))
+    buildWallet(initialState = state).use(wallet =>
+      wallet
+        .updateLocalState(newState)
+        .flatMap(_ => wallet.localState())
+        .map(updatedState => assert(updatedState.coins.length > state.coins.length)),
+    )
   }
 }

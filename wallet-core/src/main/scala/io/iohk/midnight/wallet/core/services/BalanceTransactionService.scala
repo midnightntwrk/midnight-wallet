@@ -6,10 +6,9 @@ import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.wallet.core.WalletState
-import typings.midnightLedger.mod.*
-
 import scala.annotation.tailrec
 import scala.scalajs.js
+import typings.midnightLedger.mod.*
 
 trait BalanceTransactionService[F[_]] {
   def balanceTransaction(transaction: Transaction): F[(Transaction, ZSwapLocalState)]
@@ -54,14 +53,17 @@ object BalanceTransactionService {
           if (change > js.BigInt(0)) {
             val (balancingTxWithChange, updatedState) =
               prepareTxWithChange(coinsForAttempt, state, change)
-            Right((originalTx.merge(balancingTxWithChange).merge[Transaction], updatedState))
+            tryMerge(originalTx, balancingTxWithChange).map((_, updatedState))
           } else if (change == js.BigInt(0)) {
-            Right((originalTx.merge(balancingTx).merge[Transaction], state))
+            tryMerge(originalTx, balancingTx).map((_, state))
           } else tryBalanceTx(restOfCoins, coinsForAttempt, state, originalTx)
         }
         case Nil => Left(NotSufficientFunds)
       }
     }
+
+    private def tryMerge(tx1: Transaction, tx2: Transaction): Either[MergeError, Transaction] =
+      Option(tx1.merge(tx2).merge[Transaction]).toRight(MergeError(tx1, tx2))
 
     private def getImbalance(tx: Transaction): Option[js.BigInt] = {
       tx.imbalances()
@@ -137,4 +139,7 @@ object BalanceTransactionService {
 
   final case object NotSufficientFunds
       extends Error("Not sufficient funds to balance the cost of transaction")
+  @SuppressWarnings(Array("org.wartremover.warts.ToString"))
+  final case class MergeError(tx1: Transaction, tx2: Transaction)
+      extends Error(s"Merging ${tx1.toString()} and ${tx2.toString()}")
 }

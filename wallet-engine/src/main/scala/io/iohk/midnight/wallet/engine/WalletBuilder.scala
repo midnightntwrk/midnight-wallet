@@ -31,7 +31,7 @@ object WalletBuilder {
       submitTxService <- buildOgmiosTxSubmissionService(sttpBackend, config)
       stateSyncService <- buildOgmiosSyncService(sttpBackend, config)
       filterSyncService <- buildOgmiosSyncService(sttpBackend, config)
-      walletState <- Resource.eval(WalletState.Live[F](stateSyncService, config.initialState))
+      walletState <- WalletState.Live[F](stateSyncService, config.initialState)
       walletFilterService <- Resource.pure(new WalletFilterService.Live[F](filterSyncService))
       balanceTransactionService <- Resource.pure(new BalanceTransactionService.Live[F](walletState))
       walletTxSubmission <- Resource.pure(

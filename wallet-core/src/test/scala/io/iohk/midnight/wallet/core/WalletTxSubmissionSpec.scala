@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
 import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
@@ -17,7 +17,11 @@ class WalletTxSubmissionSpec
   private val balanceTransactionService = new BalanceTransactionServiceStub()
   private val failingBalanceTransactionServiceStub = new FailingBalanceTransactionServiceStub()
   private val walletState =
-    new WalletState.Live[IO](Ref.unsafe(new ZSwapLocalState()), new SyncServiceStub())
+    new WalletState.Live[IO](
+      Ref.unsafe(new ZSwapLocalState()),
+      new SyncServiceStub(),
+      Deferred.unsafe,
+    )
 
   def buildWallet(
       txSubmissionService: TxSubmissionService[IO] = txSubmissionService,
@@ -45,7 +49,8 @@ class WalletTxSubmissionSpec
     val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val imbalance = tx.imbalances().pop().imbalance
     val stateWithFunds = Generators.generateStateWithFunds(imbalance * imbalance)
-    val walletState = new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub())
+    val walletState =
+      new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub(), Deferred.unsafe)
     val wallet =
       buildWallet(balanceTransactionService = new BalanceTransactionService.Live[IO](walletState))
     wallet
