@@ -18,8 +18,8 @@
 
 "@midnight/ledger@1.1.9":
   version "1.1.9"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.9.tgz#aa5a0520d4476f515798a354d30028b2dd395ddd"
-  integrity sha512-Ydu/fVAIIcysylKXyA3WAgGH9ti2iNdaUVc/j3GIyhkWUdfDEOV4DEBrZukfNscnIpZMJqE0fp1nBglDHA/PzA==
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.9.tgz#83ebc3d43a5d62f8f1ef3b707d8800274df8f01e"
+  integrity sha512-bKdSER5NVkfxxWYsPtM2PYHG9lYNT/t63wEGAwqSe2/VuxbNfEBWLEwx80Z+Z4LE6xmgcJXrcoBOc2RQKg13VA==
 
 "@midnight/mocked-node-api@0.4.3", "@midnight/mocked-node-api@^0.4.3":
   version "0.4.3"

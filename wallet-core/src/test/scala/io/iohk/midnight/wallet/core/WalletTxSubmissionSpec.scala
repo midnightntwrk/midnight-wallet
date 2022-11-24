@@ -1,12 +1,24 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.{Deferred, IO, Ref}
-import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
-import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
+import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, coinInfoGen}
+import io.iohk.midnight.wallet.core.WalletTxSubmission.{
+  TransactionNotWellFormed,
+  TransactionRejected,
+}
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
-import typings.midnightLedger.mod.ZSwapLocalState
+import typings.midnightLedger.mod.{
+  LedgerState,
+  TransactionBuilder,
+  ZSwapDeltas,
+  ZSwapLocalState,
+  ZSwapOffer,
+  ZSwapOutputWithRandomness,
+}
+
+import scala.scalajs.js
 
 class WalletTxSubmissionSpec
     extends CatsEffectSuite
@@ -72,6 +84,25 @@ class WalletTxSubmissionSpec
       wasSubmitted1 = txSubmissionService.wasTxSubmitted(tx1)
       wasSubmitted2 = txSubmissionService.wasTxSubmitted(tx2)
     } yield assert(wasSubmitted1 && wasSubmitted2)
+  }
+
+  test("Fails when received transaction is not well formed") {
+    val builder = new TransactionBuilder(new LedgerState())
+    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+    val coin = coinInfoGen.sample.get
+    val output = ZSwapOutputWithRandomness.`new`(coin, new ZSwapLocalState().coinPublicKey)
+    // offer with output, but with empty deltas
+    val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), new ZSwapDeltas())
+    val newBuilder = builder
+      .addOffer(offer, output.randomness)
+      .merge[TransactionBuilder]
+    val wallet = buildWallet()
+    val invalidTx = newBuilder.intoTransaction().transaction
+
+    wallet
+      .submitTransaction(invalidTx, List.empty)
+      .attempt
+      .map(assertEquals(_, Left(TransactionNotWellFormed)))
   }
 
   test("Fails when submission fails") {
