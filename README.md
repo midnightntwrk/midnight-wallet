@@ -46,36 +46,7 @@ This project provides a [flake](flake.nix) with a dev shell definition.
 
 ### 2. Internal private registry and credentials
 
-This project depends on internal libraries that are hosted in a private 
-[Nexus registry](https://nexus.p42.at). So you will need credentials to be able to fetch them.
-Contact your manager to get a user and password.
-
-#### Configure sbt
-
-Set these two environment variables: `MIDNIGHT_REPO_USER` and `MIDNIGHT_REPO_PASS`.
-If you installed direnv, just add a `.env` file exporting your credentials:
-
-```shell
-export MIDNIGHT_REPO_USER=your_user
-export MIDNIGHT_REPO_PASS=your_password
-```
-
-The `.env` file is already ignored in this repository.
-
-#### Configure Yarn
-
-From your home directory run:
-
-```shell
-npm login --scope=@midnight --registry=https://nexus.p42.at/repository/npm-midnight/
-```
-You will be required to input the Nexus user and password plus the email associated. 
-After that, check that the file `~/.npmrc` exists, with a content similar to this:
-
-```
-@midnight:registry=https://nexus.p42.at/repository/npm-midnight/
-//nexus.p42.at/repository/npm-midnight/:_authToken=NpmToken.YOUR_NPM_TOKEN
-```
+Follow all authentication steps from the [Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
 
 ### 3. Developing
 
