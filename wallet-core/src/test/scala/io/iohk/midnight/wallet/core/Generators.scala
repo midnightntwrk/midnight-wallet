@@ -47,10 +47,8 @@ object Generators {
   def generateLedgerTransaction(): TransactionWithContext =
     Generators.ledgerTransactionGen.sample.get
 
-  def buildTransaction(
-      coins: List[CoinInfo],
-      state: ZSwapLocalState = new ZSwapLocalState(),
-  ): (LedgerTransaction, ZSwapLocalState) = {
+  def buildTransaction(coins: List[CoinInfo]): (LedgerTransaction, ZSwapLocalState) = {
+    val state = new ZSwapLocalState()
     val builder = new TransactionBuilder(new LedgerState())
     coins
       .foldLeft((builder, state)) { case ((builder, state), coin) =>
@@ -58,11 +56,9 @@ object Generators {
         val deltas = new ZSwapDeltas()
         deltas.insert(tokenType, -coin.value)
         val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
-        val newBuilder = builder
-          .addOffer(offer, output.randomness)
-          .merge[TransactionBuilder]
-        val newState = state.watchFor(coin)
-        (newBuilder, newState)
+        builder.addOffer(offer, output.randomness)
+        state.watchFor(coin)
+        (builder, state)
       }
       .leftMap(_.intoTransaction().transaction)
   }
@@ -70,6 +66,7 @@ object Generators {
   def generateStateWithCoins(coins: List[CoinInfo]): ZSwapLocalState = {
     val (mintTx, state) = buildTransaction(coins)
     state.applyLocal(mintTx)
+    state
   }
 
   def generateStateWithFunds(amount: js.BigInt): ZSwapLocalState =

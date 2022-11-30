@@ -15,7 +15,7 @@ export class WalletBuilder {
     static build(
         nodeUri: string,
         initialState?: string,
-        minLogLevel?: string
+        minLogLevel?: 'trace' | 'debug' | 'info' | 'warn' | 'error'
     ): Promise<FilterService & Wallet & HasBalance & Resource>
 
     static calculateCost(tx: Transaction): bigint

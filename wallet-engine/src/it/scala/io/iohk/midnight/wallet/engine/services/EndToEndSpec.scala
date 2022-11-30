@@ -1,8 +1,15 @@
 package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
+import cats.effect.kernel.Resource
+import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.core.LedgerSerialization
+import io.iohk.midnight.wallet.core.{
+  LedgerSerialization,
+  WalletFilterService,
+  WalletState,
+  WalletTxSubmission,
+}
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
@@ -22,89 +29,93 @@ trait EndToEndSpecSetup {
   val tokenType = nativeToken()
   val coin = new CoinInfo(js.BigInt(1_000_000), tokenType)
   val spendCoin = new CoinInfo(js.BigInt(10_000), tokenType)
-  val initialState = new ZSwapLocalState().watchFor(coin)
-  val pubKey = initialState.coinPublicKey
-  val recipientKey = new ZSwapLocalState().coinPublicKey
-  val ledgerState = new LedgerState()
+  def randomRecipient(): ZSwapCoinPublicKey = new ZSwapLocalState().coinPublicKey
 
   def buildSendTx(coin: CoinInfo, recipient: ZSwapCoinPublicKey): Transaction = {
     val output = ZSwapOutputWithRandomness.`new`(coin, recipient)
     val deltas = new ZSwapDeltas()
     deltas.insert(tokenType, -coin.value)
     val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
-    new TransactionBuilder(ledgerState)
-      .addOffer(offer, output.randomness)
-      .merge[TransactionBuilder]
-      .intoTransaction()
-      .transaction
+    val builder = new TransactionBuilder(new LedgerState())
+    builder.addOffer(offer, output.randomness)
+    builder.intoTransaction().transaction
   }
 
-  def buildNode(initialTxs: Transaction*): InMemoryServer = {
-    val ledgerTxs = initialTxs.map(LedgerSerialization.toTransaction)
-    val txs: Seq[Any] = ledgerTxs.map { ledgerTx =>
-      ApiTransaction(ledgerTx.body, Hash(ledgerTx.header.hash.value))
-    }
+  def makeNodeResource(initialTxs: Transaction*): Resource[IO, Unit] = {
+    val txs: Seq[Any] =
+      initialTxs
+        .map(LedgerSerialization.toTransaction)
+        .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
+
     val nodeConfig =
       PartialConfigany()
         .setGenesis(GenesisValue("value", txs.toJSArray))
         .setHost(nodeHost)
         .setPort(nodePort.toDouble)
-    new InMemoryServer(nodeConfig)
+
+    Resource
+      .make(IO(new InMemoryServer(nodeConfig)))(node => IO(node.close()))
+      .map(_.run())
   }
+
+  type Wallets = (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])
+
+  def makeWalletResource(initialState: ZSwapLocalState): Resource[IO, Wallets] =
+    Wallet
+      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
+      .flatTap(_._1.start().background)
+
+  def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
+      body: Wallets => IO[Unit],
+  ): IO[Unit] =
+    makeNodeResource(initialTxs*)
+      .flatMap(_ => makeWalletResource(initialWalletState))
+      .use(body(_))
 }
 
 class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
   test("Submit tx spending wallet balance") {
+    val initialState = new ZSwapLocalState()
+    initialState.watchFor(coin)
+    val pubKey = initialState.coinPublicKey
     val mintTx = buildSendTx(coin, pubKey)
-    val spendTx = buildSendTx(spendCoin, recipientKey)
+    val spendTx = buildSendTx(spendCoin, randomRecipient())
     val fee = js.BigInt(1787) // This value was extracted after first run since it's not predictable
-    val node = buildNode(mintTx)
-    node.run()
 
-    Wallet
-      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
-      .use { case (walletState, _, txSubmission) =>
-        for {
-          initialBalance <- walletState.balance().head.compile.lastOrError
-          fiber <- walletState.start().start
-          balanceBeforeSend <- walletState.balance().head.compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
-          balanceAfterSend <- walletState.balance().head.compile.lastOrError
-          _ <- fiber.cancel
-          _ <- IO(node.close())
-        } yield {
-          assertEquals(
-            List(initialBalance, balanceBeforeSend, balanceAfterSend),
-            List(js.BigInt(0), coin.value, coin.value - spendCoin.value - fee),
-          )
-        }
+    withWallet(initialState, mintTx) { case (walletState, _, txSubmission) =>
+      for {
+        balanceBeforeSend <- walletState.balance().head.compile.lastOrError
+        _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
+        balanceAfterSend <- walletState.balance().head.compile.lastOrError
+      } yield {
+        assertEquals(
+          List(balanceBeforeSend, balanceAfterSend),
+          List(coin.value, coin.value - spendCoin.value - fee),
+        )
       }
+    }
   }
 
   test("Filter transactions") {
+    val initialState = new ZSwapLocalState()
+    initialState.watchFor(coin)
+    val pubKey = initialState.coinPublicKey
     val mintTx = buildSendTx(coin, pubKey)
-    val spendTx = buildSendTx(spendCoin, recipientKey)
+    val spendTx = buildSendTx(spendCoin, randomRecipient())
     val expectedIdentifier = spendTx.identifiers().head
-    val node = buildNode(mintTx)
-    node.run()
 
-    Wallet
-      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
-      .use { case (walletState, filterService, txSubmission) =>
-        for {
-          fiber <- walletState.start().start
-          _ <- walletState.balance().head.compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
-          filteredTx <- filterService
-            .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
-            .head
-            .compile
-            .lastOrError
-          _ <- fiber.cancel
-          _ <- IO(node.close())
-        } yield {
-          assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
-        }
+    withWallet(initialState, mintTx) { case (walletState, filterService, txSubmission) =>
+      for {
+        _ <- walletState.balance().head.compile.lastOrError
+        _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
+        filteredTx <- filterService
+          .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
+          .head
+          .compile
+          .lastOrError
+      } yield {
+        assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
       }
+    }
   }
 }

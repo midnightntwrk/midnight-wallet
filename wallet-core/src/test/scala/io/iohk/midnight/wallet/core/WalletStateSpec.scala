@@ -9,6 +9,7 @@ import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import scala.scalajs.js
 import typings.midnightLedger.mod.{Transaction, ZSwapLocalState}
+
 class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
   def buildWallet(
       initialState: ZSwapLocalState = new ZSwapLocalState(),
@@ -33,9 +34,10 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
     val coins = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.coinInfoGen)).sample.get
     val (tx, state) = Generators.buildTransaction(coins)
+    state.applyLocal(tx)
     val expected = coins.map(_.value).combineAll(sum)
 
-    buildWallet(initialState = state.applyLocal(tx)).use(
+    buildWallet(initialState = state).use(
       _.balance().head.compile.last
         .map(assertEquals(_, Some(expected))),
     )
@@ -44,7 +46,8 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   test("Not sum transaction outputs to another wallet") {
     val (tx, _) = generateLedgerTxAndState()
     val anotherState = new ZSwapLocalState()
-    buildWallet(initialState = anotherState.applyLocal(tx)).use(
+    anotherState.applyLocal(tx)
+    buildWallet(initialState = anotherState).use(
       _.balance().head.compile.last
         .map(assertEquals(_, Some(js.BigInt(0)))),
     )
@@ -67,20 +70,19 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
 
   test("Return the state") {
     val (tx, state) = generateLedgerTxAndState()
-    buildWallet(initialState = state.applyLocal(tx)).use(
-      _.localState()
-        .map(updatedState => assert(updatedState.coins.length > state.coins.length)),
-    )
+    state.applyLocal(tx)
+    buildWallet(initialState = state)
+      .use(_.localState().assertEquals(state))
   }
 
   test("Update the state") {
     val (tx, state) = generateLedgerTxAndState()
-    val newState = state.applyLocal(tx)
-    buildWallet(initialState = state).use(wallet =>
+    state.applyLocal(tx)
+    buildWallet().use { wallet =>
       wallet
-        .updateLocalState(newState)
+        .updateLocalState(state)
         .flatMap(_ => wallet.localState())
-        .map(updatedState => assert(updatedState.coins.length > state.coins.length)),
-    )
+        .assertEquals(state)
+    }
   }
 }

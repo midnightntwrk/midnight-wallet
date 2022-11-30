@@ -17,7 +17,6 @@ import typings.midnightLedger.mod.{
   ZSwapOffer,
   ZSwapOutputWithRandomness,
 }
-
 import scala.scalajs.js
 
 class WalletTxSubmissionSpec
@@ -93,16 +92,13 @@ class WalletTxSubmissionSpec
     val output = ZSwapOutputWithRandomness.`new`(coin, new ZSwapLocalState().coinPublicKey)
     // offer with output, but with empty deltas
     val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), new ZSwapDeltas())
-    val newBuilder = builder
-      .addOffer(offer, output.randomness)
-      .merge[TransactionBuilder]
+    builder.addOffer(offer, output.randomness)
     val wallet = buildWallet()
-    val invalidTx = newBuilder.intoTransaction().transaction
+    val invalidTx = builder.intoTransaction().transaction
 
     wallet
       .submitTransaction(invalidTx, List.empty)
-      .attempt
-      .map(assertEquals(_, Left(TransactionNotWellFormed)))
+      .intercept[TransactionNotWellFormed]
   }
 
   test("Fails when submission fails") {

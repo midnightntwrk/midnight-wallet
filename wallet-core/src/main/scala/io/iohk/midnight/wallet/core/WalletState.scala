@@ -35,7 +35,12 @@ object WalletState {
         .flatMap(Stream.emits)
         .map(LedgerSerialization.fromTransaction)
         .flatMap(Stream.fromEither(_))
-        .evalMap(tx => localState.update(_.applyLocal(tx)))
+        .evalMap { tx =>
+          localState.update { state =>
+            state.applyLocal(tx)
+            state
+          }
+        }
         .interruptWhen(deferred)
         .compile
         .drain

@@ -18,7 +18,7 @@ object BalanceTransactionService {
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   class Live[F[_]: Sync](walletState: WalletState[F]) extends BalanceTransactionService[F] {
     private val Buffer = js.BigInt(1000)
-    override def balanceTransaction(tx: Transaction): F[(Transaction, ZSwapLocalState)] = {
+    override def balanceTransaction(tx: Transaction): F[(Transaction, ZSwapLocalState)] =
       walletState.localState().flatMap { state =>
         tx.imbalances()
           // equals is probably checking the reference which is different in the runtime for the native tokens created in different places
@@ -30,12 +30,11 @@ object BalanceTransactionService {
             Sync[F].defer {
               tryBalanceTx(state.coins.toList, List.empty, state, tx) match {
                 case Left(error)  => MonadThrow[F].raiseError[(Transaction, ZSwapLocalState)](error)
-                case Right(value) => Applicative[F].pure(value)
+                case Right(value) => Applicative[F].pure((value, state))
               }
             }
           })
       }
-    }
 
     @tailrec
     private def tryBalanceTx(
@@ -43,27 +42,21 @@ object BalanceTransactionService {
         usedCoins: List[CoinInfo],
         state: ZSwapLocalState,
         originalTx: Transaction,
-    ): Either[Error, (Transaction, ZSwapLocalState)] = {
+    ): Either[Error, Transaction] =
       coinsToUse match {
-        case coin :: restOfCoins => {
-          val coinsForAttempt = coin :: usedCoins
+        case coin :: restOfCoins =>
+          val coinsForAttempt = NonEmptyList.of(coin, usedCoins*)
           val balancingTx =
-            prepareBalancingTransaction(NonEmptyList.fromListUnsafe(coinsForAttempt), state)
+            prepareBalancingTransaction(coinsForAttempt, state)
           val change = calculateChange(originalTx, balancingTx)
           if (change > js.BigInt(0)) {
-            val (balancingTxWithChange, updatedState) =
-              prepareTxWithChange(coinsForAttempt, state, change)
-            tryMerge(originalTx, balancingTxWithChange).map((_, updatedState))
+            val balancingTxWithChange = prepareTxWithChange(coinsForAttempt.toList, state, change)
+            Right(originalTx.merge(balancingTxWithChange))
           } else if (change == js.BigInt(0)) {
-            tryMerge(originalTx, balancingTx).map((_, state))
-          } else tryBalanceTx(restOfCoins, coinsForAttempt, state, originalTx)
-        }
+            Right(originalTx.merge(balancingTx))
+          } else tryBalanceTx(restOfCoins, coinsForAttempt.toList, state, originalTx)
         case Nil => Left(NotSufficientFunds)
       }
-    }
-
-    private def tryMerge(tx1: Transaction, tx2: Transaction): Either[MergeError, Transaction] =
-      Option(tx1.merge(tx2).merge[Transaction]).toRight(MergeError(tx1, tx2))
 
     private def getImbalance(tx: Transaction): Option[js.BigInt] = {
       tx.imbalances()
@@ -104,19 +97,19 @@ object BalanceTransactionService {
         .map(_.randomness)
         .reduceLeft(_.merge(_))
       val txBuilder = new TransactionBuilder(new LedgerState())
-      val txBuilderWithOffer = txBuilder.addOffer(offer, randomness).merge[TransactionBuilder]
-      txBuilderWithOffer.intoTransaction().transaction
+      txBuilder.addOffer(offer, randomness)
+      txBuilder.intoTransaction().transaction
     }
 
     private def prepareTxWithChange(
         coins: Seq[CoinInfo],
         state: ZSwapLocalState,
         change: js.BigInt,
-    ): (Transaction, ZSwapLocalState) = {
+    ): Transaction = {
       val coinBalance = coins.map(_.value).combineAll(sum)
       val inputsWithRandomness = coins.map(state.spend)
       val coinOut = new CoinInfo(change, nativeToken())
-      val updatedState = state.watchFor(coinOut)
+      state.watchFor(coinOut)
       val output = ZSwapOutputWithRandomness.`new`(coinOut, state.coinPublicKey)
       val delta = new ZSwapDeltas()
       delta.insert(nativeToken(), coinBalance - change)
@@ -130,8 +123,8 @@ object BalanceTransactionService {
         .of(output.randomness, inputsWithRandomness.map(_.randomness)*)
         .reduceLeft(_.merge(_))
       val txBuilder = new TransactionBuilder(new LedgerState())
-      val txBuilderWithOffer = txBuilder.addOffer(offer, randomness).merge[TransactionBuilder]
-      (txBuilderWithOffer.intoTransaction().transaction, updatedState)
+      txBuilder.addOffer(offer, randomness)
+      txBuilder.intoTransaction().transaction
     }
   }
 

@@ -61,9 +61,10 @@ class BalanceTransactionServiceSpec
     buildBalanceTxService(stateWithCoins).use(
       _.balanceTransaction(imbalancedTx)
         .map { case (balancedTx, newState) =>
-          assert(balancedTx.wellFormed(true))
+          balancedTx.wellFormed(true)
           // checking existence of the change
-          assert(diff(newState.applyLocal(balancedTx).coins, coins).length === 1)
+          newState.applyLocal(balancedTx)
+          assert(diff(newState.coins, coins).length === 1)
         },
     )
   }

@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.kernel.Sync
+import cats.effect.Sync
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 import io.iohk.midnight.wallet.core.services.{BalanceTransactionService, TxSubmissionService}
@@ -28,8 +28,8 @@ object WalletTxSubmission {
         _ <- validateTx(ledgerTx)
         balancedTxAndState <- balanceTransactionService.balanceTransaction(ledgerTx)
         (balancedTx, state) = balancedTxAndState
-        stateWithPendingNewCoins = newCoins.foldLeft(state)(_.watchFor(_))
-        _ <- walletState.updateLocalState(stateWithPendingNewCoins)
+        _ = newCoins.foreach(state.watchFor)
+        _ <- walletState.updateLocalState(state)
         response <- txSubmissionService
           .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
         result <- response match {
@@ -49,20 +49,18 @@ object WalletTxSubmission {
       } yield result
     }
 
-    private def validateTx(tx: Transaction): F[Unit] = {
-      Sync[F]
-        .delay(tx.wellFormed(enforceBalancing = false))
-        .ifM(
-          ().pure,
-          TransactionNotWellFormed.raiseError,
-        )
-    }
+    private def validateTx(tx: Transaction): F[Unit] =
+      Either
+        .catchNonFatal(tx.wellFormed(enforceBalancing = false))
+        .leftMap(TransactionNotWellFormed.apply)
+        .liftTo[F]
   }
 
   abstract class Error(msg: String) extends Exception(msg)
   final case object NoTransactionIdentifiers
       extends Error("Transaction did not contain an identifier")
-  final case object TransactionNotWellFormed extends Error("Transaction is not well formed")
+  final case class TransactionNotWellFormed(reason: Throwable)
+      extends Error(s"Transaction is not well formed: ${reason.getMessage}")
   final case class TransactionRejected(reason: String)
       extends Error(reason) // FIXME not an exception
 }
