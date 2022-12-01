@@ -1,15 +1,14 @@
 package io.iohk.midnight.wallet.ogmios.network
 
 import cats.effect.Resource
+import cats.effect.kernel.Sync
 import cats.syntax.all.*
-import io.circe.parser
 import io.circe.syntax.*
-import io.circe.{Decoder, Encoder}
+import io.circe.{Decoder, Encoder, parser}
 import sttp.capabilities.WebSockets
 import sttp.client3.*
 import sttp.model.Uri
-import sttp.ws.WebSocket
-import cats.effect.kernel.Sync
+import sttp.ws.{WebSocket, WebSocketClosed}
 
 trait JsonWebSocketClient[F[_]] {
   def send[T: Encoder](message: T): F[Unit]
@@ -20,14 +19,19 @@ trait JsonWebSocketClient[F[_]] {
 private class SttpJsonWebSocketClient[F[_]: Sync](webSocket: WebSocket[F])(implicit
     tracer: JsonWebSocketClientTracer[F],
 ) extends JsonWebSocketClient[F] {
+
   override def send[T: Encoder](message: T): F[Unit] = {
-    val encodedMessage = message.asJson.spaces2
-    Sync[F]
-      .defer(
-        webSocket.sendText(encodedMessage),
-      ) // using Sync[F].defer to prevent the underlying (future-based) code to run eagerly
-      .flatTap(_ => tracer.requestSent(encodedMessage))
-      .onError(tracer.sendingFailed)
+    def doSend() = {
+      val encodedMessage = message.asJson.spaces2
+
+      // using Sync[F].defer to prevent the underlying (future-based) code to run eagerly
+      Sync[F]
+        .defer(webSocket.sendText(encodedMessage))
+        .flatTap(_ => tracer.requestSent(encodedMessage))
+        .onError(tracer.sendingFailed)
+    }
+
+    webSocket.isOpen().ifM(doSend(), WebSocketClosed(None).raiseError)
   }
 
   override def receive[T: Decoder](): F[T] = {

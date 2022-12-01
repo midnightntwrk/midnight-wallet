@@ -24,6 +24,7 @@ class JsonWebSocketClientSyncStub(
     clientIsAwaitingReply: Ref[IO, Boolean],
 )(implicit R: Random[IO])
     extends JsonWebSocketClient[IO] {
+
   override def send[T: Encoder](message: T): IO[Unit] =
     message match {
       case Send.RequestNext =>

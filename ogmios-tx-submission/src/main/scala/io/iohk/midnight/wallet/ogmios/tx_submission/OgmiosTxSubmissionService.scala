@@ -6,6 +6,7 @@ import cats.effect.syntax.spawn.*
 import cats.effect.{Deferred, GenConcurrent, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Transaction
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.Error.{
   DeferredFailed,
   EmptyPendingSubmissions,
@@ -18,7 +19,6 @@ import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Decoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.Encoders.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Send.SubmitTx
-import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
 
 /** Implementation of the TxSubmissionService
@@ -49,25 +49,24 @@ class OgmiosTxSubmissionService[F[_]: GenConcurrentThrow](
       _ <- webSocketClient.send[LocalTxSubmission.Send](SubmitTx(transaction))
       _ <- tracer.txSubmitted(transaction)
       _ <- semaphore.release
-      result <- deferred.get
-      _ <- tracer.resultReceived(transaction, result)
-    } yield result
+      submissionResult <- deferred.get
+      _ <- tracer.resultReceived(transaction, submissionResult)
+    } yield submissionResult
 
+  /** In case of exception, this loop will terminate. */
   private val loopReceive: F[Unit] =
     webSocketClient
       .receive[LocalTxSubmission.Receive]()
-      .flatMap(processReceivedMessage)
+      .flatMap {
+        case LocalTxSubmission.Receive.AcceptTx =>
+          tryCompleteWith(SubmissionResult.Accepted)
+        case LocalTxSubmission.Receive.RejectTx(details) =>
+          tryCompleteWith(SubmissionResult.Rejected(details.reason))
+      }
       .onError(tracer.processingMsgFailed)
       .foreverM
 
-  private def processReceivedMessage(message: LocalTxSubmission.Receive): F[Unit] =
-    message match {
-      case LocalTxSubmission.Receive.AcceptTx => completeWith(SubmissionResult.Accepted)
-      case LocalTxSubmission.Receive.RejectTx(details) =>
-        completeWith(SubmissionResult.Rejected(details.reason))
-    }
-
-  private def completeWith(response: SubmissionResult): F[Unit] =
+  private def tryCompleteWith(response: SubmissionResult): F[Unit] =
     pendingSubmissions.tryTake.flatMap {
       case Some(deferred) =>
         deferred

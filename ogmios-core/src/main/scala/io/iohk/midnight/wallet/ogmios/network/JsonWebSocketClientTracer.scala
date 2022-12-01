@@ -14,7 +14,7 @@ class JsonWebSocketClientTracer[F[_]](val tracer: Tracer[F, JsonWebSocketClientE
   def requestSent(msg: String): F[Unit] = tracer(RequestSent(msg))
   def responseReceived(msg: String): F[Unit] = tracer(ResponseReceived(msg))
   def sendingFailed: PartialFunction[Throwable, F[Unit]] =
-    PartialFunction.fromFunction(t => tracer(ReceiveFailed(t)))
+    PartialFunction.fromFunction(t => tracer(SendFailed(t)))
   def decodingFailed: PartialFunction[Throwable, F[Unit]] = { case ce: circe.Error =>
     tracer(DecodingFailed(ce))
   }

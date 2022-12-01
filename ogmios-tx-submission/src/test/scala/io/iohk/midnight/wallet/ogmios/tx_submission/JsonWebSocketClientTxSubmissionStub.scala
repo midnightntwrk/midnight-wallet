@@ -19,6 +19,7 @@ import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
 
 class JsonWebSocketClientTxSubmissionStub(responses: Queue[IO, Receive])
     extends JsonWebSocketClient[IO] {
+
   override def send[T: Encoder](message: T): IO[Unit] =
     message match {
       case SubmitTx(transaction) =>
