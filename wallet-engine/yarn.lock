@@ -16,11 +16,6 @@
     "@midnight/protocols" "^0.5.0"
     "@midnight/session-types" "^0.5.0"
 
-"@midnight/ledger@1.1.9":
-  version "1.1.9"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.1.9.tgz#83ebc3d43a5d62f8f1ef3b707d8800274df8f01e"
-  integrity sha512-bKdSER5NVkfxxWYsPtM2PYHG9lYNT/t63wEGAwqSe2/VuxbNfEBWLEwx80Z+Z4LE6xmgcJXrcoBOc2RQKg13VA==
-
 "@midnight/ledger@1.2.0":
   version "1.2.0"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.0.tgz#f21da7e504343724cae8e5bd207e261e4b1e4742"
@@ -79,12 +74,12 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.5.0.tgz#6de690a9898444d7fa9ac377bedc047b5e2d954e"
   integrity sha512-euo83n42n3z7msUuDQegTNUR7qA0JKXg/9+1rAdMudLJhfKcHEvPin7tGudrvvd4Kk0/dX9nCeb8NLzdXkJWrg==
 
-"@midnight/wallet-api@2.2.1":
-  version "2.2.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.2.1.tgz#7b4f19932a161b62e341539f35c4e0340332696c"
-  integrity sha512-wzOkO2vKkn8RGppDU1kWi8zZjXx2ApFFarypEI89xvfevgJZIwa/+IbJHfs9Hrd/ckUxEyUo5VfRtUR1pJnxIw==
+"@midnight/wallet-api@2.3.0":
+  version "2.3.0"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.3.0.tgz#b31307ce5ef3decb168b28b63688d854936b70f2"
+  integrity sha512-rbRdVYLmAlwrMcHNAd34kSB8B1Ss9J4QjNl6X3/iVj2owm/ArVbz+AKkR2qlzT1YkCYZsoaxcwLPT1oGYGqwEw==
   dependencies:
-    "@midnight/ledger" "1.1.9"
+    "@midnight/ledger" "1.2.0"
     rxjs "7.5.5"
 
 abort-controller@^3.0.0:

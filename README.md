@@ -119,8 +119,9 @@ environment variable `MIDNIGHT_DEV=true` can be used to make all lint errors be 
 Please read our [git workflow](https://input-output.atlassian.net/wiki/spaces/MN/pages/3378086090/Git+Workflow)
 for how to branch and tag releases.
 
-In order to release a new version, the versions inside `wallet-engine/package.json`, 
-`ogmios-sync/js/package.json`, and `commonPublishSettings` in `build.sbt` should be bumped.
+In order to release a new version, the versions inside `wallet-engine/package.json`,
+`wallet-core/package.json`, `ogmios-sync/js/package.json`, and `commonPublishSettings` in
+`build.sbt` should be bumped.
 
 After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 
 from GitHub to create a tag with a name following the pattern `vX.Y.Z`.

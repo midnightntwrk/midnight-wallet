@@ -1,6 +1,6 @@
 {
     "name": "@midnight/wallet",
-    "version": "2.6.0",
+    "version": "2.6.1",
     "main": "dist/main.js",
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
@@ -17,7 +17,7 @@
     "dependencies": {
         "@midnight/mocked-node-app": "0.5.0",
         "@midnight/ledger": "1.2.0",
-        "@midnight/wallet-api": "2.2.1",
+        "@midnight/wallet-api": "2.3.0",
         "cross-fetch": "^3.1.5",
         "isomorphic-ws": "^5.0.0",
         "ws": "^8.8.1"
