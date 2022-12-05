@@ -2,38 +2,38 @@
 # yarn lockfile v1
 
 
-"@midnight/bloc@0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.5.1.tgz#5a61755238f6734209db13723d65d19de8bb0472"
-  integrity sha512-PK/GP15IvL3SUWDILr6yWCmpxlNmKuuT6hT3+XjXUUbLFuY89aJYAifNiwf5jmIElUH3igEuw+ZeoyWu7RFIHw==
+"@midnight/bloc@0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.5.2.tgz#a4c811978bbffde1d8ad7a5643639aeaa04b3abe"
+  integrity sha512-jxjmVn++hU0XAHjtpxTfzsDOoVfcP2ZYT/gEXImzEoQKOfrqwKN5d/8HTHohbvzg0xWFOjuSMyOZ8Mh9pmHkDw==
 
-"@midnight/consensus@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/consensus/-/consensus-0.5.1.tgz#17012450c612314618f3c2dac1e0363564fbe9f5"
-  integrity sha512-qdzu0b55XllnbzK4Ux87B4Bv7LHnuPRlzQBIj12S57fqdl/+fbGomDJu01NujIfHSQ6/acwkbyIRbquECiP/dg==
+"@midnight/consensus@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/consensus/-/consensus-0.5.2.tgz#b892da4f539c07742569d3d45cd2e3bfc06d9764"
+  integrity sha512-CvhwUsVqqi1F9oqffmuGPN/eij0Ht5M/rkozuNM0jK9SRNu7o2ChaxUcBydZvjwV5T+p0XybnMTmgRLQPR1uJA==
   dependencies:
-    "@midnight/mocked-node-api" "^0.5.1"
-    "@midnight/protocols" "^0.5.1"
-    "@midnight/session-types" "^0.5.1"
+    "@midnight/mocked-node-api" "^0.5.2"
+    "@midnight/protocols" "^0.5.2"
+    "@midnight/session-types" "^0.5.2"
 
-"@midnight/ledger@1.2.1":
-  version "1.2.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.1.tgz#071fddfd454d88ccc6082a5aa82302a99ab6d256"
-  integrity sha512-C1MgsdneihOQBJAHvgVhLpnAAlyvXT9NYu1y6BZFBVV7f2eXkeP5QLez2tbxLCc6pA5MY0s8Z8+JR+l4bgTNXg==
+"@midnight/ledger@1.2.3":
+  version "1.2.3"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.3.tgz#4786639a9e4a651d2d2083f9b1ad14b49deed313"
+  integrity sha512-ZsxmPE7c7mkjjBWliAA4tVcng2c2bFTezrC/zo4PyE3a/tvSKvx4riURUGXHHQHiUeUlWGrIx9RE2wM8p7Ev4w==
 
-"@midnight/mocked-node-api@0.5.1", "@midnight/mocked-node-api@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.5.1.tgz#2771e68e01156255c7ff3d3ea70d640e9ff8a009"
-  integrity sha512-tL9cYBo2St9nbXE8ISYWZ2ZtfR+IKjFOPDLS3YhEd9icoM7E2MGKKVaN4XxHNVOroD4Owmp/4s6Kd+g5yxZa7w==
+"@midnight/mocked-node-api@0.5.2", "@midnight/mocked-node-api@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.5.2.tgz#34c27eeb04b088fa2814e8ffa8db35c131908c65"
+  integrity sha512-9M1nyQ4DNOJ+fhHnIsP9HA1Y84BAO96I42d87FNySq65geoDfzzCR3pQ4ua3RbBRujXXLMpTrBzptyKENOjv0g==
 
-"@midnight/mocked-node-app@0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-app/-/mocked-node-app-0.5.1.tgz#2e9315a09c58a9c741500dbdc4999dc86f1f2bb3"
-  integrity sha512-hXWMCAO/CSYaJnsdMdTMW8XyJTWeWcGggKKk4vjthv4NtRdpwkUyLYesm025G5KXUOPPLiQltM+LCuBVESniXA==
+"@midnight/mocked-node-app@0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-app/-/mocked-node-app-0.5.2.tgz#58a13271c306477c48c722713a35adb4cb97b768"
+  integrity sha512-FDoBmtX0XnDksRard7vPFBRMSGBxz/NRlDrqjH8rnMAzrGJuVFbNhlTqi4U8++iXx4nm8knLqBdSQdV34K/Hdw==
   dependencies:
-    "@midnight/mocked-node-api" "^0.5.1"
-    "@midnight/mocked-node-in-memory" "^0.5.1"
-    "@midnight/mocked-node-server" "^0.5.1"
+    "@midnight/mocked-node-api" "^0.5.2"
+    "@midnight/mocked-node-in-memory" "^0.5.2"
+    "@midnight/mocked-node-server" "^0.5.2"
     dotenv "^16.0.1"
     fp-ts "^2.12.2"
     io-ts "^2.2.17"
@@ -42,44 +42,44 @@
     newtype-ts "^0.3.5"
     pino "^8.4.2"
 
-"@midnight/mocked-node-in-memory@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.5.1.tgz#715b0561f59157b1172e6874564e15d3fe55d88d"
-  integrity sha512-O/06MdwzkejPGodifweDspinFlcC2jE9T+5mEuKo5NnSqEQoMlPH7QOi9umVypw6H0N1yHo6pxKqHsQ8TxAEEQ==
+"@midnight/mocked-node-in-memory@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.5.2.tgz#de476eb70075eea3146a47145e443f50d7ec7ab4"
+  integrity sha512-aTFFzAbDmhZdKL/Ynd0J0AMiTd9HF1hMLfe4fEP2SpUFOEcZ8J7pnLmkxXf2Agsbz9qLTqE3Fc6RAup5zAj4sA==
   dependencies:
-    "@midnight/bloc" "0.5.1"
-    "@midnight/ledger" "1.2.1"
-    "@midnight/mocked-node-api" "^0.5.1"
+    "@midnight/bloc" "0.5.2"
+    "@midnight/ledger" "1.2.3"
+    "@midnight/mocked-node-api" "^0.5.2"
 
-"@midnight/mocked-node-server@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-server/-/mocked-node-server-0.5.1.tgz#e7c1e42ef739db9babc8a9157ec6a2fcf94cd579"
-  integrity sha512-cL13rEtEvYy9F3bywnrfODqfMAtcL7skjDnR7CjW+iSypOZScUntxAIQDQ7Xo/k+OASQAodfnOnchpIkzpD4FA==
+"@midnight/mocked-node-server@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-server/-/mocked-node-server-0.5.2.tgz#4fa6a4763e5a3b76e97f946c30aeb2882da75f1a"
+  integrity sha512-9elhKVSpkoKemuQXzNFxB7vffa0SGKV5zOL1K8c1fyirMGWe3oc+1rSyTyPAcmJgWSY1Gfjd/XSzzacVAacXpw==
   dependencies:
-    "@midnight/consensus" "^0.5.1"
-    "@midnight/mocked-node-api" "^0.5.1"
-    "@midnight/protocols" "^0.5.1"
-    "@midnight/session-types" "^0.5.1"
+    "@midnight/consensus" "^0.5.2"
+    "@midnight/mocked-node-api" "^0.5.2"
+    "@midnight/protocols" "^0.5.2"
+    "@midnight/session-types" "^0.5.2"
 
-"@midnight/protocols@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/protocols/-/protocols-0.5.1.tgz#977c9fadeeeed84350858a6269828390ff3d5c80"
-  integrity sha512-/+Y2nQLrnMAd3/r/HFcuiX4RUCVEPzXv/YkR0Qkroxpho2l8h6gehTzOPS29Vqh+83HmZK+5Dgp951MQ05ZOJg==
+"@midnight/protocols@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/protocols/-/protocols-0.5.2.tgz#db03be060f661a5144aad8dae7af5667cf532e31"
+  integrity sha512-78eoq+hOPSas/e6FSgY6JwC12fjk6dt5sFjLEVZqzCQmWX9xIp5y8qRYw4CQZYWV5j0zApi4IFHbZrfTmWeJcQ==
   dependencies:
-    "@midnight/mocked-node-api" "^0.5.1"
-    "@midnight/session-types" "^0.5.1"
+    "@midnight/mocked-node-api" "^0.5.2"
+    "@midnight/session-types" "^0.5.2"
 
-"@midnight/session-types@^0.5.1":
-  version "0.5.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.5.1.tgz#6d16a922d0d9ab7160d887b1c8462e8ff217711a"
-  integrity sha512-b8SHmOTR+KBP6DUkzm/35a3u0yVmumoXliCnA++z7qjQMXiK5iKXx+Gl9Pc9RgXWMdsL8PB41NXQG6kwvi0cIQ==
+"@midnight/session-types@^0.5.2":
+  version "0.5.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/session-types/-/session-types-0.5.2.tgz#f754ca5dc59c6611aab0975099e57d741b94d2ed"
+  integrity sha512-kW2qLGrc7sDxwAFweqtFZwgB2e3hIgAxJcqBNMFlJMpFFYiBvHjqNbS9asKEr8QSMwnyyoRmm1TeXr2DWnxVYw==
 
-"@midnight/wallet-api@2.3.1":
-  version "2.3.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.3.1.tgz#dfb3a944dc29549ec3feb371d47b9b49625ff2da"
-  integrity sha512-W1MGTXIMEa7QPLq7xBmPbxCKR/G0DVNhAHuOk1NSCYgqQr0ydZ0/Xzz5ufbDj5R2Z0EM1ZeqzWgPRselbydGkw==
+"@midnight/wallet-api@2.3.2":
+  version "2.3.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-2.3.2.tgz#9914776689aa5a9ddb2f8ff07e5f15f63391bec7"
+  integrity sha512-6h7wGZ7p5zEy54iB9U5czFQ8D2dXn7IZV98zQ71k6YpEI55Dm7ylbWFPs93MJ9t73vajfC/rQ3LzO19QqD6djw==
   dependencies:
-    "@midnight/ledger" "1.2.1"
+    "@midnight/ledger" "1.2.3"
     rxjs "7.5.5"
 
 abort-controller@^3.0.0:
