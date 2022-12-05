@@ -57,7 +57,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val initialState = new ZSwapLocalState()
     val expected = LedgerSerialization.serializePublicKey(initialState.coinPublicKey)
     buildWallet(initialState = initialState).use(
-      _.publicKey()
+      _.publicKey
         .map(LedgerSerialization.serializePublicKey)
         .map(assertEquals(_, expected)),
     )
@@ -72,7 +72,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val (tx, state) = generateLedgerTxAndState()
     state.applyLocal(tx)
     buildWallet(initialState = state)
-      .use(_.localState().assertEquals(state))
+      .use(_.localState.assertEquals(state))
   }
 
   test("Update the state") {
@@ -81,7 +81,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     buildWallet().use { wallet =>
       wallet
         .updateLocalState(state)
-        .flatMap(_ => wallet.localState())
+        .flatMap(_ => wallet.localState)
         .assertEquals(state)
     }
   }

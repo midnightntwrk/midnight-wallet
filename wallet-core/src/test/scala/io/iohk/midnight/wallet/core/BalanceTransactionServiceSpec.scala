@@ -1,16 +1,16 @@
-package io.iohk.midnight.wallet.core.services
+package io.iohk.midnight.wallet.core
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
-import io.iohk.midnight.wallet.core.services.BalanceTransactionService.NotSufficientFunds
+import io.iohk.midnight.wallet.core.BalanceTransactionService.NotSufficientFunds
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import io.iohk.midnight.wallet.core.{FailingWalletStateStub, Generators, WalletState}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite, TestOptions}
+import typings.midnightLedger.mod.*
+
 import scala.annotation.tailrec
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
-import typings.midnightLedger.mod.*
 
 @SuppressWarnings(Array("org.wartremover.warts.Equals"))
 class BalanceTransactionServiceSpec
@@ -18,13 +18,8 @@ class BalanceTransactionServiceSpec
     with ScalaCheckEffectSuite
     with BetterOutputSuite {
 
-  private def buildBalanceTxService(
-      initialState: ZSwapLocalState,
-  ): Resource[IO, BalanceTransactionService[IO]] = {
-    WalletState
-      .Live(new SyncServiceStub(), initialState)
-      .map(new BalanceTransactionService.Live[IO](_))
-  }
+  private def buildBalanceTxService(): BalanceTransactionService[IO] =
+    new BalanceTransactionService.Live[IO]()
 
   private def diff(array: js.Array[CoinInfo], arrayToRemove: List[CoinInfo]): js.Array[CoinInfo] = {
     @tailrec
@@ -57,16 +52,14 @@ class BalanceTransactionServiceSpec
 
   test("balance transaction and output change") {
     val (stateWithCoins, imbalancedTx, coins) = generateData()
-
-    buildBalanceTxService(stateWithCoins).use(
-      _.balanceTransaction(imbalancedTx)
-        .map { case (balancedTx, newState) =>
-          balancedTx.wellFormed(true)
-          // checking existence of the change
-          newState.applyLocal(balancedTx)
-          assert(diff(newState.coins, coins).length === 1)
-        },
-    )
+    buildBalanceTxService()
+      .balanceTransaction(stateWithCoins, imbalancedTx)
+      .map { case (balancedTx, newState) =>
+        balancedTx.wellFormed(true)
+        // checking existence of the change
+        newState.applyLocal(balancedTx)
+        assert(diff(newState.coins, coins).length === 1)
+      }
   }
 
   test(TestOptions("balance transaction without change").ignore) {}
@@ -75,20 +68,19 @@ class BalanceTransactionServiceSpec
 
   test("no transaction changes when tx has positive imbalance") {
     val (stateWithCoins, imbalancedTx, _) = generateData()
+    val balanceTxService = buildBalanceTxService()
 
-    buildBalanceTxService(stateWithCoins).use { balanceService =>
-      balanceService
-        .balanceTransaction(imbalancedTx)
-        .map { case (balancedTx, _) => (balanceService, balancedTx) }
-        .flatMap { case (wallet, balancedTx) =>
-          wallet.balanceTransaction(balancedTx).map { case (doubleBalancedTx, _) =>
+    balanceTxService
+      .balanceTransaction(stateWithCoins, imbalancedTx)
+      .flatMap { case (balancedTx, _) =>
+        balanceTxService.balanceTransaction(stateWithCoins, balancedTx).map {
+          case (doubleBalancedTx, _) =>
             (balancedTx, doubleBalancedTx)
-          }
         }
-        .map { case (balancedTx, doubleBalancedTx) =>
-          assertEquals(balancedTx, doubleBalancedTx)
-        }
-    }
+      }
+      .map { case (balancedTx, doubleBalancedTx) =>
+        assertEquals(balancedTx, doubleBalancedTx)
+      }
   }
 
   test("fails when not enough funds to balance transaction cost") {
@@ -97,21 +89,9 @@ class BalanceTransactionServiceSpec
     // generating not enough coins
     val stateWithCoins = Generators.generateStateWithFunds(imbalance)
 
-    buildBalanceTxService(stateWithCoins).use(
-      _.balanceTransaction(imbalancedTx).attempt
-        .map(assertEquals(_, Left(NotSufficientFunds))),
-    )
-  }
-
-  test("fails when cannot get a state") {
-    val walletState = new FailingWalletStateStub()
-
-    val balanceTransactionService = new BalanceTransactionService.Live[IO](walletState)
-    val imbalancedTx = Generators.generateLedgerTransaction().transaction
-
-    balanceTransactionService
-      .balanceTransaction(imbalancedTx)
+    buildBalanceTxService()
+      .balanceTransaction(stateWithCoins, imbalancedTx)
       .attempt
-      .map(assertEquals(_, Left(FailingWalletStateStub.error)))
+      .map(assertEquals(_, Left(NotSufficientFunds)))
   }
 }

@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.core
 import cats.effect.Sync
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.core.services.{BalanceTransactionService, TxSubmissionService}
+import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import typings.midnightLedger.mod.*
 
 trait WalletTxSubmission[F[_]] {
@@ -26,7 +26,8 @@ object WalletTxSubmission {
     ): F[TransactionIdentifier] = {
       for {
         _ <- validateTx(ledgerTx)
-        balancedTxAndState <- balanceTransactionService.balanceTransaction(ledgerTx)
+        state <- walletState.localState
+        balancedTxAndState <- balanceTransactionService.balanceTransaction(state, ledgerTx)
         (balancedTx, state) = balancedTxAndState
         _ = newCoins.foreach(state.watchFor)
         _ <- walletState.updateLocalState(state)

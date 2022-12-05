@@ -29,7 +29,7 @@ class JsWallet(
     with FilterService {
 
   override def connect(): Observable[ZSwapCoinPublicKey] =
-    walletState.publicKey().unsafeToObservable()
+    walletState.publicKey.unsafeToObservable()
 
   override def submitTx(
       tx: Transaction,

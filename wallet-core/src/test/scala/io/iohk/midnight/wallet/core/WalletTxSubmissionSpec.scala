@@ -63,10 +63,13 @@ class WalletTxSubmissionSpec
     val walletState =
       new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub(), Deferred.unsafe)
     val wallet =
-      buildWallet(balanceTransactionService = new BalanceTransactionService.Live[IO](walletState))
+      buildWallet(
+        balanceTransactionService = new BalanceTransactionService.Live[IO](),
+        walletState = walletState,
+      )
     wallet
       .submitTransaction(tx, coins)
-      .flatMap(_ => walletState.localState())
+      .flatMap(_ => walletState.localState)
       .map { updatedState =>
         assert(updatedState.pendingSpends.keys().length > 0)
       }

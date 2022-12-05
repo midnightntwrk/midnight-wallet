@@ -1,40 +1,44 @@
-package io.iohk.midnight.wallet.core.services
+package io.iohk.midnight.wallet.core
 
 import cats.data.NonEmptyList
 import cats.effect.kernel.Sync
 import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
-import io.iohk.midnight.wallet.core.WalletState
-import scala.annotation.tailrec
-import scala.scalajs.js
 import typings.midnightLedger.mod.*
 
+import scala.annotation.tailrec
+import scala.scalajs.js
+
 trait BalanceTransactionService[F[_]] {
-  def balanceTransaction(transaction: Transaction): F[(Transaction, ZSwapLocalState)]
+  def balanceTransaction(
+      state: ZSwapLocalState,
+      transaction: Transaction,
+  ): F[(Transaction, ZSwapLocalState)]
 }
 
 object BalanceTransactionService {
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  class Live[F[_]: Sync](walletState: WalletState[F]) extends BalanceTransactionService[F] {
+  class Live[F[_]: Sync]() extends BalanceTransactionService[F] {
     private val Buffer = js.BigInt(1000)
-    override def balanceTransaction(tx: Transaction): F[(Transaction, ZSwapLocalState)] =
-      walletState.localState().flatMap { state =>
-        tx.imbalances()
-          // equals is probably checking the reference which is different in the runtime for the native tokens created in different places
-          // temporal assumption that we have only native tokens
-          // .filter(_.tokenType.equals(nativeToken()))
-          .filter(_.imbalance < js.BigInt(0))
-          .headOption
-          .fold(Applicative[F].pure((tx, state)))(_ => {
-            Sync[F].defer {
-              tryBalanceTx(state.coins.toList, List.empty, state, tx) match {
-                case Left(error)  => MonadThrow[F].raiseError[(Transaction, ZSwapLocalState)](error)
-                case Right(value) => Applicative[F].pure((value, state))
-              }
+    override def balanceTransaction(
+        state: ZSwapLocalState,
+        tx: Transaction,
+    ): F[(Transaction, ZSwapLocalState)] =
+      tx.imbalances()
+        // equals is probably checking the reference which is different in the runtime for the native tokens created in different places
+        // temporal assumption that we have only native tokens
+        // .filter(_.tokenType.equals(nativeToken()))
+        .filter(_.imbalance < js.BigInt(0))
+        .headOption
+        .fold(Applicative[F].pure((tx, state)))(_ => {
+          Sync[F].defer {
+            tryBalanceTx(state.coins.toList, List.empty, state, tx) match {
+              case Left(error)  => MonadThrow[F].raiseError[(Transaction, ZSwapLocalState)](error)
+              case Right(value) => Applicative[F].pure((value, state))
             }
-          })
-      }
+          }
+        })
 
     @tailrec
     private def tryBalanceTx(
@@ -132,7 +136,4 @@ object BalanceTransactionService {
 
   final case object NotSufficientFunds
       extends Error("Not sufficient funds to balance the cost of transaction")
-  @SuppressWarnings(Array("org.wartremover.warts.ToString"))
-  final case class MergeError(tx1: Transaction, tx2: Transaction)
-      extends Error(s"Merging ${tx1.toString()} and ${tx2.toString()}")
 }
