@@ -494,16 +494,16 @@
         "utils": "utils_3"
       },
       "locked": {
-        "lastModified": 1670246291,
-        "narHash": "sha256-J2fOV7PALTkO6COaJMuJS0dkAdqxEisGlmmQaHNLg9E=",
+        "lastModified": 1670253927,
+        "narHash": "sha256-+A7urOs2pe1rrS3fIuPE3Gj/bITcked8PL24/YYCgk4=",
         "owner": "input-output-hk",
         "repo": "midnight-ledger-prototype",
-        "rev": "6d227ae917f1218607657480b2a6995235ae2b28",
+        "rev": "b4f634177e39ce07448f7fb6f083ab903ec38c16",
         "type": "github"
       },
       "original": {
         "owner": "input-output-hk",
-        "ref": "v1.2.3",
+        "ref": "v1.2.4",
         "repo": "midnight-ledger-prototype",
         "type": "github"
       }

@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/ledger@1.2.3":
-  version "1.2.3"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.3.tgz#4786639a9e4a651d2d2083f9b1ad14b49deed313"
-  integrity sha512-ZsxmPE7c7mkjjBWliAA4tVcng2c2bFTezrC/zo4PyE3a/tvSKvx4riURUGXHHQHiUeUlWGrIx9RE2wM8p7Ev4w==
+"@midnight/ledger@1.2.4":
+  version "1.2.4"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.4.tgz#5e8f90563680ba90a279432cb2ffda96c89e1ff9"
+  integrity sha512-LJcuZQpSZnBNmkaR9k0+m3bGPyacKdhB1rbnfib53zIMTBlBW8WooQdeVcjaHOINHMQQFgorag9USutYTOeWmA==
 
 typescript@^4.8.3:
   version "4.9.3"
