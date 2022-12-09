@@ -54,8 +54,8 @@ trait EndToEndSpecSetup {
         .setPort(nodePort.toDouble)
 
     Resource
-      .make(IO(new InMemoryServer(nodeConfig)))(node => IO(node.close()))
-      .map(_.run())
+      .make(IO(new InMemoryServer(nodeConfig)))(node => IO.fromPromise(IO(node.close())))
+      .evalMap(node => IO.fromPromise(IO(node.run())))
   }
 
   type Wallets = (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])

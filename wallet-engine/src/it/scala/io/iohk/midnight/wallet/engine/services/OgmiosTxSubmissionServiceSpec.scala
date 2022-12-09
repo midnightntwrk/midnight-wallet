@@ -44,7 +44,7 @@ class OgmiosTxSubmissionServiceSpec extends CatsEffectSuite {
     val node = new InMemoryServer(nodeConfig)
 
     val testCase = for {
-      _ <- IO(node.run())
+      _ <- IO.fromPromise(IO(node.run()))
       wsClientWithReleaseOp <- ogmios.network
         .SttpJsonWebSocketClient[IO](sttpBackend, uri"ws://$nodeHost:$nodePort")
         .allocated
@@ -62,6 +62,6 @@ class OgmiosTxSubmissionServiceSpec extends CatsEffectSuite {
       _ <- ogmiosTxSubmissionService.submitTransaction(dummyTx)
     } yield ()
 
-    interceptIO[WebSocketClosed](testCase).guarantee(IO(node.close()))
+    interceptIO[WebSocketClosed](testCase).guarantee(IO.fromPromise(IO(node.close())))
   }
 }
