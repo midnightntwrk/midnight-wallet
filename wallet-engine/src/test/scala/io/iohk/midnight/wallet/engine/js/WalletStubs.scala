@@ -23,25 +23,25 @@ class WalletFilterServiceInfiniteStub extends WalletFilterService[IO] {
 
 class WalletStateStub extends WalletState[IO] {
   private val state = new ZSwapLocalState()
-  override def start(): IO[Unit] = IO.unit
+  override def start: IO[Unit] = IO.unit
   override def publicKey: IO[ZSwapCoinPublicKey] = IO.pure(state.coinPublicKey)
-  override def balance(): Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
+  override def balance: Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
   override def localState: IO[ZSwapLocalState] = IO.pure(state)
   override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
 }
 
 class WalletStatePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey) extends WalletState[IO] {
-  override def start(): IO[Unit] = IO.unit
+  override def start: IO[Unit] = IO.unit
   override def publicKey: IO[ZSwapCoinPublicKey] = IO.pure(zSwapCoinPublicKey)
-  override def balance(): Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
+  override def balance: Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
   override def localState: IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
   override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
 }
 
 class WalletStateBalanceStub(balance: Seq[js.BigInt]) extends WalletState[IO] {
-  override def start(): IO[Unit] = IO.unit
+  override def start: IO[Unit] = IO.unit
   override def publicKey: IO[ZSwapCoinPublicKey] = IO.raiseError(new NotImplementedError())
-  override def balance(): Stream[IO, js.BigInt] = Stream.emits(balance)
+  override def balance: Stream[IO, js.BigInt] = Stream.emits(balance)
   override def localState: IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
   override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
 }

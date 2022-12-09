@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.{Deferred, IO, Ref}
+import cats.effect.IO
 import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, coinInfoGen}
 import io.iohk.midnight.wallet.core.WalletTxSubmission.{
   TransactionNotWellFormed,
@@ -9,15 +9,8 @@ import io.iohk.midnight.wallet.core.WalletTxSubmission.{
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
-import typings.midnightLedger.mod.{
-  LedgerState,
-  TransactionBuilder,
-  ZSwapDeltas,
-  ZSwapLocalState,
-  ZSwapOffer,
-  ZSwapOutputWithRandomness,
-}
 import scala.scalajs.js
+import typings.midnightLedger.mod.*
 
 class WalletTxSubmissionSpec
     extends CatsEffectSuite
@@ -27,12 +20,7 @@ class WalletTxSubmissionSpec
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
   private val balanceTransactionService = new BalanceTransactionServiceStub()
   private val failingBalanceTransactionServiceStub = new FailingBalanceTransactionServiceStub()
-  private val walletState =
-    new WalletState.Live[IO](
-      Ref.unsafe(new ZSwapLocalState()),
-      new SyncServiceStub(),
-      Deferred.unsafe,
-    )
+  private val walletState = new WalletStateStub()
 
   def buildWallet(
       txSubmissionService: TxSubmissionService[IO] = txSubmissionService,
@@ -60,8 +48,7 @@ class WalletTxSubmissionSpec
     val TransactionWithContext(tx, _, coins) = Generators.generateLedgerTransaction()
     val imbalance = tx.imbalances().pop().imbalance
     val stateWithFunds = Generators.generateStateWithFunds(imbalance * imbalance)
-    val walletState =
-      new WalletState.Live[IO](Ref.unsafe(stateWithFunds), new SyncServiceStub(), Deferred.unsafe)
+    val walletState = new WalletStateStub(stateWithFunds)
     val wallet =
       buildWallet(
         balanceTransactionService = new BalanceTransactionService.Live[IO](),

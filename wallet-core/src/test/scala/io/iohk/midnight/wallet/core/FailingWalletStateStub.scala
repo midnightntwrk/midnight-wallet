@@ -7,11 +7,11 @@ import typings.midnightLedger.mod.{ZSwapCoinPublicKey, ZSwapLocalState}
 import scala.scalajs.js
 
 class FailingWalletStateStub() extends WalletState[IO] {
-  override def start(): IO[Unit] = IO.raiseError(error)
+  override def start: IO[Unit] = IO.raiseError(error)
 
   override def publicKey: IO[ZSwapCoinPublicKey] = IO.raiseError(error)
 
-  override def balance(): fs2.Stream[IO, js.BigInt] = fs2.Stream.raiseError[IO](error)
+  override def balance: fs2.Stream[IO, js.BigInt] = fs2.Stream.raiseError[IO](error)
 
   override def localState: IO[ZSwapLocalState] = IO.raiseError(error)
 

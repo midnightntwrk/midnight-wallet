@@ -43,10 +43,10 @@ class JsWallet(
       .unsafeToObservable()
 
   def balance(): Observable[js.BigInt] =
-    walletState.balance().unsafeToObservable()
+    walletState.balance.unsafeToObservable()
 
   def start(): Unit =
-    walletState.start().unsafeRunAndForget()
+    walletState.start.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
     finalizer.unsafeToPromise()

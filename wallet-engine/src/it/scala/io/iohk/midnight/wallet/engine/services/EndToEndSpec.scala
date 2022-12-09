@@ -2,14 +2,9 @@ package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
 import cats.effect.kernel.Resource
-import cats.syntax.all.*
+import cats.syntax.flatMap.*
 import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.core.{
-  LedgerSerialization,
-  WalletFilterService,
-  WalletState,
-  WalletTxSubmission,
-}
+import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
@@ -63,7 +58,7 @@ trait EndToEndSpecSetup {
   def makeWalletResource(initialState: ZSwapLocalState): Resource[IO, Wallets] =
     Wallet
       .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
-      .flatTap(_._1.start().background)
+      .flatTap(_._1.start.background)
 
   def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
       body: Wallets => IO[Unit],
@@ -84,13 +79,16 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
 
     withWallet(initialState, mintTx) { case (walletState, _, txSubmission) =>
       for {
-        balanceBeforeSend <- walletState.balance().head.compile.lastOrError
-        _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
-        balanceAfterSend <- walletState.balance().head.compile.lastOrError
+        balanceBeforeSend <- walletState.balance
+          .takeWhile(_ < coin.value, takeFailure = true)
+          .compile
+          .toList
+        _ <- txSubmission.submitTransaction(spendTx, List.empty)
+        balanceAfterSend <- walletState.balance.head.compile.lastOrError
       } yield {
         assertEquals(
-          List(balanceBeforeSend, balanceAfterSend),
-          List(coin.value, coin.value - spendCoin.value - fee),
+          balanceBeforeSend ++ List(balanceAfterSend),
+          List(js.BigInt(0), coin.value, coin.value - spendCoin.value - fee),
         )
       }
     }
@@ -106,7 +104,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
 
     withWallet(initialState, mintTx) { case (walletState, filterService, txSubmission) =>
       for {
-        _ <- walletState.balance().head.compile.lastOrError
+        _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
         _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
         filteredTx <- filterService
           .installTransactionFilter(_.hasIdentifier(expectedIdentifier))

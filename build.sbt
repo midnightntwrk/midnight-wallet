@@ -16,12 +16,12 @@ lazy val nexus = "https://nexus.p42.at/repository"
 lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
 val scala213 = "2.13.8"
-val scala31 = "3.1.2"
-val supportedScalaVersions = List(scala213, scala31)
-val catsVersion = "2.7.0"
-val catsEffectVersion = "3.3.11"
+val scala32 = "3.2.1"
+val supportedScalaVersions = List(scala213, scala32)
+val catsVersion = "2.9.0"
+val catsEffectVersion = "3.4.2"
 val circeVersion = "0.14.2"
-val fs2Version = "3.2.5"
+val fs2Version = "3.4.0"
 val log4CatsVersion = "2.4.0"
 val midnightTracingVersion = "1.1.6"
 val sttpClientVersion = "3.4.1"
@@ -106,11 +106,26 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
   )
 
+lazy val bloc = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("bloc"))
+  .settings(commonSettings)
+  .settings(
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "co.fs2" %%% "fs2-core" % fs2Version,
+    )
+  )
+  .jsSettings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    useNodeModuleResolution
+  )
+
 lazy val walletCore = project
   .in(file("wallet-core"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(blockchain.js % "compile->compile;test->test")
-  .dependsOn(jsInterop)
+  .dependsOn(jsInterop, bloc.js)
   .settings(commonSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -255,6 +270,7 @@ lazy val jsInterop = project
   .settings(commonSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    crossScalaVersions := supportedScalaVersions,
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
@@ -286,6 +302,7 @@ addCommandAlias(
     "scalafmtCheckAll",
     "coverage",
     "jsInterop/test",
+    "blocJS/test",
     "walletCore/test",
     "blockchainJS/test",
     "ogmiosCoreJS/test",

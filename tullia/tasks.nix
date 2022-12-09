@@ -22,7 +22,7 @@
       set -x
 
       nix develop -L -c sbt verify
-      nix develop -L -c sbt '++ 3.1.2 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
+      nix develop -L -c sbt '++ 3.2.1 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
       nix develop -L -c sbt 'walletEngine / IntegrationTest / test'
     '';
 

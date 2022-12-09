@@ -7,6 +7,7 @@ import io.iohk.midnight.wallet.core.services.SyncServiceStub
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
+import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 import typings.midnightLedger.mod.{Transaction, ZSwapLocalState}
 
@@ -24,7 +25,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
 
   test("Start with balance zero") {
     buildWallet().use(
-      _.balance().head.compile.last
+      _.balance.head.compile.last
         .map(assertEquals(_, Some(js.BigInt(0)))),
     )
   }
@@ -38,7 +39,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val expected = coins.map(_.value).combineAll(sum)
 
     buildWallet(initialState = state).use(
-      _.balance().head.compile.last
+      _.balance.head.compile.last
         .map(assertEquals(_, Some(expected))),
     )
   }
@@ -48,7 +49,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     val anotherState = new ZSwapLocalState()
     anotherState.applyLocal(tx)
     buildWallet(initialState = anotherState).use(
-      _.balance().head.compile.last
+      _.balance.head.compile.last
         .map(assertEquals(_, Some(js.BigInt(0)))),
     )
   }
@@ -81,6 +82,8 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     buildWallet().use { wallet =>
       wallet
         .updateLocalState(state)
+        .start
+        .flatTap(_ => IO.sleep(1.nano))
         .flatMap(_ => wallet.localState)
         .assertEquals(state)
     }
