@@ -14,7 +14,7 @@ import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.ws.WebSocketClosed
 import typings.midnightMockedNodeApp.anon.PartialConfigany
-import typings.midnightMockedNodeApp.configMod.GenesisValue
+import typings.midnightMockedNodeApp.distConfigMod.GenesisValue
 import typings.midnightMockedNodeApp.mod.InMemoryServer
 
 import scala.scalajs.js.JSConverters.*

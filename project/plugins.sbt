@@ -4,7 +4,7 @@ addSbtPlugin("org.scalameta" % "sbt-scalafmt" % "2.4.6")
 addSbtPlugin("io.github.davidgregory084" % "sbt-tpolecat" % "0.1.20")
 addSbtPlugin("org.wartremover" % "sbt-wartremover" % "3.0.6")
 addSbtPlugin("org.scoverage" % "sbt-scoverage" % "2.0.5")
-addSbtPlugin("org.scalablytyped.converter" % "sbt-converter" % "1.0.0-beta39")
+addSbtPlugin("org.scalablytyped.converter" % "sbt-converter" % "1.0.0-beta40")
 
 /*
 Fixing a version conflict between transitive dependencies

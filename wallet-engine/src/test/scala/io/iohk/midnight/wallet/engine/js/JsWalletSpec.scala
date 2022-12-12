@@ -2,20 +2,16 @@ package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.kernel.Deferred
 import cats.effect.{IO, Ref}
-import io.iohk.midnight.js.interop.facades.rxjs.{Observable, Subscriber}
-import io.iohk.midnight.wallet.core.Generators.{
-  TransactionWithContext,
-  balanceGen,
-  generateLedgerTransaction,
-  ledgerTransactionsList,
-  zSwapCoinPublicKeyGen,
-}
+import io.iohk.midnight.js.interop.rxjs.Observable
+import io.iohk.midnight.js.interop.util.ObservableOps.SubscribeableObservable
+import io.iohk.midnight.wallet.core.Generators.*
 import io.iohk.midnight.wallet.core.LedgerSerialization
 import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
-import typings.midnightWalletApi.filterMod.Filter
 import typings.midnightLedger.mod.{ZSwapCoinPublicKey, Transaction as LedgerTransaction}
+import typings.midnightWalletApi.distTypesFilterMod.Filter
+import typings.rxjs.distTypesInternalTypesMod.Observer
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
@@ -88,10 +84,10 @@ class JsWalletSpec
       isFinished <- Deferred[IO, Unit]
       observable = jsWallet.installTxFilter(Filter(_ => true))
       _ <- IO {
-        observable.subscribe(new Subscriber[LedgerTransaction] {
+        observable.subscribeWithObserver(new Observer[LedgerTransaction] {
           override def next(tx: LedgerTransaction): Unit =
             acc.update(old => old :+ tx).unsafeRunAndForget()
-          override def error(error: js.Any): Unit = ()
+          override def error(error: Any): Unit = ()
           override def complete(): Unit = isFinished.complete(()).unsafeRunAndForget()
         })
       }
@@ -108,10 +104,10 @@ class JsWalletSpec
       isFinished <- Deferred[IO, Unit]
       observable = jsWalletEmptyTxList.installTxFilter(Filter(_ => true))
       _ <- IO {
-        observable.subscribe(new Subscriber[LedgerTransaction] {
+        observable.subscribeWithObserver(new Observer[LedgerTransaction] {
           override def next(tx: LedgerTransaction): Unit =
             acc.update(old => old :+ tx).unsafeRunAndForget()
-          override def error(error: js.Any): Unit = ()
+          override def error(error: Any): Unit = ()
           override def complete(): Unit = isFinished.complete(()).unsafeRunAndForget()
         })
       }

@@ -266,7 +266,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
 
 lazy val jsInterop = project
   .in(file("js-interop"))
-  .enablePlugins(ScalaJSPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -275,9 +275,14 @@ lazy val jsInterop = project
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
     ),
-    wartremoverExcluded +=
-      sourceDirectory.value / "main" / "scala" / "io" / "iohk" / "midnight" / "js" / "interop" / "facades",
-    coverageExcludedPackages := "io.iohk.midnight.js.interop.facades.*;io.iohk.midnight.js.interop.util.ObservableOps",
+    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
+    // ScalablyTyped config
+    externalNpm := {
+      if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
+      baseDirectory.value
+    },
+    stEnableScalaJsDefined := Selection.All,
+    Global / stQuiet := true,
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

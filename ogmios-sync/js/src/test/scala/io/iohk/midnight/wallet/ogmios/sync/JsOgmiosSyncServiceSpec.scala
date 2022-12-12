@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.effect.{IO, Ref}
 import fs2.Stream
-import io.iohk.midnight.js.interop.facades.rxjs.Observable
+import io.iohk.midnight.js.interop.rxjs.Observable
 import io.iohk.midnight.wallet.blockchain.data.Generators.*
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}

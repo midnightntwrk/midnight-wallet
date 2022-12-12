@@ -3,20 +3,20 @@ package io.iohk.midnight.js.interop.util
 import cats.effect.unsafe.IORuntime
 import cats.effect.{Async, IO}
 import fs2.Stream
-import io.iohk.midnight.js.interop.facades.rxjs.{Observable, Subscriber}
-import scala.scalajs.js
-import scala.scalajs.js.ThisFunction.fromFunction2
+import io.iohk.midnight.js.interop.rxjs.Observable
+import typings.rxjs.distTypesInternalSubscriberMod.Subscriber
+import typings.rxjs.distTypesInternalTypesMod.{Observer, Unsubscribable}
+import typings.rxjs.mod as rxjs
+import typings.std.Partial
 
 object ObservableOps {
   implicit class FromStream[T](stream: Stream[IO, T])(implicit IORuntime: IORuntime) {
-    def unsafeToObservable(): Observable[T] =
-      new Observable[T](
-        fromFunction2[Observable[T], Subscriber[T], js.Function0[Unit]]((_, subscriber) => {
-          val subscription = fromStream(stream, subscriber)
-          subscription.start.unsafeRunAndForget()
-          () => subscription.cancel.unsafeRunAndForget()
-        }),
-      )
+    def unsafeToObservable(): rxjs.Observable_[T] =
+      Observable(subscriber => {
+        val subscription = fromStream(stream, subscriber)
+        subscription.start.unsafeRunAndForget()
+        () => subscription.cancel.unsafeRunAndForget()
+      })
   }
 
   private def fromStream[F[_]: Async, T](
@@ -34,17 +34,21 @@ object ObservableOps {
       })
 
   implicit class FromIO[T](io: IO[T])(implicit ioRuntime: IORuntime) {
-    def unsafeToObservable(): Observable[T] =
-      new Observable[T](
-        fromFunction2[Observable[T], Subscriber[T], js.Function0[Unit]]((_, subscriber) => {
-          io.attempt
-            .map {
-              case Right(t) => subscriber.next(t); subscriber.complete()
-              case Left(e)  => subscriber.error(e.getMessage)
-            }
-            .unsafeRunAndForget()
-          () => ()
-        }),
-      )
+    def unsafeToObservable(): rxjs.Observable_[T] =
+      Observable(subscriber => {
+        io.attempt
+          .map {
+            case Right(t) => subscriber.next(t); subscriber.complete()
+            case Left(e)  => subscriber.error(e.getMessage)
+          }
+          .unsafeRunAndForget()
+        () => ()
+      })
+  }
+
+  implicit class SubscribeableObservable[T](observable: rxjs.Observable_[T]) {
+    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+    def subscribeWithObserver(observer: Observer[T]): Unsubscribable =
+      observable.subscribe(observer.asInstanceOf[Partial[Observer[T]]])
   }
 }

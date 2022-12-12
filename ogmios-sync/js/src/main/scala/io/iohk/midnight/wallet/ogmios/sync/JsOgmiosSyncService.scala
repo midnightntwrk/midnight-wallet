@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import io.iohk.midnight.js.interop.facades.rxjs.Observable
 import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, ContextAwareLog, LogLevel}
@@ -10,8 +9,9 @@ import io.iohk.midnight.wallet.ogmios.network.{JsonWebSocketClientTracer, SttpJs
 import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
-import typings.midnightMockedNodeApi.blockMod.Block
-import typings.midnightMockedNodeApi.transactionMod.Transaction
+import typings.midnightMockedNodeApi.distDataBlockMod.Block
+import typings.midnightMockedNodeApi.distDataTransactionMod.Transaction
+import typings.rxjs.mod.Observable_
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
@@ -29,7 +29,7 @@ import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 @JSExportTopLevel("OgmiosSyncService")
 class JsOgmiosSyncService(syncService: OgmiosSyncService[IO], finalizer: IO[Unit]) {
   @JSExport
-  def sync(): Observable[Block[Transaction]] =
+  def sync(): Observable_[Block[Transaction]] =
     syncService
       .sync()
       .map(Transformer.transformBlock)

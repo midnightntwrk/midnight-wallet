@@ -6,8 +6,8 @@ import io.iohk.midnight.wallet.blockchain.util.implicits.ShowInstances.instantSh
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
 import typings.midnightMockedNodeApi.anon.Hash
-import typings.midnightMockedNodeApi.blockMod.{Block, BlockBody, BlockHeader}
-import typings.midnightMockedNodeApi.transactionMod.*
+import typings.midnightMockedNodeApi.distDataBlockMod.{Block, BlockBody, BlockHeader}
+import typings.midnightMockedNodeApi.distDataTransactionMod.*
 
 private object Transformer {
   def transformBlock(block: data.Block): Block[Transaction] =

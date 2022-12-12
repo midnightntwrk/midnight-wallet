@@ -13,9 +13,9 @@ import scala.scalajs.js.JSConverters.*
 import sttp.client3.UriContext
 import typings.midnightLedger.mod.*
 import typings.midnightMockedNodeApi.anon.Hash
-import typings.midnightMockedNodeApi.transactionMod.Transaction as ApiTransaction
+import typings.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
 import typings.midnightMockedNodeApp.anon.PartialConfigany
-import typings.midnightMockedNodeApp.configMod.GenesisValue
+import typings.midnightMockedNodeApp.distConfigMod.GenesisValue
 import typings.midnightMockedNodeApp.mod.InMemoryServer
 
 trait EndToEndSpecSetup {
