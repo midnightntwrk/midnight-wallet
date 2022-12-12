@@ -130,8 +130,8 @@ Cicero will detect it and automatically build and publish the new version.
 ## Maintenance
 
 The nix build captures or "vendors" the scala dependencies, and represents
-these dependencies through a hash. This hash will need to be updated
-when changing sbt dependencies. Fortunately there's a script to make this easy:
+these dependencies through a hash. This hash will need to be updated when
+changing sbt dependencies. Fortunately there's a script to make this easy:
 
 `./update-nix.sh`
 
