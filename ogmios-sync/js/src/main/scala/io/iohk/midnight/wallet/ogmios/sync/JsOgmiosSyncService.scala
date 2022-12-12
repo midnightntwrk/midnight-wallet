@@ -4,8 +4,11 @@ import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging.{ConsoleTracer, ContextAwareLog, LogLevel}
-import io.iohk.midnight.wallet.ogmios.network.{JsonWebSocketClientTracer, SttpJsonWebSocketClient}
+import io.iohk.midnight.tracer.logging.ConsoleTracer
+import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
+import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
@@ -14,7 +17,8 @@ import typings.midnightMockedNodeApi.distDataTransactionMod.Transaction
 import typings.rxjs.mod.Observable_
 
 import scala.scalajs.js
-import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
+import scala.scalajs.js.annotation.JSExport
+import scala.scalajs.js.annotation.JSExportTopLevel
 
 /** Translation layer from Scala into JS types:
   *   - fs2.Stream into rxjs.Observable
@@ -46,12 +50,12 @@ object JsOgmiosSyncServiceBuilder {
   def build(nodeUri: String, minLogLevel: js.UndefOr[String]): js.Promise[JsOgmiosSyncService] = {
     val parsedLogLevel = minLogLevel.toOption.flatMap(LogLevel.fromString).getOrElse(LogLevel.Warn)
 
-    implicit val simpleLogTracer: Tracer[IO, ContextAwareLog] =
+    implicit val structuredLogTracer: Tracer[IO, StructuredLog] =
       ConsoleTracer.contextAware(parsedLogLevel)
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[IO] =
-      JsonWebSocketClientTracer.from(simpleLogTracer)
+      JsonWebSocketClientTracer.from(structuredLogTracer)
     implicit val ogmiosSyncTracer: OgmiosSyncTracer[IO] =
-      OgmiosSyncTracer.from(simpleLogTracer)
+      OgmiosSyncTracer.from(structuredLogTracer)
 
     val sttpBackend = FetchCatsBackend[IO]()
     val parsedNodeUri = Uri.unsafeParse(nodeUri)

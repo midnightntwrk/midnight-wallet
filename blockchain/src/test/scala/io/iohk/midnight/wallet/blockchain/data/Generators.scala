@@ -13,7 +13,7 @@ object Generators {
       .flatMap(Gen.buildableOfN[String, Char](_, Gen.hexChar))
 
   def hashGen[T]: Gen[Hash[T]] =
-    hexStringGen.map(Hash[T].apply)
+    hexStringGen.map(Hash.apply[T])
 
   val heightGen: Gen[Block.Height] =
     Gen.posNum[BigInt].map(Block.Height.apply).collect { case Right(n) => n }

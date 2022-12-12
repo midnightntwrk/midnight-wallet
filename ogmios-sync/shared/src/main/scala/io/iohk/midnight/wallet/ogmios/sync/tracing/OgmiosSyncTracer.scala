@@ -4,19 +4,18 @@ import cats.effect.kernel.Sync
 import cats.syntax.show.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.{
-  AsContextAwareLog,
-  ContextAwareLog,
-  Event,
-  LogLevel,
-  StringLogContext,
-}
-import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
+import io.iohk.midnight.tracer.logging.AsContextAwareLog
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
-import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent.*
+import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
+import io.iohk.midnight.tracer.logging.AsStructuredLog
+import io.iohk.midnight.tracer.logging.Event
+import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.tracer.logging.StringLogContext
+import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.blockchain.data.Hash
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent.*
 
 class OgmiosSyncTracer[F[_]](
     val tracer: Tracer[F, OgmiosSyncEvent],
@@ -43,19 +42,16 @@ object OgmiosSyncTracer {
 
   private val Component: Event.Component = Event.Component("ogmios_sync")
 
-  implicit val syncEventToContextAwareLog: AsContextAwareLog[OgmiosSyncEvent] =
-    new AsContextAwareLog[OgmiosSyncEvent] {
-      override def apply(event: OgmiosSyncEvent): ContextAwareLog = event match {
-        case NextBlockRequested        => NextBlockRequested.asContextAwareLog
-        case evt: RollForwardReceived  => evt.asContextAwareLog
-        case evt: RollBackwardReceived => evt.asContextAwareLog
-        case AwaitReplyReceived        => AwaitReplyReceived.asContextAwareLog
-        case evt: UnexpectedMessage    => evt.asContextAwareLog
-      }
-    }
+  implicit val syncEventAsStructuredLog: AsStructuredLog[OgmiosSyncEvent] = {
+    case NextBlockRequested        => NextBlockRequested.asContextAwareLog
+    case evt: RollForwardReceived  => evt.asContextAwareLog
+    case evt: RollBackwardReceived => evt.asContextAwareLog
+    case AwaitReplyReceived        => AwaitReplyReceived.asContextAwareLog
+    case evt: UnexpectedMessage    => evt.asContextAwareLog
+  }
 
-  implicit val nextBlockRequestedToContextAwareLog: AsContextAwareLog[NextBlockRequested.type] =
-    AsContextAwareLog.instance[NextBlockRequested.type](
+  implicit val nextBlockRequestedAsStructuredLog: AsStructuredLog[NextBlockRequested.type] =
+    AsContextAwareLog.instance(
       id = NextBlockRequested.id,
       component = Component,
       level = LogLevel.Debug,
@@ -63,8 +59,8 @@ object OgmiosSyncTracer {
       context = _ => StringLogContext.empty,
     )
 
-  implicit val rollForwardReceivedToContextAwareLog: AsContextAwareLog[RollForwardReceived] =
-    AsContextAwareLog.instance[RollForwardReceived](
+  implicit val rollForwardReceivedAsStructuredLog: AsStructuredLog[RollForwardReceived] =
+    AsContextAwareLog.instance(
       id = RollForwardReceived.id,
       component = Component,
       level = LogLevel.Info,
@@ -72,8 +68,8 @@ object OgmiosSyncTracer {
       context = _.stringLogContext,
     )
 
-  implicit val rollBackwardReceivedToContextAwareLog: AsContextAwareLog[RollBackwardReceived] =
-    AsContextAwareLog.instance[RollBackwardReceived](
+  implicit val rollBackwardReceivedAsStructuredLog: AsStructuredLog[RollBackwardReceived] =
+    AsContextAwareLog.instance(
       id = RollBackwardReceived.id,
       component = Component,
       level = LogLevel.Info,
@@ -81,8 +77,8 @@ object OgmiosSyncTracer {
       context = _.stringLogContext,
     )
 
-  implicit val awaitReplyToContextAwareLog: AsContextAwareLog[AwaitReplyReceived.type] =
-    AsContextAwareLog.instance[AwaitReplyReceived.type](
+  implicit val awaitReplyAsStructuredLog: AsStructuredLog[AwaitReplyReceived.type] =
+    AsContextAwareLog.instance(
       id = AwaitReplyReceived.id,
       component = Component,
       level = LogLevel.Debug,
@@ -90,8 +86,8 @@ object OgmiosSyncTracer {
       context = _ => StringLogContext.empty,
     )
 
-  implicit val unexpectedMsgToContextAwareLog: AsContextAwareLog[UnexpectedMessage] =
-    AsContextAwareLog.instance[UnexpectedMessage](
+  implicit val unexpectedMsgAsStructuredLog: AsStructuredLog[UnexpectedMessage] =
+    AsContextAwareLog.instance(
       id = UnexpectedMessage.id,
       component = Component,
       level = LogLevel.Warn,
@@ -100,10 +96,10 @@ object OgmiosSyncTracer {
     )
 
   def from[F[_]: Sync](
-      simple: Tracer[F, ContextAwareLog],
+      structuredTracer: Tracer[F, StructuredLog],
   ): OgmiosSyncTracer[F] = {
     val syncTracer: Tracer[F, OgmiosSyncEvent] =
-      simple >=> (evt => Sync[F].delay(evt.asContextAwareLog))
+      structuredTracer >=> (evt => Sync[F].delay(evt.asContextAwareLog))
     new OgmiosSyncTracer[F](syncTracer)
   }
 

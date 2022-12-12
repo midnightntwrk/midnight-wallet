@@ -18,6 +18,7 @@ import typings.midnightMockedNodeApp.distConfigMod.GenesisValue
 import typings.midnightMockedNodeApp.mod.InMemoryServer
 
 import scala.scalajs.js.JSConverters.*
+import io.iohk.midnight.tracer.logging.StringLogContext
 
 class OgmiosTxSubmissionServiceSpec extends CatsEffectSuite {
 
@@ -27,7 +28,7 @@ class OgmiosTxSubmissionServiceSpec extends CatsEffectSuite {
 
     val sttpBackend = FetchCatsBackend[IO]()
 
-    implicit val contextAwareLogTracer: Tracer[IO, ContextAwareLog] =
+    implicit val contextAwareLogTracer: Tracer[IO, ContextAwareLog[StringLogContext]] =
       Tracer.noOpTracer
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[IO] =
       JsonWebSocketClientTracer.from(contextAwareLogTracer)

@@ -4,28 +4,28 @@ import cats.effect.IO
 import cats.syntax.eq.*
 import cats.syntax.functor.*
 import cats.syntax.parallel.*
-import io.iohk.midnight.tracer.logging.{ContextAwareLog, InMemoryLogTracer}
+import io.iohk.midnight.tracer.logging.InMemoryLogTracer
+import io.iohk.midnight.tracer.logging.StringLogContext
+import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult.{
-  Accepted,
-  Rejected,
-}
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult.Accepted
+import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult.Rejected
 import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.tx_submission.examples.SubmitTx
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive
 import io.iohk.midnight.wallet.ogmios.tx_submission.protocol.LocalTxSubmission.Receive.AcceptTx
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.{
-  OgmiosTxSubmissionEvent,
-  OgmiosTxSubmissionTracer,
-}
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionEvent
+import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
-import java.util.concurrent.TimeUnit
-import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import munit.CatsEffectSuite
+import munit.ScalaCheckEffectSuite
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
+
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 
 trait TxSubmissionSpecBase
@@ -56,13 +56,13 @@ trait TxSubmissionSpecBase
       theTest: (
           OgmiosTxSubmissionService[IO],
           JsonWebSocketClientTxSubmissionStub,
-          InMemoryLogTracer[IO, ContextAwareLog],
+          InMemoryLogTracer[IO, StructuredLog],
       ) => PropF[IO],
   ): Unit =
     test(title) {
       JsonWebSocketClientTxSubmissionStub(initialResponses = initialResponses)
         .fproduct { webSocketClient =>
-          val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO]
+          val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO, StringLogContext]
           implicit val txSubmissionTracer: OgmiosTxSubmissionTracer[IO] =
             OgmiosTxSubmissionTracer.from(inMemoryTracer)
           (OgmiosTxSubmissionService[IO](webSocketClient), inMemoryTracer)

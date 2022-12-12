@@ -5,18 +5,25 @@ import cats.effect.std.Random
 import cats.syntax.functor.*
 import cats.syntax.traverse.*
 import fs2.Stream
-import io.iohk.midnight.tracer.logging.{ContextAwareLog, InMemoryLogTracer}
+import io.iohk.midnight.tracer.logging.InMemoryLogTracer
+import io.iohk.midnight.tracer.logging.StringLogContext
+import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.blockchain.data.Block.Height
-import io.iohk.midnight.wallet.blockchain.data.{Block, Hash, Transaction}
+import io.iohk.midnight.wallet.blockchain.data.Hash
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncServiceSpec.transactionsGen
 import io.iohk.midnight.wallet.ogmios.sync.protocol.LocalBlockSync.Receive
-import io.iohk.midnight.wallet.ogmios.sync.tracing.{OgmiosSyncEvent, OgmiosSyncTracer}
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncEvent
+import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 import io.iohk.midnight.wallet.ogmios.util.BetterOutputSuite
-import java.util.concurrent.TimeUnit
-import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import munit.CatsEffectSuite
+import munit.ScalaCheckEffectSuite
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
+
+import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
 
 trait SyncServiceSpecBase
@@ -52,7 +59,7 @@ trait SyncServiceSpecBase
       theTest: (
           OgmiosSyncService[IO],
           JsonWebSocketClientSyncStub,
-          InMemoryLogTracer[IO, ContextAwareLog],
+          InMemoryLogTracer[IO, StructuredLog],
       ) => PropF[IO],
   ): Unit =
     test(title) {
@@ -62,7 +69,7 @@ trait SyncServiceSpecBase
           JsonWebSocketClientSyncStub(initialResponses = initialResponses)
         }
         .fproduct { webSocketClient =>
-          val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO]
+          val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO, StringLogContext]
           implicit val syncTracer: OgmiosSyncTracer[IO] = OgmiosSyncTracer.from(inMemoryTracer)
           (OgmiosSyncService[IO](webSocketClient), inMemoryTracer)
         }
