@@ -1,6 +1,13 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
+import io.iohk.midnight.midnightLedger.mod.{
+  TransactionIdentifier,
+  ZSwapCoinPublicKey,
+  ZSwapLocalState,
+  Transaction as LedgerTransaction,
+  TransactionHash as LedgerTransactionHash,
+}
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Header
 import io.iohk.midnight.wallet.blockchain.data.{Hash, Transaction}
 import io.iohk.midnight.wallet.core.LedgerSerialization.Error.{
@@ -8,13 +15,6 @@ import io.iohk.midnight.wallet.core.LedgerSerialization.Error.{
   InvalidSerializedTransaction,
 }
 import io.scalajs.nodejs.buffer.Buffer
-import typings.midnightLedger.mod.{
-  TransactionIdentifier,
-  ZSwapCoinPublicKey,
-  ZSwapLocalState,
-  Transaction as LedgerTransaction,
-  TransactionHash as LedgerTransactionHash,
-}
 
 @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
 object LedgerSerialization {

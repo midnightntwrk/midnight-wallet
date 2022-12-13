@@ -1,8 +1,8 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
+import io.iohk.midnight.midnightLedger.mod.{ZSwapCoinPublicKey, ZSwapLocalState}
 import io.iohk.midnight.wallet.core.FailingWalletStateStub.error
-import typings.midnightLedger.mod.{ZSwapCoinPublicKey, ZSwapLocalState}
 
 import scala.scalajs.js
 

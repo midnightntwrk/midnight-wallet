@@ -87,6 +87,16 @@ lazy val commonPublishSettings = Seq(
   publishTo := Some(repoUrl.value),
 )
 
+lazy val commonScalablyTypedSettings = Seq(
+  externalNpm := {
+    if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
+    baseDirectory.value
+  },
+  stEnableScalaJsDefined := Selection.All,
+  stOutputPackage := "io.iohk.midnight",
+  Global / stQuiet := true
+)
+
 lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("blockchain"))
@@ -127,6 +137,7 @@ lazy val walletCore = project
   .dependsOn(blockchain.js % "compile->compile;test->test")
   .dependsOn(jsInterop, bloc.js)
   .settings(commonSettings)
+  .settings(commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
@@ -145,13 +156,6 @@ lazy val walletCore = project
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
 
-    // ScalablyTyped config
-    externalNpm := {
-      if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
-      baseDirectory.value
-    },
-    stEnableScalaJsDefined := Selection.All,
-    Global / stQuiet := true,
     useNodeModuleResolution,
   )
 
@@ -203,17 +207,14 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
       "io.iohk.midnight.wallet.ogmios.sync.Init",
     ).mkString(";"),
   )
+  .jsSettings(commonScalablyTypedSettings)
   .jsSettings(
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
 
     // ScalablyTyped config
-    externalNpm := {
-      if (!Env.nixBuild) Process("yarn", baseDirectory.value).!
-      baseDirectory.value
-    },
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "rxjs", "ws"),
-    Global / stQuiet := true,
+
     useNodeModuleResolution,
   )
 
@@ -238,6 +239,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .configs(IntegrationTest)
   .settings(commonSettings, Defaults.itSettings)
   .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonScalablyTypedSettings)
   .settings(
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -254,13 +256,8 @@ lazy val walletEngine = (project in file("wallet-engine"))
     ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
-    externalNpm := {
-      if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
-      baseDirectory.value
-    },
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
-    stEnableScalaJsDefined := Selection.All,
-    Global / stQuiet := true,
+
     useNodeModuleResolution,
   )
 
@@ -268,6 +265,7 @@ lazy val jsInterop = project
   .in(file("js-interop"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings)
+  .settings(commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     crossScalaVersions := supportedScalaVersions,
@@ -275,14 +273,7 @@ lazy val jsInterop = project
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
     ),
-    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
-    // ScalablyTyped config
-    externalNpm := {
-      if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
-      baseDirectory.value
-    },
-    stEnableScalaJsDefined := Selection.All,
-    Global / stQuiet := true,
+    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps"
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

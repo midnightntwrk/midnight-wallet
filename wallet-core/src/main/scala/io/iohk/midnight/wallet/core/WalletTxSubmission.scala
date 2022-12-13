@@ -2,9 +2,9 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.Sync
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
+import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
-import typings.midnightLedger.mod.*
+import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 
 trait WalletTxSubmission[F[_]] {
   def submitTransaction(

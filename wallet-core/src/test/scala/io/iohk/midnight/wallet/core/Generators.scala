@@ -1,15 +1,14 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
+import io.iohk.midnight.midnightLedger.mod.{Transaction as LedgerTransaction, *}
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.blockchain.data.Generators.{hashGen, heightGen, instantGen}
 import org.scalacheck.Gen
 import org.scalacheck.cats.implicits.*
 
-import scala.scalajs.js
-import typings.midnightLedger.mod.{Transaction as LedgerTransaction, *}
-
 import scala.annotation.tailrec
+import scala.scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object Generators {

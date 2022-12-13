@@ -5,9 +5,10 @@ import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
+import io.iohk.midnight.midnightLedger.mod.{Transaction, ZSwapCoinPublicKey, ZSwapLocalState}
 import io.iohk.midnight.wallet.core.services.SyncService
+
 import scala.scalajs.js
-import typings.midnightLedger.mod.{Transaction, ZSwapCoinPublicKey, ZSwapLocalState}
 
 trait WalletState[F[_]] {
   def start: F[Unit]

@@ -4,14 +4,14 @@ import cats.effect.kernel.Deferred
 import cats.effect.{IO, Ref}
 import io.iohk.midnight.js.interop.rxjs.Observable
 import io.iohk.midnight.js.interop.util.ObservableOps.SubscribeableObservable
+import io.iohk.midnight.midnightLedger.mod.{ZSwapCoinPublicKey, Transaction as LedgerTransaction}
+import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
+import io.iohk.midnight.rxjs.distTypesInternalTypesMod.Observer
 import io.iohk.midnight.wallet.core.Generators.*
 import io.iohk.midnight.wallet.core.LedgerSerialization
 import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
-import typings.midnightLedger.mod.{ZSwapCoinPublicKey, Transaction as LedgerTransaction}
-import typings.midnightWalletApi.distTypesFilterMod.Filter
-import typings.rxjs.distTypesInternalTypesMod.Observer
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*

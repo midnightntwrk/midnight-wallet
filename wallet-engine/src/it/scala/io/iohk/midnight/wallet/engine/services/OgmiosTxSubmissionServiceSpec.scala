@@ -1,6 +1,9 @@
 package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
+import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigany
+import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
+import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.ContextAwareLog
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Header
@@ -13,9 +16,6 @@ import munit.CatsEffectSuite
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.ws.WebSocketClosed
-import typings.midnightMockedNodeApp.anon.PartialConfigany
-import typings.midnightMockedNodeApp.distConfigMod.GenesisValue
-import typings.midnightMockedNodeApp.mod.InMemoryServer
 
 import scala.scalajs.js.JSConverters.*
 import io.iohk.midnight.tracer.logging.StringLogContext

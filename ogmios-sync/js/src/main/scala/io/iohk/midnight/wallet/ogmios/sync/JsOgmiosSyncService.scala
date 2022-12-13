@@ -3,6 +3,9 @@ package io.iohk.midnight.wallet.ogmios.sync
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
+import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
+import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
+import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.ConsoleTracer
 import io.iohk.midnight.tracer.logging.LogLevel
@@ -12,9 +15,6 @@ import io.iohk.midnight.wallet.ogmios.network.SttpJsonWebSocketClient
 import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
-import typings.midnightMockedNodeApi.distDataBlockMod.Block
-import typings.midnightMockedNodeApi.distDataTransactionMod.Transaction
-import typings.rxjs.mod.Observable_
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.JSExport

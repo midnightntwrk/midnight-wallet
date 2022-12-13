@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
+import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, coinInfoGen}
 import io.iohk.midnight.wallet.core.WalletTxSubmission.{
   TransactionNotWellFormed,
@@ -9,8 +10,8 @@ import io.iohk.midnight.wallet.core.WalletTxSubmission.{
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+
 import scala.scalajs.js
-import typings.midnightLedger.mod.*
 
 class WalletTxSubmissionSpec
     extends CatsEffectSuite

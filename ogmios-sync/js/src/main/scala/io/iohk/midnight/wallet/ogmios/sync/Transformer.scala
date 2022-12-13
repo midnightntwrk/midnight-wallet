@@ -1,13 +1,14 @@
 package io.iohk.midnight.wallet.ogmios.sync
 
 import cats.syntax.show.*
+import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
+import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.{Block, BlockBody, BlockHeader}
+import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.util.implicits.ShowInstances.instantShow
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.JSRichIterableOnce
-import typings.midnightMockedNodeApi.anon.Hash
-import typings.midnightMockedNodeApi.distDataBlockMod.{Block, BlockBody, BlockHeader}
-import typings.midnightMockedNodeApi.distDataTransactionMod.*
 
 private object Transformer {
   def transformBlock(block: data.Block): Block[Transaction] =

@@ -2,9 +2,10 @@ package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.IO
 import fs2.Stream
+import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
+
 import scala.scalajs.js
-import typings.midnightLedger.mod.*
 
 class WalletFilterServiceStub(txs: Seq[Transaction]) extends WalletFilterService[IO] {
   override def installTransactionFilter(filter: Transaction => Boolean): Stream[IO, Transaction] =

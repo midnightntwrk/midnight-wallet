@@ -4,8 +4,9 @@ import cats.effect.{IO, Ref}
 import cats.syntax.foldable.*
 import fs2.Stream
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
+import io.iohk.midnight.midnightLedger.mod.{ZSwapCoinPublicKey, ZSwapLocalState}
+
 import scala.scalajs.js
-import typings.midnightLedger.mod.{ZSwapCoinPublicKey, ZSwapLocalState}
 
 class WalletStateStub(initialState: ZSwapLocalState = new ZSwapLocalState())
     extends WalletState[IO] {

@@ -5,7 +5,7 @@ import cats.effect.kernel.Sync
 import cats.syntax.all.*
 import cats.{Applicative, MonadThrow}
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
-import typings.midnightLedger.mod.*
+import io.iohk.midnight.midnightLedger.mod.*
 
 import scala.annotation.tailrec
 import scala.scalajs.js

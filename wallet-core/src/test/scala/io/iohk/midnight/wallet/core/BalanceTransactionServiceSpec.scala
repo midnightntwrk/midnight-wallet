@@ -3,10 +3,10 @@ package io.iohk.midnight.wallet.core
 import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
+import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.BalanceTransactionService.NotSufficientFunds
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite, TestOptions}
-import typings.midnightLedger.mod.*
 
 import scala.annotation.tailrec
 import scala.scalajs.js

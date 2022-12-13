@@ -3,20 +3,21 @@ package io.iohk.midnight.wallet.engine.services
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.syntax.flatMap.*
+import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
+import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
+import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigany
+import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
+import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
+import sttp.client3.UriContext
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
-import sttp.client3.UriContext
-import typings.midnightLedger.mod.*
-import typings.midnightMockedNodeApi.anon.Hash
-import typings.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
-import typings.midnightMockedNodeApp.anon.PartialConfigany
-import typings.midnightMockedNodeApp.distConfigMod.GenesisValue
-import typings.midnightMockedNodeApp.mod.InMemoryServer
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"

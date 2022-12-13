@@ -3,14 +3,14 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.unsafe.implicits.global
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.js.interop.util.ObservableOps.*
+import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.midnightWalletApi.distFilterServiceMod.FilterService
+import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
+import io.iohk.midnight.midnightWalletApi.distWalletMod as api
+import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
-import typings.midnightLedger.mod.*
-import typings.midnightWalletApi.distTypesFilterMod.Filter
-import typings.midnightWalletApi.distFilterServiceMod.FilterService
-import typings.midnightWalletApi.distWalletMod as api
-import typings.rxjs.mod.Observable_
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*

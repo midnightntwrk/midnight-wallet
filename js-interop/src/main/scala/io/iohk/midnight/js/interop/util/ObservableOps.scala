@@ -4,10 +4,10 @@ import cats.effect.unsafe.IORuntime
 import cats.effect.{Async, IO}
 import fs2.Stream
 import io.iohk.midnight.js.interop.rxjs.Observable
-import typings.rxjs.distTypesInternalSubscriberMod.Subscriber
-import typings.rxjs.distTypesInternalTypesMod.{Observer, Unsubscribable}
-import typings.rxjs.mod as rxjs
-import typings.std.Partial
+import io.iohk.midnight.rxjs.distTypesInternalSubscriberMod.Subscriber
+import io.iohk.midnight.rxjs.distTypesInternalTypesMod.{Observer, Unsubscribable}
+import io.iohk.midnight.rxjs.mod as rxjs
+import io.iohk.midnight.std.Partial
 
 object ObservableOps {
   implicit class FromStream[T](stream: Stream[IO, T])(implicit IORuntime: IORuntime) {
