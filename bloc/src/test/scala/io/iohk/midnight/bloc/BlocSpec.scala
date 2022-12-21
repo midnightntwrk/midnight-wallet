@@ -81,4 +81,26 @@ class BlocSpec extends CatsEffectSuite {
       } yield assertEquals(result, (0 to 100).toList)
     }
   }
+
+  test("Subscribe in order") {
+    withBloc { bloc =>
+      for {
+        _ <- (1 to 1000).toList.traverse(bloc.set).start
+        subscription1 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
+        _ <- IO.sleep(50.millis)
+        subscription2 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
+        _ <- IO.sleep(50.millis)
+        subscription3 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
+        list1 <- subscription1.joinWithNever
+        list2 <- subscription2.joinWithNever
+        list3 <- subscription3.joinWithNever
+      } yield {
+        list1.lazyZip(list1.drop(1)).foreach { case (a, b) => assertEquals(a, b - 1, list1) }
+        list2.lazyZip(list2.drop(1)).foreach { case (a, b) => assertEquals(a, b - 1, list2) }
+        list3.lazyZip(list3.drop(1)).foreach { case (a, b) => assertEquals(a, b - 1, list3) }
+        assert(list1.endsWith(list2))
+        assert(list2.endsWith(list3))
+      }
+    }
+  }
 }

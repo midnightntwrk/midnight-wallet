@@ -1,8 +1,8 @@
 package io.iohk.midnight.bloc
 
 import cats.MonadThrow
-import cats.effect.std.AtomicCell
-import cats.effect.{Async, Resource}
+import cats.effect.std.Semaphore
+import cats.effect.{Async, Ref, Resource}
 import cats.syntax.all.*
 import fs2.Stream
 import fs2.concurrent.Topic
@@ -38,31 +38,42 @@ trait Bloc[F[_], T] {
 
 object Bloc {
 
-  /** Implementation of [[Bloc]] using an [[AtomicCell]] to hold the current value plus a [[Topic]]
-    * to publish updates
+  /** Implementation of [[Bloc]] using a [[Ref]] to hold the current value plus a [[Topic]] to
+    * publish updates
     * @param state
     *   The current value, needed to replay it to new subscribers
     * @param topic
     *   Updates to the value will be published here
+    * @param semaphore
+    *   Used internally to make [[subscribe]] and [[update]] operations atomic
     * @tparam F
     *   The effect type
     * @tparam T
     *   The value type
     */
-  class Live[F[_]: MonadThrow, T](state: AtomicCell[F, T], topic: Topic[F, T]) extends Bloc[F, T] {
-    override val subscribe: Stream[F, T] =
-      Stream.eval(state.get) ++ topic.subscribeUnbounded
+  class Live[F[_]: Async, T](state: Ref[F, T], topic: Topic[F, T], semaphore: Semaphore[F])
+      extends Bloc[F, T] {
+    override val subscribe: Stream[F, T] = {
+      val resource = for {
+        _ <- Resource.eval(semaphore.acquire)
+        currentState <- Resource.eval(state.get)
+        subscription <- topic.subscribeAwaitUnbounded
+        _ <- Resource.eval(semaphore.release)
+      } yield {
+        Stream.emit(currentState) ++ subscription
+      }
+
+      Stream.resource(resource).flatten
+    }
 
     override def set(t: T): F[Unit] =
       update(_ => t).void
 
     override def update(cb: T => T): F[T] =
-      state.evalUpdateAndGet { prev =>
-        val updated = cb(prev)
-        topic
-          .publish1(updated)
-          .rethrowTopicClosed
-          .as(updated)
+      semaphore.permit.surround {
+        state
+          .updateAndGet(cb)
+          .flatTap(topic.publish1(_).rethrowTopicClosed)
       }
 
     val stop: F[Unit] =
@@ -70,9 +81,10 @@ object Bloc {
   }
 
   def apply[F[_]: Async, T](initialValue: T): Resource[F, Bloc[F, T]] = {
-    val atomicCell = AtomicCell[F].of(initialValue)
+    val ref = Ref[F].of(initialValue)
     val topic = Topic[F, T]
-    val bloc = (atomicCell, topic).mapN(new Live[F, T](_, _))
+    val semaphore = Semaphore[F](1)
+    val bloc = (ref, topic, semaphore).mapN(new Live[F, T](_, _, _))
     Resource.make(bloc)(_.stop)
   }
 

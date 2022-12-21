@@ -9,17 +9,16 @@ import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
 import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigany
 import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
+import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+import io.iohk.midnight.wallet.engine.js.JsWallet
 import munit.CatsEffectSuite
-import sttp.client3.UriContext
-
-import scala.concurrent.duration.*
-
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import sttp.client3.UriContext
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"
@@ -82,19 +81,30 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
 
     withWallet(initialState, mintTx) { case (walletState, _, txSubmission) =>
       for {
-        balanceBeforeSend <- walletState.balance
-          .takeWhile(_ < coin.value, takeFailure = true)
-          .compile
-          .toList
+        balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
         _ <- txSubmission.submitTransaction(spendTx, List.empty)
-        _ <- IO.sleep(300.millis)
-        balanceAfterSend <- walletState.balance.head.compile.lastOrError
+        balanceAfterSend <- walletState.balance.find(_ < coin.value).compile.lastOrError
       } yield {
-        assertEquals(
-          balanceBeforeSend ++ List(balanceAfterSend),
-          List(js.BigInt(0), coin.value, coin.value - spendCoin.value - fee),
-        )
+        assertEquals(balanceBeforeSend, coin.value)
+        assertEquals(balanceAfterSend, coin.value - spendCoin.value - fee)
       }
+    }
+  }
+
+  test("Get initial balance from rxjs Observable") {
+    val initialState = new ZSwapLocalState()
+    initialState.watchFor(coin)
+    val pubKey = initialState.coinPublicKey
+    val mintTx = buildSendTx(coin, pubKey)
+
+    withWallet(initialState, mintTx) { case (walletState, walletFilter, walletTxSubmission) =>
+      val jsWallet = new JsWallet(walletState, walletFilter, walletTxSubmission, IO.unit)
+      IO.fromPromise(IO {
+        firstValueFrom(
+          jsWallet.balance().pipe(find { (value, _, _) => value > js.BigInt(0) }),
+        )
+      }).map(_.toOption)
+        .assertEquals(Some(coin.value))
     }
   }
 
