@@ -78,7 +78,7 @@ lazy val useNodeModuleResolution = {
 
 lazy val commonPublishSettings = Seq(
   organization := "io.iohk.midnight",
-  version := "2.8.1",
+  version := "2.8.2",
   repoUrl := {
     if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
     else "releases" at s"$nexus/maven-releases"
@@ -94,7 +94,7 @@ lazy val commonScalablyTypedSettings = Seq(
   },
   stEnableScalaJsDefined := Selection.All,
   stOutputPackage := "io.iohk.midnight",
-  Global / stQuiet := true
+  Global / stQuiet := true,
 )
 
 lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
@@ -124,11 +124,11 @@ lazy val bloc = crossProject(JVMPlatform, JSPlatform)
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
-    )
+    ),
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution
+    useNodeModuleResolution,
   )
 
 lazy val walletCore = project
@@ -155,7 +155,6 @@ lazy val walletCore = project
 
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
-
     useNodeModuleResolution,
   )
 
@@ -214,7 +213,6 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
 
     // ScalablyTyped config
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "rxjs", "ws"),
-
     useNodeModuleResolution,
   )
 
@@ -257,7 +255,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
 
     // ScalablyTyped config
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
-
     useNodeModuleResolution,
   )
 
@@ -273,7 +270,7 @@ lazy val jsInterop = project
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
     ),
-    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps"
+    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")
