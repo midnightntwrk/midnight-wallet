@@ -61,7 +61,7 @@ object JsOgmiosSyncServiceBuilder {
     val parsedNodeUri = Uri.unsafeParse(nodeUri)
 
     SttpJsonWebSocketClient(sttpBackend, parsedNodeUri)
-      .map(OgmiosSyncService(_))
+      .flatMap(OgmiosSyncService(_))
       .allocated
       .map((new JsOgmiosSyncService(_, _)).tupled)
       .unsafeToPromise()

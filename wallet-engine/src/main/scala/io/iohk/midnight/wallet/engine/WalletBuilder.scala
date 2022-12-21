@@ -53,7 +53,7 @@ object WalletBuilder {
 
     ogmios.network
       .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-      .map(OgmiosSyncService.apply[F])
+      .flatMap(OgmiosSyncService.apply[F])
       .map { ogmiosSync =>
         new SyncService[F] {
           override def sync(): fs2.Stream[F, Block] = ogmiosSync.sync()

@@ -25,6 +25,13 @@ import org.scalacheck.effect.PropF.forAllF
 
 import java.util.concurrent.TimeUnit
 import scala.concurrent.duration.FiniteDuration
+import cats.effect.kernel.Resource
+import cats.effect.kernel.Ref
+import io.circe.Encoder
+import io.circe.Decoder
+import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClient
+import sttp.ws.WebSocketClosed
+import scala.concurrent.duration.*
 
 trait SyncServiceSpecBase
     extends CatsEffectSuite
@@ -73,8 +80,10 @@ trait SyncServiceSpecBase
           implicit val syncTracer: OgmiosSyncTracer[IO] = OgmiosSyncTracer.from(inMemoryTracer)
           (OgmiosSyncService[IO](webSocketClient), inMemoryTracer)
         }
-        .flatMap { case (nodeClient, (syncService, tracer)) =>
-          theTest(syncService, nodeClient, tracer).checkOne()
+        .flatMap { case (nodeClient, (syncServiceR, tracer)) =>
+          syncServiceR.use { syncService =>
+            theTest(syncService, nodeClient, tracer).checkOne()
+          }
         }
     }
 }
@@ -125,9 +134,55 @@ class OgmiosSyncServiceSpec extends SyncServiceSpecBase {
           .map(_.nonEmpty)
       assertIOBoolean(containsExpectedLogs)
   }
+
+  test("Sync stream should complete without error when resources are released") {
+    import OgmiosSyncServiceSpec.*
+
+    val inMemoryTracer = InMemoryLogTracer.unsafeContextAware[IO, StringLogContext]
+    implicit val tracer: OgmiosSyncTracer[IO] = OgmiosSyncTracer.from(inMemoryTracer)
+
+    val resources =
+      ClosingWsStub().flatMap(OgmiosSyncService.apply[IO]).allocated
+
+    def runFinalizer(finalizer: IO[Unit]) = Stream.eval(finalizer).delayBy(300.millis)
+
+    resources
+      .flatMap { case (syncService, finalizer) =>
+        syncService
+          .sync()
+          .concurrently(runFinalizer(finalizer))
+          .compile
+          .drain
+          .attempt
+      }
+      .map { res =>
+        assert(res.isRight)
+      }
+  }
+
 }
 
 object OgmiosSyncServiceSpec {
   val transactionsGen: Gen[Seq[Transaction]] =
     Gen.nonEmptyListOf(Gen.const(examples.SubmitTx.validTx))
+
+  class ClosingWsStub extends JsonWebSocketClient[IO] {
+    private val isClosed: Ref[IO, Boolean] = Ref.unsafe(false)
+
+    override def send[T: Encoder](message: T): IO[Unit] = IO.unit
+
+    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+    override def receive[T: Decoder](): IO[T] =
+      isClosed.get.ifM(
+        IO.raiseError(WebSocketClosed(None)),
+        IO.pure(Receive.AwaitReply.asInstanceOf[T]),
+      )
+
+    def close: IO[Unit] = isClosed.set(true)
+  }
+
+  object ClosingWsStub {
+    def apply(): Resource[IO, ClosingWsStub] =
+      Resource.make(IO.pure(new ClosingWsStub()))(_.close)
+  }
 }

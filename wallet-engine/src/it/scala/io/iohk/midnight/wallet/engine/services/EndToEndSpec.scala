@@ -16,6 +16,8 @@ import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import munit.CatsEffectSuite
 import sttp.client3.UriContext
 
+import scala.concurrent.duration.*
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
@@ -85,6 +87,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           .compile
           .toList
         _ <- txSubmission.submitTransaction(spendTx, List.empty)
+        _ <- IO.sleep(300.millis)
         balanceAfterSend <- walletState.balance.head.compile.lastOrError
       } yield {
         assertEquals(
