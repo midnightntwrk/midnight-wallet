@@ -7,7 +7,7 @@ used by dapp developers and [client SDK](https://github.com/input-output-hk/midn
 
 - Build transactions
 - Submit transactions to a node
-- Obtain blocks from a node
+- Obtain transactions from a node
 
 The current reference node implementation, which this wallet is able to connect, is 
 the [Mocked Node](https://github.com/input-output-hk/midnight-mocked-node).
@@ -35,6 +35,8 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
 `wallet-engine` and `ogmios-sync` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
 npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`, 
 `yarn.lock`, and `.npmrc` configuration files inside those submodules.
+
+There is also an `examples` directory that shows how to set up a TypeScript client to use the wallet.
 
 ## Development setup
 
@@ -86,6 +88,12 @@ sbt test
 sbt IntegrationTest/test
 ```
 
+```shell
+cd examples
+yarn install # If needed
+yarn lint && yarn test
+```
+
 ## Generate test coverage report
 
 ```shell
@@ -107,8 +115,7 @@ does the following:
 - Compile the code with strict scala compiler flags through the use of 
 [sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
 - Check the code with [wartremover](https://www.wartremover.org/)
-- Check the code with [scapegoat](https://github.com/scapegoat-scala/sbt-scapegoat)
-- Run the unit tests to verify that the minimum code coverage is reached
+- Run the unit and integration tests to verify that the minimum code coverage is reached
 - Generate coverage reports
 
 To develop quickly, without the linting tools getting in the way, the

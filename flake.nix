@@ -101,7 +101,7 @@
           defaultPackage = packages.midnight-wallet;
 
           devShell = pkgs.mkShell {
-            packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x ledgerPkgs.ledger-napi];
+            packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x ledgerPkgs.ledger-napi pkgs.which];
           };
         }
         // tullia.fromSimple system {

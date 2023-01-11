@@ -23,7 +23,13 @@
 
       nix develop -L -c sbt verify
       nix develop -L -c sbt '++ 3.2.1 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
-      nix develop -L -c sbt 'walletEngine / IntegrationTest / test'
+      nix develop -L -c sbt dist
+      pushd examples
+      nix develop -L -c yarn install --frozen-lockfile
+      mkdir -p /usr/bin/ && touch /usr/bin/env
+      ln -fs "$(nix develop -L -c which env)" /usr/bin/env
+      nix develop -L -c yarn lint
+      nix develop -L -c yarn test
     '';
 
     memory = 1024 * 8;

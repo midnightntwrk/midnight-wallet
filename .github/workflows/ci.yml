@@ -29,5 +29,12 @@ jobs:
       run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > $HOME/.netrc && chmod 755 $HOME/.netrc
     - name: Check format and run tests
       run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt verify
+    - name: Test Typescript client examples
+      run: |
+        nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
+        cd examples
+        nix develop -ic yarn install --frozen-lockfile
+        nix develop -ic yarn lint
+        nix develop -ic yarn test
     - name: Cross build to Scala 3 and test
       run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt '++ 3.2.1 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
