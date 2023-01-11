@@ -9,16 +9,21 @@ import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
 import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigany
 import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
-import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
+import io.iohk.midnight.rxjs.mod.find
+import io.iohk.midnight.rxjs.mod.firstValueFrom
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.ConsoleTracer
 import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import io.iohk.midnight.wallet.engine.js.JsWallet
+import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import munit.CatsEffectSuite
+import sttp.client3.UriContext
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
-import sttp.client3.UriContext
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"
@@ -57,10 +62,13 @@ trait EndToEndSpecSetup {
 
   type Wallets = (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])
 
-  def makeWalletResource(initialState: ZSwapLocalState): Resource[IO, Wallets] =
+  def makeWalletResource(initialState: ZSwapLocalState): Resource[IO, Wallets] = {
+    implicit val rootTracer: Tracer[IO, StructuredLog] =
+      ConsoleTracer.contextAware(LogLevel.Info)
     Wallet
       .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
       .flatTap(_._1.start.background)
+  }
 
   def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
       body: Wallets => IO[Unit],

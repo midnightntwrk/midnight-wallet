@@ -1,15 +1,22 @@
 package io.iohk.midnight.wallet.engine
 
+import cats.Show
+import cats.effect.IO
+import cats.effect.Resource
 import cats.effect.kernel.Async
-import cats.effect.{IO, Resource}
+import cats.effect.syntax.resource.*
 import cats.syntax.all.*
 import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel, StructuredLog}
-import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
+import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.{InvalidLogLevel, InvalidUri}
+import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidLogLevel
+import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidUri
+import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.ogmios
 import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
 import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
@@ -25,9 +32,13 @@ import sttp.model.Uri
 object WalletBuilder {
   def build[F[_]: Async](
       config: Config,
+  )(implicit
+      rootTracer: Tracer[F, StructuredLog],
   ): Resource[F, (WalletState[F], WalletFilterService[F], WalletTxSubmission[F])] = {
     val sttpBackend = FetchCatsBackend[F]()
-    for {
+    val builderTracer = WalletBuilderTracer.from(rootTracer)
+    val result = for {
+      _ <- builderTracer.buildRequested(config).toResource
       submitTxService <- buildOgmiosTxSubmissionService(sttpBackend, config)
       stateSyncService <- buildOgmiosSyncService(sttpBackend, config)
       filterSyncService <- buildOgmiosSyncService(sttpBackend, config)
@@ -38,18 +49,20 @@ object WalletBuilder {
         new WalletTxSubmission.Live[F](submitTxService, balanceTransactionService, walletState),
       )
     } yield (walletState, walletFilterService, walletTxSubmission)
+    result.attemptTap {
+      case Right(_) => builderTracer.walletBuildSuccess.toResource
+      case Left(t)  => builderTracer.walletBuildError(t.getMessage).toResource
+    }
   }
 
   private def buildOgmiosSyncService[F[_]: Async](
       sttpBackend: SttpBackend[F, WebSockets],
       config: Config,
-  ): Resource[F, SyncService[F]] = {
-    implicit val contextAwareLogTracer: Tracer[F, StructuredLog] =
-      ConsoleTracer.contextAware(config.minLogLevel)
+  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, SyncService[F]] = {
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
-      JsonWebSocketClientTracer.from(contextAwareLogTracer)
+      JsonWebSocketClientTracer.from(rootTracer)
     implicit val ogmiosSyncTracer: OgmiosSyncTracer[F] =
-      OgmiosSyncTracer.from(contextAwareLogTracer)
+      OgmiosSyncTracer.from(rootTracer)
 
     ogmios.network
       .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
@@ -64,13 +77,11 @@ object WalletBuilder {
   private def buildOgmiosTxSubmissionService[F[_]: Async](
       sttpBackend: SttpBackend[F, WebSockets],
       config: Config,
-  ): Resource[F, TxSubmissionService[F]] = {
-    implicit val contextAwareLogTracer: Tracer[F, StructuredLog] =
-      ConsoleTracer.contextAware(config.minLogLevel)
+  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, TxSubmissionService[F]] = {
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
-      JsonWebSocketClientTracer.from(contextAwareLogTracer)
+      JsonWebSocketClientTracer.from(rootTracer)
     implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[F] =
-      OgmiosTxSubmissionTracer.from(contextAwareLogTracer)
+      OgmiosTxSubmissionTracer.from(rootTracer)
 
     ogmios.network
       .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
@@ -93,8 +104,11 @@ object WalletBuilder {
 
   def catsEffectWallet(
       config: Config,
-  ): Resource[IO, (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])] =
+  )(implicit
+      rootTracer: Tracer[IO, StructuredLog],
+  ): Resource[IO, (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])] = {
     build[IO](config)
+  }
 
   def generateInitialState(): String =
     LedgerSerialization.serializeState(new ZSwapLocalState())
@@ -111,6 +125,8 @@ object WalletBuilder {
       parsedLogLevel <- parseLogLevel(minLogLevel)
       parsedInitialState <- parseInitialState(initialState)
     } yield new Config(parsedUri, parsedInitialState, parsedLogLevel)
+
+    implicit val configShow: Show[Config] = Show.fromToString
 
     private def parseInitialState(
         maybeInitialState: Option[String],
