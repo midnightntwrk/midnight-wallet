@@ -49,7 +49,7 @@ object WalletBuilderTracer {
       id = WalletBuildSuccess.id,
       component = Component,
       level = LogLevel.Debug,
-      message = _ => "Wallet build has been requested.",
+      message = _ => "Wallet was built successfully.",
       context = _ => StringLogContext.empty,
     )
 
