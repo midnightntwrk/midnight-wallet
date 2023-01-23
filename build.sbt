@@ -158,14 +158,13 @@ lazy val walletCore = project
     useNodeModuleResolution,
   )
 
-lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
+lazy val ouroborosCore = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
-  .in(file("ogmios-core"))
-  .dependsOn(blockchain)
+  .in(file("mocked-node-client/ouroboros-core"))
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "ogmios-core",
+    name := "ouroboros-core",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
@@ -179,7 +178,7 @@ lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
       "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
       "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
     ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.ogmios.tracer",
+    coverageExcludedPackages := "io.iohk.midnight.wallet.ouroboros.tracer",
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -188,22 +187,21 @@ lazy val ogmiosCore = crossProject(JVMPlatform, JSPlatform)
     ),
   )
 
-lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
+lazy val ouroborosSyncMiniProtocol = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
-  .in(file("ogmios-sync"))
+  .in(file("mocked-node-client/ouroboros-sync-mini-protocol"))
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(ogmiosCore % "compile->compile;test->test")
-  .dependsOn(blockchain % "compile->compile;test->test")
+  .dependsOn(ouroborosCore % "compile->compile;test->test")
   .jsConfigure(_.dependsOn(jsInterop))
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "ogmios-sync",
+    name := "ouroboros-sync-mini-protocol",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     coverageExcludedPackages := Seq(
-      "io.iohk.midnight.wallet.ogmios.sync.JsOgmiosSyncServiceBuilder",
-      "io.iohk.midnight.wallet.ogmios.sync.Init",
+      "io.iohk.midnight.wallet.ouroboros.sync.JsOuroborosSyncServiceBuilder",
+      "io.iohk.midnight.wallet.ouroboros.sync.Init",
     ).mkString(";"),
   )
   .jsSettings(commonScalablyTypedSettings)
@@ -216,14 +214,14 @@ lazy val ogmiosSync = crossProject(JVMPlatform, JSPlatform)
     useNodeModuleResolution,
   )
 
-lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
+lazy val ouroborosTxSubmissionMiniProtocol = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
-  .in(file("ogmios-tx-submission"))
-  .dependsOn(blockchain, ogmiosCore % "compile->compile;test->test")
+  .in(file("mocked-node-client/ouroboros-tx-submission-mini-protocol"))
+  .dependsOn(ouroborosCore % "compile->compile;test->test")
   .settings(commonSettings)
   .settings(commonPublishSettings)
   .settings(
-    name := "ogmios-tx-submission",
+    name := "ouroboros-tx-submission-mini-protocol",
     crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
   )
@@ -233,7 +231,11 @@ lazy val ogmiosTxSubmission = crossProject(JVMPlatform, JSPlatform)
 
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(walletCore % "compile->compile;test->test", ogmiosSync.js, ogmiosTxSubmission.js)
+  .dependsOn(
+    walletCore % "compile->compile;test->test",
+    ouroborosSyncMiniProtocol.js,
+    ouroborosTxSubmissionMiniProtocol.js,
+  )
   .configs(IntegrationTest)
   .settings(commonSettings, Defaults.itSettings)
   .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
@@ -254,7 +256,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
     ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "@midnight/mocked-node-api"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws"),
     useNodeModuleResolution,
   )
 
@@ -298,9 +300,9 @@ addCommandAlias(
     "blocJS/test",
     "walletCore/test",
     "blockchainJS/test",
-    "ogmiosCoreJS/test",
-    "ogmiosSyncJS/test",
-    "ogmiosTxSubmissionJS/test",
+    "ouroborosCoreJS/test",
+    "ouroborosSyncMiniProtocolJS/test",
+    "ouroborosTxSubmissionMiniProtocolJS/test",
     "walletEngine/test",
     "IntegrationTest/test",
     "coverageAggregate",

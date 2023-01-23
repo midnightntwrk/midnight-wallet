@@ -37,4 +37,4 @@ jobs:
         nix develop -ic yarn lint
         nix develop -ic yarn test
     - name: Cross build to Scala 3 and test
-      run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt '++ 3.2.1 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
+      run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt '++ 3.2.1 ouroborosSyncMiniProtocolJS/test; ouroborosTxSubmissionMiniProtocolJS/test'

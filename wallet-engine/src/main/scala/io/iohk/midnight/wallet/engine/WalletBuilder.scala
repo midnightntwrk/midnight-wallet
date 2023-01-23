@@ -14,16 +14,15 @@ import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidLogLevel
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.InvalidUri
+import io.iohk.midnight.wallet.engine.WalletBuilder.Config.Error.{InvalidLogLevel, InvalidUri}
+import io.iohk.midnight.wallet.ouroboros
+import io.iohk.midnight.wallet.ouroboros.network.JsonWebSocketClientTracer
+import io.iohk.midnight.wallet.ouroboros.sync.OuroborosSyncService
+import io.iohk.midnight.wallet.ouroboros.sync.tracing.OuroborosSyncTracer
+import io.iohk.midnight.wallet.ouroboros.tx_submission.OuroborosTxSubmissionService
+import io.iohk.midnight.wallet.ouroboros.tx_submission.OuroborosTxSubmissionService.SubmissionResult
+import io.iohk.midnight.wallet.ouroboros.tx_submission.tracing.OuroborosTxSubmissionTracer
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
-import io.iohk.midnight.wallet.ogmios
-import io.iohk.midnight.wallet.ogmios.network.JsonWebSocketClientTracer
-import io.iohk.midnight.wallet.ogmios.sync.OgmiosSyncService
-import io.iohk.midnight.wallet.ogmios.sync.tracing.OgmiosSyncTracer
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService
-import io.iohk.midnight.wallet.ogmios.tx_submission.OgmiosTxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.ogmios.tx_submission.tracing.OgmiosTxSubmissionTracer
 import sttp.capabilities.WebSockets
 import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -39,9 +38,9 @@ object WalletBuilder {
     val builderTracer = WalletBuilderTracer.from(rootTracer)
     val result = for {
       _ <- builderTracer.buildRequested(config).toResource
-      submitTxService <- buildOgmiosTxSubmissionService(sttpBackend, config)
-      stateSyncService <- buildOgmiosSyncService(sttpBackend, config)
-      filterSyncService <- buildOgmiosSyncService(sttpBackend, config)
+      submitTxService <- buildOuroborosTxSubmissionService(sttpBackend, config)
+      stateSyncService <- buildOuroborosSyncService(sttpBackend, config)
+      filterSyncService <- buildOuroborosSyncService(sttpBackend, config)
       walletState <- WalletState.Live[F](stateSyncService, config.initialState)
       walletFilterService <- Resource.pure(new WalletFilterService.Live[F](filterSyncService))
       balanceTransactionService <- Resource.pure(new BalanceTransactionService.Live[F]())
@@ -55,49 +54,43 @@ object WalletBuilder {
     }
   }
 
-  private def buildOgmiosSyncService[F[_]: Async](
+  private def buildOuroborosSyncService[F[_]: Async](
       sttpBackend: SttpBackend[F, WebSockets],
       config: Config,
   )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, SyncService[F]] = {
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
       JsonWebSocketClientTracer.from(rootTracer)
-    implicit val ogmiosSyncTracer: OgmiosSyncTracer[F] =
-      OgmiosSyncTracer.from(rootTracer)
+    implicit val ogmiosSyncTracer: OuroborosSyncTracer[F] =
+      OuroborosSyncTracer.from(rootTracer)
 
-    ogmios.network
+    import Instances.{blockDecoder, blockShow}
+
+    ouroboros.network
       .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-      .flatMap(OgmiosSyncService.apply[F])
-      .map { ogmiosSync =>
-        new SyncService[F] {
-          override def sync(): fs2.Stream[F, Block] = ogmiosSync.sync()
-        }
-      }
+      .flatMap(OuroborosSyncService.apply[F, Block])
+      .map { ogmiosSync => () => ogmiosSync.sync }
   }
 
-  private def buildOgmiosTxSubmissionService[F[_]: Async](
+  private def buildOuroborosTxSubmissionService[F[_]: Async](
       sttpBackend: SttpBackend[F, WebSockets],
       config: Config,
   )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, TxSubmissionService[F]] = {
     implicit val jsonWebSocketClientTracer: JsonWebSocketClientTracer[F] =
       JsonWebSocketClientTracer.from(rootTracer)
-    implicit val ogmiosTxSubmissionTracer: OgmiosTxSubmissionTracer[F] =
-      OgmiosTxSubmissionTracer.from(rootTracer)
+    implicit val ogmiosTxSubmissionTracer: OuroborosTxSubmissionTracer[F] =
+      OuroborosTxSubmissionTracer.from(rootTracer)
 
-    ogmios.network
+    import Instances.{transactionEncoder, transactionShow}
+
+    ouroboros.network
       .SttpJsonWebSocketClient[F](sttpBackend, config.platformUri)
-      .flatMap(OgmiosTxSubmissionService(_))
-      .map { ogmiosSubmitTxService =>
-        new TxSubmissionService[F] {
-          override def submitTransaction(
-              transaction: Transaction,
-          ): F[TxSubmissionService.SubmissionResult] = {
-            ogmiosSubmitTxService.submitTransaction(transaction).map {
-              case SubmissionResult.Accepted =>
-                TxSubmissionService.SubmissionResult.Accepted
-              case SubmissionResult.Rejected(reason) =>
-                TxSubmissionService.SubmissionResult.Rejected(reason)
-            }
-          }
+      .flatMap(OuroborosTxSubmissionService(_))
+      .map { ouroborosSubmitTxService => (transaction: Transaction) =>
+        ouroborosSubmitTxService.submitTransaction(transaction).map {
+          case SubmissionResult.Accepted =>
+            TxSubmissionService.SubmissionResult.Accepted
+          case SubmissionResult.Rejected(reason) =>
+            TxSubmissionService.SubmissionResult.Rejected(reason)
         }
       }
   }
@@ -139,7 +132,7 @@ object WalletBuilder {
         case Some(providedLogLevel) =>
           LogLevel
             .fromString(providedLogLevel)
-            .toRight[Throwable](new InvalidLogLevel(s"Invalid log level: $providedLogLevel"))
+            .toRight[Throwable](InvalidLogLevel(s"Invalid log level: $providedLogLevel"))
         case None =>
           Right(LogLevel.Warn)
       }

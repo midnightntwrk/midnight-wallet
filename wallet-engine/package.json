@@ -23,7 +23,7 @@
         "ws": "^8.8.1"
     },
     "devDependencies": {
-        "@midnight/mocked-node-api": "0.5.3",
+        "@midnight/mocked-node-api": "0.6.0",
         "typescript": "^4.8.3"
     }
 }

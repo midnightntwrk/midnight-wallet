@@ -6,7 +6,7 @@ import cats.syntax.flatMap.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
-import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigany
+import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigTransaction
 import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
 import io.iohk.midnight.rxjs.mod.find
@@ -44,13 +44,13 @@ trait EndToEndSpecSetup {
   }
 
   def makeNodeResource(initialTxs: Transaction*): Resource[IO, Unit] = {
-    val txs: Seq[Any] =
+    val txs: Seq[ApiTransaction] =
       initialTxs
         .map(LedgerSerialization.toTransaction)
         .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
 
     val nodeConfig =
-      PartialConfigany()
+      PartialConfigTransaction()
         .setGenesis(GenesisValue("value", txs.toJSArray))
         .setHost(nodeHost)
         .setPort(nodePort.toDouble)

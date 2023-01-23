@@ -25,14 +25,14 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
 
 - `blockchain` - Blockchain model used by the wallet
 
-- `ogmios-sync` - Implementation of the `SyncService` from `wallet-core` module using the Ouroboros mini protocols
+- `ouroboros-sync-mini-protocol` - Implementation of the `SyncService` from `wallet-core` module using the Ouroboros mini protocols
 
-- `ogmios-tx-submission` - Implementation of the `TxSubmissionService` from `wallet-core` module using the Ouroboros mini protocols
+- `ouroboros-tx-submission-mini-protocol` - Implementation of the `TxSubmissionService` from `wallet-core` module using the Ouroboros mini protocols
 
 - `js-interop` - [Facade types](https://www.scala-js.org/doc/interoperability/facade-types.html) and
   general utilities to work with JavaScript libraries such as [rxjs](rxjs.dev/)
 
-`wallet-engine` and `ogmios-sync` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
+`wallet-engine` and `ouroboros-sync-mini-protocol` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
 npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`, 
 `yarn.lock`, and `.npmrc` configuration files inside those submodules.
 
@@ -72,7 +72,7 @@ nix develop
 sbt dist
 ```
 
-The generated JavaScript code is written to `wallet-engine/dist` and `ogmios-sync/js/dist`.
+The generated JavaScript code is written to `wallet-engine/dist` and `ouroboros-sync-mini-protocol/js/dist`.
 
 ## Test
 
@@ -127,7 +127,7 @@ Please read our [git workflow](https://input-output.atlassian.net/wiki/spaces/MN
 for how to branch and tag releases.
 
 In order to release a new version, the versions inside `wallet-engine/package.json`,
-`wallet-core/package.json`, `ogmios-sync/js/package.json`, and `commonPublishSettings` in
+`wallet-core/package.json`, `ouroboros-sync-mini-protocol/js/package.json`, and `commonPublishSettings` in
 `build.sbt` should be bumped.
 
 After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 

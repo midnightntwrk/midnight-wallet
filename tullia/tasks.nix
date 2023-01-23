@@ -22,7 +22,7 @@
       set -x
 
       nix develop -L -c sbt verify
-      nix develop -L -c sbt '++ 3.2.1 ogmiosSyncJS/test; ogmiosTxSubmissionJS/test'
+      nix develop -L -c sbt '++ 3.2.1 ouroborosSyncMiniProtocolJS/test; ouroborosTxSubmissionMiniProtocolJS/test'
       nix develop -L -c sbt dist
       pushd examples
       nix develop -L -c yarn install --frozen-lockfile
@@ -109,12 +109,12 @@
     command.text = ''
       set -x
 
-      nix develop -L -c sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ogmiosCoreJS/publish; + ogmiosCoreJVM/publish; + ogmiosSyncJS/publish; + ogmiosSyncJVM/publish; + ogmiosTxSubmissionJS/publish; + ogmiosTxSubmissionJVM/publish' || :
+      nix develop -L -c sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ouroborosCoreJS/publish; + ouroborosCoreJVM/publish; + ouroborosSyncMiniProtocolJS/publish; + ouroborosSyncMiniProtocolJVM/publish; + ouroborosTxSubmissionMiniProtocolJS/publish; + ouroborosTxSubmissionMiniProtocolJVM/publish' || :
 
       nix develop -L -c sbt dist
       pushd wallet-engine
       nix develop -L -c yarn publish || :
-      pushd ../ogmios-sync/js
+      pushd ../ouroboros-sync-mini-protocol/js
       nix develop -L -c yarn publish || :
     '';
 
