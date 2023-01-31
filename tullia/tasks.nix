@@ -21,8 +21,9 @@
     command.text = ''
       set -x
 
-      nix develop -L -c sbt verify
-      nix develop -L -c sbt '++ 3.2.1 ouroborosSyncMiniProtocolJS/test; ouroborosTxSubmissionMiniProtocolJS/test'
+      nix develop .#no-proofs -L -c sbt verify
+      nix develop .#real-proofs -L -c sbt IntegrationTest/test
+      nix develop .#no-proofs -L -c sbt '++ 3.2.1 ouroborosSyncMiniProtocolJS/test; ouroborosTxSubmissionMiniProtocolJS/test'
       nix develop -L -c sbt dist
       pushd examples
       nix develop -L -c yarn install --frozen-lockfile

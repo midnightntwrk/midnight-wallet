@@ -16,7 +16,7 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {
-      url = "github:input-output-hk/midnight-ledger-prototype/v1.2.4";
+      url = "github:input-output-hk/midnight-ledger-prototype";
       inputs = {
         nixpkgs.follows = "nixpkgs";
         tullia.follows = "tullia";
@@ -45,6 +45,8 @@
         ledgerPkgs = midnight-ledger.packages.${system};
 
         packageJSON = __fromJSON (__readFile ./wallet-engine/package.json);
+
+        lib = pkgs.lib;
       in
         rec {
           packages = {
@@ -79,7 +81,7 @@
                 rm node_modules
               '';
 
-              nativeBuildInputs = with pkgs; [yarn nodejs-16_x ledgerPkgs.ledger-napi];
+              nativeBuildInputs = with pkgs; [yarn nodejs-16_x ledgerPkgs.ledger];
 
               preBuild = "ln -s ${packages.midnight-wallet-node-modules}/node_modules .";
 
@@ -100,9 +102,23 @@
 
           defaultPackage = packages.midnight-wallet;
 
-          devShell = pkgs.mkShell {
-            packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x ledgerPkgs.ledger-napi pkgs.which];
-          };
+          mkShell = {realProofs}: let
+            ledgerPkg =
+              if realProofs
+              then ledgerPkgs.ledger
+              else ledgerPkgs.ledger-no-proofs;
+            packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x pkgs.which ledgerPkg];
+            shellHook = lib.attrsets.optionalAttrs (!realProofs) {
+              shellHook = "export NO_PROOFS=true";
+            };
+          in
+            pkgs.mkShell ({inherit packages;} // shellHook);
+
+          devShells.real-proofs = mkShell {realProofs = true;};
+
+          devShells.no-proofs = mkShell {realProofs = false;};
+
+          devShells.default = devShells.real-proofs;
         }
         // tullia.fromSimple system {
           tasks = import tullia/tasks.nix;

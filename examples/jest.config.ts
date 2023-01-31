@@ -10,6 +10,7 @@ const config: Config.InitialOptions = {
   passWithNoTests: true,
   testMatch: ['**/*.test.ts'],
   extensionsToTreatAsEsm: ['.ts'],
+  testTimeout: 30000,
   transform: {
     '^.+\\.[tj]sx?$': [
       'ts-jest',

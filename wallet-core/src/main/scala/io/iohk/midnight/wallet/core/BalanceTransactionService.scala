@@ -20,7 +20,7 @@ trait BalanceTransactionService[F[_]] {
 object BalanceTransactionService {
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
   class Live[F[_]: Sync]() extends BalanceTransactionService[F] {
-    private val Buffer = js.BigInt(1000)
+    private val Buffer = js.BigInt(2000)
     override def balanceTransaction(
         state: ZSwapLocalState,
         tx: Transaction,

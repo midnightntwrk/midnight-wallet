@@ -2,32 +2,29 @@ package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
 import cats.effect.kernel.Resource
+import cats.syntax.eq.*
 import cats.syntax.flatMap.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
 import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigTransaction
-import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
-import io.iohk.midnight.rxjs.mod.find
-import io.iohk.midnight.rxjs.mod.firstValueFrom
+import io.iohk.midnight.midnightMockedNodeInMemory.distGenesisMod.GenesisValue
+import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
 import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging.ConsoleTracer
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel, StructuredLog}
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.Config
 import io.iohk.midnight.wallet.engine.js.JsWallet
-import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import munit.CatsEffectSuite
-import sttp.client3.UriContext
-
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import sttp.client3.UriContext
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"
-  val nodePort = 5205L
+  val nodePort = 5206L
   val tokenType = nativeToken()
   val coin = new CoinInfo(js.BigInt(1_000_000), tokenType)
   val spendCoin = new CoinInfo(js.BigInt(10_000), tokenType)
@@ -85,7 +82,8 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val pubKey = initialState.coinPublicKey
     val mintTx = buildSendTx(coin, pubKey)
     val spendTx = buildSendTx(spendCoin, randomRecipient())
-    val fee = js.BigInt(1787) // This value was extracted after first run since it's not predictable
+    // These values were extracted after first run since it's not predictable
+    val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
 
     withWallet(initialState, mintTx) { case (walletState, _, txSubmission) =>
       for {
@@ -98,6 +96,13 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
       }
     }
   }
+
+  private def isLedgerNoProofs: Boolean =
+    readEnvVariable[String]("NO_PROOFS") === Some("true")
+
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+  private def readEnvVariable[T](name: String): Option[T] =
+    js.Dynamic.global.process.env.selectDynamic(name).asInstanceOf[js.UndefOr[T]].toOption
 
   test("Get initial balance from rxjs Observable") {
     val initialState = new ZSwapLocalState()

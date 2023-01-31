@@ -21,7 +21,8 @@ const nodePort = 5205;
 
 const tokenType = nativeToken();
 const initialBalance = 1_000_000n;
-const txFee = 1787n;
+const isLedgerNoProofs = process.env.NO_PROOFS === 'true';
+const txFee = isLedgerNoProofs ? 2403n : 5585n;
 
 const buildMintTx = (
   coin: CoinInfo,

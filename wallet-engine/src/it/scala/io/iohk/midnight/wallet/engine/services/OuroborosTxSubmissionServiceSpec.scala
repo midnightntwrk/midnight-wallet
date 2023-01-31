@@ -3,8 +3,8 @@ package io.iohk.midnight.wallet.engine.services
 import cats.effect.IO
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
 import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigTransaction
-import io.iohk.midnight.midnightMockedNodeApp.distConfigMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
+import io.iohk.midnight.midnightMockedNodeInMemory.distGenesisMod.GenesisValue
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.{ContextAwareLog, StringLogContext}
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Header
@@ -18,7 +18,6 @@ import munit.CatsEffectSuite
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.ws.WebSocketClosed
-
 import scala.scalajs.js.JSConverters.*
 
 class OuroborosTxSubmissionServiceSpec extends CatsEffectSuite {

@@ -256,7 +256,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
     ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws"),
+    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "fp-ts", "io-ts"),
     useNodeModuleResolution,
   )
 
