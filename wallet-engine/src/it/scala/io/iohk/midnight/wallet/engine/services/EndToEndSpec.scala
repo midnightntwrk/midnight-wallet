@@ -3,24 +3,23 @@ package io.iohk.midnight.wallet.engine.services
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.syntax.eq.*
-import cats.syntax.flatMap.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
-import io.iohk.midnight.midnightMockedNodeApp.anon.PartialConfigTransaction
-import io.iohk.midnight.midnightMockedNodeApp.mod.InMemoryServer
+import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
 import io.iohk.midnight.midnightMockedNodeInMemory.distGenesisMod.GenesisValue
+import io.iohk.midnight.midnightMockedNodeInMemory.mod.{InMemoryMockedNode, LedgerNapi}
 import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
-import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel, StructuredLog}
+import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
+import io.iohk.midnight.wallet.engine.config.Config
+import io.iohk.midnight.wallet.engine.config.NodeConnection.NodeInstance
 import io.iohk.midnight.wallet.engine.js.JsWallet
 import munit.CatsEffectSuite
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
-import sttp.client3.UriContext
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"
@@ -40,38 +39,34 @@ trait EndToEndSpecSetup {
     builder.intoTransaction().transaction
   }
 
-  def makeNodeResource(initialTxs: Transaction*): Resource[IO, Unit] = {
-    val txs: Seq[ApiTransaction] =
+  def makeNodeResource(initialTxs: Transaction*): Resource[IO, MockedNode[ApiTransaction]] = {
+    val txs =
       initialTxs
         .map(LedgerSerialization.toTransaction)
         .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
-
-    val nodeConfig =
-      PartialConfigTransaction()
-        .setGenesis(GenesisValue("value", txs.toJSArray))
-        .setHost(nodeHost)
-        .setPort(nodePort.toDouble)
-
-    Resource
-      .make(IO(new InMemoryServer(nodeConfig)))(node => IO.fromPromise(IO(node.close())))
-      .evalMap(node => IO.fromPromise(IO(node.run())))
+    Resource.pure(
+      new InMemoryMockedNode(GenesisValue("value", txs.toJSArray), new LedgerNapi()),
+    )
   }
 
   type Wallets = (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])
 
-  def makeWalletResource(initialState: ZSwapLocalState): Resource[IO, Wallets] = {
-    implicit val rootTracer: Tracer[IO, StructuredLog] =
-      ConsoleTracer.contextAware(LogLevel.Info)
-    Wallet
-      .build[IO](Config(uri"ws://$nodeHost:$nodePort", initialState, LogLevel.Warn))
-      .flatTap(_._1.start.background)
+  def makeWalletResource(
+      node: MockedNode[ApiTransaction],
+      initialState: ZSwapLocalState,
+  ): Resource[IO, AllocatedWallet[IO]] = {
+    Resource.make(
+      Wallet
+        .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn))
+        .flatTap(_.dependencies.state.start.start),
+    )(_.finalizer)
   }
 
   def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
-      body: Wallets => IO[Unit],
+      body: AllocatedWallet[IO] => IO[Unit],
   ): IO[Unit] =
     makeNodeResource(initialTxs*)
-      .flatMap(_ => makeWalletResource(initialWalletState))
+      .flatMap(makeWalletResource(_, initialWalletState))
       .use(body(_))
 }
 
@@ -85,15 +80,16 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     // These values were extracted after first run since it's not predictable
     val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
 
-    withWallet(initialState, mintTx) { case (walletState, _, txSubmission) =>
-      for {
-        balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
-        _ <- txSubmission.submitTransaction(spendTx, List.empty)
-        balanceAfterSend <- walletState.balance.find(_ < coin.value).compile.lastOrError
-      } yield {
-        assertEquals(balanceBeforeSend, coin.value)
-        assertEquals(balanceAfterSend, coin.value - spendCoin.value - fee)
-      }
+    withWallet(initialState, mintTx) {
+      case AllocatedWallet(WalletDependencies(walletState, _, txSubmission), _) =>
+        for {
+          balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
+          _ <- txSubmission.submitTransaction(spendTx, List.empty)
+          balanceAfterSend <- walletState.balance.find(_ < coin.value).compile.lastOrError
+        } yield {
+          assertEquals(balanceBeforeSend, coin.value)
+          assertEquals(balanceAfterSend, coin.value - spendCoin.value - fee)
+        }
     }
   }
 
@@ -110,14 +106,15 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val pubKey = initialState.coinPublicKey
     val mintTx = buildSendTx(coin, pubKey)
 
-    withWallet(initialState, mintTx) { case (walletState, walletFilter, walletTxSubmission) =>
-      val jsWallet = new JsWallet(walletState, walletFilter, walletTxSubmission, IO.unit)
-      IO.fromPromise(IO {
-        firstValueFrom(
-          jsWallet.balance().pipe(find { (value, _, _) => value > js.BigInt(0) }),
-        )
-      }).map(_.toOption)
-        .assertEquals(Some(coin.value))
+    withWallet(initialState, mintTx) {
+      case AllocatedWallet(WalletDependencies(walletState, walletFilter, walletTxSubmission), _) =>
+        val jsWallet = new JsWallet(walletState, walletFilter, walletTxSubmission, IO.unit)
+        IO.fromPromise(IO {
+          firstValueFrom(
+            jsWallet.balance().pipe(find { (value, _, _) => value > js.BigInt(0) }),
+          )
+        }).map(_.toOption)
+          .assertEquals(Some(coin.value))
     }
   }
 
@@ -129,18 +126,19 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val spendTx = buildSendTx(spendCoin, randomRecipient())
     val expectedIdentifier = spendTx.identifiers().head
 
-    withWallet(initialState, mintTx) { case (walletState, filterService, txSubmission) =>
-      for {
-        _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
-        _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
-        filteredTx <- filterService
-          .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
-          .head
-          .compile
-          .lastOrError
-      } yield {
-        assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
-      }
+    withWallet(initialState, mintTx) {
+      case AllocatedWallet(WalletDependencies(walletState, filterService, txSubmission), _) =>
+        for {
+          _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
+          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
+          filteredTx <- filterService
+            .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
+            .head
+            .compile
+            .lastOrError
+        } yield {
+          assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
+        }
     }
   }
 }

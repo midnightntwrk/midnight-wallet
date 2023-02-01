@@ -15,10 +15,10 @@ import io.iohk.midnight.wallet.ouroboros.network.JsonWebSocketClientTracer
 import io.iohk.midnight.wallet.ouroboros.tx_submission.OuroborosTxSubmissionService
 import io.iohk.midnight.wallet.ouroboros.tx_submission.tracing.OuroborosTxSubmissionTracer
 import munit.CatsEffectSuite
+import scala.scalajs.js.JSConverters.*
 import sttp.client3.UriContext
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.ws.WebSocketClosed
-import scala.scalajs.js.JSConverters.*
 
 class OuroborosTxSubmissionServiceSpec extends CatsEffectSuite {
 

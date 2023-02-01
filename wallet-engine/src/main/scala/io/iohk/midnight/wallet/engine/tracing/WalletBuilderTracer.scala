@@ -3,21 +3,15 @@ package io.iohk.midnight.wallet.engine.tracing
 import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
-import io.iohk.midnight.tracer.logging.AsStructuredLog
-import io.iohk.midnight.tracer.logging.Event
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.StringLogContext
-import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.wallet.engine.WalletBuilder
-
-import WalletBuilderEvent.*
+import io.iohk.midnight.tracer.logging.*
+import io.iohk.midnight.wallet.engine.config.Config
+import io.iohk.midnight.wallet.engine.tracing.WalletBuilderEvent.*
 
 class WalletBuilderTracer[F[_]](val tracer: Tracer[F, WalletBuilderEvent]) {
 
-  def buildRequested(config: WalletBuilder.Config): F[Unit] = tracer(BuildRequested(config))
+  def buildRequested(config: Config): F[Unit] = tracer(BuildRequested(config))
   val walletBuildSuccess: F[Unit] = tracer(WalletBuildSuccess)
   def walletBuildError(reason: String): F[Unit] = tracer(WalletBuildError(reason))
 

@@ -1,6 +1,5 @@
 import { distinct, find, firstValueFrom, take } from 'rxjs';
-import type { Transaction } from '@midnight/mocked-node-api';
-import { InMemoryServer } from '@midnight/mocked-node-app';
+import type { MockedNode, Transaction } from '@midnight/mocked-node-api';
 import {
   CoinInfo,
   LedgerState,
@@ -15,9 +14,11 @@ import {
 } from '@midnight/ledger';
 import { HasBalance, Resource, WalletBuilder } from '@midnight/wallet';
 import type { Filter, FilterService, Wallet } from '@midnight/wallet-api';
-
-const nodeHost = 'localhost';
-const nodePort = 5205;
+import {
+  Genesis,
+  InMemoryMockedNode,
+  LedgerNapi,
+} from '@midnight/mocked-node-in-memory';
 
 const tokenType = nativeToken();
 const initialBalance = 1_000_000n;
@@ -53,7 +54,7 @@ const deserializeLocalState = (state: string): ZSwapLocalState => {
 };
 
 describe('Wallet client example', () => {
-  let mockedNode: InMemoryServer;
+  let mockedNode: MockedNode<Transaction>;
   let wallet: FilterService & Wallet & HasBalance & Resource;
 
   beforeEach(async () => {
@@ -68,19 +69,18 @@ describe('Wallet client example', () => {
     const mintTx = buildMintTx(initialCoin, localState.coinPublicKey);
 
     // Create a mocked-node instance with the mint tx in the genesis block
-    mockedNode = new InMemoryServer({
-      host: nodeHost,
-      port: nodePort,
-      genesis: { tag: 'value', transactions: [serializeTx(mintTx)] },
-    });
-    // Run mocked-node: start listening on websocket port
-    await mockedNode.run();
+    const genesis: Genesis<Transaction> = {
+      tag: 'value',
+      transactions: [serializeTx(mintTx)],
+    };
+    mockedNode = new InMemoryMockedNode(genesis, new LedgerNapi());
 
     // Create a wallet instance that connects to the mocked-node
     // Initial state is set up to receive funds from the mint tx
     wallet = await WalletBuilder.build(
-      `ws://${nodeHost}:${nodePort}`,
+      mockedNode,
       serializeLocalState(localState),
+      'warn',
     );
     // Run wallet: start syncing blocks
     // This is necessary to have local state updated
@@ -90,8 +90,6 @@ describe('Wallet client example', () => {
   afterEach(async () => {
     // Stop syncing
     await wallet.close();
-    // Close ports
-    await mockedNode.close();
   });
 
   test('Submit a tx', async () => {

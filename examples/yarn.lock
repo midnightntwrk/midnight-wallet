@@ -613,7 +613,7 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/ledger/-/ledger-1.2.4.tgz#5e8f90563680ba90a279432cb2ffda96c89e1ff9"
   integrity sha512-LJcuZQpSZnBNmkaR9k0+m3bGPyacKdhB1rbnfib53zIMTBlBW8WooQdeVcjaHOINHMQQFgorag9USutYTOeWmA==
 
-"@midnight/mocked-node-api@^0.7.1":
+"@midnight/mocked-node-api@0.7.1", "@midnight/mocked-node-api@^0.7.1":
   version "0.7.1"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.7.1.tgz#048af11885772780fbba9e58b824727badf2c55f"
   integrity sha512-7DFwuqmMRo+Sj/SRk6WJIXfn84Y7wamnU3lYC1fQyU7VVttDXa0v7oZgqnQCHpu7Ro8WqWBd2al0vIxalk/U7A==
@@ -634,7 +634,7 @@
     newtype-ts "^0.3.5"
     pino "^8.4.2"
 
-"@midnight/mocked-node-in-memory@^0.7.1":
+"@midnight/mocked-node-in-memory@0.7.1", "@midnight/mocked-node-in-memory@^0.7.1":
   version "0.7.1"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.7.1.tgz#6e3e69146eb8371366a2c0f690e27d0f9d814088"
   integrity sha512-5Wz+thmvWxosrY6TEQB8Scx229vzmHORU+H3EpuFxNAl4v/jbCG7xTrfMdtdBXKauVKp47KVUdrHhqzmAsBECA==
@@ -678,7 +678,9 @@
   version "2.8.3"
   dependencies:
     "@midnight/ledger" "1.2.4"
+    "@midnight/mocked-node-api" "0.7.1"
     "@midnight/mocked-node-app" "0.7.1"
+    "@midnight/mocked-node-in-memory" "0.7.1"
     "@midnight/wallet-api" "2.3.6"
     cross-fetch "^3.1.5"
     isomorphic-ws "^5.0.0"

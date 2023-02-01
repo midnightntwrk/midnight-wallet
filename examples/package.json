@@ -9,7 +9,7 @@
     "test": "NODE_OPTIONS='--experimental-vm-modules' yarn jest"
   },
   "devDependencies": {
-    "@midnight/mocked-node-app": "0.7.1",
+    "@midnight/mocked-node-in-memory": "0.7.1",
     "@midnight/wallet": "file:../wallet-engine",
     "@types/jest": "^29.2.4",
     "@typescript-eslint/eslint-plugin": "^5.46.1",

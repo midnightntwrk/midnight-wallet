@@ -1,27 +1,20 @@
 package io.iohk.midnight.wallet.engine.tracing
 
+import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
-import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.tracer.logging.AsStructuredLog
-import cats.effect.kernel.Sync
-import io.iohk.midnight.tracer.logging.Event
-import JsWalletEvent.*
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.engine.WalletBuilder
+import io.iohk.midnight.tracer.logging.*
+import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
+import io.iohk.midnight.wallet.engine.tracing.JsWalletEvent.*
 
 class JsWalletTracer[F[_]](val tracer: Tracer[F, JsWalletEvent]) {
 
-  def jsWalletBuildRequested(
-      nodeUri: String,
-      initialState: Option[String],
-      minLogLevel: Option[String],
-  ): F[Unit] = tracer(JsWalletBuildRequested(nodeUri, initialState, minLogLevel))
+  def jsWalletBuildRequested(rawConfig: RawConfig): F[Unit] =
+    tracer(JsWalletBuildRequested(rawConfig))
 
-  def configConstructed(config: WalletBuilder.Config): F[Unit] = tracer(ConfigConstructed(config))
+  def configConstructed(config: Config): F[Unit] = tracer(ConfigConstructed(config))
 
   def invalidConfig(t: Throwable): F[Unit] = tracer(InvalidConfig(t.getMessage()))
 

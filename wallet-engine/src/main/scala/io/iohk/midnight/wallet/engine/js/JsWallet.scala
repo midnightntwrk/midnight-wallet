@@ -5,20 +5,25 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as NodeTx
+import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
 import io.iohk.midnight.midnightWalletApi.distFilterServiceMod.FilterService
 import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
 import io.iohk.midnight.midnightWalletApi.distWalletMod as api
 import io.iohk.midnight.rxjs.mod.Observable_
-import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.tracer.logging
-import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.wallet.core.WalletFilterService
-import io.iohk.midnight.wallet.core.WalletState
-import io.iohk.midnight.wallet.core.WalletTxSubmission
+import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
+import io.iohk.midnight.wallet.core.{
+  LedgerSerialization,
+  WalletFilterService,
+  WalletState,
+  WalletTxSubmission,
+}
 import io.iohk.midnight.wallet.engine.WalletBuilder
-import io.iohk.midnight.wallet.engine.WalletBuilder.Config
+import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
+import io.iohk.midnight.wallet.engine.config.RawNodeConnection.RawNodeInstance
+import io.iohk.midnight.wallet.engine.config.RawNodeConnection.RawNodeUri
+import io.iohk.midnight.wallet.engine.config.{Config, RawConfig, RawNodeConnection}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
-
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
 
@@ -59,49 +64,57 @@ class JsWallet(
 }
 
 @JSExportTopLevel("WalletBuilder")
-object JsWalletBuilder {
+object JsWallet {
   @JSExport
   def build(
+      node: MockedNode[NodeTx],
+      initialState: js.UndefOr[String],
+      minLogLevel: js.UndefOr[String],
+  ): js.Promise[api.Wallet] =
+    internalBuild(RawNodeInstance(node), initialState, minLogLevel)
+
+  @JSExport
+  def connect(
       nodeUri: String,
       initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
+  ): js.Promise[api.Wallet] =
+    internalBuild(RawNodeUri(nodeUri), initialState, minLogLevel)
+
+  private def internalBuild(
+      rawNodeConnection: RawNodeConnection,
+      initialState: js.UndefOr[String],
+      minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] = {
-    val jsWalletTracer = JsWalletTracer.from[IO](
-      logging.ConsoleTracer.contextAware(
-        logging.LogLevel.Debug,
-      ),
-    )
+    val rawConfig = RawConfig(rawNodeConnection, initialState.toOption, minLogLevel.toOption)
 
-    val logBuildRequest = jsWalletTracer.jsWalletBuildRequested(
-      nodeUri,
-      initialState.toOption,
-      minLogLevel.toOption,
-    )
+    val jsWalletIO = for {
+      _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
+      config <- parseConfig(rawConfig)
+      allocatedWallet <- WalletBuilder.build[IO](config)
+    } yield JsWallet(allocatedWallet)
 
-    val parseConfig = IO
-      .fromEither(Config.parse(nodeUri, initialState.toOption, minLogLevel.toOption))
+    jsWalletIO.unsafeToPromise()
+  }
+
+  private val jsWalletTracer =
+    JsWalletTracer.from[IO](ConsoleTracer.contextAware(LogLevel.Debug))
+
+  private def parseConfig(rawConfig: RawConfig): IO[Config] =
+    IO
+      .fromEither(Config.parse(rawConfig))
       .attemptTap {
         case Right(config) => jsWalletTracer.configConstructed(config)
         case Left(t)       => jsWalletTracer.invalidConfig(t)
       }
 
-    def walletResources(config: Config) = {
-      val rootTracer: Tracer[IO, StructuredLog] =
-        logging.ConsoleTracer.contextAware(config.minLogLevel)
-      WalletBuilder.catsEffectWallet(config)(rootTracer).allocated
-    }
-
-    val jsWallet = for {
-      _ <- logBuildRequest
-      config <- parseConfig
-      wallet <- walletResources(config).map {
-        case ((state, filterService, txSubmission), finalizer) =>
-          new JsWallet(state, filterService, txSubmission, finalizer)
-      }
-    } yield wallet
-
-    jsWallet.unsafeToPromise()
-  }
+  def apply(wallet: AllocatedWallet[IO]): JsWallet =
+    new JsWallet(
+      wallet.dependencies.state,
+      wallet.dependencies.filterService,
+      wallet.dependencies.txSubmissionService,
+      wallet.finalizer,
+    )
 
   @JSExport
   def calculateCost(tx: Transaction): js.BigInt =
@@ -109,5 +122,5 @@ object JsWalletBuilder {
 
   @JSExport
   def generateInitialState(): String =
-    WalletBuilder.generateInitialState()
+    LedgerSerialization.serializeState(new ZSwapLocalState())
 }

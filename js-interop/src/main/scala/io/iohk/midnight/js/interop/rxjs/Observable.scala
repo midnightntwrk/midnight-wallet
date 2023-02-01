@@ -20,4 +20,5 @@ object Observable {
     )
 
   def firstValueFrom[T](observable: Observable_[T]): Promise[T] = mod.firstValueFrom(observable)
+  def lastValueFrom[T](observable: Observable_[T]): Promise[T] = mod.lastValueFrom(observable)
 }
