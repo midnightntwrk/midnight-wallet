@@ -43,9 +43,6 @@ object Generators {
       TransactionWithContext(tx, state, coins)
     }
 
-  def generateLedgerTransaction(): TransactionWithContext =
-    Generators.ledgerTransactionGen.sample.get
-
   def buildTransaction(coins: List[CoinInfo]): (LedgerTransaction, ZSwapLocalState) = {
     val state = new ZSwapLocalState()
     val builder = new TransactionBuilder(new LedgerState())

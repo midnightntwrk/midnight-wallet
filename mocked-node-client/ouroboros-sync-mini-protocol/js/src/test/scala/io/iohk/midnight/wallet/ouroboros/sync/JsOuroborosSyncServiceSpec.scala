@@ -6,6 +6,7 @@ import io.iohk.midnight.js.interop.rxjs.Observable
 import io.iohk.midnight.wallet.ouroboros.sync.TestDomain.Block
 import io.iohk.midnight.wallet.ouroboros.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import org.scalacheck.effect.PropF.forAllF
 
 class JsOuroborosSyncServiceSpec
     extends CatsEffectSuite
@@ -13,19 +14,16 @@ class JsOuroborosSyncServiceSpec
     with BetterOutputSuite {
 
   test("Should sync") {
-    // There's some issue that makes it super slow to run a forAll so just sampling 1
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val block = Generators.blockGen.sample.get
+    forAllF(Generators.blockGen) { block =>
+      val syncService = new OuroborosSyncService[IO, Block] {
+        override def sync: Stream[IO, Block] = Stream.emit(block)
+      }
 
-    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-    val syncService = new OuroborosSyncService[IO, Block] {
-      override def sync: Stream[IO, Block] = Stream.emit(block)
+      val observable = new JsOuroborosSyncService(syncService, IO.unit).sync()
+      val firstBlock = IO.fromPromise(IO.pure(Observable.firstValueFrom(observable)))
+
+      firstBlock.map { obtainedBlock => assertEquals(obtainedBlock, block) }
     }
-
-    val observable = new JsOuroborosSyncService(syncService, IO.unit).sync()
-    val firstBlock = IO.fromPromise(IO.pure(Observable.firstValueFrom(observable)))
-
-    firstBlock.map { obtainedBlock => assertEquals(obtainedBlock, block) }
   }
 
   test("Should close") {

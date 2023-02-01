@@ -55,27 +55,28 @@ class JsWalletSpec
   }
 
   test("submitting a generic tx successfully should return the tx identifier") {
-    // Taking just a sample because tx building is slow
-    val TransactionWithContext(tx, _, coins) = generateLedgerTransaction()
-    @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-    val txIdentifier = tx.identifiers().headOption.get
+    forAllF(ledgerTransactionGen) { txWithCtx =>
+      val TransactionWithContext(tx, _, coins) = txWithCtx
+      @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+      val txIdentifier = tx.identifiers().headOption.get
 
-    val wallet =
-      new JsWallet(
-        new WalletStateStub(),
-        new WalletFilterServiceStub(Seq.empty),
-        new WalletTxSubmissionIdentifierStub(txIdentifier),
-        IO.unit,
-      )
+      val wallet =
+        new JsWallet(
+          new WalletStateStub(),
+          new WalletFilterServiceStub(Seq.empty),
+          new WalletTxSubmissionIdentifierStub(txIdentifier),
+          IO.unit,
+        )
 
-    val observable = wallet.submitTx(tx, coins.toJSArray)
-    IO.fromPromise(IO(Observable.firstValueFrom(observable)))
-      .map(txId =>
-        assertEquals(
-          LedgerSerialization.serializeIdentifier(txId),
-          LedgerSerialization.serializeIdentifier(txIdentifier),
-        ),
-      )
+      val observable = wallet.submitTx(tx, coins.toJSArray)
+      IO.fromPromise(IO(Observable.firstValueFrom(observable)))
+        .map(txId =>
+          assertEquals(
+            LedgerSerialization.serializeIdentifier(txId),
+            LedgerSerialization.serializeIdentifier(txIdentifier),
+          ),
+        )
+    }
   }
 
   test("install tx filter returns the filtered txs") {
