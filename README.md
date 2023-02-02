@@ -25,15 +25,13 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
 
 - `blockchain` - Blockchain model used by the wallet
 
-- `ouroboros-sync-mini-protocol` - Implementation of the `SyncService` from `wallet-core` module using the Ouroboros mini protocols
-
-- `ouroboros-tx-submission-mini-protocol` - Implementation of the `TxSubmissionService` from `wallet-core` module using the Ouroboros mini protocols
+- `mocked-node-client` - Implementations of the `SyncService` and `TxSubmissionService` from `wallet-core` module using the Ouroboros mini protocols
 
 - `js-interop` - [Facade types](https://www.scala-js.org/doc/interoperability/facade-types.html) and
   general utilities to work with JavaScript libraries such as [rxjs](rxjs.dev/)
 
-`wallet-engine` and `ouroboros-sync-mini-protocol` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
-npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`, 
+`wallet-engine` and `mocked-node-client/ouroboros-sync-mini-protocol` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
+npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`,
 `yarn.lock`, and `.npmrc` configuration files inside those submodules.
 
 There is also an `examples` directory that shows how to set up a TypeScript client to use the wallet.
@@ -72,7 +70,7 @@ nix develop
 sbt dist
 ```
 
-The generated JavaScript code is written to `wallet-engine/dist` and `ouroboros-sync-mini-protocol/js/dist`.
+The generated JavaScript code is written to `wallet-engine/dist` and `mocked-node-client/ouroboros-sync-mini-protocol/js/dist`.
 
 ## Test
 
@@ -127,7 +125,7 @@ Please read our [git workflow](https://input-output.atlassian.net/wiki/spaces/MN
 for how to branch and tag releases.
 
 In order to release a new version, the versions inside `wallet-engine/package.json`,
-`wallet-core/package.json`, `ouroboros-sync-mini-protocol/js/package.json`, and `commonPublishSettings` in
+`wallet-core/package.json`, `mocked-node-client/ouroboros-sync-mini-protocol/js/package.json`, and `commonPublishSettings` in
 `build.sbt` should be bumped.
 
 After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 
