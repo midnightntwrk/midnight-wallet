@@ -2,7 +2,7 @@
   description = "Midnight Wallet";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs?ref=7fdf32904996430a723d5085e021d601777c41ac"; #release-22.05 from Nov 14th
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
     utils.url = "github:numtide/flake-utils";
     flake-compat = {
       url = "github:edolstra/flake-compat";
@@ -12,7 +12,7 @@
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
     tullia = {
-      url = "github:input-output-hk/tullia?rev=f75ad427298eb8adf1a14cf08a5c48d3d3aa8ca1";
+      url = "github:input-output-hk/tullia";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     midnight-ledger = {

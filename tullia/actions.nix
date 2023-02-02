@@ -3,14 +3,32 @@
     task = "CI";
     io = ''
       let github = {
-        #input: "GitHub event"
+        #input: "GitHub Push or PR"
         #repo: "input-output-hk/midnight-wallet"
       }
+
+      let push = {
+        #lib.io.github_push
+        #default_branch: true
+        #tag: ".*"
+        github
+      }
+
+      let pr = #lib.io.github_pr & github
+
       #lib.merge
-      #ios: [
-        #lib.io.github_push & github,
-        #lib.io.github_pr   & github,
-      ]
+      #ios: [push, pr]
+      inputs: "commit already built": {
+        not: true
+        match: {
+          _deps: inputs[github.#input]
+          if (push._revision | pr._revision) == _|_ {close({})}
+          if (push._revision | pr._revision) != _|_ {
+            ok: bool
+            revision: push._revision | pr._revision
+          }
+        }
+      }
     '';
   };
 
@@ -19,12 +37,11 @@
     io = ''
       let push = {
         #lib.io.github_push
-        #input: "GitHub tag pushed"
+        #input: "GitHub Tag"
         #repo: "input-output-hk/midnight-wallet"
         #tag: ".*"
-        inputs: _final_inputs
       }
-      _final_inputs: inputs
+
       inputs: {
         push.inputs
         "CI passed": match: {
@@ -32,10 +49,14 @@
           revision: push._revision
         }
       }
+
       output: {
         success: published: true
         failure: published: false
-        [string]: revision: push._revision
+        [string]: {
+          revision: push._revision
+          tag: push._tag
+        }
       }
     '';
   };

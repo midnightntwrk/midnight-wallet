@@ -1,6 +1,6 @@
 {
     "name": "@midnight/ouroboros-sync-mini-protocol",
-    "version": "0.0.16",
+    "version": "0.0.20",
     "types": "dist/main.d.ts",
     "main": "dist/main.js",
     "module": "dist/main.js",
