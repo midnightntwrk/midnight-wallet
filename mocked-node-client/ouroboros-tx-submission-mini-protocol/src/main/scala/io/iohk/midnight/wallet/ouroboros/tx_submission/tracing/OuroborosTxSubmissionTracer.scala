@@ -55,7 +55,7 @@ object OuroborosTxSubmissionTracer {
       id = TxSubmitted.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Transaction [${evt.show}] has been submitted to node.", // [FIXME] PM-5687
+      message = evt => s"Transaction [${evt.show}] has been submitted to node.",
       context = _.stringLogContext,
     )
 
