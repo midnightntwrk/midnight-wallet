@@ -151,6 +151,8 @@ lazy val walletCore = project
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
       "net.exoego" %%% "scala-js-nodejs-v16" % "0.14.0",
+      "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
+      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
     ),
 
     // Test dependencies

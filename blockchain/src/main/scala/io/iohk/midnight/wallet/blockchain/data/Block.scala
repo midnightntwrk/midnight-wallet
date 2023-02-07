@@ -1,6 +1,8 @@
 package io.iohk.midnight.wallet.blockchain.data
 
 import java.time.Instant
+import cats.Show
+import cats.syntax.contravariant.*
 
 final case class Block(header: Block.Header, body: Block.Body)
 
@@ -18,6 +20,9 @@ object Block {
     def increment: Height = new Height(value + 1) {}
   }
   object Height {
+
+    implicit val heightShow: Show[Height] = Show[BigInt].contramap(_.value)
+
     val Genesis: Height = new Height(0) {}
 
     def apply(value: BigInt): Either[String, Height] =

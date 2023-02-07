@@ -12,6 +12,11 @@ import io.iohk.midnight.wallet.engine.config.NodeConnection.{NodeInstance, NodeU
 import io.iohk.midnight.wallet.engine.config.{Config, NodeConnection}
 import io.iohk.midnight.wallet.engine.js.{SyncServiceFactory, TxSubmissionServiceFactory}
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
+import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
+import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
+import io.iohk.midnight.wallet.core.tracing.WalletFilterTracer
+import io.iohk.midnight.wallet.core.tracing.BalanceTransactionTracer
+import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 
 object WalletBuilder {
   final case class WalletDependencies[F[_]](
@@ -25,20 +30,23 @@ object WalletBuilder {
   )
 
   def build[F[_]: Async](config: Config): F[AllocatedWallet[F]] = {
-    val rootTracer = ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
+    implicit val rootTracer: Tracer[F, StructuredLog] =
+      ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
     val builderTracer = WalletBuilderTracer.from(rootTracer)
 
     val dependencies = for {
       _ <- builderTracer.buildRequested(config).toResource
-      (syncService, txSubmissionService) = buildNodeResources(config.nodeConnection, rootTracer)
+      (syncService, txSubmissionService) = buildNodeResources(config.nodeConnection)
       submitTxService <- txSubmissionService
       stateSyncService <- syncService
       filterSyncService <- syncService
-      walletState <- WalletState.Live[F](stateSyncService, config.initialState)
-      walletFilterService <- Resource.pure(new WalletFilterService.Live[F](filterSyncService))
-      balanceTransactionService <- Resource.pure(new BalanceTransactionService.Live[F]())
-      walletTxSubmission <- Resource.pure(
-        new WalletTxSubmission.Live[F](submitTxService, balanceTransactionService, walletState),
+      walletState <- buildWalletState(stateSyncService, config.initialState)
+      walletFilterService <- buildWalletFilterService(filterSyncService)
+      balanceTxService <- buildBalanceTransactionService
+      walletTxSubmission <- buildWalletTxSubmissionService(
+        submitTxService,
+        balanceTxService,
+        walletState,
       )
     } yield WalletDependencies(walletState, walletFilterService, walletTxSubmission)
 
@@ -55,12 +63,11 @@ object WalletBuilder {
 
   private def buildNodeResources[F[_]: Async](
       nodeConnection: NodeConnection,
-      tracer: Tracer[F, StructuredLog],
-  ): NodeResources[F] =
+  )(implicit rootTracer: Tracer[F, StructuredLog]): NodeResources[F] =
     nodeConnection match {
       case NodeUri(uri) =>
-        val syncService = SyncServiceFactory.connect(uri, tracer)
-        val txSubmissionService = TxSubmissionServiceFactory.connect(uri, tracer)
+        val syncService = SyncServiceFactory.connect(uri, rootTracer)
+        val txSubmissionService = TxSubmissionServiceFactory.connect(uri, rootTracer)
         (syncService, txSubmissionService)
       case NodeInstance(nodeInstance) =>
         val syncService =
@@ -69,4 +76,41 @@ object WalletBuilder {
           Async[F].delay(TxSubmissionServiceFactory.fromNode[F](nodeInstance)).toResource
         (syncService, txSubmissionService)
     }
+
+  private def buildWalletState[F[_]: Async](
+      syncService: SyncService[F],
+      initialState: ZSwapLocalState,
+  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, WalletState[F]] = {
+    implicit val walletStateTracer: WalletStateTracer[F] = WalletStateTracer.from(rootTracer)
+    WalletState.Live[F](syncService, initialState)
+  }
+
+  private def buildWalletFilterService[F[_]: Async](
+      syncService: SyncService[F],
+  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, WalletFilterService[F]] = {
+    implicit val walletFilterTracer: WalletFilterTracer[F] = WalletFilterTracer.from(rootTracer)
+    Resource.pure(new WalletFilterService.Live[F](syncService))
+  }
+
+  private def buildBalanceTransactionService[F[_]: Async](implicit
+      rootTracer: Tracer[F, StructuredLog],
+  ): Resource[F, BalanceTransactionService[F]] = {
+    implicit val balanceTxTracer: BalanceTransactionTracer[F] =
+      BalanceTransactionTracer.from(rootTracer)
+    Resource.pure(new BalanceTransactionService.Live[F]())
+  }
+
+  private def buildWalletTxSubmissionService[F[_]: Async](
+      submitTxService: TxSubmissionService[F],
+      balanceTxService: BalanceTransactionService[F],
+      walletState: WalletState[F],
+  )(implicit
+      rootTracer: Tracer[F, StructuredLog],
+  ): Resource[F, WalletTxSubmission[F]] = {
+    implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[F] =
+      WalletTxSubmissionTracer.from(rootTracer)
+    Resource.pure(
+      new WalletTxSubmission.Live[F](submitTxService, balanceTxService, walletState),
+    )
+  }
 }

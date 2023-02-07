@@ -9,6 +9,7 @@ import io.iohk.midnight.midnightLedger.mod.{Transaction, ZSwapCoinPublicKey, ZSw
 import io.iohk.midnight.wallet.core.services.SyncService
 
 import scala.scalajs.js
+import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
 
 trait WalletState[F[_]] {
   def start: F[Unit]
@@ -27,14 +28,25 @@ object WalletState {
       bloc: Bloc[F, ZSwapLocalState],
       syncService: SyncService[F],
       deferred: Deferred[F, Either[Throwable, Unit]],
-  ) extends WalletState[F] {
+  )(implicit tracer: WalletStateTracer[F])
+      extends WalletState[F] {
 
     override val start: F[Unit] =
       syncService
         .sync()
+        .evalTap(tracer.handlingBlock)
         .flatMap(block => Stream.emits(block.body.transactionResults))
+        .evalTap(tracer.updateStateStart)
         .flatMap(tx => Stream.fromEither(LedgerSerialization.fromTransaction(tx)))
-        .foreach(tx => bloc.update { s => s.applyLocal(tx); s }.void)
+        .foreach { tx =>
+          bloc
+            .update { s => s.applyLocal(tx); s }
+            .attemptTap {
+              case Right(_)    => tracer.updateStateSuccess(tx)
+              case Left(error) => tracer.updateStateError(tx, error)
+            }
+            .void
+        }
         .interruptWhen(deferred)
         .compile
         .drain
@@ -61,7 +73,7 @@ object WalletState {
     def apply[F[_]: Async](
         syncService: SyncService[F],
         initialState: ZSwapLocalState = new ZSwapLocalState(),
-    ): Resource[F, Live[F]] = {
+    )(implicit tracer: WalletStateTracer[F]): Resource[F, Live[F]] = {
       val bloc = Bloc(initialState)
       val deferred = Resource.eval(Deferred[F, Either[Throwable, Unit]])
       val walletState = (bloc, deferred).mapN(new Live[F](_, syncService, _))

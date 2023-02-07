@@ -9,6 +9,7 @@ import io.iohk.midnight.midnightLedger.mod.*
 
 import scala.annotation.tailrec
 import scala.scalajs.js
+import io.iohk.midnight.wallet.core.tracing.BalanceTransactionTracer
 
 trait BalanceTransactionService[F[_]] {
   def balanceTransaction(
@@ -19,26 +20,33 @@ trait BalanceTransactionService[F[_]] {
 
 object BalanceTransactionService {
   @SuppressWarnings(Array("org.wartremover.warts.Equals"))
-  class Live[F[_]: Sync]() extends BalanceTransactionService[F] {
+  class Live[F[_]: Sync]()(implicit tracer: BalanceTransactionTracer[F])
+      extends BalanceTransactionService[F] {
     private val Buffer = js.BigInt(2000)
     override def balanceTransaction(
         state: ZSwapLocalState,
         tx: Transaction,
-    ): F[(Transaction, ZSwapLocalState)] =
-      tx.imbalances()
-        // equals is probably checking the reference which is different in the runtime for the native tokens created in different places
-        // temporal assumption that we have only native tokens
-        // .filter(_.tokenType.equals(nativeToken()))
-        .filter(_.imbalance < js.BigInt(0))
-        .headOption
-        .fold(Applicative[F].pure((tx, state)))(_ => {
-          Sync[F].defer {
-            tryBalanceTx(state.coins.toList, List.empty, state, tx) match {
-              case Left(error)  => MonadThrow[F].raiseError[(Transaction, ZSwapLocalState)](error)
-              case Right(value) => Applicative[F].pure((value, state))
+    ): F[(Transaction, ZSwapLocalState)] = {
+      val result = tracer.balanceTxStart(tx) >>
+        tx.imbalances()
+          // equals is probably checking the reference which is different in the runtime for the native tokens created in different places
+          // temporal assumption that we have only native tokens
+          // .filter(_.tokenType.equals(nativeToken()))
+          .filter(_.imbalance < js.BigInt(0))
+          .headOption
+          .fold(Applicative[F].pure((tx, state)))(_ => {
+            Sync[F].defer {
+              tryBalanceTx(state.coins.toList, List.empty, state, tx) match {
+                case Left(error)  => MonadThrow[F].raiseError[(Transaction, ZSwapLocalState)](error)
+                case Right(value) => Applicative[F].pure((value, state))
+              }
             }
-          }
-        })
+          })
+      result.attemptTap {
+        case Right((balancedTx, _)) => tracer.balanceTxSuccess(balancedTx)
+        case Left(error)            => tracer.balanceTxError(tx, error)
+      }
+    }
 
     @tailrec
     private def tryBalanceTx(

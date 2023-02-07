@@ -2,15 +2,21 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
 import cats.syntax.eq.*
-import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction}
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.blockchain.util.implicits.Equality.*
 import io.iohk.midnight.wallet.core.services.SyncServiceStub
+import io.iohk.midnight.wallet.core.tracing.WalletFilterTracer
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.CatsEffectSuite
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
 
 class WalletFilterServiceSpec extends CatsEffectSuite with BetterOutputSuite {
+
+  implicit val filterTracer: WalletFilterTracer[IO] = WalletFilterTracer.from(Tracer.noOpTracer)
+
   test("Syncs transactions") {
     val blocksGen =
       Gen

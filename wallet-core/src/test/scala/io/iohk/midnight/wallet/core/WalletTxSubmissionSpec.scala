@@ -2,18 +2,19 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.IO
 import io.iohk.midnight.midnightLedger.mod.*
-import io.iohk.midnight.wallet.core.Generators.{
-  TransactionWithContext,
-  coinInfoGen,
-  ledgerTransactionGen,
-}
-import io.iohk.midnight.wallet.core.WalletTxSubmission.{
-  TransactionNotWellFormed,
-  TransactionRejected,
-}
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
+import io.iohk.midnight.wallet.core.Generators.coinInfoGen
+import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
+import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionNotWellFormed
+import io.iohk.midnight.wallet.core.WalletTxSubmission.TransactionRejected
 import io.iohk.midnight.wallet.core.services.*
+import io.iohk.midnight.wallet.core.tracing.BalanceTransactionTracer
+import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import munit.CatsEffectSuite
+import munit.ScalaCheckEffectSuite
 import org.scalacheck.effect.PropF.forAllF
 
 import scala.scalajs.js
@@ -22,6 +23,16 @@ class WalletTxSubmissionSpec
     extends CatsEffectSuite
     with ScalaCheckEffectSuite
     with BetterOutputSuite {
+
+  val noOpTracer: Tracer[IO, StructuredLog] = Tracer.noOpTracer[IO]
+
+  implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[IO] = {
+    WalletTxSubmissionTracer.from(noOpTracer)
+  }
+
+  implicit val balanceTxTracer: BalanceTransactionTracer[IO] =
+    BalanceTransactionTracer.from(noOpTracer)
+
   private val txSubmissionService = new TxSubmissionServiceStub()
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
   private val balanceTransactionService = new BalanceTransactionServiceStub()

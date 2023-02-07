@@ -5,6 +5,7 @@ import cats.syntax.all.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
+import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 
 trait WalletTxSubmission[F[_]] {
   def submitTransaction(
@@ -18,13 +19,15 @@ object WalletTxSubmission {
       txSubmissionService: TxSubmissionService[F],
       balanceTransactionService: BalanceTransactionService[F],
       walletState: WalletState[F],
-  ) extends WalletTxSubmission[F] {
+  )(implicit tracer: WalletTxSubmissionTracer[F])
+      extends WalletTxSubmission[F] {
 
     override def submitTransaction(
         ledgerTx: Transaction,
         newCoins: List[CoinInfo],
     ): F[TransactionIdentifier] = {
       for {
+        _ <- tracer.submitTxStart(ledgerTx)
         _ <- validateTx(ledgerTx)
         state <- walletState.localState
         balancedTxAndState <- balanceTransactionService.balanceTransaction(state, ledgerTx)
@@ -33,28 +36,40 @@ object WalletTxSubmission {
         _ <- walletState.updateLocalState(state)
         response <- txSubmissionService
           .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
-        result <- response match {
-          case SubmissionResult.Accepted =>
-            ledgerTx
-              .identifiers()
-              .headOption
-              .fold(
-                // $COVERAGE-OFF$ Can't generate a test transaction for this scenario
-                NoTransactionIdentifiers.raiseError[F, TransactionIdentifier],
-                // $COVERAGE-ON$
-              )(_.pure)
-          case SubmissionResult.Rejected(reason) =>
-            // we should clear the pending spends here, but we don't have an API now
-            TransactionRejected(reason).raiseError
-        }
+        result <- adaptResponse(ledgerTx, response)
       } yield result
     }
 
-    private def validateTx(tx: Transaction): F[Unit] =
+    private def validateTx(ledgerTx: Transaction): F[Unit] = {
       Either
-        .catchNonFatal(tx.wellFormed(enforceBalancing = false))
+        .catchNonFatal(ledgerTx.wellFormed(enforceBalancing = false))
         .leftMap(TransactionNotWellFormed.apply)
         .liftTo[F]
+    }
+
+    private def adaptResponse(
+        ledgerTx: Transaction,
+        submissionResult: SubmissionResult,
+    ): F[TransactionIdentifier] = {
+      val result: F[TransactionIdentifier] = submissionResult match {
+        case SubmissionResult.Accepted =>
+          ledgerTx
+            .identifiers()
+            .headOption
+            .fold(
+              // $COVERAGE-OFF$ Can't generate a test transaction for this scenario
+              NoTransactionIdentifiers.raiseError[F, TransactionIdentifier],
+              // $COVERAGE-ON$
+            )(_.pure)
+        case SubmissionResult.Rejected(reason) =>
+          // we should clear the pending spends here, but we don't have an API now
+          TransactionRejected(reason).raiseError
+      }
+      result.attemptTap {
+        case Right(txId) => tracer.submitTxSuccess(ledgerTx, txId)
+        case Left(error) => tracer.submitTxError(ledgerTx, error)
+      }
+    }
   }
 
   abstract class Error(msg: String) extends Exception(msg)

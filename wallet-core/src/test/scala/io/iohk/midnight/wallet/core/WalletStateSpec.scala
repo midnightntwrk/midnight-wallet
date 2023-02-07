@@ -1,13 +1,18 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.{IO, Resource}
+import cats.effect.IO
+import cats.effect.Resource
 import cats.syntax.foldable.*
-import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
+import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid => sum, _}
 import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
-import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, ledgerTransactionGen}
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
+import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
 import io.iohk.midnight.wallet.core.services.SyncServiceStub
+import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import munit.CatsEffectSuite
+import munit.ScalaCheckEffectSuite
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.scalacheck.effect.PropF.forAllF
@@ -16,6 +21,9 @@ import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 
 class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
+
+  implicit val stateTracer: WalletStateTracer[IO] = WalletStateTracer.from(Tracer.noOpTracer)
+
   def buildWallet(
       initialState: ZSwapLocalState = new ZSwapLocalState(),
   ): Resource[IO, WalletState[IO]] =
