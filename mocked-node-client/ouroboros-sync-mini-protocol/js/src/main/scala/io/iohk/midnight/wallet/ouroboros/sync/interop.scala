@@ -8,7 +8,7 @@ object interop {
 
   @js.native
   trait Decoder[T] extends js.Object {
-    @nowarn def decode(raw: String): DecodingResult[T] = js.native
+    @nowarn def decode(obj: Any): DecodingResult[T] = js.native
   }
 
   @js.native

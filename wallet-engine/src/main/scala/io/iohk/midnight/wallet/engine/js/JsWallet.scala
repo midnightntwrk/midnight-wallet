@@ -20,10 +20,10 @@ import io.iohk.midnight.wallet.core.{
 }
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
-import io.iohk.midnight.wallet.engine.config.RawNodeConnection.RawNodeInstance
-import io.iohk.midnight.wallet.engine.config.RawNodeConnection.RawNodeUri
+import io.iohk.midnight.wallet.engine.config.RawNodeConnection.{RawNodeInstance, RawNodeUri}
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig, RawNodeConnection}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
+
 import scala.scalajs.js
 import scala.scalajs.js.annotation.*
 
@@ -60,7 +60,7 @@ class JsWallet(
     walletState.start.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
-    finalizer.unsafeToPromise()
+    finalizer.unsafeRunSyncToPromise()
 }
 
 @JSExportTopLevel("WalletBuilder")

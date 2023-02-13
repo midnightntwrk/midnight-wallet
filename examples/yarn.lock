@@ -653,6 +653,14 @@
     "@midnight/protocols" "^0.7.1"
     "@midnight/session-types" "^0.7.1"
 
+"@midnight/ouroboros-sync-mini-protocol@file:../mocked-node-client/ouroboros-sync-mini-protocol/js":
+  version "0.0.16"
+  dependencies:
+    cross-fetch "^3.1.5"
+    isomorphic-ws "^5.0.0"
+    rxjs "7.5.5"
+    ws "^8.8.1"
+
 "@midnight/protocols@^0.7.1":
   version "0.7.1"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/protocols/-/protocols-0.7.1.tgz#53a1aa79e1e3b54362840fc60aacc9ee916a4822"
@@ -1852,6 +1860,11 @@ flatted@^3.1.0:
   resolved "https://registry.yarnpkg.com/flatted/-/flatted-3.2.7.tgz#609f39207cb614b89d0765b477cb2d437fbf9787"
   integrity sha512-5nqDSxl8nn5BSNxyR3n4I6eDmbolI6WT+QqR547RwxQapgjQBmtktdP+HTBb/a/zLsbzERTONyUB5pefh5TtjQ==
 
+fp-ts@2.12.3:
+  version "2.12.3"
+  resolved "https://registry.yarnpkg.com/fp-ts/-/fp-ts-2.12.3.tgz#d991b1e8467d325dadbb6b0ab9524f773e9c3c49"
+  integrity sha512-8m0XvW8kZbfnJOA4NvSVXu95mLbPf4LQGwQyqVukIYS4KzSNJiyKSmuZUmbVHteUi6MGkAJGPb0goPZqI+Tsqg==
+
 fp-ts@^2.12.2:
   version "2.13.1"
   resolved "https://registry.yarnpkg.com/fp-ts/-/fp-ts-2.13.1.tgz#1bf2b24136cca154846af16752dc29e8fa506f2a"
@@ -2099,6 +2112,11 @@ io-ts-types@^0.5.17:
   version "0.5.19"
   resolved "https://registry.yarnpkg.com/io-ts-types/-/io-ts-types-0.5.19.tgz#9c04fa73f15992436605218a5686b610efa7a5d3"
   integrity sha512-kQOYYDZG5vKre+INIDZbLeDJe+oM+4zLpUkjXyTMyUfoCpjJNyi29ZLkuEAwcPufaYo3yu/BsemZtbdD+NtRfQ==
+
+io-ts@2.2.18:
+  version "2.2.18"
+  resolved "https://registry.yarnpkg.com/io-ts/-/io-ts-2.2.18.tgz#dfb41aded5f0e598ccf2a25a483c205444210173"
+  integrity sha512-3JxUUzRtPQPs5sOwB7pW0+Xb54nOzqA6M1sRB1hwgsRmkWMeGTjtOrCynGTJhIj+mBLUj2S37DAq2+BrPh9kTQ==
 
 io-ts@^2.2.17:
   version "2.2.20"
@@ -3025,9 +3043,9 @@ pino-abstract-transport@v1.0.0:
     split2 "^4.0.0"
 
 pino-std-serializers@^6.0.0:
-  version "6.0.0"
-  resolved "https://registry.yarnpkg.com/pino-std-serializers/-/pino-std-serializers-6.0.0.tgz#4c20928a1bafca122fdc2a7a4a171ca1c5f9c526"
-  integrity sha512-mMMOwSKrmyl+Y12Ri2xhH1lbzQxwwpuru9VjyJpgFIH4asSj88F2csdMwN6+M5g1Ll4rmsYghHLQJw81tgZ7LQ==
+  version "6.1.0"
+  resolved "https://registry.yarnpkg.com/pino-std-serializers/-/pino-std-serializers-6.1.0.tgz#307490fd426eefc95e06067e85d8558603e8e844"
+  integrity sha512-KO0m2f1HkrPe9S0ldjx7za9BJjeHqBku5Ch8JyxETxT8dEFGz1PwgrHaOQupVYitpzbFSYm7nnljxD8dik2c+g==
 
 pino@^8.4.2:
   version "8.8.0"
@@ -3123,9 +3141,9 @@ react-is@^18.0.0:
   integrity sha512-xWGDIW6x921xtzPkhiULtthJHoJvBbF3q26fzloPCK0hsvxtPVelvftw3zjbHWSkR2km9Z+4uxbDDK/6Zw9B8w==
 
 readable-stream@^4.0.0:
-  version "4.2.0"
-  resolved "https://registry.yarnpkg.com/readable-stream/-/readable-stream-4.2.0.tgz#a7ef523d3b39e4962b0db1a1af22777b10eeca46"
-  integrity sha512-gJrBHsaI3lgBoGMW/jHZsQ/o/TIWiu5ENCJG1BB7fuCKzpFM8GaS2UoBVt9NO+oI+3FcrBNbUkl3ilDe09aY4A==
+  version "4.3.0"
+  resolved "https://registry.yarnpkg.com/readable-stream/-/readable-stream-4.3.0.tgz#0914d0c72db03b316c9733bb3461d64a3cc50cba"
+  integrity sha512-MuEnA0lbSi7JS8XM+WNJlWZkHAAdm7gETHdFK//Q/mChGyj2akEFtdLZh32jSdkWGbRwCW9pn6g3LWDdDeZnBQ==
   dependencies:
     abort-controller "^3.0.0"
     buffer "^6.0.3"
@@ -3223,9 +3241,9 @@ safe-regex-test@^1.0.0:
     is-regex "^1.1.4"
 
 safe-stable-stringify@^2.3.1:
-  version "2.4.1"
-  resolved "https://registry.yarnpkg.com/safe-stable-stringify/-/safe-stable-stringify-2.4.1.tgz#34694bd8a30575b7f94792aa51527551bd733d61"
-  integrity sha512-dVHE6bMtS/bnL2mwualjc6IxEv1F+OCUpA46pKUj6F8uDbUM0jCCulPqRNPSnWwGNKx5etqMjZYdXtrm5KJZGA==
+  version "2.4.2"
+  resolved "https://registry.yarnpkg.com/safe-stable-stringify/-/safe-stable-stringify-2.4.2.tgz#ec7b037768098bf65310d1d64370de0dc02353aa"
+  integrity sha512-gMxvPJYhP0O9n2pvcfYfIuYgbledAOJFcqRThtPRmjscaipiwcwPPKLytpVzMkG2HAN87Qmo2d4PtGiri1dSLA==
 
 semver@7.x, semver@^7.0.0, semver@^7.3.5, semver@^7.3.7, semver@^7.3.8:
   version "7.3.8"
@@ -3415,9 +3433,9 @@ text-table@^0.2.0:
   integrity sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==
 
 thread-stream@^2.0.0:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/thread-stream/-/thread-stream-2.2.0.tgz#310c03a253f729094ce5d4638ef5186dfa80a9e8"
-  integrity sha512-rUkv4/fnb4rqy/gGy7VuqK6wE1+1DOCOWy4RMeaV69ZHMP11tQKZvZSip1yTgrKCMZzEMcCL/bKfHvSfDHx+iQ==
+  version "2.3.0"
+  resolved "https://registry.yarnpkg.com/thread-stream/-/thread-stream-2.3.0.tgz#4fc07fb39eff32ae7bad803cb7dd9598349fed33"
+  integrity sha512-kaDqm1DET9pp3NXwR8382WHbnpXnRkN9xGN9dQt3B2+dmXiW8X1SOwmFOxAErEQ47ObhZ96J6yhZNXuyCOL7KA==
   dependencies:
     real-require "^0.2.0"
 

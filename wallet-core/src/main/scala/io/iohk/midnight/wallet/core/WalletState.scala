@@ -7,9 +7,9 @@ import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.midnightLedger.mod.{Transaction, ZSwapCoinPublicKey, ZSwapLocalState}
 import io.iohk.midnight.wallet.core.services.SyncService
+import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
 
 import scala.scalajs.js
-import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
 
 trait WalletState[F[_]] {
   def start: F[Unit]
@@ -34,6 +34,7 @@ object WalletState {
     override val start: F[Unit] =
       syncService
         .sync()
+        .interruptWhen(deferred)
         .evalTap(tracer.handlingBlock)
         .flatMap(block => Stream.emits(block.body.transactionResults))
         .evalTap(tracer.updateStateStart)
@@ -47,7 +48,6 @@ object WalletState {
             }
             .void
         }
-        .interruptWhen(deferred)
         .compile
         .drain
 

@@ -4,15 +4,11 @@ import cats.effect.kernel.Sync
 import io.circe
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
+import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
-import io.iohk.midnight.tracer.logging.AsStructuredLog
-import io.iohk.midnight.tracer.logging.Event
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.StructuredLog
-
-import JsonWebSocketClientEvent.*
+import io.iohk.midnight.wallet.ouroboros.network.JsonWebSocketClientEvent.*
+import sttp.ws.WebSocketClosed
 
 class JsonWebSocketClientTracer[F[_]](val tracer: Tracer[F, JsonWebSocketClientEvent]) {
 
@@ -23,9 +19,10 @@ class JsonWebSocketClientTracer[F[_]](val tracer: Tracer[F, JsonWebSocketClientE
   def decodingFailed: PartialFunction[Throwable, F[Unit]] = { case ce: circe.Error =>
     tracer(DecodingFailed(ce))
   }
-  def receiveFailed: PartialFunction[Throwable, F[Unit]] =
-    PartialFunction.fromFunction(t => tracer(ReceiveFailed(t)))
-
+  def receiveFailed: PartialFunction[Throwable, F[Unit]] = {
+    case wsc @ WebSocketClosed(_) => tracer(CloseFrameReceived(wsc))
+    case t                        => tracer(ReceiveFailed(t))
+  }
 }
 
 object JsonWebSocketClientTracer {
@@ -34,17 +31,14 @@ object JsonWebSocketClientTracer {
 
   private val Component: Event.Component = Event.Component("json_websocket_client")
 
-  implicit val websocketEventAsStructuredLog: AsStructuredLog[JsonWebSocketClientEvent] =
-    new AsStructuredLog[JsonWebSocketClientEvent] {
-      override def apply(event: JsonWebSocketClientEvent): StructuredLog =
-        event match {
-          case e: RequestSent      => e.asContextAwareLog
-          case e: ResponseReceived => e.asContextAwareLog
-          case e: SendFailed       => e.asContextAwareLog
-          case e: DecodingFailed   => e.asContextAwareLog
-          case e: ReceiveFailed    => e.asContextAwareLog
-        }
-    }
+  implicit val websocketEventAsStructuredLog: AsStructuredLog[JsonWebSocketClientEvent] = {
+    case e: RequestSent        => e.asContextAwareLog
+    case e: ResponseReceived   => e.asContextAwareLog
+    case e: SendFailed         => e.asContextAwareLog
+    case e: DecodingFailed     => e.asContextAwareLog
+    case e: ReceiveFailed      => e.asContextAwareLog
+    case e: CloseFrameReceived => e.asContextAwareLog
+  }
 
   implicit val requestSentAsStructuredLog: AsStructuredLog[RequestSent] =
     AsContextAwareLog.instance(
@@ -84,6 +78,14 @@ object JsonWebSocketClientTracer {
       component = Component,
       level = LogLevel.Warn,
       message = _ => "Receiving message failed.",
+      context = _.stringLogContext,
+    )
+  implicit val closeFrameReceivedAsStructuredLog: AsStructuredLog[CloseFrameReceived] =
+    AsContextAwareLog.instance(
+      id = CloseFrameReceived.id,
+      component = Component,
+      level = LogLevel.Warn,
+      message = _ => "Received web socket close frame.",
       context = _.stringLogContext,
     )
 

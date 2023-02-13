@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.ouroboros.sync
 import cats.Show as CatsShow
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
-import io.circe.Decoder as CirceDecoder
+import io.circe.{Json, Decoder as CirceDecoder}
 import io.iohk.midnight.js.interop.util.ObservableOps.FromStream
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.Tracer
@@ -18,6 +18,7 @@ import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
 import scala.scalajs.js
+import scala.scalajs.js.JSConverters.JSRichIterableOnce
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 
 /** Translation layer from Scala into JS types:
@@ -40,7 +41,7 @@ class JsOuroborosSyncService[Block](
 
   @JSExport
   def close(): js.Promise[Unit] =
-    finalizer.unsafeToPromise()
+    finalizer.unsafeRunSyncToPromise()
 }
 
 @JSExportTopLevel("OuroborosSyncServiceBuilder")
@@ -65,18 +66,8 @@ object JsOuroborosSyncServiceBuilder {
     val sttpBackend = FetchCatsBackend[IO]()
     val parsedNodeUri = Uri.unsafeParse(nodeUri)
 
-    @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-    implicit val circeDecoder: CirceDecoder[Block] = {
-      CirceDecoder[String].emap { rawString =>
-        val rawResult = blockDecoder.decode(rawString)
-
-        if (rawResult.hasOwnProperty("value")) { // Success
-          Right(rawResult.asInstanceOf[Success[Block]].value)
-        } else { // Failure
-          Left(rawResult.asInstanceOf[Failure].message)
-        }
-      }
-    }
+    implicit val circeDecoder: CirceDecoder[Block] =
+      createCirceDecoder[Block](blockDecoder)
 
     implicit val catsShow: CatsShow[Block] =
       CatsShow.show[Block](blockShow.show)
@@ -87,4 +78,32 @@ object JsOuroborosSyncServiceBuilder {
       .map((new JsOuroborosSyncService[Block](_, _)).tupled)
       .unsafeToPromise()
   }
+
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+  private def createCirceDecoder[Block](blockDecoder: Decoder[Block]): CirceDecoder[Block] = {
+
+    @SuppressWarnings(Array("org.wartremover.warts.Null"))
+    def toJSON(json: Json): js.Any =
+      json.fold(
+        jsonNull = null,
+        jsonBoolean = identity(_),
+        jsonNumber = _.toDouble,
+        jsonString = identity(_),
+        jsonArray = _.map(toJSON).toJSArray,
+        jsonObject = obj => {
+          val keyValues = obj.toList.map { case (str, json) => (str, toJSON(json)) }
+          js.special.objectLiteral(keyValues*)
+        },
+      )
+
+    CirceDecoder[Json].emap { json =>
+      val rawResult = blockDecoder.decode(toJSON(json))
+      if (rawResult.hasOwnProperty("value")) { // Success
+        Right(rawResult.asInstanceOf[Success[Block]].value)
+      } else { // Failure
+        Left(rawResult.asInstanceOf[Failure].message)
+      }
+    }
+  }
+
 }

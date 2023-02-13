@@ -24,16 +24,17 @@ class WalletFilterServiceSpec extends CatsEffectSuite with BetterOutputSuite {
         .flatMap(tx => Gen.listOfN(2, Generators.blockGen(tx)))
 
     forAllF(blocksGen) { blocks =>
-      val wallet = new WalletFilterService.Live[IO](new SyncServiceStub(blocks))
-      wallet
-        .installTransactionFilter(_ => true)
-        .compile
-        .to(List)
-        .map { result =>
-          val obtained = result.map(LedgerSerialization.toTransaction(_).header.hash)
-          val expected = blocks.flatMap(_.body.transactionResults.map(_.header.hash))
-          assertEquals(obtained, expected)
-        }
+      WalletFilterService.Live[IO](new SyncServiceStub(blocks)).use { wallet =>
+        wallet
+          .installTransactionFilter(_ => true)
+          .compile
+          .to(List)
+          .map { result =>
+            val obtained = result.map(LedgerSerialization.toTransaction(_).header.hash)
+            val expected = blocks.flatMap(_.body.transactionResults.map(_.header.hash))
+            assertEquals(obtained, expected)
+          }
+      }
     }
   }
   test("Filters transactions") {
@@ -46,18 +47,19 @@ class WalletFilterServiceSpec extends CatsEffectSuite with BetterOutputSuite {
     forAllF(blockTxGen) { blocksWithTx =>
       val (block, tx) = blocksWithTx
 
-      val wallet = new WalletFilterService.Live[IO](new SyncServiceStub(Seq(block)))
-      wallet
-        .installTransactionFilter(
-          LedgerSerialization.toTransaction(_).header.hash === tx.header.hash,
-        )
-        .compile
-        .to(Seq)
-        .map { result =>
-          val obtained = result.map(LedgerSerialization.toTransaction(_).header.hash)
-          val expected = Seq(tx.header.hash)
-          assertEquals(obtained, expected)
-        }
+      WalletFilterService.Live[IO](new SyncServiceStub(Seq(block))).use { wallet =>
+        wallet
+          .installTransactionFilter(
+            LedgerSerialization.toTransaction(_).header.hash === tx.header.hash,
+          )
+          .compile
+          .to(Seq)
+          .map { result =>
+            val obtained = result.map(LedgerSerialization.toTransaction(_).header.hash)
+            val expected = Seq(tx.header.hash)
+            assertEquals(obtained, expected)
+          }
+      }
     }
   }
 }

@@ -1,5 +1,5 @@
-import { distinct, find, firstValueFrom, take } from 'rxjs';
-import type { MockedNode, Transaction } from '@midnight/mocked-node-api';
+import { distinct, find, firstValueFrom, take, toArray } from 'rxjs';
+import type { Transaction } from '@midnight/mocked-node-api';
 import {
   CoinInfo,
   LedgerState,
@@ -14,6 +14,9 @@ import {
 } from '@midnight/ledger';
 import { HasBalance, Resource, WalletBuilder } from '@midnight/wallet';
 import type { Filter, FilterService, Wallet } from '@midnight/wallet-api';
+import type { OuroborosSyncService } from '@midnight/ouroboros-sync-mini-protocol';
+import { InMemoryServer } from '@midnight/mocked-node-app';
+import * as osp from './ouroboros-sync-protocol';
 import {
   Genesis,
   InMemoryMockedNode,
@@ -53,84 +56,174 @@ const deserializeLocalState = (state: string): ZSwapLocalState => {
   return ZSwapLocalState.deserialize(Buffer.from(state, 'base64'));
 };
 
-describe('Wallet client example', () => {
-  let mockedNode: MockedNode<Transaction>;
-  let wallet: FilterService & Wallet & HasBalance & Resource;
+const prepareLocalStateAndMintTx = (): [string, LedgerTransaction] => {
+  // Create the wallet local state
+  // This holds priv/pub keys, coins, and private state of contracts
+  const serializedInitialState = WalletBuilder.generateInitialState();
+  const localState = deserializeLocalState(serializedInitialState);
 
-  beforeEach(async () => {
-    // Create the wallet local state
-    // This holds priv/pub keys, coins, and private state of contracts
-    const serializedInitialState = WalletBuilder.generateInitialState();
-    const localState = deserializeLocalState(serializedInitialState);
+  // Create an initial tx minting money for the wallet
+  const initialCoin = new CoinInfo(initialBalance, tokenType);
+  localState.watchFor(initialCoin);
+  const mintTx = buildMintTx(initialCoin, localState.coinPublicKey);
+  const serializedLocalState = serializeLocalState(localState);
 
-    // Create an initial tx minting money for the wallet
-    const initialCoin = new CoinInfo(initialBalance, tokenType);
-    localState.watchFor(initialCoin);
-    const mintTx = buildMintTx(initialCoin, localState.coinPublicKey);
+  return [serializedLocalState, mintTx];
+};
+
+type WalletType = FilterService & Wallet & HasBalance & Resource;
+
+const testSpec = (
+  specName: string,
+  testName: string,
+  setupWallet: () => Promise<WalletType>,
+  additionalTest: () => Promise<void>,
+  tearDown: () => Promise<void>,
+): void => {
+  describe(specName, () => {
+    let wallet: WalletType;
+
+    beforeEach(async () => {
+      wallet = await setupWallet();
+
+      // Run wallet: start syncing blocks
+      // This is necessary to have local state updated
+      wallet.start();
+    });
+
+    afterEach(async () => {
+      // Stop syncing
+      await wallet.close();
+      await tearDown();
+    });
+
+    test(testName, async () => {
+      // Subscribe to wallet balance changes
+      const balanceHistory: bigint[] = [];
+      wallet
+        .balance()
+        .pipe(distinct(), take(3))
+        .subscribe((b) => balanceHistory.push(b));
+
+      // Wait until wallet is synced and received the initial coin
+      await firstValueFrom(
+        wallet.balance().pipe(find((balance) => balance === initialBalance)),
+      );
+
+      // We can create a mint tx without inputs, because
+      // the wallet will balance it with its own coins
+      const spendCoin = new CoinInfo(10_000n, tokenType);
+      const randomRecipient = new ZSwapLocalState().coinPublicKey;
+      const unbalancedTx = buildMintTx(spendCoin, randomRecipient);
+
+      // Submit the tx, get an identifier back
+      const submittedTxId = await firstValueFrom(
+        wallet.submitTx(unbalancedTx, []),
+      );
+
+      // Install a filter waiting for the submitted tx
+      const filter: Filter<LedgerTransaction> = {
+        apply(arg: LedgerTransaction): boolean {
+          return arg.hasIdentifier(submittedTxId);
+        },
+      };
+      const filteredTx = await firstValueFrom(wallet.installTxFilter(filter));
+      // Double-check that the filtered tx is what we want
+      expect(filteredTx.hasIdentifier(submittedTxId)).toBeTruthy();
+
+      expect(balanceHistory).toEqual([
+        0n, // Starts with 0
+        initialBalance, // Receives mint tx
+        initialBalance - spendCoin.value - txFee, // Spends (spendCoin + fee)
+      ]);
+
+      await additionalTest();
+    });
+  });
+};
+
+describe('Mocked node instance and simple wallet flow (submit tx, check balance)', () => {
+  const setup = async (): Promise<WalletType> => {
+    const [serializedLocalState, mintTx] = prepareLocalStateAndMintTx();
 
     // Create a mocked-node instance with the mint tx in the genesis block
     const genesis: Genesis<Transaction> = {
       tag: 'value',
       transactions: [serializeTx(mintTx)],
     };
-    mockedNode = new InMemoryMockedNode(genesis, new LedgerNapi());
+    const mockedNode = new InMemoryMockedNode(genesis, new LedgerNapi());
 
     // Create a wallet instance that connects to the mocked-node
     // Initial state is set up to receive funds from the mint tx
-    wallet = await WalletBuilder.build(
-      mockedNode,
-      serializeLocalState(localState),
-      'warn',
+    return await WalletBuilder.build(mockedNode, serializedLocalState, 'warn');
+  };
+
+  const noAdditionalTest = async (): Promise<void> => {
+    return await Promise.resolve();
+  };
+
+  const noTearDown = async (): Promise<void> => {
+    return await Promise.resolve();
+  };
+
+  testSpec(
+    'Wallet client example',
+    'Submit a tx',
+    setup,
+    noAdditionalTest,
+    noTearDown,
+  );
+});
+
+describe('MockedNode as InMemoryServer and OuroborosSyncService flow (syncing transactions)', () => {
+  let mockedNode: InMemoryServer;
+  let ouroborosSyncService: OuroborosSyncService<osp.Block>;
+
+  const setup = async (): Promise<WalletType> => {
+    const [serializedLocalState, mintTx] = prepareLocalStateAndMintTx();
+
+    const nodeHost = 'localhost';
+    const nodePort = 5205;
+
+    mockedNode = new InMemoryServer({
+      host: nodeHost,
+      port: nodePort,
+      genesis: { tag: 'value', transactions: [serializeTx(mintTx)] },
+    });
+
+    await mockedNode.run();
+
+    ouroborosSyncService = await osp.createOuroborosSyncService(
+      nodeHost,
+      nodePort,
     );
-    // Run wallet: start syncing blocks
-    // This is necessary to have local state updated
-    wallet.start();
-  });
 
-  afterEach(async () => {
-    // Stop syncing
-    await wallet.close();
-  });
-
-  test('Submit a tx', async () => {
-    // Subscribe to wallet balance changes
-    const balanceHistory: bigint[] = [];
-    wallet
-      .balance()
-      .pipe(distinct(), take(3))
-      .subscribe((b) => balanceHistory.push(b));
-
-    // Wait until wallet is synced and received the initial coin
-    await firstValueFrom(
-      wallet.balance().pipe(find((balance) => balance === initialBalance)),
+    // Create a wallet instance that connects to the mocked-node
+    // Initial state is set up to receive funds from the mint tx
+    return await WalletBuilder.connect(
+      `ws://${nodeHost}:${nodePort}`,
+      serializedLocalState,
     );
+  };
 
-    // We can create a mint tx without inputs, because
-    // the wallet will balance it with its own coins
-    const spendCoin = new CoinInfo(10_000n, tokenType);
-    const randomRecipient = new ZSwapLocalState().coinPublicKey;
-    const unbalancedTx = buildMintTx(spendCoin, randomRecipient);
-
-    // Submit the tx, get an identifier back
-    const submittedTxId = await firstValueFrom(
-      wallet.submitTx(unbalancedTx, []),
+  const additionalTest = async (): Promise<void> => {
+    // Check synced txs (they're two, genesis and unbalancedTx)
+    const syncedTxs = await firstValueFrom(
+      ouroborosSyncService.sync().pipe(take(2), toArray()),
     );
+    expect(syncedTxs.length).toBe(2);
+  };
 
-    // Install a filter waiting for the submitted tx
-    const filter: Filter<LedgerTransaction> = {
-      apply(arg: LedgerTransaction): boolean {
-        return arg.hasIdentifier(submittedTxId);
-      },
-    };
-    const filteredTx = await firstValueFrom(wallet.installTxFilter(filter));
+  const tearDown = async (): Promise<void> => {
+    await ouroborosSyncService.close();
+    await mockedNode.close();
+  };
 
-    // Double-check that the filtered tx is what we want
-    expect(filteredTx.hasIdentifier(submittedTxId)).toBeTruthy();
-
-    expect(balanceHistory).toEqual([
-      0n, // Starts with 0
-      initialBalance, // Receives mint tx
-      initialBalance - spendCoin.value - txFee, // Spends (spendCoin + fee)
-    ]);
-  });
+  testSpec(
+    'Ouroboros Sync Service',
+    'Sync all transactions',
+    setup,
+    additionalTest,
+    tearDown,
+  );
 });

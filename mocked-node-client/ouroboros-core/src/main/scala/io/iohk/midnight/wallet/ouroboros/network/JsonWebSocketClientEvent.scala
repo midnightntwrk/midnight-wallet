@@ -1,8 +1,8 @@
 package io.iohk.midnight.wallet.ouroboros.network
 
 import io.circe
-import io.iohk.midnight.tracer.logging.Event
-import io.iohk.midnight.tracer.logging.AsStringLogContext
+import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
+import sttp.ws.WebSocketClosed
 
 sealed trait JsonWebSocketClientEvent
 
@@ -31,6 +31,11 @@ object JsonWebSocketClientEvent {
   final case class ReceiveFailed(error: Throwable) extends JsonWebSocketClientEvent
   object ReceiveFailed {
     val id: Event.Id[ReceiveFailed] = Event.Id("receive_failed")
+  }
+
+  final case class CloseFrameReceived(error: WebSocketClosed) extends JsonWebSocketClientEvent
+  object CloseFrameReceived {
+    val id: Event.Id[CloseFrameReceived] = Event.Id("close_frame_received")
   }
 
   object DefaultInstances {
@@ -67,9 +72,16 @@ object JsonWebSocketClientEvent {
       AsStringLogContext.fromMap[ReceiveFailed](evt =>
         Map(
           "reason" -> evt.error.getMessage(),
+          "exception" -> evt.error.getClass.getName,
         ),
       )
 
+    implicit val CloseFrameReceivedContext: AsStringLogContext[CloseFrameReceived] =
+      AsStringLogContext.fromMap[CloseFrameReceived](evt =>
+        Map(
+          "status_code" -> evt.error.frame.map(_.statusCode.toString).getOrElse(""),
+          "reason_text" -> evt.error.frame.map(_.reasonText).getOrElse(""),
+        ),
+      )
   }
-
 }

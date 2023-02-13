@@ -15,7 +15,7 @@ export declare class OuroborosSyncServiceBuilder {
 }
 
 export interface Decoder<T> {
-  decode(str: string): DecodingResult<T>
+  decode(obj: unknown): DecodingResult<T>
 }
 export interface Show<T> {
   show(t: T): string

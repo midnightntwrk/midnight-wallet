@@ -4,19 +4,21 @@ import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.effect.syntax.resource.*
 import cats.syntax.all.*
+import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.services.*
+import io.iohk.midnight.wallet.core.tracing.{
+  BalanceTransactionTracer,
+  WalletFilterTracer,
+  WalletStateTracer,
+  WalletTxSubmissionTracer,
+}
 import io.iohk.midnight.wallet.engine.config.NodeConnection.{NodeInstance, NodeUri}
 import io.iohk.midnight.wallet.engine.config.{Config, NodeConnection}
 import io.iohk.midnight.wallet.engine.js.{SyncServiceFactory, TxSubmissionServiceFactory}
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
-import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
-import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
-import io.iohk.midnight.wallet.core.tracing.WalletFilterTracer
-import io.iohk.midnight.wallet.core.tracing.BalanceTransactionTracer
-import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 
 object WalletBuilder {
   final case class WalletDependencies[F[_]](
@@ -89,7 +91,7 @@ object WalletBuilder {
       syncService: SyncService[F],
   )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, WalletFilterService[F]] = {
     implicit val walletFilterTracer: WalletFilterTracer[F] = WalletFilterTracer.from(rootTracer)
-    Resource.pure(new WalletFilterService.Live[F](syncService))
+    WalletFilterService.Live[F](syncService)
   }
 
   private def buildBalanceTransactionService[F[_]: Async](implicit
