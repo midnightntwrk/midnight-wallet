@@ -1,10 +1,9 @@
 package io.iohk.midnight.bloc
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
 import cats.syntax.traverse.*
 import munit.CatsEffectSuite
-import scala.concurrent.duration.DurationDouble
 
 class BlocSpec extends CatsEffectSuite {
   def withBloc(theTest: Bloc[IO, Int] => IO[Unit]): IO[Unit] =
@@ -26,13 +25,15 @@ class BlocSpec extends CatsEffectSuite {
   test("Propagate new values") {
     withBloc { bloc =>
       for {
-        fiber <- bloc.subscribe.take(4).compile.toList.start
-        _ <- IO.sleep(100.millis) // If we don't wait, values are set before subscription sees them
+        deferred <- Deferred[IO, Unit]
+        fiber <- bloc.subscribe.take(5).evalTap(_ => deferred.complete(())).compile.toList.start
+        _ <- deferred.get
         _ <- bloc.set(12)
-        _ <- bloc.set(13)
         _ <- bloc.update(_ + 1).void
+        _ <- bloc.updateEither(value => Right(value + 1))
+        _ <- bloc.modifyEither(value => Right((value + 1, "test")))
         result <- fiber.joinWithNever
-      } yield assertEquals(result, List(0, 12, 13, 14))
+      } yield assertEquals(result, List(0, 12, 13, 14, 15))
     }
   }
 
@@ -62,8 +63,9 @@ class BlocSpec extends CatsEffectSuite {
   test("Set in order") {
     withBloc { bloc =>
       for {
-        fiber <- bloc.subscribe.take(101).compile.toList.start
-        _ <- IO.sleep(100.millis) // If we don't wait, values are set before subscription sees them
+        deferred <- Deferred[IO, Unit]
+        fiber <- bloc.subscribe.take(101).evalTap(_ => deferred.complete(())).compile.toList.start
+        _ <- deferred.get
         _ <- (1 to 100).toList.traverse(bloc.set).void
         result <- fiber.joinWithNever
       } yield assertEquals(result, (0 to 100).toList)
@@ -73,8 +75,9 @@ class BlocSpec extends CatsEffectSuite {
   test("Update atomically") {
     withBloc { bloc =>
       for {
-        fiber <- bloc.subscribe.take(101).compile.toList.start
-        _ <- IO.sleep(100.millis)
+        deferred <- Deferred[IO, Unit]
+        fiber <- bloc.subscribe.take(101).evalTap(_ => deferred.complete(())).compile.toList.start
+        _ <- deferred.get
         // Increment 100 times in parallel
         _ <- (1 to 100).toList.parTraverse(_ => bloc.update(_ + 1)).void
         result <- fiber.joinWithNever
@@ -82,14 +85,81 @@ class BlocSpec extends CatsEffectSuite {
     }
   }
 
+  test("updateEither atomically") {
+    withBloc { bloc =>
+      for {
+        deferred <- Deferred[IO, Unit]
+        fiber <- bloc.subscribe.take(101).evalTap(_ => deferred.complete(())).compile.toList.start
+        _ <- deferred.get
+        // Increment 100 times in parallel
+        _ <- (1 to 100).toList.parTraverse(_ => bloc.updateEither(value => Right(value + 1))).void
+        result <- fiber.joinWithNever
+      } yield assertEquals(result, (0 to 100).toList)
+    }
+  }
+
+  test("failed updateEither will not blow up Bloc") {
+    withBloc { bloc =>
+      for {
+        _ <- bloc.updateEither(value => Right(value + 1))
+        _ <- bloc.updateEither(_ => Left(new RuntimeException("BUM!"))).attempt
+        _ <- bloc.updateEither(value => Right(value + 1))
+        result <- bloc.subscribe.head.compile.toList
+      } yield assertEquals(result, List(2))
+    }
+  }
+
+  test("modifyEither atomically") {
+    withBloc { bloc =>
+      for {
+        deferred <- Deferred[IO, Unit]
+        fiber <- bloc.subscribe.take(101).evalTap(_ => deferred.complete(())).compile.toList.start
+        _ <- deferred.get
+        // Increment 100 times in parallel
+        outputs <- (1 to 100).toList
+          .parTraverse(_ => bloc.modifyEither(value => Right((value + 1, value))))
+          .map {
+            _.collect { case Right(value) => value }
+          }
+        result <- fiber.joinWithNever
+      } yield {
+        assertEquals(result, (0 to 100).toList)
+        assertEquals(outputs.toSet, (0 to 99).toSet)
+      }
+    }
+  }
+
+  test("failed modifyEither will not blow up Bloc") {
+    withBloc { bloc =>
+      for {
+        _ <- bloc.modifyEither(value => Right((value + 1, value)))
+        _ <- bloc.modifyEither(_ => Left(new RuntimeException("BUM!"))).attempt
+        _ <- bloc.modifyEither(value => Right((value + 1, value)))
+        result <- bloc.subscribe.head.compile.toList
+      } yield assertEquals(result, List(2))
+    }
+  }
+
   test("Subscribe in order") {
     withBloc { bloc =>
       for {
+        deferred1 <- Deferred[IO, Unit]
+        deferred2 <- Deferred[IO, Unit]
         _ <- (1 to 1000).toList.traverse(bloc.set).start
-        subscription1 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
-        _ <- IO.sleep(50.millis)
-        subscription2 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
-        _ <- IO.sleep(50.millis)
+        subscription1 <- bloc.subscribe
+          .takeWhile(_ < 1000)
+          .evalTap(_ => deferred1.complete(()))
+          .compile
+          .toList
+          .start
+        _ <- deferred1.get
+        subscription2 <- bloc.subscribe
+          .takeWhile(_ < 1000)
+          .evalTap(_ => deferred2.complete(()))
+          .compile
+          .toList
+          .start
+        _ <- deferred2.get
         subscription3 <- bloc.subscribe.takeWhile(_ < 1000).compile.toList.start
         list1 <- subscription1.joinWithNever
         list2 <- subscription2.joinWithNever

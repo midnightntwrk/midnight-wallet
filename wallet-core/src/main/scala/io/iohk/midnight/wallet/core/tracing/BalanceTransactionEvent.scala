@@ -4,6 +4,7 @@ import cats.syntax.show.*
 import io.iohk.midnight.tracer.logging.AsStringLogContext
 import io.iohk.midnight.tracer.logging.Event
 import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.core.WalletError
 
 sealed trait BalanceTransactionEvent
 
@@ -23,7 +24,7 @@ object BalanceTransactionEvent {
 
   final case class BalanceTransactionError(
       tx: data.Transaction,
-      error: Throwable,
+      error: WalletError,
   ) extends BalanceTransactionEvent
 
   object BalanceTransactionError {
@@ -40,7 +41,7 @@ object BalanceTransactionEvent {
       )
     implicit val balanceTxErrorContext: AsStringLogContext[BalanceTransactionError] =
       AsStringLogContext.fromMap[BalanceTransactionError](evt =>
-        Map("transaction_hash" -> evt.tx.header.hash.show, "error" -> evt.error.getMessage()),
+        Map("transaction_hash" -> evt.tx.header.hash.show, "error" -> evt.error.message),
       )
 
   }

@@ -18,6 +18,7 @@ import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.config.NodeConnection.NodeInstance
 import io.iohk.midnight.wallet.engine.js.JsWallet
 import munit.CatsEffectSuite
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
@@ -49,21 +50,19 @@ trait EndToEndSpecSetup {
     )
   }
 
-  type Wallets = (WalletState[IO], WalletFilterService[IO], WalletTxSubmission[IO])
-
   def makeWalletResource(
       node: MockedNode[ApiTransaction],
       initialState: ZSwapLocalState,
-  ): Resource[IO, AllocatedWallet[IO]] = {
+  ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
     Resource.make(
       Wallet
         .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn))
-        .flatTap(_.dependencies.state.start.start),
+        .flatTap(_.dependencies.walletBlockProcessingService.start.start),
     )(_.finalizer)
   }
 
   def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
-      body: AllocatedWallet[IO] => IO[Unit],
+      body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
     makeNodeResource(initialTxs*)
       .flatMap(makeWalletResource(_, initialWalletState))
@@ -81,7 +80,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
 
     withWallet(initialState, mintTx) {
-      case AllocatedWallet(WalletDependencies(walletState, _, txSubmission), _) =>
+      case AllocatedWallet(WalletDependencies(_, walletState, _, txSubmission), _) =>
         for {
           balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
           _ <- txSubmission.submitTransaction(spendTx, List.empty)
@@ -107,8 +106,22 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val mintTx = buildSendTx(coin, pubKey)
 
     withWallet(initialState, mintTx) {
-      case AllocatedWallet(WalletDependencies(walletState, walletFilter, walletTxSubmission), _) =>
-        val jsWallet = new JsWallet(walletState, walletFilter, walletTxSubmission, IO.unit)
+      case AllocatedWallet(
+            WalletDependencies(
+              walletBlockProcessingService,
+              walletState,
+              walletFilter,
+              walletTxSubmission,
+            ),
+            _,
+          ) =>
+        val jsWallet = new JsWallet(
+          walletBlockProcessingService,
+          walletState,
+          walletFilter,
+          walletTxSubmission,
+          IO.unit,
+        )
         IO.fromPromise(IO {
           firstValueFrom(
             jsWallet.balance().pipe(find { (value, _, _) => value > js.BigInt(0) }),
@@ -127,7 +140,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val expectedIdentifier = spendTx.identifiers().head
 
     withWallet(initialState, mintTx) {
-      case AllocatedWallet(WalletDependencies(walletState, filterService, txSubmission), _) =>
+      case AllocatedWallet(WalletDependencies(_, walletState, filterService, txSubmission), _) =>
         for {
           _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
           _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))

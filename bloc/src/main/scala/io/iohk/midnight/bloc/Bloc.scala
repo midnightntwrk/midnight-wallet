@@ -3,7 +3,12 @@ package io.iohk.midnight.bloc
 import cats.MonadThrow
 import cats.effect.std.Semaphore
 import cats.effect.{Async, Ref, Resource}
-import cats.syntax.all.*
+import cats.syntax.applicative.*
+import cats.syntax.applicativeError.*
+import cats.syntax.contravariantSemigroupal.*
+import cats.syntax.either.*
+import cats.syntax.flatMap.*
+import cats.syntax.functor.*
 import fs2.Stream
 import fs2.concurrent.Topic
 
@@ -34,6 +39,26 @@ trait Bloc[F[_], T] {
     *   an effect that will update the value and emit it to subscribers upon execution
     */
   def update(f: T => T): F[T]
+
+  /** Update the previous value and return it
+    *
+    * @param f
+    *   a function that returns a new value depending on the previous one
+    * @return
+    *   an effect that will update the value and emit it to subscribers upon execution or or return
+    *   error
+    */
+  def updateEither[E](f: T => Either[E, T]): F[Either[E, T]]
+
+  /** Update the previous value and return output value
+    *
+    * @param f
+    *   a function that returns a new value depending on the previous one
+    * @return
+    *   an effect that will update the value and emit it to subscribers upon execution or return
+    *   error
+    */
+  def modifyEither[E, Output](f: T => Either[E, (T, Output)]): F[Either[E, Output]]
 }
 
 object Bloc {
@@ -66,8 +91,7 @@ object Bloc {
       Stream.resource(resource).flatten
     }
 
-    override def set(t: T): F[Unit] =
-      update(_ => t).void
+    override def set(t: T): F[Unit] = update(_ => t).void
 
     override def update(cb: T => T): F[T] =
       semaphore.permit.surround {
@@ -75,6 +99,25 @@ object Bloc {
           .updateAndGet(cb)
           .flatTap(topic.publish1(_).rethrowTopicClosed)
       }
+
+    override def updateEither[E](f: T => Either[E, T]): F[Either[E, T]] = modifyEither(
+      f(_).fproduct(identity),
+    )
+
+    override def modifyEither[E, Output](f: T => Either[E, (T, Output)]): F[Either[E, Output]] = {
+      semaphore.permit.surround {
+        state.get.flatMap { currentState =>
+          f(currentState) match {
+            case Left(error) => error.asLeft[Output].pure
+            case Right((newState, output)) =>
+              state
+                .set(newState)
+                .as(output.asRight[E])
+                .flatTap(_ => topic.publish1(newState).rethrowTopicClosed)
+          }
+        }
+      }
+    }
 
     val stop: F[Unit] =
       topic.close.rethrowTopicClosed

@@ -4,15 +4,18 @@ import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.effect.syntax.resource.*
 import cats.syntax.all.*
+import io.iohk.midnight.midnightLedger.mod
 import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{
   BalanceTransactionTracer,
+  WalletBlockProcessingTracer,
   WalletFilterTracer,
-  WalletStateTracer,
   WalletTxSubmissionTracer,
 }
 import io.iohk.midnight.wallet.engine.config.NodeConnection.{NodeInstance, NodeUri}
@@ -21,17 +24,29 @@ import io.iohk.midnight.wallet.engine.js.{SyncServiceFactory, TxSubmissionServic
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 
 object WalletBuilder {
-  final case class WalletDependencies[F[_]](
-      state: WalletState[F],
-      filterService: WalletFilterService[F],
-      txSubmissionService: WalletTxSubmission[F],
+  final case class WalletDependencies[F[_], TWallet](
+      walletBlockProcessingService: WalletBlockProcessingService[F],
+      walletStateService: WalletStateService[F, TWallet],
+      walletFilterService: WalletFilterService[F],
+      walletTxSubmissionService: WalletTxSubmissionService[F],
   )
-  final case class AllocatedWallet[F[_]](
-      dependencies: WalletDependencies[F],
+  final case class AllocatedWallet[F[_], TWallet](
+      dependencies: WalletDependencies[F, TWallet],
       finalizer: F[Unit],
   )
 
-  def build[F[_]: Async](config: Config): F[AllocatedWallet[F]] = {
+  def build[F[_]: Async](
+      config: Config,
+  ): F[AllocatedWallet[F, Wallet]] = {
+    import Wallet.*
+    buildWallet[F, Wallet](config)
+  }
+
+  private def buildWallet[F[_]: Async, TWallet](config: Config)(implicit
+      walletCreation: WalletCreation[TWallet, ZSwapLocalState],
+      walletTxBalancing: WalletTxBalancing[TWallet, mod.Transaction, mod.CoinInfo],
+      walletBlockProcessing: WalletBlockProcessing[TWallet, Block],
+  ): F[AllocatedWallet[F, TWallet]] = {
     implicit val rootTracer: Tracer[F, StructuredLog] =
       ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
     val builderTracer = WalletBuilderTracer.from(rootTracer)
@@ -42,17 +57,30 @@ object WalletBuilder {
       submitTxService <- txSubmissionService
       stateSyncService <- syncService
       filterSyncService <- syncService
-      walletState <- buildWalletState(stateSyncService, config.initialState)
-      walletFilterService <- buildWalletFilterService(filterSyncService)
-      balanceTxService <- buildBalanceTransactionService
-      walletTxSubmission <- buildWalletTxSubmissionService(
-        submitTxService,
-        balanceTxService,
-        walletState,
+      walletStateContainer <- WalletStateContainer.Live(walletCreation.create(config.initialState))
+      walletQueryStateService <- Resource.pure(
+        new WalletQueryStateService.Live(walletStateContainer),
       )
-    } yield WalletDependencies(walletState, walletFilterService, walletTxSubmission)
+      walletStateService <- Resource.pure(
+        new WalletStateService.Live(walletQueryStateService),
+      )
+      walletFilterService <- buildWalletFilterService(filterSyncService)
+      walletTxSubmissionService <- buildWalletTxSubmissionService(
+        submitTxService,
+        walletStateContainer,
+      )
+      walletBlockProcessingService <- buildWalletBlockProcessingService(
+        stateSyncService,
+        walletStateContainer,
+      )
+    } yield WalletDependencies(
+      walletBlockProcessingService,
+      walletStateService,
+      walletFilterService,
+      walletTxSubmissionService,
+    )
 
-    val allocatedWallet = dependencies.allocated.map((AllocatedWallet[F] _).tupled)
+    val allocatedWallet = dependencies.allocated.map((AllocatedWallet[F, TWallet] _).tupled)
 
     allocatedWallet.attemptTap {
       case Right(_) => builderTracer.walletBuildSuccess
@@ -79,12 +107,16 @@ object WalletBuilder {
         (syncService, txSubmissionService)
     }
 
-  private def buildWalletState[F[_]: Async](
+  private def buildWalletBlockProcessingService[F[_]: Async, TWallet](
       syncService: SyncService[F],
-      initialState: ZSwapLocalState,
-  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, WalletState[F]] = {
-    implicit val walletStateTracer: WalletStateTracer[F] = WalletStateTracer.from(rootTracer)
-    WalletState.Live[F](syncService, initialState)
+      walletStateContainer: WalletStateContainer[F, TWallet],
+  )(implicit
+      rootTracer: Tracer[F, StructuredLog],
+      walletBlockProcessing: WalletBlockProcessing[TWallet, Block],
+  ): Resource[F, WalletBlockProcessingService[F]] = {
+    implicit val walletBlockProcessingTracer: WalletBlockProcessingTracer[F] =
+      WalletBlockProcessingTracer.from(rootTracer)
+    WalletBlockProcessingService(syncService, walletStateContainer)
   }
 
   private def buildWalletFilterService[F[_]: Async](
@@ -94,25 +126,19 @@ object WalletBuilder {
     WalletFilterService.Live[F](syncService)
   }
 
-  private def buildBalanceTransactionService[F[_]: Async](implicit
-      rootTracer: Tracer[F, StructuredLog],
-  ): Resource[F, BalanceTransactionService[F]] = {
-    implicit val balanceTxTracer: BalanceTransactionTracer[F] =
-      BalanceTransactionTracer.from(rootTracer)
-    Resource.pure(new BalanceTransactionService.Live[F]())
-  }
-
-  private def buildWalletTxSubmissionService[F[_]: Async](
+  private def buildWalletTxSubmissionService[F[_]: Async, TWallet](
       submitTxService: TxSubmissionService[F],
-      balanceTxService: BalanceTransactionService[F],
-      walletState: WalletState[F],
+      walletStateContainer: WalletStateContainer[F, TWallet],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
-  ): Resource[F, WalletTxSubmission[F]] = {
+      walletTxBalancing: WalletTxBalancing[TWallet, mod.Transaction, mod.CoinInfo],
+  ): Resource[F, WalletTxSubmissionService[F]] = {
     implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[F] =
       WalletTxSubmissionTracer.from(rootTracer)
+    implicit val balanceTxTracer: BalanceTransactionTracer[F] =
+      BalanceTransactionTracer.from(rootTracer)
     Resource.pure(
-      new WalletTxSubmission.Live[F](submitTxService, balanceTxService, walletState),
+      new WalletTxSubmissionService.Live[F, TWallet](submitTxService, walletStateContainer),
     )
   }
 }

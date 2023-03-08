@@ -1,36 +1,42 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.IO
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
 import cats.syntax.foldable.*
-import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid => sum, _}
+import io.iohk.midnight.bloc.Bloc
+import io.iohk.midnight.js.interop.cats.Instances.{bigIntSumMonoid as sum, *}
 import io.iohk.midnight.midnightLedger.mod.ZSwapLocalState
-import io.iohk.midnight.tracer.Tracer
-import io.iohk.midnight.wallet.core.Generators.TransactionWithContext
 import io.iohk.midnight.wallet.core.Generators.ledgerTransactionGen
-import io.iohk.midnight.wallet.core.services.SyncServiceStub
-import io.iohk.midnight.wallet.core.tracing.WalletStateTracer
+import io.iohk.midnight.wallet.core.capabilities.WalletCreation
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import munit.CatsEffectSuite
-import munit.ScalaCheckEffectSuite
+import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.Prop.forAll
 import org.scalacheck.effect.PropF.forAllF
 
-import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 
-class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
-
-  implicit val stateTracer: WalletStateTracer[IO] = WalletStateTracer.from(Tracer.noOpTracer)
-
-  def buildWallet(
+class WalletStateServiceSpec
+    extends CatsEffectSuite
+    with ScalaCheckEffectSuite
+    with BetterOutputSuite {
+  def buildWalletStateService[TWallet](
       initialState: ZSwapLocalState = new ZSwapLocalState(),
-  ): Resource[IO, WalletState[IO]] =
-    WalletState.Live[IO](new SyncServiceStub(), initialState)
+  )(implicit
+      walletCreation: WalletCreation[TWallet, ZSwapLocalState],
+  ): Resource[IO, WalletStateService[IO, TWallet]] = {
+    Bloc[IO, TWallet](walletCreation.create(initialState)).map { bloc =>
+      new WalletStateService.Live[IO, TWallet](
+        new WalletQueryStateService.Live(
+          new WalletStateContainer.Live(bloc),
+        ),
+      )
+    }
+  }
+
+  import Wallet.*
 
   test("Start with balance zero") {
-    buildWallet().use(
+    buildWalletStateService().use(
       _.balance.head.compile.last
         .map(assertEquals(_, Some(js.BigInt(0)))),
     )
@@ -43,7 +49,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
       state.applyLocal(tx)
       val expected = coins.map(_.value).combineAll(sum)
 
-      buildWallet(initialState = state).use(
+      buildWalletStateService(initialState = state).use(
         _.balance.head.compile.last
           .map(assertEquals(_, Some(expected))),
       )
@@ -54,7 +60,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
     forAllF(ledgerTransactionGen) { txWithCtx =>
       val anotherState = new ZSwapLocalState()
       anotherState.applyLocal(txWithCtx.transaction)
-      buildWallet(initialState = anotherState).use(
+      buildWalletStateService(initialState = anotherState).use(
         _.balance.head.compile.last
           .map(assertEquals(_, Some(js.BigInt(0)))),
       )
@@ -64,7 +70,7 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   test("Return the public key") {
     val initialState = new ZSwapLocalState()
     val expected = LedgerSerialization.serializePublicKey(initialState.coinPublicKey)
-    buildWallet(initialState = initialState).use(
+    buildWalletStateService(initialState = initialState).use(
       _.publicKey
         .map(LedgerSerialization.serializePublicKey)
         .map(assertEquals(_, expected)),
@@ -74,33 +80,10 @@ class WalletStateSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Be
   test("Calculate cost as the sum of tx imbalances") {
     forAll(ledgerTransactionGen) { txWithCtx =>
       val tx = txWithCtx.transaction
-      assertEquals(WalletState.calculateCost(tx), tx.imbalances().map(_.imbalance).combineAll(sum))
-    }
-  }
-
-  test("Return the state") {
-    forAllF(ledgerTransactionGen) { txWithCtx =>
-      val TransactionWithContext(tx, state, _) = txWithCtx
-
-      state.applyLocal(tx)
-      buildWallet(initialState = state)
-        .use(_.localState.assertEquals(state))
-    }
-  }
-
-  test("Update the state") {
-    forAllF(ledgerTransactionGen) { txWithCtx =>
-      val TransactionWithContext(tx, state, _) = txWithCtx
-
-      state.applyLocal(tx)
-      buildWallet().use { wallet =>
-        wallet
-          .updateLocalState(state)
-          .start
-          .flatTap(_ => IO.sleep(1.nano))
-          .flatMap(_ => wallet.localState)
-          .assertEquals(state)
-      }
+      assertEquals(
+        WalletStateService.calculateCost(tx),
+        tx.imbalances().map(_.imbalance).combineAll(sum),
+      )
     }
   }
 }

@@ -12,13 +12,8 @@ import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
 import io.iohk.midnight.midnightWalletApi.distWalletMod as api
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
-import io.iohk.midnight.wallet.core.{
-  LedgerSerialization,
-  WalletFilterService,
-  WalletState,
-  WalletTxSubmission,
-}
-import io.iohk.midnight.wallet.engine.WalletBuilder
+import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.engine.{WalletBlockProcessingService, WalletBuilder}
 import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
 import io.iohk.midnight.wallet.engine.config.RawNodeConnection.{RawNodeInstance, RawNodeUri}
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig, RawNodeConnection}
@@ -32,32 +27,35 @@ import scala.scalajs.js.annotation.*
   */
 @JSExportTopLevel("Wallet")
 class JsWallet(
-    walletState: WalletState[IO],
+    walletBlockProcessingService: WalletBlockProcessingService[IO],
+    walletStateService: WalletStateService[IO, Wallet],
     walletFilterService: WalletFilterService[IO],
-    walletTxSubmission: WalletTxSubmission[IO],
+    walletTxSubmissionService: WalletTxSubmissionService[IO],
     finalizer: IO[Unit],
 ) extends api.Wallet
     with FilterService {
 
   override def connect(): Observable_[ZSwapCoinPublicKey] =
-    walletState.publicKey.unsafeToObservable()
+    walletStateService.publicKey.unsafeToObservable()
 
   override def submitTx(
       tx: Transaction,
       newCoins: js.Array[CoinInfo],
   ): Observable_[TransactionIdentifier] =
-    walletTxSubmission.submitTransaction(tx, newCoins.toList).unsafeToObservable()
+    walletTxSubmissionService.submitTransaction(tx, newCoins.toList).unsafeToObservable()
 
   override def installTxFilter(filter: Filter[Transaction]): Observable_[Transaction] =
     walletFilterService
-      .installTransactionFilter(filter.apply(_)) // IMPORTANT: Don't convert this to method value
+      .installTransactionFilter(
+        filter.apply(_),
+      ) // IMPORTANT: Don't convert this to method value - otherwise scalajs will try to use undefined `this` context
       .unsafeToObservable()
 
   def balance(): Observable_[js.BigInt] =
-    walletState.balance.unsafeToObservable()
+    walletStateService.balance.unsafeToObservable()
 
   def start(): Unit =
-    walletState.start.unsafeRunAndForget()
+    walletBlockProcessingService.start.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
     finalizer.unsafeRunSyncToPromise()
@@ -108,17 +106,18 @@ object JsWallet {
         case Left(t)       => jsWalletTracer.invalidConfig(t)
       }
 
-  def apply(wallet: AllocatedWallet[IO]): JsWallet =
+  def apply(wallet: AllocatedWallet[IO, Wallet]): JsWallet =
     new JsWallet(
-      wallet.dependencies.state,
-      wallet.dependencies.filterService,
-      wallet.dependencies.txSubmissionService,
+      wallet.dependencies.walletBlockProcessingService,
+      wallet.dependencies.walletStateService,
+      wallet.dependencies.walletFilterService,
+      wallet.dependencies.walletTxSubmissionService,
       wallet.finalizer,
     )
 
   @JSExport
   def calculateCost(tx: Transaction): js.BigInt =
-    WalletState.calculateCost(tx)
+    WalletStateService.calculateCost(tx)
 
   @JSExport
   def generateInitialState(): String =

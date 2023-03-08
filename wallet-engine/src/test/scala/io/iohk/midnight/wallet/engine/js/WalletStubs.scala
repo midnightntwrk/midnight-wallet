@@ -3,7 +3,14 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import fs2.Stream
 import io.iohk.midnight.midnightLedger.mod.*
-import io.iohk.midnight.wallet.core.{WalletFilterService, WalletState, WalletTxSubmission}
+import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletKeys}
+import io.iohk.midnight.wallet.core.{
+  Wallet,
+  WalletFilterService,
+  WalletStateService,
+  WalletTxSubmissionService,
+}
+import io.iohk.midnight.wallet.engine.WalletBlockProcessingService
 
 import scala.scalajs.js
 
@@ -22,32 +29,33 @@ class WalletFilterServiceInfiniteStub extends WalletFilterService[IO] {
     Stream.never[IO]
 }
 
-class WalletStateStub extends WalletState[IO] {
+class WalletBlockProcessingServiceStub extends WalletBlockProcessingService[IO] {
+  override def start: IO[Unit] = IO.unit
+  override def stop: IO[Unit] = IO.unit
+}
+
+class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
   private val state = new ZSwapLocalState()
-  override def start: IO[Unit] = IO.unit
-  override def publicKey: IO[ZSwapCoinPublicKey] = IO.pure(state.coinPublicKey)
-  override def balance: Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
-  override def localState: IO[ZSwapLocalState] = IO.pure(state)
-  override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
+  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
+    IO.pure(state.coinPublicKey)
+  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emit(js.BigInt(0))
 }
 
-class WalletStatePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey) extends WalletState[IO] {
-  override def start: IO[Unit] = IO.unit
-  override def publicKey: IO[ZSwapCoinPublicKey] = IO.pure(zSwapCoinPublicKey)
-  override def balance: Stream[IO, js.BigInt] = Stream.emit(js.BigInt(0))
-  override def localState: IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
-  override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
+class WalletStateServicePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey)
+    extends WalletStateService[IO, Wallet] {
+  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
+    IO.pure(zSwapCoinPublicKey)
+  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emit(js.BigInt(0))
 }
 
-class WalletStateBalanceStub(balance: Seq[js.BigInt]) extends WalletState[IO] {
-  override def start: IO[Unit] = IO.unit
-  override def publicKey: IO[ZSwapCoinPublicKey] = IO.raiseError(new NotImplementedError())
-  override def balance: Stream[IO, js.BigInt] = Stream.emits(balance)
-  override def localState: IO[ZSwapLocalState] = IO.raiseError(new NotImplementedError())
-  override def updateLocalState(newState: ZSwapLocalState): IO[Unit] = IO.unit
+class WalletStateServiceBalanceStub(balance: Seq[js.BigInt])
+    extends WalletStateService[IO, Wallet] {
+  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
+    IO.raiseError(new NotImplementedError())
+  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emits(balance)
 }
 
-class WalletTxSubmissionStub extends WalletTxSubmission[IO] {
+class WalletTxSubmissionServiceStub extends WalletTxSubmissionService[IO] {
   override def submitTransaction(
       transaction: Transaction,
       newCoins: List[CoinInfo],
@@ -58,8 +66,8 @@ class WalletTxSubmissionStub extends WalletTxSubmission[IO] {
       .fold[IO[TransactionIdentifier]](IO.raiseError(new Exception("Invalid tx")))(IO.pure)
 }
 
-class WalletTxSubmissionIdentifierStub(txIdentifier: TransactionIdentifier)
-    extends WalletTxSubmission[IO] {
+class WalletTxSubmissionServiceIdentifierStub(txIdentifier: TransactionIdentifier)
+    extends WalletTxSubmissionService[IO] {
   override def submitTransaction(
       transaction: Transaction,
       newCoins: List[CoinInfo],

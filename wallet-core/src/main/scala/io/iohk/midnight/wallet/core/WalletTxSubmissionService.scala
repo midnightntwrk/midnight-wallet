@@ -3,24 +3,27 @@ package io.iohk.midnight.wallet.core
 import cats.effect.Sync
 import cats.syntax.all.*
 import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
-import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
+import io.iohk.midnight.wallet.core.tracing.{BalanceTransactionTracer, WalletTxSubmissionTracer}
 
-trait WalletTxSubmission[F[_]] {
+trait WalletTxSubmissionService[F[_]] {
   def submitTransaction(
       transaction: Transaction,
       newCoins: List[CoinInfo],
   ): F[TransactionIdentifier]
 }
 
-object WalletTxSubmission {
-  class Live[F[_]: Sync](
+object WalletTxSubmissionService {
+  class Live[F[_]: Sync, TWallet](
       txSubmissionService: TxSubmissionService[F],
-      balanceTransactionService: BalanceTransactionService[F],
-      walletState: WalletState[F],
-  )(implicit tracer: WalletTxSubmissionTracer[F])
-      extends WalletTxSubmission[F] {
+      walletStateContainer: WalletStateContainer[F, TWallet],
+  )(implicit
+      walletTxBalancing: WalletTxBalancing[TWallet, Transaction, CoinInfo],
+      tracer: WalletTxSubmissionTracer[F],
+      balanceTxTracer: BalanceTransactionTracer[F],
+  ) extends WalletTxSubmissionService[F] {
 
     override def submitTransaction(
         ledgerTx: Transaction,
@@ -29,11 +32,7 @@ object WalletTxSubmission {
       for {
         _ <- tracer.submitTxStart(ledgerTx)
         _ <- validateTx(ledgerTx)
-        state <- walletState.localState
-        balancedTxAndState <- balanceTransactionService.balanceTransaction(state, ledgerTx)
-        (balancedTx, state) = balancedTxAndState
-        _ = newCoins.foreach(state.watchFor)
-        _ <- walletState.updateLocalState(state)
+        balancedTx <- balanceTransaction(ledgerTx, newCoins)
         response <- txSubmissionService
           .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
         result <- adaptResponse(ledgerTx, response)
@@ -45,6 +44,26 @@ object WalletTxSubmission {
         .catchNonFatal(ledgerTx.wellFormed(enforceBalancing = false))
         .leftMap(TransactionNotWellFormed.apply)
         .liftTo[F]
+        .attemptTap {
+          case Left(error) => tracer.txValidationError(ledgerTx, error)
+          case Right(_)    => tracer.txValidationSuccess(ledgerTx)
+        }
+    }
+
+    private def balanceTransaction(
+        ledgerTx: Transaction,
+        newCoins: List[CoinInfo],
+    ): F[Transaction] = {
+      balanceTxTracer.balanceTxStart(ledgerTx) >> walletStateContainer
+        .modifyStateEither { wallet =>
+          walletTxBalancing
+            .balanceTransaction(wallet, (ledgerTx, newCoins.toVector))
+        }
+        .flatMap {
+          case Left(error) =>
+            balanceTxTracer.balanceTxError(ledgerTx, error) >> error.toThrowable.raiseError
+          case Right(balancedTx) => balanceTxTracer.balanceTxSuccess(balancedTx) >> balancedTx.pure
+        }
     }
 
     private def adaptResponse(

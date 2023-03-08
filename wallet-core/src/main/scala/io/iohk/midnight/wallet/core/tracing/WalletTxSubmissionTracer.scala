@@ -21,6 +21,12 @@ class WalletTxSubmissionTracer[F[_]](val tracer: Tracer[F, WalletTxSubmissionEve
   def submitTxStart(ledgerTx: Transaction): F[Unit] =
     tracer(TransactionSubmissionStart(LedgerSerialization.toTransaction(ledgerTx)))
 
+  def txValidationSuccess(ledgerTx: Transaction): F[Unit] =
+    tracer(TxValidationSuccess(LedgerSerialization.toTransaction(ledgerTx)))
+
+  def txValidationError(ledgerTx: Transaction, error: Throwable): F[Unit] =
+    tracer(TxValidationError(LedgerSerialization.toTransaction(ledgerTx), error))
+
   def submitTxSuccess(ledgerTx: Transaction, txId: TransactionIdentifier): F[Unit] =
     tracer(
       TransactionSubmissionSuccess(

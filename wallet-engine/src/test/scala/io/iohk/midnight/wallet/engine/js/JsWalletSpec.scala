@@ -19,17 +19,19 @@ import scala.scalajs.js.JSConverters.*
 trait JsWalletFixtures {
   val jsWalletEmptyTxList: JsWallet =
     new JsWallet(
-      new WalletStateStub(),
+      new WalletBlockProcessingServiceStub(),
+      new WalletStateServiceStub(),
       new WalletFilterServiceStub(Seq.empty),
-      new WalletTxSubmissionStub(),
+      new WalletTxSubmissionServiceStub(),
       IO.unit,
     )
 
   val jsWallet: JsWallet =
     new JsWallet(
-      new WalletStateStub(),
+      new WalletBlockProcessingServiceStub(),
+      new WalletStateServiceStub(),
       new WalletFilterServiceStub(ledgerTransactionsList),
-      new WalletTxSubmissionStub(),
+      new WalletTxSubmissionServiceStub(),
       IO.unit,
     )
 }
@@ -43,9 +45,10 @@ class JsWalletSpec
     forAllF(zSwapCoinPublicKeyGen) { (zSwapCoinPublicKey: ZSwapCoinPublicKey) =>
       val wallet =
         new JsWallet(
-          new WalletStatePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey),
+          new WalletBlockProcessingServiceStub(),
+          new WalletStateServicePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey),
           new WalletFilterServiceStub(Seq.empty),
-          new WalletTxSubmissionStub(),
+          new WalletTxSubmissionServiceStub(),
           IO.unit,
         )
       val observable = wallet.connect()
@@ -62,9 +65,10 @@ class JsWalletSpec
 
       val wallet =
         new JsWallet(
-          new WalletStateStub(),
+          new WalletBlockProcessingServiceStub(),
+          new WalletStateServiceStub(),
           new WalletFilterServiceStub(Seq.empty),
-          new WalletTxSubmissionIdentifierStub(txIdentifier),
+          new WalletTxSubmissionServiceIdentifierStub(txIdentifier),
           IO.unit,
         )
 
@@ -122,9 +126,10 @@ class JsWalletSpec
     forAllF(balanceGen) { (balance: js.BigInt) =>
       val wallet =
         new JsWallet(
-          new WalletStateBalanceStub(Seq(balance)),
+          new WalletBlockProcessingServiceStub(),
+          new WalletStateServiceBalanceStub(Seq(balance)),
           new WalletFilterServiceStub(Seq.empty),
-          new WalletTxSubmissionStub(),
+          new WalletTxSubmissionServiceStub(),
           IO.unit,
         )
       val observable = wallet.balance()
@@ -137,9 +142,10 @@ class JsWalletSpec
     for {
       ref <- Ref.of[IO, Boolean](false)
       wallet = new JsWallet(
-        new WalletStateStub(),
+        new WalletBlockProcessingServiceStub(),
+        new WalletStateServiceStub(),
         new WalletFilterServiceStub(Seq.empty),
-        new WalletTxSubmissionStub(),
+        new WalletTxSubmissionServiceStub(),
         ref.set(true),
       )
       _ <- IO.fromPromise(IO(wallet.close()))

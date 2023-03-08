@@ -12,8 +12,7 @@ import io.iohk.midnight.tracer.logging.AsStructuredLog
 import io.iohk.midnight.tracer.logging.Event
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.wallet.core.LedgerSerialization
-
+import io.iohk.midnight.wallet.core.{LedgerSerialization, WalletError}
 import BalanceTransactionEvent.*
 
 class BalanceTransactionTracer[F[_]](val tracer: Tracer[F, BalanceTransactionEvent]) {
@@ -24,7 +23,7 @@ class BalanceTransactionTracer[F[_]](val tracer: Tracer[F, BalanceTransactionEve
   def balanceTxSuccess(tx: Transaction): F[Unit] = tracer(
     BalanceTransactionSuccess(LedgerSerialization.toTransaction(tx)),
   )
-  def balanceTxError(tx: Transaction, error: Throwable): F[Unit] = tracer(
+  def balanceTxError(tx: Transaction, error: WalletError): F[Unit] = tracer(
     BalanceTransactionError(LedgerSerialization.toTransaction(tx), error),
   )
 
