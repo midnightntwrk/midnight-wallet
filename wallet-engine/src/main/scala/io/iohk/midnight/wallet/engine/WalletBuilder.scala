@@ -91,13 +91,11 @@ object WalletBuilder {
   private type NodeResources[F[_]] =
     (Resource[F, SyncService[F]], Resource[F, TxSubmissionService[F]])
 
-  private def buildNodeResources[F[_]: Async](
-      nodeConnection: NodeConnection,
-  )(implicit rootTracer: Tracer[F, StructuredLog]): NodeResources[F] =
+  private def buildNodeResources[F[_]: Async](nodeConnection: NodeConnection): NodeResources[F] =
     nodeConnection match {
       case NodeUri(uri) =>
-        val syncService = SyncServiceFactory.connect(uri, rootTracer)
-        val txSubmissionService = TxSubmissionServiceFactory.connect(uri, rootTracer)
+        val syncService = SyncServiceFactory.fromMockedNodeClient[F](uri)
+        val txSubmissionService = TxSubmissionServiceFactory.fromMockedNodeClient[F](uri)
         (syncService, txSubmissionService)
       case NodeInstance(nodeInstance) =>
         val syncService =

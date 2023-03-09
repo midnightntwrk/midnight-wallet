@@ -9,6 +9,7 @@ import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
 import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
 import io.iohk.midnight.midnightMockedNodeInMemory.distGenesisMod.GenesisValue
 import io.iohk.midnight.midnightMockedNodeInMemory.mod.{InMemoryMockedNode, LedgerNapi}
+import io.iohk.midnight.pino.mod.pino.LoggerOptions
 import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
@@ -45,8 +46,10 @@ trait EndToEndSpecSetup {
       initialTxs
         .map(LedgerSerialization.toTransaction)
         .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
+    val pinoLogger = io.iohk.midnight.pino.mod.default.apply[LoggerOptions]()
+
     Resource.pure(
-      new InMemoryMockedNode(GenesisValue("value", txs.toJSArray), new LedgerNapi()),
+      new InMemoryMockedNode(GenesisValue("value", txs.toJSArray), new LedgerNapi(), pinoLogger),
     )
   }
 
