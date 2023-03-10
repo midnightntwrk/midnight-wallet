@@ -160,84 +160,9 @@ lazy val walletCore = project
     useNodeModuleResolution,
   )
 
-lazy val ouroborosCore = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("mocked-node-client/ouroboros-core"))
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
-  .settings(
-    name := "ouroboros-core",
-    crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    libraryDependencies ++= Seq(
-      "co.fs2" %%% "fs2-core" % fs2Version,
-      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
-      "io.circe" %%% "circe-core" % circeVersion,
-      "io.circe" %%% "circe-parser" % circeVersion,
-      "io.circe" %%% "circe-generic" % circeVersion,
-      "org.typelevel" %%% "cats-core" % catsVersion,
-      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
-      "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
-      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
-    ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.ouroboros.tracer",
-  )
-  .jsSettings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
-    ),
-  )
-
-lazy val ouroborosSyncMiniProtocol = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Full)
-  .in(file("mocked-node-client/ouroboros-sync-mini-protocol"))
-  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(ouroborosCore % "compile->compile;test->test")
-  .jsConfigure(_.dependsOn(jsInterop))
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
-  .settings(
-    name := "ouroboros-sync-mini-protocol",
-    crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-    coverageExcludedPackages := Seq(
-      "io.iohk.midnight.wallet.ouroboros.sync.JsOuroborosSyncServiceBuilder",
-      "io.iohk.midnight.wallet.ouroboros.sync.Init",
-    ).mkString(";"),
-  )
-  .jsSettings(commonScalablyTypedSettings)
-  .jsSettings(
-    dist := distImpl.value,
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-
-    // ScalablyTyped config
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "rxjs", "ws"),
-    useNodeModuleResolution,
-  )
-
-lazy val ouroborosTxSubmissionMiniProtocol = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
-  .in(file("mocked-node-client/ouroboros-tx-submission-mini-protocol"))
-  .dependsOn(ouroborosCore % "compile->compile;test->test")
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
-  .settings(
-    name := "ouroboros-tx-submission-mini-protocol",
-    crossScalaVersions := supportedScalaVersions,
-    conflictWarning := ConflictWarning.disable,
-  )
-  .jsSettings(
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-  )
-
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(
-    walletCore % "compile->compile;test->test",
-    ouroborosSyncMiniProtocol.js,
-    ouroborosTxSubmissionMiniProtocol.js,
-  )
+  .dependsOn(walletCore % "compile->compile;test->test")
   .configs(IntegrationTest)
   .settings(commonSettings, Defaults.itSettings)
   .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
@@ -302,9 +227,6 @@ addCommandAlias(
     "blocJS/test",
     "walletCore/test",
     "blockchainJS/test",
-    "ouroborosCoreJS/test",
-    "ouroborosSyncMiniProtocolJS/test",
-    "ouroborosTxSubmissionMiniProtocolJS/test",
     "walletEngine/test",
     "IntegrationTest/test",
     "coverageAggregate",

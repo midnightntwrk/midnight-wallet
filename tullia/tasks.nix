@@ -98,7 +98,6 @@ in {
 
       nix develop .#no-proofs -L -c sbt verify
       nix develop .#real-proofs -L -c sbt IntegrationTest/test
-      nix develop .#no-proofs -L -c sbt '++ 3.2.1 ouroborosSyncMiniProtocolJS/test; ouroborosTxSubmissionMiniProtocolJS/test'
 
       nix develop -L -c sbt dist
       pushd examples
@@ -119,13 +118,10 @@ in {
     command.text = ''
       set -x
 
-      nix develop -L -c sbt '+ blockchainJS/publish; + blockchainJVM/publish; + ouroborosCoreJS/publish; + ouroborosCoreJVM/publish; + ouroborosSyncMiniProtocolJS/publish; + ouroborosSyncMiniProtocolJVM/publish; + ouroborosTxSubmissionMiniProtocolJS/publish; + ouroborosTxSubmissionMiniProtocolJVM/publish' || :
+      nix develop -L -c sbt '+ blockchainJS/publish; + blockchainJVM/publish' || :
 
       nix develop -L -c sbt dist
       pushd wallet-engine
-      nix develop -L -c yarn publish || :
-
-      pushd ../mocked-node-client/ouroboros-sync-mini-protocol/js
       nix develop -L -c yarn publish || :
     '';
   };

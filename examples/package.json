@@ -9,9 +9,9 @@
     "test": "NODE_OPTIONS='--experimental-vm-modules' yarn jest"
   },
   "devDependencies": {
-    "@midnight/mocked-node-in-memory": "0.7.1",
+    "@midnight/mocked-node-in-memory": "0.7.4",
+    "@midnight/mocked-node-client": "0.7.4",
     "@midnight/wallet": "file:../wallet-engine",
-    "@midnight/ouroboros-sync-mini-protocol":  "file:../mocked-node-client/ouroboros-sync-mini-protocol/js",
     "@types/jest": "^29.2.4",
     "@typescript-eslint/eslint-plugin": "^5.46.1",
     "@typescript-eslint/parser": "^5.46.1",
@@ -28,6 +28,9 @@
     "ts-node": "^10.9.1",
     "typescript": "^4.9.4",
     "fp-ts": "2.12.3",
-    "io-ts": "2.2.18"
+    "io-ts": "2.2.18",
+    "io-ts-types": "^0.5.17",
+    "newtype-ts": "^0.3.5",
+    "monocle-ts": "^2.3.13"
   }
 }

@@ -594,11 +594,6 @@
     "@jridgewell/resolve-uri" "3.1.0"
     "@jridgewell/sourcemap-codec" "1.4.14"
 
-"@midnight/bloc@0.7.1":
-  version "0.7.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.7.1.tgz#d68136934d4172ed80a6ee935fd49289b818ea6e"
-  integrity sha512-837bs0Fk+rtmjwhNSEnImInZPuu9HoRcCu9d5Ojcr5wJON9RZON3l7J3/s31gOisqqkFsYANcW57gY9/nNZz8A==
-
 "@midnight/bloc@0.7.4":
   version "0.7.4"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/bloc/-/bloc-0.7.4.tgz#d375c9998deb76a27886f7539caeb9756cfca689"
@@ -623,11 +618,6 @@
   version "0.7.4"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.7.4.tgz#a33781495bae166ed64551ac8f08fdc9d2ad8fac"
   integrity sha512-2J100eD+ovdC1TCqdQplCZK6AVzcXhlMXmHV/IConjD4yieptb7Du7/dZhTPDmgkHMywh6A2EUPUyLsZUcwG9g==
-
-"@midnight/mocked-node-api@^0.7.1":
-  version "0.7.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-api/-/mocked-node-api-0.7.1.tgz#048af11885772780fbba9e58b824727badf2c55f"
-  integrity sha512-7DFwuqmMRo+Sj/SRk6WJIXfn84Y7wamnU3lYC1fQyU7VVttDXa0v7oZgqnQCHpu7Ro8WqWBd2al0vIxalk/U7A==
 
 "@midnight/mocked-node-app@0.7.4":
   version "0.7.4"
@@ -664,15 +654,6 @@
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-common/-/mocked-node-common-0.7.4.tgz#224d2f3856e416744c0e19d73fda04576ae96a1c"
   integrity sha512-iEu6Iw8b+XGufxE08CqdiSS0hEPiU7Qzo6tAZSqhV+u9FWG1zk2VAKz/UOmCqYuaRkvyWI8Mj2WsoA9JavksOg==
 
-"@midnight/mocked-node-in-memory@0.7.1":
-  version "0.7.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.7.1.tgz#6e3e69146eb8371366a2c0f690e27d0f9d814088"
-  integrity sha512-5Wz+thmvWxosrY6TEQB8Scx229vzmHORU+H3EpuFxNAl4v/jbCG7xTrfMdtdBXKauVKp47KVUdrHhqzmAsBECA==
-  dependencies:
-    "@midnight/bloc" "0.7.1"
-    "@midnight/ledger" "1.2.4"
-    "@midnight/mocked-node-api" "^0.7.1"
-
 "@midnight/mocked-node-in-memory@0.7.4", "@midnight/mocked-node-in-memory@^0.7.4":
   version "0.7.4"
   resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/mocked-node-in-memory/-/mocked-node-in-memory-0.7.4.tgz#2f77e7780558af8fa2e8b8d1dc62fd36c36e97d7"
@@ -692,14 +673,6 @@
     "@midnight/mocked-node-common" "^0.7.4"
     "@midnight/protocols" "^0.7.4"
     "@midnight/session-types" "^0.7.4"
-
-"@midnight/ouroboros-sync-mini-protocol@file:../mocked-node-client/ouroboros-sync-mini-protocol/js":
-  version "0.0.20"
-  dependencies:
-    cross-fetch "^3.1.5"
-    isomorphic-ws "^5.0.0"
-    rxjs "7.5.5"
-    ws "^8.8.1"
 
 "@midnight/protocols@^0.7.4":
   version "0.7.4"

@@ -14,14 +14,16 @@ import {
 } from '@midnight/ledger';
 import { HasBalance, Resource, WalletBuilder } from '@midnight/wallet';
 import type { Filter, FilterService, Wallet } from '@midnight/wallet-api';
-import type { OuroborosSyncService } from '@midnight/ouroboros-sync-mini-protocol';
 import { InMemoryServer } from '@midnight/mocked-node-app';
-import * as osp from './ouroboros-sync-protocol';
 import {
   Genesis,
   InMemoryMockedNode,
   LedgerNapi,
 } from '@midnight/mocked-node-in-memory';
+
+import * as mnc from '@midnight/mocked-node-client';
+import pino from 'pino';
+import type { MockedNodeClient } from '@midnight/mocked-node-client';
 
 const tokenType = nativeToken();
 const initialBalance = 1_000_000n;
@@ -70,6 +72,10 @@ const prepareLocalStateAndMintTx = (): [string, LedgerTransaction] => {
 
   return [serializedLocalState, mintTx];
 };
+
+const logger = pino({
+  level: 'error',
+});
 
 type WalletType = FilterService & Wallet & HasBalance & Resource;
 
@@ -151,7 +157,11 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
       tag: 'value',
       transactions: [serializeTx(mintTx)],
     };
-    const mockedNode = new InMemoryMockedNode(genesis, new LedgerNapi());
+    const mockedNode = new InMemoryMockedNode(
+      genesis,
+      new LedgerNapi(),
+      logger,
+    );
 
     // Create a wallet instance that connects to the mocked-node
     // Initial state is set up to receive funds from the mint tx
@@ -175,9 +185,9 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
   );
 });
 
-describe('MockedNode as InMemoryServer and OuroborosSyncService flow (syncing transactions)', () => {
+describe('MockedNode as InMemoryServer and MockedNodeClient flow (syncing transactions)', () => {
   let mockedNode: InMemoryServer;
-  let ouroborosSyncService: OuroborosSyncService<osp.Block>;
+  let mockedNodeClient: MockedNodeClient<Transaction>;
 
   const setup = async (): Promise<WalletType> => {
     const [serializedLocalState, mintTx] = prepareLocalStateAndMintTx();
@@ -193,10 +203,7 @@ describe('MockedNode as InMemoryServer and OuroborosSyncService flow (syncing tr
 
     await mockedNode.run();
 
-    ouroborosSyncService = await osp.createOuroborosSyncService(
-      nodeHost,
-      nodePort,
-    );
+    mockedNodeClient = await mnc.client(`ws://${nodeHost}:${nodePort}`, logger);
 
     // Create a wallet instance that connects to the mocked-node
     // Initial state is set up to receive funds from the mint tx
@@ -209,18 +216,18 @@ describe('MockedNode as InMemoryServer and OuroborosSyncService flow (syncing tr
   const additionalTest = async (): Promise<void> => {
     // Check synced txs (they're two, genesis and unbalancedTx)
     const syncedTxs = await firstValueFrom(
-      ouroborosSyncService.sync().pipe(take(2), toArray()),
+      mockedNodeClient.sync().pipe(take(2), toArray()),
     );
     expect(syncedTxs.length).toBe(2);
   };
 
   const tearDown = async (): Promise<void> => {
-    await ouroborosSyncService.close();
+    mockedNodeClient.close();
     await mockedNode.close();
   };
 
   testSpec(
-    'Ouroboros Sync Service',
+    'Mocked Node Client',
     'Sync all transactions',
     setup,
     additionalTest,
