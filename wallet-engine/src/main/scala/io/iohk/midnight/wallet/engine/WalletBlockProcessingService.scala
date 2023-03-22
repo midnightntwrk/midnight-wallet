@@ -2,14 +2,16 @@ package io.iohk.midnight.wallet.engine
 
 import cats.effect.{Async, Deferred, Resource}
 import cats.syntax.all.*
+import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
 import io.iohk.midnight.wallet.core.capabilities.WalletBlockProcessing
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.core.tracing.WalletBlockProcessingTracer
-import io.iohk.midnight.wallet.core.{BlockProcessingFactory, WalletStateContainer}
+import io.iohk.midnight.wallet.core.{BlockProcessingFactory, WalletError, WalletStateContainer}
 
 trait WalletBlockProcessingService[F[_]] {
-  def start: F[Unit]
+  def blocks: Stream[F, Either[WalletError, AppliedBlock]]
   def stop: F[Unit]
 }
 
@@ -23,13 +25,14 @@ object WalletBlockProcessingService {
       tracer: WalletBlockProcessingTracer[F],
   ) extends WalletBlockProcessingService[F] {
 
-    override val start: F[Unit] =
+    override val blocks: Stream[F, Either[WalletError, AppliedBlock]] =
       BlockProcessingFactory
         .pipe(walletStateContainer)
         .apply(syncService.sync())
+        .map(_.map { case (block, _) =>
+          block
+        })
         .interruptWhen(deferred)
-        .compile
-        .drain
 
     override val stop: F[Unit] =
       deferred.complete(Right(())).void

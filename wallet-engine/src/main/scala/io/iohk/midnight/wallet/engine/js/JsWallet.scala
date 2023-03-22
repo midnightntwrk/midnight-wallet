@@ -55,7 +55,7 @@ class JsWallet(
     walletStateService.balance.unsafeToObservable()
 
   def start(): Unit =
-    walletBlockProcessingService.start.unsafeRunAndForget()
+    walletBlockProcessingService.blocks.compile.drain.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
     finalizer.unsafeRunSyncToPromise()

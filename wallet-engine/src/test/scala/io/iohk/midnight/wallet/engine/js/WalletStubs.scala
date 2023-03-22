@@ -3,9 +3,11 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import fs2.Stream
 import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
 import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletKeys}
 import io.iohk.midnight.wallet.core.{
   Wallet,
+  WalletError,
   WalletFilterService,
   WalletStateService,
   WalletTxSubmissionService,
@@ -30,7 +32,7 @@ class WalletFilterServiceInfiniteStub extends WalletFilterService[IO] {
 }
 
 class WalletBlockProcessingServiceStub extends WalletBlockProcessingService[IO] {
-  override def start: IO[Unit] = IO.unit
+  override def blocks: Stream[IO, Either[WalletError, AppliedBlock]] = Stream.empty
   override def stop: IO[Unit] = IO.unit
 }
 

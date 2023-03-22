@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.engine.services
 
 import cats.effect.IO
 import cats.effect.kernel.Resource
+import cats.effect.std.Queue
 import cats.syntax.eq.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
@@ -13,6 +14,7 @@ import io.iohk.midnight.pino.mod.pino.LoggerOptions
 import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
 import io.iohk.midnight.wallet.engine.config.Config
@@ -53,14 +55,31 @@ trait EndToEndSpecSetup {
     )
   }
 
-  def makeWalletResource(
+  def makeRunningWalletResource(
       node: MockedNode[ApiTransaction],
       initialState: ZSwapLocalState,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
     Resource.make(
       Wallet
         .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn))
-        .flatTap(_.dependencies.walletBlockProcessingService.start.start),
+        .flatTap(_.dependencies.walletBlockProcessingService.blocks.compile.drain.start),
+    )(_.finalizer)
+  }
+
+  def withRunningWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
+      body: AllocatedWallet[IO, Wallet] => IO[Unit],
+  ): IO[Unit] =
+    makeNodeResource(initialTxs*)
+      .flatMap(makeRunningWalletResource(_, initialWalletState))
+      .use(body(_))
+
+  def makeWalletResource(
+      node: MockedNode[ApiTransaction],
+      initialState: ZSwapLocalState,
+  ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
+    Resource.make(
+      Wallet
+        .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn)),
     )(_.finalizer)
   }
 
@@ -82,7 +101,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     // These values were extracted after first run since it's not predictable
     val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
 
-    withWallet(initialState, mintTx) {
+    withRunningWallet(initialState, mintTx) {
       case AllocatedWallet(WalletDependencies(_, walletState, _, txSubmission), _) =>
         for {
           balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
@@ -91,6 +110,47 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
         } yield {
           assertEquals(balanceBeforeSend, coin.value)
           assertEquals(balanceAfterSend, coin.value - spendCoin.value - fee)
+        }
+    }
+  }
+
+  test("Submit tx one after another and doesn't spend the same coin (no double spend)") {
+    val initialState = new ZSwapLocalState()
+    initialState.watchFor(coin)
+    val pubKey = initialState.coinPublicKey
+    val mintTx = buildSendTx(coin, pubKey)
+    val firstSpendTx = buildSendTx(spendCoin, randomRecipient())
+    val secondSpendTx = buildSendTx(spendCoin, randomRecipient())
+    // These values were extracted after first run since it's not predictable
+    val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
+
+    withWallet(initialState, mintTx) {
+      case AllocatedWallet(
+            WalletDependencies(walletBlockProcessingService, walletState, _, txSubmission),
+            _,
+          ) =>
+        for {
+          appliedBlocksQueue <- Queue.unbounded[IO, AppliedBlock]
+          _ <- walletBlockProcessingService.blocks
+            .collect { case Right(value) =>
+              value
+            }
+            .enqueueUnterminated(appliedBlocksQueue)
+            .compile
+            .drain
+            .start
+          _ <- appliedBlocksQueue.take
+          balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
+          _ <- txSubmission.submitTransaction(firstSpendTx, List.empty)
+          _ <- appliedBlocksQueue.take
+          balanceAfter1Send <- walletState.balance.find(_ < coin.value).compile.lastOrError
+          _ <- txSubmission.submitTransaction(secondSpendTx, List.empty)
+          _ <- appliedBlocksQueue.take
+          balanceAfter2Send <- walletState.balance.find(_ < coin.value).compile.lastOrError
+        } yield {
+          assertEquals(balanceBeforeSend, coin.value)
+          assertEquals(balanceAfter1Send, coin.value - spendCoin.value - fee)
+          assertEquals(balanceAfter2Send, balanceAfter1Send - spendCoin.value - fee)
         }
     }
   }
@@ -108,7 +168,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val pubKey = initialState.coinPublicKey
     val mintTx = buildSendTx(coin, pubKey)
 
-    withWallet(initialState, mintTx) {
+    withRunningWallet(initialState, mintTx) {
       case AllocatedWallet(
             WalletDependencies(
               walletBlockProcessingService,
@@ -142,7 +202,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val spendTx = buildSendTx(spendCoin, randomRecipient())
     val expectedIdentifier = spendTx.identifiers().head
 
-    withWallet(initialState, mintTx) {
+    withRunningWallet(initialState, mintTx) {
       case AllocatedWallet(WalletDependencies(_, walletState, filterService, txSubmission), _) =>
         for {
           _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
