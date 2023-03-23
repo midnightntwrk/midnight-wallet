@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.IO
+import cats.effect.{Deferred, IO}
 import fs2.Stream
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
@@ -41,6 +41,13 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
   override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
     IO.pure(state.coinPublicKey)
   override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emit(js.BigInt(0))
+}
+
+class WalletBlockProcessingServiceStartStub(ref: Deferred[IO, Boolean])
+    extends WalletBlockProcessingService[IO] {
+  override val blocks: Stream[IO, Either[WalletError, AppliedBlock]] =
+    Stream.eval(ref.complete(true)).flatMap(_ => Stream.empty)
+  override def stop: IO[Unit] = IO.unit
 }
 
 class WalletStateServicePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey)

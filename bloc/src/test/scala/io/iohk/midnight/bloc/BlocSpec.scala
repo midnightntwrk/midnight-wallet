@@ -3,6 +3,7 @@ package io.iohk.midnight.bloc
 import cats.effect.{Deferred, IO}
 import cats.syntax.parallel.*
 import cats.syntax.traverse.*
+import io.iohk.midnight.bloc.Bloc.TopicAlreadyClosed
 import munit.CatsEffectSuite
 
 class BlocSpec extends CatsEffectSuite {
@@ -172,5 +173,16 @@ class BlocSpec extends CatsEffectSuite {
         assert(list2.endsWith(list3))
       }
     }
+  }
+
+  test("Closing resources more than once throws error") {
+    val closeTwice =
+      for {
+        blocWithReleaseOp <- Bloc[IO, Int](0).allocated
+        (_, close) = blocWithReleaseOp
+        _ <- close
+        _ <- close
+      } yield ()
+    interceptIO[TopicAlreadyClosed.type](closeTwice)
   }
 }

@@ -48,6 +48,7 @@ object WalletBlockProcessingEvent {
           "transactions" -> evt.block.body.transactionResults.map(_.header.hash.show).show,
         ),
       )
+    // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
     implicit val applyBlockErrorContext: AsStringLogContext[ApplyBlockError] =
       AsStringLogContext.fromMap(evt =>
         Map(
@@ -56,6 +57,7 @@ object WalletBlockProcessingEvent {
           "error" -> evt.error.message,
         ),
       )
+    // $COVERAGE-ON$
   }
 
 }

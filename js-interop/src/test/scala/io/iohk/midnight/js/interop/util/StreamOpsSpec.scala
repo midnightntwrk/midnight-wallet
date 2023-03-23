@@ -28,6 +28,17 @@ class StreamOpsSpec extends CatsEffectSuite with StreamOpsFixtures {
     }
   }
 
+  test("Run toStream and get all values from underlying Observable") {
+    val sourceObservable = stream.unsafeToObservable()
+    val streamFromObservable =
+      FromObservable[IO, Int](sourceObservable).toStream()
+    val expectedEvents: List[Int] = events.toList
+
+    streamFromObservable.use { stream =>
+      assertIO(stream.compile.toList, expectedEvents)
+    }
+  }
+
   test(
     "Run stream, offer some events and then on error, stream should finish with some data and error",
   ) {

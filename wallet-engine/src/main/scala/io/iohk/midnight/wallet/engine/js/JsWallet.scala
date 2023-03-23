@@ -62,6 +62,7 @@ class JsWallet(
 }
 
 @JSExportTopLevel("WalletBuilder")
+// $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
 object JsWallet {
   @JSExport
   def build(

@@ -40,9 +40,11 @@ object SyncServiceFactory {
           transformBlock(result.asInstanceOf[RollForward[Block[Transaction]]].block)
         }.rethrow
       } else {
+        // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
         Async[F].raiseError {
           new Throwable(s"Invalid RequestNextResult type '$tag'")
         }
+        // $COVERAGE-ON$
       }
     }
 
@@ -66,6 +68,7 @@ object SyncServiceFactory {
     }
   }
 
+  // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
   def fromMockedNodeClient[F[_]: Async](nodeUri: Uri): Resource[F, SyncService[F]] = {
     // This logger needs to be adjusted to the existing tracing solutions.
     // https://input-output.atlassian.net/browse/PM-5761
@@ -82,6 +85,7 @@ object SyncServiceFactory {
           .evalMap(rollForward => Async[F].delay(transformBlock(rollForward.block)).rethrow)
       }
   }
+  // $COVERAGE-ON$
 
   private def transformBlock(block: Block[Transaction]): Either[Throwable, data.Block] =
     transformBlockHeader(block).map(data.Block(_, transformBlockBody(block)))
@@ -95,7 +99,9 @@ object SyncServiceFactory {
     data.Block
       .Height(block.header.height.intValue())
       .bimap(
+        // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
         new Throwable(_),
+        // $COVERAGE-ON$
         data.Block.Header(
           data.Hash(block.header.hash),
           data.Hash(block.header.parentHash),

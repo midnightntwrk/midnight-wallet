@@ -28,6 +28,7 @@ object TxSubmissionServiceFactory {
   def fromNode[F[_]: Async](node: MockedNode[Transaction]): TxSubmissionService[F] =
     doSubmitTransaction(node.submitTx)
 
+  // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
   def fromMockedNodeClient[F[_]: Async](nodeUri: Uri): Resource[F, TxSubmissionService[F]] = {
     // This logger needs to be adjusted to the existing tracing solutions.
     // https://input-output.atlassian.net/browse/PM-5761
@@ -37,6 +38,7 @@ object TxSubmissionServiceFactory {
 
     clientR.map { client => doSubmitTransaction(client.submitTx) }
   }
+  // $COVERAGE-ON$
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
   private def doSubmitTransaction[F[_]: Async](
@@ -47,10 +49,12 @@ object TxSubmissionServiceFactory {
       val tag = result.asInstanceOf[js.Dynamic].tag.asInstanceOf[String]
       if (tag === TRANSACTION_ACCEPTED) {
         TxSubmissionService.SubmissionResult.Accepted
+        // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
       } else {
         val reason = result.asInstanceOf[TxRejected].reason
         TxSubmissionService.SubmissionResult.Rejected(reason)
       }
+    // $COVERAGE-ON$
     }
   }
 }

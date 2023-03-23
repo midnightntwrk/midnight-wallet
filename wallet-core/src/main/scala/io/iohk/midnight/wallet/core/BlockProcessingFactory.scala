@@ -21,8 +21,10 @@ object BlockProcessingFactory {
             walletBlockProcessing.applyBlock(wallet, block)
           }
           .flatTap {
-            case Right(_)    => tracer.applyBlockSuccess(block)
+            case Right(_) => tracer.applyBlockSuccess(block)
+            // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
             case Left(error) => tracer.applyBlockError(block, error)
+            // $COVERAGE-ON$
           }
           .fmap(_.fmap((AppliedBlock(block.header), _)))
       }

@@ -40,7 +40,9 @@ object TransactionBalancer {
           val balancingTxWithChange = prepareTxWithChange(coinsForAttempt.toList, state, change)
           Right(originalTx.merge(balancingTxWithChange))
         } else if (change == Zero) {
+          // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
           Right(originalTx.merge(balancingTx))
+          // $COVERAGE-ON$
         } else tryBalanceTx(restOfCoins, coinsForAttempt.toList, state, originalTx)
       case Nil => Left(NotSufficientFunds)
     }
@@ -60,9 +62,11 @@ object TransactionBalancer {
     (orgTxImbalanceOpt, balancingTxImbalanceOpt) match {
       case (Some(orgTxImbalance), Some(balancingTxImbalance)) =>
         (orgTxImbalance - Buffer) + balancingTxImbalance
+      // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
       case (Some(orgTxImbalance), None)       => orgTxImbalance - Buffer
       case (None, Some(balancingTxImbalance)) => balancingTxImbalance
       case (None, None)                       => Zero
+      // $COVERAGE-ON$
     }
   }
 

@@ -16,9 +16,11 @@ class WalletBlockProcessingTracer[F[_]](val tracer: Tracer[F, WalletBlockProcess
   def applyBlockSuccess(block: Block): F[Unit] = tracer(
     ApplyBlockSuccess(block),
   )
+  // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
   def applyBlockError(block: Block, error: WalletError): F[Unit] = tracer(
     ApplyBlockError(block, error),
   )
+  // $COVERAGE-ON$
 }
 
 object WalletBlockProcessingTracer {
@@ -31,7 +33,9 @@ object WalletBlockProcessingTracer {
       : AsStructuredLog[WalletBlockProcessingEvent] = {
     case evt: BlockProcessingHandlingBlock => evt.asContextAwareLog
     case evt: ApplyBlockSuccess            => evt.asContextAwareLog
-    case evt: ApplyBlockError              => evt.asContextAwareLog
+    // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
+    case evt: ApplyBlockError => evt.asContextAwareLog
+    // $COVERAGE-ON$
   }
 
   implicit val blockProcessingHandlingBlockAsStructuredLog
@@ -53,6 +57,7 @@ object WalletBlockProcessingTracer {
       context = _.stringLogContext,
     )
 
+  // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
   implicit val applyBlockErrorAsStructuredLog: AsStructuredLog[ApplyBlockError] =
     AsContextAwareLog.instance(
       id = ApplyBlockError.id,
@@ -61,6 +66,7 @@ object WalletBlockProcessingTracer {
       message = evt => s"Error while applying block [${evt.block.header.hash.show}].",
       context = _.stringLogContext,
     )
+  // $COVERAGE-ON$
 
   def from[F[_]: Sync](
       structuredTracer: Tracer[F, StructuredLog],

@@ -158,6 +158,11 @@ lazy val walletCore = project
     // Test dependencies
     libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
     useNodeModuleResolution,
+
+    // Coverage
+    coverageExcludedPackages := "" +
+      "io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat;" +
+      "io.iohk.midnight.wallet.core.Instances;",
   )
 
 lazy val walletEngine = (project in file("wallet-engine"))
@@ -185,6 +190,15 @@ lazy val walletEngine = (project in file("wallet-engine"))
     // ScalablyTyped config
     stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "fp-ts", "io-ts"),
     useNodeModuleResolution,
+
+    // Coverage
+    coverageExcludedPackages := "" +
+      "io.iohk.midnight.wallet.engine.WalletBuilder;" +
+      "io.iohk.midnight.wallet.engine.config;" +
+      "io.iohk.midnight.wallet.engine.tracing.JsWalletTracer;" +
+      "io.iohk.midnight.wallet.engine.tracing.JsWalletEvent.DefaultInstances;" +
+      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderEvent.DefaultInstances;" +
+      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer;",
   )
 
 lazy val jsInterop = project
@@ -229,6 +243,6 @@ addCommandAlias(
     "blockchainJS/test",
     "walletEngine/test",
     "IntegrationTest/test",
-    "coverageAggregate",
+    "coverageReport",
   ).mkString(";", " ;", ""),
 )

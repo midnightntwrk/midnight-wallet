@@ -2,17 +2,18 @@ package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.kernel.Deferred
 import cats.effect.{IO, Ref}
-import io.iohk.midnight.js.interop.rxjs.Observable
 import io.iohk.midnight.js.interop.util.ObservableOps.SubscribeableObservable
 import io.iohk.midnight.midnightLedger.mod.{ZSwapCoinPublicKey, Transaction as LedgerTransaction}
 import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
 import io.iohk.midnight.rxjs.distTypesInternalTypesMod.Observer
+import io.iohk.midnight.rxjs.mod.firstValueFrom
 import io.iohk.midnight.wallet.core.Generators.*
 import io.iohk.midnight.wallet.core.LedgerSerialization
 import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF.forAllF
 
+import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
@@ -52,7 +53,7 @@ class JsWalletSpec
           IO.unit,
         )
       val observable = wallet.connect()
-      IO.fromPromise(IO(Observable.firstValueFrom(observable)))
+      IO.fromPromise(IO(firstValueFrom(observable)))
         .map(assertEquals(_, zSwapCoinPublicKey))
     }
   }
@@ -73,7 +74,7 @@ class JsWalletSpec
         )
 
       val observable = wallet.submitTx(tx, coins.toJSArray)
-      IO.fromPromise(IO(Observable.firstValueFrom(observable)))
+      IO.fromPromise(IO(firstValueFrom(observable)))
         .map(txId =>
           assertEquals(
             LedgerSerialization.serializeIdentifier(txId),
@@ -133,7 +134,7 @@ class JsWalletSpec
           IO.unit,
         )
       val observable = wallet.balance()
-      IO.fromPromise(IO(Observable.firstValueFrom(observable)))
+      IO.fromPromise(IO(firstValueFrom(observable)))
         .map(assertEquals(_, balance))
     }
   }
@@ -150,6 +151,21 @@ class JsWalletSpec
       )
       _ <- IO.fromPromise(IO(wallet.close()))
       result <- ref.get
+    } yield assert(result)
+  }
+
+  test("wallet should start") {
+    for {
+      isFinished <- Deferred[IO, Boolean]
+      wallet = new JsWallet(
+        new WalletBlockProcessingServiceStartStub(isFinished),
+        new WalletStateServiceStub(),
+        new WalletFilterServiceStub(Seq.empty),
+        new WalletTxSubmissionServiceStub(),
+        IO.unit,
+      )
+      _ <- IO(wallet.start())
+      result <- isFinished.get.timeout(5.seconds)
     } yield assert(result)
   }
 }
