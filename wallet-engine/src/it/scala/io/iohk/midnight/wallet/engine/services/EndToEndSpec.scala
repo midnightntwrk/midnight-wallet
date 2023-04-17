@@ -3,27 +3,29 @@ package io.iohk.midnight.wallet.engine.services
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.effect.std.Queue
+import cats.effect.unsafe.implicits.global
 import cats.syntax.eq.*
 import io.iohk.midnight.midnightLedger.mod.*
 import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
+import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
+import io.iohk.midnight.midnightMockedNodeApi.distDataRequestNextResultMod.RequestNextResult
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
-import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
-import io.iohk.midnight.midnightMockedNodeInMemory.distGenesisMod.GenesisValue
-import io.iohk.midnight.midnightMockedNodeInMemory.mod.{InMemoryMockedNode, LedgerNapi}
-import io.iohk.midnight.pino.mod.pino.LoggerOptions
-import io.iohk.midnight.rxjs.mod.{find, firstValueFrom}
+import io.iohk.midnight.midnightMockedNodeApi.distDataTxSubmissionResultMod
+import io.iohk.midnight.midnightMockedNodeTest.distTestSystemMod.TestSystem
+import io.iohk.midnight.midnightMockedNodeTest.mod.ProdTestSystem
+import io.iohk.midnight.rxjs.mod.*
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
-import io.iohk.midnight.wallet.engine.config.Config
-import io.iohk.midnight.wallet.engine.config.NodeConnection.NodeInstance
-import io.iohk.midnight.wallet.engine.js.JsWallet
+import io.iohk.midnight.wallet.engine.config.{Config, NodeConnectionResourced}
+import io.iohk.midnight.wallet.engine.js.{JsWallet, NodeConnection, SubmitSession, SyncSession}
 import munit.CatsEffectSuite
 
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
+import scala.scalajs.js.Promise
 
 trait EndToEndSpecSetup {
   val nodeHost = "localhost"
@@ -43,50 +45,100 @@ trait EndToEndSpecSetup {
     builder.intoTransaction().transaction
   }
 
-  def makeNodeResource(initialTxs: Transaction*): Resource[IO, MockedNode[ApiTransaction]] = {
+  def makeTestSystemResource(initialTxs: Transaction*): Resource[IO, TestSystem[ApiTransaction]] = {
     val txs =
       initialTxs
         .map(LedgerSerialization.toTransaction)
         .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
-    val pinoLogger = io.iohk.midnight.pino.mod.default.apply[LoggerOptions]()
+    Resource.pure(ProdTestSystem(txs.toJSArray))
+  }
 
-    Resource.pure(
-      new InMemoryMockedNode(GenesisValue("value", txs.toJSArray), new LedgerNapi(), pinoLogger),
-    )
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+  def makeNodeConnection(testSystem: TestSystem[ApiTransaction]): NodeConnectionResourced = {
+    val nodeConnection = new NodeConnection {
+
+      override def startSyncSession(): js.Promise[SyncSession] = IO {
+        new SyncSession {
+          private val session = testSystem.startClientSession("wallet-e2e-sync")
+
+          override def sync(): Observable_[Block[ApiTransaction]] = {
+            val filterFun = {
+              (requestNextResult: RequestNextResult[Block[ApiTransaction]], _: Double) =>
+                {
+                  val tag = requestNextResult.asInstanceOf[js.Dynamic].tag.asInstanceOf[String]
+                  tag === "RollForward"
+                }
+            }
+
+            val mapFun = {
+              (requestNextResult: RequestNextResult[Block[ApiTransaction]], _: Double) =>
+                {
+                  requestNextResult
+                    .asInstanceOf[js.Dynamic]
+                    .block
+                    .asInstanceOf[Block[ApiTransaction]]
+                }
+            }
+
+            session
+              .sync()
+              .pipe(filter(filterFun), map(mapFun))
+              .asInstanceOf[Observable_[Block[ApiTransaction]]]
+          }
+
+          override def close(): Unit =
+            session.close()
+        }
+      }.unsafeToPromise()
+
+      override def startSubmitSession(): js.Promise[SubmitSession] = IO {
+        new SubmitSession {
+          private val session = testSystem.startClientSession("wallet-e2e-submit")
+
+          override def submitTx(
+              tx: ApiTransaction,
+          ): Promise[distDataTxSubmissionResultMod.TxSubmissionResult] =
+            session.submitTx(tx)
+
+          override def close(): Unit =
+            session.close()
+        }
+      }.unsafeToPromise()
+    }
+    NodeConnectionResourced(nodeConnection)
   }
 
   def makeRunningWalletResource(
-      node: MockedNode[ApiTransaction],
+      testSystem: TestSystem[ApiTransaction],
       initialState: ZSwapLocalState,
-  ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
+  ): Resource[IO, AllocatedWallet[IO, Wallet]] =
     Resource.make(
       Wallet
-        .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn))
+        .build[IO](Config(makeNodeConnection(testSystem), initialState, LogLevel.Warn))
         .flatTap(_.dependencies.walletBlockProcessingService.blocks.compile.drain.start),
     )(_.finalizer)
-  }
 
   def withRunningWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
-    makeNodeResource(initialTxs*)
+    makeTestSystemResource(initialTxs*)
       .flatMap(makeRunningWalletResource(_, initialWalletState))
       .use(body(_))
 
   def makeWalletResource(
-      node: MockedNode[ApiTransaction],
+      testSystem: TestSystem[ApiTransaction],
       initialState: ZSwapLocalState,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
     Resource.make(
       Wallet
-        .build[IO](Config(NodeInstance(node), initialState, LogLevel.Warn)),
+        .build[IO](Config(makeNodeConnection(testSystem), initialState, LogLevel.Warn)),
     )(_.finalizer)
   }
 
   def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
-    makeNodeResource(initialTxs*)
+    makeTestSystemResource(initialTxs*)
       .flatMap(makeWalletResource(_, initialWalletState))
       .use(body(_))
 }

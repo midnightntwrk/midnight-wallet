@@ -5,21 +5,23 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.midnightLedger.mod.*
+import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as NodeTx
-import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
+import io.iohk.midnight.midnightMockedNodeApi.distDataTxSubmissionResultMod.TxSubmissionResult
 import io.iohk.midnight.midnightWalletApi.distFilterServiceMod.FilterService
 import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
 import io.iohk.midnight.midnightWalletApi.distWalletMod as api
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.engine.{WalletBlockProcessingService, WalletBuilder}
 import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
-import io.iohk.midnight.wallet.engine.config.RawNodeConnection.{RawNodeInstance, RawNodeUri}
-import io.iohk.midnight.wallet.engine.config.{Config, RawConfig, RawNodeConnection}
+import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
+import io.iohk.midnight.wallet.engine.{WalletBlockProcessingService, WalletBuilder}
 
+import scala.annotation.unused
 import scala.scalajs.js
+import scala.scalajs.js.Promise
 import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
@@ -61,31 +63,39 @@ class JsWallet(
     finalizer.unsafeRunSyncToPromise()
 }
 
+trait SyncSession extends js.Object {
+  def sync(): Observable_[Block[NodeTx]]
+  def close(): Unit
+}
+
+trait SubmitSession extends js.Object {
+  def submitTx(@unused tx: NodeTx): Promise[TxSubmissionResult]
+  def close(): Unit
+}
+
+trait NodeConnection extends js.Object {
+  def startSyncSession(): Promise[SyncSession]
+  def startSubmitSession(): Promise[SubmitSession]
+}
+
 @JSExportTopLevel("WalletBuilder")
 // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
 object JsWallet {
+
   @JSExport
   def build(
-      node: MockedNode[NodeTx],
+      nodeConnection: NodeConnection,
       initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
-    internalBuild(RawNodeInstance(node), initialState, minLogLevel)
-
-  @JSExport
-  def connect(
-      nodeUri: String,
-      initialState: js.UndefOr[String],
-      minLogLevel: js.UndefOr[String],
-  ): js.Promise[api.Wallet] =
-    internalBuild(RawNodeUri(nodeUri), initialState, minLogLevel)
+    internalBuild(nodeConnection, initialState, minLogLevel)
 
   private def internalBuild(
-      rawNodeConnection: RawNodeConnection,
+      nodeConnection: NodeConnection,
       initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] = {
-    val rawConfig = RawConfig(rawNodeConnection, initialState.toOption, minLogLevel.toOption)
+    val rawConfig = RawConfig(nodeConnection, initialState.toOption, minLogLevel.toOption)
 
     val jsWalletIO = for {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)

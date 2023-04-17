@@ -18,8 +18,7 @@ import io.iohk.midnight.wallet.core.tracing.{
   WalletFilterTracer,
   WalletTxSubmissionTracer,
 }
-import io.iohk.midnight.wallet.engine.config.NodeConnection.{NodeInstance, NodeUri}
-import io.iohk.midnight.wallet.engine.config.{Config, NodeConnection}
+import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.js.{SyncServiceFactory, TxSubmissionServiceFactory}
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 
@@ -53,10 +52,10 @@ object WalletBuilder {
 
     val dependencies = for {
       _ <- builderTracer.buildRequested(config).toResource
-      (syncService, txSubmissionService) = buildNodeResources(config.nodeConnection)
-      submitTxService <- txSubmissionService
-      stateSyncService <- syncService
-      filterSyncService <- syncService
+      submitTxService <- TxSubmissionServiceFactory(config.nodeConnection)
+      syncServiceTemplate = SyncServiceFactory(config.nodeConnection)
+      filterSyncService <- syncServiceTemplate
+      stateSyncService <- syncServiceTemplate
       walletStateContainer <- WalletStateContainer.Live(walletCreation.create(config.initialState))
       walletQueryStateService <- Resource.pure(
         new WalletQueryStateService.Live(walletStateContainer),
@@ -87,23 +86,6 @@ object WalletBuilder {
       case Left(t)  => builderTracer.walletBuildError(t.getMessage)
     }
   }
-
-  private type NodeResources[F[_]] =
-    (Resource[F, SyncService[F]], Resource[F, TxSubmissionService[F]])
-
-  private def buildNodeResources[F[_]: Async](nodeConnection: NodeConnection): NodeResources[F] =
-    nodeConnection match {
-      case NodeUri(uri) =>
-        val syncService = SyncServiceFactory.fromMockedNodeClient[F](uri)
-        val txSubmissionService = TxSubmissionServiceFactory.fromMockedNodeClient[F](uri)
-        (syncService, txSubmissionService)
-      case NodeInstance(nodeInstance) =>
-        val syncService =
-          Async[F].delay(SyncServiceFactory.fromNode[F](nodeInstance)).toResource
-        val txSubmissionService =
-          Async[F].delay(TxSubmissionServiceFactory.fromNode[F](nodeInstance)).toResource
-        (syncService, txSubmissionService)
-    }
 
   private def buildWalletBlockProcessingService[F[_]: Async, TWallet](
       syncService: SyncService[F],

@@ -17,7 +17,7 @@ trait WalletTxSubmissionService[F[_]] {
 
 object WalletTxSubmissionService {
   class Live[F[_]: Sync, TWallet](
-      txSubmissionService: TxSubmissionService[F],
+      submitTxService: TxSubmissionService[F],
       walletStateContainer: WalletStateContainer[F, TWallet],
   )(implicit
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, CoinInfo],
@@ -33,8 +33,7 @@ object WalletTxSubmissionService {
         _ <- tracer.submitTxStart(ledgerTx)
         _ <- validateTx(ledgerTx)
         balancedTx <- balanceTransaction(ledgerTx, newCoins)
-        response <- txSubmissionService
-          .submitTransaction(LedgerSerialization.toTransaction(balancedTx))
+        response <- submitTxService.submitTransaction(LedgerSerialization.toTransaction(balancedTx))
         result <- adaptResponse(ledgerTx, response)
       } yield result
     }

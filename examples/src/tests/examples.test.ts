@@ -1,5 +1,19 @@
-import { distinct, find, firstValueFrom, take, toArray } from 'rxjs';
-import type { Transaction } from '@midnight/mocked-node-api';
+import {
+  distinct,
+  find,
+  firstValueFrom,
+  Observable,
+  filter,
+  take,
+  toArray,
+  map,
+} from 'rxjs';
+import type {
+  Block,
+  Transaction,
+  TxSubmissionResult,
+  RollForward,
+} from '@midnight/mocked-node-api';
 import {
   CoinInfo,
   LedgerState,
@@ -12,7 +26,14 @@ import {
   ZSwapOffer,
   ZSwapOutputWithRandomness,
 } from '@midnight/ledger';
-import { HasBalance, Resource, WalletBuilder } from '@midnight/wallet';
+import {
+  HasBalance,
+  Resource,
+  WalletBuilder,
+  SyncSession,
+  SubmitSession,
+  NodeConnection,
+} from '@midnight/wallet';
 import type { Filter, FilterService, Wallet } from '@midnight/wallet-api';
 import { InMemoryServer } from '@midnight/mocked-node-app';
 import {
@@ -133,7 +154,9 @@ const testSpec = (
           return arg.hasIdentifier(submittedTxId);
         },
       };
+
       const filteredTx = await firstValueFrom(wallet.installTxFilter(filter));
+
       // Double-check that the filtered tx is what we want
       expect(filteredTx.hasIdentifier(submittedTxId)).toBeTruthy();
 
@@ -157,15 +180,38 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
       tag: 'value',
       transactions: [serializeTx(mintTx)],
     };
-    const mockedNode = new InMemoryMockedNode(
-      genesis,
-      new LedgerNapi(),
-      logger,
-    );
+    const mockedNode: InMemoryMockedNode<Transaction, LedgerState> =
+      new InMemoryMockedNode(genesis, new LedgerNapi(), logger);
 
-    // Create a wallet instance that connects to the mocked-node
-    // Initial state is set up to receive funds from the mint tx
-    return await WalletBuilder.build(mockedNode, serializedLocalState, 'warn');
+    const nodeConnection = {
+      async startSyncSession(): Promise<SyncSession> {
+        const chain = mockedNode.sync();
+        const syncSession: SyncSession = {
+          sync(): Observable<Block<Transaction>> {
+            return chain.sync();
+          },
+          close(): void {},
+        };
+
+        return await Promise.resolve(syncSession);
+      },
+
+      async startSubmitSession(): Promise<SubmitSession> {
+        const submitSession: SubmitSession = {
+          async submitTx(tx: Transaction): Promise<TxSubmissionResult> {
+            return await mockedNode.submitTx(tx);
+          },
+          close(): void {},
+        };
+        return await Promise.resolve(submitSession);
+      },
+    };
+
+    return await WalletBuilder.build(
+      nodeConnection,
+      serializedLocalState,
+      'error',
+    );
   };
 
   const noAdditionalTest = async (): Promise<void> => {
@@ -205,11 +251,45 @@ describe('MockedNode as InMemoryServer and MockedNodeClient flow (syncing transa
 
     mockedNodeClient = await mnc.client(`ws://${nodeHost}:${nodePort}`, logger);
 
+    const nodeConnection: NodeConnection = {
+      async startSyncSession() {
+        return await mnc
+          .client(`ws://${nodeHost}:${nodePort}`, logger)
+          .then((mockedNodeClient) => ({
+            sync(): Observable<Block<Transaction>> {
+              return mockedNodeClient.sync().pipe(
+                filter(
+                  (r): r is RollForward<Block<Transaction>> =>
+                    r.tag === 'RollForward',
+                ),
+                map((r) => r.block),
+              );
+            },
+            close(): void {
+              return mockedNodeClient.close();
+            },
+          }));
+      },
+      async startSubmitSession() {
+        return await mnc
+          .client(`ws://${nodeHost}:${nodePort}`, logger)
+          .then((mockedNodeClient) => ({
+            async submitTx(tx: Transaction): Promise<TxSubmissionResult> {
+              return await mockedNodeClient.submitTx(tx);
+            },
+            close(): void {
+              return mockedNodeClient.close();
+            },
+          }));
+      },
+    };
+
     // Create a wallet instance that connects to the mocked-node
     // Initial state is set up to receive funds from the mint tx
-    return await WalletBuilder.connect(
-      `ws://${nodeHost}:${nodePort}`,
+    return await WalletBuilder.build(
+      nodeConnection,
       serializedLocalState,
+      'error',
     );
   };
 

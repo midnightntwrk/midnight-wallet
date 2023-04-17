@@ -1,30 +1,24 @@
 package io.iohk.midnight.wallet.engine
 
 import io.iohk.midnight.wallet.core.LedgerSerialization
-import io.iohk.midnight.wallet.engine.config.RawNodeConnection.RawNodeUri
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
-import io.iohk.midnight.wallet.engine.js.JsWallet
+import io.iohk.midnight.wallet.engine.js.{JsWallet, NodeConnection, SubmitSession, SyncSession}
 import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
 import munit.CatsEffectSuite
 
-class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
-  test("Fail if node URI is invalid") {
-    val uri = "%"
-    val initialState = JsWallet.generateInitialState()
-    val minLogLevel = "Warn"
-    val config = Config.parse(RawConfig(RawNodeUri(uri), Some(initialState), Some(minLogLevel)))
+import scala.scalajs.js.Promise
 
-    config match {
-      case Left(Config.ParseError.InvalidUri(_)) =>
-      case _                                     => fail("Expected invalid URI error")
-    }
+class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
+  private val mockedNodeConnection = new NodeConnection {
+    override def startSyncSession(): Promise[SyncSession] = ???
+    override def startSubmitSession(): Promise[SubmitSession] = ???
   }
 
   test("Fail if initial state is invalid") {
-    val uri = "ws://localhost:5205"
     val initialState = "Invalid initial state"
     val minLogLevel = "Warn"
-    val config = Config.parse(RawConfig(RawNodeUri(uri), Some(initialState), Some(minLogLevel)))
+    val config =
+      Config.parse(RawConfig(mockedNodeConnection, Some(initialState), Some(minLogLevel)))
 
     config match {
       case Left(LedgerSerialization.Error.InvalidInitialState(_)) =>
@@ -33,10 +27,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
   }
 
   test("Fail if log level is invalid") {
-    val uri = "ws://localhost:5205"
     val initialState = JsWallet.generateInitialState()
     val minLogLevel = "bla_bla"
-    val config = Config.parse(RawConfig(RawNodeUri(uri), Some(initialState), Some(minLogLevel)))
+    val config =
+      Config.parse(RawConfig(mockedNodeConnection, Some(initialState), Some(minLogLevel)))
 
     config match {
       case Left(Config.ParseError.InvalidLogLevel(_)) =>
@@ -45,10 +39,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
   }
 
   test("Generate valid initial state") {
-    val uri = "ws://localhost:5205"
     val initialState = JsWallet.generateInitialState()
     val minLogLevel = "Warn"
-    val config = Config.parse(RawConfig(RawNodeUri(uri), Some(initialState), Some(minLogLevel)))
+    val config =
+      Config.parse(RawConfig(mockedNodeConnection, Some(initialState), Some(minLogLevel)))
     assert(config.isRight)
   }
 }

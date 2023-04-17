@@ -198,7 +198,10 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "io.iohk.midnight.wallet.engine.tracing.JsWalletTracer;" +
       "io.iohk.midnight.wallet.engine.tracing.JsWalletEvent.DefaultInstances;" +
       "io.iohk.midnight.wallet.engine.tracing.WalletBuilderEvent.DefaultInstances;" +
-      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer;",
+      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer;" +
+      "io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer;" +
+      "io.iohk.midnight.wallet.engine.js.SyncServiceFactory;"
+
   )
 
 lazy val jsInterop = project

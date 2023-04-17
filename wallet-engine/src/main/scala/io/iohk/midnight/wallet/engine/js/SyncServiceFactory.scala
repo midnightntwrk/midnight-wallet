@@ -4,88 +4,57 @@ import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.js.interop.util.StreamOps
 import io.iohk.midnight.js.interop.util.StreamOps.FromObservable
 import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
-import io.iohk.midnight.midnightMockedNodeApi.distDataRequestNextResultMod.{
-  ROLL_FORWARD,
-  RequestNextResult,
-  RollForward,
-}
 import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
-import io.iohk.midnight.midnightMockedNodeApi.distMockedNodeMod.MockedNode
-import io.iohk.midnight.midnightMockedNodeClient.*
-import io.iohk.midnight.pino.mod.pino.LoggerOptions
-import io.iohk.midnight.rxjs.distTypesMod.Observable_
-import io.iohk.midnight.rxjs.mod.lastValueFrom
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.services.SyncService
-import sttp.model.Uri
+import io.iohk.midnight.wallet.engine.config.NodeConnectionResourced
+import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
 
 import java.time.Instant
 import scala.scalajs.js
-import scala.scalajs.js.Promise
+import scala.util.Try
 
-@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
+// TODO: [PM-5832] Improve code coverage
+@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.ToString"))
 object SyncServiceFactory {
 
-  // Ugly code, will be simplified by using TestSystem from mocked-node
-  // https://input-output.atlassian.net/browse/PM-5758
-  def fromNode[F[_]: Async](node: MockedNode[Transaction]): SyncService[F] = {
-    def parseResponse(
-        result: RequestNextResult[Block[Transaction]],
-    ): F[data.Block] = {
-      val tag = result.asInstanceOf[js.Dynamic].tag.asInstanceOf[String]
-      if (tag === ROLL_FORWARD) {
-        Async[F].delay {
-          transformBlock(result.asInstanceOf[RollForward[Block[Transaction]]].block)
-        }.rethrow
-      } else {
-        // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-        Async[F].raiseError {
-          new Throwable(s"Invalid RequestNextResult type '$tag'")
-        }
-        // $COVERAGE-ON$
-      }
-    }
+  def apply[F[_]: Async](
+      nodeConnectionResourced: NodeConnectionResourced,
+  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, SyncService[F]] = {
+    val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
-    new SyncService[F] {
-      private val chainSync = node.sync()
+    nodeConnectionResourced.syncSessionResource
+      .flatMap(session => {
+        session
+          .sync()
+          .toObservableProtocolStream
+          .map { stream => () =>
+            stream
+              .evalTap {
+                case StreamOps.Next(event) =>
+                  val eventJs = event.asInstanceOf[js.Dynamic]
+                  val additionalLogData = Try(eventJs.header.hash.asInstanceOf[String]).toOption
+                    .map(height => Map("hash" -> height))
+                    .getOrElse(Map.empty)
 
-      override def sync(): Stream[F, data.Block] =
-        Stream.repeatEval {
-          Async[F]
-            .fromPromise(Async[F].delay(requestNext))
-            .flatMap(parseResponse(_))
-        }
-
-      private def requestNext: Promise[RequestNextResult[Block[Transaction]]] =
-        lastValueFrom(
-          chainSync
-            .requestNext()
-            .asInstanceOf[Observable_[RequestNextResult[Block[Transaction]]]],
-        )
-
-    }
+                  syncServiceTracer.syncBlockReceived(additionalLogData)
+                case StreamOps.Error(error) =>
+                  syncServiceTracer.syncFailed(error)
+              }
+              .flatMap {
+                case StreamOps.Error(error) =>
+                  Stream.raiseError(new Throwable(error.toString))
+                case StreamOps.Next(value) => Stream.emit(value)
+              }
+              .evalMap(block => Async[F].delay(transformBlock(block)).rethrow)
+          }
+      })
   }
-
-  // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-  def fromMockedNodeClient[F[_]: Async](nodeUri: Uri): Resource[F, SyncService[F]] = {
-    // This logger needs to be adjusted to the existing tracing solutions.
-    // https://input-output.atlassian.net/browse/PM-5761
-    val pinoLogger = io.iohk.midnight.pino.mod.default.apply[LoggerOptions]()
-    val clientF = Async[F].fromPromise(Async[F].delay(mod.client(nodeUri.toString(), pinoLogger)))
-    val clientR = Resource.make(clientF)(client => Async[F].delay(client.close()))
-
-    clientR
-      .flatMap { client => client.sync().toStream() }
-      .map { stream => () =>
-        stream
-          .filter(_.asInstanceOf[js.Dynamic].tag.asInstanceOf[String] === ROLL_FORWARD)
-          .map(_.asInstanceOf[RollForward[Block[Transaction]]])
-          .evalMap(rollForward => Async[F].delay(transformBlock(rollForward.block)).rethrow)
-      }
-  }
-  // $COVERAGE-ON$
 
   private def transformBlock(block: Block[Transaction]): Either[Throwable, data.Block] =
     transformBlockHeader(block).map(data.Block(_, transformBlockBody(block)))
@@ -99,9 +68,7 @@ object SyncServiceFactory {
     data.Block
       .Height(block.header.height.intValue())
       .bimap(
-        // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
         new Throwable(_),
-        // $COVERAGE-ON$
         data.Block.Header(
           data.Hash(block.header.hash),
           data.Hash(block.header.parentHash),
@@ -112,5 +79,4 @@ object SyncServiceFactory {
 
   private def transformTransaction(tx: Transaction): data.Transaction =
     data.Transaction(data.Transaction.Header(data.Hash(tx.header.hash)), tx.body)
-
 }

@@ -33,6 +33,7 @@ object WalletFilterService {
   )(implicit
       tracer: WalletFilterTracer[F],
   ) extends WalletFilterService[F] {
+
     override def installTransactionFilter(
         filter: Transaction => Boolean,
     ): Stream[F, Transaction] =
