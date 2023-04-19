@@ -2,40 +2,41 @@ package io.iohk.midnight.wallet.core.tracing
 
 import cats.effect.kernel.Sync
 import cats.syntax.show.*
+import io.iohk.midnight.midnightLedger.mod.{TransactionIdentifier, Transaction as LedgerTransaction}
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
-import io.iohk.midnight.tracer.logging.AsContextAwareLog
+import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
-import io.iohk.midnight.tracer.logging.AsStructuredLog
-import io.iohk.midnight.tracer.logging.Event
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.midnightLedger.mod.Transaction
-import WalletTxSubmissionEvent.*
+import io.iohk.midnight.wallet.blockchain.data.Transaction as DomainTransaction
 import io.iohk.midnight.wallet.core.LedgerSerialization
-import io.iohk.midnight.midnightLedger.mod.TransactionIdentifier
+import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionEvent.*
 
 class WalletTxSubmissionTracer[F[_]](val tracer: Tracer[F, WalletTxSubmissionEvent]) {
 
-  def submitTxStart(ledgerTx: Transaction): F[Unit] =
+  def submitTxStart(ledgerTx: LedgerTransaction): F[Unit] =
     tracer(TransactionSubmissionStart(LedgerSerialization.toTransaction(ledgerTx)))
 
-  def txValidationSuccess(ledgerTx: Transaction): F[Unit] =
+  def txValidationSuccess(ledgerTx: LedgerTransaction): F[Unit] =
     tracer(TxValidationSuccess(LedgerSerialization.toTransaction(ledgerTx)))
 
-  def txValidationError(ledgerTx: Transaction, error: Throwable): F[Unit] =
+  def txValidationError(ledgerTx: LedgerTransaction, error: Throwable): F[Unit] =
     tracer(TxValidationError(LedgerSerialization.toTransaction(ledgerTx), error))
 
-  def submitTxSuccess(ledgerTx: Transaction, txId: TransactionIdentifier): F[Unit] =
+  def submitTxSuccess(
+      ledgerTx: LedgerTransaction,
+      balancedDomainTx: DomainTransaction,
+      submittedTxId: TransactionIdentifier,
+  ): F[Unit] =
     tracer(
       TransactionSubmissionSuccess(
         LedgerSerialization.toTransaction(ledgerTx),
-        LedgerSerialization.serializeIdentifier(txId),
+        balancedDomainTx,
+        LedgerSerialization.serializeIdentifier(submittedTxId),
       ),
     )
 
-  def submitTxError(ledgerTx: Transaction, error: Throwable): F[Unit] =
+  def submitTxError(ledgerTx: LedgerTransaction, error: Throwable): F[Unit] =
     tracer(TransactionSubmissionError(LedgerSerialization.toTransaction(ledgerTx), error))
 
 }
@@ -68,7 +69,9 @@ object WalletTxSubmissionTracer {
       id = TransactionSubmissionSuccess.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Transaction [${evt.tx.header.hash.show}] has been submitted successfully.",
+      message = evt => s"""Transaction [${evt.ledgerTx.header.hash.show}] balanced to 
+           |[${evt.balancedDomainTx.header.hash.show}] has been submitted successfully.
+           |""".stripMargin,
       context = _.stringLogContext,
     )
 
