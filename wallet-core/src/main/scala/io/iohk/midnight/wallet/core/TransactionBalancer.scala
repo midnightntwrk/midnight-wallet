@@ -20,8 +20,20 @@ object TransactionBalancer {
       .filter(_.imbalance < Zero)
       .headOption
       .fold[Either[Error, (Transaction, ZSwapLocalState)]](Right((tx, state)))(_ => {
-        tryBalanceTx(state.coins.toList, List.empty, state, tx).map((_, state))
+        tryBalanceTx(getAvailableCoins(state), List.empty, state, tx).map((_, state))
       })
+
+  @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.AsInstanceOf"))
+  private def getAvailableCoins(state: ZSwapLocalState): List[CoinInfo] = {
+    val allCoins = state.coins.toList
+    val pendingSpends = state.pendingSpends
+    val pendingCoins: List[CoinInfo] = pendingSpends
+      .keys()
+      .toList
+      .flatMap(key => Option(pendingSpends.get(key).asInstanceOf[CoinInfo]))
+    val pendingCoinsSerialized = pendingCoins.map(_.serialize().toString)
+    allCoins.filterNot(coin => pendingCoinsSerialized.contains(coin.serialize().toString))
+  }
 
   @tailrec
   private def tryBalanceTx(

@@ -166,7 +166,9 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     }
   }
 
-  test("Submit tx one after another and doesn't spend the same coin (no double spend)") {
+  test(
+    "Submit tx one after another with waiting for blocks apply and doesn't spend the same coin (no double spend)",
+  ) {
     val initialState = new ZSwapLocalState()
     initialState.watchFor(coin)
     val pubKey = initialState.coinPublicKey
@@ -205,6 +207,33 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           assertEquals(balanceAfter2Send, balanceAfter1Send - spendCoin.value - fee)
         }
     }
+  }
+
+  test("Submit tx one after another and doesn't spend the same coin (no double spend)") {
+    val initialState = new ZSwapLocalState()
+    initialState.watchFor(coin)
+    val pubKey = initialState.coinPublicKey
+    val mintTx = buildSendTx(coin, pubKey)
+    val firstSpendTx = buildSendTx(spendCoin, randomRecipient())
+    val secondSpendTx = buildSendTx(spendCoin, randomRecipient())
+
+    val quickTxSend = withWallet(initialState, mintTx) {
+      case AllocatedWallet(
+            WalletDependencies(walletBlockProcessingService, _, _, txSubmission),
+            _,
+          ) =>
+        for {
+          _ <- walletBlockProcessingService.blocks.take(1).compile.toList
+          firstTxResult <- txSubmission.submitTransaction(firstSpendTx, List.empty).attempt
+          _ <-
+            if (firstTxResult.isRight) txSubmission.submitTransaction(secondSpendTx, List.empty)
+            else fail("Submitting first transaction has failed")
+        } yield ()
+    }
+
+    interceptMessageIO[Throwable]("Not sufficient funds to balance the cost of transaction")(
+      quickTxSend,
+    )
   }
 
   private def isLedgerNoProofs: Boolean =

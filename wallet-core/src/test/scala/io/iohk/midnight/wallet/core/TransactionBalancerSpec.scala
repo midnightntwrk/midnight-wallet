@@ -100,4 +100,22 @@ class TransactionBalancerSpec extends ScalaCheckSuite with BetterOutputSuite {
       }
     }
   }
+
+  test("fails when not enough funds to balance transaction cost (all coins are pending spends)") {
+    forAll(ledgerTransactionGen) { txWithCtx =>
+      val imbalancedTx = txWithCtx.transaction
+      val imbalance = sumImbalance(imbalancedTx.imbalances())
+      val state = Generators.generateStateWithFunds(imbalance * imbalance)
+      val stateCoins = state.coins.toList
+      // spending all coins
+      stateCoins.foreach(state.spend)
+
+      TransactionBalancer
+        .balanceTransaction(state, imbalancedTx) match {
+        case Left(error) => assertEquals(error, NotSufficientFunds)
+        case Right(_) =>
+          fail("Balancing transaction process should fail because of not sufficient funds")
+      }
+    }
+  }
 }
