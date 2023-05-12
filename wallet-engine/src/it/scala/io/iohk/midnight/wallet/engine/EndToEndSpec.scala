@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.engine.services
+package io.iohk.midnight.wallet.engine
 
 import cats.effect.IO
 import cats.effect.kernel.Resource

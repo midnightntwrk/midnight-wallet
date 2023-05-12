@@ -89,21 +89,31 @@ object JsWallet {
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
     internalBuild(nodeConnection, initialState, minLogLevel)
+      .unsafeToPromise()
+
+  @JSExport
+  def connect(
+      nodeUri: String,
+      initialState: js.UndefOr[String],
+      minLogLevel: js.UndefOr[String],
+  ): js.Promise[api.Wallet] = {
+    IO.fromEither(NodeConnectionFactory.create(nodeUri))
+      .flatMap(internalBuild(_, initialState, minLogLevel))
+      .unsafeToPromise()
+  }
 
   private def internalBuild(
       nodeConnection: NodeConnection,
       initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
-  ): js.Promise[api.Wallet] = {
+  ): IO[api.Wallet] = {
     val rawConfig = RawConfig(nodeConnection, initialState.toOption, minLogLevel.toOption)
 
-    val jsWalletIO = for {
+    for {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig)
       allocatedWallet <- WalletBuilder.build[IO](config)
     } yield JsWallet(allocatedWallet)
-
-    jsWalletIO.unsafeToPromise()
   }
 
   private val jsWalletTracer =
