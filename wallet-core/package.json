@@ -6,7 +6,7 @@
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight/ledger": "1.2.4"
+        "@midnight/ledger": "1.2.5"
     },
     "devDependencies": {
         "typescript": "^4.8.3"
