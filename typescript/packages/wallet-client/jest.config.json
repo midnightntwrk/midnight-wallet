@@ -1,0 +1,32 @@
+{
+  "preset": "ts-jest/presets/default-esm",
+  "testEnvironment": "node",
+  "verbose": true,
+  "roots": ["<rootDir>"],
+  "modulePaths": ["<rootDir>"],
+  "testPathIgnorePatterns": ["node_modules", "dist"],
+  "testMatch": ["<rootDir>/**/*.test.ts"],
+  "transform": {
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        "useESM": true
+      }
+    ]
+  },
+  "reporters": [
+    "default",
+    ["jest-junit", { "outputDirectory": "reports", "outputName": "report.xml" }],
+    ["jest-html-reporters", { "publicPath": "reports", "filename": "test-report.html" }]
+  ],
+  "collectCoverage": true,
+  "coverageDirectory": "coverage",
+  "collectCoverageFrom": [
+    "src/**/*.{ts,js,jsx}"
+  ],
+  "coveragePathIgnorePatterns": [
+    ".eslintrc.cjs",
+    "/node_modules/",
+    "/dist/"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "@midnight/wallet-ui-client",
+  "version": "2.9.2",
+  "description": "The Wallet UI Client package handles the requests to/from the Wallet Server",
+  "module": "./dist/index.mjs",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "author": "IOG",
+  "license": "Apache-2.0",
+  "files": [
+    "dist",
+    "package.json"
+  ],
+  "exports": {
+    ".": {
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "prepack": "yarn build",
+    "deploy": "yarn npm publish",
+    "build": "rm -rf ./dist && rollup -c rollup.config.mjs",
+    "test": "jest --passWithNoTests",
+    "lint": "eslint src"
+  },
+  "devDependencies": {
+    "@rollup/plugin-node-resolve": "^15.0.1",
+    "@rollup/plugin-typescript": "^11.0.0",
+    "@types/jest": "^29.2.0",
+    "@types/node": "^18.11.3",
+    "@typescript-eslint/eslint-plugin": "^5.40.1",
+    "eslint": "^8.26.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-config-standard-with-typescript": "^23.0.0",
+    "eslint-plugin-import": "^2.26.0",
+    "eslint-plugin-n": "^15.3.0",
+    "eslint-plugin-prettier": "^4.2.1",
+    "eslint-plugin-promise": "^6.1.1",
+    "jest": "^29.2.1",
+    "jest-html-reporters": "^3.1.4",
+    "jest-junit": "^15.0.0",
+    "prettier": "^2.7.1",
+    "rollup": "^3.19.1",
+    "ts-jest": "^29.0.3",
+    "tsc-watch": "^6.0.0",
+    "typescript": "~4.8.4"
+  },
+  "dependencies": {
+    "@midnight/wallet-server-api": "*",
+    "fp-ts": "^2.13.1",
+    "io-ts": "^2.2.20",
+    "rxjs": "7.5.5"
+  }
+}

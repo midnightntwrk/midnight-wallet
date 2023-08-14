@@ -1,16 +1,5 @@
-import {
-  distinct,
-  find,
-  firstValueFrom,
-  Observable,
-  take,
-  toArray,
-} from 'rxjs';
-import type {
-  Block,
-  Transaction,
-  TxSubmissionResult,
-} from '@midnight/mocked-node-api';
+import { distinct, find, firstValueFrom, Observable, take, toArray } from 'rxjs';
+import type { Block, Transaction, TxSubmissionResult } from '@midnight/mocked-node-api';
 import {
   CoinInfo,
   LedgerState,
@@ -23,20 +12,10 @@ import {
   ZSwapOffer,
   ZSwapOutputWithRandomness,
 } from '@midnight/ledger';
-import {
-  HasBalance,
-  Resource,
-  WalletBuilder,
-  SyncSession,
-  SubmitSession,
-} from '@midnight/wallet';
+import { HasBalance, Resource, WalletBuilder, SyncSession, SubmitSession } from '@midnight/wallet';
 import type { Filter, FilterService, Wallet } from '@midnight/wallet-api';
 import { InMemoryServer } from '@midnight/mocked-node-app';
-import {
-  Genesis,
-  InMemoryMockedNode,
-  LedgerNapi,
-} from '@midnight/mocked-node-in-memory';
+import { Genesis, InMemoryMockedNode, LedgerNapi } from '@midnight/mocked-node-in-memory';
 
 import * as mnc from '@midnight/mocked-node-client';
 import pino from 'pino';
@@ -47,10 +26,7 @@ const initialBalance = 1_000_000n;
 const isLedgerNoProofs = process.env.NO_PROOFS === 'true';
 const txFee = isLedgerNoProofs ? 2403n : 5585n;
 
-const buildMintTx = (
-  coin: CoinInfo,
-  recipient: ZSwapCoinPublicKey,
-): LedgerTransaction => {
+const buildMintTx = (coin: CoinInfo, recipient: ZSwapCoinPublicKey): LedgerTransaction => {
   const output = ZSwapOutputWithRandomness.new(coin, recipient);
   const deltas = new ZSwapDeltas();
   deltas.insert(tokenType, -coin.value);
@@ -129,9 +105,7 @@ const testSpec = (
         .subscribe((b) => balanceHistory.push(b));
 
       // Wait until wallet is synced and received the initial coin
-      await firstValueFrom(
-        wallet.balance().pipe(find((balance) => balance === initialBalance)),
-      );
+      await firstValueFrom(wallet.balance().pipe(find((balance) => balance === initialBalance)));
 
       // We can create a mint tx without inputs, because
       // the wallet will balance it with its own coins
@@ -140,9 +114,7 @@ const testSpec = (
       const unbalancedTx = buildMintTx(spendCoin, randomRecipient);
 
       // Submit the tx, get an identifier back
-      const submittedTxId = await firstValueFrom(
-        wallet.submitTx(unbalancedTx, []),
-      );
+      const submittedTxId = await firstValueFrom(wallet.submitTx(unbalancedTx, []));
 
       // Install a filter waiting for the submitted tx
       const filter: Filter<LedgerTransaction> = {
@@ -176,8 +148,11 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
       tag: 'value',
       transactions: [serializeTx(mintTx)],
     };
-    const mockedNode: InMemoryMockedNode<Transaction, LedgerState> =
-      new InMemoryMockedNode(genesis, new LedgerNapi(), logger);
+    const mockedNode: InMemoryMockedNode<Transaction, LedgerState> = new InMemoryMockedNode(
+      genesis,
+      new LedgerNapi(),
+      logger,
+    );
 
     const nodeConnection = {
       async startSyncSession(): Promise<SyncSession> {
@@ -203,11 +178,7 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
       },
     };
 
-    return await WalletBuilder.build(
-      nodeConnection,
-      serializedLocalState,
-      'error',
-    );
+    return await WalletBuilder.build(nodeConnection, serializedLocalState, 'error');
   };
 
   const noAdditionalTest = async (): Promise<void> => {
@@ -218,13 +189,7 @@ describe('Mocked node instance and simple wallet flow (submit tx, check balance)
     return await Promise.resolve();
   };
 
-  testSpec(
-    'Wallet client example',
-    'Submit a tx',
-    setup,
-    noAdditionalTest,
-    noTearDown,
-  );
+  testSpec('Wallet client example', 'Submit a tx', setup, noAdditionalTest, noTearDown);
 });
 
 describe('MockedNode as InMemoryServer and MockedNodeClient flow (syncing transactions)', () => {
@@ -255,9 +220,7 @@ describe('MockedNode as InMemoryServer and MockedNodeClient flow (syncing transa
 
   const additionalTest = async (): Promise<void> => {
     // Check synced txs (they're two, genesis and unbalancedTx)
-    const syncedTxs = await firstValueFrom(
-      mockedNodeClient.sync().pipe(take(2), toArray()),
-    );
+    const syncedTxs = await firstValueFrom(mockedNodeClient.sync().pipe(take(2), toArray()));
     expect(syncedTxs.length).toBe(2);
   };
 
@@ -266,11 +229,5 @@ describe('MockedNode as InMemoryServer and MockedNodeClient flow (syncing transa
     await mockedNode.close();
   };
 
-  testSpec(
-    'Mocked Node Client',
-    'Sync all transactions',
-    setup,
-    additionalTest,
-    tearDown,
-  );
+  testSpec('Mocked Node Client', 'Sync all transactions', setup, additionalTest, tearDown);
 });

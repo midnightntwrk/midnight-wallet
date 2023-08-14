@@ -3,6 +3,7 @@ name: CD
 env:
   MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
   MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
+  NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
 on:
   push:
@@ -13,24 +14,44 @@ jobs:
     name: Build & Publish
     runs-on: ubuntu-latest
     steps:
-    - name: Prepare .netrc to access other repos
-      run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
-    - uses: actions/checkout@v3
-    - uses: cachix/install-nix-action@v22
-      with:
-        nix_path: nixpkgs=channel:nixos-22.11
-        github_access_token: ${{ secrets.GH_TOKEN }}
-        extra_nix_config: |
-          access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-          extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-          extra-substituters = https://cache.iog.io
-          accept-flake-config = true
-          netrc-file = ~/.netrc
-    - uses: bduff9/use-npmrc@v1.2
-      with:
-        dot-npmrc: ${{ secrets.DOT_NPMRC }}
-    - name: Publish Scala and TS packages
-      run: |
-        nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
-        cd wallet-engine
-        nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic yarn publish
+      - name: Prepare .netrc to access other repos
+        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
+      - uses: actions/checkout@v3
+      - uses: nixbuild/nix-quick-install-action@v25
+        with:
+          github_access_token: ${{ secrets.GH_TOKEN }}
+          nix_conf: |
+            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.iog.io
+            accept-flake-config = true
+            netrc-file = ~/.netrc
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v1
+        with:
+          linux-gc-enabled: true
+          linux-max-store-size: 8000000000
+          key: cache-ubuntu-${{ hashFiles('**/*') }}
+          restore-keys: |
+            cache-ubuntu-
+      - name: Setup .npmrc
+        run: |
+          echo "
+          //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
+          @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
+          " > ./.npmrc
+      - name: Build Wallet
+        run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
+      - name: Publish Wallet
+        run: |
+          cd wallet-engine
+          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic yarn publish
+      - name: Configure yarn
+        run: |
+          cd typescript
+          yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
+          echo 'checksumBehavior: update' >> ./.yarnrc.yml
+      - name: Install typescript dependencies
+        run: nix develop .#typescript --command yarn
+      - name: Deploy typescript packages
+        run: nix develop .#typescript --command yarn deploy

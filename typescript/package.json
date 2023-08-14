@@ -1,0 +1,17 @@
+{
+  "packageManager": "yarn@3.6.1",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "wallet-server": "turbo run start --filter=wallet-server",
+    "deploy": "turbo run deploy"
+  },
+  "devDependencies": {
+    "turbo": "^1.10.12"
+  }
+}

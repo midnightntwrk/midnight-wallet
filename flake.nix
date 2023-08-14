@@ -11,9 +11,8 @@
     inclusive.url = "github:input-output-hk/nix-inclusive";
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
-    midnight-ledger = {
-      url = "github:input-output-hk/midnight-ledger-prototype/v1.3.0";
-    };
+    midnight-ledger.url = "github:input-output-hk/midnight-ledger-prototype/v1.3.0";
+    midnight-ledger-legacy.url = "github:input-output-hk/midnight-ledger-prototype/v1.2.5";
   };
 
   outputs = {
@@ -24,6 +23,7 @@
     yarn2nix,
     sbt-derivation,
     midnight-ledger,
+    midnight-ledger-legacy,
     ...
   }:
     utils.lib.eachDefaultSystem (
@@ -34,6 +34,7 @@
           yarn2nix.overlay
         ]);
         ledgerPkgs = midnight-ledger.packages.${system};
+        legacyLedgerPkgs = midnight-ledger-legacy.packages.${system};
 
         packageJSON = __fromJSON (__readFile ./wallet-engine/package.json);
 
@@ -53,7 +54,7 @@
             version = packageJSON.version;
 
             src = inclusive.lib.inclusive ./. [
-              ./build.sbt
+              ./build.sbtf
               ./project
               ./wallet-engine/package.json
               ./wallet-engine/src
@@ -91,7 +92,6 @@
         formatter = pkgs.alejandra;
 
         defaultPackage = packages.midnight-wallet;
-
         mkShell = {realProofs}: let
           ledgerPkg =
             if realProofs
@@ -107,6 +107,19 @@
         devShells.real-proofs = mkShell {realProofs = true;};
 
         devShells.no-proofs = mkShell {realProofs = false;};
+
+        devShells.typescript = pkgs.mkShell {
+          packages = [pkgs.yarn pkgs.nodejs-18_x pkgs.which legacyLedgerPkgs.ledger-napi pkgs.git];
+
+          shellHook = ''
+            cd typescript
+            if [ ! -e node_modules ]; then
+              yarn
+            fi
+            turboBinDir=$(dirname $(yarn bin turbo))
+            export PATH=$PATH:$turboBinDir
+          '';
+        };
 
         devShells.default = devShells.real-proofs;
       }

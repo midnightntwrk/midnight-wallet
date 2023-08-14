@@ -1,0 +1,24 @@
+{
+  "include": [
+    "src/**/*.ts",
+    ".eslintrc.cjs"
+  ],
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Node",
+    "declaration": true,
+    "allowJs": false,
+    "forceConsistentCasingInFileNames": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "isolatedModules": true,
+    "sourceMap": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "skipLibCheck": false,
+    "noErrorTruncation": true
+  }
+}

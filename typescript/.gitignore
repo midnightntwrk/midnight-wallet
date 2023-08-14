@@ -8,17 +8,11 @@
 !.yarn/versions
 node_modules
 
-# sbt
-target
-dist
 
-# Others
-.DS_Store
-*.log
-result
-.bsp/
-.idea/
-.nix/
-.env
-.direnv/
-.vscode/
+# Build
+*.tsbuildinfo
+*.local
+coverage
+reports
+.turbo
+packages/*/*.tgz
