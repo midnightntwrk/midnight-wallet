@@ -22,7 +22,7 @@
   ],
   "coveragePathIgnorePatterns": [
     ".eslintrc.cjs",
-    "rollup.config.js",
+    "rollup.config.mjs",
     "/node_modules/",
     "/dist/"
   ]

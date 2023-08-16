@@ -12,6 +12,8 @@
     "deploy": "turbo run deploy"
   },
   "devDependencies": {
+    "jest-junit": "^16.0.0",
+    "nyc": "^15.1.0",
     "turbo": "^1.10.12"
   }
 }

@@ -18,7 +18,11 @@ const config: Config.InitialOptions = {
         useESM: true
       }
     ]
-  }
+  },
+ reporters: [
+    'default',
+    ['jest-junit', { outputDirectory: 'reports', outputName: 'report.xml' }],
+ ]
 };
 
 export default config;

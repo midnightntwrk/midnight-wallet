@@ -47,6 +47,7 @@ jobs:
           nix fmt -- -c flake.nix
           nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS .#no-proofs -ic sbt verify
           nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS .#real-proofs -ic sbt IntegrationTest/test
+          nix develop -ic sbt coverageAggregate
       - name: Test Typescript client examples
         run: |
           nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
@@ -64,3 +65,92 @@ jobs:
           nix develop .#typescript --command yarn
           nix develop .#typescript --command yarn lint
           nix develop .#typescript --command yarn test
+      - name: Publish examples Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Examples Jest Tests Report
+          path: |
+            ./examples/reports/report.xml
+          reporter: jest-junit
+      - name: Publish wallet TS Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Wallet TS packages Jest Tests Report
+          path: |
+            ./typescript/**/reports/report.xml
+          reporter: jest-junit
+      - name: Publish Unit Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Scala Unit Tests Report
+          path: |
+            !(examples)/**/target/test-reports/TEST-*.xml
+          reporter: java-junit
+      - name: Publish Integration Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Scala Integration Tests Report
+          path: |        
+            !(examples)/**/target/it-reports/TEST-*.xml
+          reporter: java-junit
+      - name: Publish Examples Test Summary
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: success() || failure()
+        with:
+          check_name: Examples Jest Tests Results
+          files: |
+            ./examples/reports/report.xml
+            !(node_modules)/**/reports/report.xml
+      - name: Publish Wallet TS Test Summary
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: success() || failure()
+        with:
+          check_name: Wallet TS Packages Jest Tests Results
+          files: |
+            ./typescript/**/reports/report.xml
+            !(node_modules)/**/reports/report.xml
+      - name: Publish Unit Test Summary
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: success() || failure()
+        with:
+          check_name: Scala Unit Tests Results
+          files: |
+            **/target/test-reports/TEST-*.xml
+            !examples/node_modules/@midnight/wallet/target/test-reports/TEST-*.xml
+      - name: Publish Integration Test Summary
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: success() || failure()
+        with:
+          check_name: Scala Integration Tests Results
+          files: |
+            **/target/it-reports/TEST-*.xml
+            !examples/node_modules/@midnight/wallet/target/it-reports/TEST-*.xml        
+      - name: Upload Scala coverage report
+        uses: actions/upload-artifact@v3
+        if: success() || failure()
+        with:
+          name: scoverage-report
+          path: target/scala-2.12/scoverage-report
+      - name: Aggregate wallet TS coverage reports
+        run: |
+          rm -rf typescript/coverage
+          mkdir -p typescript/coverage/workspaces
+          nix develop .#typescript --command yarn workspaces foreach -Apv exec bash -c '[ ! -f coverage/coverage-final.json ] && exit 0 || cp coverage/coverage-final.json '$(pwd)'/typescript/coverage/workspaces/$(basename $(pwd))-coverage-final.json'
+          nix develop .#typescript --command yarn run nyc merge coverage/workspaces coverage/monorepo-coverage.json
+          nix develop .#typescript --command yarn run nyc report -t coverage --report-dir coverage/html --reporter=html
+    
+      - name: Merge report as ZIP
+        working-directory: typescript
+        run: |
+          #ArtiomTr/jest-coverage-report-action@v2 has a bug, this is temp solution
+          mv coverage coverage_$(date +"%Y%m%d%H%M%S")
+    
+      - name: Upload TS coverage report
+        uses: actions/upload-artifact@v3
+        with:
+          name: wallet-ts-coverage-report
+          path: typescript/coverage*
