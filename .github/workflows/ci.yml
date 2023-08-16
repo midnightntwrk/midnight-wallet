@@ -60,11 +60,32 @@ jobs:
           cd typescript
           yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
           echo 'checksumBehavior: update' >> ./.yarnrc.yml
-      - name: Test typescript packages
+      - name: Test and build typescript packages
         run: |
           nix develop .#typescript --command yarn
           nix develop .#typescript --command yarn lint
           nix develop .#typescript --command yarn test
+          nix develop .#typescript --command yarn build
+      - name: Log in to the Container registry
+        if: github.ref == 'refs/heads/main'
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: 'https://registry.ci.iog.io'
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Docker setup buildx
+        if: github.ref == 'refs/heads/main'
+        uses: docker/setup-buildx-action@v2.5.0
+        with:
+          platforms: linux/arm/v7,linux/arm/v8,linux/arm64,linux/amd64,linux/386 # optional
+      - name: Create multiplatform image and push
+        if: github.ref == 'refs/heads/main'
+        run: |
+          docker buildx build \
+          --platform linux/arm/v7,linux/arm/v8,linux/arm64,linux/amd64,linux/386 \
+          -t registry.ci.iog.io/midnight-wallet-server:latest \
+          -t registry.ci.iog.io/midnight-wallet-server:${{ github.head_ref || github.ref_name }} \
+          --push .
       - name: Publish examples Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
@@ -143,7 +164,7 @@ jobs:
           nix develop .#typescript --command yarn run nyc merge coverage/workspaces coverage/monorepo-coverage.json
           nix develop .#typescript --command yarn run nyc report -t coverage --report-dir coverage/html --reporter=html
     
-      - name: Merge report as ZIP
+      - name: Merge report
         working-directory: typescript
         run: |
           #ArtiomTr/jest-coverage-report-action@v2 has a bug, this is temp solution
