@@ -3,6 +3,8 @@ name: CI
 env:
   MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
   MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
+  MIDNIGHT_GH_USER: ${{ github.actor }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 
 on:
@@ -45,12 +47,12 @@ jobs:
       - name: Check format and run tests
         run: |
           nix fmt -- -c flake.nix
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS .#no-proofs -ic sbt verify
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS .#real-proofs -ic sbt IntegrationTest/test
+          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN .#no-proofs -ic sbt verify
+          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN .#real-proofs -ic sbt IntegrationTest/test
           nix develop -ic sbt coverageAggregate
       - name: Test Typescript client examples
         run: |
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
+          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN -ic sbt dist
           cd examples
           nix develop -ic yarn install --frozen-lockfile
           nix develop -ic yarn lint
@@ -149,7 +151,7 @@ jobs:
           check_name: Scala Integration Tests Results
           files: |
             **/target/it-reports/TEST-*.xml
-            !examples/node_modules/@midnight/wallet/target/it-reports/TEST-*.xml        
+            !examples/node_modules/@midnight/wallet/target/it-reports/TEST-*.xml
       - name: Upload Scala coverage report
         uses: actions/upload-artifact@v3
         if: success() || failure()
@@ -163,13 +165,13 @@ jobs:
           nix develop .#typescript --command yarn workspaces foreach -Apv exec bash -c '[ ! -f coverage/coverage-final.json ] && exit 0 || cp coverage/coverage-final.json '$(pwd)'/typescript/coverage/workspaces/$(basename $(pwd))-coverage-final.json'
           nix develop .#typescript --command yarn run nyc merge coverage/workspaces coverage/monorepo-coverage.json
           nix develop .#typescript --command yarn run nyc report -t coverage --report-dir coverage/html --reporter=html
-    
+
       - name: Merge report
         working-directory: typescript
         run: |
           #ArtiomTr/jest-coverage-report-action@v2 has a bug, this is temp solution
           mv coverage coverage_$(date +"%Y%m%d%H%M%S")
-    
+
       - name: Upload TS coverage report
         uses: actions/upload-artifact@v3
         with:

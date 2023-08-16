@@ -1,4 +1,5 @@
 import scala.sys.process._
+import sbt.util.CacheImplicits._
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -16,8 +17,8 @@ lazy val nexus = "https://nexus.p42.at/repository"
 lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
 val scala213 = "2.13.8"
-val scala32 = "3.2.1"
-val supportedScalaVersions = List(scala213, scala32)
+val scala33 = "3.3.0"
+val supportedScalaVersions = List(scala213, scala33)
 val catsVersion = "2.9.0"
 val catsEffectVersion = "3.4.5"
 val circeVersion = "0.14.2"
@@ -25,6 +26,17 @@ val fs2Version = "3.4.0"
 val log4CatsVersion = "2.4.0"
 val midnightTracingVersion = "1.3.0"
 val sttpClientVersion = "3.4.1"
+
+lazy val nexusRepo =
+  resolvers +=
+    "Sonatype Nexus Repository Manager" at "https://nexus.p42.at/repository/maven-releases"
+lazy val nexusCredentials =
+  credentials += Credentials(
+    "Sonatype Nexus Repository Manager",
+    "nexus.p42.at",
+    sys.env("MIDNIGHT_REPO_USER"),
+    sys.env("MIDNIGHT_REPO_PASS"),
+  )
 
 lazy val commonSettings = Seq(
   // Scala compiler options
@@ -42,14 +54,8 @@ lazy val commonSettings = Seq(
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
   // Private Nexus repository config
-  resolvers +=
-    "Sonatype Nexus Repository Manager" at "https://nexus.p42.at/repository/maven-releases",
-  credentials += Credentials(
-    "Sonatype Nexus Repository Manager",
-    "nexus.p42.at",
-    sys.env("MIDNIGHT_REPO_USER"),
-    sys.env("MIDNIGHT_REPO_PASS"),
-  ),
+  nexusRepo,
+  nexusCredentials,
 
   // Test dependencies
   libraryDependencies ++= Seq(
@@ -76,15 +82,26 @@ lazy val useNodeModuleResolution = {
   )
 }
 
+val ghPackagesRealm = "GitHub Package Registry"
+val ghPackagesHost = "maven.pkg.github.com"
+val ghPackagesUrl = s"https://$ghPackagesHost/input-output-hk/midnight-wallet"
+lazy val ghPackagesResolver =
+  resolvers += ghPackagesRealm at ghPackagesUrl
+lazy val ghPackagesCredentials =
+  credentials += Credentials(
+    ghPackagesRealm,
+    ghPackagesHost,
+    sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
+    sys.env.getOrElse("MIDNIGHT_PUBLISH_TOKEN", ""),
+  )
+
 lazy val commonPublishSettings = Seq(
+  ghPackagesResolver,
+  ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "2.9.2",
-  repoUrl := {
-    if (isSnapshot.value) "snapshots" at s"$nexus/maven-snapshots"
-    else "releases" at s"$nexus/maven-releases"
-  },
+  version := "2.9.3",
   versionScheme := Some("early-semver"),
-  publishTo := Some(repoUrl.value),
+  publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
 
 lazy val commonScalablyTypedSettings = Seq(
@@ -218,6 +235,43 @@ lazy val jsInterop = project
     coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
   )
 
+lazy val downloadLedgerBinaries = taskKey[File]("Download ledger binaries")
+lazy val zswap = project
+  .in(file("wallet-zswap"))
+  .settings(
+    downloadLedgerBinaries := {
+      val store = streams.value.cacheStoreFactory.make("jnr-files")
+      val downloadFile = Cache.cached[Unit, File](store) { _ =>
+        val downloadedFile = taskTemporaryDirectory.value / "jnr-bin.tar.gz"
+        val assetId = "121096870"
+        val url =
+          s"https://api.github.com/repos/input-output-hk/midnight-ledger-prototype/releases/assets/$assetId"
+        val authToken = sys.env("MIDNIGHT_GH_TOKEN")
+
+        s"curl -o $downloadedFile -H @wallet-zswap/headers.txt --oauth2-bearer $authToken -L $url".!!
+        val resourcesDir = (Compile / resourceDirectory).value
+        IO.createDirectory(resourcesDir)
+        s"tar -xzf $downloadedFile -C $resourcesDir".!!
+        downloadedFile
+      }
+      downloadFile(())
+    },
+    Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
+    scalaVersion := scala33,
+    commonPublishSettings,
+    libraryDependencies ++= Seq(
+      "org.typelevel" %% "cats-core" % catsVersion,
+      "com.github.jnr" % "jnr-ffi" % "2.2.13",
+    ),
+    // Test dependencies
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
+      "org.scalacheck" %%% "scalacheck" % "1.15.4",
+      "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
+    ).map(_ % Test),
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
+  )
+
 lazy val dist = taskKey[Unit]("Builds the lib")
 lazy val distImpl = Def.task {
   (Compile / fullOptJS).value
@@ -244,6 +298,7 @@ addCommandAlias(
     "walletCore/test",
     "blockchainJS/test",
     "walletEngine/test",
+    "zswap/test",
     "IntegrationTest/test",
     "coverageReport",
   ).mkString(";", " ;", ""),

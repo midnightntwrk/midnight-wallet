@@ -97,7 +97,7 @@
             if realProofs
             then ledgerPkgs.ledger
             else ledgerPkgs.ledger-no-proofs;
-          packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x pkgs.which ledgerPkg pkgs.git];
+          packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x pkgs.which ledgerPkg pkgs.git pkgs.curl pkgs.gnutar];
           shellHook = lib.attrsets.optionalAttrs (!realProofs) {
             shellHook = "export NO_PROOFS=true";
           };

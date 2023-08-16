@@ -63,8 +63,7 @@ trait Bloc[F[_], T] {
 
 object Bloc {
 
-  /** Implementation of [[Bloc]] using a [[Ref]] to hold the current value plus a [[Topic]] to
-    * publish updates
+  /** Implementation of Bloc using a Ref to hold the current value plus a Topic to publish updates
     * @param state
     *   The current value, needed to replay it to new subscribers
     * @param topic

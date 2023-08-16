@@ -9,6 +9,7 @@ import munit.CatsEffectSuite
 import scala.scalajs.js.Promise
 
 class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
+  @SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
   private val mockedNodeConnection = new NodeConnection {
     override def startSyncSession(): Promise[SyncSession] = ???
     override def startSubmitSession(): Promise[SubmitSession] = ???
