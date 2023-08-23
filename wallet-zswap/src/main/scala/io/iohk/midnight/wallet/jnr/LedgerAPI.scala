@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.jnr
 
+import jnr.ffi.Pointer
 import jnr.ffi.types.size_t
 
 trait LedgerAPI {
@@ -15,6 +16,7 @@ trait LedgerAPI {
       @size_t tx_borshed_len: Int,
       local_state: Array[Byte],
       @size_t local_state_len: Int,
-      result: Array[Byte],
-  ): Int
+  ): Pointer
+
+  def free_apply_result(pointer: Pointer): Unit
 }

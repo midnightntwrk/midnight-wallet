@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.jnr
 
+import io.iohk.midnight.wallet.jnr.Ledger.{TxAppliedSuccessfully, TxApplyError}
 import munit.ScalaCheckSuite
 
 import scala.util.{Failure, Success, Try}
@@ -12,21 +13,52 @@ class LedgerApiSpec extends ScalaCheckSuite {
   private val hexedEncryptionSecretKey =
     "20d70aa9e64eae18b2d0e374b98f429fd3ffc816b0e479606c5ad9e362ea971c0c"
 
+  private val localState =
+    "8fb627bc6b525a05e3418eccf90c4e5dcf5269b8574232ad2adbea18f0d558871fb275660bea21a25eea73cbcb2e2b0a58b23fab5ceda0e798bd824bda93dcd300000000000000000000000002200000000000000000"
+
   private val ledger = LedgerLoader.loadLedger.getOrElse(throw new IllegalStateException())
 
-  test("Calling ledger without correct encryption key should give proper error") {
+  test("Checking relevance without correct encryption key should give proper error") {
     Try(ledger.isTransactionRelevant(validTx, "invalid_secret_key")) match {
       case Failure(exception) => fail(exception.getMessage)
       case Success(result)    => assertEquals(result, LedgerError.EncryptionSecretKeyError)
     }
   }
 
-  test("Calling ledger without correct tx should give proper error") {
+  test("Checking relevance without correct tx should give proper error") {
     Try(
       ledger.isTransactionRelevant("invalid_tx", hexedEncryptionSecretKey),
     ) match {
       case Failure(exception) => fail(exception.getMessage)
       case Success(result)    => assertEquals(result, LedgerError.TransactionError)
+    }
+  }
+
+  test("Applying tx to state should succeed") {
+    ledger.applyTransactionToState(validTx, localState) match {
+      case Right(_: TxAppliedSuccessfully) => assert(true)
+      case Left(error)                     => fail(error.getMessage)
+      case Right(_: TxApplyError)          => fail("Wrong case.")
+    }
+  }
+
+  test("Applying tx without correct tx should give proper error") {
+    ledger.applyTransactionToState("invalid_tx", localState) match {
+      case Right(TxApplyError(ledgerError, _)) =>
+        assertEquals(ledgerError, LedgerError.TransactionError)
+      case Left(error) =>
+        fail(error.getMessage)
+      case Right(_: TxAppliedSuccessfully) => fail("Wrong case.")
+    }
+  }
+
+  test("Applying tx without correct state should give proper error") {
+    ledger.applyTransactionToState(validTx, "invalid_state") match {
+      case Right(TxApplyError(ledgerError, _)) =>
+        assertEquals(ledgerError, LedgerError.StateError)
+      case Left(error) =>
+        fail(error.getMessage)
+      case Right(_: TxAppliedSuccessfully) => fail("Wrong case.")
     }
   }
 }

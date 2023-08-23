@@ -1,7 +1,10 @@
 package io.iohk.midnight.wallet.jnr
 
+import io.iohk.midnight.wallet.jnr.Ledger.ApplyResult
+import jnr.ffi.Pointer
+
 import java.nio.charset.StandardCharsets
-import scala.annotation.unused
+import scala.util.Try
 
 class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
 
@@ -10,7 +13,7 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       encryptionKeySerialized: String,
   ): LedgerResult = {
     val rawResultCode = ledgerAPI.is_transaction_relevant(
-      tx.getBytes,
+      tx.getBytes(StandardCharsets.UTF_8),
       tx.length,
       encryptionKeySerialized.getBytes(StandardCharsets.UTF_8),
       encryptionKeySerialized.length,
@@ -22,16 +25,26 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
   override def applyTransactionToState(
       tx: String,
       localState: String,
-  ): Either[LedgerError, String] = {
-    // TODO: The signature of Rust code needs to be clarified for how to handle models, and memory management.
-    @unused val result = ledgerAPI.apply_transaction_to_state(
-      tx.getBytes,
-      tx.length,
-      local_state = "".getBytes(StandardCharsets.UTF_8),
-      local_state_len = "".length,
-      result = Array.emptyByteArray,
-    )
+  ): Either[Throwable, ApplyResult] = {
+    val maybeResult = for {
+      resultPointer <- tryApplyTransactionToState(tx, localState)
+      applyResult <- ApplyResult(resultPointer).toTry
+      _ <- tryFreeApplyResult(applyResult)
+    } yield applyResult
 
-    Left(LedgerError.ExcUnknown)
+    maybeResult.toEither
+  }
+
+  private def tryFreeApplyResult(applyResult: ApplyResult) = Try {
+    ledgerAPI.free_apply_result(applyResult.pointer)
+  }
+
+  private def tryApplyTransactionToState(tx: String, localState: String): Try[Pointer] = Try {
+    ledgerAPI.apply_transaction_to_state(
+      tx.getBytes(StandardCharsets.UTF_8),
+      tx.length,
+      local_state = localState.getBytes(StandardCharsets.UTF_8),
+      local_state_len = localState.length,
+    )
   }
 }

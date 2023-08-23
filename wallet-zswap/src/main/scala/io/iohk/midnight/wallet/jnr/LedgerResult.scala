@@ -35,12 +35,14 @@ sealed abstract class LedgerError(code: Int) extends LedgerResult(code)
 object LedgerError {
   case object EncryptionSecretKeyError extends LedgerError(3)
   case object TransactionError extends LedgerError(4)
+  case object StateError extends LedgerError(5)
   case object ExcUnknown extends LedgerError(255)
 
   def apply(code: Int): Either[Int, LedgerError] = {
     code match {
       case EncryptionSecretKeyError.code => Right(EncryptionSecretKeyError)
       case TransactionError.code         => Right(TransactionError)
+      case StateError.code               => Right(StateError)
       case ExcUnknown.code               => Right(ExcUnknown)
       case unknownResultCode             => Left(unknownResultCode)
     }

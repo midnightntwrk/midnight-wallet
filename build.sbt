@@ -241,9 +241,8 @@ lazy val zswap = project
   .settings(
     downloadLedgerBinaries := {
       val store = streams.value.cacheStoreFactory.make("jnr-files")
-      val downloadFile = Cache.cached[Unit, File](store) { _ =>
+      val downloadFile = Cache.cached[String, File](store) { assetId =>
         val downloadedFile = taskTemporaryDirectory.value / "jnr-bin.tar.gz"
-        val assetId = "121096870"
         val url =
           s"https://api.github.com/repos/input-output-hk/midnight-ledger-prototype/releases/assets/$assetId"
         val authToken = sys.env("MIDNIGHT_GH_TOKEN")
@@ -251,16 +250,19 @@ lazy val zswap = project
         s"curl -o $downloadedFile -H @wallet-zswap/headers.txt --oauth2-bearer $authToken -L $url".!!
         val resourcesDir = (Compile / resourceDirectory).value
         IO.createDirectory(resourcesDir)
-        s"tar -xzf $downloadedFile -C $resourcesDir".!!
+        s"tar -xzf $downloadedFile --strip-components=2 -C $resourcesDir".!!
         downloadedFile
       }
-      downloadFile(())
+
+      val latestAssetId = "122049350"
+      downloadFile(latestAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
     scalaVersion := scala33,
     commonPublishSettings,
     libraryDependencies ++= Seq(
       "org.typelevel" %% "cats-core" % catsVersion,
+      "org.typelevel" %% "cats-effect" % catsEffectVersion,
       "com.github.jnr" % "jnr-ffi" % "2.2.13",
     ),
     // Test dependencies
