@@ -1,6 +1,6 @@
 {
     "name": "@midnight/wallet-core",
-    "version": "2.9.3",
+    "version": "2.9.4",
     "packageManager": "yarn@1.22.18",
     "author": "IOHK",
     "license": "Apache-2.0",
