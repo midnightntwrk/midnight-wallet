@@ -99,7 +99,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "2.9.4",
+  version := "2.9.5",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -254,8 +254,11 @@ lazy val zswap = project
         downloadedFile
       }
 
-      val latestAssetId = "122049350"
-      downloadFile(latestAssetId)
+      val linuxAssetId = "122049350"
+      downloadFile(linuxAssetId)
+
+      val darwinAssetId = "123073047"
+      downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
     scalaVersion := scala33,
