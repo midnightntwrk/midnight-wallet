@@ -3,79 +3,118 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
-import io.iohk.midnight.midnightLedger.mod.*
-import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
-import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as NodeTx
-import io.iohk.midnight.midnightMockedNodeApi.distDataTxSubmissionResultMod.TxSubmissionResult
-import io.iohk.midnight.midnightWalletApi.distFilterServiceMod.FilterService
-import io.iohk.midnight.midnightWalletApi.distTypesFilterMod.Filter
-import io.iohk.midnight.midnightWalletApi.distWalletMod as api
+import io.iohk.midnight.midnightWalletApi.distTypesMod.{
+  BalanceTransactionToProve,
+  NothingToProve,
+  TransactionHistoryEntry,
+  TransactionIdentifier,
+  TransactionToProve,
+  WalletState,
+  ProvingRecipe as ApiProvingRecipe,
+  TokenTransfer as ApiTokenTransfer,
+}
+import io.iohk.midnight.midnightWalletApi.{distTypesMod, distWalletMod as api}
+import io.iohk.midnight.midnightZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.domain.{Address, ProvingRecipe, TokenTransfer}
 import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
-import io.iohk.midnight.wallet.engine.{WalletBlockProcessingService, WalletBuilder}
-
-import scala.annotation.unused
+import io.iohk.midnight.wallet.engine.{WalletBuilder, WalletTransactionProcessingService}
+import io.iohk.midnight.wallet.zswap.*
+import org.scalablytyped.runtime.StringDictionary
 import scala.scalajs.js
+import scala.scalajs.js.JSConverters.*
 import scala.scalajs.js.Promise
 import scala.scalajs.js.annotation.*
 
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
   */
+@SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
 @JSExportTopLevel("Wallet")
 class JsWallet(
-    walletBlockProcessingService: WalletBlockProcessingService[IO],
+    walletTransactionProcessingService: WalletTransactionProcessingService[IO],
     walletStateService: WalletStateService[IO, Wallet],
-    walletFilterService: WalletFilterService[IO],
     walletTxSubmissionService: WalletTxSubmissionService[IO],
+    walletTransactionService: WalletTransactionService[IO],
     finalizer: IO[Unit],
-) extends api.Wallet
-    with FilterService {
+) extends api.Wallet {
 
-  override def connect(): Observable_[ZSwapCoinPublicKey] =
-    walletStateService.publicKey.unsafeToObservable()
+  override def submitTransaction(
+      tx: mod.Transaction,
+  ): Promise[TransactionIdentifier] =
+    walletTxSubmissionService
+      .submitTransaction(Transaction.fromJs(tx))
+      .map(_.txId)
+      .unsafeToPromise()
 
-  override def submitTx(
-      tx: Transaction,
-      newCoins: js.Array[CoinInfo],
-  ): Observable_[TransactionIdentifier] =
-    walletTxSubmissionService.submitTransaction(tx, newCoins.toList).unsafeToObservable()
+  override def balanceTransaction(
+      tx: mod.Transaction,
+      newCoins: js.Array[mod.CoinInfo],
+  ): Promise[BalanceTransactionToProve | NothingToProve] =
+    walletTransactionService
+      .balanceTransaction(Transaction.fromJs(tx), newCoins.toSeq.map(CoinInfo.fromJs))
+      .map(ProvingRecipeTransformer.toApiBalanceTransactionRecipe)
+      .unsafeToPromise()
 
-  override def installTxFilter(filter: Filter[Transaction]): Observable_[Transaction] =
-    walletFilterService
-      .installTransactionFilter(
-        filter.apply(_),
-      ) // IMPORTANT: Don't convert this to method value - otherwise scalajs will try to use undefined `this` context
+  override def proveTransaction(recipe: ApiProvingRecipe): Promise[mod.Transaction] = {
+    ProvingRecipeTransformer.toRecipe(recipe) match
+      case Left(error) =>
+        IO.raiseError(new Error(error)).unsafeToPromise()
+      case Right(txRecipe) =>
+        walletTransactionService
+          .proveTransaction(txRecipe)
+          .map(_.toJs)
+          .unsafeToPromise()
+  }
+
+  override def state(): Observable_[WalletState] =
+    walletStateService.state
+      .map { localState =>
+        WalletState(
+          availableCoins = localState.availableCoins.map(_.toJs).toJSArray,
+          balances =
+            localState.balances.map(_.map(_.toJsBigInt)).map(StringDictionary(_)).toJSArray,
+          coins = localState.coins.map(_.toJs).toJSArray,
+          publicKey = localState.publicKey,
+          transactionHistory = localState.transactionHistory.map { tx =>
+            TransactionHistoryEntry(
+              tx.deltas.map(_.map(_.toJsBigInt)).map(StringDictionary(_)).toJSArray,
+              tx.identifiers.toJSArray,
+              tx.toJs,
+              tx.hash,
+            )
+          }.toJSArray,
+        )
+      }
       .unsafeToObservable()
 
-  def balance(): Observable_[js.BigInt] =
-    walletStateService.balance.unsafeToObservable()
+  override def transferTransaction(
+      outputs: js.Array[ApiTokenTransfer],
+  ): Promise[TransactionToProve] =
+    walletTransactionService
+      .prepareTransferRecipe(
+        outputs.toList.map((tt: ApiTokenTransfer) =>
+          TokenTransfer(
+            amount = tt.amount.toScalaBigInt,
+            tokenType = TokenType(tt.`type`),
+            receiverAddress = Address(tt.receiverAddress),
+          ),
+        ),
+      )
+      .map(ProvingRecipeTransformer.toApiTransactionToProve)
+      .unsafeToPromise()
 
   def start(): Unit =
-    walletBlockProcessingService.blocks.compile.drain.unsafeRunAndForget()
+    walletTransactionProcessingService.transactions.compile.drain.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
     finalizer.unsafeRunSyncToPromise()
-}
-
-trait SyncSession extends js.Object {
-  def sync(): Observable_[Block[NodeTx]]
-  def close(): Unit
-}
-
-trait SubmitSession extends js.Object {
-  def submitTx(@unused tx: NodeTx): Promise[TxSubmissionResult]
-  def close(): Unit
-}
-
-trait NodeConnection extends js.Object {
-  def startSyncSession(): Promise[SyncSession]
-  def startSubmitSession(): Promise[SubmitSession]
 }
 
 @JSExportTopLevel("WalletBuilder")
@@ -84,30 +123,80 @@ object JsWallet {
 
   @JSExport
   def build(
-      nodeConnection: NodeConnection,
+      indexerUri: String,
+      indexerWsUri: String,
+      proverServerUri: String,
+      substrateNodeUri: String,
       initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
-    internalBuild(nodeConnection, initialState, minLogLevel)
+    internalBuild(
+      indexerUri,
+      indexerWsUri,
+      proverServerUri,
+      substrateNodeUri,
+      initialState.toOption,
+      minLogLevel.toOption,
+    )
       .unsafeToPromise()
 
   @JSExport
-  def connect(
-      nodeUri: String,
-      initialState: js.UndefOr[String],
+  def buildFromSeed(
+      indexerUri: String,
+      indexerWsUri: String,
+      proverServerUri: String,
+      substrateNodeUri: String,
+      seed: String,
       minLogLevel: js.UndefOr[String],
-  ): js.Promise[api.Wallet] = {
-    IO.fromEither(NodeConnectionFactory.create(nodeUri))
-      .flatMap(internalBuild(_, initialState, minLogLevel))
+  ): js.Promise[api.Wallet] =
+    internalBuildFromSeed(
+      indexerUri,
+      indexerWsUri,
+      proverServerUri,
+      substrateNodeUri,
+      seed,
+      minLogLevel.toOption,
+    )
       .unsafeToPromise()
+
+  private def internalBuildFromSeed(
+      indexerUri: String,
+      indexerWsUri: String,
+      proverServerUri: String,
+      substrateNodeUri: String,
+      seed: String,
+      minLogLevel: Option[String],
+  ): IO[api.Wallet] = {
+    IO.fromEither(LedgerSerialization.fromSeedSerialized(seed))
+      .flatMap(state =>
+        internalBuild(
+          indexerUri,
+          indexerWsUri,
+          proverServerUri,
+          substrateNodeUri,
+          Some(state),
+          minLogLevel,
+        ),
+      )
   }
 
   private def internalBuild(
-      nodeConnection: NodeConnection,
-      initialState: js.UndefOr[String],
-      minLogLevel: js.UndefOr[String],
+      indexerUri: String,
+      indexerWsUri: String,
+      proverServerUri: String,
+      substrateNodeUri: String,
+      initialState: Option[String],
+      minLogLevel: Option[String],
   ): IO[api.Wallet] = {
-    val rawConfig = RawConfig(nodeConnection, initialState.toOption, minLogLevel.toOption)
+    val rawConfig =
+      RawConfig(
+        indexerUri,
+        indexerWsUri,
+        proverServerUri,
+        substrateNodeUri,
+        initialState,
+        minLogLevel,
+      )
 
     for {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
@@ -129,18 +218,18 @@ object JsWallet {
 
   def apply(wallet: AllocatedWallet[IO, Wallet]): JsWallet =
     new JsWallet(
-      wallet.dependencies.walletBlockProcessingService,
+      wallet.dependencies.walletTransactionProcessingService,
       wallet.dependencies.walletStateService,
-      wallet.dependencies.walletFilterService,
       wallet.dependencies.walletTxSubmissionService,
+      wallet.dependencies.walletTransactionService,
       wallet.finalizer,
     )
 
   @JSExport
   def calculateCost(tx: Transaction): js.BigInt =
-    WalletStateService.calculateCost(tx)
+    WalletStateService.calculateCost(tx).toJsBigInt
 
   @JSExport
   def generateInitialState(): String =
-    LedgerSerialization.serializeState(new ZSwapLocalState())
+    LedgerSerialization.serializeState(LocalState())
 }

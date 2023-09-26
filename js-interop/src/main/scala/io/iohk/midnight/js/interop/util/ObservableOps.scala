@@ -7,7 +7,6 @@ import io.iohk.midnight.js.interop.rxjs.Observable
 import io.iohk.midnight.rxjs.distTypesInternalSubscriberMod.Subscriber
 import io.iohk.midnight.rxjs.distTypesInternalTypesMod.{Observer, Unsubscribable}
 import io.iohk.midnight.rxjs.mod.Observable_
-import io.iohk.midnight.std.Partial
 
 object ObservableOps {
   implicit class FromStream[T](stream: Stream[IO, T])(implicit IORuntime: IORuntime) {
@@ -49,6 +48,6 @@ object ObservableOps {
   implicit class SubscribeableObservable[T](observable: Observable_[T]) {
     @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
     def subscribeWithObserver(observer: Observer[T]): Unsubscribable =
-      observable.subscribe(observer.asInstanceOf[Partial[Observer[T]]])
+      observable.subscribe(observer)
   }
 }

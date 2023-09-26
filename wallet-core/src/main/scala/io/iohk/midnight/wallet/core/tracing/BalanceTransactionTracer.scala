@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.core.tracing
 
 import cats.effect.kernel.Sync
 import cats.syntax.show.*
-import io.iohk.midnight.midnightLedger.mod.Transaction
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLog
@@ -14,6 +13,7 @@ import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.core.{LedgerSerialization, WalletError}
 import BalanceTransactionEvent.*
+import io.iohk.midnight.wallet.zswap.Transaction
 
 class BalanceTransactionTracer[F[_]](val tracer: Tracer[F, BalanceTransactionEvent]) {
 
@@ -46,7 +46,7 @@ object BalanceTransactionTracer {
       id = BalanceTransactionStart.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Starting to balance transaction [${evt.tx.header.hash.show}].",
+      message = evt => s"Starting to balance transaction [${evt.tx.hash.show}].",
       context = _.stringLogContext,
     )
 
@@ -55,7 +55,7 @@ object BalanceTransactionTracer {
       id = BalanceTransactionSuccess.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Successfully balanced transaction [${evt.tx.header.hash.show}].",
+      message = evt => s"Successfully balanced transaction [${evt.tx.hash.show}].",
       context = _.stringLogContext,
     )
 
@@ -64,7 +64,7 @@ object BalanceTransactionTracer {
       id = BalanceTransactionError.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Error balancing transaction [${evt.tx.header.hash.show}].",
+      message = evt => s"Error balancing transaction [${evt.tx.hash.show}].",
       context = _.stringLogContext,
     )
 

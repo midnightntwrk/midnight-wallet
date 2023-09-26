@@ -23,5 +23,7 @@ result
 .env
 .direnv/
 .vscode/
+.bloop/
+metals.sbt
 
 libmidnight_zswap_jnr.*

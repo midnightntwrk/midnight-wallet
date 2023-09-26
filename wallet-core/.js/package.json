@@ -1,0 +1,16 @@
+{
+    "name": "@midnight/wallet-core",
+    "version": "2.9.5",
+    "packageManager": "yarn@1.22.18",
+    "author": "IOHK",
+    "license": "Apache-2.0",
+    "type": "module",
+    "dependencies": {
+        "@midnight/zswap": "0.2.5",
+        "testcontainers": "^10.2.1",
+        "node-fetch": "3.3.2"
+    },
+    "devDependencies": {
+        "typescript": "^4.8.3"
+    }
+}

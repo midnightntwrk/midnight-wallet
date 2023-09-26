@@ -24,11 +24,8 @@ object Generators {
   private val blockHeaderGen: Gen[Block.Header] =
     (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
 
-  private val transactionHeaderGen: Gen[Transaction.Header] =
-    hashGen[Transaction].map(Transaction.Header.apply)
-
   private val transactionGen: Gen[Transaction] =
-    (transactionHeaderGen, hexStringGen).mapN(Transaction.apply)
+    (hashGen[Transaction], hexStringGen).mapN(Transaction.apply)
 
   private val blockBodyGen: Gen[Block.Body] =
     Gen.listOf(transactionGen).map(Block.Body.apply)

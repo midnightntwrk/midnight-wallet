@@ -8,7 +8,7 @@ object SyncServiceEvent {
 
   /** Sync failed with an error.
     */
-  final case class SyncFailed(error: Any) extends SyncServiceEvent
+  final case class SyncFailed(error: Throwable) extends SyncServiceEvent
 
   object SyncFailed {
     val id: Event.Id[SyncFailed] = Event.Id("sync_failed")
@@ -16,10 +16,10 @@ object SyncServiceEvent {
 
   /** Sync event received.
     */
-  final case class BlockReceived(additionalData: Map[String, String]) extends SyncServiceEvent
+  final case class TransactionReceived(txHash: String) extends SyncServiceEvent
 
-  object BlockReceived {
-    val id: Event.Id[BlockReceived] = Event.Id("block_received")
+  object TransactionReceived {
+    val id: Event.Id[TransactionReceived] = Event.Id("transaction_received")
   }
 
   object DefaultInstances {
@@ -27,10 +27,10 @@ object SyncServiceEvent {
     // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
     @SuppressWarnings(Array("org.wartremover.warts.ToString"))
     implicit val syncFailedContext: AsStringLogContext[SyncFailed] =
-      AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.toString))
+      AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.getMessage))
     // $COVERAGE-ON$
 
-    implicit val syncEventReceivedContext: AsStringLogContext[BlockReceived] =
-      AsStringLogContext.fromMap[BlockReceived](evt => Map("data" -> evt.additionalData.toString()))
+    implicit val syncEventReceivedContext: AsStringLogContext[TransactionReceived] =
+      AsStringLogContext.fromMap[TransactionReceived](evt => Map("transaction_hash" -> evt.txHash))
   }
 }

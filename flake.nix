@@ -11,7 +11,7 @@
     inclusive.url = "github:input-output-hk/nix-inclusive";
     yarn2nix.url = "github:input-output-hk/yarn2nix";
     sbt-derivation.url = "github:zaninime/sbt-derivation";
-    midnight-ledger.url = "github:input-output-hk/midnight-ledger-prototype/v1.3.0";
+    midnight-ledger.url = "github:input-output-hk/midnight-ledger-prototype";
     midnight-ledger-legacy.url = "github:input-output-hk/midnight-ledger-prototype/v1.2.5";
   };
 
@@ -54,7 +54,7 @@
             version = packageJSON.version;
 
             src = inclusive.lib.inclusive ./. [
-              ./build.sbtf
+              ./build.sbt
               ./project
               ./wallet-engine/package.json
               ./wallet-engine/src
@@ -72,7 +72,7 @@
               rm node_modules
             '';
 
-            nativeBuildInputs = with pkgs; [yarn nodejs-16_x ledgerPkgs.ledger];
+            nativeBuildInputs = with pkgs; [yarn nodejs-18_x ledgerPkgs.ledger];
 
             preBuild = "ln -s ${packages.midnight-wallet-node-modules}/node_modules .";
 
@@ -92,21 +92,6 @@
         formatter = pkgs.alejandra;
 
         defaultPackage = packages.midnight-wallet;
-        mkShell = {realProofs}: let
-          ledgerPkg =
-            if realProofs
-            then ledgerPkgs.ledger
-            else ledgerPkgs.ledger-no-proofs;
-          packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-16_x pkgs.which ledgerPkg pkgs.git pkgs.curl pkgs.gnutar];
-          shellHook = lib.attrsets.optionalAttrs (!realProofs) {
-            shellHook = "export NO_PROOFS=true";
-          };
-        in
-          pkgs.mkShell ({inherit packages;} // shellHook);
-
-        devShells.real-proofs = mkShell {realProofs = true;};
-
-        devShells.no-proofs = mkShell {realProofs = false;};
 
         devShells.typescript = pkgs.mkShell {
           packages = [pkgs.yarn pkgs.nodejs-18_x pkgs.which legacyLedgerPkgs.ledger-napi pkgs.git];
@@ -121,7 +106,9 @@
           '';
         };
 
-        devShells.default = devShells.real-proofs;
+        devShells.default = pkgs.mkShell {
+          packages = [pkgs.yarn pkgs.sbt pkgs.nodejs-18_x pkgs.which ledgerPkgs.ledger pkgs.git pkgs.curl pkgs.gnutar];
+        };
       }
     );
 }

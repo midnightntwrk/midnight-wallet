@@ -28,11 +28,22 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
 - `js-interop` - [Facade types](https://www.scala-js.org/doc/interoperability/facade-types.html) and
   general utilities to work with JavaScript libraries such as [rxjs](rxjs.dev/)
 
-`wallet-engine` use [yarn](https://classic.yarnpkg.com) under the hood to fetch
+- `prover-client` - Implementation of proving server client
+
+- `substrate-client` - Implementation of substrate node client
+
+- `pubsub-indexer-client` - Implementation of PubSub Indexer client
+
+- `bloc` - Basic Scala implementation of the BLoC (Business Logic Component) pattern
+
+- `wallet-zswap` - A module that exposes ZSwap functionalities that is compatible 
+  with Scala JS and JVM. This is achieved by using a WASM ledger package on JS 
+  and JNR interfaces on JVM. The module hides the complexity of different 
+  platforms and enables Scala clients work with idiomatic Scala.
+
+`wallet-engine` uses [yarn](https://classic.yarnpkg.com) under the hood to fetch
 npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`,
 `yarn.lock`, and `.npmrc` configuration files inside those submodules.
-
-There is also an `examples` directory that shows how to set up a TypeScript client to use the wallet.
 
 ## Development setup
 
@@ -82,12 +93,6 @@ sbt test
 
 ```shell
 sbt IntegrationTest/test
-```
-
-```shell
-cd examples
-yarn install # If needed
-yarn lint && yarn test
 ```
 
 ## Generate test coverage report

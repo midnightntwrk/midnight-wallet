@@ -1,5 +1,5 @@
-import scala.sys.process._
-import sbt.util.CacheImplicits._
+import scala.sys.process.*
+import sbt.util.CacheImplicits.*
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -16,16 +16,14 @@ lazy val warts = Warts.allBut(
 lazy val nexus = "https://nexus.p42.at/repository"
 lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
-val scala213 = "2.13.8"
 val scala33 = "3.3.0"
-val supportedScalaVersions = List(scala213, scala33)
 val catsVersion = "2.9.0"
-val catsEffectVersion = "3.4.5"
-val circeVersion = "0.14.2"
-val fs2Version = "3.4.0"
+val catsEffectVersion = "3.5.0"
+val fs2Version = "3.7.0"
 val log4CatsVersion = "2.4.0"
 val midnightTracingVersion = "1.3.0"
-val sttpClientVersion = "3.4.1"
+val sttpClientVersion = "3.9.0"
+val munitCatsEffectVersion = "2.0.0-M3"
 
 lazy val nexusRepo =
   resolvers +=
@@ -40,16 +38,11 @@ lazy val nexusCredentials =
 
 lazy val commonSettings = Seq(
   // Scala compiler options
-  scalaVersion := scala213,
+  scalaVersion := scala33,
+  scalacOptions ++= Seq("-Wunused:all", "-Wvalue-discard"),
   scalacOptions ~= { prev =>
     // Treat linting errors as warnings for quick development
     if (Env.devModeEnabled) prev.filterNot(_ == "-Xfatal-warnings") else prev
-  },
-  scalacOptions ++= {
-    CrossVersion.partialVersion(scalaVersion.value) match {
-      case Some((2, _)) => Seq("-Xsource:3") // Allow Scala 3 syntax like * wildcards for imports
-      case _            => Seq.empty
-    }
   },
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
@@ -59,10 +52,10 @@ lazy val commonSettings = Seq(
 
   // Test dependencies
   libraryDependencies ++= Seq(
-    "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
-    "org.scalacheck" %%% "scalacheck" % "1.15.4",
-    "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.1",
-    "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
+    "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
+    "org.scalacheck" %%% "scalacheck" % "1.17.0",
+    "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.2",
+    "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2",
   ).map(_ % Test),
 
   // Linting
@@ -106,10 +99,9 @@ lazy val commonPublishSettings = Seq(
 
 lazy val commonScalablyTypedSettings = Seq(
   externalNpm := {
-    if (!Env.nixBuild) Process("yarn", baseDirectory.value).! else Seq.empty
+    if (!Env.nixBuild) Process("yarn", baseDirectory.value).!!
     baseDirectory.value
   },
-  stEnableScalaJsDefined := Selection.All,
   stOutputPackage := "io.iohk.midnight",
   Global / stQuiet := true,
 )
@@ -121,7 +113,6 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
   .settings(commonPublishSettings)
   .settings(
     name := "wallet-blockchain",
-    crossScalaVersions := supportedScalaVersions,
     conflictWarning := ConflictWarning.disable,
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-core" % catsVersion,
@@ -148,64 +139,85 @@ lazy val bloc = crossProject(JVMPlatform, JSPlatform)
     useNodeModuleResolution,
   )
 
-lazy val walletCore = project
+lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
   .in(file("wallet-core"))
-  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(blockchain.js % "compile->compile;test->test")
-  .dependsOn(jsInterop, bloc.js)
+  .dependsOn(
+    bloc,
+    blockchain % "compile->compile;test->test",
+    proverClient % "test->test",
+    walletZswap,
+  )
   .settings(commonSettings)
-  .settings(commonScalablyTypedSettings)
   .settings(
-    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
+    Test / parallelExecution := false,
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
     // Dependencies
     libraryDependencies ++= Seq(
-      "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion,
-      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
-      "io.circe" %%% "circe-generic-extras" % circeVersion,
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
-      "net.exoego" %%% "scala-js-nodejs-v16" % "0.14.0",
       "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
       "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
     ),
 
     // Test dependencies
-    libraryDependencies += "org.typelevel" %%% "kittens" % "2.3.2" % Test,
-    useNodeModuleResolution,
+    libraryDependencies += "org.typelevel" %%% "kittens" % "3.0.0" % Test,
 
     // Coverage
     coverageExcludedPackages := "" +
       "io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat;" +
       "io.iohk.midnight.wallet.core.Instances;",
   )
+  .jsConfigure(_.dependsOn(jsInterop))
+  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
+  .jsSettings(
+    commonScalablyTypedSettings,
+    scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
+    useNodeModuleResolution,
+  )
 
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .dependsOn(walletCore % "compile->compile;test->test")
+  .dependsOn(
+    walletCore.js % "compile->compile;test->test",
+    proverClient.js % "compile->compile;test->test",
+    pubSubIndexerClient % "compile->compile;test->test",
+    substrateClient % "compile->compile;test->test",
+    walletZswap.js,
+  )
   .configs(IntegrationTest)
   .settings(commonSettings, Defaults.itSettings)
   .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
   .settings(commonScalablyTypedSettings)
   .settings(
+    Test / parallelExecution := false,
+    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
 
     // Test dependencies
     libraryDependencies ++= Seq(
-      "org.http4s" %%% "http4s-dsl" % "0.23.11",
-      "org.http4s" %%% "http4s-ember-server" % "0.23.11",
-    ).map(_ % Test),
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
       // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-      "org.scala-js" %% "scalajs-test-bridge" % "1.9.0",
+      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
     ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
-    stIgnore ++= List("cross-fetch", "isomorphic-ws", "ws", "fp-ts", "io-ts"),
+    stIgnore ++= List(
+      "testcontainers",
+      "node-fetch",
+      "scale-ts",
+      "ws",
+      "isomorphic-ws",
+      "fp-ts",
+      "io-ts",
+      "io-ts-types",
+      "newtype-ts",
+      "monocle-ts",
+    ),
     useNodeModuleResolution,
 
     // Coverage
@@ -227,7 +239,6 @@ lazy val jsInterop = project
   .settings(commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    crossScalaVersions := supportedScalaVersions,
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
@@ -236,9 +247,18 @@ lazy val jsInterop = project
   )
 
 lazy val downloadLedgerBinaries = taskKey[File]("Download ledger binaries")
-lazy val zswap = project
+lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Full)
   .in(file("wallet-zswap"))
-  .settings(
+  .settings(commonSettings, commonPublishSettings)
+  .jsConfigure(_.dependsOn(jsInterop))
+  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
+  .jsSettings(
+    commonScalablyTypedSettings,
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+  )
+  .jvmSettings(
+    libraryDependencies += "com.github.jnr" % "jnr-ffi" % "2.2.13",
     downloadLedgerBinaries := {
       val store = streams.value.cacheStoreFactory.make("jnr-files")
       val downloadFile = Cache.cached[String, File](store) { assetId =>
@@ -261,20 +281,97 @@ lazy val zswap = project
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
-    scalaVersion := scala33,
-    commonPublishSettings,
+  )
+  .settings(
     libraryDependencies ++= Seq(
-      "org.typelevel" %% "cats-core" % catsVersion,
-      "org.typelevel" %% "cats-effect" % catsEffectVersion,
-      "com.github.jnr" % "jnr-ffi" % "2.2.13",
+      "org.typelevel" %%% "cats-core" % catsVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
     ),
     // Test dependencies
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
-      "org.scalacheck" %%% "scalacheck" % "1.15.4",
+      "org.scalacheck" %%% "scalacheck" % "1.17.)",
       "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
     ).map(_ % Test),
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
+  )
+
+lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
+  .crossType(CrossType.Pure)
+  .in(file("prover-client"))
+  .dependsOn(walletZswap)
+  .jsConfigure(_.dependsOn(jsInterop))
+  .configs(IntegrationTest)
+  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
+  .settings(commonSettings, Defaults.itSettings)
+  .jsSettings(
+    commonScalablyTypedSettings,
+    stIgnore ++= List("node-fetch"),
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
+    libraryDependencies += "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross CrossVersion.for3Use2_13,
+    useNodeModuleResolution,
+    inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings),
+  )
+  .jvmSettings(
+    libraryDependencies += "com.softwaremill.sttp.client3" %% "fs2" % sttpClientVersion,
+  )
+  .settings(
+    libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
+      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "io.github.enriquerodbe" %%% "borsh4s" % "3.0.0",
+    ),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
+    ).map(_ % IntegrationTest),
+  )
+
+lazy val substrateClient = project
+  .in(file("substrate-client"))
+  .dependsOn(jsInterop)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+  .configs(IntegrationTest)
+  .settings(commonSettings, Defaults.itSettings)
+  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonScalablyTypedSettings)
+  .settings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    libraryDependencies ++= Seq(
+      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
+      "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion,
+    ),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
+      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
+      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
+    ).map(_ % IntegrationTest),
+  )
+
+lazy val pubSubIndexerClient = project
+  .in(file("pubsub-indexer-client"))
+  .dependsOn(jsInterop)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+  .configs(IntegrationTest)
+  .settings(commonSettings, Defaults.itSettings)
+  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonScalablyTypedSettings)
+  .settings(
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    useNodeModuleResolution,
+    libraryDependencies ++= Seq(
+      "com.github.ghostdogpr" %%% "caliban-client" % "2.3.0",
+      "com.github.ghostdogpr" %%% "caliban-client-laminext" % "2.3.0",
+      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
+      // Caliban client-laminext uses java.util.UUID and here is the ScalaJS implementation
+      "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross (CrossVersion.for3Use2_13),
+    ),
+    libraryDependencies ++= Seq(
+      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
+      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
+      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
+    ).map(_ % IntegrationTest),
+    stIgnore ++= List("ws", "isomorphic-ws"),
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")
@@ -292,19 +389,20 @@ lazy val distImpl = Def.task {
 
   streams.value.log.info(s"Dist done at ${distDir.absolutePath}")
 }
-
+// coverage temporary removed - sbt-scoverage doesn't support scala 3 with scalajs yet
 addCommandAlias(
   "verify",
   Seq(
     "scalafmtCheckAll",
-    "coverage",
+    // "coverage",
     "jsInterop/test",
+    "proverClientJS/test",
+    "substrateClient/test",
     "blocJS/test",
-    "walletCore/test",
+    "walletCoreJS/test",
     "blockchainJS/test",
     "walletEngine/test",
-    "zswap/test",
-    "IntegrationTest/test",
-    "coverageReport",
+    "walletZswapJVM/test",
+    // "coverageReport",
   ).mkString(";", " ;", ""),
 )

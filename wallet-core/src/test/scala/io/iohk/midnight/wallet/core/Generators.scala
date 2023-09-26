@@ -1,91 +1,228 @@
 package io.iohk.midnight.wallet.core
 
+import cats.data.NonEmptyList
+import cats.effect.IO
 import cats.syntax.all.*
-import io.iohk.midnight.midnightLedger.mod.{Transaction as LedgerTransaction, *}
+import io.iohk.midnight.wallet.zswap.{Transaction as LedgerTransaction, *}
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.blockchain.data.Generators.{hashGen, heightGen, instantGen}
-import org.scalacheck.Gen
+import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
+import io.iohk.midnight.wallet.core.services.ProvingService
 import org.scalacheck.cats.implicits.*
-
+import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.annotation.tailrec
-import scala.scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object Generators {
-  private val tokenType = nativeToken()
-
   final case class TransactionWithContext(
       transaction: LedgerTransaction,
-      state: ZSwapLocalState,
-      coins: List[CoinInfo],
+      state: LocalState,
+      coins: NonEmptyList[CoinInfo],
   )
 
-  val coinInfoGen: Gen[CoinInfo] =
-    Gen.posNum[Int].map(js.BigInt(_)).map(new CoinInfo(_, tokenType))
+  final case class OfferWithContext(
+      offer: UnprovenOffer,
+      state: LocalState,
+      coinOutputs: NonEmptyList[CoinInfo],
+  )
 
-  def generateCoinsFor(amount: js.BigInt): List[CoinInfo] = {
+  private def noShrink[T]: Shrink[T] = Shrink.withLazyList(_ => LazyList.empty)
+
+  private val byteStringGen: Gen[String] =
+    Gen.hexChar.replicateA(64).map(_.mkString)
+
+  given tokenTypeArbitrary: Arbitrary[TokenType] =
+    Arbitrary {
+      Gen.oneOf(Gen.const(TokenType.Native), byteStringGen.map(TokenType.apply))
+    }
+
+  given coinInfoArbitrary: Arbitrary[CoinInfo] =
+    Arbitrary {
+      tokenTypeArbitrary.arbitrary.flatMap { tokenType =>
+        Gen.posNum[Int].map(BigInt(_)).map(CoinInfo(tokenType, _))
+      }
+    }
+
+  given tokenTransferArbitrary: Arbitrary[TokenTransfer] = {
+    Arbitrary {
+      for {
+        amount <- Gen.posNum[BigInt]
+        tokenType <- tokenTypeArbitrary.arbitrary
+        address <- byteStringGen.map(Address.apply)
+      } yield TokenTransfer(amount, tokenType, address)
+    }
+  }
+
+  given tokenTransfersArbitrary(using
+      tokenTransferArb: Arbitrary[TokenTransfer],
+  ): Arbitrary[NonEmptyList[TokenTransfer]] = {
+    Arbitrary {
+      for {
+        head <- tokenTransferArb.arbitrary
+        tail <- Gen.nonEmptyListOf(tokenTransferArb.arbitrary)
+      } yield NonEmptyList(head, tail)
+    }
+  }
+
+  given unprovenOfferWithContextArbitrary: Arbitrary[OfferWithContext] = {
+    Arbitrary {
+      for {
+        coins <- Gen
+          .choose(2, 5)
+          .flatMap(amount =>
+            Gen.listOfN(amount, coinInfoArbitrary.arbitrary).map(NonEmptyList.fromListUnsafe),
+          )
+        unprovenTxAndState = buildOfferForCoins(coins)
+      } yield OfferWithContext(unprovenTxAndState._1, unprovenTxAndState._2, coins)
+    }
+  }
+
+  given unprovenTransactionArbitrary: Arbitrary[UnprovenTransaction] = {
+    Arbitrary {
+      unprovenOfferWithContextArbitrary.arbitrary.map { offerWithContext =>
+        UnprovenTransaction(offerWithContext.offer)
+      }
+    }
+  }
+
+  def generateCoinsFor(coinsData: NonEmptyList[(TokenType, BigInt)]): NonEmptyList[CoinInfo] = {
+    coinsData.map(coinData => generateCoinsForAmount(coinData._1, coinData._2)).flatten
+  }
+
+  def generateCoinsForAmount(coinType: TokenType, amount: BigInt): NonEmptyList[CoinInfo] = {
     val coinsNumber = Gen.chooseNum(2, 5).sample.get
-    val part = amount / js.BigInt(coinsNumber)
+    val part = {
+      val divider = amount / BigInt(coinsNumber)
+      if (divider === BigInt(0)) BigInt(1)
+      else divider
+    }
 
     @tailrec
-    def loop(amount: js.BigInt, acc: List[CoinInfo]): List[CoinInfo] = {
+    def loop(amount: BigInt, acc: List[CoinInfo]): List[CoinInfo] = {
       val newAmount = amount - part
-      if (newAmount > js.BigInt(0)) loop(newAmount, new CoinInfo(part, nativeToken()) :: acc)
-      else new CoinInfo(amount, nativeToken()) :: acc
+      if (newAmount > BigInt(0)) loop(newAmount, CoinInfo(coinType, part) :: acc)
+      else CoinInfo(coinType, amount) :: acc
     }
 
-    loop(amount, List.empty)
+    NonEmptyList.fromListUnsafe(loop(amount, List.empty))
   }
 
-  val ledgerTransactionGen: Gen[TransactionWithContext] =
-    Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, coinInfoGen)).map { coins =>
-      val (tx, state) = buildTransaction(coins)
-      TransactionWithContext(tx, state, coins)
-    }
-
-  def buildTransaction(coins: List[CoinInfo]): (LedgerTransaction, ZSwapLocalState) = {
-    val state = new ZSwapLocalState()
-    val builder = new TransactionBuilder(new LedgerState())
-    coins
-      .foldLeft((builder, state)) { case ((builder, state), coin) =>
-        val output = ZSwapOutputWithRandomness.`new`(coin, state.coinPublicKey)
-        val deltas = new ZSwapDeltas()
-        deltas.insert(tokenType, -coin.value)
-        val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
-        builder.addOffer(offer, output.randomness)
-        state.watchFor(coin)
-        (builder, state)
+  // REMEMBER it is using external service, until we get a way to mock proofs
+  given txWithContextArbitrary(using
+      provingService: ProvingService[IO],
+  ): Arbitrary[IO[TransactionWithContext]] = {
+    Arbitrary {
+      unprovenOfferWithContextArbitrary.arbitrary.map {
+        case OfferWithContext(offer, state, coins) =>
+          provingService
+            .proveTransaction(UnprovenTransaction(offer))
+            .map(tx => TransactionWithContext(tx, state, coins))
       }
-      .leftMap(_.intoTransaction().transaction)
+    }
   }
 
-  def generateStateWithCoins(coins: List[CoinInfo]): ZSwapLocalState = {
-    val (mintTx, state) = buildTransaction(coins)
-    state.applyLocal(mintTx)
-    state
+  given txWithContextShrink: Shrink[IO[TransactionWithContext]] = noShrink
+
+  private def buildOfferForCoins(
+      coins: NonEmptyList[CoinInfo],
+      localState: Option[LocalState] = None,
+  ): (UnprovenOffer, LocalState) = {
+    val state = localState.getOrElse(LocalState())
+    val baseOfferAndState = buildOfferForCoin(coins.head, state)
+    coins.tail
+      .foldLeft(baseOfferAndState) { case ((accOffer, accState), coin) =>
+        val (offerForCoin, newState) = buildOfferForCoin(coin, accState)
+        (accOffer.merge(offerForCoin), newState)
+      }
   }
 
-  def generateStateWithFunds(amount: js.BigInt): ZSwapLocalState =
-    generateStateWithCoins(generateCoinsFor(amount))
+  private def buildOfferForCoin(coin: CoinInfo, state: LocalState): (UnprovenOffer, LocalState) = {
+    val output = UnprovenOutput(coin, state.coinPublicKey, state.encryptionPublicKey)
+    val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value)
+    (offer, state.watchFor(coin))
+  }
 
-  val ledgerTransactionsList: Seq[LedgerTransaction] =
+  def generateStateWithCoins(coins: NonEmptyList[CoinInfo]): LocalState = {
+    val (tx, state) = buildOfferForCoins(coins).leftMap(UnprovenTransaction(_).eraseProofs)
+    state.applyProofErased(tx.guaranteedCoins)
+  }
+
+  def generateStateWithFunds(balanceData: NonEmptyList[(TokenType, BigInt)]): LocalState =
+    generateStateWithCoins(generateCoinsFor(balanceData))
+
+  def generateTransactionWithFundsFor(
+      balanceData: NonEmptyList[(TokenType, BigInt)],
+      state: LocalState,
+  ): (UnprovenTransaction, LocalState) = {
+    buildOfferForCoins(generateCoinsFor(balanceData), Some(state)).leftMap(
+      UnprovenTransaction(_),
+    )
+  }
+
+  given ledgerTransactionArbitrary(using
+      provingService: ProvingService[IO],
+      txWithContextArb: Arbitrary[IO[TransactionWithContext]],
+  ): Arbitrary[IO[LedgerTransaction]] =
+    Arbitrary {
+      txWithContextArb.arbitrary
+        .map(_.map(_.transaction))
+    }
+
+  given ledgerTransactionShrink: Shrink[IO[LedgerTransaction]] = noShrink
+
+  given transactionArbitrary(using
+      provingService: ProvingService[IO],
+      txWithContextArb: Arbitrary[IO[TransactionWithContext]],
+  ): Arbitrary[IO[Transaction]] =
+    Arbitrary {
+      txWithContextArb.arbitrary
+        .map(_.map(txWithContext => LedgerSerialization.toTransaction(txWithContext.transaction)))
+    }
+
+  given transactionShrink: Shrink[IO[Transaction]] = noShrink
+
+  def ledgerTransactionsList(using
+      provingService: ProvingService[IO],
+      txArb: Arbitrary[IO[LedgerTransaction]],
+  ): IO[Seq[LedgerTransaction]] =
     Gen
       .chooseNum(1, 5)
-      .flatMap(Gen.listOfN(_, ledgerTransactionGen.map(_.transaction)))
+      .flatMap(Gen.listOfN(_, txArb.arbitrary).map(_.sequence))
       .sample
       .get
 
-  val zSwapCoinPublicKeyGen: Gen[ZSwapCoinPublicKey] =
-    ledgerTransactionGen.map(_.state).map(_.coinPublicKey)
+  given blockHeaderArbitrary: Arbitrary[Block.Header] =
+    Arbitrary {
+      (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
+    }
 
-  val balanceGen: Gen[js.BigInt] = Gen.posNum[Int].map(js.BigInt(_))
+  def blockIOGen(txsIO: IO[Seq[Transaction]]): Arbitrary[IO[Block]] =
+    Arbitrary {
+      blockHeaderArbitrary.arbitrary.map { header =>
+        txsIO.map(txs => Block(header, Block.Body(txs)))
+      }
+    }
 
-  val transactionGen: Gen[Transaction] =
-    ledgerTransactionGen.map(_.transaction).map(LedgerSerialization.toTransaction)
+  given transactionsArbitrary(using
+      provingService: ProvingService[IO],
+      txArbitrary: Arbitrary[IO[Transaction]],
+  ): Arbitrary[IO[List[Transaction]]] = {
+    Arbitrary {
+      Gen.listOfN(2, txArbitrary.arbitrary).map(_.sequence)
+    }
+  }
 
-  private val blockHeaderGen: Gen[Block.Header] =
-    (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
+  given blocksArbitrary(using
+      provingService: ProvingService[IO],
+      txArbitrary: Arbitrary[IO[Transaction]],
+  ): Arbitrary[IO[List[Block]]] = {
+    Arbitrary {
+      for {
+        txs <- Gen.listOfN(2, txArbitrary.arbitrary)
+        blocks <- Gen.listOfN(2, Generators.blockIOGen(txs.sequence).arbitrary)
+      } yield blocks.sequence
+    }
+  }
 
-  def blockGen(txs: Seq[Transaction]): Gen[Block] =
-    blockHeaderGen.map(Block(_, Block.Body(txs)))
+  given blocksShrink: Shrink[IO[List[Block]]] = noShrink
 }

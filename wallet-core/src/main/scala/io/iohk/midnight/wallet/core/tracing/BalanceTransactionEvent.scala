@@ -41,7 +41,7 @@ object BalanceTransactionEvent {
       )
     implicit val balanceTxErrorContext: AsStringLogContext[BalanceTransactionError] =
       AsStringLogContext.fromMap[BalanceTransactionError](evt =>
-        Map("transaction_hash" -> evt.tx.header.hash.show, "error" -> evt.error.message),
+        Map("transaction_hash" -> evt.tx.hash.show, "error" -> evt.error.message),
       )
 
   }

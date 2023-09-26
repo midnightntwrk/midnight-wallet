@@ -1,85 +1,169 @@
 package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.{Deferred, IO}
+import cats.syntax.applicative.*
 import fs2.Stream
-import io.iohk.midnight.midnightLedger.mod.*
-import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
-import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletKeys}
+import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedTransaction
+import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletCoins, WalletKeys}
+import io.iohk.midnight.wallet.core.domain.{
+  BalanceTransactionRecipe,
+  BalanceTransactionToProve,
+  NothingToProve,
+  ProvingRecipe,
+  TokenTransfer,
+  TransactionIdentifier,
+  TransactionToProve,
+}
+import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.{
   Wallet,
   WalletError,
-  WalletFilterService,
   WalletStateService,
+  WalletTransactionService,
   WalletTxSubmissionService,
 }
-import io.iohk.midnight.wallet.engine.WalletBlockProcessingService
-
-import scala.scalajs.js
-
-class WalletFilterServiceStub(txs: Seq[Transaction]) extends WalletFilterService[IO] {
-  override def installTransactionFilter(filter: Transaction => Boolean): Stream[IO, Transaction] =
-    Stream.emits(txs)
-}
-class WalletFilterServiceFailingStub(txs: Seq[Transaction], error: Throwable)
-    extends WalletFilterService[IO] {
-  override def installTransactionFilter(filter: Transaction => Boolean): Stream[IO, Transaction] =
-    Stream.emits(txs) ++ Stream.raiseError[IO](error)
+import io.iohk.midnight.wallet.engine.WalletTransactionProcessingService
+import io.iohk.midnight.wallet.zswap.{
+  CoinInfo,
+  CoinPublicKey,
+  EncryptionSecretKey,
+  LocalState,
+  TokenType,
+  Transaction,
 }
 
-class WalletFilterServiceInfiniteStub extends WalletFilterService[IO] {
-  override def installTransactionFilter(filter: Transaction => Boolean): Stream[IO, Transaction] =
-    Stream.never[IO]
-}
-
-class WalletBlockProcessingServiceStub extends WalletBlockProcessingService[IO] {
-  override def blocks: Stream[IO, Either[WalletError, AppliedBlock]] = Stream.empty
+class WalletTransactionProcessingServiceStub extends WalletTransactionProcessingService[IO] {
+  override def transactions: Stream[IO, Either[WalletError, AppliedTransaction]] = Stream.empty
   override def stop: IO[Unit] = IO.unit
 }
 
 class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
-  private val state = new ZSwapLocalState()
-  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
-    IO.pure(state.coinPublicKey)
-  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emit(js.BigInt(0))
+  private val state = LocalState()
+
+  override def keys(implicit
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
+    IO.pure((state.coinPublicKey, state.encryptionSecretKey))
+
+  override def state(using
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletBalances: WalletBalances[Wallet],
+      walletCoins: WalletCoins[Wallet],
+  ): Stream[IO, WalletStateService.State] =
+    Stream.emit(
+      WalletStateService.State(
+        state.coinPublicKey,
+        state.encryptionSecretKey,
+        state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _),
+        state.coins,
+        state.coins,
+        Seq.empty,
+      ),
+    )
 }
 
-class WalletBlockProcessingServiceStartStub(ref: Deferred[IO, Boolean])
-    extends WalletBlockProcessingService[IO] {
-  override val blocks: Stream[IO, Either[WalletError, AppliedBlock]] =
+class WalletTransactionProcessingServiceStartStub(ref: Deferred[IO, Boolean])
+    extends WalletTransactionProcessingService[IO] {
+  override val transactions: Stream[IO, Either[WalletError, AppliedTransaction]] =
     Stream.eval(ref.complete(true)).flatMap(_ => Stream.empty)
   override def stop: IO[Unit] = IO.unit
 }
 
-class WalletStateServicePublicKeyStub(zSwapCoinPublicKey: ZSwapCoinPublicKey)
-    extends WalletStateService[IO, Wallet] {
-  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
-    IO.pure(zSwapCoinPublicKey)
-  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emit(js.BigInt(0))
+class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[IO, Wallet] {
+  override def keys(implicit
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
+    IO.raiseError(new NotImplementedError())
+
+  override def state(using
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletBalances: WalletBalances[Wallet],
+      walletCoins: WalletCoins[Wallet],
+  ): Stream[IO, WalletStateService.State] = {
+    val state = LocalState()
+    Stream.emit(
+      WalletStateService.State(
+        state.coinPublicKey,
+        state.encryptionSecretKey,
+        Map(TokenType.Native -> balance),
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+      ),
+    )
+  }
 }
 
-class WalletStateServiceBalanceStub(balance: Seq[js.BigInt])
-    extends WalletStateService[IO, Wallet] {
-  override def publicKey(implicit walletKeys: WalletKeys[Wallet, ZSwapCoinPublicKey]) =
+class WalletStateServicePubKeyStub(pubKey: CoinPublicKey) extends WalletStateService[IO, Wallet] {
+  override def keys(implicit
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
     IO.raiseError(new NotImplementedError())
-  override def balance(implicit walletBalances: WalletBalances[Wallet]) = Stream.emits(balance)
+
+  override def state(using
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletBalances: WalletBalances[Wallet],
+      walletCoins: WalletCoins[Wallet],
+  ): Stream[IO, WalletStateService.State] =
+    Stream.emit(
+      WalletStateService.State(
+        pubKey,
+        LocalState().encryptionSecretKey,
+        Map.empty,
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+      ),
+    )
 }
 
 class WalletTxSubmissionServiceStub extends WalletTxSubmissionService[IO] {
   override def submitTransaction(
       transaction: Transaction,
-      newCoins: List[CoinInfo],
   ): IO[TransactionIdentifier] =
-    transaction
-      .identifiers()
-      .headOption
-      .fold[IO[TransactionIdentifier]](IO.raiseError(new Exception("Invalid tx")))(IO.pure)
+    transaction.identifiers.headOption
+      .fold[IO[TransactionIdentifier]](IO.raiseError(new Exception("Invalid tx")))(txId =>
+        IO.pure(TransactionIdentifier(txId)),
+      )
 }
 
-class WalletTxSubmissionServiceIdentifierStub(txIdentifier: TransactionIdentifier)
-    extends WalletTxSubmissionService[IO] {
-  override def submitTransaction(
-      transaction: Transaction,
-      newCoins: List[CoinInfo],
-  ): IO[TransactionIdentifier] =
-    IO.pure(txIdentifier)
+class WalletTransactionServiceStub() extends WalletTransactionService[IO] {
+  override def prepareTransferRecipe(outputs: List[TokenTransfer]): IO[TransactionToProve] =
+    IO.raiseError(new NotImplementedError())
+
+  override def proveTransaction(provingRecipe: ProvingRecipe): IO[Transaction] =
+    IO.raiseError(new NotImplementedError())
+
+  override def balanceTransaction(
+      tx: Transaction,
+      newCoins: Seq[CoinInfo],
+  ): IO[BalanceTransactionRecipe] =
+    IO.raiseError(new NotImplementedError())
+}
+
+class WalletTransactionServiceWithProvingStub(
+    provingService: ProvingService[IO],
+    transferRecipe: TransactionToProve,
+) extends WalletTransactionService[IO] {
+  override def prepareTransferRecipe(outputs: List[TokenTransfer]): IO[TransactionToProve] =
+    IO.pure(transferRecipe)
+
+  override def proveTransaction(provingRecipe: ProvingRecipe): IO[Transaction] = {
+    provingRecipe match
+      case TransactionToProve(transaction) =>
+        provingService.proveTransaction(transaction)
+      case BalanceTransactionToProve(toProve, toBalance) =>
+        provingService
+          .proveTransaction(toProve)
+          .map { provedTx =>
+            toBalance.merge(provedTx)
+          }
+      case NothingToProve(transaction) => transaction.pure
+  }
+
+  override def balanceTransaction(
+      tx: Transaction,
+      newCoins: Seq[CoinInfo],
+  ): IO[BalanceTransactionRecipe] =
+    IO.pure(NothingToProve(tx))
 }

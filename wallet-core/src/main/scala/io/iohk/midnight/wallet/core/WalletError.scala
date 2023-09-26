@@ -1,5 +1,8 @@
 package io.iohk.midnight.wallet.core
 
+import cats.syntax.show.*
+import io.iohk.midnight.wallet.zswap.TokenType
+
 sealed trait ReadableMessage {
   def message: String
 }
@@ -17,8 +20,15 @@ object WalletError {
   implicit def toReadableMessage(error: WalletError): ReadableMessage = new ReadableMessage {
     override def message: String = error.toString
   }
-  final case object NotSufficientFunds extends WalletError {
-    override def toString: String = "Not sufficient funds to balance the cost of transaction"
+  final case class NotSufficientFunds(tokenType: TokenType) extends WalletError {
+    override def toString: String = s"Not sufficient funds to balance token: ${tokenType.show}"
+
+    override def toThrowable: Throwable = new Throwable(this.message)
+  }
+
+  case object NoTokenTransfers extends WalletError {
+    override def toString: String =
+      "List of token transfers is empty or there is no positive transfers"
 
     override def toThrowable: Throwable = new Throwable(this.message)
   }

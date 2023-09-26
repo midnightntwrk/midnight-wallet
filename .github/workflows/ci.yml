@@ -44,19 +44,24 @@ jobs:
           //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
           @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
           " > ./.npmrc
+      - name: Log in to IOG Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: 'https://registry.ci.iog.io'
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ secrets.GH_USERNAME }}
+          password: ${{ secrets.GH_GHRC_TOKEN }}
       - name: Check format and run tests
         run: |
           nix fmt -- -c flake.nix
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN .#no-proofs -ic sbt verify
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN .#real-proofs -ic sbt IntegrationTest/test
-          nix develop -ic sbt coverageAggregate
-      - name: Test Typescript client examples
-        run: |
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -k MIDNIGHT_GH_TOKEN -ic sbt dist
-          cd examples
-          nix develop -ic yarn install --frozen-lockfile
-          nix develop -ic yarn lint
-          nix develop -ic yarn test
+          nix develop -c sbt verify
+          nix develop -c sbt IntegrationTest/test
+          nix develop -c sbt coverageAggregate
       - name: Configure yarn
         run: |
           cd typescript
@@ -68,13 +73,6 @@ jobs:
           nix develop .#typescript --command yarn lint
           nix develop .#typescript --command yarn test
           nix develop .#typescript --command yarn build
-      - name: Log in to the Container registry
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
-        with:
-          registry: 'https://registry.ci.iog.io'
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
       - name: Docker setup buildx
         if: github.ref == 'refs/heads/main'
         uses: docker/setup-buildx-action@v2.5.0
@@ -88,14 +86,6 @@ jobs:
           -t registry.ci.iog.io/midnight-wallet-server:latest \
           -t registry.ci.iog.io/midnight-wallet-server:${{ github.head_ref || github.ref_name }} \
           --push .
-      - name: Publish examples Test Report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Examples Jest Tests Report
-          path: |
-            ./examples/reports/report.xml
-          reporter: jest-junit
       - name: Publish wallet TS Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
@@ -117,17 +107,9 @@ jobs:
         if: success() || failure()
         with:
           name: Scala Integration Tests Report
-          path: |        
+          path: |
             !(examples)/**/target/it-reports/TEST-*.xml
           reporter: java-junit
-      - name: Publish Examples Test Summary
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: success() || failure()
-        with:
-          check_name: Examples Jest Tests Results
-          files: |
-            ./examples/reports/report.xml
-            !(node_modules)/**/reports/report.xml
       - name: Publish Wallet TS Test Summary
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: success() || failure()

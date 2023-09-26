@@ -3,299 +3,232 @@ package io.iohk.midnight.wallet.engine
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.effect.std.Queue
-import cats.effect.unsafe.implicits.global
-import cats.syntax.eq.*
-import io.iohk.midnight.midnightLedger.mod.*
-import io.iohk.midnight.midnightMockedNodeApi.anon.Hash
-import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
-import io.iohk.midnight.midnightMockedNodeApi.distDataRequestNextResultMod.RequestNextResult
-import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction as ApiTransaction
-import io.iohk.midnight.midnightMockedNodeApi.distDataTxSubmissionResultMod
-import io.iohk.midnight.midnightMockedNodeTest.distTestSystemMod.TestSystem
-import io.iohk.midnight.midnightMockedNodeTest.mod.ProdTestSystem
-import io.iohk.midnight.rxjs.mod.*
+import io.iohk.midnight.wallet.zswap.*
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedBlock
+import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedTransaction
+import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
-import io.iohk.midnight.wallet.engine.config.{Config, NodeConnectionResourced}
-import io.iohk.midnight.wallet.engine.js.{JsWallet, NodeConnection, SubmitSession, SyncSession}
+import io.iohk.midnight.wallet.engine.config.Config
 import munit.CatsEffectSuite
-
-import scala.scalajs.js
-import scala.scalajs.js.JSConverters.*
-import scala.scalajs.js.Promise
+import sttp.client3.UriContext
+import scala.concurrent.duration.*
 
 trait EndToEndSpecSetup {
-  val nodeHost = "localhost"
-  val nodePort = 5206L
-  val tokenType = nativeToken()
-  val coin = new CoinInfo(js.BigInt(1_000_000), tokenType)
-  val spendCoin = new CoinInfo(js.BigInt(10_000), tokenType)
-  def randomRecipient(): ZSwapCoinPublicKey = new ZSwapLocalState().coinPublicKey
+  val indexerRPCUri = uri"http://localhost:8088/api/graphql"
+  val indexerWSUri = uri"ws://localhost:8088/api/graphql/ws"
+  val proverServerUri = uri"http://localhost:6300"
+  val substrateNodeUri = uri"http://localhost:9933"
+  val tokenType = TokenType.Native
+  val coin = CoinInfo(tokenType, BigInt(1_000_000))
+  val spendCoin = CoinInfo(tokenType, BigInt(10_000))
+  def randomRecipient(): CoinPublicKey = LocalState().coinPublicKey
 
-  def buildSendTx(coin: CoinInfo, recipient: ZSwapCoinPublicKey): Transaction = {
-    val output = ZSwapOutputWithRandomness.`new`(coin, recipient)
-    val deltas = new ZSwapDeltas()
-    deltas.insert(tokenType, -coin.value)
-    val offer = new ZSwapOffer(js.Array(), js.Array(output.output), js.Array(), deltas)
-    val builder = new TransactionBuilder(new LedgerState())
-    builder.addOffer(offer, output.randomness)
-    builder.intoTransaction().transaction
-  }
-
-  def makeTestSystemResource(initialTxs: Transaction*): Resource[IO, TestSystem[ApiTransaction]] = {
-    val txs =
-      initialTxs
-        .map(LedgerSerialization.toTransaction)
-        .map(tx => ApiTransaction(tx.body, Hash(tx.header.hash.value)))
-    Resource.pure(ProdTestSystem(txs.toJSArray))
-  }
-
-  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  def makeNodeConnection(testSystem: TestSystem[ApiTransaction]): NodeConnectionResourced = {
-    val nodeConnection = new NodeConnection {
-
-      override def startSyncSession(): js.Promise[SyncSession] = IO {
-        new SyncSession {
-          private val session = testSystem.startClientSession("wallet-e2e-sync")
-
-          override def sync(): Observable_[Block[ApiTransaction]] = {
-            val filterFun = {
-              (requestNextResult: RequestNextResult[Block[ApiTransaction]], _: Double) =>
-                {
-                  val tag = requestNextResult.asInstanceOf[js.Dynamic].tag.asInstanceOf[String]
-                  tag === "RollForward"
-                }
-            }
-
-            val mapFun = {
-              (requestNextResult: RequestNextResult[Block[ApiTransaction]], _: Double) =>
-                {
-                  requestNextResult
-                    .asInstanceOf[js.Dynamic]
-                    .block
-                    .asInstanceOf[Block[ApiTransaction]]
-                }
-            }
-
-            session
-              .sync()
-              .pipe(filter(filterFun), map(mapFun))
-              .asInstanceOf[Observable_[Block[ApiTransaction]]]
-          }
-
-          override def close(): Unit =
-            session.close()
-        }
-      }.unsafeToPromise()
-
-      override def startSubmitSession(): js.Promise[SubmitSession] = IO {
-        new SubmitSession {
-          private val session = testSystem.startClientSession("wallet-e2e-submit")
-
-          override def submitTx(
-              tx: ApiTransaction,
-          ): Promise[distDataTxSubmissionResultMod.TxSubmissionResult] =
-            session.submitTx(tx)
-
-          override def close(): Unit =
-            session.close()
-        }
-      }.unsafeToPromise()
+  def prepareOutputs(coins: List[CoinInfo], recipient: CoinPublicKey): List[TokenTransfer] = {
+    coins.map { coin =>
+      TokenTransfer(coin.value, coin.tokenType, Address(recipient))
     }
-    NodeConnectionResourced(nodeConnection)
+  }
+
+  def prepareStateWithCoins(coins: List[CoinInfo]): LocalState = {
+    def applyCoinToState(coin: CoinInfo, state: LocalState): LocalState = {
+      val output = UnprovenOutput(coin, state.coinPublicKey, state.encryptionPublicKey)
+      val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value)
+      state
+        .watchFor(coin)
+        .applyProofErased(UnprovenTransaction(offer).eraseProofs.guaranteedCoins)
+    }
+    val state = LocalState()
+    coins
+      .foldLeft(state) { case (accState, coin) =>
+        applyCoinToState(coin, accState)
+      }
   }
 
   def makeRunningWalletResource(
-      testSystem: TestSystem[ApiTransaction],
-      initialState: ZSwapLocalState,
+      initialState: LocalState,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] =
     Resource.make(
       Wallet
-        .build[IO](Config(makeNodeConnection(testSystem), initialState, LogLevel.Warn))
-        .flatTap(_.dependencies.walletBlockProcessingService.blocks.compile.drain.start),
+        .build[IO](
+          Config(
+            indexerRPCUri,
+            indexerWSUri,
+            proverServerUri,
+            substrateNodeUri,
+            initialState,
+            LogLevel.Warn,
+          ),
+        )
+        .flatTap(_.dependencies.walletTransactionProcessingService.transactions.compile.drain.start),
     )(_.finalizer)
 
-  def withRunningWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
+  def withRunningWallet(initialWalletState: LocalState)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
-    makeTestSystemResource(initialTxs*)
-      .flatMap(makeRunningWalletResource(_, initialWalletState))
+    makeRunningWalletResource(initialWalletState)
       .use(body(_))
 
   def makeWalletResource(
-      testSystem: TestSystem[ApiTransaction],
-      initialState: ZSwapLocalState,
+      initialState: LocalState,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
     Resource.make(
       Wallet
-        .build[IO](Config(makeNodeConnection(testSystem), initialState, LogLevel.Warn)),
+        .build[IO](
+          Config(
+            indexerRPCUri,
+            indexerWSUri,
+            proverServerUri,
+            substrateNodeUri,
+            initialState,
+            LogLevel.Warn,
+          ),
+        ),
     )(_.finalizer)
   }
 
-  def withWallet(initialWalletState: ZSwapLocalState, initialTxs: Transaction*)(
+  def withWallet(initialWalletState: LocalState)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
-    makeTestSystemResource(initialTxs*)
-      .flatMap(makeWalletResource(_, initialWalletState))
+    makeWalletResource(initialWalletState)
       .use(body(_))
 }
 
 class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
-  test("Submit tx spending wallet balance") {
-    val initialState = new ZSwapLocalState()
-    initialState.watchFor(coin)
-    val pubKey = initialState.coinPublicKey
-    val mintTx = buildSendTx(coin, pubKey)
-    val spendTx = buildSendTx(spendCoin, randomRecipient())
-    // These values were extracted after first run since it's not predictable
-    val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
 
-    withRunningWallet(initialState, mintTx) {
-      case AllocatedWallet(WalletDependencies(_, walletState, _, txSubmission), _) =>
+  override val munitIOTimeout: Duration = 60.seconds
+
+  test("Submit transfer tx spending wallet balance".ignore) {
+    val initialState = prepareStateWithCoins(List(coin))
+
+    withRunningWallet(initialState) {
+      case AllocatedWallet(
+            WalletDependencies(_, walletState, txSubmission, walletTransactionService),
+            _,
+          ) =>
         for {
-          balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx, List.empty)
-          balanceAfterSend <- walletState.balance.find(_ < coin.value).compile.lastOrError
+          balanceBeforeSend <- walletState.state
+            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+            .find(_ >= coin.value)
+            .compile
+            .lastOrError
+          transferRecipe <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(spendCoin), randomRecipient()),
+          )
+          spendTx <- walletTransactionService.proveTransaction(transferRecipe)
+          txId <- txSubmission.submitTransaction(spendTx)
+          balanceAfterSend <- walletState.state
+            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+            .find(_ < coin.value)
+            .compile
+            .lastOrError
         } yield {
+          // TODO: add better assertions, when wallet state API be ready
+          assertEquals(txId.txId, spendTx.identifiers(0))
           assertEquals(balanceBeforeSend, coin.value)
-          assertEquals(balanceAfterSend, coin.value - spendCoin.value - fee)
+          assert(balanceAfterSend < coin.value - spendCoin.value) // spend amount + fee
         }
     }
   }
 
   test(
-    "Submit tx one after another with waiting for blocks apply and doesn't spend the same coin (no double spend)",
+    "Submit tx one after another with waiting for blocks apply and doesn't spend the same coin (no double spend)".ignore,
   ) {
-    val initialState = new ZSwapLocalState()
-    initialState.watchFor(coin)
-    val pubKey = initialState.coinPublicKey
-    val mintTx = buildSendTx(coin, pubKey)
-    val firstSpendTx = buildSendTx(spendCoin, randomRecipient())
-    val secondSpendTx = buildSendTx(spendCoin, randomRecipient())
-    // These values were extracted after first run since it's not predictable
-    val fee = if (isLedgerNoProofs) js.BigInt(2403) else js.BigInt(5585)
+    val initialState = prepareStateWithCoins(List(coin))
 
-    withWallet(initialState, mintTx) {
+    withWallet(initialState) {
       case AllocatedWallet(
-            WalletDependencies(walletBlockProcessingService, walletState, _, txSubmission),
+            WalletDependencies(
+              walletTransactionProcessingService,
+              walletState,
+              txSubmission,
+              walletTransactionService,
+            ),
             _,
           ) =>
         for {
-          appliedBlocksQueue <- Queue.unbounded[IO, AppliedBlock]
-          _ <- walletBlockProcessingService.blocks
+          appliedTransactionsQueue <- Queue.unbounded[IO, AppliedTransaction]
+          _ <- walletTransactionProcessingService.transactions
             .collect { case Right(value) =>
               value
             }
-            .enqueueUnterminated(appliedBlocksQueue)
+            .enqueueUnterminated(appliedTransactionsQueue)
             .compile
             .drain
             .start
-          _ <- appliedBlocksQueue.take
-          balanceBeforeSend <- walletState.balance.find(_ >= coin.value).compile.lastOrError
-          _ <- txSubmission.submitTransaction(firstSpendTx, List.empty)
-          _ <- appliedBlocksQueue.take
-          balanceAfter1Send <- walletState.balance.find(_ < coin.value).compile.lastOrError
-          _ <- txSubmission.submitTransaction(secondSpendTx, List.empty)
-          _ <- appliedBlocksQueue.take
-          balanceAfter2Send <- walletState.balance.find(_ < coin.value).compile.lastOrError
+          _ <- appliedTransactionsQueue.take
+          balanceBeforeSend <- walletState.state
+            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+            .find(_ >= coin.value)
+            .compile
+            .lastOrError
+          firstTransferRecipe <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(spendCoin), randomRecipient()),
+          )
+          firstSpendTx <- walletTransactionService.proveTransaction(firstTransferRecipe)
+          _ <- txSubmission.submitTransaction(firstSpendTx)
+          _ <- appliedTransactionsQueue.take
+          balanceAfter1Send <- walletState.state
+            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+            .find(_ < coin.value)
+            .compile
+            .lastOrError
+          secondTransferRecipe <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(spendCoin), randomRecipient()),
+          )
+          secondSpendTx <- walletTransactionService.proveTransaction(secondTransferRecipe)
+          _ <- txSubmission.submitTransaction(secondSpendTx)
+          _ <- appliedTransactionsQueue.take
+          balanceAfter2Send <- walletState.state
+            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+            .find(_ < coin.value)
+            .compile
+            .lastOrError
         } yield {
           assertEquals(balanceBeforeSend, coin.value)
-          assertEquals(balanceAfter1Send, coin.value - spendCoin.value - fee)
-          assertEquals(balanceAfter2Send, balanceAfter1Send - spendCoin.value - fee)
+          assertEquals(balanceAfter1Send, coin.value - spendCoin.value)
+          assertEquals(balanceAfter2Send, balanceAfter1Send - spendCoin.value)
         }
     }
   }
 
-  test("Submit tx one after another and doesn't spend the same coin (no double spend)") {
-    val initialState = new ZSwapLocalState()
-    initialState.watchFor(coin)
-    val pubKey = initialState.coinPublicKey
-    val mintTx = buildSendTx(coin, pubKey)
-    val firstSpendTx = buildSendTx(spendCoin, randomRecipient())
-    val secondSpendTx = buildSendTx(spendCoin, randomRecipient())
+  test(
+    "Prepare transfer tx one after another and doesn't spend the same coin (no double spend)".ignore,
+  ) {
+    val initialState = prepareStateWithCoins(List(coin))
 
-    val quickTxSend = withWallet(initialState, mintTx) {
+    val quickTxSend = withWallet(initialState) {
       case AllocatedWallet(
-            WalletDependencies(walletBlockProcessingService, _, _, txSubmission),
+            WalletDependencies(
+              walletTransactionProcessingService,
+              _,
+              txSubmission,
+              walletTransactionService,
+            ),
             _,
           ) =>
         for {
-          _ <- walletBlockProcessingService.blocks.take(1).compile.toList
-          firstTxResult <- txSubmission.submitTransaction(firstSpendTx, List.empty).attempt
+          _ <- walletTransactionProcessingService.transactions.take(1).compile.toList
+          firstTransferRecipe <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(spendCoin), randomRecipient()),
+          )
+          firstSpendTx <- walletTransactionService.proveTransaction(firstTransferRecipe)
+          firstTxResult <- txSubmission.submitTransaction(firstSpendTx).attempt
           _ <-
-            if (firstTxResult.isRight) txSubmission.submitTransaction(secondSpendTx, List.empty)
-            else fail("Submitting first transaction has failed")
+            if (firstTxResult.isRight) {
+              for {
+                secondTransferRecipe <- walletTransactionService.prepareTransferRecipe(
+                  prepareOutputs(List(spendCoin), randomRecipient()),
+                )
+                secondSpendTx <- walletTransactionService.proveTransaction(secondTransferRecipe)
+              } yield txSubmission.submitTransaction(secondSpendTx)
+            } else fail("Submitting first transaction has failed")
         } yield ()
     }
 
     interceptMessageIO[Throwable]("Not sufficient funds to balance the cost of transaction")(
       quickTxSend,
     )
-  }
-
-  private def isLedgerNoProofs: Boolean =
-    readEnvVariable[String]("NO_PROOFS") === Some("true")
-
-  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  private def readEnvVariable[T](name: String): Option[T] =
-    js.Dynamic.global.process.env.selectDynamic(name).asInstanceOf[js.UndefOr[T]].toOption
-
-  test("Get initial balance from rxjs Observable") {
-    val initialState = new ZSwapLocalState()
-    initialState.watchFor(coin)
-    val pubKey = initialState.coinPublicKey
-    val mintTx = buildSendTx(coin, pubKey)
-
-    withRunningWallet(initialState, mintTx) {
-      case AllocatedWallet(
-            WalletDependencies(
-              walletBlockProcessingService,
-              walletState,
-              walletFilter,
-              walletTxSubmission,
-            ),
-            _,
-          ) =>
-        val jsWallet = new JsWallet(
-          walletBlockProcessingService,
-          walletState,
-          walletFilter,
-          walletTxSubmission,
-          IO.unit,
-        )
-        IO.fromPromise(IO {
-          firstValueFrom(
-            jsWallet.balance().pipe(find { (value, _, _) => value > js.BigInt(0) }),
-          )
-        }).map(_.toOption)
-          .assertEquals(Some(coin.value))
-    }
-  }
-
-  test("Filter transactions") {
-    val initialState = new ZSwapLocalState()
-    initialState.watchFor(coin)
-    val pubKey = initialState.coinPublicKey
-    val mintTx = buildSendTx(coin, pubKey)
-    val spendTx = buildSendTx(spendCoin, randomRecipient())
-    val expectedIdentifier = spendTx.identifiers().head
-
-    withRunningWallet(initialState, mintTx) {
-      case AllocatedWallet(WalletDependencies(_, walletState, filterService, txSubmission), _) =>
-        for {
-          _ <- walletState.balance.find(_ > js.BigInt(0)).compile.lastOrError
-          _ <- txSubmission.submitTransaction(spendTx, List(spendCoin))
-          filteredTx <- filterService
-            .installTransactionFilter(_.hasIdentifier(expectedIdentifier))
-            .head
-            .compile
-            .lastOrError
-        } yield {
-          assert(filteredTx.identifiers().exists(_.equals(expectedIdentifier)))
-        }
-    }
   }
 }

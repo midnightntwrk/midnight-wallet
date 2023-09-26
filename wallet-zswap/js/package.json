@@ -1,0 +1,14 @@
+{
+    "name": "@midnight/wallet-zswap",
+    "version": "2.9.2",
+    "packageManager": "yarn@1.22.18",
+    "author": "IOHK",
+    "license": "Apache-2.0",
+    "type": "module",
+    "dependencies": {
+        "@midnight/zswap": "0.2.5"
+    },
+    "devDependencies": {
+        "typescript": "^4.8.3"
+    }
+}

@@ -1,6 +1,7 @@
 package io.iohk.midnight.js.interop.cats
 
-import cats.{Eval, Foldable, Monoid}
+import cats.{Eq, Eval, Foldable, Monoid}
+
 import scala.scalajs.js
 
 object Instances {
@@ -22,4 +23,6 @@ object Instances {
         Eval.defer(loop(fa))
       }
     }
+
+  given jsBigIntEq: Eq[js.BigInt] = Eq.fromUniversalEquals
 }

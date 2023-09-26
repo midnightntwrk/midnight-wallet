@@ -1,82 +1,54 @@
 package io.iohk.midnight.wallet.engine.js
 
+import cats.Applicative
 import cats.effect.Resource
 import cats.effect.kernel.Async
-import cats.syntax.all.*
-import fs2.Stream
-import io.iohk.midnight.js.interop.util.StreamOps
-import io.iohk.midnight.js.interop.util.StreamOps.FromObservable
-import io.iohk.midnight.midnightMockedNodeApi.distDataBlockMod.Block
-import io.iohk.midnight.midnightMockedNodeApi.distDataTransactionMod.Transaction
+import cats.syntax.functor.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.{Hash, Transaction}
+import io.iohk.midnight.wallet.core.capabilities.WalletKeys
+import io.iohk.midnight.wallet.core.domain.TransactionHash
 import io.iohk.midnight.wallet.core.services.SyncService
-import io.iohk.midnight.wallet.engine.config.NodeConnectionResourced
+import io.iohk.midnight.wallet.core.{LedgerSerialization, WalletStateService}
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
+import io.iohk.midnight.wallet.indexer.IndexerClient
+import io.iohk.midnight.wallet.indexer.IndexerClient.RawTransaction
+import io.iohk.midnight.wallet.zswap
+import sttp.model.Uri
 
-import java.time.Instant
-import scala.scalajs.js
-import scala.util.Try
-
-// TODO: [PM-5832] Improve code coverage
-@SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.ToString"))
 object SyncServiceFactory {
 
-  def apply[F[_]: Async](
-      nodeConnectionResourced: NodeConnectionResourced,
-  )(implicit rootTracer: Tracer[F, StructuredLog]): Resource[F, SyncService[F]] = {
+  def apply[F[_]: Async, TWallet](
+      indexerUri: Uri,
+      indexerWsUri: Uri,
+      walletStateService: WalletStateService[F, TWallet],
+  )(implicit
+      rootTracer: Tracer[F, StructuredLog],
+      walletKeys: WalletKeys[TWallet, zswap.CoinPublicKey, zswap.EncryptionSecretKey],
+  ): Resource[F, SyncService[F]] = {
     val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
-    nodeConnectionResourced.syncSessionResource
-      .flatMap(session => {
-        session
-          .sync()
-          .toObservableProtocolStream
-          .map { stream => () =>
-            stream
-              .evalTap {
-                case StreamOps.Next(event) =>
-                  val eventJs = event.asInstanceOf[js.Dynamic]
-                  val additionalLogData = Try(eventJs.header.hash.asInstanceOf[String]).toOption
-                    .map(height => Map("hash" -> height))
-                    .getOrElse(Map.empty)
-
-                  syncServiceTracer.syncBlockReceived(additionalLogData)
-                case StreamOps.Error(error) =>
-                  syncServiceTracer.syncFailed(error)
-              }
-              .flatMap {
-                case StreamOps.Error(error) =>
-                  Stream.raiseError(new Throwable(error.toString))
-                case StreamOps.Next(value) => Stream.emit(value)
-              }
-              .evalMap(block => Async[F].delay(transformBlock(block)).rethrow)
-          }
-      })
+    IndexerClient[F](indexerUri, indexerWsUri)
+      .evalMap(client => walletStateService.keys.map(_._2).map((client, _)))
+      .map { case (client, viewingKey) =>
+        (lastHash: Option[TransactionHash]) =>
+          client
+            .rawTransactions(
+              LedgerSerialization.viewingKeyToString(viewingKey),
+              lastHash.map(_.hash),
+            )
+            .attempt
+            .evalTap {
+              case Left(error) => syncServiceTracer.syncFailed(error)
+              case _           => Applicative[F].unit
+            }
+            .collect { case Right(tx) =>
+              tx
+            }
+            .evalTap(tx => syncServiceTracer.syncTransactionReceived(tx.hash))
+            .map { case RawTransaction(hash, raw) => Transaction(Hash(hash), raw) }
+      }
   }
-
-  private def transformBlock(block: Block[Transaction]): Either[Throwable, data.Block] =
-    transformBlockHeader(block).map(data.Block(_, transformBlockBody(block)))
-
-  private def transformBlockBody(block: Block[Transaction]): data.Block.Body =
-    data.Block.Body(block.body.transactionResults.toSeq.map(transformTransaction))
-
-  private def transformBlockHeader(
-      block: Block[Transaction],
-  ): Either[Throwable, data.Block.Header] =
-    data.Block
-      .Height(block.header.height.intValue())
-      .bimap(
-        new Throwable(_),
-        data.Block.Header(
-          data.Hash(block.header.hash),
-          data.Hash(block.header.parentHash),
-          _,
-          Instant.ofEpochMilli(block.header.timestamp.getTime().longValue()),
-        ),
-      )
-
-  private def transformTransaction(tx: Transaction): data.Transaction =
-    data.Transaction(data.Transaction.Header(data.Hash(tx.header.hash)), tx.body)
 }

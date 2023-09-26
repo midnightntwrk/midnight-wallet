@@ -3,32 +3,33 @@ package io.iohk.midnight.wallet.core
 import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Pipe
-import io.iohk.midnight.wallet.blockchain.data.Block
-import io.iohk.midnight.wallet.blockchain.data.Block.Header
-import io.iohk.midnight.wallet.core.capabilities.WalletBlockProcessing
-import io.iohk.midnight.wallet.core.tracing.WalletBlockProcessingTracer
+import io.iohk.midnight.wallet.blockchain.data.Transaction
+import io.iohk.midnight.wallet.core.capabilities.WalletTransactionProcessing
+import io.iohk.midnight.wallet.core.domain.TransactionHash
+import io.iohk.midnight.wallet.core.tracing.WalletTransactionProcessingTracer
 
 object BlockProcessingFactory {
   def pipe[F[_]: Async, TWallet](walletStateContainer: WalletStateContainer[F, TWallet])(implicit
-      walletBlockProcessing: WalletBlockProcessing[TWallet, Block],
-      tracer: WalletBlockProcessingTracer[F],
-  ): Pipe[F, Block, Either[WalletError, (AppliedBlock, TWallet)]] = blocks => {
-    blocks
-      .evalTap(tracer.handlingBlock)
-      .evalMap { block =>
+      walletTransactionProcessing: WalletTransactionProcessing[TWallet, Transaction],
+      tracer: WalletTransactionProcessingTracer[F],
+  ): Pipe[F, Transaction, Either[WalletError, (AppliedTransaction, TWallet)]] = transactions => {
+    transactions
+      .map(tx => (tx, TransactionHash(tx.hash.value)))
+      .evalTap((_, hash) => tracer.handlingTransaction(hash))
+      .evalMap { (tx, hash) =>
         walletStateContainer
           .updateStateEither { wallet =>
-            walletBlockProcessing.applyBlock(wallet, block)
+            walletTransactionProcessing.applyTransaction(wallet, tx)
           }
           .flatTap {
-            case Right(_) => tracer.applyBlockSuccess(block)
+            case Right(_) => tracer.applyTransactionSuccess(hash)
             // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-            case Left(error) => tracer.applyBlockError(block, error)
+            case Left(error) => tracer.applyTransactionError(hash, error)
             // $COVERAGE-ON$
           }
-          .fmap(_.fmap((AppliedBlock(block.header), _)))
+          .fmap(_.fmap((AppliedTransaction(hash), _)))
       }
   }
 
-  final case class AppliedBlock(header: Header)
+  final case class AppliedTransaction(hash: TransactionHash)
 }

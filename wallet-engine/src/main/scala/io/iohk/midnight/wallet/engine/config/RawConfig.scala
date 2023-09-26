@@ -1,10 +1,12 @@
 package io.iohk.midnight.wallet.engine.config
 
 import cats.Show
-import io.iohk.midnight.wallet.engine.js.NodeConnection
 
 final case class RawConfig(
-    nodeConnection: NodeConnection,
+    indexerUri: String,
+    indexerWsUri: String,
+    provingServerUri: String,
+    substrateNodeUri: String,
     initialState: Option[String],
     minLogLevel: Option[String],
 )
