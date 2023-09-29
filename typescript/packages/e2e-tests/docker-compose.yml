@@ -1,0 +1,31 @@
+services:
+  proof-server:
+    image: registry.ci.iog.io/proof-server:master
+    container_name: proof-server
+    ports:
+      - '6300:6300'
+  node:
+    image: 596662952274.dkr.ecr.eu-north-1.amazonaws.com/mn:node-a608c355b9474231becb3693ce8923e5a69eb01e
+    container_name: node
+    environment:
+      - RUN_DEV_NET=TRUE
+    ports:
+      - '9933:9933'
+      - '9944:9944'
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9933/health" ]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+  indexer:
+    image: ghcr.io/input-output-hk/midnight-pubsub-indexer:556b2bf03cf9d353a9631b8f76510b9cf5b727ac
+    container_name: indexer
+    ports:
+      - '8088:8088'
+    command: ["midnight-pubsub-indexer", "-Devents-source.node-host=node"]
+    environment:
+      - SUBSTRATE_NODE_URL=node
+    depends_on:
+      node:
+        condition: service_healthy
