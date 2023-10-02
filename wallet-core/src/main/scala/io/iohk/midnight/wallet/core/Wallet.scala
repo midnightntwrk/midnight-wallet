@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.syntax.either.*
+import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
 import io.iohk.midnight.wallet.core.TransactionBalancer.BalanceTransactionResult
 import io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat
@@ -15,6 +15,7 @@ import io.iohk.midnight.wallet.core.domain.{
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
+import scala.util.Try
 
 final case class Wallet private (private val state: LocalState, txHistory: Vector[Transaction])
 
@@ -102,19 +103,19 @@ object Wallet {
 
   implicit val walletTransactionProcessing: WalletTransactionProcessing[Wallet, WalletTransaction] =
     (wallet: Wallet, transaction: WalletTransaction) => {
-      val state = wallet.state
-      LedgerSerialization.fromTransaction(transaction).leftMap(BadTransactionFormat.apply).map {
-        tx =>
-          val updatedState = applyTransaction(state, tx)
-          val newTx = Option.when(isRelevant(wallet, tx))(tx)
+      LedgerSerialization
+        .fromTransaction(transaction)
+        .leftMap[WalletError](BadTransactionFormat.apply)
+        .mproduct(isRelevant(wallet, _).toEither.leftMap(WalletError.LedgerExecutionError.apply))
+        .map { (tx, relevant) =>
+          val updatedState = applyTransaction(wallet.state, tx)
+          val newTx = Option.when(relevant)(tx)
           Wallet(updatedState, wallet.txHistory ++ newTx)
-      }
+        }
     }
 
-  private def isRelevant(wallet: Wallet, tx: Transaction): Boolean = {
-    val viewingKey = wallet.state.encryptionSecretKey
-    viewingKey.test(tx.guaranteedCoins) || tx.fallibleCoins.exists(viewingKey.test)
-  }
+  private def isRelevant(wallet: Wallet, tx: Transaction): Try[Boolean] =
+    wallet.state.encryptionSecretKey.test(tx)
 
   implicit val walletSync: WalletSync[Wallet, ViewingUpdate] =
     (wallet: Wallet, update: ViewingUpdate) => {
@@ -123,17 +124,19 @@ object Wallet {
         case (state, transaction) =>
           applyTransaction(state, transaction)
       }
-      val newTxs = update.transactionDiff.filter(isRelevant(wallet, _))
-      Right(Wallet(stateWithAppliedTxs, wallet.txHistory.appendedAll(newTxs)))
+      val newTxs = update.transactionDiff
+        .filterA(isRelevant(wallet, _))
+        .toEither
+        .leftMap(WalletError.LedgerExecutionError.apply)
+      newTxs.map(txs => Wallet(stateWithAppliedTxs, wallet.txHistory ++ txs))
     }
 
   // TODO use information about fallible execution success to apply fallible offer
-  private def applyTransaction(state: LocalState, transaction: Transaction): LocalState = {
+  private def applyTransaction(state: LocalState, transaction: Transaction): LocalState =
     transaction.fallibleCoins match {
       case Some(offer) =>
         state.apply(transaction.guaranteedCoins).apply(offer)
       case None =>
         state.apply(transaction.guaranteedCoins)
     }
-  }
 }

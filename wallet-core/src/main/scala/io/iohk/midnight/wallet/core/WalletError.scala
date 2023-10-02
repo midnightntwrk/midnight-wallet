@@ -38,4 +38,9 @@ object WalletError {
 
     override def toThrowable: Throwable = error
   }
+
+  final case class LedgerExecutionError(error: Throwable) extends WalletError {
+    override def toString: String = s"LedgerExecutionError: ${error.getMessage}"
+    override def toThrowable: Throwable = error
+  }
 }

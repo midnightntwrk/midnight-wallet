@@ -1,9 +1,11 @@
-name: CD ZSwap
+name: CD Maven (JVM)
 
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
   MIDNIGHT_PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
+  MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
 
 on:
   push:
@@ -20,4 +22,4 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - name: Publish Scala packages
-      run: sbt downloadLedgerBinaries zswap/publish
+      run: sbt blocJVM/publish blockchainJVM/publish proverClientJVM/publish walletZswapJVM/publish walletCoreJVM/publish

@@ -167,14 +167,14 @@ object JsWallet {
       seed: String,
       minLogLevel: Option[String],
   ): IO[api.Wallet] = {
-    IO.fromEither(LedgerSerialization.fromSeedSerialized(seed))
+    IO.fromEither(LedgerSerialization.fromSeed(seed))
       .flatMap(state =>
         internalBuild(
           indexerUri,
           indexerWsUri,
           proverServerUri,
           substrateNodeUri,
-          Some(state),
+          Some(LedgerSerialization.serializeState(state)),
           minLogLevel,
         ),
       )

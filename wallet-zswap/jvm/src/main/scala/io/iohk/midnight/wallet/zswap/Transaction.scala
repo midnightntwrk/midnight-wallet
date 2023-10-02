@@ -1,13 +1,13 @@
 package io.iohk.midnight.wallet.zswap
 
-opaque type Transaction = Nothing
+opaque type Transaction = Array[Byte]
 
 @SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
 object Transaction {
-  def deserialize(bytes: Array[Byte]): Transaction = ???
+  def deserialize(bytes: Array[Byte]): Transaction = bytes
 
   extension (tx: Transaction) {
-    def serialize: Array[Byte] = ???
+    def serialize: Array[Byte] = tx
     def hash: String = ???
     def identifiers: Array[String] = ???
     def fees: BigInt = ???

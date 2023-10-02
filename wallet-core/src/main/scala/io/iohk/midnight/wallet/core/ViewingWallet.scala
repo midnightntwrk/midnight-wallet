@@ -1,17 +1,11 @@
 package io.iohk.midnight.wallet.core
 
-import cats.syntax.either.*
-import cats.syntax.eq.*
+import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
-import io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat
-import io.iohk.midnight.wallet.core.capabilities.{WalletRestore, WalletSync}
+import io.iohk.midnight.wallet.core.WalletError.{BadTransactionFormat, LedgerExecutionError}
+import io.iohk.midnight.wallet.core.capabilities.{WalletKeys, WalletRestore, WalletSync}
 import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
-import io.iohk.midnight.wallet.zswap.{
-  EncryptionSecretKey,
-  MerkleTreeCollapsedUpdate,
-  Transaction,
-  ZswapChainState,
-}
+import io.iohk.midnight.wallet.zswap.*
 import scala.annotation.tailrec
 
 final case class ViewingWallet private (
@@ -52,17 +46,22 @@ object ViewingWallet {
   given WalletRestore[ViewingWallet, EncryptionSecretKey] = (input: EncryptionSecretKey) =>
     new ViewingWallet(input, Vector.empty)
 
+  // TODO (PM-7230): Concatenate CoinPublicKey+EncryptionSecretKey
+  given WalletKeys[ViewingWallet, Unit, EncryptionSecretKey] =
+    new WalletKeys[ViewingWallet, Unit, EncryptionSecretKey] {
+      override def publicKey(wallet: ViewingWallet): Unit = ()
+      override def viewingKey(wallet: ViewingWallet): EncryptionSecretKey = wallet.viewingKey
+    }
+
   given WalletSync[ViewingWallet, WalletTransaction] =
     (wallet: ViewingWallet, update: WalletTransaction) => {
-      LedgerSerialization.fromTransaction(update).leftMap(BadTransactionFormat.apply).map { tx =>
-        // TODO use information about fallible execution success
-        // test(guaranteed) || (test(fallible) && fallible_success)
-        if (
-          wallet.viewingKey.test(tx.guaranteedCoins) || tx.fallibleCoins
-            .exists(wallet.viewingKey.test)
-        ) {
-          wallet.copy(transactions = wallet.transactions.appended(tx))
-        } else wallet
-      }
+      LedgerSerialization
+        .fromTransaction(update)
+        .leftMap[WalletError](BadTransactionFormat.apply)
+        .mproduct(wallet.viewingKey.test(_).toEither.leftMap(LedgerExecutionError.apply))
+        .map { (tx, isRelevant) =>
+          if (isRelevant) wallet.copy(transactions = wallet.transactions.appended(tx))
+          else wallet
+        }
     }
 }

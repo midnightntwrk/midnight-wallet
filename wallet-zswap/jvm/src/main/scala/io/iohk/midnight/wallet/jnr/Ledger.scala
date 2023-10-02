@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.jnr
 import io.iohk.midnight.wallet.jnr.Ledger.ApplyResult
 import io.iohk.midnight.wallet.jnr.LedgerSuccess.OperationTrue
 import jnr.ffi.Pointer
+import scala.util.Try
 
 trait Ledger {
 
@@ -23,6 +24,8 @@ object Ledger {
   }
   final case class TxAppliedSuccessfully(updatedState: String, pointer: Pointer) extends ApplyResult
   final case class TxApplyError(ledgerError: LedgerError, pointer: Pointer) extends ApplyResult
+
+  val instance: Try[Ledger] = LedgerLoader.loadLedger
 
   object ApplyResult {
 

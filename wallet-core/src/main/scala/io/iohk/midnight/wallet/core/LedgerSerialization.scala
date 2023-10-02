@@ -7,6 +7,7 @@ import io.iohk.midnight.wallet.core.LedgerSerialization.Error.{
   InvalidSerializedTransaction,
 }
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.HexUtil
 import java.util.Base64
 
 object LedgerSerialization {
@@ -14,10 +15,6 @@ object LedgerSerialization {
     Base64.getDecoder.decode(raw)
   private def encodeBase64(bytes: Array[Byte]): String =
     Base64.getEncoder.encodeToString(bytes)
-  def encodeHex(bytes: Array[Byte]): String =
-    bytes.map(b => String.format("%02x", Integer.valueOf(b & 0xff))).mkString
-  def decodeHex(raw: String): Array[Byte] =
-    raw.grouped(2).map(Integer.parseInt(_, 16).toByte).toArray
 
   def serializeState(state: zswap.LocalState): String =
     encodeBase64(state.serialize)
@@ -28,24 +25,24 @@ object LedgerSerialization {
       .leftMap(InvalidInitialState.apply)
 
   def fromTransaction(tx: Transaction): Either[Throwable, zswap.Transaction] =
-    Either
-      .catchNonFatal(zswap.Transaction.deserialize(decodeHex(tx.raw)))
-      .leftMap(InvalidSerializedTransaction.apply)
+    HexUtil.decodeHex(tx.raw).toEither.flatMap { decoded =>
+      Either
+        .catchNonFatal(zswap.Transaction.deserialize(decoded))
+        .leftMap(InvalidSerializedTransaction.apply)
+    }
 
   def toTransaction(tx: zswap.Transaction): Transaction =
-    Transaction(Hash(tx.hash), encodeHex(tx.serialize))
+    Transaction(Hash(tx.hash), HexUtil.encodeHex(tx.serialize))
 
   def viewingKeyToString(viewingKey: zswap.EncryptionSecretKey): String =
-    encodeHex(viewingKey.serialize)
+    HexUtil.encodeHex(viewingKey.serialize)
 
   def fromSeed(seed: String): Either[Throwable, zswap.LocalState] =
-    Either
-      .catchNonFatal(zswap.LocalState.fromSeed(decodeHex(seed)))
-      .leftMap(InvalidInitialState.apply)
-
-  def fromSeedSerialized(seed: String): Either[Throwable, String] = fromSeed(seed).flatMap(state =>
-    Either.catchNonFatal(serializeState(state)).leftMap(InvalidInitialState.apply),
-  )
+    HexUtil.decodeHex(seed).toEither.flatMap { decoded =>
+      Either
+        .catchNonFatal(zswap.LocalState.fromSeed(decoded))
+        .leftMap(InvalidInitialState.apply)
+    }
 
   abstract class Error(cause: Throwable) extends Exception(cause)
   object Error {

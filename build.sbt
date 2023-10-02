@@ -9,6 +9,7 @@ lazy val warts = Warts.allBut(
   Wart.ImplicitParameter,
   Wart.JavaSerializable,
   Wart.Nothing,
+  Wart.Overloading,
   Wart.Product,
   Wart.Recursion,
   Wart.Serializable,
@@ -92,7 +93,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "2.9.5",
+  version := "2.9.6",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -109,8 +110,7 @@ lazy val commonScalablyTypedSettings = Seq(
 lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("blockchain"))
-  .settings(commonSettings)
-  .settings(commonPublishSettings)
+  .settings(commonSettings, commonPublishSettings)
   .settings(
     name := "wallet-blockchain",
     conflictWarning := ConflictWarning.disable,
@@ -127,7 +127,7 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
 lazy val bloc = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Pure)
   .in(file("bloc"))
-  .settings(commonSettings)
+  .settings(commonSettings, commonPublishSettings)
   .settings(
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
@@ -148,7 +148,7 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
     proverClient % "test->test",
     walletZswap,
   )
-  .settings(commonSettings)
+  .settings(commonSettings, commonPublishSettings)
   .settings(
     Test / parallelExecution := false,
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
@@ -303,7 +303,7 @@ lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
   .jsConfigure(_.dependsOn(jsInterop))
   .configs(IntegrationTest)
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .settings(commonSettings, Defaults.itSettings)
+  .settings(commonSettings, commonPublishSettings, Defaults.itSettings)
   .jsSettings(
     commonScalablyTypedSettings,
     stIgnore ++= List("node-fetch"),
