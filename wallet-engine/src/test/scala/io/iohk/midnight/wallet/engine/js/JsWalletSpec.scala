@@ -26,21 +26,24 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       val observable = wallet.state()
       IO.fromPromise(IO(firstValueFrom(observable)))
         .map(_.balances)
-        .map(_.foreach(r => assertEquals(r.get(TokenType.Native), Some(balance.toJsBigInt))))
+        .map(r => assertEquals(r.get(TokenType.Native), Some(balance.toJsBigInt)))
     }
   }
 
-  test("publicKey should return wallet public key") {
-    val pubKey = CoinPublicKey("test-pubKey")
+  test("publicKey should return wallet coin public key") {
+    val coinPubKey = CoinPublicKey("test-coinPubKey")
+    val encPubKey = "test-encPubKey"
     val wallet =
       new JsWallet(
         new WalletTransactionProcessingServiceStub(),
-        new WalletStateServicePubKeyStub(pubKey),
+        new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         IO.unit,
       )
-    IO.fromPromise(IO(firstValueFrom(wallet.state()))).map(_.publicKey).assertEquals(pubKey)
+    IO.fromPromise(IO(firstValueFrom(wallet.state())))
+      .map(state => (state.coinPublicKey, state.encryptionPublicKey))
+      .assertEquals((coinPubKey, encPubKey))
   }
 
   test("should close") {

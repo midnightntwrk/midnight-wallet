@@ -44,7 +44,12 @@ object WalletBuilder {
 
   private def buildWallet[F[_]: Async, TWallet](config: Config)(implicit
       walletCreation: WalletCreation[TWallet, zswap.LocalState],
-      walletKeys: WalletKeys[TWallet, zswap.CoinPublicKey, zswap.EncryptionSecretKey],
+      walletKeys: WalletKeys[
+        TWallet,
+        zswap.CoinPublicKey,
+        zswap.EncryptionPublicKey,
+        zswap.EncryptionSecretKey,
+      ],
       walletTransactionProcessing: WalletTransactionProcessing[TWallet, Transaction],
       walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.CoinInfo],
   ): F[AllocatedWallet[F, TWallet]] = {

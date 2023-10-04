@@ -1,20 +1,24 @@
 package io.iohk.midnight.wallet.core.capabilities
 
+import cats.effect.IO
 import io.iohk.midnight.wallet.core.WalletError.NotSufficientFunds
 import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
-  TransactionToProve,
   TokenTransfer,
+  TransactionToProve,
 }
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
+import munit.CatsEffectSuite
 
-trait WalletTxBalancingSpec[TWallet, TTransaction, TCoin] extends BetterOutputSuite {
+trait WalletTxBalancingSpec[TWallet, TTransaction, TCoin]
+    extends CatsEffectSuite
+    with BetterOutputSuite {
 
   val walletTxBalancing: WalletTxBalancing[TWallet, TTransaction, TCoin]
-  val walletWithFundsForBalancing: TWallet
+  val walletWithFundsForBalancing: IO[TWallet]
   val walletWithoutFundsForBalancing: TWallet
 
-  val transactionToBalance: TTransaction
+  val transactionToBalance: IO[TTransaction]
   val newCoins: Vector[TCoin]
   val isValidBalancingRecipe: BalanceTransactionRecipe => Boolean
 
@@ -22,27 +26,34 @@ trait WalletTxBalancingSpec[TWallet, TTransaction, TCoin] extends BetterOutputSu
   val isValidTransferRecipe: TransactionToProve => Boolean
 
   test("return recipe for balanced transaction") {
-    val isBalanced = walletTxBalancing
-      .balanceTransaction(walletWithFundsForBalancing, (transactionToBalance, newCoins))
-      .map { case (_, tx) => isValidBalancingRecipe(tx) }
-    assert(isBalanced.getOrElse(false))
+    transactionToBalance.product(walletWithFundsForBalancing).map { (tx, wallet) =>
+      val isBalanced = walletTxBalancing
+        .balanceTransaction(wallet, (tx, newCoins))
+        .map { case (_, tx) => isValidBalancingRecipe(tx) }
+      assert(isBalanced.getOrElse(false))
+    }
   }
 
   test("return NotSufficientFunds when not enough funds for balance transaction") {
-    val error = walletTxBalancing.balanceTransaction(
-      walletWithoutFundsForBalancing,
-      (transactionToBalance, newCoins),
-    )
-    error match
-      case Left(NotSufficientFunds(tokenType)) => ()
-      case _                                   => fail("NotSufficientFunds must be returned")
+    transactionToBalance.map { tx =>
+      val error = walletTxBalancing.balanceTransaction(
+        walletWithoutFundsForBalancing,
+        (tx, newCoins),
+      )
+      error match {
+        case Left(NotSufficientFunds(_)) => ()
+        case _                           => fail("NotSufficientFunds must be returned")
+      }
+    }
   }
 
   test("return recipe for balanced transfer transaction") {
-    val isValid = walletTxBalancing
-      .prepareTransferRecipe(walletWithFundsForBalancing, tokensTransfers)
-      .map { case (_, tx) => isValidTransferRecipe(tx) }
-    assert(isValid.getOrElse(false))
+    walletWithFundsForBalancing.map { wallet =>
+      val isValid = walletTxBalancing
+        .prepareTransferRecipe(wallet, tokensTransfers)
+        .map { case (_, tx) => isValidTransferRecipe(tx) }
+      assert(isValid.getOrElse(false))
+    }
   }
 
   test("return NotSufficientFunds when not enough funds for transfer transaction") {
@@ -51,7 +62,7 @@ trait WalletTxBalancingSpec[TWallet, TTransaction, TCoin] extends BetterOutputSu
       tokensTransfers,
     )
     error match
-      case Left(NotSufficientFunds(tokenType)) => ()
-      case _                                   => fail("NotSufficientFunds must be returned")
+      case Left(NotSufficientFunds(_)) => ()
+      case _                           => fail("NotSufficientFunds must be returned")
   }
 }

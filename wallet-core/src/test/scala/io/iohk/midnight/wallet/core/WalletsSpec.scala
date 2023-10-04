@@ -35,11 +35,21 @@ class WalletsSpec extends WithProvingServerSuite {
 
   private val receiverState = LocalState()
 
+  private val coinPublicKey: CoinPublicKey =
+    summon[WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]]
+      .coinPublicKey(regularWallet)
+
+  private val encryptionPublicKey: EncryptionPublicKey =
+    summon[WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]]
+      .encryptionPublicKey(regularWallet)
+
   private val viewingKey: EncryptionSecretKey =
-    summon[WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey]].viewingKey(regularWallet)
+    summon[WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]]
+      .viewingKey(regularWallet)
 
   private val viewingWallet =
-    summon[WalletRestore[ViewingWallet, EncryptionSecretKey]].restore(viewingKey)
+    summon[WalletRestore[ViewingWallet, (CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)]]
+      .restore((coinPublicKey, encryptionPublicKey, viewingKey))
 
   test("ViewingWallet must prepare updates for Wallet") {
     val (regularWalletUsedForTransfer, transferRecipe) =

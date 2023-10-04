@@ -26,12 +26,17 @@ object SyncServiceFactory {
       walletStateService: WalletStateService[F, TWallet],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
-      walletKeys: WalletKeys[TWallet, zswap.CoinPublicKey, zswap.EncryptionSecretKey],
+      walletKeys: WalletKeys[
+        TWallet,
+        zswap.CoinPublicKey,
+        zswap.EncryptionPublicKey,
+        zswap.EncryptionSecretKey,
+      ],
   ): Resource[F, SyncService[F]] = {
     val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
     IndexerClient[F](indexerUri, indexerWsUri)
-      .evalMap(client => walletStateService.keys.map(_._2).map((client, _)))
+      .evalMap(client => walletStateService.keys.map(_._3).map((client, _)))
       .map { case (client, viewingKey) =>
         (lastHash: Option[TransactionHash]) =>
           client

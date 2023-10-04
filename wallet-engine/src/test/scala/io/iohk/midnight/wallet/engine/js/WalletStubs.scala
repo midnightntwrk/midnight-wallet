@@ -26,6 +26,7 @@ import io.iohk.midnight.wallet.engine.WalletTransactionProcessingService
 import io.iohk.midnight.wallet.zswap.{
   CoinInfo,
   CoinPublicKey,
+  EncryptionPublicKey,
   EncryptionSecretKey,
   LocalState,
   TokenType,
@@ -41,18 +42,19 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
   private val state = LocalState()
 
   override def keys(implicit
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
-  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
-    IO.pure((state.coinPublicKey, state.encryptionSecretKey))
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
+    IO.pure((state.coinPublicKey, state.encryptionPublicKey, state.encryptionSecretKey))
 
   override def state(using
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
   ): Stream[IO, WalletStateService.State] =
     Stream.emit(
       WalletStateService.State(
         state.coinPublicKey,
+        state.encryptionPublicKey,
         state.encryptionSecretKey,
         state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _),
         state.coins,
@@ -71,12 +73,12 @@ class WalletTransactionProcessingServiceStartStub(ref: Deferred[IO, Boolean])
 
 class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[IO, Wallet] {
   override def keys(implicit
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
-  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
     IO.raiseError(new NotImplementedError())
 
   override def state(using
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
   ): Stream[IO, WalletStateService.State] = {
@@ -84,6 +86,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
     Stream.emit(
       WalletStateService.State(
         state.coinPublicKey,
+        state.encryptionPublicKey,
         state.encryptionSecretKey,
         Map(TokenType.Native -> balance),
         Seq.empty,
@@ -94,20 +97,22 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
   }
 }
 
-class WalletStateServicePubKeyStub(pubKey: CoinPublicKey) extends WalletStateService[IO, Wallet] {
+class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: EncryptionPublicKey)
+    extends WalletStateService[IO, Wallet] {
   override def keys(implicit
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
-  ): IO[(CoinPublicKey, EncryptionSecretKey)] =
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
+  ): IO[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
     IO.raiseError(new NotImplementedError())
 
   override def state(using
-      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey],
+      walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
   ): Stream[IO, WalletStateService.State] =
     Stream.emit(
       WalletStateService.State(
-        pubKey,
+        coinPubKey,
+        encPubKey,
         LocalState().encryptionSecretKey,
         Map.empty,
         Seq.empty,

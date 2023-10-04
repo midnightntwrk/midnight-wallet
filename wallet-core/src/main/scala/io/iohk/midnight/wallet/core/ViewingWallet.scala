@@ -9,6 +9,8 @@ import io.iohk.midnight.wallet.zswap.*
 import scala.annotation.tailrec
 
 final case class ViewingWallet private (
+    coinPublicKey: CoinPublicKey,
+    encryptionPublicKey: EncryptionPublicKey,
     viewingKey: EncryptionSecretKey,
     transactions: Vector[Transaction],
 ) {
@@ -43,14 +45,18 @@ final case class ViewingWallet private (
 }
 
 object ViewingWallet {
-  given WalletRestore[ViewingWallet, EncryptionSecretKey] = (input: EncryptionSecretKey) =>
-    new ViewingWallet(input, Vector.empty)
+  given WalletRestore[ViewingWallet, (CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
+    (coinPubKey, encPubKey, encSecKey) =>
+      new ViewingWallet(coinPubKey, encPubKey, encSecKey, Vector.empty)
 
-  // TODO (PM-7230): Concatenate CoinPublicKey+EncryptionSecretKey
-  given WalletKeys[ViewingWallet, Unit, EncryptionSecretKey] =
-    new WalletKeys[ViewingWallet, Unit, EncryptionSecretKey] {
-      override def publicKey(wallet: ViewingWallet): Unit = ()
-      override def viewingKey(wallet: ViewingWallet): EncryptionSecretKey = wallet.viewingKey
+  given WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
+    new WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
+      override def coinPublicKey(wallet: ViewingWallet): CoinPublicKey =
+        wallet.coinPublicKey
+      override def encryptionPublicKey(wallet: ViewingWallet): EncryptionPublicKey =
+        wallet.encryptionPublicKey
+      override def viewingKey(wallet: ViewingWallet): EncryptionSecretKey =
+        wallet.viewingKey
     }
 
   given WalletSync[ViewingWallet, WalletTransaction] =

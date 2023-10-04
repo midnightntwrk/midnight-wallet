@@ -3,21 +3,15 @@ package io.iohk.midnight.wallet.core
 import fs2.Stream
 import io.iohk.midnight.wallet.core.WalletStateService.State
 import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletCoins, WalletKeys}
-import io.iohk.midnight.wallet.zswap.{
-  CoinPublicKey,
-  EncryptionSecretKey,
-  QualifiedCoinInfo,
-  TokenType,
-  Transaction,
-}
+import io.iohk.midnight.wallet.zswap.*
 
 trait WalletStateService[F[_], TWallet] {
   def keys(implicit
-      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionSecretKey],
-  ): F[(CoinPublicKey, EncryptionSecretKey)]
+      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
+  ): F[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)]
 
   def state(using
-      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionSecretKey],
+      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[TWallet],
       walletCoins: WalletCoins[TWallet],
   ): Stream[F, State]
@@ -28,20 +22,25 @@ object WalletStateService {
       extends WalletStateService[F, TWallet] {
 
     override def keys(using
-        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionSecretKey],
-    ): F[(CoinPublicKey, EncryptionSecretKey)] =
+        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
+    ): F[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
       walletQueryStateService.queryOnce { wallet =>
-        (walletKeys.publicKey(wallet), walletKeys.viewingKey(wallet))
+        (
+          walletKeys.coinPublicKey(wallet),
+          walletKeys.encryptionPublicKey(wallet),
+          walletKeys.viewingKey(wallet),
+        )
       }
 
     override def state(using
-        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionSecretKey],
+        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
         walletBalances: WalletBalances[TWallet],
         walletCoins: WalletCoins[TWallet],
     ): Stream[F, State] =
       walletQueryStateService.queryStream { wallet =>
         State(
-          publicKey = walletKeys.publicKey(wallet),
+          coinPublicKey = walletKeys.coinPublicKey(wallet),
+          encryptionPublicKey = walletKeys.encryptionPublicKey(wallet),
           viewingKey = walletKeys.viewingKey(wallet),
           balances = walletBalances.balance(wallet),
           coins = walletCoins.coins(wallet),
@@ -57,11 +56,14 @@ object WalletStateService {
   }
 
   final case class State(
-      publicKey: CoinPublicKey,
+      coinPublicKey: CoinPublicKey,
+      encryptionPublicKey: EncryptionPublicKey,
       viewingKey: EncryptionSecretKey,
       balances: Map[TokenType, BigInt],
       coins: Seq[QualifiedCoinInfo],
       availableCoins: Seq[QualifiedCoinInfo],
       transactionHistory: Seq[Transaction],
-  )
+  ) {
+    lazy val address: Address = s"$coinPublicKey$encryptionPublicKey"
+  }
 }

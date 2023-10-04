@@ -1,17 +1,18 @@
 package io.iohk.midnight.wallet.core
 
 import cats.effect.{IO, Resource}
-import cats.syntax.all.*
 import io.iohk.midnight.bloc.Bloc
-import io.iohk.midnight.wallet.zswap.{LocalState, TokenType}
 import io.iohk.midnight.wallet.core.capabilities.WalletCreation
-import io.iohk.midnight.wallet.core.util.BetterOutputSuite
+import io.iohk.midnight.wallet.core.util.{BetterOutputSuite, WithProvingServerSuite}
+import io.iohk.midnight.wallet.zswap.{LocalState, TokenType}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
+import org.scalacheck.effect.PropF
+import org.scalacheck.effect.PropF.forAllF
 
 class WalletStateServiceSpec
-    extends CatsEffectSuite
-    with ScalaCheckEffectSuite
-    with BetterOutputSuite {
+    extends ScalaCheckEffectSuite
+    with BetterOutputSuite
+    with WithProvingServerSuite {
   def buildWalletStateService[TWallet](
       initialState: LocalState = LocalState(),
   )(implicit
@@ -39,51 +40,60 @@ class WalletStateServiceSpec
     )
   }
 
-  // SOME TESTS TEMPORARY IGNORED
-
-  /*  test("Sum transaction outputs to this wallet") {
-    val coinsGen = Gen.chooseNum(1, 5).flatMap(Gen.listOfN(_, Generators.coinInfoGen))
-    forAllF(coinsGen) { coins =>
-      val (tx, state) = Generators.buildTransaction(coins)
-      val initialState = state.apply(tx.guaranteedCoins)
-      val expected = coins.map(_.value).combineAll(sum)
-
-      buildWalletStateService(initialState = initialState).use(
-        _.balance.head.compile.last
-          .map(assertEquals(_, Some(expected))),
-      )
+  test("Sum transaction outputs to this wallet") {
+    forAllF(Generators.txWithContextArbitrary.arbitrary) { txWithContextIO =>
+      for {
+        txWithContext <- txWithContextIO
+        initialState = txWithContext.state.apply(txWithContext.transaction.guaranteedCoins)
+        expected = txWithContext.transaction.guaranteedCoins.deltas
+          .get(TokenType.Native)
+          .map(value => -value)
+        result <- buildWalletStateService(initialState = initialState).use(
+          _.state.head.compile.lastOrError
+            .map(_.balances.get(TokenType.Native))
+            .map(assertEquals(_, expected)),
+        )
+      } yield result
     }
   }
 
   test("Not sum transaction outputs to another wallet") {
-    forAllF(ledgerTransactionGen) { txWithCtx =>
-      val anotherState = new LocalState().apply(txWithCtx.transaction.guaranteedCoins)
-      buildWalletStateService(initialState = anotherState).use(
-        _.balance.head.compile.last
-          .map(assertEquals(_, Some(js.BigInt(0)))),
-      )
+    forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txWithCtxIO =>
+      txWithCtxIO.flatMap { tx =>
+        val anotherState = LocalState.apply().apply(tx.guaranteedCoins)
+        buildWalletStateService(initialState = anotherState).use(
+          _.state.head.compile.lastOrError
+            .map(_.balances.get(TokenType.Native))
+            .map(assertEquals(_, None)),
+        )
+      }
     }
-  }*/
+  }
 
   test("Return the public and viewing keys") {
     val initialState = LocalState()
     val expected =
-      (initialState.coinPublicKey, keyToString(initialState.encryptionSecretKey.serialize))
+      (
+        initialState.coinPublicKey,
+        initialState.encryptionPublicKey,
+        keyToString(initialState.encryptionSecretKey.serialize),
+      )
     buildWalletStateService(initialState).use(
-      _.keys.map(_.map(vk => keyToString(vk.serialize))).assertEquals(expected),
+      _.keys.map((cpk, epk, vk) => (cpk, epk, keyToString(vk.serialize))).assertEquals(expected),
     )
   }
 
   private def keyToString(bytes: Array[Byte]): String =
     bytes.map(String.format("%02X", _)).mkString
 
-  /*  test("Calculate cost as the sum of tx imbalances") {
-    forAll(ledgerTransactionGen) { txWithCtx =>
-      val tx = txWithCtx.transaction
-      assertEquals(
-        WalletStateService.calculateCost(tx),
-        tx.imbalances(true).toList.map(_._2).combineAll(sum),
-      )
+  test("Calculate cost as the sum of tx imbalances") {
+    forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txIO =>
+      txIO.map { tx =>
+        assertEquals(
+          WalletStateService.calculateCost(tx),
+          tx.imbalances(true, tx.fees).getOrElse(TokenType.Native, BigInt(0)),
+        )
+      }
     }
-  }*/
+  }
 }

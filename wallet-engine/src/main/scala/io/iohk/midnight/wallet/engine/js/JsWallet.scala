@@ -78,13 +78,14 @@ class JsWallet(
       .map { localState =>
         WalletState(
           availableCoins = localState.availableCoins.map(_.toJs).toJSArray,
-          balances =
-            localState.balances.map(_.map(_.toJsBigInt)).map(StringDictionary(_)).toJSArray,
+          balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
           coins = localState.coins.map(_.toJs).toJSArray,
-          publicKey = localState.publicKey,
+          coinPublicKey = localState.coinPublicKey,
+          encryptionPublicKey = localState.encryptionPublicKey,
+          address = localState.address,
           transactionHistory = localState.transactionHistory.map { tx =>
             TransactionHistoryEntry(
-              tx.deltas.map(_.map(_.toJsBigInt)).map(StringDictionary(_)).toJSArray,
+              StringDictionary(tx.deltas.map(_.map(_.toJsBigInt)).toSeq*),
               tx.identifiers.toJSArray,
               tx.toJs,
               tx.hash,

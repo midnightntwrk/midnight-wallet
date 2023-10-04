@@ -30,10 +30,13 @@ object Wallet {
   implicit val walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
     wallet.state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _)
 
-  implicit val walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey] =
-    new WalletKeys[Wallet, CoinPublicKey, EncryptionSecretKey] {
-      override def publicKey(wallet: Wallet): CoinPublicKey =
+  implicit val walletKeys
+      : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
+    new WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
+      override def coinPublicKey(wallet: Wallet): CoinPublicKey =
         wallet.state.coinPublicKey
+      override def encryptionPublicKey(wallet: Wallet): EncryptionPublicKey =
+        wallet.state.encryptionPublicKey
       override def viewingKey(wallet: Wallet): EncryptionSecretKey =
         wallet.state.encryptionSecretKey
     }
