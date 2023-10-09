@@ -45,8 +45,8 @@ object UnprovenOutput {
     mod.UnprovenOutput.`new`(coin.toJs, publicKey)
   def apply(
       coin: CoinInfo,
-      publicKey: CoinPublicKey,
-      targetEpk: EncryptionPublicKey,
+      coinPubKey: CoinPublicKey,
+      encPubKey: EncryptionPublicKey,
   ): UnprovenOutput =
-    mod.UnprovenOutput.`new`(coin.toJs, publicKey, targetEpk)
+    mod.UnprovenOutput.`new`(coin.toJs, coinPubKey, encPubKey)
 }

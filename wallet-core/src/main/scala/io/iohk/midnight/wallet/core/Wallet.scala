@@ -55,15 +55,22 @@ object Wallet {
           wallet: Wallet,
           outputs: List[TokenTransfer],
       ): Either[WalletError, (Wallet, TransactionToProve)] = {
-        val offers = outputs.filter(_.amount > BigInt(0)).map { tt =>
-          val output = UnprovenOutput(
-            CoinInfo(tt.tokenType, tt.amount),
-            CoinPublicKey(tt.receiverAddress.address),
-          )
-          UnprovenOffer.fromOutput(output, tt.tokenType, tt.amount)
+        val offers = outputs.filter(_.amount > BigInt(0)).traverse { tt =>
+          Address
+            .fromString(tt.receiverAddress.address)
+            .map { address =>
+              val output = UnprovenOutput(
+                CoinInfo(tt.tokenType, tt.amount),
+                address.coinPublicKey,
+                address.encryptionPublicKey,
+              )
+              UnprovenOffer.fromOutput(output, tt.tokenType, tt.amount)
+            }
+            .toEither
+            .leftMap(WalletError.InvalidAddress.apply)
         }
 
-        offers.reduceLeftOption(_.merge(_)) match
+        offers.flatMap(_.reduceLeftOption(_.merge(_)) match
           case Some(offerToBalance) =>
             TransactionBalancer
               .balanceOffer(wallet.state, offerToBalance)
@@ -77,7 +84,8 @@ object Wallet {
                 WalletError.NotSufficientFunds(error)
               }
           case None =>
-            Left(WalletError.NoTokenTransfers)
+            Left(WalletError.NoTokenTransfers),
+        )
       }
 
       override def balanceTransaction(

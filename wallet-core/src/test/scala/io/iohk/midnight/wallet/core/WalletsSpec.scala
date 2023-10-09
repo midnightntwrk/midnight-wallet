@@ -1,19 +1,12 @@
 package io.iohk.midnight.wallet.core
 
-import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
-import io.iohk.midnight.wallet.core.capabilities.{
-  WalletBalances,
-  WalletCreation,
-  WalletKeys,
-  WalletRestore,
-  WalletSync,
-  WalletTxBalancing,
-}
-import io.iohk.midnight.wallet.core.domain.*
-import Generators.*
 import cats.data.NonEmptyList
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
+import io.iohk.midnight.wallet.core.Generators.*
+import io.iohk.midnight.wallet.core.capabilities.*
+import io.iohk.midnight.wallet.core.domain.{Address as _, *}
 import io.iohk.midnight.wallet.core.util.WithProvingServerSuite
+import io.iohk.midnight.wallet.zswap.*
 
 class WalletsSpec extends WithProvingServerSuite {
 
@@ -59,7 +52,9 @@ class WalletsSpec extends WithProvingServerSuite {
           TokenTransfer(
             BigInt(1000),
             TokenType.Native,
-            Address(receiverState.coinPublicKey),
+            domain.Address(
+              Address(receiverState.coinPublicKey, receiverState.encryptionPublicKey).asString,
+            ),
           ),
         ),
       ) match

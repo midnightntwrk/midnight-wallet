@@ -16,7 +16,9 @@ trait WithProvingServerSuite
 
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
-    ProvingServiceImpl.instance("registry.ci.iog.io/proof-server:master"),
+    ProvingServiceImpl.instance(
+      "registry.ci.iog.io/proof-server@sha256:a9e5efc2550d3444ed499606f35bb508e9716f001aa37bc0c00a1f132a6b5c68",
+    ),
   )
 
   override def munitIOTimeout = 10.minutes

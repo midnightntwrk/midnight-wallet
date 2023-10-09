@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.core
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.zswap.{Transaction as LedgerTransaction, *}
+import io.iohk.midnight.wallet.zswap.{Transaction as LedgerTransaction, Address as LedgerAddress, *}
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.blockchain.data.Generators.{hashGen, heightGen, instantGen}
 import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
@@ -28,12 +28,12 @@ object Generators {
 
   private def noShrink[T]: Shrink[T] = Shrink.withLazyList(_ => LazyList.empty)
 
-  private val byteStringGen: Gen[String] =
-    Gen.hexChar.replicateA(64).map(_.mkString)
+  private def byteStringGen(size: Int): Gen[String] =
+    Gen.hexChar.replicateA(size).map(_.mkString)
 
   given tokenTypeArbitrary: Arbitrary[TokenType] =
     Arbitrary {
-      Gen.oneOf(Gen.const(TokenType.Native), byteStringGen.map(TokenType.apply))
+      Gen.oneOf(Gen.const(TokenType.Native), byteStringGen(64).map(TokenType.apply))
     }
 
   given coinInfoArbitrary: Arbitrary[CoinInfo] =
@@ -43,12 +43,20 @@ object Generators {
       }
     }
 
+  private val localStateGen: Gen[LocalState] =
+    Gen.lzy(LocalState().pure[Gen])
+
+  private lazy val addressGen: Gen[Address] =
+    localStateGen
+      .map(state => LedgerAddress(state.coinPublicKey, state.encryptionPublicKey).asString)
+      .map(Address.apply)
+
   given tokenTransferArbitrary: Arbitrary[TokenTransfer] = {
     Arbitrary {
       for {
         amount <- Gen.posNum[BigInt]
         tokenType <- tokenTypeArbitrary.arbitrary
-        address <- byteStringGen.map(Address.apply)
+        address <- addressGen
       } yield TokenTransfer(amount, tokenType, address)
     }
   }

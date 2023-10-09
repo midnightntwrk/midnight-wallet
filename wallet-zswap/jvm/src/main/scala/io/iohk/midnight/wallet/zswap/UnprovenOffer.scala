@@ -29,6 +29,6 @@ object UnprovenOutput {
   def apply(
       coin: CoinInfo,
       publicKey: CoinPublicKey,
-      targetEpk: EncryptionSecretKey,
+      targetEpk: EncryptionPublicKey,
   ): UnprovenOutput = ???
 }

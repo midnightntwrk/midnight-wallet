@@ -64,6 +64,6 @@ object WalletStateService {
       availableCoins: Seq[QualifiedCoinInfo],
       transactionHistory: Seq[Transaction],
   ) {
-    lazy val address: Address = s"$coinPublicKey$encryptionPublicKey"
+    lazy val address: Address = Address(coinPublicKey, encryptionPublicKey)
   }
 }
