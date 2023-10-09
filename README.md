@@ -40,6 +40,7 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
   with Scala JS and JVM. This is achieved by using a WASM ledger package on JS 
   and JNR interfaces on JVM. The module hides the complexity of different 
   platforms and enables Scala clients work with idiomatic Scala.
+- `integration-tests` - All tests that require an external service to work
 
 `wallet-engine` uses [yarn](https://classic.yarnpkg.com) under the hood to fetch
 npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`,

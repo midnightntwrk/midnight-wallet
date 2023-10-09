@@ -188,22 +188,12 @@ lazy val walletEngine = (project in file("wallet-engine"))
     substrateClient % "compile->compile;test->test",
     walletZswap.js,
   )
-  .configs(IntegrationTest)
-  .settings(commonSettings, Defaults.itSettings)
-  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
-    Test / parallelExecution := false,
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
-
-    // Test dependencies
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
-      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
-    ).map(_ % IntegrationTest),
 
     // ScalablyTyped config
     stIgnore ++= List(
@@ -301,17 +291,13 @@ lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
   .in(file("prover-client"))
   .dependsOn(walletZswap)
   .jsConfigure(_.dependsOn(jsInterop))
-  .configs(IntegrationTest)
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .settings(commonSettings, commonPublishSettings, Defaults.itSettings)
+  .settings(commonSettings, commonPublishSettings)
   .jsSettings(
     commonScalablyTypedSettings,
     stIgnore ++= List("node-fetch"),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-    libraryDependencies += "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross CrossVersion.for3Use2_13,
     useNodeModuleResolution,
-    inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings),
   )
   .jvmSettings(
     libraryDependencies += "com.softwaremill.sttp.client3" %% "fs2" % sttpClientVersion,
@@ -321,40 +307,28 @@ lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "io.github.enriquerodbe" %%% "borsh4s" % "3.0.0",
-    ),
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
-    ).map(_ % IntegrationTest),
+    )
   )
 
 lazy val substrateClient = project
   .in(file("substrate-client"))
   .dependsOn(jsInterop)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .configs(IntegrationTest)
-  .settings(commonSettings, Defaults.itSettings)
-  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion,
-    ),
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
-      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
-    ).map(_ % IntegrationTest),
+    )
   )
 
 lazy val pubSubIndexerClient = project
   .in(file("pubsub-indexer-client"))
   .dependsOn(jsInterop)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .configs(IntegrationTest)
-  .settings(commonSettings, Defaults.itSettings)
-  .settings(inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings))
+  .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
@@ -366,12 +340,43 @@ lazy val pubSubIndexerClient = project
       // Caliban client-laminext uses java.util.UUID and here is the ScalaJS implementation
       "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross (CrossVersion.for3Use2_13),
     ),
+    stIgnore ++= List("ws", "isomorphic-ws"),
+  )
+
+lazy val integrationTests = project
+  .in(file("integration-tests"))
+  .dependsOn(
+    walletEngine % "compile->compile;it->test",
+    walletCore.js % "compile->compile;it->test",
+  )
+  .configs(IntegrationTest)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+  .settings(commonSettings, commonScalablyTypedSettings)
+  .settings(
+    Defaults.itSettings,
+    inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings),
+    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+    useNodeModuleResolution,
+    stIgnore ++= List(
+      "testcontainers",
+      "node-fetch",
+      "scale-ts",
+      "ws",
+      "isomorphic-ws",
+      "fp-ts",
+      "io-ts",
+      "io-ts-types",
+      "newtype-ts",
+      "monocle-ts",
+    ),
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
+      "org.scalacheck" %%% "scalacheck" % "1.17.0",
+      "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.2",
+      "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2",
       // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
       "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
     ).map(_ % IntegrationTest),
-    stIgnore ++= List("ws", "isomorphic-ws"),
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")

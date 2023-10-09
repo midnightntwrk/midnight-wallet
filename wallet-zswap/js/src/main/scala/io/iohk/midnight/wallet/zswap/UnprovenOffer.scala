@@ -8,7 +8,7 @@ import scala.scalajs.js
 
 opaque type UnprovenOffer = mod.UnprovenOffer
 object UnprovenOffer {
-  private[zswap] def fromJs(offer: mod.UnprovenOffer): UnprovenOffer = offer
+  def fromJs(offer: mod.UnprovenOffer): UnprovenOffer = offer
 
   def fromInput(input: UnprovenInput, tokenType: TokenType, value: BigInt): UnprovenOffer =
     mod.UnprovenOffer.fromInput(input, tokenType, value.toJsBigInt)

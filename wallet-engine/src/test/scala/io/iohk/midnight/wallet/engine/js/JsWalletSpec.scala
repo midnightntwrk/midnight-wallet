@@ -4,7 +4,7 @@ import cats.effect.kernel.Deferred
 import cats.effect.{IO, Ref}
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.rxjs.mod.firstValueFrom
-import io.iohk.midnight.wallet.engine.util.BetterOutputSuite
+import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
