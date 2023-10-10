@@ -28,13 +28,8 @@ object Generators {
 
   private def noShrink[T]: Shrink[T] = Shrink.withLazyList(_ => LazyList.empty)
 
-  private def byteStringGen(size: Int): Gen[String] =
-    Gen.hexChar.replicateA(size).map(_.mkString)
-
   given tokenTypeArbitrary: Arbitrary[TokenType] =
-    Arbitrary {
-      Gen.oneOf(Gen.const(TokenType.Native), byteStringGen(64).map(TokenType.apply))
-    }
+    Arbitrary { Gen.const(TokenType.Native) }
 
   given coinInfoArbitrary: Arbitrary[CoinInfo] =
     Arbitrary {

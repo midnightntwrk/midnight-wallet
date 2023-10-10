@@ -6,7 +6,7 @@
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight/zswap": "0.2.5"
+        "@midnight/zswap": "0.3.1"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

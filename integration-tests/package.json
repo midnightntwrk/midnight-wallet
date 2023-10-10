@@ -5,8 +5,8 @@
     "author": "IOHK",
     "license": "Apache-2.0",
     "dependencies": {
-        "@midnight/wallet-api": "3.1.0",
-        "@midnight/zswap": "0.2.5",
+        "@midnight/wallet-api": "3.1.2",
+        "@midnight/zswap": "0.3.1",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

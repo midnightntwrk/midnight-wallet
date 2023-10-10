@@ -390,7 +390,7 @@ lazy val distImpl = Def.task {
   IO.copyDirectory(resDir, distDir, overwrite = true)
 
   val gitHeadCommitFile = distDir / "git-head-commit"
-  IO.write(gitHeadCommitFile, sys.env.getOrElse("rev", "git rev-parse HEAD" !!))
+  IO.write(gitHeadCommitFile, sys.env.getOrElse("rev", "git rev-parse HEAD".!!))
 
   streams.value.log.info(s"Dist done at ${distDir.absolutePath}")
 }
@@ -398,6 +398,15 @@ lazy val distImpl = Def.task {
 addCommandAlias(
   "verify",
   Seq(
+    // Need to execute stImport sequentially before compiling/testing
+    // Because otherwise they'll run in parallel and do yarn install concurrently
+    // And yarn seems to have problems with that
+    "jsInterop/stImport",
+    "substrateClient/stImport",
+    "walletZswapJS/stImport",
+    "proverClientJS/stImport",
+    "walletCoreJS/stImport",
+    "walletEngine/stImport",
     "scalafmtCheckAll",
     // "coverage",
     "jsInterop/test",
@@ -405,6 +414,7 @@ addCommandAlias(
     "blockchainJS/test",
     "walletZswapJVM/test",
     "substrateClient/test",
+    "walletZswapJS/Test/compile",
     "proverClientJS/test",
     "walletCoreJS/test",
     "walletCoreJVM/compile",

@@ -16,7 +16,7 @@ on:
 jobs:
   build:
     name: Lint & Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4-cores
     steps:
       - name: Prepare .netrc to access other repos
         run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
@@ -31,10 +31,10 @@ jobs:
             accept-flake-config = true
             netrc-file = ~/.netrc
       - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v1
+        uses: nix-community/cache-nix-action@v4
         with:
-          linux-gc-enabled: true
-          linux-max-store-size: 8000000000
+          gc-linux: true
+          gc-max-store-size-linux: 8000000000
           key: cache-ubuntu-${{ hashFiles('**/*') }}
           restore-keys: |
             cache-ubuntu-

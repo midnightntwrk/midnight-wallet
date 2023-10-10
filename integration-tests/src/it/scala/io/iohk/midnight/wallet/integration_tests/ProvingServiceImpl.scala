@@ -23,8 +23,6 @@ object ProvingServiceImpl {
         new ProvingService[IO] {
           override def proveTransaction(tx: UnprovenTransaction): IO[Transaction] =
             client.proveTransaction(tx)
-          override def proveOffer(offer: UnprovenOffer): IO[Offer] =
-            client.proveOffer(offer)
         }
       }
     }

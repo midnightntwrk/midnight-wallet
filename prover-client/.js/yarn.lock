@@ -7,10 +7,10 @@
   resolved "https://registry.yarnpkg.com/@balena/dockerignore/-/dockerignore-1.0.2.tgz#9ffe4726915251e8eb69f44ef3547e0da2c03e0d"
   integrity sha512-wMue2Sy4GAVTk6Ic4tJVcnfdau+gx2EnG7S+uAEe+TWJFqE4YoWN4/H8MSLj4eYJKxGg26lZwboEniNiNwZQ6Q==
 
-"@midnight/zswap@0.2.5":
-  version "0.2.5"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.2.5.tgz#9ccb168016f5f6f8bcd2d2934f092afd6ef33862"
-  integrity sha512-27umsyvGuCjoY/nbw627h6SzLpsDD3odzcf+1Z+URjSwIoq3BEAIv9ZolhU5vnXT0sSwvco7rvrT9peYBW/lUg==
+"@midnight/zswap@0.3.1":
+  version "0.3.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.3.1.tgz#b916db2c2812549ea49ec9a4f242ff214b32d72d"
+  integrity sha512-ZVh5IlNKPjXCd201UIHVubq7oK0pet3T9ryRC8UMFetu1AAhd4V0E3U2NMU20lgCQHD+ERD6kj+Lm+4fZpKLeA==
 
 "@types/node@*":
   version "20.6.2"

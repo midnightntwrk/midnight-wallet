@@ -2,10 +2,10 @@
   description = "Midnight Wallet";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-22.11";
-    utils.url = "github:numtide/flake-utils";
     midnight-ledger.url = "github:input-output-hk/midnight-ledger-prototype";
     midnight-ledger-legacy.url = "github:input-output-hk/midnight-ledger-prototype/v1.2.5";
+    nixpkgs.follows = "midnight-ledger/nixpkgs";
+    utils.follows = "midnight-ledger/utils";
   };
 
   outputs = {

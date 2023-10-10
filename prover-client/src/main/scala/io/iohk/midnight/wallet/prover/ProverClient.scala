@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.prover
 import cats.effect.{Async, Resource}
 import cats.syntax.functor.*
 import io.borsh4s.{Borsh4s, given}
-import io.iohk.midnight.wallet.zswap.{Offer, Transaction, UnprovenOffer, UnprovenTransaction}
+import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
 import scala.concurrent.duration.DurationInt
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
 import sttp.model.Uri
@@ -13,9 +13,6 @@ class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
 
   private val asTransaction: ResponseAs[Transaction, Any] =
     asByteArray.getRight.map(bytes => Transaction.deserialize(bytes))
-
-  private val asOffer: ResponseAs[Offer, Any] =
-    asByteArray.getRight.map(bytes => Offer.deserialize(bytes))
 
   def proveTransaction(tx: UnprovenTransaction): F[Transaction] = {
     val serializedTx = tx.serialize
@@ -30,21 +27,6 @@ class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
 
     backend.send(request).map(_.body)
   }
-
-  def proveOffer(offer: UnprovenOffer): F[Offer] = {
-    val serializedOffer = offer.serialize
-
-    val request = emptyRequest
-      .body(serializedOffer)
-      .post(uri"$serverUri/prove-offer")
-      .response(asOffer)
-      .readTimeout(readTimeout)
-
-    backend
-      .send(request)
-      .map(_.body)
-  }
-
 }
 
 object ProverClient {

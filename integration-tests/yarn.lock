@@ -7,22 +7,17 @@
   resolved "https://registry.yarnpkg.com/@balena/dockerignore/-/dockerignore-1.0.2.tgz#9ffe4726915251e8eb69f44ef3547e0da2c03e0d"
   integrity sha512-wMue2Sy4GAVTk6Ic4tJVcnfdau+gx2EnG7S+uAEe+TWJFqE4YoWN4/H8MSLj4eYJKxGg26lZwboEniNiNwZQ6Q==
 
-"@midnight/wallet-api@3.1.0":
-  version "3.1.0"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-3.1.0.tgz#9fad8f294465ffbe6c060a5671f4a019a9299ece"
-  integrity sha512-nN+1iYQBlV3SF5s9V1vGyooI3Ll56lNv1b2CH+nhgUEYYBWS2eQYVqZjhAz5d+mMkXIwcyBeSZ/cOQDGa0LDPw==
+"@midnight/wallet-api@3.1.2":
+  version "3.1.2"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/wallet-api/-/wallet-api-3.1.2.tgz#6d315e6ae14f213e1660035906d3093393082df2"
+  integrity sha512-Si4QwZdCp5WPAGVc4wSOTRhz4jR+hMPg7cpxmejnd3WU1LhoF9WZyWwaV885y6eMxDzFM0MOhhUF8IsO7xuSOw==
   dependencies:
-    "@midnight/zswap" "0.2.x"
+    "@midnight/zswap" "0.3.1"
 
-"@midnight/zswap@0.2.5":
-  version "0.2.5"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.2.5.tgz#9ccb168016f5f6f8bcd2d2934f092afd6ef33862"
-  integrity sha512-27umsyvGuCjoY/nbw627h6SzLpsDD3odzcf+1Z+URjSwIoq3BEAIv9ZolhU5vnXT0sSwvco7rvrT9peYBW/lUg==
-
-"@midnight/zswap@0.2.x":
-  version "0.2.6"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.2.6.tgz#5dbbe1d0b4133e102ff33d56bd09964815400233"
-  integrity sha512-BQ5u+WzF63IA0GsJoqWxhuSjuwev6HjtCFG6EGfveKUeUaf46tGzrIbr8AuZDYFCtJV55JeatxAMpOmqgz7hWQ==
+"@midnight/zswap@0.3.1":
+  version "0.3.1"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.3.1.tgz#b916db2c2812549ea49ec9a4f242ff214b32d72d"
+  integrity sha512-ZVh5IlNKPjXCd201UIHVubq7oK0pet3T9ryRC8UMFetu1AAhd4V0E3U2NMU20lgCQHD+ERD6kj+Lm+4fZpKLeA==
 
 "@types/node@*":
   version "20.8.2"

@@ -37,7 +37,7 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     TestContainers.resource(
-      "registry.ci.iog.io/proof-server@sha256:a9e5efc2550d3444ed499606f35bb508e9716f001aa37bc0c00a1f132a6b5c68",
+      "registry.ci.iog.io/proof-server@sha256:0790c3b85abeaa681799d782e565bf5c0839354124de128e2722c1ccb997d0f6",
     )(
       _.withExposedPorts(proverServerPort)
         .withWaitStrategy(Wait.forListeningPorts()),
@@ -49,16 +49,6 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   private def withProvingClient(body: ProverClient[IO] => IO[Unit]): IO[Unit] = {
     val port = provingServiceFixture().getMappedPort(proverServerPort).toInt
     ProverClient(serverUri(port)).use(body(_))
-  }
-
-  test("Prover client must prove offer") {
-    withProvingClient { proverClient =>
-      proverClient.proveOffer(unprovenOffer).map { offer =>
-        assert(offer.outputsSize === 1)
-        assert(offer.inputsSize === 0)
-        assert(offer.deltas.get(dustToken).contains(-spendCoinAmount))
-      }
-    }
   }
 
   test("Prover client must prove transaction") {

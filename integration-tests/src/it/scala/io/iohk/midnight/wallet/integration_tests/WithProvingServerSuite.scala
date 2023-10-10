@@ -18,7 +18,7 @@ trait WithProvingServerSuite
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     ProvingServiceImpl.instance(
-      "registry.ci.iog.io/proof-server@sha256:a9e5efc2550d3444ed499606f35bb508e9716f001aa37bc0c00a1f132a6b5c68",
+      "registry.ci.iog.io/proof-server@sha256:0790c3b85abeaa681799d782e565bf5c0839354124de128e2722c1ccb997d0f6",
     ),
   )
 

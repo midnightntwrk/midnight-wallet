@@ -5,7 +5,7 @@
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight/zswap": "0.2.5",
+        "@midnight/zswap": "0.3.1",
         "node-fetch": "3.3.2",
         "testcontainers": "^10.2.1"
     },
