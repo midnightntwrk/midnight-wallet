@@ -12,7 +12,7 @@ on:
 jobs:
   publish:
     name: Build & Publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-4-cores
     steps:
       - name: Prepare .netrc to access other repos
         run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
@@ -41,7 +41,7 @@ jobs:
           @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
           " > ./.npmrc
       - name: Build Wallet
-        run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt dist
+        run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
       - name: Publish Wallet
         run: |
           cd wallet-engine

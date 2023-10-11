@@ -28,7 +28,8 @@ class IndexerClient[F[_]: Async: Concurrent](
       )
       (hash, rawTx) <- GraphQLSubscriber.subscribe(
         indexerWsUri,
-        subscribeForTransactions(Some(sessionId), lastHash),
+        // TODO (PM-6663): use wallet endpoint to get viewing updates
+        subscribeForTransactions(None, lastHash),
       )
     } yield RawTransaction(hash, rawTx)
   }
