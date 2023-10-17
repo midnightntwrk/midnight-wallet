@@ -8,10 +8,10 @@ import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.{Hash, Transaction}
+import io.iohk.midnight.wallet.core.WalletStateService
 import io.iohk.midnight.wallet.core.capabilities.WalletKeys
 import io.iohk.midnight.wallet.core.domain.TransactionHash
 import io.iohk.midnight.wallet.core.services.SyncService
-import io.iohk.midnight.wallet.core.{LedgerSerialization, WalletStateService}
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.indexer.IndexerClient.RawTransaction
@@ -40,10 +40,7 @@ object SyncServiceFactory {
       .map { case (client, viewingKey) =>
         (lastHash: Option[TransactionHash]) =>
           client
-            .rawTransactions(
-              LedgerSerialization.viewingKeyToString(viewingKey),
-              lastHash.map(_.hash),
-            )
+            .rawTransactions(viewingKey.serialize, lastHash.map(_.hash))
             .attempt
             .evalTap {
               case Left(error) => syncServiceTracer.syncFailed(error)

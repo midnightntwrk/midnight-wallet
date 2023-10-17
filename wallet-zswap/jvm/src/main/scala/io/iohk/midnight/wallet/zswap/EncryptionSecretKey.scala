@@ -3,12 +3,12 @@ package io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.jnr.*
 import scala.util.{Failure, Success, Try}
 
-final case class EncryptionSecretKey private (bytes: Array[Byte], ledger: Ledger) {
-  def serialize: Array[Byte] = bytes
+final case class EncryptionSecretKey private (data: String, ledger: Ledger) {
+  def serialize: String = data
 
   def test(tx: Transaction): Try[Boolean] = {
-    val serializedTx = HexUtil.encodeHex(tx.serialize)
-    val serializedKey = HexUtil.encodeHex(bytes)
+    val serializedTx = tx.serialize
+    val serializedKey = this.serialize
     ledger.isTransactionRelevant(serializedTx, serializedKey) match {
       case LedgerSuccess.OperationTrue  => Success(true)
       case LedgerSuccess.OperationFalse => Success(false)
@@ -21,6 +21,6 @@ final case class EncryptionSecretKey private (bytes: Array[Byte], ledger: Ledger
 }
 
 object EncryptionSecretKey {
-  def deserialize(bytes: Array[Byte], ledger: Ledger): EncryptionSecretKey =
-    EncryptionSecretKey(bytes, ledger)
+  def deserialize(data: String, ledger: Ledger): EncryptionSecretKey =
+    EncryptionSecretKey(data, ledger)
 }

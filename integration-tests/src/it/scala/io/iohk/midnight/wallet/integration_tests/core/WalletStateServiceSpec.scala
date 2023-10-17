@@ -78,15 +78,12 @@ class WalletStateServiceSpec
       (
         initialState.coinPublicKey,
         initialState.encryptionPublicKey,
-        keyToString(initialState.encryptionSecretKey.serialize),
+        initialState.encryptionSecretKey.serialize,
       )
     buildWalletStateService(initialState).use(
-      _.keys.map((cpk, epk, vk) => (cpk, epk, keyToString(vk.serialize))).assertEquals(expected),
+      _.keys.map((cpk, epk, vk) => (cpk, epk, vk.serialize)).assertEquals(expected),
     )
   }
-
-  private def keyToString(bytes: Array[Byte]): String =
-    bytes.map(String.format("%02X", _)).mkString
 
   test("Calculate cost as the sum of tx imbalances") {
     forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txIO =>

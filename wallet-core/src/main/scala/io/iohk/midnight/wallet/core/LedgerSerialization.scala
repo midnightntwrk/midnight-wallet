@@ -32,10 +32,7 @@ object LedgerSerialization {
     }
 
   def toTransaction(tx: zswap.Transaction): Transaction =
-    Transaction(Hash(tx.hash), HexUtil.encodeHex(tx.serialize))
-
-  def viewingKeyToString(viewingKey: zswap.EncryptionSecretKey): String =
-    HexUtil.encodeHex(viewingKey.serialize)
+    Transaction(Hash(tx.hash), tx.serialize)
 
   def fromSeed(seed: String): Either[Throwable, zswap.LocalState] =
     HexUtil.decodeHex(seed).toEither.flatMap { decoded =>

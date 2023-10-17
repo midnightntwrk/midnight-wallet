@@ -18,7 +18,7 @@ object Transaction {
   def fromJs(tx: mod.Transaction): Transaction = tx
 
   extension (tx: Transaction) {
-    def serialize: Array[Byte] = tx.serialize().toByteArray
+    def serialize: String = HexUtil.encodeHex(tx.serialize().toByteArray)
 
     def toJs: mod.Transaction = tx
 
