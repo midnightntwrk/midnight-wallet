@@ -18,5 +18,33 @@ trait LedgerAPI {
       @size_t local_state_len: Int,
   ): Pointer
 
-  def free_apply_result(pointer: Pointer): Unit
+  def extract_guaranteed_coins_from_transaction(
+      tx_borshed: Array[Byte],
+      @size_t tx_borshed_len: Int,
+  ): Pointer
+
+  def zswap_chain_state_new(): Pointer
+
+  def zswap_chain_state_first_free(
+      zswap_chain_state: Array[Byte],
+      @size_t zswap_chain_state_len: Int,
+  ): Pointer
+
+  def zswap_chain_state_try_apply(
+      zswap_chain_state: Array[Byte],
+      @size_t zswap_chain_state_len: Int,
+      offer: Array[Byte],
+      @size_t offer_len: Int,
+  ): Pointer
+
+  def merkle_tree_collapsed_update_new(
+      zswap_chain_state: Array[Byte],
+      @size_t zswap_chain_state_len: Int,
+      @size_t index_start: Long,
+      @size_t index_end: Long,
+  ): Pointer
+
+  def free_string_result(pointer: Pointer): Unit
+
+  def free_number_result(pointer: Pointer): Unit
 }

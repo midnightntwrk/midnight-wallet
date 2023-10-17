@@ -36,15 +36,30 @@ object LedgerError {
   case object EncryptionSecretKeyError extends LedgerError(3)
   case object TransactionError extends LedgerError(4)
   case object StateError extends LedgerError(5)
+  case object ZswapChainStateNewError extends LedgerError(6)
+  case object ZswapChainStateFirstFreeError extends LedgerError(7)
+  case object ExtractGuaranteedCoinsFromTxError extends LedgerError(8)
+  case object ZswapChainStateTryApplyStateError extends LedgerError(9)
+  case object ZswapChainStateTryApplyOfferError extends LedgerError(10)
+  case object ZswapChainStateTryApplyUpdateStateError extends LedgerError(11)
+  case object MerkleTreeCollapsedUpdateNewError extends LedgerError(12)
   case object ExcUnknown extends LedgerError(255)
 
   def apply(code: Int): Either[Int, LedgerError] = {
     code match {
-      case EncryptionSecretKeyError.code => Right(EncryptionSecretKeyError)
-      case TransactionError.code         => Right(TransactionError)
-      case StateError.code               => Right(StateError)
-      case ExcUnknown.code               => Right(ExcUnknown)
-      case unknownResultCode             => Left(unknownResultCode)
+      case EncryptionSecretKeyError.code          => Right(EncryptionSecretKeyError)
+      case TransactionError.code                  => Right(TransactionError)
+      case StateError.code                        => Right(StateError)
+      case ZswapChainStateNewError.code           => Right(ZswapChainStateNewError)
+      case ZswapChainStateFirstFreeError.code     => Right(ZswapChainStateFirstFreeError)
+      case ExtractGuaranteedCoinsFromTxError.code => Right(ExtractGuaranteedCoinsFromTxError)
+      case ZswapChainStateTryApplyStateError.code => Right(ZswapChainStateTryApplyStateError)
+      case ZswapChainStateTryApplyOfferError.code => Right(ZswapChainStateTryApplyOfferError)
+      case ZswapChainStateTryApplyUpdateStateError.code =>
+        Right(ZswapChainStateTryApplyUpdateStateError)
+      case MerkleTreeCollapsedUpdateNewError.code => Right(MerkleTreeCollapsedUpdateNewError)
+      case ExcUnknown.code                        => Right(ExcUnknown)
+      case unknownResultCode                      => Left(unknownResultCode)
     }
   }
 }

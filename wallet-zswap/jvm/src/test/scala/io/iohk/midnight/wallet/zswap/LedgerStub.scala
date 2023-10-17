@@ -1,9 +1,17 @@
 package io.iohk.midnight.wallet.zswap
 
+import cats.data.NonEmptyList
 import cats.syntax.eq.*
-import io.iohk.midnight.wallet.jnr.Ledger.{TxAppliedSuccessfully, TxApplyError}
+import io.iohk.midnight.wallet.jnr.Ledger.{
+  JNRError,
+  LedgerErrorResult,
+  NumberResult,
+  StringResult,
+  UnexpectedJNRError,
+}
 import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult, LedgerSuccess}
 import io.iohk.midnight.wallet.zswap.LedgerStub.*
+
 import java.nio.charset.StandardCharsets
 
 class LedgerStub extends Ledger {
@@ -13,14 +21,43 @@ class LedgerStub extends Ledger {
     else if (tx === TxUnknown) LedgerResult.UnknownCode(1)
     else LedgerError.StateError
 
-  @SuppressWarnings(Array("org.wartremover.warts.Null"))
   override def applyTransactionToState(
       tx: String,
       localState: String,
-  ): Either[Throwable, Ledger.ApplyResult] =
-    if (tx === ValidTx) Right(TxAppliedSuccessfully(AppliedTxState, null))
-    else if (tx === ValidTxNoData) Right(TxApplyError(LedgerError.TransactionError, null))
-    else Left(Exception("fail!"))
+  ): Either[NonEmptyList[JNRError], StringResult] = {
+    if (tx === ValidTx)
+      Right(StringResult(AppliedTxState))
+    else if (tx === ValidTxNoData)
+      Left(NonEmptyList.one(LedgerErrorResult(LedgerError.TransactionError)))
+    else
+      Left(NonEmptyList.one(UnexpectedJNRError(Exception("fail!"))))
+  }
+
+  override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def zswapChainStateFirstFree(
+      zswapChainState: String,
+  ): Either[NonEmptyList[JNRError], NumberResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def zswapChainStateTryApply(
+      zswapChainState: String,
+      offer: String,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def merkleTreeCollapsedUpdateNew(
+      zswapChainState: String,
+      indexStart: Long,
+      indexEnd: Long,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def extractGuaranteedCoinsFromTransaction(
+      tx: String,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
 }
 
 object LedgerStub {

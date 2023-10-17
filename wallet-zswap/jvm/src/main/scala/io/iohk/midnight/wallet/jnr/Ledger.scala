@@ -1,8 +1,10 @@
 package io.iohk.midnight.wallet.jnr
 
-import io.iohk.midnight.wallet.jnr.Ledger.ApplyResult
+import cats.data.NonEmptyList
+import io.iohk.midnight.wallet.jnr.Ledger.{JNRError, NumberResult, StringResult}
 import io.iohk.midnight.wallet.jnr.LedgerSuccess.OperationTrue
 import jnr.ffi.Pointer
+
 import scala.util.Try
 
 trait Ledger {
@@ -15,37 +17,88 @@ trait Ledger {
   def applyTransactionToState(
       tx: String,
       localState: String,
-  ): Either[Throwable, ApplyResult]
+  ): Either[NonEmptyList[JNRError], StringResult]
+
+  def extractGuaranteedCoinsFromTransaction(
+      tx: String,
+  ): Either[NonEmptyList[JNRError], StringResult]
+
+  def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult]
+
+  def zswapChainStateFirstFree(
+      zswapChainState: String,
+  ): Either[NonEmptyList[JNRError], NumberResult]
+
+  def zswapChainStateTryApply(
+      zswapChainState: String,
+      offer: String,
+  ): Either[NonEmptyList[JNRError], StringResult]
+
+  def merkleTreeCollapsedUpdateNew(
+      zswapChainState: String,
+      indexStart: Long,
+      indexEnd: Long,
+  ): Either[NonEmptyList[JNRError], StringResult]
 }
 
 object Ledger {
-  sealed trait ApplyResult {
-    private[jnr] def pointer: Pointer
-  }
-  final case class TxAppliedSuccessfully(updatedState: String, pointer: Pointer) extends ApplyResult
-  final case class TxApplyError(ledgerError: LedgerError, pointer: Pointer) extends ApplyResult
+
+  private val LEDGER_RESULT_STRUCT_OFFSET = 0
+  private val LEDGER_RESULT_FIELD_SIZE = 8 // In Rust ApplyResult::ledger_result is i16 (2 bytes)
 
   val instance: Try[Ledger] = LedgerLoader.loadLedger
 
-  object ApplyResult {
+  sealed trait JNRResult
 
-    private val LEDGER_RESULT_STRUCT_OFFSET = 0
-    private val LEDGER_RESULT_FIELD_SIZE = 8 // In Rust ApplyResult::ledger_result is i16 (2 bytes)
+  sealed trait JNRSuccessCallResult extends JNRResult
 
-    def apply(pointer: Pointer): Either[Throwable, ApplyResult] = {
+  sealed trait JNRError extends JNRResult {
+    def getMessage: String
+  }
+  final case class LedgerErrorResult(ledgerResult: LedgerResult) extends JNRError {
+    override def getMessage: String = s"Ledger error code ${ledgerResult.code}"
+  }
+  final case class UnexpectedJNRError(throwable: Throwable) extends JNRError {
+    override def getMessage: String = throwable.getMessage
+  }
+
+  final case class NumberResult(data: Long) extends JNRSuccessCallResult
+
+  object NumberResult {
+
+    def applyEither(pointer: Pointer): Either[JNRError, NumberResult] = {
       val ledgerResult = LedgerResult(pointer.getShort(LEDGER_RESULT_STRUCT_OFFSET))
 
       ledgerResult match {
         case LedgerSuccess.OperationTrue =>
-          val updatedState = pointer
+          val numberData = pointer.getLong(LEDGER_RESULT_FIELD_SIZE)
+          Right(NumberResult(numberData))
+        case error: LedgerError =>
+          Left(LedgerErrorResult(error))
+        case unexpected =>
+          Left(LedgerErrorResult(unexpected))
+      }
+    }
+  }
+
+  final case class StringResult(data: String) extends JNRSuccessCallResult
+
+  object StringResult {
+
+    def applyEither(pointer: Pointer): Either[JNRError, StringResult] = {
+      val ledgerResult = LedgerResult(pointer.getShort(LEDGER_RESULT_STRUCT_OFFSET))
+
+      ledgerResult match {
+        case LedgerSuccess.OperationTrue =>
+          val stringData = pointer
             .getPointer(LEDGER_RESULT_FIELD_SIZE)
             .getString(0)
-          Right(TxAppliedSuccessfully(updatedState, pointer))
+          Right(StringResult(stringData))
 
         case error: LedgerError =>
-          Right(TxApplyError(error, pointer))
+          Left(LedgerErrorResult(error))
         case unexpected =>
-          Left(new IllegalStateException(s"Unexpected apply result received: $unexpected"))
+          Left(LedgerErrorResult(unexpected))
       }
     }
   }

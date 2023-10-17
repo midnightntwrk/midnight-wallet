@@ -93,7 +93,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.1.1",
+  version := "3.2.0-SNAPSHOT",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -264,10 +264,10 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         downloadedFile
       }
 
-      val linuxAssetId = "122049350"
+      val linuxAssetId = "131063606"
       downloadFile(linuxAssetId)
 
-      val darwinAssetId = "123073047"
+      val darwinAssetId = "131064656"
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
@@ -307,7 +307,7 @@ lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "io.github.enriquerodbe" %%% "borsh4s" % "3.0.0",
-    )
+    ),
   )
 
 lazy val substrateClient = project
@@ -321,7 +321,7 @@ lazy val substrateClient = project
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion,
-    )
+    ),
   )
 
 lazy val pubSubIndexerClient = project

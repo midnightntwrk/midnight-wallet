@@ -21,9 +21,6 @@ final case class EncryptionSecretKey private (bytes: Array[Byte], ledger: Ledger
 }
 
 object EncryptionSecretKey {
-  def deserialize(bytes: Array[Byte]): Try[EncryptionSecretKey] =
-    Ledger.instance.flatMap(deserialize(bytes, _))
-
-  def deserialize(bytes: Array[Byte], ledger: Ledger): Try[EncryptionSecretKey] =
-    Success(EncryptionSecretKey(bytes, ledger))
+  def deserialize(bytes: Array[Byte], ledger: Ledger): EncryptionSecretKey =
+    EncryptionSecretKey(bytes, ledger)
 }
