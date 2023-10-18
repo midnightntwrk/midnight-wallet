@@ -1,9 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
 import io.iohk.midnight.wallet.core.TransactionBalancer.BalanceTransactionResult
-import io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
@@ -112,28 +110,15 @@ object Wallet {
       }
     }
 
-  implicit val walletTransactionProcessing: WalletTransactionProcessing[Wallet, WalletTransaction] =
-    (wallet: Wallet, transaction: WalletTransaction) => {
-      LedgerSerialization
-        .fromTransaction(transaction)
-        .leftMap[WalletError](BadTransactionFormat.apply)
-        .mproduct(isRelevant(wallet, _).toEither.leftMap(WalletError.LedgerExecutionError.apply))
-        .map { (tx, relevant) =>
-          val updatedState = applyTransaction(wallet.state, tx)
-          val newTx = Option.when(relevant)(tx)
-          Wallet(updatedState, wallet.txHistory ++ newTx)
-        }
-    }
-
   private def isRelevant(wallet: Wallet, tx: Transaction): Try[Boolean] =
     wallet.state.encryptionSecretKey.test(tx)
 
   implicit val walletSync: WalletSync[Wallet, ViewingUpdate] =
     (wallet: Wallet, update: ViewingUpdate) => {
-      val stateWithMTUpdated = wallet.state.applyCollapsedUpdate(update.merkleTreeUpdate)
+      val stateWithMTUpdated: LocalState =
+        update.merkleTreeUpdate.fold(wallet.state)((mt, _) => wallet.state.applyCollapsedUpdate(mt))
       val stateWithAppliedTxs = update.transactionDiff.foldLeft(stateWithMTUpdated) {
-        case (state, transaction) =>
-          applyTransaction(state, transaction)
+        case (state, transaction) => applyTransaction(state, transaction)
       }
       val newTxs = update.transactionDiff
         .filterA(isRelevant(wallet, _))

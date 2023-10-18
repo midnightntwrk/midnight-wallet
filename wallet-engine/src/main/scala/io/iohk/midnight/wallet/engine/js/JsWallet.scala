@@ -24,7 +24,7 @@ import io.iohk.midnight.wallet.core.domain.{Address, ProvingRecipe, TokenTransfe
 import io.iohk.midnight.wallet.engine.WalletBuilder.AllocatedWallet
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
-import io.iohk.midnight.wallet.engine.{WalletBuilder, WalletTransactionProcessingService}
+import io.iohk.midnight.wallet.engine.{WalletBuilder, WalletSyncService}
 import io.iohk.midnight.wallet.zswap.*
 import org.scalablytyped.runtime.StringDictionary
 import scala.scalajs.js
@@ -38,7 +38,7 @@ import scala.scalajs.js.annotation.*
 @SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
 @JSExportTopLevel("Wallet")
 class JsWallet(
-    walletTransactionProcessingService: WalletTransactionProcessingService[IO],
+    walletSyncService: WalletSyncService[IO],
     walletStateService: WalletStateService[IO, Wallet],
     walletTxSubmissionService: WalletTxSubmissionService[IO],
     walletTransactionService: WalletTransactionService[IO],
@@ -112,7 +112,7 @@ class JsWallet(
       .unsafeToPromise()
 
   def start(): Unit =
-    walletTransactionProcessingService.transactions.compile.drain.unsafeRunAndForget()
+    walletSyncService.updates.compile.drain.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
     finalizer.unsafeRunSyncToPromise()
@@ -219,7 +219,7 @@ object JsWallet {
 
   def apply(wallet: AllocatedWallet[IO, Wallet]): JsWallet =
     new JsWallet(
-      wallet.dependencies.walletTransactionProcessingService,
+      wallet.dependencies.walletSyncService,
       wallet.dependencies.walletStateService,
       wallet.dependencies.walletTxSubmissionService,
       wallet.dependencies.walletTransactionService,

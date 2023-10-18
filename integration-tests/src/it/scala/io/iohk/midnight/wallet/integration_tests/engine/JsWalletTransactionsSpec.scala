@@ -28,7 +28,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
 
   def jsWallet: JsWallet =
     new JsWallet(
-      new WalletTransactionProcessingServiceStub(),
+      new WalletSyncServiceStub(),
       new WalletStateServiceStub(),
       new WalletTxSubmissionServiceStub(),
       new WalletTransactionServiceWithProvingStub(provingService, transferRecipe),

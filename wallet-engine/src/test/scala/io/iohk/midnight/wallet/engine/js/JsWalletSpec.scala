@@ -17,7 +17,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
       val wallet =
         new JsWallet(
-          new WalletTransactionProcessingServiceStub(),
+          new WalletSyncServiceStub(),
           new WalletStateServiceBalanceStub(balance),
           new WalletTxSubmissionServiceStub(),
           new WalletTransactionServiceStub(),
@@ -35,7 +35,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     val encPubKey = "test-encPubKey"
     val wallet =
       new JsWallet(
-        new WalletTransactionProcessingServiceStub(),
+        new WalletSyncServiceStub(),
         new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
@@ -50,7 +50,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       ref <- Ref.of[IO, Boolean](false)
       wallet = new JsWallet(
-        new WalletTransactionProcessingServiceStub(),
+        new WalletSyncServiceStub(),
         new WalletStateServiceStub(),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
@@ -65,7 +65,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       isFinished <- Deferred[IO, Boolean]
       wallet = new JsWallet(
-        new WalletTransactionProcessingServiceStartStub(isFinished),
+        new WalletSyncServiceStartStub(isFinished),
         new WalletStateServiceStub(),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),

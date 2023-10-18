@@ -25,7 +25,7 @@ package object domain {
   final case class TransactionIdentifier(txId: String) extends AnyVal
 
   final case class ViewingUpdate(
-      merkleTreeUpdate: MerkleTreeCollapsedUpdate,
+      merkleTreeUpdate: Option[(MerkleTreeCollapsedUpdate, BigInt)],
       transactionDiff: Vector[Transaction],
   )
 

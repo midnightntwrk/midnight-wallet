@@ -7,15 +7,16 @@ import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.AsContextAwareLogOps
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.AsStringLogContextOps
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceEvent.{
-  TransactionReceived,
   SyncFailed,
+  ViewingUpdateReceived,
 }
+import io.iohk.midnight.wallet.indexer.IndexerClient.RawViewingUpdate
 
 class SyncServiceTracer[F[_]](val tracer: Tracer[F, SyncServiceEvent]) {
 
   def syncFailed(error: Throwable): F[Unit] = tracer(SyncFailed(error))
-  def syncTransactionReceived(txHash: String): F[Unit] = tracer(
-    TransactionReceived(txHash),
+  def viewingUpdateReceived(viewingUpdate: RawViewingUpdate): F[Unit] = tracer(
+    ViewingUpdateReceived(viewingUpdate),
   )
 }
 
@@ -26,8 +27,8 @@ object SyncServiceTracer {
   private val Component: Event.Component = Event.Component("sync_service")
 
   implicit val txSubmissionEventAsStructuredLog: AsStructuredLog[SyncServiceEvent] = {
-    case e: SyncFailed          => e.asContextAwareLog
-    case e: TransactionReceived => e.asContextAwareLog
+    case e: SyncFailed            => e.asContextAwareLog
+    case e: ViewingUpdateReceived => e.asContextAwareLog
   }
 
   implicit val syncFailedAsStructuredLog: AsStructuredLog[SyncFailed] =
@@ -39,12 +40,13 @@ object SyncServiceTracer {
       context = _.stringLogContext,
     )
 
-  implicit val syncEventReceivedAsStructuredLog: AsStructuredLog[TransactionReceived] =
+  implicit val viewingUpdateReceivedAsStructuredLog: AsStructuredLog[ViewingUpdateReceived] =
     AsContextAwareLog.instance(
-      id = TransactionReceived.id,
+      id = ViewingUpdateReceived.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt => s"Transaction ${evt.txHash} received.",
+      message =
+        evt => s"Viewing update received with ${evt.update.transactions.mkString("[", ",", "]")}.",
       context = _.stringLogContext,
     )
 

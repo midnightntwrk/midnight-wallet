@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.engine.tracing.sync
 
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
+import io.iohk.midnight.wallet.indexer.IndexerClient.RawViewingUpdate
 
 sealed trait SyncServiceEvent
 
@@ -16,10 +17,10 @@ object SyncServiceEvent {
 
   /** Sync event received.
     */
-  final case class TransactionReceived(txHash: String) extends SyncServiceEvent
+  final case class ViewingUpdateReceived(update: RawViewingUpdate) extends SyncServiceEvent
 
-  object TransactionReceived {
-    val id: Event.Id[TransactionReceived] = Event.Id("transaction_received")
+  object ViewingUpdateReceived {
+    val id: Event.Id[ViewingUpdateReceived] = Event.Id("viewing_update_received")
   }
 
   object DefaultInstances {
@@ -30,7 +31,9 @@ object SyncServiceEvent {
       AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.getMessage))
     // $COVERAGE-ON$
 
-    implicit val syncEventReceivedContext: AsStringLogContext[TransactionReceived] =
-      AsStringLogContext.fromMap[TransactionReceived](evt => Map("transaction_hash" -> evt.txHash))
+    implicit val viewingUpdateReceivedContext: AsStringLogContext[ViewingUpdateReceived] =
+      AsStringLogContext.fromMap[ViewingUpdateReceived](evt =>
+        Map("transaction_hashes" -> evt.update.transactions.mkString("[", ",", "]")),
+      )
   }
 }

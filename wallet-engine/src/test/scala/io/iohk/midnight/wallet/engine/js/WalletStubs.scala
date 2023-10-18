@@ -3,7 +3,6 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.{Deferred, IO}
 import cats.syntax.applicative.*
 import fs2.Stream
-import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedTransaction
 import io.iohk.midnight.wallet.core.capabilities.{
   WalletBalances,
   WalletCoins,
@@ -18,6 +17,7 @@ import io.iohk.midnight.wallet.core.domain.{
   TokenTransfer,
   TransactionIdentifier,
   TransactionToProve,
+  ViewingUpdate,
 }
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.{
@@ -27,7 +27,7 @@ import io.iohk.midnight.wallet.core.{
   WalletTransactionService,
   WalletTxSubmissionService,
 }
-import io.iohk.midnight.wallet.engine.WalletTransactionProcessingService
+import io.iohk.midnight.wallet.engine.WalletSyncService
 import io.iohk.midnight.wallet.zswap.{
   CoinInfo,
   CoinPublicKey,
@@ -38,8 +38,8 @@ import io.iohk.midnight.wallet.zswap.{
   Transaction,
 }
 
-class WalletTransactionProcessingServiceStub extends WalletTransactionProcessingService[IO] {
-  override def transactions: Stream[IO, Either[WalletError, AppliedTransaction]] = Stream.empty
+class WalletSyncServiceStub extends WalletSyncService[IO] {
+  override def updates: Stream[IO, Either[WalletError, ViewingUpdate]] = Stream.empty
   override def stop: IO[Unit] = IO.unit
 }
 
@@ -70,9 +70,8 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
     )
 }
 
-class WalletTransactionProcessingServiceStartStub(ref: Deferred[IO, Boolean])
-    extends WalletTransactionProcessingService[IO] {
-  override val transactions: Stream[IO, Either[WalletError, AppliedTransaction]] =
+class WalletSyncServiceStartStub(ref: Deferred[IO, Boolean]) extends WalletSyncService[IO] {
+  override val updates: Stream[IO, Either[WalletError, ViewingUpdate]] =
     Stream.eval(ref.complete(true)).flatMap(_ => Stream.empty)
   override def stop: IO[Unit] = IO.unit
 }

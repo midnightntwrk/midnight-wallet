@@ -5,8 +5,7 @@ import cats.effect.kernel.Resource
 import cats.effect.std.Queue
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedTransaction
-import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
+import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer, ViewingUpdate}
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
 import io.iohk.midnight.wallet.engine.config.Config
@@ -61,7 +60,7 @@ trait EndToEndSpecSetup {
             LogLevel.Warn,
           ),
         )
-        .flatTap(_.dependencies.walletTransactionProcessingService.transactions.compile.drain.start),
+        .flatTap(_.dependencies.walletSyncService.updates.compile.drain.start),
     )(_.finalizer)
 
   def withRunningWallet(initialWalletState: LocalState)(
@@ -140,7 +139,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     withWallet(initialState) {
       case AllocatedWallet(
             WalletDependencies(
-              walletTransactionProcessingService,
+              walletSyncService,
               walletState,
               txSubmission,
               walletTransactionService,
@@ -148,16 +147,14 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
             _,
           ) =>
         for {
-          appliedTransactionsQueue <- Queue.unbounded[IO, AppliedTransaction]
-          _ <- walletTransactionProcessingService.transactions
-            .collect { case Right(value) =>
-              value
-            }
-            .enqueueUnterminated(appliedTransactionsQueue)
+          appliedUpdatesQueue <- Queue.unbounded[IO, ViewingUpdate]
+          _ <- walletSyncService.updates
+            .collect { case Right(value) => value }
+            .enqueueUnterminated(appliedUpdatesQueue)
             .compile
             .drain
             .start
-          _ <- appliedTransactionsQueue.take
+          _ <- appliedUpdatesQueue.take
           balanceBeforeSend <- walletState.state
             .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
             .find(_ >= coin.value)
@@ -168,7 +165,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           )
           firstSpendTx <- walletTransactionService.proveTransaction(firstTransferRecipe)
           _ <- txSubmission.submitTransaction(firstSpendTx)
-          _ <- appliedTransactionsQueue.take
+          _ <- appliedUpdatesQueue.take
           balanceAfter1Send <- walletState.state
             .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
             .find(_ < coin.value)
@@ -179,7 +176,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           )
           secondSpendTx <- walletTransactionService.proveTransaction(secondTransferRecipe)
           _ <- txSubmission.submitTransaction(secondSpendTx)
-          _ <- appliedTransactionsQueue.take
+          _ <- appliedUpdatesQueue.take
           balanceAfter2Send <- walletState.state
             .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
             .find(_ < coin.value)
@@ -201,7 +198,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     val quickTxSend = withWallet(initialState) {
       case AllocatedWallet(
             WalletDependencies(
-              walletTransactionProcessingService,
+              walletSyncService,
               _,
               txSubmission,
               walletTransactionService,
@@ -209,7 +206,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
             _,
           ) =>
         for {
-          _ <- walletTransactionProcessingService.transactions.take(1).compile.toList
+          _ <- walletSyncService.updates.take(1).compile.toList
           firstTransferRecipe <- walletTransactionService.prepareTransferRecipe(
             prepareOutputs(List(spendCoin), randomRecipient()),
           )

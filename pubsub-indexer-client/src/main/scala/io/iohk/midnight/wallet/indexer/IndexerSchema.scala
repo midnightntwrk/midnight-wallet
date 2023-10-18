@@ -1,11 +1,20 @@
 package io.iohk.midnight.wallet.indexer
 
-import caliban.client.FieldBuilder.*
 import caliban.client.*
+import caliban.client.FieldBuilder.*
+import caliban.client.__Value.*
 
 object IndexerSchema {
 
   type SessionId = String
+
+  type MerkleTreeCollapsedUpdate
+  object MerkleTreeCollapsedUpdate {
+    def update: SelectionBuilder[MerkleTreeCollapsedUpdate, String] =
+      SelectionBuilder.Field("update", Scalar())
+    def lastIndex: SelectionBuilder[MerkleTreeCollapsedUpdate, BigInt] =
+      SelectionBuilder.Field("lastIndex", Scalar())
+  }
 
   type Transaction
   object Transaction {
@@ -15,13 +24,37 @@ object IndexerSchema {
       SelectionBuilder.Field("raw", Scalar())
   }
 
-  type TransactionAdded
-
-  object TransactionAdded {
-    def transaction[A](
+  type ViewingUpdate
+  object ViewingUpdate {
+    def merkleTreeCollapsedUpdate[A](
+        innerSelection: SelectionBuilder[MerkleTreeCollapsedUpdate, A],
+    ): SelectionBuilder[ViewingUpdate, Option[A]] =
+      SelectionBuilder.Field("merkleTreeCollapsedUpdate", OptionOf(Obj(innerSelection)))
+    def transactions[A](
         innerSelection: SelectionBuilder[Transaction, A],
-    ): SelectionBuilder[TransactionAdded, A] =
-      SelectionBuilder.Field("transaction", Obj(innerSelection))
+    ): SelectionBuilder[ViewingUpdate, List[A]] =
+      SelectionBuilder.Field("transactions", ListOf(Obj(innerSelection)))
+  }
+
+  final case class TransactionOffsetInput(
+      hash: Option[String] = None,
+      identifier: Option[String] = None,
+  )
+  object TransactionOffsetInput {
+    implicit val encoder: ArgEncoder[TransactionOffsetInput] =
+      new ArgEncoder[TransactionOffsetInput] {
+        override def encode(value: TransactionOffsetInput): __Value =
+          __ObjectValue(
+            List(
+              "hash" -> value.hash.fold(__NullValue: __Value)(value =>
+                implicitly[ArgEncoder[String]].encode(value),
+              ),
+              "identifier" -> value.identifier.fold(__NullValue: __Value)(value =>
+                implicitly[ArgEncoder[String]].encode(value),
+              ),
+            ),
+          )
+      }
   }
 
   type Mutation = Operations.RootMutation
@@ -32,7 +65,7 @@ object IndexerSchema {
       SelectionBuilder.Field(
         "connect",
         Scalar(),
-        arguments = List(Argument("viewingKey", viewingKey, "String")(encoder0)),
+        arguments = List(Argument("viewingKey", viewingKey, "String!")(encoder0)),
       )
     def disconnect(sessionId: SessionId)(implicit
         encoder0: ArgEncoder[SessionId],
@@ -46,22 +79,27 @@ object IndexerSchema {
 
   type Subscription = Operations.RootSubscription
   object Subscription {
-    def transactions[A](sessionId: Option[SessionId], hash: scala.Option[String] = None)(
-        onTransactionAdded: SelectionBuilder[TransactionAdded, A],
+    def wallet[A](
+        sessionId: Option[SessionId] = None,
+        transactionOffset: Option[TransactionOffsetInput] = None,
+        lastIndex: Option[BigInt] = None,
+    )(
+        onViewingUpdate: SelectionBuilder[ViewingUpdate, A],
     )(implicit
         encoder0: ArgEncoder[Option[SessionId]],
-        encoder1: ArgEncoder[scala.Option[String]],
+        encoder1: ArgEncoder[Option[TransactionOffsetInput]],
+        encoder2: ArgEncoder[Option[BigInt]],
     ): SelectionBuilder[Operations.RootSubscription, A] =
       SelectionBuilder.Field(
-        "transactions",
+        "wallet",
         ChoiceOf(
-          Map("TransactionAdded" -> Obj(onTransactionAdded)),
+          Map("ViewingUpdate" -> Obj(onViewingUpdate)),
         ),
         arguments = List(
           Argument("sessionId", sessionId, "SessionId")(encoder0),
-          Argument("hash", hash, "String")(encoder1),
+          Argument("transactionOffset", transactionOffset, "TransactionOffsetInput")(encoder1),
+          Argument("lastIndex", lastIndex, "BigInt")(encoder2),
         ),
       )
   }
-
 }

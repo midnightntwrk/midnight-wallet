@@ -3,9 +3,9 @@ package io.iohk.midnight.wallet.integration_tests.core
 import cats.Eq
 import cats.data.NonEmptyList
 import cats.effect.IO
-import cats.syntax.eq.*
-import io.iohk.midnight.wallet.blockchain.data
-import io.iohk.midnight.wallet.core.{Generators, LedgerSerialization, Wallet}
+import cats.syntax.all.*
+import io.iohk.midnight.wallet.core.{Generators, Wallet}
+import io.iohk.midnight.wallet.core.domain.ViewingUpdate
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
@@ -16,7 +16,7 @@ abstract class WalletSpec
     extends WalletKeysSpec[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]
     with WalletBalancesSpec[Wallet]
     with WalletTxBalancingSpec[Wallet, Transaction, CoinInfo]
-    with WalletTransactionProcessingSpec[Wallet, data.Transaction]
+    with WalletSyncSpec[Wallet, ViewingUpdate]
     with WithProvingServerSuite {
 
   private val zero = BigInt(0)
@@ -70,15 +70,29 @@ abstract class WalletSpec
 
   override val walletWithoutFundsForBalancing: Wallet = Wallet.walletCreation.create(defaultState)
 
-  override val walletTransactionProcessing: WalletTransactionProcessing[Wallet, data.Transaction] =
-    Wallet.walletTransactionProcessing
-  private val txWithContext = Generators.txWithContextArbitrary.arbitrary.sample.get
-  override val walletForTransactions: IO[Wallet] =
-    txWithContext.map(tx => Wallet.walletCreation.create(tx.state))
-  override val validTransactionToApply: IO[data.Transaction] =
-    txWithContext.map(tx => LedgerSerialization.toTransaction(tx.transaction))
-  override val transactionToApplyWithBadFormatTx: data.Transaction =
-    data.Transaction(data.Hash(""), "")
-  override val isTransactionApplied: Wallet => Boolean = wallet =>
+  override val walletSync: WalletSync[Wallet, ViewingUpdate] = Wallet.walletSync
+  private val txWithContext =
+    Generators.txWithContextArbitrary.arbitrary.sample.get.fproduct(tx =>
+      ZswapChainState().tryApply(tx.transaction.guaranteedCoins),
+    )
+  override val walletForUpdates: IO[Wallet] =
+    txWithContext.map((tx, _) => Wallet.walletCreation.create(tx.state))
+  override val validUpdateToApply: IO[ViewingUpdate] =
+    txWithContext.map { (txCtx, chainState) =>
+      ViewingUpdate(
+        Some(
+          (
+            MerkleTreeCollapsedUpdate(
+              chainState,
+              BigInt(0),
+              chainState.firstFree - BigInt(1),
+            ),
+            chainState.firstFree - BigInt(1),
+          ),
+        ),
+        Vector(txCtx.transaction),
+      )
+    }
+  override val isUpdateApplied: Wallet => Boolean = wallet =>
     Wallet.walletBalances.balance(wallet).getOrElse(TokenType.Native, zero) > zero
 }

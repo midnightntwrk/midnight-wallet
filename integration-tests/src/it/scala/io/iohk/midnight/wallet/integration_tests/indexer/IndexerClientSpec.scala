@@ -17,7 +17,7 @@ class IndexerClientSpec extends CatsEffectSuite {
   private val pubSubIndexerServiceFixture = ResourceSuiteLocalFixture(
     "pubSubIndexerService",
     TestContainers.resource(
-      "ghcr.io/input-output-hk/midnight-pubsub-indexer:556b2bf03cf9d353a9631b8f76510b9cf5b727ac",
+      "ghcr.io/input-output-hk/midnight-pubsub-indexer:920082d3b1420b44b13117183799496b600f8776",
     )(
       _.withExposedPorts(pubSubIndexerPort)
         .withWaitStrategy(Wait.forListeningPorts()),
@@ -37,11 +37,11 @@ class IndexerClientSpec extends CatsEffectSuite {
   test("Indexer client must expose a stream with raw transactions") {
     withIndexerClient { indexerClient =>
       indexerClient
-        .rawTransactions("2045b931b0bd3d4b7d2e9e3b5a28361fc0b7d6d9f633a912f56fe3d7040d645d05")
+        .viewingUpdates("2045b931b0bd3d4b7d2e9e3b5a28361fc0b7d6d9f633a912f56fe3d7040d645d05")
         .take(5)
         .compile
         .toList
-        .map { transactions => assert(transactions.nonEmpty) }
+        .map(updates => assert(updates.nonEmpty))
     }
   }
 }

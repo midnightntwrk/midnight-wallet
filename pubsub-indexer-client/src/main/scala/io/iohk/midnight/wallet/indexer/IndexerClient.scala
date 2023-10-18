@@ -1,12 +1,13 @@
 package io.iohk.midnight.wallet.indexer
 
+import caliban.client.SelectionBuilder
 import cats.effect.kernel.Concurrent
 import cats.effect.{Async, Resource}
 import cats.syntax.applicative.*
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
 import fs2.Stream
-import io.iohk.midnight.wallet.indexer.IndexerClient.RawTransaction
+import io.iohk.midnight.wallet.indexer.IndexerClient.{RawTransaction, RawViewingUpdate}
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -18,45 +19,50 @@ class IndexerClient[F[_]: Async: Concurrent](
     backend: SttpBackend[F, Any],
 ) {
 
-  def rawTransactions(
+  def viewingUpdates(
       viewingKey: String,
       lastHash: Option[String] = None,
-  ): Stream[F, RawTransaction] = {
+      lastIndex: Option[BigInt] = None,
+  ): Stream[F, RawViewingUpdate] =
     for {
       sessionId <- Stream.resource(
         Resource.make(connect(viewingKey))(disconnect),
       )
-      (hash, rawTx) <- GraphQLSubscriber.subscribe(
+      (merkleTreeUpdate, txs) <- GraphQLSubscriber.subscribe(
         indexerWsUri,
-        // TODO (PM-6663): use wallet endpoint to get viewing updates
-        subscribeForTransactions(None, lastHash),
+        subscribeForViewingUpdates(Some(sessionId), lastHash, lastIndex),
       )
-    } yield RawTransaction(hash, rawTx)
-  }
+    } yield RawViewingUpdate(merkleTreeUpdate, txs.map(RawTransaction.apply))
 
-  private def connect(viewingKey: String) = {
+  private def connect(viewingKey: String) =
     Mutation
       .connect(viewingKey)
       .toRequest(indexerUri)
       .send[F, Any](backend)
       .map(_.body)
       .rethrow
-  }
 
-  private def subscribeForTransactions(
+  private def subscribeForViewingUpdates(
       sessionId: Option[SessionId],
       lastHash: Option[String],
-  ) = Subscription.transactions(sessionId, lastHash)(onTransactionAdded =
-    TransactionAdded.transaction(Transaction.hash ~ Transaction.raw),
-  )
+      lastIndex: Option[BigInt],
+  ) =
+    Subscription.wallet(
+      sessionId,
+      lastHash.map(hash => TransactionOffsetInput(Some(hash))),
+      lastIndex,
+    )(onViewingUpdate =
+      ViewingUpdate.merkleTreeCollapsedUpdate(
+        MerkleTreeCollapsedUpdate.update ~ MerkleTreeCollapsedUpdate.lastIndex,
+      ) ~ ViewingUpdate.transactions(Transaction.hash ~ Transaction.raw),
+    )
 
-  private def disconnect(sessionId: SessionId) = {
+  private def disconnect(sessionId: SessionId) =
     Mutation
       .disconnect(sessionId)
       .toRequest(indexerUri)
       .send[F, Any](backend)
       .map(_.body.getOrElse(()))
-  }
 
 }
 
@@ -70,4 +76,9 @@ object IndexerClient {
   }
 
   final case class RawTransaction(hash: String, raw: String)
+
+  final case class RawViewingUpdate(
+      collapsedMerkleTree: Option[(String, BigInt)],
+      transactions: Seq[RawTransaction],
+  )
 }

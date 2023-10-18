@@ -25,12 +25,12 @@ final case class ViewingWallet private (
       chainState: ZswapChainState,
   ): ViewingUpdate = {
     val newTxs = lastKnownTxHash match {
-      case Some(hash) =>
-        findTransactionsDiff(transactions, hash)
-      case None => transactions
+      case Some(hash) => findTransactionsDiff(transactions, hash)
+      case None       => transactions
     }
+    val lastIndex = chainState.firstFree - BigInt(1)
     ViewingUpdate(
-      MerkleTreeCollapsedUpdate(chainState, startIndex, chainState.firstFree - BigInt(1)),
+      Some(MerkleTreeCollapsedUpdate(chainState, startIndex, lastIndex), lastIndex),
       newTxs,
     )
   }

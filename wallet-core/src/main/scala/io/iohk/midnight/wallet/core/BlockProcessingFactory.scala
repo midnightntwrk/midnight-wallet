@@ -3,33 +3,27 @@ package io.iohk.midnight.wallet.core
 import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Pipe
-import io.iohk.midnight.wallet.blockchain.data.Transaction
-import io.iohk.midnight.wallet.core.capabilities.WalletTransactionProcessing
-import io.iohk.midnight.wallet.core.domain.TransactionHash
-import io.iohk.midnight.wallet.core.tracing.WalletTransactionProcessingTracer
+import io.iohk.midnight.wallet.core.capabilities.WalletSync
+import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
+import io.iohk.midnight.wallet.core.tracing.WalletSyncTracer
 
 object BlockProcessingFactory {
   def pipe[F[_]: Async, TWallet](walletStateContainer: WalletStateContainer[F, TWallet])(implicit
-      walletTransactionProcessing: WalletTransactionProcessing[TWallet, Transaction],
-      tracer: WalletTransactionProcessingTracer[F],
-  ): Pipe[F, Transaction, Either[WalletError, (AppliedTransaction, TWallet)]] = transactions => {
-    transactions
-      .map(tx => (tx, TransactionHash(tx.hash.value)))
-      .evalTap((_, hash) => tracer.handlingTransaction(hash))
-      .evalMap { (tx, hash) =>
+      walletSync: WalletSync[TWallet, ViewingUpdate],
+      tracer: WalletSyncTracer[F],
+  ): Pipe[F, ViewingUpdate, Either[WalletError, (ViewingUpdate, TWallet)]] =
+    _.evalTap(tracer.handlingUpdate)
+      .evalMap { viewingUpdate =>
         walletStateContainer
-          .updateStateEither { wallet =>
-            walletTransactionProcessing.applyTransaction(wallet, tx)
-          }
+          .updateStateEither(walletSync.applyUpdate(_, viewingUpdate))
           .flatTap {
-            case Right(_) => tracer.applyTransactionSuccess(hash)
+            case Right(_) => tracer.applyUpdateSuccess(viewingUpdate)
             // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-            case Left(error) => tracer.applyTransactionError(hash, error)
+            case Left(error) => tracer.applyUpdateError(viewingUpdate, error)
             // $COVERAGE-ON$
           }
-          .fmap(_.fmap((AppliedTransaction(hash), _)))
+          .fmap(_.fmap((viewingUpdate, _)))
       }
-  }
 
   final case class AppliedTransaction(hash: TransactionHash)
 }
