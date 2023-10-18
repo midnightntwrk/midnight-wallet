@@ -150,4 +150,6 @@ object Wallet {
       case None =>
         state.apply(transaction.guaranteedCoins)
     }
+
+  implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] = _.txHistory
 }

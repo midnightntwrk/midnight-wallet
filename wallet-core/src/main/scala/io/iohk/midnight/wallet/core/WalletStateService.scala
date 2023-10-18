@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.core
 
 import fs2.Stream
 import io.iohk.midnight.wallet.core.WalletStateService.State
-import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletCoins, WalletKeys}
+import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.zswap.*
 
 trait WalletStateService[F[_], TWallet] {
@@ -14,6 +14,7 @@ trait WalletStateService[F[_], TWallet] {
       walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[TWallet],
       walletCoins: WalletCoins[TWallet],
+      walletTxHistory: WalletTxHistory[TWallet, Transaction],
   ): Stream[F, State]
 }
 
@@ -36,6 +37,7 @@ object WalletStateService {
         walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
         walletBalances: WalletBalances[TWallet],
         walletCoins: WalletCoins[TWallet],
+        walletTxHistory: WalletTxHistory[TWallet, Transaction],
     ): Stream[F, State] =
       walletQueryStateService.queryStream { wallet =>
         State(
@@ -45,7 +47,7 @@ object WalletStateService {
           balances = walletBalances.balance(wallet),
           coins = walletCoins.coins(wallet),
           availableCoins = walletCoins.availableCoins(wallet),
-          transactionHistory = Seq.empty,
+          transactionHistory = walletTxHistory.transactionHistory(wallet),
         )
       }
   }

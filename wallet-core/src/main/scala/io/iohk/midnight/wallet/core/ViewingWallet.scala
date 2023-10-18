@@ -3,7 +3,12 @@ package io.iohk.midnight.wallet.core
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
 import io.iohk.midnight.wallet.core.WalletError.{BadTransactionFormat, LedgerExecutionError}
-import io.iohk.midnight.wallet.core.capabilities.{WalletKeys, WalletRestore, WalletSync}
+import io.iohk.midnight.wallet.core.capabilities.{
+  WalletKeys,
+  WalletRestore,
+  WalletSync,
+  WalletTxHistory,
+}
 import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
 import io.iohk.midnight.wallet.zswap.*
 import scala.annotation.tailrec
@@ -70,4 +75,6 @@ object ViewingWallet {
           else wallet
         }
     }
+
+  given WalletTxHistory[ViewingWallet, Transaction] = _.transactions
 }

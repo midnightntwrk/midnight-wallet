@@ -4,7 +4,12 @@ import cats.effect.{Deferred, IO}
 import cats.syntax.applicative.*
 import fs2.Stream
 import io.iohk.midnight.wallet.core.BlockProcessingFactory.AppliedTransaction
-import io.iohk.midnight.wallet.core.capabilities.{WalletBalances, WalletCoins, WalletKeys}
+import io.iohk.midnight.wallet.core.capabilities.{
+  WalletBalances,
+  WalletCoins,
+  WalletKeys,
+  WalletTxHistory,
+}
 import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
@@ -50,6 +55,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
       walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
+      walletTxHistory: WalletTxHistory[Wallet, Transaction],
   ): Stream[IO, WalletStateService.State] =
     Stream.emit(
       WalletStateService.State(
@@ -81,6 +87,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
       walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
+      walletTxHistory: WalletTxHistory[Wallet, Transaction],
   ): Stream[IO, WalletStateService.State] = {
     val state = LocalState()
     Stream.emit(
@@ -108,6 +115,7 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
       walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
       walletBalances: WalletBalances[Wallet],
       walletCoins: WalletCoins[Wallet],
+      walletTxHistory: WalletTxHistory[Wallet, Transaction],
   ): Stream[IO, WalletStateService.State] =
     Stream.emit(
       WalletStateService.State(
