@@ -1,6 +1,6 @@
 {
     "name": "@midnight/wallet",
-    "version": "3.2.0",
+    "version": "3.2.3",
     "main": "dist/main.js",
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
@@ -15,8 +15,8 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/wallet-api": "3.1.2",
-        "@midnight/zswap": "0.3.1",
+        "@midnight/wallet-api": "3.1.5",
+        "@midnight/zswap": "0.3.4",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

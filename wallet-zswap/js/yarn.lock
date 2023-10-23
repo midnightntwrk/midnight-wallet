@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight/zswap@0.3.1":
-  version "0.3.1"
-  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.3.1.tgz#b916db2c2812549ea49ec9a4f242ff214b32d72d"
-  integrity sha512-ZVh5IlNKPjXCd201UIHVubq7oK0pet3T9ryRC8UMFetu1AAhd4V0E3U2NMU20lgCQHD+ERD6kj+Lm+4fZpKLeA==
+"@midnight/zswap@0.3.4":
+  version "0.3.4"
+  resolved "https://nexus.p42.at/repository/npm-midnight/@midnight/zswap/-/zswap-0.3.4.tgz#91121ec6342e39b8b20998ec5387aaeadeb1de25"
+  integrity sha512-2rUDaCDSdzYdN9/hR0eKuZXOYKV8tQHV7chgGI0EUMGkWF1+f74hVdwTRHCk5QQSKZ50aiETHovXjX1UrgwJ7w==
 
 typescript@^4.8.3:
   version "4.9.5"

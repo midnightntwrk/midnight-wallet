@@ -93,7 +93,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.2.0",
+  version := "3.2.3",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -264,10 +264,10 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         downloadedFile
       }
 
-      val linuxAssetId = "131063606"
+      val linuxAssetId = "131582653"
       downloadFile(linuxAssetId)
 
-      val darwinAssetId = "131064656"
+      val darwinAssetId = "131582600"
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },

@@ -95,9 +95,9 @@ object Wallet {
           .balanceTransaction(wallet.state, transactionToBalance)
           .map {
             case BalanceTransactionResult.BalancedTransactionAndState(unprovenTx, state) =>
-              coins.foreach(state.watchFor)
+              val updatedState = coins.foldLeft(state)(_.watchFor(_))
               (
-                Wallet(state, wallet.txHistory),
+                Wallet(updatedState, wallet.txHistory),
                 BalanceTransactionToProve(unprovenTx, transactionToBalance),
               )
             case BalanceTransactionResult.ReadyTransactionAndState(tx, state) =>
