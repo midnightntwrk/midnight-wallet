@@ -1,19 +1,23 @@
-[DApp Connector API Reference - v2.9.2](README.md) / Exports
+[DApp Connector API Reference - v3.1.2](README.md) / Exports
 
-# DApp Connector API Reference - v2.9.2
+# DApp Connector API Reference - v3.1.2
 
 ## Table of contents
 
+### Classes
+
+- [APIError](classes/APIError.md)
+
 ### Interfaces
 
-- [APIError](interfaces/APIError.md)
 - [DAppConnectorAPI](interfaces/DAppConnectorAPI.md)
+- [DAppConnectorWalletState](interfaces/DAppConnectorWalletState.md)
+- [ServiceUriConfig](interfaces/ServiceUriConfig.md)
 
 ### Type Aliases
 
 - [DAppConnectorWalletAPI](modules.md#dappconnectorwalletapi)
 - [ErrorCode](modules.md#errorcode)
-- [WalletAPI](modules.md#walletapi)
 
 ### Variables
 
@@ -23,13 +27,13 @@
 
 ### DAppConnectorWalletAPI
 
-Ƭ **DAppConnectorWalletAPI**: [`WalletAPI`](modules.md#walletapi) & `WalletState`
+Ƭ **DAppConnectorWalletAPI**: { `state`: () => `Promise`<[`DAppConnectorWalletState`](interfaces/DAppConnectorWalletState.md)\>  } & `Pick`<`Wallet`, ``"submitTransaction"`` \| ``"balanceTransaction"`` \| ``"proveTransaction"``\>
 
 Shape of the Wallet API in the DApp Connector
 
 #### Defined in
 
-[api.ts:21](https://github.com/input-output-hk/midnight-wallet/blob/c3aab45/typescript/packages/dapp-connector-api/src/api.ts#L21)
+[api.ts:32](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L32)
 
 ___
 
@@ -41,19 +45,7 @@ ErrorCode type definition
 
 #### Defined in
 
-[errors.ts:16](https://github.com/input-output-hk/midnight-wallet/blob/c3aab45/typescript/packages/dapp-connector-api/src/errors.ts#L16)
-
-___
-
-### WalletAPI
-
-Ƭ **WalletAPI**: `Pick`<`Wallet`, ``"submitTransaction"`` \| ``"balanceTransaction"`` \| ``"proveTransaction"``\>
-
-The wallet functions that must be exposed
-
-#### Defined in
-
-[api.ts:16](https://github.com/input-output-hk/midnight-wallet/blob/c3aab45/typescript/packages/dapp-connector-api/src/api.ts#L16)
+[errors.ts:16](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/errors.ts#L16)
 
 ## Variables
 
@@ -73,4 +65,4 @@ The following error codes can be thrown by the dapp connector.
 
 #### Defined in
 
-[errors.ts:4](https://github.com/input-output-hk/midnight-wallet/blob/c3aab45/typescript/packages/dapp-connector-api/src/errors.ts#L4)
+[errors.ts:4](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/errors.ts#L4)

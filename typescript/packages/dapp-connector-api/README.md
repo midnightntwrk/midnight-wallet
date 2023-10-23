@@ -13,5 +13,11 @@ This package declares a set of [TypeScript](https://www.typescriptlang.org/) int
 To generate documentation files in `docs` folder:
 
 ```shell
-yarn run build:docs
+yarn build:docs
 ```
+
+## Global Variables Exposure
+
+This package declares a global variable in the `window.midnight.mnLace` scope.
+
+The package needs to be imported in the project or the (typeRoots)[https://www.typescriptlang.org/tsconfig#typeRoots] needs to be configured to load the global variable declaration.

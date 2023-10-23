@@ -11,8 +11,8 @@
   },
   "devDependencies": {
     "@cardano-sdk/key-management": "0.8.2",
-    "@midnight/wallet": "file:../../../wallet-engine/dist",
-    "@midnight/wallet-api": "3.0.1",
+    "@midnight/wallet": "file:../../../wallet-engine",
+    "@midnight/wallet-api": "3.1.2",
     "@types/jest": "^29.2.0",
     "@types/node": "^18.11.3",
     "@types/ws": "^8.5.4",

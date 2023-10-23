@@ -19,9 +19,14 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
  * Whenever there's a function called that returns a promise,
  * an error with the shape can be thrown.
  */
-export interface APIError {
+export class APIError {
   /** The code of the error that's thrown */
   code: ErrorCode;
   /** The reason the error is thrown */
   reason: string;
+
+  constructor(code: ErrorCode, reason: string) {
+    this.code = code;
+    this.reason = reason;
+  }
 }

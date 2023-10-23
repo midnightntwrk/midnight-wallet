@@ -1,7 +1,7 @@
 {
   "name": "@midnight/dapp-connector-api",
   "packageManager": "yarn@3.6.1",
-  "version": "2.9.2",
+  "version": "3.1.2",
   "description": "Midnight DApp Connector API",
   "module": "./dist/index.js",
   "main": "./dist/index.js",
@@ -15,7 +15,7 @@
   "scripts": {
     "prepack": "yarn build",
     "deploy": "yarn npm publish",
-    "build": "rm -rf ./dist && tsc --build",
+    "build": "rm -rf ./dist && tsc --build && cp src/global.d.ts dist",
     "lint": "eslint src",
     "build:docs": "typedoc --validation --plugin typedoc-plugin-markdown --options typedoc.json"
   },
@@ -37,6 +37,6 @@
     "typescript": "~4.8.4"
   },
   "dependencies": {
-    "@midnight/wallet-api": "^3.0.0"
+    "@midnight/wallet-api": "3.1.2"
   }
 }
