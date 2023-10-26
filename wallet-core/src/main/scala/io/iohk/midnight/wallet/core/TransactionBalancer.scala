@@ -81,7 +81,9 @@ object TransactionBalancer {
         offerAndState <- tryBalanceImbalances(imbalancesWithoutNativeToken, state)
         (offerContainer, offerState) = offerAndState
         nativeTokenOfferAndState <- tryBalanceImbalances(
-          Map(nativeTokenType -> (nativeTokenImbalance - calculateFee(offerContainer))),
+          Map(
+            nativeTokenType -> (nativeTokenImbalance - calculateFee(OfferContainer(Some(offer)))),
+          ),
           offerState,
         )
         (nativeTokenOfferContainer, finalState) = nativeTokenOfferAndState
@@ -231,7 +233,7 @@ object TransactionBalancer {
   private def calculateFee(offer: OfferContainer): BigInt = {
     val inputsFee = TokenType.InputFeeOverhead * BigInt(offer.inputsLength)
     val outputsFee = TokenType.OutputFeeOverhead * BigInt(offer.outputsLength)
-    inputsFee + outputsFee
+    inputsFee + outputsFee + TokenType.OutputFeeOverhead
   }
 
   sealed abstract class Error(message: String) extends Throwable(message)

@@ -4,6 +4,7 @@ import cats.syntax.show.*
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
 import io.iohk.midnight.wallet.core.WalletError
 import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.zswap.Transaction
 
 sealed trait WalletSyncEvent
 
@@ -32,20 +33,32 @@ object WalletSyncEvent {
     implicit val syncHandlingTransactionContext: AsStringLogContext[SyncHandlingUpdate] =
       AsStringLogContext.fromMap(evt =>
         Map(
-          "transaction_hashes" -> evt.update.transactionDiff.map(_.hash).mkString("[", ",", "]"),
+          "block_height" -> evt.update.blockHeight.show,
+          "transaction_hashes" -> evt.update.updates
+            .collect { case Right(tx) => tx }
+            .map(_.hash)
+            .mkString("[", ",", "]"),
         ),
       )
     implicit val applyUpdateSuccessContext: AsStringLogContext[ApplyUpdateSuccess] =
       AsStringLogContext.fromMap(evt =>
         Map(
-          "transaction_hashes" -> evt.update.transactionDiff.map(_.hash).mkString("[", ",", "]"),
+          "block_height" -> evt.update.blockHeight.show,
+          "transaction_hashes" -> evt.update.updates
+            .collect { case Right(tx) => tx }
+            .map(_.hash)
+            .mkString("[", ",", "]"),
         ),
       )
     // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
     implicit val applyUpdateErrorContext: AsStringLogContext[ApplyUpdateError] =
       AsStringLogContext.fromMap(evt =>
         Map(
-          "transaction_hashes" -> evt.update.transactionDiff.map(_.hash).mkString("[", ",", "]"),
+          "block_height" -> evt.update.blockHeight.show,
+          "transaction_hashes" -> evt.update.updates
+            .collect { case Right(tx) => tx }
+            .map(_.hash)
+            .mkString("[", ",", "]"),
           "error" -> evt.error.message,
         ),
       )

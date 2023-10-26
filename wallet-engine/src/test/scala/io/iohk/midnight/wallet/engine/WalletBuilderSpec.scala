@@ -25,6 +25,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           fakeSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(minLogLevel),
         ),
       )
@@ -45,6 +46,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           fakeSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(minLogLevel),
         ),
       )
@@ -65,6 +67,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           invalidProverServerUri,
           fakeSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(minLogLevel),
         ),
       )
@@ -85,6 +88,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           invalidSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(minLogLevel),
         ),
       )
@@ -105,6 +109,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           fakeSubstrateNodeUri,
           Some(invalidInitialState),
+          None,
           Some(minLogLevel),
         ),
       )
@@ -125,6 +130,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           fakeSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(invalidMinLogLevel),
         ),
       )
@@ -144,6 +150,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeProverServerUri,
           fakeSubstrateNodeUri,
           Some(initialState),
+          None,
           Some(minLogLevel),
         ),
       )

@@ -57,6 +57,7 @@ trait EndToEndSpecSetup {
             proverServerUri,
             substrateNodeUri,
             initialState,
+            None,
             LogLevel.Warn,
           ),
         )
@@ -81,6 +82,7 @@ trait EndToEndSpecSetup {
             proverServerUri,
             substrateNodeUri,
             initialState,
+            None,
             LogLevel.Warn,
           ),
         ),

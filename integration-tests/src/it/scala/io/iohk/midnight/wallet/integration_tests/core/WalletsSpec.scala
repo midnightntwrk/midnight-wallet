@@ -1,11 +1,12 @@
 package io.iohk.midnight.wallet.integration_tests.core
 
 import cats.data.NonEmptyList
+import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
-import io.iohk.midnight.wallet.core.{LedgerSerialization, ViewingWallet, Wallet}
 import io.iohk.midnight.wallet.core.Generators.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{Address as DomainAddress, *}
+import io.iohk.midnight.wallet.core.{LedgerSerialization, ViewingWallet, Wallet}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.*
 
@@ -71,7 +72,8 @@ class WalletsSpec extends WithProvingServerSuite {
         case Right(newViewingWallet) => newViewingWallet
 
       val viewingUpdate =
-        updatedViewingWallet.prepareUpdate(None, stateWithFunds.firstFree, chainState)
+        updatedViewingWallet
+          .prepareUpdate(None, chainState, stateWithFunds.firstFree)
 
       val updatedRegularWallet = summon[WalletSync[Wallet, ViewingUpdate]]
         .applyUpdate(regularWalletUsedForTransfer, viewingUpdate) match
@@ -85,7 +87,7 @@ class WalletsSpec extends WithProvingServerSuite {
           .balance(updatedRegularWallet)
           .getOrElse(TokenType.Native, BigInt(0))
 
-      assert(startBalance > endBalance)
+      assert(startBalance > endBalance, s"Start $startBalance, End $endBalance")
     }
 
   }

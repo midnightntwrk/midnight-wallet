@@ -8,6 +8,7 @@ final case class RawConfig(
     provingServerUri: String,
     substrateNodeUri: String,
     initialState: Option[String],
+    blockHeight: Option[BigInt],
     minLogLevel: Option[String],
 )
 

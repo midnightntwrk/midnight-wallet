@@ -1,17 +1,11 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
+import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction as WalletTransaction}
 import io.iohk.midnight.wallet.core.WalletError.{BadTransactionFormat, LedgerExecutionError}
-import io.iohk.midnight.wallet.core.capabilities.{
-  WalletKeys,
-  WalletRestore,
-  WalletSync,
-  WalletTxHistory,
-}
+import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
 import io.iohk.midnight.wallet.zswap.*
-import scala.annotation.tailrec
 
 final case class ViewingWallet private (
     coinPublicKey: CoinPublicKey,
@@ -20,33 +14,17 @@ final case class ViewingWallet private (
     transactions: Vector[Transaction],
 ) {
   def prepareUpdate(
-      lastKnownTxHash: Option[TransactionHash],
-      startIndex: BigInt,
+      lastKnownHash: Option[TransactionHash],
       chainState: ZswapChainState,
-  ): ViewingUpdate = {
-    val newTxs = lastKnownTxHash match {
-      case Some(hash) => findTransactionsDiff(transactions, hash)
-      case None       => transactions
-    }
-    val lastIndex = chainState.firstFree - BigInt(1)
+      start: BigInt,
+  ): ViewingUpdate =
     ViewingUpdate(
-      Some(MerkleTreeCollapsedUpdate(chainState, startIndex, lastIndex), lastIndex),
-      newTxs,
+      Block.Height.Genesis,
+      lastKnownHash
+        .fold(transactions)(hash => transactions.dropWhile(_.hash =!= hash.hash))
+        .map(_.asRight) ++
+        Seq(MerkleTreeCollapsedUpdate(chainState, start, chainState.firstFree - BigInt(1)).asLeft),
     )
-  }
-
-  @tailrec
-  private def findTransactionsDiff(
-      transactions: Vector[Transaction],
-      lastKnownTxHash: TransactionHash,
-  ): Vector[Transaction] = {
-    transactions match
-      case head +: tail =>
-        if (head.hash === lastKnownTxHash.hash) tail
-        else findTransactionsDiff(tail, lastKnownTxHash)
-      case _ =>
-        Vector.empty[Transaction]
-  }
 }
 
 object ViewingWallet {

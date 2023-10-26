@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.engine.tracing.sync
 
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
-import io.iohk.midnight.wallet.indexer.IndexerClient.RawViewingUpdate
+import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
 
 sealed trait SyncServiceEvent
 
@@ -33,7 +33,11 @@ object SyncServiceEvent {
 
     implicit val viewingUpdateReceivedContext: AsStringLogContext[ViewingUpdateReceived] =
       AsStringLogContext.fromMap[ViewingUpdateReceived](evt =>
-        Map("transaction_hashes" -> evt.update.transactions.mkString("[", ",", "]")),
+        Map(
+          "transaction_hashes" -> evt.update.updates
+            .collect { case SingleUpdate.RawTransaction(hash, _) => hash }
+            .mkString("[", ",", "]"),
+        ),
       )
   }
 }

@@ -1,11 +1,9 @@
 package io.iohk.midnight.wallet.core.services
 
 import fs2.Stream
-import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
+import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.core.domain.ViewingUpdate
 
 trait SyncService[F[_]] {
-  def sync(
-      lastHash: Option[TransactionHash] = None,
-      lastIndex: Option[BigInt] = None,
-  ): Stream[F, ViewingUpdate]
+  def sync(blockHeight: Option[Block.Height]): Stream[F, ViewingUpdate]
 }

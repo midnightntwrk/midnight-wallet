@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.indexer
 
+import caliban.client.Operations.RootSubscription
 import caliban.client.SelectionBuilder
 import cats.effect.kernel.Concurrent
 import cats.effect.{Async, Resource}
@@ -7,7 +8,7 @@ import cats.syntax.applicative.*
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
 import fs2.Stream
-import io.iohk.midnight.wallet.indexer.IndexerClient.{RawTransaction, RawViewingUpdate}
+import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -21,18 +22,17 @@ class IndexerClient[F[_]: Async: Concurrent](
 
   def viewingUpdates(
       viewingKey: String,
-      lastHash: Option[String] = None,
-      lastIndex: Option[BigInt] = None,
+      blockHeight: Option[BigInt],
   ): Stream[F, RawViewingUpdate] =
     for {
       sessionId <- Stream.resource(
         Resource.make(connect(viewingKey))(disconnect),
       )
-      (merkleTreeUpdate, txs) <- GraphQLSubscriber.subscribe(
+      (blockHeight, updates) <- GraphQLSubscriber.subscribe(
         indexerWsUri,
-        subscribeForViewingUpdates(Some(sessionId), lastHash, lastIndex),
+        subscribeForViewingUpdates(Some(sessionId), blockHeight),
       )
-    } yield RawViewingUpdate(merkleTreeUpdate, txs.map(RawTransaction.apply))
+    } yield RawViewingUpdate(blockHeight, updates)
 
   private def connect(viewingKey: String) =
     Mutation
@@ -44,17 +44,19 @@ class IndexerClient[F[_]: Async: Concurrent](
 
   private def subscribeForViewingUpdates(
       sessionId: Option[SessionId],
-      lastHash: Option[String],
-      lastIndex: Option[BigInt],
-  ) =
+      blockHeight: Option[BigInt],
+  ): SelectionBuilder[RootSubscription, (BigInt, List[SingleUpdate])] =
     Subscription.wallet(
       sessionId,
-      lastHash.map(hash => TransactionOffsetInput(Some(hash))),
-      lastIndex,
+      blockHeight,
     )(onViewingUpdate =
-      ViewingUpdate.merkleTreeCollapsedUpdate(
-        MerkleTreeCollapsedUpdate.update ~ MerkleTreeCollapsedUpdate.lastIndex,
-      ) ~ ViewingUpdate.transactions(Transaction.hash ~ Transaction.raw),
+      ViewingUpdate.blockHeight ~ ViewingUpdate
+        .update[SingleUpdate](
+          MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
+          RelevantTransaction
+            .transaction(Transaction.hash ~ Transaction.raw)
+            .map(SingleUpdate.RawTransaction.apply.tupled),
+        ),
     )
 
   private def disconnect(sessionId: SessionId) =
@@ -75,10 +77,12 @@ object IndexerClient {
     Resource.make(backend.pure)(_.close()).map(new IndexerClient[F](indexerUri, indexerWsUri, _))
   }
 
-  final case class RawTransaction(hash: String, raw: String)
+  sealed trait SingleUpdate
 
-  final case class RawViewingUpdate(
-      collapsedMerkleTree: Option[(String, BigInt)],
-      transactions: Seq[RawTransaction],
-  )
+  object SingleUpdate {
+    final case class RawTransaction(hash: String, raw: String) extends SingleUpdate
+    final case class MerkleTreeCollapsedUpdate(update: String) extends SingleUpdate
+  }
+
+  final case class RawViewingUpdate(blockHeight: BigInt, updates: Seq[SingleUpdate])
 }

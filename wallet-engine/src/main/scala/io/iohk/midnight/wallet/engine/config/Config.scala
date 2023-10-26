@@ -1,11 +1,15 @@
 package io.iohk.midnight.wallet.engine.config
 
 import cats.Show
-import cats.syntax.apply.*
-import cats.syntax.either.*
+import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.LedgerSerialization
-import io.iohk.midnight.wallet.engine.config.Config.ParseError.{InvalidLogLevel, InvalidUri}
+import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
+  InvalidBlockHeight,
+  InvalidLogLevel,
+  InvalidUri,
+}
 import io.iohk.midnight.wallet.zswap.LocalState
 import sttp.model.Uri
 
@@ -15,17 +19,19 @@ final case class Config(
     provingServerUri: Uri,
     substrateNodeUri: Uri,
     initialState: LocalState,
+    blockHeight: Option[Block.Height],
     minLogLevel: LogLevel,
 )
 
 object Config {
   def parse(rawConfig: RawConfig): Either[Throwable, Config] =
     (
-      Uri.parse(rawConfig.indexerUri).leftMap(error => InvalidUri(error)),
-      Uri.parse(rawConfig.indexerWsUri).leftMap(error => InvalidUri(error)),
-      Uri.parse(rawConfig.provingServerUri).leftMap(error => InvalidUri(error)),
-      Uri.parse(rawConfig.substrateNodeUri).leftMap(error => InvalidUri(error)),
+      Uri.parse(rawConfig.indexerUri).leftMap(InvalidUri.apply),
+      Uri.parse(rawConfig.indexerWsUri).leftMap(InvalidUri.apply),
+      Uri.parse(rawConfig.provingServerUri).leftMap(InvalidUri.apply),
+      Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
       parseInitialState(rawConfig.initialState),
+      rawConfig.blockHeight.traverse(Block.Height.apply).leftMap(InvalidBlockHeight.apply),
       parseLogLevel(rawConfig.minLogLevel),
     )
       .mapN(Config.apply)
@@ -51,5 +57,6 @@ object Config {
   object ParseError {
     final case class InvalidLogLevel(msg: String) extends ParseError(msg)
     final case class InvalidUri(msg: String) extends ParseError(msg)
+    final case class InvalidBlockHeight(msg: String) extends ParseError(msg)
   }
 }

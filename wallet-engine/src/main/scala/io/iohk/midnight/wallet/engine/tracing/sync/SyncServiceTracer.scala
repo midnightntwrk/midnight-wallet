@@ -10,7 +10,7 @@ import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceEvent.{
   SyncFailed,
   ViewingUpdateReceived,
 }
-import io.iohk.midnight.wallet.indexer.IndexerClient.RawViewingUpdate
+import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
 
 class SyncServiceTracer[F[_]](val tracer: Tracer[F, SyncServiceEvent]) {
 
@@ -45,8 +45,10 @@ object SyncServiceTracer {
       id = ViewingUpdateReceived.id,
       component = Component,
       level = LogLevel.Debug,
-      message =
-        evt => s"Viewing update received with ${evt.update.transactions.mkString("[", ",", "]")}.",
+      message = evt =>
+        s"Viewing update received with ${evt.update.updates
+            .collect { case SingleUpdate.RawTransaction(hash, _) => hash }
+            .mkString("[", ",", "]")}.",
       context = _.stringLogContext,
     )
 

@@ -137,6 +137,7 @@ object JsWallet {
       proverServerUri,
       substrateNodeUri,
       initialState.toOption,
+      None,
       minLogLevel.toOption,
     )
       .unsafeToPromise()
@@ -176,6 +177,7 @@ object JsWallet {
           proverServerUri,
           substrateNodeUri,
           Some(LedgerSerialization.serializeState(state)),
+          None,
           minLogLevel,
         ),
       )
@@ -187,6 +189,7 @@ object JsWallet {
       proverServerUri: String,
       substrateNodeUri: String,
       initialState: Option[String],
+      blockHeight: Option[BigInt],
       minLogLevel: Option[String],
   ): IO[api.Wallet] = {
     val rawConfig =
@@ -196,6 +199,7 @@ object JsWallet {
         proverServerUri,
         substrateNodeUri,
         initialState,
+        blockHeight,
         minLogLevel,
       )
 

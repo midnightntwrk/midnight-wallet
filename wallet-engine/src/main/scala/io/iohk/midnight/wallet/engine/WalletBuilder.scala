@@ -6,6 +6,7 @@ import cats.effect.syntax.resource.*
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.ViewingUpdate
@@ -74,6 +75,7 @@ object WalletBuilder {
       walletBlockProcessingService <- buildWalletSyncService(
         stateSyncService,
         walletStateContainer,
+        config.blockHeight,
       )
       walletTransactionService <- buildWalletTransactionService(
         walletStateContainer,
@@ -97,12 +99,13 @@ object WalletBuilder {
   private def buildWalletSyncService[F[_]: Async, TWallet](
       syncService: SyncService[F],
       walletStateContainer: WalletStateContainer[F, TWallet],
+      blockHeight: Option[Block.Height],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
       walletSync: WalletSync[TWallet, ViewingUpdate],
   ): Resource[F, WalletSyncService[F]] = {
     implicit val walletSyncTracer: WalletSyncTracer[F] = WalletSyncTracer.from(rootTracer)
-    WalletSyncService(syncService, walletStateContainer)
+    WalletSyncService(syncService, walletStateContainer, blockHeight)
   }
 
   private def buildWalletTxSubmissionService[F[_]: Async, TWallet](

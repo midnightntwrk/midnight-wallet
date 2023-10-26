@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
+import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.TransactionBalancer.BalanceTransactionResult
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
@@ -13,17 +14,20 @@ import io.iohk.midnight.wallet.core.domain.{
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
-import scala.util.Try
 
-final case class Wallet private (private val state: LocalState, txHistory: Vector[Transaction])
+final case class Wallet private (
+    private val state: LocalState = LocalState(),
+    txHistory: Vector[Transaction] = Vector.empty,
+    blockHeight: Option[Block.Height] = None,
+)
 
 object Wallet {
 
   implicit val walletCreation: WalletCreation[Wallet, LocalState] =
-    (initialState: LocalState) => Wallet(initialState, Vector.empty)
+    (initialState: LocalState) => Wallet(initialState)
 
   implicit val walletRestore: WalletRestore[Wallet, Seed] =
-    (input: Seed) => new Wallet(LocalState.fromSeed(input.seed), Vector.empty)
+    (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
 
   implicit val walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
     wallet.state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _)
@@ -110,21 +114,15 @@ object Wallet {
       }
     }
 
-  private def isRelevant(wallet: Wallet, tx: Transaction): Try[Boolean] =
-    wallet.state.encryptionSecretKey.test(tx)
-
   implicit val walletSync: WalletSync[Wallet, ViewingUpdate] =
     (wallet: Wallet, update: ViewingUpdate) => {
-      val stateWithMTUpdated: LocalState =
-        update.merkleTreeUpdate.fold(wallet.state)((mt, _) => wallet.state.applyCollapsedUpdate(mt))
-      val stateWithAppliedTxs = update.transactionDiff.foldLeft(stateWithMTUpdated) {
-        case (state, transaction) => applyTransaction(state, transaction)
-      }
-      val newTxs = update.transactionDiff
-        .filterA(isRelevant(wallet, _))
-        .toEither
-        .leftMap(WalletError.LedgerExecutionError.apply)
-      newTxs.map(txs => Wallet(stateWithAppliedTxs, wallet.txHistory ++ txs))
+      val newState =
+        update.updates.foldLeft(wallet.state) {
+          case (state, Left(mt))  => state.applyCollapsedUpdate(mt)
+          case (state, Right(tx)) => applyTransaction(state, tx)
+        }
+      val newTxs = update.updates.collect { case Right(tx) => tx }
+      Wallet(newState, wallet.txHistory ++ newTxs, Some(update.blockHeight)).asRight
     }
 
   // TODO use information about fallible execution success to apply fallible offer

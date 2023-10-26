@@ -93,7 +93,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.2.3",
+  version := "3.3.3",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -264,10 +264,10 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         downloadedFile
       }
 
-      val linuxAssetId = "131582653"
+      val linuxAssetId = "132176107"
       downloadFile(linuxAssetId)
 
-      val darwinAssetId = "131582600"
+      val darwinAssetId = "132176833"
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
@@ -327,7 +327,7 @@ lazy val substrateClient = project
 lazy val pubSubIndexerClient = project
   .in(file("pubsub-indexer-client"))
   .dependsOn(jsInterop)
-  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin, CalibanPlugin)
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
