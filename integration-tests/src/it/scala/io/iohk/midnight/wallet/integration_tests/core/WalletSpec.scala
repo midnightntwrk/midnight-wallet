@@ -25,21 +25,21 @@ abstract class WalletSpec
   override val walletKeys
       : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
     Wallet.walletKeys
-  private val defaultState = LocalState()
+  private val defaultState = Wallet.Snapshot.create
   override val walletWithKeys: Wallet = Wallet.walletCreation.create(defaultState)
-  override val expectedCoinPubKey: CoinPublicKey = defaultState.coinPublicKey
+  override val expectedCoinPubKey: CoinPublicKey = defaultState.state.coinPublicKey
   override val compareCoinPubKeys: (CoinPublicKey, CoinPublicKey) => Boolean = {
     given Eq[CoinPublicKey] = Eq.fromUniversalEquals
     (key1, key2) => key1 === key2
   }
 
-  override val expectedEncPubKey: EncryptionPublicKey = defaultState.encryptionPublicKey
+  override val expectedEncPubKey: EncryptionPublicKey = defaultState.state.encryptionPublicKey
   override val compareEncPubKeys: (EncryptionPublicKey, EncryptionPublicKey) => Boolean = {
     given Eq[EncryptionPublicKey] = Eq.fromUniversalEquals
     (key1, key2) => key1 === key2
   }
 
-  override val expectedViewingKey: EncryptionSecretKey = defaultState.encryptionSecretKey
+  override val expectedViewingKey: EncryptionSecretKey = defaultState.state.encryptionSecretKey
   override val compareViewingKeys: (EncryptionSecretKey, EncryptionSecretKey) => Boolean = {
     given Eq[EncryptionSecretKey] = Eq.fromUniversalEquals
     (key1, key2) => key1 === key2
@@ -49,7 +49,11 @@ abstract class WalletSpec
   override val expectedBalance: BigInt = BigInt(100)
   override val walletWithBalances: Wallet =
     Wallet.walletCreation.create(
-      Generators.generateStateWithFunds(NonEmptyList.one((TokenType.Native, expectedBalance))),
+      Wallet.Snapshot(
+        Generators.generateStateWithFunds(NonEmptyList.one((TokenType.Native, expectedBalance))),
+        Seq.empty,
+        None,
+      ),
     )
 
   override val walletTxBalancing: WalletTxBalancing[Wallet, Transaction, CoinInfo] =
@@ -63,8 +67,12 @@ abstract class WalletSpec
   override val walletWithFundsForBalancing: IO[Wallet] =
     imbalanceValue.map { value =>
       Wallet.walletCreation.create(
-        Generators.generateStateWithFunds(
-          NonEmptyList.one((TokenType.Native, value * value)),
+        Wallet.Snapshot(
+          Generators.generateStateWithFunds(
+            NonEmptyList.one((TokenType.Native, value * value)),
+          ),
+          Seq.empty,
+          None,
         ),
       )
     }
@@ -77,7 +85,9 @@ abstract class WalletSpec
       ZswapChainState().tryApply(tx.transaction.guaranteedCoins),
     )
   override val walletForUpdates: IO[Wallet] =
-    txWithContext.map((tx, _) => Wallet.walletCreation.create(tx.state))
+    txWithContext.map((tx, _) =>
+      Wallet.walletCreation.create(Wallet.Snapshot(tx.state, Seq(tx.transaction), None)),
+    )
   override val validUpdateToApply: IO[ViewingUpdate] =
     txWithContext.map { (txCtx, chainState) =>
       ViewingUpdate(

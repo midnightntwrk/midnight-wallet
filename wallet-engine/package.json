@@ -15,7 +15,7 @@
         "registry": "https://nexus.p42.at/repository/npm-midnight/"
     },
     "dependencies": {
-        "@midnight/wallet-api": "3.1.5",
+        "@midnight/wallet-api": "3.2.0",
         "@midnight/zswap": "0.3.4",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",

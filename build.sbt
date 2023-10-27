@@ -20,6 +20,7 @@ lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 val scala33 = "3.3.0"
 val catsVersion = "2.9.0"
 val catsEffectVersion = "3.5.0"
+val circeVersion = "0.14.6"
 val fs2Version = "3.7.0"
 val log4CatsVersion = "2.4.0"
 val midnightTracingVersion = "1.3.0"
@@ -161,6 +162,9 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
       "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
       "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
+      "io.circe" %%% "circe-core" % circeVersion,
+      "io.circe" %%% "circe-parser" % circeVersion,
+      "io.circe" %%% "circe-generic" % circeVersion
     ),
 
     // Test dependencies

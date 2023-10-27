@@ -111,6 +111,9 @@ class JsWallet(
       .map(ProvingRecipeTransformer.toApiTransactionToProve)
       .unsafeToPromise()
 
+  def serializeState(): Promise[String] =
+    walletStateService.serializeState.map(_.serializedState).unsafeToPromise()
+
   def start(): Unit =
     walletSyncService.updates.compile.drain.unsafeRunAndForget()
 
@@ -128,7 +131,6 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
-      initialState: js.UndefOr[String],
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
     internalBuild(
@@ -136,11 +138,9 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      initialState.toOption,
-      None,
       minLogLevel.toOption,
-    )
-      .unsafeToPromise()
+      none[RawConfig.InitialState],
+    ).unsafeToPromise()
 
   @JSExport
   def buildFromSeed(
@@ -151,46 +151,40 @@ object JsWallet {
       seed: String,
       minLogLevel: js.UndefOr[String],
   ): js.Promise[api.Wallet] =
-    internalBuildFromSeed(
+    internalBuild(
       indexerUri,
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      seed,
       minLogLevel.toOption,
-    )
-      .unsafeToPromise()
+      RawConfig.InitialState.Seed(seed).some,
+    ).unsafeToPromise()
 
-  private def internalBuildFromSeed(
+  @JSExport
+  def restore(
       indexerUri: String,
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
-      seed: String,
-      minLogLevel: Option[String],
-  ): IO[api.Wallet] = {
-    IO.fromEither(LedgerSerialization.fromSeed(seed))
-      .flatMap(state =>
-        internalBuild(
-          indexerUri,
-          indexerWsUri,
-          proverServerUri,
-          substrateNodeUri,
-          Some(LedgerSerialization.serializeState(state)),
-          None,
-          minLogLevel,
-        ),
-      )
-  }
+      serializedState: String,
+      minLogLevel: js.UndefOr[String],
+  ): js.Promise[api.Wallet] =
+    internalBuild(
+      indexerUri,
+      indexerWsUri,
+      proverServerUri,
+      substrateNodeUri,
+      minLogLevel.toOption,
+      RawConfig.InitialState.SerializedSnapshot(serializedState).some,
+    ).unsafeToPromise()
 
   private def internalBuild(
       indexerUri: String,
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
-      initialState: Option[String],
-      blockHeight: Option[BigInt],
       minLogLevel: Option[String],
+      initialState: Option[RawConfig.InitialState],
   ): IO[api.Wallet] = {
     val rawConfig =
       RawConfig(
@@ -198,9 +192,8 @@ object JsWallet {
         indexerWsUri,
         proverServerUri,
         substrateNodeUri,
-        initialState,
-        blockHeight,
         minLogLevel,
+        initialState,
       )
 
     for {
@@ -236,5 +229,5 @@ object JsWallet {
 
   @JSExport
   def generateInitialState(): String =
-    LedgerSerialization.serializeState(LocalState())
+    Wallet.Snapshot.create.serialize
 }

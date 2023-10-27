@@ -75,4 +75,23 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       result <- isFinished.get.timeout(5.seconds)
     } yield assert(result)
   }
+
+  test("Serialize wallet state") {
+    val generated = JsWallet.generateInitialState()
+    for {
+      restored <- IO.fromPromise(
+        IO(
+          JsWallet.restore(
+            "http://indexer",
+            "http://indexer",
+            "http://prover",
+            "http://node",
+            generated,
+            "warn",
+          ),
+        ),
+      )
+      serialized <- IO.fromPromise(IO(restored.serializeState()))
+    } yield assertEquals(serialized, generated)
+  }
 }

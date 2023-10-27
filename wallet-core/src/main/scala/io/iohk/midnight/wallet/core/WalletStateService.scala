@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import fs2.Stream
-import io.iohk.midnight.wallet.core.WalletStateService.State
+import io.iohk.midnight.wallet.core.WalletStateService.{State, SerializedWalletState}
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.zswap.*
 
@@ -16,6 +16,10 @@ trait WalletStateService[F[_], TWallet] {
       walletCoins: WalletCoins[TWallet],
       walletTxHistory: WalletTxHistory[TWallet, Transaction],
   ): Stream[F, State]
+
+  def serializeState(using
+      stateSerializer: WalletStateSerialize[TWallet, SerializedWalletState],
+  ): F[SerializedWalletState]
 }
 
 object WalletStateService {
@@ -50,6 +54,11 @@ object WalletStateService {
           transactionHistory = walletTxHistory.transactionHistory(wallet),
         )
       }
+
+    override def serializeState(using
+        stateSerializer: WalletStateSerialize[TWallet, SerializedWalletState],
+    ) =
+      walletQueryStateService.queryOnce { wallet => stateSerializer.serialize(wallet) }
   }
 
   // TODO improve returning type or add estimated fee to recipe
@@ -68,4 +77,6 @@ object WalletStateService {
   ) {
     lazy val address: Address = Address(coinPublicKey, encryptionPublicKey)
   }
+
+  case class SerializedWalletState(serializedState: String)
 }

@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.integration_tests.engine
 
 import cats.data.NonEmptyList
 import cats.effect.IO
-import cats.syntax.eq.*
+import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightWalletApi.distTypesMod.{
@@ -14,6 +14,7 @@ import io.iohk.midnight.midnightWalletApi.distTypesMod.{
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
+import io.iohk.midnight.wallet.engine.WalletSyncService
 import io.iohk.midnight.wallet.engine.js.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
@@ -26,9 +27,9 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   private val transferRecipe =
     domain.TransactionToProve(unprovenTransactionArbitrary.arbitrary.sample.get)
 
-  def jsWallet: JsWallet =
+  def jsWallet(syncService: WalletSyncService[IO] = new WalletSyncServiceStub()): JsWallet =
     new JsWallet(
-      new WalletSyncServiceStub(),
+      syncService,
       new WalletStateServiceStub(),
       new WalletTxSubmissionServiceStub(),
       new WalletTransactionServiceWithProvingStub(provingService, transferRecipe),
@@ -41,7 +42,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
         @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
         val txIdentifier = tx.identifiers.headOption.get
 
-        val promise = jsWallet.submitTransaction(tx.toJs)
+        val promise = jsWallet().submitTransaction(tx.toJs)
         IO.fromPromise(IO(promise))
           .map { txId =>
             assert(txId === txIdentifier)
@@ -58,7 +59,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
         }
         .toList
         .toJSArray
-      val promise = jsWallet.transferTransaction(apiTokenTransfers)
+      val promise = jsWallet().transferTransaction(apiTokenTransfers)
       IO.fromPromise(IO(promise))
         .map { apiRecipe =>
           assertEquals(ProvingRecipeTransformer.toRecipe(apiRecipe), Right(transferRecipe))
@@ -68,7 +69,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
 
   test("submitting tx to prove should return proved transaction") {
     forAllF { (unprovenTx: UnprovenTransaction) =>
-      val promise = jsWallet.proveTransaction(
+      val promise = jsWallet().proveTransaction(
         ApiProvingRecipe.TransactionToProve(unprovenTx.toJs, TRANSACTION_TO_PROVE),
       )
       IO.fromPromise(IO(promise))
@@ -85,7 +86,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     forAllF { (provenTxIO: IO[Transaction]) =>
       provenTxIO.flatMap { provenTx =>
         val promise =
-          jsWallet.proveTransaction(
+          jsWallet().proveTransaction(
             ApiProvingRecipe.NothingToProve(provenTx.toJs, NOTHING_TO_PROVE),
           )
         IO.fromPromise(IO(promise))
@@ -100,7 +101,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
       txWithContextIO.flatMap { case TransactionWithContext(transaction, _, coins) =>
         val promise =
-          jsWallet.balanceTransaction(transaction.toJs, coins.map(_.toJs).toList.toJSArray)
+          jsWallet().balanceTransaction(transaction.toJs, coins.map(_.toJs).toList.toJSArray)
         IO.fromPromise(IO(promise))
           .map { apiRecipe =>
             assertEquals(

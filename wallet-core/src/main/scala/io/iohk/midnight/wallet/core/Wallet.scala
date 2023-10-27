@@ -1,7 +1,10 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.blockchain.data.Block
+import io.circe.*
+import io.circe.syntax.*
+import io.circe.generic.semiauto.*
+import io.circe.parser.decode
 import io.iohk.midnight.wallet.core.TransactionBalancer.BalanceTransactionResult
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
@@ -14,6 +17,8 @@ import io.iohk.midnight.wallet.core.domain.{
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 
 final case class Wallet private (
     private val state: LocalState = LocalState(),
@@ -23,8 +28,9 @@ final case class Wallet private (
 
 object Wallet {
 
-  implicit val walletCreation: WalletCreation[Wallet, LocalState] =
-    (initialState: LocalState) => Wallet(initialState)
+  implicit val walletCreation: WalletCreation[Wallet, Wallet.Snapshot] =
+    (snapshot: Wallet.Snapshot) =>
+      Wallet(snapshot.state, snapshot.txHistory.toVector, snapshot.blockHeight)
 
   implicit val walletRestore: WalletRestore[Wallet, Seed] =
     (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
@@ -135,4 +141,37 @@ object Wallet {
     }
 
   implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] = _.txHistory
+
+  implicit val serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
+    (wallet: Wallet) =>
+      SerializedWalletState(
+        Snapshot(wallet.state, wallet.txHistory, wallet.blockHeight).serialize,
+      )
+
+  final case class Snapshot(
+      state: LocalState,
+      txHistory: Seq[Transaction],
+      blockHeight: Option[Block.Height],
+  ) {
+    def serialize: String = this.asJson.noSpaces
+  }
+  object Snapshot {
+    def parse(serialized: String): Either[Throwable, Snapshot] =
+      decode[Snapshot](serialized)
+
+    def fromSeed(seed: String): Either[Throwable, Snapshot] =
+      LedgerSerialization.fromSeed(seed).map(Snapshot(_, Seq.empty, None))
+
+    def create: Snapshot = Snapshot(LocalState(), Seq.empty, None)
+
+    given Encoder[LocalState] = Encoder.instance(LedgerSerialization.serializeState(_).asJson)
+    given Encoder[Transaction] = Encoder.instance(_.serialize.asJson)
+    given Encoder[Block.Height] = Encoder.encodeBigInt.contramap(_.value)
+    given Encoder[Snapshot] = deriveEncoder[Snapshot]
+    given Decoder[LocalState] = Decoder[String].emapTry(LedgerSerialization.parseState(_).toTry)
+    given Decoder[Transaction] =
+      Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize)
+    given Decoder[Block.Height] = Decoder[BigInt].emap(Block.Height.apply)
+    given Decoder[Snapshot] = deriveDecoder[Snapshot]
+  }
 }

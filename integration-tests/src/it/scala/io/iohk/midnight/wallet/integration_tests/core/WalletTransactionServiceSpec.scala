@@ -17,10 +17,11 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   def buildWalletTransactionService[TWallet](
       initialState: LocalState = LocalState(),
   )(using
-      walletCreation: WalletCreation[TWallet, LocalState],
+      walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, CoinInfo],
   ): Resource[IO, WalletTransactionService[IO]] = {
-    Bloc[IO, TWallet](walletCreation.create(initialState)).map { bloc =>
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None)
+    Bloc[IO, TWallet](walletCreation.create(snapshot)).map { bloc =>
       new core.WalletTransactionService.Live[IO, TWallet](
         new WalletStateContainer.Live(bloc),
         provingService,

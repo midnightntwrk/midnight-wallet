@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.effect.std.Queue
 import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.wallet.core
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer, ViewingUpdate}
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
@@ -56,9 +57,8 @@ trait EndToEndSpecSetup {
             indexerWSUri,
             proverServerUri,
             substrateNodeUri,
-            initialState,
-            None,
             LogLevel.Warn,
+            core.Wallet.Snapshot(initialState, Seq.empty, None),
           ),
         )
         .flatTap(_.dependencies.walletSyncService.updates.compile.drain.start),
@@ -81,9 +81,8 @@ trait EndToEndSpecSetup {
             indexerWSUri,
             proverServerUri,
             substrateNodeUri,
-            initialState,
-            None,
             LogLevel.Warn,
+            core.Wallet.Snapshot(initialState, Seq.empty, None),
           ),
         ),
     )(_.finalizer)

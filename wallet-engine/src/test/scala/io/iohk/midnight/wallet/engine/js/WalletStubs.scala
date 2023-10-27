@@ -3,10 +3,12 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.{Deferred, IO}
 import cats.syntax.applicative.*
 import fs2.Stream
+import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.{
   WalletBalances,
   WalletCoins,
   WalletKeys,
+  WalletStateSerialize,
   WalletTxHistory,
 }
 import io.iohk.midnight.wallet.core.domain.{
@@ -68,6 +70,11 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
         Seq.empty,
       ),
     )
+
+  def serializeState(using
+      stateSerializer: WalletStateSerialize[Wallet, SerializedWalletState],
+  ): IO[SerializedWalletState] =
+    IO.pure(SerializedWalletState(Wallet.Snapshot(state, Seq.empty, None).serialize))
 }
 
 class WalletSyncServiceStartStub(ref: Deferred[IO, Boolean]) extends WalletSyncService[IO] {
@@ -101,6 +108,10 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
       ),
     )
   }
+
+  def serializeState(using
+      stateSerializer: WalletStateSerialize[Wallet, SerializedWalletState],
+  ): IO[SerializedWalletState] = IO.raiseError(Exception("Not implemented"))
 }
 
 class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: EncryptionPublicKey)
@@ -127,6 +138,10 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
         Seq.empty,
       ),
     )
+
+  def serializeState(using
+      stateSerializer: WalletStateSerialize[Wallet, SerializedWalletState],
+  ): IO[SerializedWalletState] = IO.raiseError(Exception("Not implemented"))
 }
 
 class WalletTxSubmissionServiceStub extends WalletTxSubmissionService[IO] {

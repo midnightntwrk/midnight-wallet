@@ -41,7 +41,7 @@ object WalletBuilder {
   }
 
   private def buildWallet[F[_]: Async, TWallet](config: Config)(implicit
-      walletCreation: WalletCreation[TWallet, zswap.LocalState],
+      walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
       walletKeys: WalletKeys[
         TWallet,
         zswap.CoinPublicKey,
@@ -75,7 +75,7 @@ object WalletBuilder {
       walletBlockProcessingService <- buildWalletSyncService(
         stateSyncService,
         walletStateContainer,
-        config.blockHeight,
+        config.initialState.blockHeight,
       )
       walletTransactionService <- buildWalletTransactionService(
         walletStateContainer,

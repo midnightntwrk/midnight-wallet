@@ -3,7 +3,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { firstValueFrom } from 'rxjs';
-import { WalletBuilder } from '../../node_modules/@midnight/wallet/main';
+import { WalletBuilder } from '@midnight/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { useTestContainersFixture } from './test-fixture';
 

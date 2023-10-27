@@ -3,14 +3,13 @@ package io.iohk.midnight.wallet.engine.config
 import cats.Show
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.blockchain.data.Block
-import io.iohk.midnight.wallet.core.LedgerSerialization
+import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
-  InvalidBlockHeight,
   InvalidLogLevel,
+  InvalidSerializedSnapshot,
   InvalidUri,
 }
-import io.iohk.midnight.wallet.zswap.LocalState
+import io.iohk.midnight.wallet.engine.config.RawConfig.InitialState
 import sttp.model.Uri
 
 final case class Config(
@@ -18,9 +17,8 @@ final case class Config(
     indexerWsUri: Uri,
     provingServerUri: Uri,
     substrateNodeUri: Uri,
-    initialState: LocalState,
-    blockHeight: Option[Block.Height],
     minLogLevel: LogLevel,
+    initialState: Wallet.Snapshot,
 )
 
 object Config {
@@ -30,16 +28,19 @@ object Config {
       Uri.parse(rawConfig.indexerWsUri).leftMap(InvalidUri.apply),
       Uri.parse(rawConfig.provingServerUri).leftMap(InvalidUri.apply),
       Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
-      parseInitialState(rawConfig.initialState),
-      rawConfig.blockHeight.traverse(Block.Height.apply).leftMap(InvalidBlockHeight.apply),
       parseLogLevel(rawConfig.minLogLevel),
+      parseInitialState(rawConfig.initialState),
     )
       .mapN(Config.apply)
 
-  private def parseInitialState(initialState: Option[String]): Either[Throwable, LocalState] =
-    initialState
-      .map(LedgerSerialization.parseState)
-      .getOrElse(Right(LocalState()))
+  private def parseInitialState(
+      initialState: Option[RawConfig.InitialState],
+  ): Either[Throwable, Wallet.Snapshot] =
+    (initialState match {
+      case None                                              => Wallet.Snapshot.create.asRight
+      case Some(InitialState.Seed(seed))                     => Wallet.Snapshot.fromSeed(seed)
+      case Some(InitialState.SerializedSnapshot(serialized)) => Wallet.Snapshot.parse(serialized)
+    }).leftMap(t => InvalidSerializedSnapshot.apply(t.getMessage))
 
   private def parseLogLevel(minLogLevel: Option[String]): Either[Throwable, LogLevel] =
     minLogLevel match {
@@ -57,6 +58,6 @@ object Config {
   object ParseError {
     final case class InvalidLogLevel(msg: String) extends ParseError(msg)
     final case class InvalidUri(msg: String) extends ParseError(msg)
-    final case class InvalidBlockHeight(msg: String) extends ParseError(msg)
+    final case class InvalidSerializedSnapshot(msg: String) extends ParseError(msg)
   }
 }

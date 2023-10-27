@@ -8,6 +8,7 @@
 !.yarn/versions
 node_modules
 **/report.xml
+.metals
 
 # sbt
 target

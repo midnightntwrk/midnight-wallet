@@ -12,13 +12,11 @@ export interface Resource {
 export declare class WalletBuilder {
 
   /**
-   * Create an instance of wallet
+   * Create an instance of a new wallet with a random seed
    * @param indexerUri PubSub-Indexer HTTP URI
    * @param indexerWsUri PubSub-Indexer Websockets URI
    * @param proverServerUri Prover server URI
    * @param substrateNodeUri Node URI
-   * @param initialState Initial ZSwapLocalState serialized as Base64.
-   * A new random initial state will be generated if this is `undefined`
    * @param minLogLevel Only statements with this level and above will be logged
    */
   static build(
@@ -26,7 +24,6 @@ export declare class WalletBuilder {
     indexerWsUri: string,
     proverServerUri: string,
     substrateNodeUri: string,
-    initialState?: string,
     minLogLevel?: LogLevel,
   ): Promise<Wallet & Resource>;
 
@@ -45,6 +42,24 @@ export declare class WalletBuilder {
     proverServerUri: string,
     substrateNodeUri: string,
     seed: string,
+    minLogLevel?: LogLevel,
+  ): Promise<Wallet & Resource>;
+
+  /**
+   * Create an instance of wallet
+   * @param indexerUri PubSub-Indexer HTTP URI
+   * @param indexerWsUri PubSub-Indexer Websockets URI
+   * @param proverServerUri Prover server URI
+   * @param substrateNodeUri Node URI
+   * @param serializedState Serialized (JSON) state containing LocalState, Transaction History and Block Height
+   * @param minLogLevel Only statements with this level and above will be logged
+   */
+  static restore(
+    indexerUri: string,
+    indexerWsUri: string,
+    proverServerUri: string,
+    substrateNodeUri: string,
+    serializedState: string,
     minLogLevel?: LogLevel,
   ): Promise<Wallet & Resource>;
 

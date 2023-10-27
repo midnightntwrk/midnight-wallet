@@ -1447,6 +1447,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight/wallet-api@npm:3.1.5":
+  version: 3.1.5
+  resolution: "@midnight/wallet-api@npm:3.1.5"
+  dependencies:
+    "@midnight/zswap": 0.3.4
+  peerDependencies:
+    rxjs: 7.x
+  checksum: 8940189174e2576b4112ebef77459358bb65a203131c9a4338976568cfa1c52e4a63b5ea28ec293e65c13a75648e160ed77e27d93e24f17b68d74263d6059323
+  languageName: node
+  linkType: hard
+
 "@midnight/wallet-cli@workspace:*, @midnight/wallet-cli@workspace:packages/wallet-cli":
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-cli@workspace:packages/wallet-cli"
@@ -1645,18 +1656,18 @@ __metadata:
   linkType: soft
 
 "@midnight/wallet@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.1.0
-  resolution: "@midnight/wallet@file:../../../wallet-engine#../../../wallet-engine::hash=1d95e3&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  version: 3.2.3
+  resolution: "@midnight/wallet@file:../../../wallet-engine#../../../wallet-engine::hash=b28f80&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
   dependencies:
-    "@midnight/wallet-api": 3.1.2
-    "@midnight/zswap": 0.3.1
+    "@midnight/wallet-api": 3.1.5
+    "@midnight/zswap": 0.3.4
     isomorphic-ws: ^5.0.0
     node-fetch: 3.3.2
     rxjs: ^7.5
     scale-ts: ^1.1.0
     testcontainers: ^10.2.1
     ws: ^8.8.1
-  checksum: 98fa15bb2d268f7b1f4fac771b49d7a4ab11ea111a85fdafbea45d710df7828b89e37de852546c72574818ff07d68d1c7b7ff860776002ac455df0e0c2a8e5d5
+  checksum: a36ce841997071959115d6f0feb794f543da115a3beff0296a33e46c85efe7c8b8b40b215c68ce02bb62e55fc0871a3be22e7be793d0f966cb25071d6be12729
   languageName: node
   linkType: hard
 
@@ -1679,6 +1690,13 @@ __metadata:
   version: 0.3.1
   resolution: "@midnight/zswap@npm:0.3.1"
   checksum: b645cedf87227cb977d83adf0af1798b55fe5b34fb5bbe14e21fd013bda00de116abc06a48a93e779bd060b7b55002a41e05b62cc862b7b4078fbb527e599fce
+  languageName: node
+  linkType: hard
+
+"@midnight/zswap@npm:0.3.4":
+  version: 0.3.4
+  resolution: "@midnight/zswap@npm:0.3.4"
+  checksum: e277d0592cde24b851b2bd1b52d03f63ab3ab5476c3b6c91f9d3db84257c9a94dc47ab45148a79aa0b18d343bd1c41498d0bae8c518453d97a0dfe29f2f28582
   languageName: node
   linkType: hard
 
@@ -9324,9 +9342,9 @@ __metadata:
   linkType: hard
 
 "scale-ts@npm:^1.1.0":
-  version: 1.4.1
-  resolution: "scale-ts@npm:1.4.1"
-  checksum: 51d0a5370054de931c7f30f573eef7f3b97fed9311909639659309490a4acd3a1aef59f61f5ddb8f5c9e7179f8c039eedb990fb7ca5c093188874da97455d867
+  version: 1.4.2
+  resolution: "scale-ts@npm:1.4.2"
+  checksum: 67b7bb53612b747bf6bae971441a98f2e8adeefa136f23ab16e9608e7f7b55f699c9cf2cf3ca2a0ea8b6defd774be1d0546279455d608d99dcb235980a3d787b
   languageName: node
   linkType: hard
 

@@ -18,9 +18,10 @@ class WalletStateServiceSpec
   def buildWalletStateService[TWallet](
       initialState: LocalState = LocalState(),
   )(implicit
-      walletCreation: WalletCreation[TWallet, LocalState],
+      walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
   ): Resource[IO, WalletStateService[IO, TWallet]] = {
-    Bloc[IO, TWallet](walletCreation.create(initialState)).map { bloc =>
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None)
+    Bloc[IO, TWallet](walletCreation.create(snapshot)).map { bloc =>
       new WalletStateService.Live[IO, TWallet](
         new WalletQueryStateService.Live(
           new WalletStateContainer.Live(bloc),

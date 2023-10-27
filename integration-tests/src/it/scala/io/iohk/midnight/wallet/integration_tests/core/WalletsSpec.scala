@@ -26,7 +26,8 @@ class WalletsSpec extends WithProvingServerSuite {
     ZswapChainState().tryApplyProofErased(unprovenTx.eraseProofs.guaranteedCoins)
 
   private val regularWallet =
-    summon[WalletCreation[Wallet, LocalState]].create(stateWithFunds)
+    summon[WalletCreation[Wallet, Wallet.Snapshot]]
+      .create(Wallet.Snapshot(stateWithFunds, Seq.empty, None))
 
   private val receiverState = LocalState()
 

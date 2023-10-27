@@ -1,9 +1,8 @@
 package io.iohk.midnight.wallet.engine
 
-import io.iohk.midnight.wallet.core.LedgerSerialization
+import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.js.JsWallet
-import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.CatsEffectSuite
 
 class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
@@ -24,9 +23,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(minLogLevel),
+          None,
         ),
       )
 
@@ -45,9 +43,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           invalidIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(minLogLevel),
+          None,
         ),
       )
 
@@ -66,9 +63,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           invalidProverServerUri,
           fakeSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(minLogLevel),
+          None,
         ),
       )
 
@@ -87,9 +83,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           invalidSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(minLogLevel),
+          None,
         ),
       )
 
@@ -108,14 +103,13 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(invalidInitialState),
-          None,
           Some(minLogLevel),
+          Some(RawConfig.InitialState.SerializedSnapshot(invalidInitialState)),
         ),
       )
 
     config match {
-      case Left(LedgerSerialization.Error.InvalidInitialState(_)) =>
+      case Left(Config.ParseError.InvalidSerializedSnapshot(_)) =>
       case _ => fail("Expected invalid initial state error")
     }
   }
@@ -129,9 +123,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(invalidMinLogLevel),
+          None,
         ),
       )
 
@@ -149,9 +142,8 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(initialState),
-          None,
           Some(minLogLevel),
+          Some(RawConfig.InitialState.SerializedSnapshot(initialState)),
         ),
       )
     assert(config.isRight)
