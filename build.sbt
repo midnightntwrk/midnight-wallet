@@ -268,10 +268,10 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         downloadedFile
       }
 
-      val linuxAssetId = "132176107"
+      val linuxAssetId = "132688689"
       downloadFile(linuxAssetId)
 
-      val darwinAssetId = "132176833"
+      val darwinAssetId = "132688104"
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },

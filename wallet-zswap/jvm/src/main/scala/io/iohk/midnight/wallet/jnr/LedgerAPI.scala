@@ -4,6 +4,11 @@ import jnr.ffi.Pointer
 import jnr.ffi.types.size_t
 
 trait LedgerAPI {
+
+  def set_network_id(
+      @size_t networkId: Int,
+  ): Pointer
+
   def is_transaction_relevant(
       tx_borshed: Array[Byte],
       @size_t tx_borshed_len: Int,
@@ -19,6 +24,11 @@ trait LedgerAPI {
   ): Pointer
 
   def extract_guaranteed_coins_from_transaction(
+      tx_borshed: Array[Byte],
+      @size_t tx_borshed_len: Int,
+  ): Pointer
+
+  def extract_fallible_coins_from_transaction(
       tx_borshed: Array[Byte],
       @size_t tx_borshed_len: Int,
   ): Pointer

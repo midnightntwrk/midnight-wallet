@@ -9,6 +9,10 @@ import scala.util.Try
 
 trait Ledger {
 
+  def setNetworkId(
+      networkId: NetworkId,
+  ): Either[NonEmptyList[JNRError], NumberResult]
+
   def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,
@@ -22,6 +26,10 @@ trait Ledger {
   def extractGuaranteedCoinsFromTransaction(
       tx: String,
   ): Either[NonEmptyList[JNRError], StringResult]
+
+  def extractFallibleCoinsFromTransaction(
+      tx: String,
+  ): Either[NonEmptyList[JNRError], Option[String]]
 
   def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult]
 
@@ -81,7 +89,9 @@ object Ledger {
     }
   }
 
-  final case class StringResult(data: String) extends JNRSuccessCallResult
+  final case class StringResult(data: String) extends JNRSuccessCallResult {
+    def optionalData: Option[String] = Option.when(data.nonEmpty)(data)
+  }
 
   object StringResult {
 

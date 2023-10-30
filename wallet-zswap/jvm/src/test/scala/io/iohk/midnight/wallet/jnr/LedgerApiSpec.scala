@@ -24,6 +24,13 @@ class LedgerApiSpec extends ScalaCheckSuite {
     fail(errors.map(_.toString).toList.mkString("\n"))
   }
 
+  test("Set network id should be possible") {
+    ledger.setNetworkId(NetworkId.Undeployed) match {
+      case Left(error) => fail(error.toList.mkString(","))
+      case Right(_)    => assert(true)
+    }
+  }
+
   test("Creation of MerkleTreeCollapsedUpdate should work") {
     val state = ledger.zswapChainStateNew().toOption.get.data
     val collapsedUpdateEither = ledger.merkleTreeCollapsedUpdateNew(state, 0, 1)
@@ -48,6 +55,13 @@ class LedgerApiSpec extends ScalaCheckSuite {
     ledger.extractGuaranteedCoinsFromTransaction(validTx) match {
       case Left(errors)                         => failWithErrors(errors)
       case Right(StringResult(guaranteedCoins)) => assert(guaranteedCoins.nonEmpty)
+    }
+  }
+
+  test("Extracting fallible coins from transaction should work") {
+    ledger.extractFallibleCoinsFromTransaction(validTx) match {
+      case Left(errors)                  => failWithErrors(errors)
+      case Right(maybeFallibleCoinsData) => assert(true)
     }
   }
 

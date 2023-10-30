@@ -9,6 +9,13 @@ import scala.util.Try
 
 class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
 
+  override def setNetworkId(networkId: NetworkId): Either[NonEmptyList[JNRError], NumberResult] =
+    createResultAndFreePointer(
+      callTry = Try(ledgerAPI.set_network_id(networkId.id)),
+      freePointerTry = tryFreeNumberResult,
+      createResultEither = NumberResult.applyEither,
+    )
+
   override def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,
@@ -58,6 +65,23 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       freePointerTry = tryFreeStringResult,
       createResultEither = StringResult.applyEither,
     )
+  }
+
+  override def extractFallibleCoinsFromTransaction(
+      tx: String,
+  ): Either[NonEmptyList[JNRError], Option[String]] = {
+    val callTry = Try {
+      ledgerAPI.extract_fallible_coins_from_transaction(
+        tx.getBytes(StandardCharsets.UTF_8),
+        tx.length,
+      )
+    }
+
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    ).map(_.optionalData)
   }
 
   override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] = {

@@ -9,12 +9,16 @@ import io.iohk.midnight.wallet.jnr.Ledger.{
   StringResult,
   UnexpectedJNRError,
 }
-import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult, LedgerSuccess}
+import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult, LedgerSuccess, NetworkId}
 import io.iohk.midnight.wallet.zswap.LedgerStub.*
 
 import java.nio.charset.StandardCharsets
 
 class LedgerStub extends Ledger {
+
+  override def setNetworkId(networkId: NetworkId): Either[NonEmptyList[JNRError], NumberResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
   override def isTransactionRelevant(tx: String, encryptionKeySerialized: String): LedgerResult =
     if (tx === TxRelevant) LedgerSuccess.OperationTrue
     else if (tx === TxNotRelevant) LedgerSuccess.OperationFalse
@@ -57,6 +61,11 @@ class LedgerStub extends Ledger {
   override def extractGuaranteedCoinsFromTransaction(
       tx: String,
   ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def extractFallibleCoinsFromTransaction(
+      tx: String,
+  ): Either[NonEmptyList[JNRError], Option[String]] =
     Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
 }
 
