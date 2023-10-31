@@ -1447,14 +1447,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight/wallet-api@npm:3.1.5":
-  version: 3.1.5
-  resolution: "@midnight/wallet-api@npm:3.1.5"
+"@midnight/wallet-api@npm:3.2.0":
+  version: 3.2.0
+  resolution: "@midnight/wallet-api@npm:3.2.0"
   dependencies:
     "@midnight/zswap": 0.3.4
   peerDependencies:
     rxjs: 7.x
-  checksum: 8940189174e2576b4112ebef77459358bb65a203131c9a4338976568cfa1c52e4a63b5ea28ec293e65c13a75648e160ed77e27d93e24f17b68d74263d6059323
+  checksum: efdfc5c048db723e6c2fc3d4c42bd7391d942f4359354afcc4334bfc310b89985020bd095347d4d08f8464e82fa784c7e99e576113e39186200c0f3374b5690a
   languageName: node
   linkType: hard
 
@@ -1656,10 +1656,10 @@ __metadata:
   linkType: soft
 
 "@midnight/wallet@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.2.3
-  resolution: "@midnight/wallet@file:../../../wallet-engine#../../../wallet-engine::hash=b28f80&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  version: 3.3.5
+  resolution: "@midnight/wallet@file:../../../wallet-engine#../../../wallet-engine::hash=c12058&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
   dependencies:
-    "@midnight/wallet-api": 3.1.5
+    "@midnight/wallet-api": 3.2.0
     "@midnight/zswap": 0.3.4
     isomorphic-ws: ^5.0.0
     node-fetch: 3.3.2
@@ -1667,7 +1667,7 @@ __metadata:
     scale-ts: ^1.1.0
     testcontainers: ^10.2.1
     ws: ^8.8.1
-  checksum: a36ce841997071959115d6f0feb794f543da115a3beff0296a33e46c85efe7c8b8b40b215c68ce02bb62e55fc0871a3be22e7be793d0f966cb25071d6be12729
+  checksum: 69f21bbed31030121ed615e8e077ef3adb177ae1f2c2a6faacffd6c44d010f5ecbf262f867ae9d03100cfb8aee746899756ed655eb73f8b29705f106da832d02
   languageName: node
   linkType: hard
 
