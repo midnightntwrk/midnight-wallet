@@ -25,9 +25,15 @@ package object domain {
 
   final case class TransactionIdentifier(txId: String) extends AnyVal
 
+  enum ApplyStage {
+    case FailEntirely, FailFallible, SucceedEntirely
+  }
+
+  final case class AppliedTransaction(tx: Transaction, applyStage: ApplyStage)
+
   final case class ViewingUpdate(
       blockHeight: Block.Height,
-      updates: Seq[Either[MerkleTreeCollapsedUpdate, Transaction]],
+      updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction]],
   )
 
   final case class Seed(seed: Array[Byte]) extends AnyVal

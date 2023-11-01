@@ -35,7 +35,7 @@ object SyncServiceEvent {
       AsStringLogContext.fromMap[ViewingUpdateReceived](evt =>
         Map(
           "transaction_hashes" -> evt.update.updates
-            .collect { case SingleUpdate.RawTransaction(hash, _) => hash }
+            .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
             .mkString("[", ",", "]"),
         ),
       )

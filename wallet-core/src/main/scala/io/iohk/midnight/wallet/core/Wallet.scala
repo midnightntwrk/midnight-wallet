@@ -8,6 +8,8 @@ import io.circe.parser.decode
 import io.iohk.midnight.wallet.core.TransactionBalancer.BalanceTransactionResult
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
+  AppliedTransaction,
+  ApplyStage,
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
   NothingToProve,
@@ -128,16 +130,17 @@ object Wallet {
           case (state, Right(tx)) => applyTransaction(state, tx)
         }
       val newTxs = update.updates.collect { case Right(tx) => tx }
-      Wallet(newState, wallet.txHistory ++ newTxs, Some(update.blockHeight)).asRight
+      Wallet(newState, wallet.txHistory ++ newTxs.map(_.tx), Some(update.blockHeight)).asRight
     }
 
-  // TODO use information about fallible execution success to apply fallible offer
-  private def applyTransaction(state: LocalState, transaction: Transaction): LocalState =
-    transaction.fallibleCoins match {
-      case Some(offer) =>
-        state.apply(transaction.guaranteedCoins).apply(offer)
-      case None =>
-        state.apply(transaction.guaranteedCoins)
+  private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState =
+    transaction.applyStage match {
+      case ApplyStage.FailEntirely => state // TODO: Rollback pending tx
+      case ApplyStage.FailFallible =>
+        state.apply(transaction.tx.guaranteedCoins)
+      case ApplyStage.SucceedEntirely =>
+        val guaranteed = state.apply(transaction.tx.guaranteedCoins)
+        transaction.tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
     }
 
   implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] = _.txHistory

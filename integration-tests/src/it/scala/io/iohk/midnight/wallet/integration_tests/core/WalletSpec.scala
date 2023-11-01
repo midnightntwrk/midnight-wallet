@@ -6,7 +6,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.{Generators, Wallet}
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.{AppliedTransaction, ApplyStage, ViewingUpdate}
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
@@ -94,7 +94,7 @@ abstract class WalletSpec
         Block.Height.Genesis,
         Seq(
           Left(MerkleTreeCollapsedUpdate(chainState, BigInt(0), BigInt(1))),
-          Right(txCtx.transaction),
+          Right(AppliedTransaction(txCtx.transaction, ApplyStage.SucceedEntirely)),
         ),
       )
     }

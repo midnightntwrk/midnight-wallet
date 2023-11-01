@@ -4,7 +4,12 @@ import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction as WalletTransaction}
 import io.iohk.midnight.wallet.core.WalletError.{BadTransactionFormat, LedgerExecutionError}
 import io.iohk.midnight.wallet.core.capabilities.*
-import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain.{
+  AppliedTransaction,
+  ApplyStage,
+  TransactionHash,
+  ViewingUpdate,
+}
 import io.iohk.midnight.wallet.zswap.*
 
 final case class ViewingWallet private (
@@ -22,7 +27,7 @@ final case class ViewingWallet private (
       Block.Height.Genesis,
       lastKnownHash
         .fold(transactions)(hash => transactions.dropWhile(_.hash =!= hash.hash))
-        .map(_.asRight) ++
+        .map(AppliedTransaction(_, ApplyStage.SucceedEntirely).asRight) ++
         Seq(MerkleTreeCollapsedUpdate(chainState, start, chainState.firstFree - BigInt(1)).asLeft),
     )
 }

@@ -17,7 +17,7 @@ class IndexerClientSpec extends CatsEffectSuite {
   private val pubSubIndexerServiceFixture = ResourceSuiteLocalFixture(
     "pubSubIndexerService",
     TestContainers.resource(
-      "ghcr.io/input-output-hk/midnight-pubsub-indexer:0.1.1",
+      "ghcr.io/input-output-hk/midnight-pubsub-indexer:0.2.0",
     )(
       _.withExposedPorts(pubSubIndexerPort)
         .withWaitStrategy(Wait.forListeningPorts()),

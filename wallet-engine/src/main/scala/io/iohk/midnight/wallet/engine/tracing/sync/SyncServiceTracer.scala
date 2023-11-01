@@ -47,7 +47,7 @@ object SyncServiceTracer {
       level = LogLevel.Debug,
       message = evt =>
         s"Viewing update received with ${evt.update.updates
-            .collect { case SingleUpdate.RawTransaction(hash, _) => hash }
+            .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
             .mkString("[", ",", "]")}.",
       context = _.stringLogContext,
     )

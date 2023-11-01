@@ -9,7 +9,6 @@ import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import io.iohk.midnight.wallet.core.WalletError
 import io.iohk.midnight.wallet.core.domain.ViewingUpdate
 import io.iohk.midnight.wallet.core.tracing.WalletSyncEvent.*
-import io.iohk.midnight.wallet.zswap.Transaction
 
 class WalletSyncTracer[F[_]](
     val tracer: Tracer[F, WalletSyncEvent],
@@ -47,7 +46,7 @@ object WalletSyncTracer {
       component = Component,
       level = LogLevel.Debug,
       message = evt =>
-        s"Starting applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.hash).mkString("[", ",", "]")}].",
+        s"Starting applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
       context = _.stringLogContext,
     )
 
@@ -57,7 +56,7 @@ object WalletSyncTracer {
       component = Component,
       level = LogLevel.Debug,
       message = evt =>
-        s"Successfully applied update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.hash).mkString("[", ",", "]")}].",
+        s"Successfully applied update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
       context = _.stringLogContext,
     )
 
@@ -68,7 +67,7 @@ object WalletSyncTracer {
       component = Component,
       level = LogLevel.Warn,
       message = evt =>
-        s"Error while applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.hash).mkString("[", ",", "]")}].",
+        s"Error while applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
       context = _.stringLogContext,
     )
   // $COVERAGE-ON$

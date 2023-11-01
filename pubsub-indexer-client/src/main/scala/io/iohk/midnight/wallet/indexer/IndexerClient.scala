@@ -54,7 +54,7 @@ class IndexerClient[F[_]: Async: Concurrent](
         .update[SingleUpdate](
           MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
           RelevantTransaction
-            .transaction(Transaction.hash ~ Transaction.raw)
+            .transaction(Transaction.hash ~ Transaction.raw ~ Transaction.applyStage)
             .map(SingleUpdate.RawTransaction.apply.tupled),
         ),
     )
@@ -80,7 +80,8 @@ object IndexerClient {
   sealed trait SingleUpdate
 
   object SingleUpdate {
-    final case class RawTransaction(hash: String, raw: String) extends SingleUpdate
+    final case class RawTransaction(hash: String, raw: String, applyStage: String)
+        extends SingleUpdate
     final case class MerkleTreeCollapsedUpdate(update: String) extends SingleUpdate
   }
 

@@ -4,7 +4,7 @@ import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Pipe
 import io.iohk.midnight.wallet.core.capabilities.WalletSync
-import io.iohk.midnight.wallet.core.domain.{TransactionHash, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain.ViewingUpdate
 import io.iohk.midnight.wallet.core.tracing.WalletSyncTracer
 
 object BlockProcessingFactory {
@@ -24,6 +24,4 @@ object BlockProcessingFactory {
           }
           .fmap(_.fmap((viewingUpdate, _)))
       }
-
-  final case class AppliedTransaction(hash: TransactionHash)
 }

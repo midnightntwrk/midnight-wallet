@@ -9,7 +9,7 @@ import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.WalletStateService
 import io.iohk.midnight.wallet.core.capabilities.WalletKeys
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.{ApplyStage, AppliedTransaction, ViewingUpdate}
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
@@ -55,22 +55,26 @@ object SyncServiceFactory {
             .evalMap { case RawViewingUpdate(blockHeight, rawUpdates) =>
               val viewingUpdate =
                 rawUpdates
-                  .traverse[Try, Either[MerkleTreeCollapsedUpdate, zswap.Transaction]] {
+                  .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
                     case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
                       HexUtil
                         .decodeHex(mt)
                         .flatMap(MerkleTreeCollapsedUpdate.deserialize)
                         .map(_.asLeft)
-                    case SingleUpdate.RawTransaction(_, raw) =>
-                      HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize).map(_.asRight)
+                    case SingleUpdate.RawTransaction(_, raw, applyStage) =>
+                      (
+                        HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
+                        Try(ApplyStage.valueOf(applyStage)),
+                      )
+                        .mapN(AppliedTransaction(_, _).asRight)
                   }
-                  .flatMap(updates =>
+                  .flatMap { updates =>
                     Block
                       .Height(blockHeight)
                       .map(ViewingUpdate(_, updates))
                       .leftMap(Exception(_))
-                      .toTry,
-                  )
+                      .toTry
+                  }
 
               ApplicativeThrow[F].fromTry(viewingUpdate)
             }

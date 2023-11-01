@@ -27,6 +27,8 @@ object IndexerSchema {
       SelectionBuilder.Field("hash", Scalar())
     def raw: SelectionBuilder[Transaction, String] =
       SelectionBuilder.Field("raw", Scalar())
+    def applyStage: SelectionBuilder[Transaction, String] =
+      SelectionBuilder.Field("applyStage", Scalar())
   }
 
   type ViewingUpdate
