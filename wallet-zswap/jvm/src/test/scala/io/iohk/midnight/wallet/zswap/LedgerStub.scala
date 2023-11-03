@@ -3,27 +3,32 @@ package io.iohk.midnight.wallet.zswap
 import cats.data.NonEmptyList
 import cats.syntax.eq.*
 import io.iohk.midnight.wallet.jnr.Ledger.{
+  BooleanResult,
   JNRError,
   LedgerErrorResult,
   NumberResult,
   StringResult,
   UnexpectedJNRError,
 }
-import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult, LedgerSuccess, NetworkId}
+import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult}
 import io.iohk.midnight.wallet.zswap.LedgerStub.*
 
 import java.nio.charset.StandardCharsets
 
 class LedgerStub extends Ledger {
 
-  override def setNetworkId(networkId: NetworkId): Either[NonEmptyList[JNRError], NumberResult] =
-    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
-
-  override def isTransactionRelevant(tx: String, encryptionKeySerialized: String): LedgerResult =
-    if (tx === TxRelevant) LedgerSuccess.OperationTrue
-    else if (tx === TxNotRelevant) LedgerSuccess.OperationFalse
-    else if (tx === TxUnknown) LedgerResult.UnknownCode(1)
-    else LedgerError.StateError
+  override def isTransactionRelevant(
+      tx: String,
+      encryptionKeySerialized: String,
+  ): Either[NonEmptyList[JNRError], BooleanResult] =
+    if (tx === TxRelevant)
+      Right(BooleanResult(true))
+    else if (tx === TxNotRelevant)
+      Right(BooleanResult(false))
+    else if (tx === TxUnknown)
+      Left(NonEmptyList.one(LedgerErrorResult(LedgerResult.UnknownCode(1))))
+    else
+      Left(NonEmptyList.one(LedgerErrorResult(LedgerError.StateError)))
 
   override def applyTransactionToState(
       tx: String,

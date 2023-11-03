@@ -1,10 +1,8 @@
 package io.iohk.midnight.wallet.jnr
 
 import cats.data.NonEmptyList
-import io.iohk.midnight.wallet.jnr.Ledger.{JNRError, LedgerErrorResult, NumberResult, StringResult}
+import io.iohk.midnight.wallet.jnr.Ledger.*
 import munit.ScalaCheckSuite
-
-import scala.util.{Failure, Success, Try}
 
 @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.OptionPartial"))
 class LedgerApiSpec extends ScalaCheckSuite {
@@ -18,17 +16,13 @@ class LedgerApiSpec extends ScalaCheckSuite {
   private val localState =
     "010000010000612c52b55b1d8265df62db079961e49a1701ba18239489e5da348811d0911d4b0100002008ef2c4ddcc9855b330b86b636a5b7f73e6ad71b2adf7b5d8f22ef381159a70b00000000000000000000000001000002200000000000000000"
 
-  private val ledger = LedgerLoader.loadLedger.getOrElse(fail("Invalid ledger state"))
+  private val ledger =
+    LedgerLoader
+      .loadLedger(networkId = Some(NetworkId.Undeployed))
+      .getOrElse(fail("Invalid ledger state"))
 
   private def failWithErrors(errors: NonEmptyList[JNRError]): Nothing = {
     fail(errors.map(_.toString).toList.mkString("\n"))
-  }
-
-  test("Set network id should be possible") {
-    ledger.setNetworkId(NetworkId.Undeployed) match {
-      case Left(error) => fail(error.toList.mkString(","))
-      case Right(_)    => assert(true)
-    }
   }
 
   test("Creation of MerkleTreeCollapsedUpdate should work") {
@@ -77,18 +71,20 @@ class LedgerApiSpec extends ScalaCheckSuite {
   }
 
   test("Checking relevance without correct encryption key should give proper error") {
-    Try(ledger.isTransactionRelevant(validTx, "invalid_secret_key")) match {
-      case Failure(exception) => fail(exception.getMessage)
-      case Success(result)    => assertEquals(result, LedgerError.EncryptionSecretKeyError)
+    ledger.isTransactionRelevant(validTx, "invalid_secret_key") match {
+      case Left(errors) =>
+        assert(errors.toList.contains(LedgerErrorResult(LedgerError.EncryptionSecretKeyError)))
+      case Right(BooleanResult(isRelevant)) =>
+        fail("Should not be here!")
     }
   }
 
   test("Checking relevance without correct tx should give proper error") {
-    Try(
-      ledger.isTransactionRelevant("invalid_tx", hexedEncryptionSecretKey),
-    ) match {
-      case Failure(exception) => fail(exception.getMessage)
-      case Success(result)    => assertEquals(result, LedgerError.TransactionError)
+    ledger.isTransactionRelevant("invalid_tx", hexedEncryptionSecretKey) match {
+      case Left(errors) =>
+        assert(errors.toList.contains(LedgerErrorResult(LedgerError.TransactionError)))
+      case Right(BooleanResult(isRelevant)) =>
+        fail("Should not be here!")
     }
   }
 

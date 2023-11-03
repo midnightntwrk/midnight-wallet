@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.jnr
 
 import cats.data.NonEmptyList
-import io.iohk.midnight.wallet.jnr.Ledger.{JNRError, NumberResult, StringResult}
+import io.iohk.midnight.wallet.jnr.Ledger.{BooleanResult, JNRError, NumberResult, StringResult}
 import io.iohk.midnight.wallet.jnr.LedgerSuccess.OperationTrue
 import jnr.ffi.Pointer
 
@@ -9,14 +9,10 @@ import scala.util.Try
 
 trait Ledger {
 
-  def setNetworkId(
-      networkId: NetworkId,
-  ): Either[NonEmptyList[JNRError], NumberResult]
-
   def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,
-  ): LedgerResult
+  ): Either[NonEmptyList[JNRError], BooleanResult]
 
   def applyTransactionToState(
       tx: String,
@@ -54,7 +50,11 @@ object Ledger {
   private val LEDGER_RESULT_STRUCT_OFFSET = 0
   private val LEDGER_RESULT_FIELD_SIZE = 8 // In Rust ApplyResult::ledger_result is i16 (2 bytes)
 
-  val instance: Try[Ledger] = LedgerLoader.loadLedger
+  val instance: Try[Ledger] =
+    LedgerLoader.loadLedger(networkId = None)
+
+  def instanceWithNetworkId(networkId: NetworkId): Try[Ledger] =
+    LedgerLoader.loadLedger(Some(networkId))
 
   sealed trait JNRResult
 
@@ -105,6 +105,24 @@ object Ledger {
             .getString(0)
           Right(StringResult(stringData))
 
+        case error: LedgerError =>
+          Left(LedgerErrorResult(error))
+        case unexpected =>
+          Left(LedgerErrorResult(unexpected))
+      }
+    }
+  }
+
+  final case class BooleanResult(booleanData: Boolean) extends JNRSuccessCallResult
+
+  object BooleanResult {
+
+    def applyEither(result: Int): Either[JNRError, BooleanResult] = {
+      LedgerResult(result) match {
+        case LedgerSuccess.OperationTrue =>
+          Right(BooleanResult(true))
+        case LedgerSuccess.OperationFalse =>
+          Right(BooleanResult(false))
         case error: LedgerError =>
           Left(LedgerErrorResult(error))
         case unexpected =>

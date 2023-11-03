@@ -1,6 +1,5 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.wallet.jnr.LedgerError
 import munit.FunSuite
 import scala.util.{Failure, Success}
 
@@ -23,7 +22,7 @@ class EncryptionSecretKeySpec extends FunSuite {
     val key = EncryptionSecretKey.deserialize("", ledgerStub)
     val result = key.test(Transaction.deserialize(LedgerStub.TxUnknown, ledgerStub))
     result match {
-      case Failure(exception) => assertEquals(exception.getMessage, "Unknown code received: 1")
+      case Failure(exception) => assertEquals(exception.getMessage, "Ledger error code 1")
       case other              => fail(s"Expected failure, got $other")
     }
   }
@@ -33,7 +32,7 @@ class EncryptionSecretKeySpec extends FunSuite {
     val result = key.test(Transaction.deserialize(LedgerStub.ValidTxNoData, ledgerStub))
     result match {
       case Failure(exception) =>
-        assertEquals(exception.getMessage, s"Ledger error received: ${LedgerError.StateError}")
+        assertEquals(exception.getMessage, s"Ledger error code 5")
       case other => fail(s"Expected failure, got $other")
     }
   }

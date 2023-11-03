@@ -7,27 +7,28 @@ import jnr.ffi.Pointer
 import java.nio.charset.StandardCharsets
 import scala.util.Try
 
-class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
-
-  override def setNetworkId(networkId: NetworkId): Either[NonEmptyList[JNRError], NumberResult] =
-    createResultAndFreePointer(
-      callTry = Try(ledgerAPI.set_network_id(networkId.id)),
-      freePointerTry = tryFreeNumberResult,
-      createResultEither = NumberResult.applyEither,
-    )
+class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends Ledger {
 
   override def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,
-  ): LedgerResult = {
-    val rawResultCode = ledgerAPI.is_transaction_relevant(
-      tx.getBytes(StandardCharsets.UTF_8),
-      tx.length,
-      encryptionKeySerialized.getBytes(StandardCharsets.UTF_8),
-      encryptionKeySerialized.length,
-    )
+  ): Either[NonEmptyList[JNRError], BooleanResult] = {
+    val callTry = Try {
+      ledgerAPI.is_transaction_relevant(
+        tx.getBytes(StandardCharsets.UTF_8),
+        tx.length,
+        encryptionKeySerialized.getBytes(StandardCharsets.UTF_8),
+        encryptionKeySerialized.length,
+      )
+    }
 
-    LedgerResult(rawResultCode)
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultRaw(
+        callTry = callTry,
+        createResultEither = BooleanResult.applyEither,
+      )
+    } yield result
   }
 
   override def applyTransactionToState(
@@ -43,11 +44,14 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      )
+    } yield result
   }
 
   override def extractGuaranteedCoinsFromTransaction(
@@ -60,11 +64,14 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      )
+    } yield result
   }
 
   override def extractFallibleCoinsFromTransaction(
@@ -77,20 +84,25 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    ).map(_.optionalData)
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      ).map(_.optionalData)
+    } yield result
   }
 
-  override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] = {
-    createResultAndFreePointer(
-      callTry = Try(ledgerAPI.zswap_chain_state_new()),
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
-  }
+  override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] =
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = Try(ledgerAPI.zswap_chain_state_new()),
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      )
+    } yield result
 
   override def zswapChainStateFirstFree(
       zswapChainState: String,
@@ -102,11 +114,14 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeNumberResult,
-      createResultEither = NumberResult.applyEither,
-    )
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeNumberResult,
+        createResultEither = NumberResult.applyEither,
+      )
+    } yield result
   }
 
   override def zswapChainStateTryApply(
@@ -122,11 +137,14 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      )
+    } yield result
   }
 
   override def merkleTreeCollapsedUpdateNew(
@@ -143,11 +161,27 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
       )
     }
 
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
+    for {
+      _ <- setNetworkIdIfProvided(networkIdOpt)
+      result <- createResultAndFreePointer(
+        callTry = callTry,
+        freePointerTry = tryFreeStringResult,
+        createResultEither = StringResult.applyEither,
+      )
+    } yield result
+  }
+
+  private def setNetworkIdIfProvided(
+      networkIdOpt: Option[NetworkId],
+  ): Either[NonEmptyList[JNRError], Unit] = {
+    def setupLedgerNetworkId(networkId: NetworkId) =
+      createResultAndFreePointer(
+        callTry = Try(ledgerAPI.set_network_id(networkId.id)),
+        freePointerTry = tryFreeNumberResult,
+        createResultEither = NumberResult.applyEither,
+      )
+
+    networkIdOpt.fold(Right(()))(setupLedgerNetworkId(_).map(_ => ()))
   }
 
   private def tryFreeStringResult(pointer: Pointer): Try[Unit] =
@@ -155,6 +189,27 @@ class LedgerImpl(ledgerAPI: LedgerAPI) extends Ledger {
 
   private def tryFreeNumberResult(pointer: Pointer): Try[Unit] =
     Try(ledgerAPI.free_number_result(pointer))
+
+  private def createResultRaw[Result <: JNRSuccessCallResult](
+      callTry: Try[Int],
+      createResultEither: Int => Either[JNRError, Result],
+  ): Either[NonEmptyList[JNRError], Result] = {
+
+    val resultE = callTry.toEither match {
+      case Left(throwable) =>
+        Left(List(UnexpectedJNRError.apply(throwable)))
+
+      case Right(rawInt) =>
+        createResultEither(rawInt) match {
+          case Left(resultError) =>
+            Left(List(resultError))
+          case Right(result) =>
+            Right(result)
+        }
+    }
+
+    resultE.left.map(NonEmptyList.fromListUnsafe)
+  }
 
   private def createResultAndFreePointer[Result <: JNRSuccessCallResult](
       callTry: Try[Pointer],

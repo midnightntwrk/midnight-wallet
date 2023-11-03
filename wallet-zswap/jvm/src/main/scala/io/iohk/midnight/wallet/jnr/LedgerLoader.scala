@@ -7,23 +7,23 @@ import scala.util.{Failure, Success, Try}
 
 object LedgerLoader {
 
-  def loadLedger: Try[Ledger] =
-    getLibName.flatMap(loadNativeCode)
+  def loadLedger(networkId: Option[NetworkId]): Try[Ledger] =
+    getLibName.flatMap(loadNativeCode(_, networkId))
 
-  private def loadNativeCode(libName: String): Try[Ledger] =
-    loadFromJar(libName).orElse(loadFromResource(libName))
+  private def loadNativeCode(libName: String, networkId: Option[NetworkId]): Try[Ledger] =
+    loadFromJar(libName, networkId).orElse(loadFromResource(libName, networkId))
 
-  private def loadFromResource(libName: String): Try[Ledger] =
+  private def loadFromResource(libName: String, networkId: Option[NetworkId]): Try[Ledger] =
     Try {
       val path = getClass.getClassLoader.getResource(libName).getPath
       val loader = LibraryLoader.create(classOf[LedgerAPI])
       val loadedLedger = loader.load(path)
-      LedgerImpl(loadedLedger)
+      LedgerImpl(loadedLedger, networkId)
     }
 
-  private def loadFromJar(libName: String): Try[Ledger] =
+  private def loadFromJar(libName: String, networkId: Option[NetworkId]): Try[Ledger] =
     Try {
-      LedgerImpl(NativeUtils.loadLibraryFromJar(s"/$libName"))
+      LedgerImpl(NativeUtils.loadLibraryFromJar(s"/$libName"), networkId)
     }
 
   private def getLibName: Try[String] =
