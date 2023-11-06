@@ -5,7 +5,7 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
-import io.iohk.midnight.midnightWalletApi.distTypesMod.{
+import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   NOTHING_TO_PROVE,
   TRANSACTION_TO_PROVE,
   ProvingRecipe as ApiProvingRecipe,

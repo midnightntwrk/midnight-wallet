@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.midnightZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod
 
 type CoinPublicKey = mod.CoinPublicKey
 

@@ -5,7 +5,7 @@ import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
-import io.iohk.midnight.midnightWalletApi.distTypesMod.{
+import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   BalanceTransactionToProve,
   NothingToProve,
   TransactionHistoryEntry,
@@ -14,9 +14,10 @@ import io.iohk.midnight.midnightWalletApi.distTypesMod.{
   WalletState,
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
+  ApplyStage,
 }
-import io.iohk.midnight.midnightWalletApi.{distTypesMod, distWalletMod as api}
-import io.iohk.midnight.midnightZswap.mod
+import io.iohk.midnight.midnightNtwrkWalletApi.{distTypesMod, distWalletMod as api}
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
 import io.iohk.midnight.wallet.core.*
@@ -85,6 +86,7 @@ class JsWallet(
           address = localState.address.asString,
           transactionHistory = localState.transactionHistory.map { tx =>
             TransactionHistoryEntry(
+              ApplyStage.SucceedEntirely,
               StringDictionary(tx.deltas.map(_.map(_.toJsBigInt)).toSeq*),
               tx.identifiers.toJSArray,
               tx.toJs,

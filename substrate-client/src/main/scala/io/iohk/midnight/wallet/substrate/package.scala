@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet
 
-import io.iohk.midnight.midnightZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.buffer.mod.Buffer
 
 package object substrate {

@@ -1,5 +1,5 @@
 {
-    "name": "@midnight/indexer-client",
+    "name": "@midnight/wallet-pubsub-indexer-client",
     "packageManager": "yarn@1.22.18",
     "author": "IOHK",
     "license": "Apache-2.0",

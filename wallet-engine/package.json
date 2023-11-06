@@ -1,6 +1,6 @@
 {
-    "name": "@midnight/wallet",
-    "version": "3.3.7",
+    "name": "@midnight-ntwrk/wallet",
+    "version": "3.3.8",
     "main": "dist/main.js",
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
@@ -12,11 +12,15 @@
         "dist/"
     ],
     "publishConfig": {
-        "registry": "https://nexus.p42.at/repository/npm-midnight/"
+        "registry": "https://npm.pkg.github.com/"
+    },
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/midnight-ntwrk/artifacts.git"
     },
     "dependencies": {
-        "@midnight/wallet-api": "3.2.0",
-        "@midnight/zswap": "0.3.4",
+        "@midnight-ntwrk/wallet-api": "^3.2.3",
+        "@midnight-ntwrk/zswap": "^0.3.8",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

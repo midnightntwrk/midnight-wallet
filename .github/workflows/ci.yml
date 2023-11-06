@@ -6,6 +6,7 @@ env:
   MIDNIGHT_GH_USER: ${{ github.actor }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
+  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   pull_request:
@@ -42,8 +43,8 @@ jobs:
         run: |
           echo "
           //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
-          @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
-          " > ./.npmrc
+          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
+          " >> ./.npmrc
       - name: Log in to IOG Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
@@ -66,12 +67,12 @@ jobs:
         run: |
           cd typescript
           yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
-          echo 'checksumBehavior: update' >> ./.yarnrc.yml
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
           echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
       - name: Test and build typescript packages
         run: |
           nix develop -c sbt dist
-          cp ./wallet-engine/package.json ./wallet-engine/dist/
+          # cp ./wallet-engine/package.json ./wallet-engine/dist/
           nix develop .#typescript --command yarn
           nix develop .#typescript --command yarn build
           nix develop .#typescript --command yarn lint
@@ -128,7 +129,7 @@ jobs:
           check_name: Scala Unit Tests Results
           files: |
             **/target/test-reports/TEST-*.xml
-            !examples/node_modules/@midnight/wallet/target/test-reports/TEST-*.xml
+            !examples/node_modules/@midnight-ntwrk/wallet/target/test-reports/TEST-*.xml
       - name: Publish Integration Test Summary
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: success() || failure()
@@ -136,7 +137,7 @@ jobs:
           check_name: Scala Integration Tests Results
           files: |
             **/target/it-reports/TEST-*.xml
-            !examples/node_modules/@midnight/wallet/target/it-reports/TEST-*.xml
+            !examples/node_modules/@midnight-ntwrk/wallet/target/it-reports/TEST-*.xml
       - name: Upload Scala coverage report
         uses: actions/upload-artifact@v3
         if: success() || failure()

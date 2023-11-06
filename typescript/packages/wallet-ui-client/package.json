@@ -20,7 +20,6 @@
   },
   "scripts": {
     "prepack": "yarn build",
-    "deploy": "yarn npm publish",
     "build": "rm -rf ./dist && rollup -c rollup.config.mjs",
     "test": "jest --passWithNoTests",
     "lint": "eslint src"

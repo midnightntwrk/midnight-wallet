@@ -1190,6 +1190,47 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/dapp-connector-api@workspace:packages/dapp-connector-api":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/dapp-connector-api@workspace:packages/dapp-connector-api"
+  dependencies:
+    "@midnight-ntwrk/wallet-api": ^3.2.3
+    "@types/node": ^18.11.3
+    "@typescript-eslint/eslint-plugin": ^5.40.1
+    "@typescript-eslint/parser": ^5.60.0
+    eslint: ^8.26.0
+    eslint-config-prettier: ^8.5.0
+    eslint-config-standard-with-typescript: ^23.0.0
+    eslint-plugin-import: ^2.26.0
+    eslint-plugin-n: ^15.3.0
+    eslint-plugin-prettier: ^4.2.1
+    eslint-plugin-promise: ^6.1.1
+    prettier: ^2.7.1
+    tslib: ^2.5.0
+    typedoc: ^0.24.8
+    typedoc-plugin-markdown: ^3.15.4
+    typescript: ~4.8.4
+  languageName: unknown
+  linkType: soft
+
+"@midnight-ntwrk/wallet-api@npm:3.2.3, @midnight-ntwrk/wallet-api@npm:^3.2.3":
+  version: 3.2.3
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.2.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.2.3%2F77603cd4ddea7dba5b560559c90b1291c3320417"
+  dependencies:
+    "@midnight-ntwrk/zswap": ^0.3.8
+  peerDependencies:
+    rxjs: 7.x
+  checksum: dd8b66d38fcf33e962b7c574a0cc84c72a514a1ae4c976a84701ccf6e5bb42fbfb459ae8d1b1ecf7f120058a1c7dad44f81130aa33f7770962b621aa083d1215
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/zswap@npm:^0.3.8":
+  version: 0.3.8
+  resolution: "@midnight-ntwrk/zswap@npm:0.3.8::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F0.3.8%2Fe07b2660e1ded48ec077f88eb1db3db96e06986d"
+  checksum: 9fb8f79caf41715af7af3ab385af87238053dff5b6d8d4b1be88897619b600f379ffbb3075a473b963b4a1d8cbf29b3a83492a91c65fa06c18063a62ff6613dd
+  languageName: node
+  linkType: hard
+
 "@midnight/bloc@npm:^0.8.3":
   version: 0.8.3
   resolution: "@midnight/bloc@npm:0.8.3"
@@ -1214,29 +1255,6 @@ __metadata:
   checksum: 3e9b1153a2900f912774656279bdd735818376a0e4c1738da8a7d75400ecc150f18cdf08092b6ee93711f76c7ef674ed10de7f1ee9514e509ee24e13b8c851a6
   languageName: node
   linkType: hard
-
-"@midnight/dapp-connector-api@workspace:packages/dapp-connector-api":
-  version: 0.0.0-use.local
-  resolution: "@midnight/dapp-connector-api@workspace:packages/dapp-connector-api"
-  dependencies:
-    "@midnight/wallet-api": ^3.2.0
-    "@types/node": ^18.11.3
-    "@typescript-eslint/eslint-plugin": ^5.40.1
-    "@typescript-eslint/parser": ^5.60.0
-    eslint: ^8.26.0
-    eslint-config-prettier: ^8.5.0
-    eslint-config-standard-with-typescript: ^23.0.0
-    eslint-plugin-import: ^2.26.0
-    eslint-plugin-n: ^15.3.0
-    eslint-plugin-prettier: ^4.2.1
-    eslint-plugin-promise: ^6.1.1
-    prettier: ^2.7.1
-    tslib: ^2.5.0
-    typedoc: ^0.24.8
-    typedoc-plugin-markdown: ^3.15.4
-    typescript: ~4.8.4
-  languageName: unknown
-  linkType: soft
 
 "@midnight/faucet@npm:0.2.0":
   version: 0.2.0
@@ -1436,18 +1454,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight/wallet-api@npm:3.1.2":
-  version: 3.1.2
-  resolution: "@midnight/wallet-api@npm:3.1.2"
-  dependencies:
-    "@midnight/zswap": 0.3.1
-  peerDependencies:
-    rxjs: 7.x
-  checksum: 1a38cdd9e9d009b16620292a8c68db16d2d0380587546b7d120574d71cd292e79bdc8607004ab69136f6cd673b895a9b646bf62aad9ac198d258dde2216516a4
-  languageName: node
-  linkType: hard
-
-"@midnight/wallet-api@npm:3.2.0, @midnight/wallet-api@npm:^3.2.0":
+"@midnight/wallet-api@npm:3.2.0":
   version: 3.2.0
   resolution: "@midnight/wallet-api@npm:3.2.0"
   dependencies:
@@ -1525,8 +1532,8 @@ __metadata:
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
-    "@midnight/wallet": "file:../../../wallet-engine"
-    "@midnight/wallet-api": 3.1.2
+    "@midnight-ntwrk/wallet-api": 3.2.3
+    "@midnight/wallet": 3.3.6
     "@types/jest": ^29.2.0
     "@types/node": ^18.11.3
     "@types/ws": ^8.5.4
@@ -1655,22 +1662,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight/wallet@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.3.6
-  resolution: "@midnight/wallet@file:../../../wallet-engine#../../../wallet-engine::hash=4b6043&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
-  dependencies:
-    "@midnight/wallet-api": 3.2.0
-    "@midnight/zswap": 0.3.4
-    isomorphic-ws: ^5.0.0
-    node-fetch: 3.3.2
-    rxjs: ^7.5
-    scale-ts: ^1.1.0
-    testcontainers: ^10.2.1
-    ws: ^8.8.1
-  checksum: 80009103f05d1be5ddcd8fb1cc0df6469d83ae5c902d1d9e36962618f3c687901cac4e5909216b91ae9c8ec0eeeaec05d7202b9f22063a0e941971d26af05277
-  languageName: node
-  linkType: hard
-
 "@midnight/wallet@npm:2.9.1":
   version: 2.9.1
   resolution: "@midnight/wallet@npm:2.9.1"
@@ -1686,10 +1677,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight/zswap@npm:0.3.1":
-  version: 0.3.1
-  resolution: "@midnight/zswap@npm:0.3.1"
-  checksum: b645cedf87227cb977d83adf0af1798b55fe5b34fb5bbe14e21fd013bda00de116abc06a48a93e779bd060b7b55002a41e05b62cc862b7b4078fbb527e599fce
+"@midnight/wallet@npm:3.3.6":
+  version: 3.3.6
+  resolution: "@midnight/wallet@npm:3.3.6"
+  dependencies:
+    "@midnight/wallet-api": 3.2.0
+    "@midnight/zswap": 0.3.4
+    isomorphic-ws: ^5.0.0
+    node-fetch: 3.3.2
+    rxjs: ^7.5
+    scale-ts: ^1.1.0
+    testcontainers: ^10.2.1
+    ws: ^8.8.1
+  checksum: 594d3ac6ac144a9daaa5563013d7c52c0d99563129283367c42f4eef3b128120c073ab99d150e197852dc08dde8659c15e3a3ff7f6922729dc267d2efa6360ba
   languageName: node
   linkType: hard
 

@@ -4,7 +4,7 @@ import cats.syntax.functor.*
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
-import io.iohk.midnight.midnightZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.std.Map as JsMap
 import scala.scalajs.js
 

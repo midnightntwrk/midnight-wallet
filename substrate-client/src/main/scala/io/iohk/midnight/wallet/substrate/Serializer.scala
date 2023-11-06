@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.substrate
 
 import io.iohk.midnight.buffer.mod.Buffer
-import io.iohk.midnight.midnightZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.scaleTs.mod.{Vector, compact, u8}
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 

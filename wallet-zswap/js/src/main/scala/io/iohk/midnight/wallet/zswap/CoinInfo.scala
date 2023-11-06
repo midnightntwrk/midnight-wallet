@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.zswap
 
 import io.iohk.midnight.js.interop.util.BigIntOps.*
-import io.iohk.midnight.midnightZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import scala.scalajs.js
 
 opaque type CoinInfo = mod.CoinInfo

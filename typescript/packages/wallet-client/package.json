@@ -13,7 +13,6 @@
   ],
   "scripts": {
     "prepack": "yarn build",
-    "deploy": "yarn npm publish",
     "build": "rm -rf ./dist && tsc --build --force tsconfig.build.json",
     "test": "NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node' jest",
     "lint": "eslint src"

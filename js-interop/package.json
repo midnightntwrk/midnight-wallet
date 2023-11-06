@@ -1,5 +1,5 @@
 {
-    "name": "@midnight/js-interop",
+    "name": "@midnight/wallet-js-interop",
     "packageManager": "yarn@1.22.18",
     "author": "IOHK",
     "license": "Apache-2.0",

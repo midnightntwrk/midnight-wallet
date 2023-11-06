@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.substrate
 
-import io.iohk.midnight.midnightZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.buffer.mod.Buffer
 import scala.scalajs.js.typedarray.Uint8Array
 

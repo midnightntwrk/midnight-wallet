@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.IO
 import cats.syntax.either.*
 import cats.effect.unsafe.implicits.global
-import io.iohk.midnight.midnightZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.wallet.substrate.SubstrateClient as ScalaSubstrateClient
 import sttp.model.Uri
 

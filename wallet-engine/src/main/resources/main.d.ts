@@ -1,5 +1,5 @@
-import { Transaction } from '@midnight/zswap';
-import { Wallet } from '@midnight/wallet-api';
+import { Transaction } from '@midnight-ntwrk/zswap';
+import { Wallet } from '@midnight-ntwrk/wallet-api';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 

@@ -4,6 +4,7 @@ env:
   MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
   MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
+  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   push:
@@ -39,6 +40,9 @@ jobs:
           echo "
           //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
           @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
+
+          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
+          @midnight-ntwrk:registry=https://npm.pkg.github.com/
           " > ./.npmrc
       - name: Build Wallet
         run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
@@ -50,7 +54,7 @@ jobs:
         run: |
           cd typescript
           yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
-          echo 'checksumBehavior: update' >> ./.yarnrc.yml
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
       - name: Install typescript dependencies
         run: nix develop .#typescript --command yarn
       - name: Deploy typescript packages

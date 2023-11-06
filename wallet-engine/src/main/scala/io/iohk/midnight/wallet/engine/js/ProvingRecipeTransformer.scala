@@ -1,13 +1,13 @@
 package io.iohk.midnight.wallet.engine.js
 
 import cats.syntax.eq.*
-import io.iohk.midnight.midnightWalletApi.distTypesMod.{
+import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   BalanceTransactionToProve,
   NothingToProve,
   TransactionToProve,
   ProvingRecipe as ApiProvingRecipe,
 }
-import io.iohk.midnight.midnightWalletApi.mod.{
+import io.iohk.midnight.midnightNtwrkWalletApi.mod.{
   BALANCE_TRANSACTION_TO_PROVE,
   NOTHING_TO_PROVE,
   TRANSACTION_TO_PROVE,

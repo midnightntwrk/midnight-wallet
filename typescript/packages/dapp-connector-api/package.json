@@ -1,5 +1,5 @@
 {
-  "name": "@midnight/dapp-connector-api",
+  "name": "@midnight-ntwrk/dapp-connector-api",
   "packageManager": "yarn@3.6.1",
   "version": "1.0.0",
   "description": "Midnight DApp Connector API",
@@ -12,6 +12,13 @@
     "dist",
     "package.json"
   ],
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+  },
   "scripts": {
     "prepack": "yarn build",
     "deploy": "yarn npm publish",
@@ -37,6 +44,6 @@
     "typescript": "~4.8.4"
   },
   "dependencies": {
-    "@midnight/wallet-api": "^3.2.0"
+    "@midnight-ntwrk/wallet-api": "^3.2.3"
   }
 }

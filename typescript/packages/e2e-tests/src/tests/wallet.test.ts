@@ -64,7 +64,7 @@ describe('Fresh wallet with empty state', () => {
       );
 
       const state = await firstValueFrom(wallet.state());
-      expect(state.publicKey).toMatch(mnPattern);
+      expect(state.address).toMatch(mnPattern);
       await wallet.close();
     } catch (error: any) {
       if (error instanceof Error) {

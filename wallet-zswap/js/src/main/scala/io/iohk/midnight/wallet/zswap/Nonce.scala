@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.zswap
 
 import cats.Eq
-import io.iohk.midnight.midnightZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod
 
 type Nonce = mod.Nonce
 

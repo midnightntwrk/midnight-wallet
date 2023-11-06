@@ -79,22 +79,17 @@ lazy val useNodeModuleResolution = {
 
 val ghPackagesRealm = "GitHub Package Registry"
 val ghPackagesHost = "maven.pkg.github.com"
-val ghPackagesUrl = s"https://$ghPackagesHost/input-output-hk/midnight-wallet"
-lazy val ghPackagesResolver =
-  resolvers += ghPackagesRealm at ghPackagesUrl
-lazy val ghPackagesCredentials =
+val ghPackagesUrl = s"https://$ghPackagesHost/midnight-ntwrk/artifacts"
+lazy val commonPublishSettings = Seq(
+  resolvers += ghPackagesRealm at ghPackagesUrl,
   credentials += Credentials(
     ghPackagesRealm,
     ghPackagesHost,
     sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
     sys.env.getOrElse("MIDNIGHT_PUBLISH_TOKEN", ""),
-  )
-
-lazy val commonPublishSettings = Seq(
-  ghPackagesResolver,
-  ghPackagesCredentials,
+  ),
   organization := "io.iohk.midnight",
-  version := "3.3.7",
+  version := "3.3.8",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -130,6 +125,7 @@ lazy val bloc = crossProject(JVMPlatform, JSPlatform)
   .in(file("bloc"))
   .settings(commonSettings, commonPublishSettings)
   .settings(
+    name := "wallet-bloc",
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
@@ -151,6 +147,7 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
   )
   .settings(commonSettings, commonPublishSettings)
   .settings(
+    name := "wallet-core",
     Test / parallelExecution := false,
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
@@ -195,6 +192,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
+    name := "wallet-engine",
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
     dist := distImpl.value,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -232,6 +230,7 @@ lazy val jsInterop = project
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
+    name := "wallet-js-interop",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
@@ -245,6 +244,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .in(file("wallet-zswap"))
   .settings(commonSettings, commonPublishSettings)
+  .settings(name := "wallet-zswap")
   .jsConfigure(_.dependsOn(jsInterop))
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
   .jsSettings(
@@ -297,6 +297,7 @@ lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
   .jsConfigure(_.dependsOn(jsInterop))
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings, commonPublishSettings)
+  .settings(name := "wallet-prover-client")
   .jsSettings(
     commonScalablyTypedSettings,
     stIgnore ++= List("node-fetch"),
@@ -321,6 +322,7 @@ lazy val substrateClient = project
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
+    name := "wallet-substrate-client",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
@@ -335,6 +337,7 @@ lazy val pubSubIndexerClient = project
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
   .settings(
+    name := "wallet-pubsub-indexer-client",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     useNodeModuleResolution,
     libraryDependencies ++= Seq(

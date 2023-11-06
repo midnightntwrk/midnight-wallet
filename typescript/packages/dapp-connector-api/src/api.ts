@@ -1,4 +1,4 @@
-import { Wallet, WalletState } from '@midnight/wallet-api';
+import { Wallet, WalletState } from '@midnight-ntwrk/wallet-api';
 
 /**
  * The shape of the wallet state that must be exposed
