@@ -9,6 +9,8 @@ import scala.util.Try
 
 class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends Ledger {
 
+  private val finalNetworkId = networkIdOpt.getOrElse(NetworkId.Undeployed)
+
   override def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,
@@ -19,16 +21,14 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
         tx.length,
         encryptionKeySerialized.getBytes(StandardCharsets.UTF_8),
         encryptionKeySerialized.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultRaw(
-        callTry = callTry,
-        createResultEither = BooleanResult.applyEither,
-      )
-    } yield result
+    createResultRaw(
+      callTry = callTry,
+      createResultEither = BooleanResult.applyEither,
+    )
   }
 
   override def applyTransactionToState(
@@ -41,17 +41,15 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
         tx.length,
         local_state = localState.getBytes(StandardCharsets.UTF_8),
         local_state_len = localState.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      )
-    } yield result
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
   }
 
   override def extractGuaranteedCoinsFromTransaction(
@@ -61,17 +59,15 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
       ledgerAPI.extract_guaranteed_coins_from_transaction(
         tx.getBytes(StandardCharsets.UTF_8),
         tx.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      )
-    } yield result
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
   }
 
   override def extractFallibleCoinsFromTransaction(
@@ -81,28 +77,23 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
       ledgerAPI.extract_fallible_coins_from_transaction(
         tx.getBytes(StandardCharsets.UTF_8),
         tx.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      ).map(_.optionalData)
-    } yield result
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    ).map(_.optionalData)
   }
 
   override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] =
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = Try(ledgerAPI.zswap_chain_state_new()),
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      )
-    } yield result
+    createResultAndFreePointer(
+      callTry = Try(ledgerAPI.zswap_chain_state_new(finalNetworkId.id)),
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
 
   override def zswapChainStateFirstFree(
       zswapChainState: String,
@@ -111,17 +102,15 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
       ledgerAPI.zswap_chain_state_first_free(
         zswapChainState.getBytes(StandardCharsets.UTF_8),
         zswapChainState.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeNumberResult,
-        createResultEither = NumberResult.applyEither,
-      )
-    } yield result
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeNumberResult,
+      createResultEither = NumberResult.applyEither,
+    )
   }
 
   override def zswapChainStateTryApply(
@@ -134,17 +123,15 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
         zswapChainState.length,
         offer.getBytes(StandardCharsets.UTF_8),
         offer.length,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      )
-    } yield result
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
   }
 
   override def merkleTreeCollapsedUpdateNew(
@@ -158,30 +145,15 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
         zswapChainState.length,
         indexStart,
         indexEnd,
+        finalNetworkId.id,
       )
     }
 
-    for {
-      _ <- setNetworkIdIfProvided(networkIdOpt)
-      result <- createResultAndFreePointer(
-        callTry = callTry,
-        freePointerTry = tryFreeStringResult,
-        createResultEither = StringResult.applyEither,
-      )
-    } yield result
-  }
-
-  private def setNetworkIdIfProvided(
-      networkIdOpt: Option[NetworkId],
-  ): Either[NonEmptyList[JNRError], Unit] = {
-    def setupLedgerNetworkId(networkId: NetworkId) =
-      createResultAndFreePointer(
-        callTry = Try(ledgerAPI.set_network_id(networkId.id)),
-        freePointerTry = tryFreeNumberResult,
-        createResultEither = NumberResult.applyEither,
-      )
-
-    networkIdOpt.fold(Right(()))(setupLedgerNetworkId(_).map(_ => ()))
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
   }
 
   private def tryFreeStringResult(pointer: Pointer): Try[Unit] =

@@ -79,17 +79,22 @@ lazy val useNodeModuleResolution = {
 
 val ghPackagesRealm = "GitHub Package Registry"
 val ghPackagesHost = "maven.pkg.github.com"
-val ghPackagesUrl = s"https://$ghPackagesHost/midnight-ntwrk/artifacts"
-lazy val commonPublishSettings = Seq(
-  resolvers += ghPackagesRealm at ghPackagesUrl,
+val ghPackagesUrl = s"https://$ghPackagesHost/input-output-hk/midnight-wallet"
+lazy val ghPackagesResolver =
+  resolvers += ghPackagesRealm at ghPackagesUrl
+lazy val ghPackagesCredentials =
   credentials += Credentials(
     ghPackagesRealm,
     ghPackagesHost,
     sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
     sys.env.getOrElse("MIDNIGHT_PUBLISH_TOKEN", ""),
-  ),
+  )
+
+lazy val commonPublishSettings = Seq(
+  ghPackagesResolver,
+  ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.3.8",
+  version := "3.3.10",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -161,7 +166,7 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
       "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
       "io.circe" %%% "circe-core" % circeVersion,
       "io.circe" %%% "circe-parser" % circeVersion,
-      "io.circe" %%% "circe-generic" % circeVersion
+      "io.circe" %%% "circe-generic" % circeVersion,
     ),
 
     // Test dependencies
@@ -268,10 +273,10 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         downloadedFile
       }
 
-      val linuxAssetId = "132688689"
+      val linuxAssetId = "134358211"
       downloadFile(linuxAssetId)
 
-      val darwinAssetId = "132688104"
+      val darwinAssetId = "134359209"
       downloadFile(darwinAssetId)
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },

@@ -45,6 +45,7 @@ object LedgerError {
   case object MerkleTreeCollapsedUpdateNewError extends LedgerError(12)
   case object UnknownNetworkIdError extends LedgerError(13)
   case object ExtractFallibleCoinsFromTxError extends LedgerError(14)
+  case object SetNetworkIdError extends LedgerError(15)
   case object ExcUnknown extends LedgerError(255)
 
   def apply(code: Int): Either[Int, LedgerError] = {
@@ -62,6 +63,7 @@ object LedgerError {
       case MerkleTreeCollapsedUpdateNewError.code => Right(MerkleTreeCollapsedUpdateNewError)
       case UnknownNetworkIdError.code             => Right(UnknownNetworkIdError)
       case ExtractFallibleCoinsFromTxError.code   => Right(ExtractFallibleCoinsFromTxError)
+      case SetNetworkIdError.code                 => Right(SetNetworkIdError)
       case ExcUnknown.code                        => Right(ExcUnknown)
       case unknownResultCode                      => Left(unknownResultCode)
     }

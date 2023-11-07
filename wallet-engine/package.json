@@ -1,6 +1,6 @@
 {
     "name": "@midnight-ntwrk/wallet",
-    "version": "3.3.8",
+    "version": "3.3.10",
     "main": "dist/main.js",
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
