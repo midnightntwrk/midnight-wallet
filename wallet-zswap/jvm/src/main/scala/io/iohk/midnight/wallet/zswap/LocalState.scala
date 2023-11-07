@@ -23,6 +23,7 @@ object LocalState {
     @SuppressWarnings(Array("org.wartremover.warts.Overloading"))
     def apply(offer: Offer): LocalState = ???
     def applyProofErased(offer: ProofErasedOffer): LocalState = ???
+    def applyFailed(offer: Offer): LocalState = ???
     def pendingOutputsSize: Int = ???
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState = ???
     def firstFree: BigInt = ???

@@ -43,6 +43,8 @@ object LocalState {
       localState.apply(offer.toJs)
     def applyProofErased(offer: ProofErasedOffer): LocalState =
       localState.applyProofErased(offer.toJs)
+    def applyFailed(offer: Offer): LocalState =
+      localState.applyFailed(offer.toJs)
     def pendingOutputsSize: Int =
       localState.pendingOutputs.valuesList.size
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState =

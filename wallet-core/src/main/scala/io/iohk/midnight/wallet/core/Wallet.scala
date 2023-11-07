@@ -133,15 +133,20 @@ object Wallet {
       Wallet(newState, wallet.txHistory ++ newTxs.map(_.tx), Some(update.blockHeight)).asRight
     }
 
-  private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState =
+  private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState = {
+    val tx = transaction.tx
     transaction.applyStage match {
-      case ApplyStage.FailEntirely => state // TODO: Rollback pending tx
+      case ApplyStage.FailEntirely =>
+        val guaranteed = state.applyFailed(tx.guaranteedCoins)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.FailFallible =>
-        state.apply(transaction.tx.guaranteedCoins)
+        val guaranteed = state.apply(tx.guaranteedCoins)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.SucceedEntirely =>
         val guaranteed = state.apply(transaction.tx.guaranteedCoins)
-        transaction.tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
     }
+  }
 
   implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] = _.txHistory
 

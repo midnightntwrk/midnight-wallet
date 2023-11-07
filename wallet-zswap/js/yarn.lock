@@ -2,10 +2,10 @@
 # yarn lockfile v1
 
 
-"@midnight-ntwrk/zswap@^0.3.8":
-  version "0.3.8"
-  resolved "https://npm.pkg.github.com/download/@midnight-ntwrk/zswap/0.3.8/e07b2660e1ded48ec077f88eb1db3db96e06986d#e07b2660e1ded48ec077f88eb1db3db96e06986d"
-  integrity sha512-/AfNRh1H/hWMO5jzBlDOLq7XNmnRotDdRZCHuc0/X2TjkoaGXM9BTkjtZos8qtgNdg0rwneIFuq+f1MmHpWT0Q==
+"@midnight-ntwrk/zswap@^0.3.9":
+  version "0.3.9"
+  resolved "https://npm.pkg.github.com/download/@midnight-ntwrk/zswap/0.3.9/886c019caba04f3e9764edf452b96a3f5430357b#886c019caba04f3e9764edf452b96a3f5430357b"
+  integrity sha512-fHtZ3SHA3kiWMwU0o4QiSNP13h4oE7iei/YG8c+i+eZOe84/VSBAFsH5TY6WLqSF1RvCh2xnR/uYDEcwk2UrHQ==
 
 typescript@^4.8.3:
   version "4.9.5"
