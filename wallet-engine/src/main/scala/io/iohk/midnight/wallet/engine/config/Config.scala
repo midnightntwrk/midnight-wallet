@@ -42,7 +42,7 @@ object Config {
       case Some(InitialState.SerializedSnapshot(serialized)) => Wallet.Snapshot.parse(serialized)
     }).leftMap(t => InvalidSerializedSnapshot.apply(t.getMessage))
 
-  private def parseLogLevel(minLogLevel: Option[String]): Either[Throwable, LogLevel] =
+  def parseLogLevel(minLogLevel: Option[String]): Either[Throwable, LogLevel] =
     minLogLevel match {
       case Some(providedLogLevel) =>
         LogLevel

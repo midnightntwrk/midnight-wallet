@@ -199,16 +199,18 @@ object JsWallet {
       )
 
     for {
+      minLogLevel <- IO.fromEither(Config.parseLogLevel(rawConfig.minLogLevel))
+      jsWalletTracer = buildJsWalletTracer(minLogLevel)
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
-      config <- parseConfig(rawConfig)
+      config <- parseConfig(rawConfig, jsWalletTracer)
       allocatedWallet <- WalletBuilder.build[IO](config)
     } yield JsWallet(allocatedWallet)
   }
 
-  private val jsWalletTracer =
-    JsWalletTracer.from[IO](ConsoleTracer.contextAware(LogLevel.Debug))
+  private def buildJsWalletTracer(minLogLevel: LogLevel): JsWalletTracer[IO] =
+    JsWalletTracer.from[IO](ConsoleTracer.contextAware(minLogLevel))
 
-  private def parseConfig(rawConfig: RawConfig): IO[Config] =
+  private def parseConfig(rawConfig: RawConfig, jsWalletTracer: JsWalletTracer[IO]): IO[Config] =
     IO
       .fromEither(Config.parse(rawConfig))
       .attemptTap {
