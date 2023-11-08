@@ -1,5 +1,3 @@
-DApp Connector API Reference / [Exports](modules.md)
-
 # Midnight DApp Connector API
 
 This API provides a comprehensive interface for the DApp Connector operations, defining the structure of the wallet state it exposes, the methods for interacting with it, and the types and variables used within.

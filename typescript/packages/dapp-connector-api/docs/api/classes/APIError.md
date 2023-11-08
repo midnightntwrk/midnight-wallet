@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v3.1.2](../README.md) / [Exports](../modules.md) / APIError
+[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / APIError
 
 # Class: APIError
 
@@ -20,7 +20,7 @@ an error with the shape can be thrown.
 
 ### constructor
 
-• **new APIError**(`code`, `reason`)
+• **new APIError**(`code`, `reason`): [`APIError`](APIError.md)
 
 #### Parameters
 
@@ -29,9 +29,13 @@ an error with the shape can be thrown.
 | `code` | [`ErrorCode`](../modules.md#errorcode) |
 | `reason` | `string` |
 
+#### Returns
+
+[`APIError`](APIError.md)
+
 #### Defined in
 
-[errors.ts:28](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/errors.ts#L28)
+[errors.ts:28](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L28)
 
 ## Properties
 
@@ -43,7 +47,7 @@ The code of the error that's thrown
 
 #### Defined in
 
-[errors.ts:24](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/errors.ts#L24)
+[errors.ts:24](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L24)
 
 ___
 
@@ -55,4 +59,4 @@ The reason the error is thrown
 
 #### Defined in
 
-[errors.ts:26](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/errors.ts#L26)
+[errors.ts:26](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L26)

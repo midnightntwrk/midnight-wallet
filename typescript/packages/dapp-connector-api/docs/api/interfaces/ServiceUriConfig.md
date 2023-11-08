@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v3.1.2](../README.md) / [Exports](../modules.md) / ServiceUriConfig
+[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / ServiceUriConfig
 
 # Interface: ServiceUriConfig
 
@@ -23,7 +23,7 @@ PubSub Indexer URI
 
 #### Defined in
 
-[api.ts:20](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L20)
+[api.ts:20](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L20)
 
 ___
 
@@ -35,7 +35,7 @@ PubSub Indexer WebSocket URI
 
 #### Defined in
 
-[api.ts:22](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L22)
+[api.ts:22](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L22)
 
 ___
 
@@ -47,7 +47,7 @@ Prover Server URI
 
 #### Defined in
 
-[api.ts:24](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L24)
+[api.ts:24](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L24)
 
 ___
 
@@ -59,4 +59,4 @@ Substrate URI
 
 #### Defined in
 
-[api.ts:26](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L26)
+[api.ts:26](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L26)

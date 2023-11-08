@@ -4,7 +4,7 @@
   "includeVersion": true,
   "hideGenerator": true,
   "out": "docs/api",
-  "readme": "README.md",
+  "readme": "README_PUBLIC.md",
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
     "./src/index.ts"

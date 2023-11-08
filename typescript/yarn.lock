@@ -1207,13 +1207,13 @@ __metadata:
     eslint-plugin-promise: ^6.1.1
     prettier: ^2.7.1
     tslib: ^2.5.0
-    typedoc: ^0.24.8
-    typedoc-plugin-markdown: ^3.15.4
+    typedoc: ^0.25.3
+    typedoc-plugin-markdown: ^3.17.1
     typescript: ~4.8.4
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-api@npm:3.2.3, @midnight-ntwrk/wallet-api@npm:^3.2.3":
+"@midnight-ntwrk/wallet-api@npm:^3.2.3":
   version: 3.2.3
   resolution: "@midnight-ntwrk/wallet-api@npm:3.2.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.2.3%2F77603cd4ddea7dba5b560559c90b1291c3320417"
   dependencies:
@@ -1224,10 +1224,33 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/wallet@npm:^3.3.8":
+  version: 3.4.0
+  resolution: "@midnight-ntwrk/wallet@npm:3.4.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.4.0%2Ff13944617acd8ea47c21df7bf59af286b8bcafe3"
+  dependencies:
+    "@midnight-ntwrk/wallet-api": ^3.2.3
+    "@midnight-ntwrk/zswap": ^0.3.9
+    isomorphic-ws: ^5.0.0
+    node-fetch: 3.3.2
+    rxjs: ^7.5
+    scale-ts: ^1.1.0
+    testcontainers: ^10.2.1
+    ws: ^8.8.1
+  checksum: cbcc7bad792a30647f3af257031f88b4fcc79119a21c9639bb961ea5a948f8df29b926f4c067f1810290a8a976ed30eac4082b4aef70885900fb256228e4f1b1
+  languageName: node
+  linkType: hard
+
 "@midnight-ntwrk/zswap@npm:^0.3.8":
   version: 0.3.8
   resolution: "@midnight-ntwrk/zswap@npm:0.3.8::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F0.3.8%2Fe07b2660e1ded48ec077f88eb1db3db96e06986d"
   checksum: 9fb8f79caf41715af7af3ab385af87238053dff5b6d8d4b1be88897619b600f379ffbb3075a473b963b4a1d8cbf29b3a83492a91c65fa06c18063a62ff6613dd
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/zswap@npm:^0.3.9":
+  version: 0.3.9
+  resolution: "@midnight-ntwrk/zswap@npm:0.3.9::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F0.3.9%2F886c019caba04f3e9764edf452b96a3f5430357b"
+  checksum: bbb2c858a366dc2f36f8c960a8210cc11f294af9f49cb41951fe67c59f2fca5fe9aa2d26a185e6c7851d89f8c38fdfbd7aac523e124846fd7bbb7227f49760ca
   languageName: node
   linkType: hard
 
@@ -1454,17 +1477,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight/wallet-api@npm:3.2.0":
-  version: 3.2.0
-  resolution: "@midnight/wallet-api@npm:3.2.0"
-  dependencies:
-    "@midnight/zswap": 0.3.4
-  peerDependencies:
-    rxjs: 7.x
-  checksum: efdfc5c048db723e6c2fc3d4c42bd7391d942f4359354afcc4334bfc310b89985020bd095347d4d08f8464e82fa784c7e99e576113e39186200c0f3374b5690a
-  languageName: node
-  linkType: hard
-
 "@midnight/wallet-cli@workspace:*, @midnight/wallet-cli@workspace:packages/wallet-cli":
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-cli@workspace:packages/wallet-cli"
@@ -1532,8 +1544,8 @@ __metadata:
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
-    "@midnight-ntwrk/wallet-api": 3.2.3
-    "@midnight/wallet": 3.3.6
+    "@midnight-ntwrk/wallet": ^3.3.8
+    "@midnight-ntwrk/wallet-api": ^3.2.3
     "@types/jest": ^29.2.0
     "@types/node": ^18.11.3
     "@types/ws": ^8.5.4
@@ -1674,29 +1686,6 @@ __metadata:
     isomorphic-ws: ^5.0.0
     ws: ^8.8.1
   checksum: bfc79d616cdea73a0c3813b51d47273bee252c0930b244c3477a4491923fc378bcc118b57ce7f3f449d49870ed0c764e6ac17c1b18a754a4d441f2d9b79f4ac9
-  languageName: node
-  linkType: hard
-
-"@midnight/wallet@npm:3.3.6":
-  version: 3.3.6
-  resolution: "@midnight/wallet@npm:3.3.6"
-  dependencies:
-    "@midnight/wallet-api": 3.2.0
-    "@midnight/zswap": 0.3.4
-    isomorphic-ws: ^5.0.0
-    node-fetch: 3.3.2
-    rxjs: ^7.5
-    scale-ts: ^1.1.0
-    testcontainers: ^10.2.1
-    ws: ^8.8.1
-  checksum: 594d3ac6ac144a9daaa5563013d7c52c0d99563129283367c42f4eef3b128120c073ab99d150e197852dc08dde8659c15e3a3ff7f6922729dc267d2efa6360ba
-  languageName: node
-  linkType: hard
-
-"@midnight/zswap@npm:0.3.4":
-  version: 0.3.4
-  resolution: "@midnight/zswap@npm:0.3.4"
-  checksum: e277d0592cde24b851b2bd1b52d03f63ab3ab5476c3b6c91f9d3db84257c9a94dc47ab45148a79aa0b18d343bd1c41498d0bae8c518453d97a0dfe29f2f28582
   languageName: node
   linkType: hard
 
@@ -10437,30 +10426,30 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc-plugin-markdown@npm:^3.15.4":
-  version: 3.15.4
-  resolution: "typedoc-plugin-markdown@npm:3.15.4"
+"typedoc-plugin-markdown@npm:^3.17.1":
+  version: 3.17.1
+  resolution: "typedoc-plugin-markdown@npm:3.17.1"
   dependencies:
     handlebars: ^4.7.7
   peerDependencies:
     typedoc: ">=0.24.0"
-  checksum: 0ba19732713a0e0da12ae4eb3ec634e6e7ffb7237451780ae1e8c072276fc682603502086104728477ce03e1168853346046648443a718f7393d1eab0bb23e84
+  checksum: f12494bfc98ef532be63fb5e7630ff0aa2de17bb22b1d0b6260c416fe8b62cb537ddd3576cadc90c57c4aae2371722994ed873dc3220b23660e149a3eb676c04
   languageName: node
   linkType: hard
 
-"typedoc@npm:^0.24.8":
-  version: 0.24.8
-  resolution: "typedoc@npm:0.24.8"
+"typedoc@npm:^0.25.3":
+  version: 0.25.3
+  resolution: "typedoc@npm:0.25.3"
   dependencies:
     lunr: ^2.3.9
     marked: ^4.3.0
-    minimatch: ^9.0.0
+    minimatch: ^9.0.3
     shiki: ^0.14.1
   peerDependencies:
-    typescript: 4.6.x || 4.7.x || 4.8.x || 4.9.x || 5.0.x || 5.1.x
+    typescript: 4.6.x || 4.7.x || 4.8.x || 4.9.x || 5.0.x || 5.1.x || 5.2.x
   bin:
     typedoc: bin/typedoc
-  checksum: a46a14497f789fb3594e6c3af2e45276934ac46df40b7ed15a504ee51dc7a8013a2ffb3a54fd73abca6a2b71f97d3ec9ad356fa9aa81d29743e4645a965a2ae0
+  checksum: 060a8f798b32a0e70aa3b16e04d95b56fcfabf54f75fdff74fd9ddeed8860db3ba030d153f8b535b409a9d8825856252bc59f401619e5e3e2f71d3b9e0de606a
   languageName: node
   linkType: hard
 

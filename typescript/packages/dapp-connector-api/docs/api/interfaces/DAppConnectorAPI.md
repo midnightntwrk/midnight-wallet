@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v3.1.2](../README.md) / [Exports](../modules.md) / DAppConnectorAPI
+[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / DAppConnectorAPI
 
 # Interface: DAppConnectorAPI
 
@@ -26,47 +26,47 @@ Semver string. DApps are encouraged to check the compatibility whenever this cha
 
 #### Defined in
 
-[api.ts:46](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L46)
+[api.ts:46](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L46)
 
 ___
 
 ### enable
 
-• **enable**: () => `Promise`<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+• **enable**: () => `Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
 
 #### Type declaration
 
-▸ (): `Promise`<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+▸ (): `Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
 
 Request access to the wallet, returns the wallet api on approval
 
 ##### Returns
 
-`Promise`<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+`Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
 
 #### Defined in
 
-[api.ts:52](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L52)
+[api.ts:52](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L52)
 
 ___
 
 ### isEnabled
 
-• **isEnabled**: () => `Promise`<`boolean`\>
+• **isEnabled**: () => `Promise`\<`boolean`\>
 
 #### Type declaration
 
-▸ (): `Promise`<`boolean`\>
+▸ (): `Promise`\<`boolean`\>
 
 Check if the wallet has authorized the dapp
 
 ##### Returns
 
-`Promise`<`boolean`\>
+`Promise`\<`boolean`\>
 
 #### Defined in
 
-[api.ts:48](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L48)
+[api.ts:48](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L48)
 
 ___
 
@@ -78,24 +78,24 @@ The name of the wallet
 
 #### Defined in
 
-[api.ts:44](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L44)
+[api.ts:44](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L44)
 
 ___
 
 ### serviceUriConfig
 
-• **serviceUriConfig**: () => `Promise`<[`ServiceUriConfig`](ServiceUriConfig.md)\>
+• **serviceUriConfig**: () => `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
 
 #### Type declaration
 
-▸ (): `Promise`<[`ServiceUriConfig`](ServiceUriConfig.md)\>
+▸ (): `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
 
 Request the services (pubsub, node and proof server) uris.
 
 ##### Returns
 
-`Promise`<[`ServiceUriConfig`](ServiceUriConfig.md)\>
+`Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
 
 #### Defined in
 
-[api.ts:50](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L50)
+[api.ts:50](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L50)

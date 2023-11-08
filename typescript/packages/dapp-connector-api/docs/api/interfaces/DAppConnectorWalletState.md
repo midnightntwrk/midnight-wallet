@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v3.1.2](../README.md) / [Exports](../modules.md) / DAppConnectorWalletState
+[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / DAppConnectorWalletState
 
 # Interface: DAppConnectorWalletState
 
@@ -22,7 +22,7 @@ The wallet address, which is a concatenation of coinPublicKey and encryptionPubl
 
 #### Defined in
 
-[api.ts:8](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L8)
+[api.ts:8](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L8)
 
 ___
 
@@ -34,7 +34,7 @@ The coin public key
 
 #### Defined in
 
-[api.ts:10](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L10)
+[api.ts:10](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L10)
 
 ___
 
@@ -46,4 +46,4 @@ The encryption public key
 
 #### Defined in
 
-[api.ts:12](https://github.com/input-output-hk/midnight-wallet/blob/d3a4d43/typescript/packages/dapp-connector-api/src/api.ts#L12)
+[api.ts:12](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L12)
