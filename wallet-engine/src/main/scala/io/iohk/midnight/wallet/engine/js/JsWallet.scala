@@ -15,8 +15,9 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
   ApplyStage,
+  SyncProgress,
 }
-import io.iohk.midnight.midnightNtwrkWalletApi.{distTypesMod, distWalletMod as api}
+import io.iohk.midnight.midnightNtwrkWalletApi.distWalletMod as api
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
@@ -77,7 +78,7 @@ class JsWallet(
   override def state(): Observable_[WalletState] =
     walletStateService.state
       .map { localState =>
-        WalletState(
+        val mappedWalletState = WalletState(
           availableCoins = localState.availableCoins.map(_.toJs).toJSArray,
           balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
           coins = localState.coins.map(_.toJs).toJSArray,
@@ -94,6 +95,11 @@ class JsWallet(
             )
           }.toJSArray,
         )
+        localState.syncProgress.fold(mappedWalletState.setSyncProgressUndefined) { progress =>
+          mappedWalletState.setSyncProgress(
+            SyncProgress(progress.synced.value.toJsBigInt, progress.total.value.toJsBigInt),
+          )
+        }
       }
       .unsafeToObservable()
 

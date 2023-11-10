@@ -31,10 +31,14 @@ package object domain {
 
   final case class AppliedTransaction(tx: Transaction, applyStage: ApplyStage)
 
+  sealed trait IndexerUpdate
+
   final case class ViewingUpdate(
       blockHeight: Block.Height,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction]],
-  )
+  ) extends IndexerUpdate
+
+  final case class ProgressUpdate(synced: Block.Height, total: Block.Height) extends IndexerUpdate
 
   final case class Seed(seed: Array[Byte]) extends AnyVal
 }

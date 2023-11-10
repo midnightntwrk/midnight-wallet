@@ -76,7 +76,7 @@ class WalletsSpec extends WithProvingServerSuite {
         updatedViewingWallet
           .prepareUpdate(None, chainState, stateWithFunds.firstFree)
 
-      val updatedRegularWallet = summon[WalletSync[Wallet, ViewingUpdate]]
+      val updatedRegularWallet = summon[WalletSync[Wallet, IndexerUpdate]]
         .applyUpdate(regularWalletUsedForTransfer, viewingUpdate) match
         case Left(value)             => fail(s"Syncing regular wallet failed: ${value.message}")
         case Right(newRegularWallet) => newRegularWallet

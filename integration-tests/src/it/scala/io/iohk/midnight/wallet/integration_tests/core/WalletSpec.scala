@@ -6,7 +6,12 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.{Generators, Wallet}
-import io.iohk.midnight.wallet.core.domain.{AppliedTransaction, ApplyStage, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain.{
+  AppliedTransaction,
+  ApplyStage,
+  IndexerUpdate,
+  ViewingUpdate,
+}
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
@@ -17,7 +22,7 @@ abstract class WalletSpec
     extends WalletKeysSpec[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]
     with WalletBalancesSpec[Wallet]
     with WalletTxBalancingSpec[Wallet, Transaction, CoinInfo]
-    with WalletSyncSpec[Wallet, ViewingUpdate]
+    with WalletSyncSpec[Wallet, IndexerUpdate]
     with WithProvingServerSuite {
 
   private val zero = BigInt(0)
@@ -79,7 +84,7 @@ abstract class WalletSpec
 
   override val walletWithoutFundsForBalancing: Wallet = Wallet.walletCreation.create(defaultState)
 
-  override val walletSync: WalletSync[Wallet, ViewingUpdate] = Wallet.walletSync
+  override val walletSync: WalletSync[Wallet, IndexerUpdate] = Wallet.walletSync
   private val txWithContext =
     Generators.txWithContextArbitrary.arbitrary.sample.get.fproduct(tx =>
       ZswapChainState().tryApply(tx.transaction.guaranteedCoins),
@@ -88,7 +93,7 @@ abstract class WalletSpec
     txWithContext.map((tx, _) =>
       Wallet.walletCreation.create(Wallet.Snapshot(tx.state, Seq(tx.transaction), None)),
     )
-  override val validUpdateToApply: IO[ViewingUpdate] =
+  override val validUpdateToApply: IO[IndexerUpdate] =
     txWithContext.map { (txCtx, chainState) =>
       ViewingUpdate(
         Block.Height.Genesis,

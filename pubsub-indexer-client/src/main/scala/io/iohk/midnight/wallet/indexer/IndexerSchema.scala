@@ -51,6 +51,14 @@ object IndexerSchema {
     )
   }
 
+  type ProgressUpdate
+  object ProgressUpdate {
+    def synced: SelectionBuilder[ProgressUpdate, BigInt] =
+      SelectionBuilder.Field("synced", Scalar())
+    def total: SelectionBuilder[ProgressUpdate, BigInt] =
+      SelectionBuilder.Field("total", Scalar())
+  }
+
   type Mutation = Operations.RootMutation
   object Mutation {
     def connect(viewingKey: String)(implicit
@@ -77,6 +85,7 @@ object IndexerSchema {
         sessionId: Option[SessionId] = None,
         blockHeight: Option[BigInt] = None,
     )(
+        onProgressUpdate: SelectionBuilder[ProgressUpdate, A],
         onViewingUpdate: SelectionBuilder[ViewingUpdate, A],
     )(implicit
         encoder0: ArgEncoder[Option[SessionId]],
@@ -85,7 +94,10 @@ object IndexerSchema {
       SelectionBuilder.Field(
         "wallet",
         ChoiceOf(
-          Map("ViewingUpdate" -> Obj(onViewingUpdate)),
+          Map(
+            "ProgressUpdate" -> Obj(onProgressUpdate),
+            "ViewingUpdate" -> Obj(onViewingUpdate),
+          ),
         ),
         arguments = List(
           Argument("sessionId", sessionId, "SessionId")(encoder0),

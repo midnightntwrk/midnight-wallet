@@ -17,6 +17,7 @@ final case class ViewingWallet private (
     encryptionPublicKey: EncryptionPublicKey,
     viewingKey: EncryptionSecretKey,
     transactions: Vector[Transaction],
+    progress: Option[domain.ProgressUpdate],
 ) {
   def prepareUpdate(
       lastKnownHash: Option[TransactionHash],
@@ -35,7 +36,7 @@ final case class ViewingWallet private (
 object ViewingWallet {
   given WalletRestore[ViewingWallet, (CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
     (coinPubKey, encPubKey, encSecKey) =>
-      new ViewingWallet(coinPubKey, encPubKey, encSecKey, Vector.empty)
+      new ViewingWallet(coinPubKey, encPubKey, encSecKey, Vector.empty, None)
 
   given WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
     new WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
@@ -59,5 +60,11 @@ object ViewingWallet {
         }
     }
 
-  given WalletTxHistory[ViewingWallet, Transaction] = _.transactions
+  given WalletTxHistory[ViewingWallet, Transaction] =
+    new WalletTxHistory[ViewingWallet, Transaction] {
+      override def transactionHistory(wallet: ViewingWallet): Seq[Transaction] =
+        wallet.transactions
+      override def progress(wallet: ViewingWallet): Option[domain.ProgressUpdate] =
+        wallet.progress
+    }
 }

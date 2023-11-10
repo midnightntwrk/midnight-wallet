@@ -5,13 +5,13 @@ import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.capabilities.WalletSync
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.core.tracing.WalletSyncTracer
 import io.iohk.midnight.wallet.core.{BlockProcessingFactory, WalletError, WalletStateContainer}
 
 trait WalletSyncService[F[_]] {
-  def updates: Stream[F, Either[WalletError, ViewingUpdate]]
+  def updates: Stream[F, Either[WalletError, IndexerUpdate]]
   def stop: F[Unit]
 }
 
@@ -22,11 +22,11 @@ object WalletSyncService {
       deferred: Deferred[F, Either[Throwable, Unit]],
       blockHeight: Option[Block.Height],
   )(implicit
-      walletSync: WalletSync[TWallet, ViewingUpdate],
+      walletSync: WalletSync[TWallet, IndexerUpdate],
       tracer: WalletSyncTracer[F],
   ) extends WalletSyncService[F] {
 
-    override val updates: Stream[F, Either[WalletError, ViewingUpdate]] =
+    override val updates: Stream[F, Either[WalletError, IndexerUpdate]] =
       BlockProcessingFactory
         .pipe(walletStateContainer)
         .apply(syncService.sync(blockHeight))
@@ -42,7 +42,7 @@ object WalletSyncService {
       walletStateContainer: WalletStateContainer[F, TWallet],
       blockHeight: Option[Block.Height],
   )(implicit
-      walletSync: WalletSync[TWallet, ViewingUpdate],
+      walletSync: WalletSync[TWallet, IndexerUpdate],
       tracer: WalletSyncTracer[F],
   ): Resource[F, WalletSyncService[F]] = {
     val deferred = Resource.eval(Deferred[F, Either[Throwable, Unit]])

@@ -9,11 +9,15 @@ import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.WalletStateService
 import io.iohk.midnight.wallet.core.capabilities.WalletKeys
-import io.iohk.midnight.wallet.core.domain.{ApplyStage, AppliedTransaction, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
-import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
+import io.iohk.midnight.wallet.indexer.IndexerClient.{
+  RawProgressUpdate,
+  RawViewingUpdate,
+  SingleUpdate,
+}
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.{HexUtil, MerkleTreeCollapsedUpdate}
 import scala.util.Try
@@ -52,31 +56,37 @@ object SyncServiceFactory {
             }
             .collect { case Right(viewingUpdate) => viewingUpdate }
             .evalTap(syncServiceTracer.viewingUpdateReceived)
-            .evalMap { case RawViewingUpdate(blockHeight, rawUpdates) =>
-              val viewingUpdate =
-                rawUpdates
-                  .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
-                    case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
-                      HexUtil
-                        .decodeHex(mt)
-                        .flatMap(MerkleTreeCollapsedUpdate.deserialize)
-                        .map(_.asLeft)
-                    case SingleUpdate.RawTransaction(_, raw, applyStage) =>
-                      (
-                        HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
-                        Try(ApplyStage.valueOf(applyStage)),
-                      )
-                        .mapN(AppliedTransaction(_, _).asRight)
-                  }
-                  .flatMap { updates =>
-                    Block
-                      .Height(blockHeight)
-                      .map(ViewingUpdate(_, updates))
-                      .leftMap(Exception(_))
-                      .toTry
-                  }
+            .evalMap {
+              case RawViewingUpdate(blockHeight, rawUpdates) =>
+                val viewingUpdate =
+                  rawUpdates
+                    .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
+                      case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
+                        HexUtil
+                          .decodeHex(mt)
+                          .flatMap(MerkleTreeCollapsedUpdate.deserialize)
+                          .map(_.asLeft)
+                      case SingleUpdate.RawTransaction(_, raw, applyStage) =>
+                        (
+                          HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
+                          Try(ApplyStage.valueOf(applyStage)),
+                        )
+                          .mapN(AppliedTransaction(_, _).asRight)
+                    }
+                    .flatMap { updates =>
+                      Block
+                        .Height(blockHeight)
+                        .map(ViewingUpdate(_, updates))
+                        .leftMap(Exception(_))
+                        .toTry
+                    }
 
-              ApplicativeThrow[F].fromTry(viewingUpdate)
+                ApplicativeThrow[F].fromTry(viewingUpdate)
+              case RawProgressUpdate(synced, total) =>
+                (Block.Height(synced), Block.Height(total))
+                  .mapN(ProgressUpdate.apply)
+                  .leftMap(Exception(_))
+                  .liftTo[F]
             }
       }
   }

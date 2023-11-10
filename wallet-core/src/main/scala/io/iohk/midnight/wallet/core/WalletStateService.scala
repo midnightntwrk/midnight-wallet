@@ -1,8 +1,9 @@
 package io.iohk.midnight.wallet.core
 
 import fs2.Stream
-import io.iohk.midnight.wallet.core.WalletStateService.{State, SerializedWalletState}
+import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
 import io.iohk.midnight.wallet.core.capabilities.*
+import io.iohk.midnight.wallet.core.domain.ProgressUpdate
 import io.iohk.midnight.wallet.zswap.*
 
 trait WalletStateService[F[_], TWallet] {
@@ -52,6 +53,7 @@ object WalletStateService {
           coins = walletCoins.coins(wallet),
           availableCoins = walletCoins.availableCoins(wallet),
           transactionHistory = walletTxHistory.transactionHistory(wallet),
+          syncProgress = walletTxHistory.progress(wallet),
         )
       }
 
@@ -74,6 +76,7 @@ object WalletStateService {
       coins: Seq[QualifiedCoinInfo],
       availableCoins: Seq[QualifiedCoinInfo],
       transactionHistory: Seq[Transaction],
+      syncProgress: Option[ProgressUpdate],
   ) {
     lazy val address: Address = Address(coinPublicKey, encryptionPublicKey)
   }

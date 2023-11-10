@@ -8,7 +8,12 @@ import cats.syntax.applicative.*
 import cats.syntax.functor.*
 import cats.syntax.monadError.*
 import fs2.Stream
-import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
+import io.iohk.midnight.wallet.indexer.IndexerClient.{
+  RawIndexerUpdate,
+  RawProgressUpdate,
+  RawViewingUpdate,
+  SingleUpdate,
+}
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
@@ -23,16 +28,16 @@ class IndexerClient[F[_]: Async: Concurrent](
   def viewingUpdates(
       viewingKey: String,
       blockHeight: Option[BigInt],
-  ): Stream[F, RawViewingUpdate] =
+  ): Stream[F, RawIndexerUpdate] =
     for {
       sessionId <- Stream.resource(
         Resource.make(connect(viewingKey))(disconnect),
       )
-      (blockHeight, updates) <- GraphQLSubscriber.subscribe(
+      rawIndexerUpdate <- GraphQLSubscriber.subscribe(
         indexerWsUri,
         subscribeForViewingUpdates(Some(sessionId), blockHeight),
       )
-    } yield RawViewingUpdate(blockHeight, updates)
+    } yield rawIndexerUpdate
 
   private def connect(viewingKey: String) =
     Mutation
@@ -45,18 +50,19 @@ class IndexerClient[F[_]: Async: Concurrent](
   private def subscribeForViewingUpdates(
       sessionId: Option[SessionId],
       blockHeight: Option[BigInt],
-  ): SelectionBuilder[RootSubscription, (BigInt, List[SingleUpdate])] =
+  ): SelectionBuilder[RootSubscription, RawIndexerUpdate] =
     Subscription.wallet(
       sessionId,
       blockHeight,
-    )(onViewingUpdate =
-      ViewingUpdate.blockHeight ~ ViewingUpdate
+    )(
+      onViewingUpdate = (ViewingUpdate.blockHeight ~ ViewingUpdate
         .update[SingleUpdate](
           MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
           RelevantTransaction
             .transaction(Transaction.hash ~ Transaction.raw ~ Transaction.applyStage)
             .map(SingleUpdate.RawTransaction.apply.tupled),
-        ),
+        )).map(RawViewingUpdate.apply),
+      onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map(RawProgressUpdate.apply),
     )
 
   private def disconnect(sessionId: SessionId) =
@@ -77,6 +83,10 @@ object IndexerClient {
     Resource.make(backend.pure)(_.close()).map(new IndexerClient[F](indexerUri, indexerWsUri, _))
   }
 
+  sealed trait RawIndexerUpdate
+
+  final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate
+
   sealed trait SingleUpdate
 
   object SingleUpdate {
@@ -86,4 +96,5 @@ object IndexerClient {
   }
 
   final case class RawViewingUpdate(blockHeight: BigInt, updates: Seq[SingleUpdate])
+      extends RawIndexerUpdate
 }

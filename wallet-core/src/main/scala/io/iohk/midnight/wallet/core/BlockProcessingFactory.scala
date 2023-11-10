@@ -4,24 +4,24 @@ import cats.effect.Async
 import cats.syntax.all.*
 import fs2.Pipe
 import io.iohk.midnight.wallet.core.capabilities.WalletSync
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.tracing.WalletSyncTracer
 
 object BlockProcessingFactory {
   def pipe[F[_]: Async, TWallet](walletStateContainer: WalletStateContainer[F, TWallet])(implicit
-      walletSync: WalletSync[TWallet, ViewingUpdate],
+      walletSync: WalletSync[TWallet, IndexerUpdate],
       tracer: WalletSyncTracer[F],
-  ): Pipe[F, ViewingUpdate, Either[WalletError, (ViewingUpdate, TWallet)]] =
+  ): Pipe[F, IndexerUpdate, Either[WalletError, (IndexerUpdate, TWallet)]] =
     _.evalTap(tracer.handlingUpdate)
-      .evalMap { viewingUpdate =>
+      .evalMap { indexerUpdate =>
         walletStateContainer
-          .updateStateEither(walletSync.applyUpdate(_, viewingUpdate))
+          .updateStateEither(walletSync.applyUpdate(_, indexerUpdate))
           .flatTap {
-            case Right(_) => tracer.applyUpdateSuccess(viewingUpdate)
+            case Right(_) => tracer.applyUpdateSuccess(indexerUpdate)
             // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-            case Left(error) => tracer.applyUpdateError(viewingUpdate, error)
+            case Left(error) => tracer.applyUpdateError(indexerUpdate, error)
             // $COVERAGE-ON$
           }
-          .fmap(_.fmap((viewingUpdate, _)))
+          .fmap(_.fmap((indexerUpdate, _)))
       }
 }

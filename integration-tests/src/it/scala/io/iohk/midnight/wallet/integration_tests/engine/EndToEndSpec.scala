@@ -6,7 +6,7 @@ import cats.effect.std.Queue
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
 import io.iohk.midnight.wallet.engine.config.Config
@@ -23,11 +23,14 @@ trait EndToEndSpecSetup {
   val tokenType = TokenType.Native
   val coin = CoinInfo(tokenType, BigInt(1_000_000))
   val spendCoin = CoinInfo(tokenType, BigInt(10_000))
-  def randomRecipient(): CoinPublicKey = LocalState().coinPublicKey
+  def randomRecipient(): Address = {
+    val localState = LocalState()
+    Address(localState.coinPublicKey, localState.encryptionPublicKey)
+  }
 
-  def prepareOutputs(coins: List[CoinInfo], recipient: CoinPublicKey): List[TokenTransfer] = {
+  def prepareOutputs(coins: List[CoinInfo], recipient: Address): List[domain.TokenTransfer] = {
     coins.map { coin =>
-      TokenTransfer(coin.value, coin.tokenType, Address(recipient))
+      domain.TokenTransfer(coin.value, coin.tokenType, domain.Address(recipient.asString))
     }
   }
 
@@ -148,7 +151,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
             _,
           ) =>
         for {
-          appliedUpdatesQueue <- Queue.unbounded[IO, ViewingUpdate]
+          appliedUpdatesQueue <- Queue.unbounded[IO, domain.IndexerUpdate]
           _ <- walletSyncService.updates
             .collect { case Right(value) => value }
             .enqueueUnterminated(appliedUpdatesQueue)

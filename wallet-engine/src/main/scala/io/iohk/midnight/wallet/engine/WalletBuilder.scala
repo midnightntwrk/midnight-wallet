@@ -9,7 +9,7 @@ import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.blockchain.data.Block
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{WalletSyncTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.engine.config.Config
@@ -48,7 +48,7 @@ object WalletBuilder {
         zswap.EncryptionPublicKey,
         zswap.EncryptionSecretKey,
       ],
-      walletSync: WalletSync[TWallet, ViewingUpdate],
+      walletSync: WalletSync[TWallet, IndexerUpdate],
       walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.CoinInfo],
   ): F[AllocatedWallet[F, TWallet]] = {
     implicit val rootTracer: Tracer[F, StructuredLog] =
@@ -102,7 +102,7 @@ object WalletBuilder {
       blockHeight: Option[Block.Height],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
-      walletSync: WalletSync[TWallet, ViewingUpdate],
+      walletSync: WalletSync[TWallet, IndexerUpdate],
   ): Resource[F, WalletSyncService[F]] = {
     implicit val walletSyncTracer: WalletSyncTracer[F] = WalletSyncTracer.from(rootTracer)
     WalletSyncService(syncService, walletStateContainer, blockHeight)

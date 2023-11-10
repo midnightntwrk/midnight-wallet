@@ -68,6 +68,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
         state.coins,
         state.coins,
         Seq.empty,
+        None,
       ),
     )
 
@@ -105,6 +106,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        None,
       ),
     )
   }
@@ -136,6 +138,7 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        None,
       ),
     )
 

@@ -16,6 +16,8 @@ import io.iohk.midnight.wallet.core.domain.{
   Seed,
   TokenTransfer,
   TransactionToProve,
+  IndexerUpdate,
+  ProgressUpdate,
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
@@ -26,6 +28,7 @@ final case class Wallet private (
     private val state: LocalState = LocalState(),
     txHistory: Vector[Transaction] = Vector.empty,
     blockHeight: Option[Block.Height] = None,
+    progress: Option[ProgressUpdate] = None,
 )
 
 object Wallet {
@@ -122,16 +125,25 @@ object Wallet {
       }
     }
 
-  implicit val walletSync: WalletSync[Wallet, ViewingUpdate] =
-    (wallet: Wallet, update: ViewingUpdate) => {
+  implicit val walletSync: WalletSync[Wallet, IndexerUpdate] = {
+    case (wallet: Wallet, update: ViewingUpdate) =>
       val newState =
         update.updates.foldLeft(wallet.state) {
           case (state, Left(mt))  => state.applyCollapsedUpdate(mt)
           case (state, Right(tx)) => applyTransaction(state, tx)
         }
       val newTxs = update.updates.collect { case Right(tx) => tx }
-      Wallet(newState, wallet.txHistory ++ newTxs.map(_.tx), Some(update.blockHeight)).asRight
-    }
+      wallet
+        .copy(
+          state = newState,
+          txHistory = wallet.txHistory ++ newTxs.map(_.tx),
+          blockHeight = Some(update.blockHeight),
+        )
+        .asRight
+
+    case (wallet: Wallet, update: ProgressUpdate) =>
+      wallet.copy(progress = Some(update)).asRight
+  }
 
   private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState = {
     val tx = transaction.tx
@@ -148,7 +160,11 @@ object Wallet {
     }
   }
 
-  implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] = _.txHistory
+  implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] =
+    new WalletTxHistory[Wallet, Transaction] {
+      override def transactionHistory(wallet: Wallet): Seq[Transaction] = wallet.txHistory
+      override def progress(wallet: Wallet): Option[ProgressUpdate] = wallet.progress
+    }
 
   implicit val serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
     (wallet: Wallet) =>

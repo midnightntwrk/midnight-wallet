@@ -1,7 +1,13 @@
 package io.iohk.midnight.wallet.engine.tracing.sync
 
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
-import io.iohk.midnight.wallet.indexer.IndexerClient.{RawViewingUpdate, SingleUpdate}
+import io.iohk.midnight.wallet.indexer.IndexerClient
+import io.iohk.midnight.wallet.indexer.IndexerClient.{
+  RawIndexerUpdate,
+  RawProgressUpdate,
+  RawViewingUpdate,
+  SingleUpdate,
+}
 
 sealed trait SyncServiceEvent
 
@@ -17,10 +23,10 @@ object SyncServiceEvent {
 
   /** Sync event received.
     */
-  final case class ViewingUpdateReceived(update: RawViewingUpdate) extends SyncServiceEvent
+  final case class IndexerUpdateReceived(update: RawIndexerUpdate) extends SyncServiceEvent
 
-  object ViewingUpdateReceived {
-    val id: Event.Id[ViewingUpdateReceived] = Event.Id("viewing_update_received")
+  object IndexerUpdateReceived {
+    val id: Event.Id[IndexerUpdateReceived] = Event.Id("viewing_update_received")
   }
 
   object DefaultInstances {
@@ -31,12 +37,19 @@ object SyncServiceEvent {
       AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.getMessage))
     // $COVERAGE-ON$
 
-    implicit val viewingUpdateReceivedContext: AsStringLogContext[ViewingUpdateReceived] =
-      AsStringLogContext.fromMap[ViewingUpdateReceived](evt =>
+    def showIndexerUpdate(indexerUpdate: RawIndexerUpdate): String =
+      indexerUpdate match {
+        case RawProgressUpdate(synced, total) => s"Progress: $synced/$total"
+        case RawViewingUpdate(blockHeight, updates) =>
+          s"ViewingUpdate: @$blockHeight ${updates
+              .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
+              .mkString("[", ",", "]")}"
+      }
+
+    implicit val indexerUpdateReceivedContext: AsStringLogContext[IndexerUpdateReceived] =
+      AsStringLogContext.fromMap[IndexerUpdateReceived](evt =>
         Map(
-          "transaction_hashes" -> evt.update.updates
-            .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
-            .mkString("[", ",", "]"),
+          "update" -> showIndexerUpdate(evt.update),
         ),
       )
   }

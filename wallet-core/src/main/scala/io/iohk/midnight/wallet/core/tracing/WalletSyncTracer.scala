@@ -7,21 +7,21 @@ import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.tracer.logging.AsContextAwareLogSyntax.*
 import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import io.iohk.midnight.wallet.core.WalletError
-import io.iohk.midnight.wallet.core.domain.ViewingUpdate
+import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.tracing.WalletSyncEvent.*
 
 class WalletSyncTracer[F[_]](
     val tracer: Tracer[F, WalletSyncEvent],
 ) {
-  def handlingUpdate(viewingUpdate: ViewingUpdate): F[Unit] = tracer(
-    SyncHandlingUpdate(viewingUpdate),
+  def handlingUpdate(indexerUpdate: IndexerUpdate): F[Unit] = tracer(
+    SyncHandlingUpdate(indexerUpdate),
   )
-  def applyUpdateSuccess(viewingUpdate: ViewingUpdate): F[Unit] = tracer(
-    ApplyUpdateSuccess(viewingUpdate),
+  def applyUpdateSuccess(indexerUpdate: IndexerUpdate): F[Unit] = tracer(
+    ApplyUpdateSuccess(indexerUpdate),
   )
   // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-  def applyUpdateError(viewingUpdate: ViewingUpdate, error: WalletError): F[Unit] = tracer(
-    ApplyUpdateError(viewingUpdate, error),
+  def applyUpdateError(indexerUpdate: IndexerUpdate, error: WalletError): F[Unit] = tracer(
+    ApplyUpdateError(indexerUpdate, error),
   )
   // $COVERAGE-ON$
 }
@@ -45,8 +45,7 @@ object WalletSyncTracer {
       id = SyncHandlingUpdate.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt =>
-        s"Starting applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
+      message = evt => WalletSyncEvent.DefaultInstances.showIndexerUpdate(evt.update),
       context = _.stringLogContext,
     )
 
@@ -55,8 +54,7 @@ object WalletSyncTracer {
       id = ApplyUpdateSuccess.id,
       component = Component,
       level = LogLevel.Debug,
-      message = evt =>
-        s"Successfully applied update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
+      message = evt => WalletSyncEvent.DefaultInstances.showIndexerUpdate(evt.update),
       context = _.stringLogContext,
     )
 
@@ -66,8 +64,7 @@ object WalletSyncTracer {
       id = ApplyUpdateError.id,
       component = Component,
       level = LogLevel.Warn,
-      message = evt =>
-        s"Error while applying update [${evt.update.updates.collect { case Right(tx) => tx }.map(_.tx.hash).mkString("[", ",", "]")}].",
+      message = evt => WalletSyncEvent.DefaultInstances.showIndexerUpdate(evt.update),
       context = _.stringLogContext,
     )
   // $COVERAGE-ON$
