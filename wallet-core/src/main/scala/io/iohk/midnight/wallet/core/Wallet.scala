@@ -89,7 +89,7 @@ object Wallet {
               .balanceOffer(wallet.state, offerToBalance)
               .map { case (balancedOffer, newState) =>
                 (
-                  Wallet(newState, wallet.txHistory),
+                  wallet.copy(state = newState),
                   TransactionToProve(UnprovenTransaction(balancedOffer)),
                 )
               }
@@ -112,12 +112,12 @@ object Wallet {
             case BalanceTransactionResult.BalancedTransactionAndState(unprovenTx, state) =>
               val updatedState = coins.foldLeft(state)(_.watchFor(_))
               (
-                Wallet(updatedState, wallet.txHistory),
+                wallet.copy(state = updatedState),
                 BalanceTransactionToProve(unprovenTx, transactionToBalance),
               )
             case BalanceTransactionResult.ReadyTransactionAndState(tx, state) =>
-              coins.foreach(state.watchFor)
-              (Wallet(state, wallet.txHistory), NothingToProve(tx))
+              val updatedState = coins.foldLeft(state)(_.watchFor(_))
+              (wallet.copy(state = updatedState), NothingToProve(tx))
           }
           .leftMap { case TransactionBalancer.NotSufficientFunds(error) =>
             WalletError.NotSufficientFunds(error)
