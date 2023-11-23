@@ -94,7 +94,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.4.2",
+  version := "3.4.3",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
