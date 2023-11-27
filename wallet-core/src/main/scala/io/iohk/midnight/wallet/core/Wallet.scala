@@ -41,7 +41,7 @@ object Wallet {
     (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
 
   implicit val walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
-    wallet.state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _)
+    wallet.state.availableCoins.groupMapReduce(_.tokenType)(_.value)(_ + _)
 
   implicit val walletKeys
       : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
@@ -59,11 +59,12 @@ object Wallet {
       override def coins(wallet: Wallet): Seq[QualifiedCoinInfo] =
         wallet.state.coins
       override def availableCoins(wallet: Wallet): Seq[QualifiedCoinInfo] =
-        wallet.state.coins.filterNot(wallet.state.pendingSpends.contains)
+        wallet.state.availableCoins
     }
 
-  implicit val walletTxBalancing: WalletTxBalancing[Wallet, Transaction, CoinInfo] =
-    new WalletTxBalancing[Wallet, Transaction, CoinInfo] {
+  implicit val walletTxBalancing
+      : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] =
+    new WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] {
       override def prepareTransferRecipe(
           wallet: Wallet,
           outputs: List[TokenTransfer],
@@ -122,6 +123,28 @@ object Wallet {
           .leftMap { case TransactionBalancer.NotSufficientFunds(error) =>
             WalletError.NotSufficientFunds(error)
           }
+      }
+
+      override def applyFailedTransaction(
+          wallet: Wallet,
+          tx: Transaction,
+      ): Either[WalletError, Wallet] =
+        wallet
+          .copy(state =
+            applyTransaction(wallet.state, AppliedTransaction(tx, ApplyStage.FailEntirely)),
+          )
+          .asRight
+
+      override def applyFailedUnprovenTransaction(
+          wallet: Wallet,
+          tx: UnprovenTransaction,
+      ): Either[WalletError, Wallet] = {
+        val txProofErased = tx.eraseProofs
+        val guaranteedReverted = wallet.state.applyFailedProofErased(txProofErased.guaranteedCoins)
+        val newState = txProofErased.fallibleCoins.fold(guaranteedReverted)(
+          guaranteedReverted.applyFailedProofErased,
+        )
+        wallet.copy(state = newState).asRight
       }
     }
 

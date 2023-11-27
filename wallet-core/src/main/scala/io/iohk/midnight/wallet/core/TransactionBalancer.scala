@@ -116,11 +116,8 @@ object TransactionBalancer {
     imbalances.forall(_._2 >= Zero)
   }
 
-  private def getAvailableCoins(state: LocalState): List[QualifiedCoinInfo] = {
-    state.coins
-      .filterNot(coin => state.pendingSpends.exists(_.nonce === coin.nonce))
-      .sortWith((a, b) => a.value < b.value)
-  }
+  private def getAvailableCoins(state: LocalState): List[QualifiedCoinInfo] =
+    state.availableCoins.sortWith((a, b) => a.value < b.value)
 
   private def balanceImbalances(
       imbalances: Map[TokenType, BigInt],

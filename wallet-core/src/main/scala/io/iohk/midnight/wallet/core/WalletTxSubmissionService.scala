@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.Sync
 import cats.syntax.all.*
+import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
 import io.iohk.midnight.wallet.core.domain.TransactionIdentifier
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
@@ -17,8 +18,11 @@ trait WalletTxSubmissionService[F[_]] {
 object WalletTxSubmissionService {
   class Live[F[_]: Sync, TWallet](
       submitTxService: TxSubmissionService[F],
-  )(implicit tracer: WalletTxSubmissionTracer[F])
-      extends WalletTxSubmissionService[F] {
+      walletStateContainer: WalletStateContainer[F, TWallet],
+  )(implicit
+      tracer: WalletTxSubmissionTracer[F],
+      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, _],
+  ) extends WalletTxSubmissionService[F] {
 
     override def submitTransaction(
         toSubmitLedgerTx: zswap.Transaction,
@@ -27,8 +31,8 @@ object WalletTxSubmissionService {
         txId <- getIdentifier(toSubmitLedgerTx)
         _ <- tracer.submitTxStart(txId)
         _ <- validateTx(toSubmitLedgerTx, txId)
-        response <- submitTxService.submitTransaction(toSubmitLedgerTx)
-        result <- adaptResponse(txId, response)
+        response <- submitTxService.submitTransaction(toSubmitLedgerTx).attempt
+        result <- adaptResponse(toSubmitLedgerTx, txId, response)
       } yield result
     }
 
@@ -55,22 +59,28 @@ object WalletTxSubmissionService {
     }
 
     private def adaptResponse(
+        tx: zswap.Transaction,
         txId: TransactionIdentifier,
-        submissionResult: SubmissionResult,
+        submissionResult: Either[Throwable, SubmissionResult],
     ): F[TransactionIdentifier] = {
-      val result: F[TransactionIdentifier] = submissionResult match {
-        case SubmissionResult.Accepted =>
-          txId.pure
-        case SubmissionResult.Rejected(reason) =>
-          // we should clear the pending spends here, but we don't have an API now
-          TransactionRejected(reason).raiseError
+      val result = submissionResult match {
+        case Right(SubmissionResult.Accepted)         => txId.pure
+        case Right(SubmissionResult.Rejected(reason)) => TransactionRejected(reason).raiseError
+        case Left(error) => TransactionSubmissionFailed(error).raiseError
       }
       result.attemptTap {
-        case Right(_) =>
-          tracer.submitTxSuccess(txId)
-        case Left(error) => tracer.submitTxError(txId, error)
+        case Right(_)    => tracer.submitTxSuccess(txId)
+        case Left(error) => tracer.submitTxError(txId, error) >> revertTx(tx, txId)
       }
     }
+
+    private def revertTx(tx: zswap.Transaction, txId: TransactionIdentifier): F[Unit] =
+      walletStateContainer
+        .updateStateEither(walletTxBalancing.applyFailedTransaction(_, tx))
+        .flatMap {
+          case Right(_)    => Sync[F].unit
+          case Left(error) => tracer.revertError(txId, error.toThrowable)
+        }
   }
 
   abstract class Error(msg: String) extends Exception(msg)
@@ -79,4 +89,6 @@ object WalletTxSubmissionService {
       extends Error(s"Transaction is not well formed: ${reason.getMessage}")
   final case class TransactionRejected(reason: String)
       extends Error(reason) // FIXME not an exception
+  final case class TransactionSubmissionFailed(throwable: Throwable)
+      extends Error(throwable.getMessage)
 }

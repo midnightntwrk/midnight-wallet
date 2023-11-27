@@ -11,7 +11,11 @@ import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.core.tracing.{WalletSyncTracer, WalletTxSubmissionTracer}
+import io.iohk.midnight.wallet.core.tracing.{
+  WalletSyncTracer,
+  WalletTxServiceTracer,
+  WalletTxSubmissionTracer,
+}
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.js.{
   ProvingServiceFactory,
@@ -49,7 +53,12 @@ object WalletBuilder {
         zswap.EncryptionSecretKey,
       ],
       walletSync: WalletSync[TWallet, IndexerUpdate],
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.CoinInfo],
+      walletTxBalancing: WalletTxBalancing[
+        TWallet,
+        zswap.Transaction,
+        zswap.UnprovenTransaction,
+        zswap.CoinInfo,
+      ],
   ): F[AllocatedWallet[F, TWallet]] = {
     implicit val rootTracer: Tracer[F, StructuredLog] =
       ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
@@ -71,7 +80,10 @@ object WalletBuilder {
         walletStateService,
       )
       provingService <- ProvingServiceFactory(config.provingServerUri)
-      walletTxSubmissionService <- buildWalletTxSubmissionService(submitTxService)
+      walletTxSubmissionService <- buildWalletTxSubmissionService(
+        submitTxService,
+        walletStateContainer,
+      )
       walletBlockProcessingService <- buildWalletSyncService(
         stateSyncService,
         walletStateContainer,
@@ -110,13 +122,15 @@ object WalletBuilder {
 
   private def buildWalletTxSubmissionService[F[_]: Async, TWallet](
       submitTxService: TxSubmissionService[F],
+      walletStateContainer: WalletStateContainer[F, TWallet],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
+      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, _],
   ): Resource[F, WalletTxSubmissionService[F]] = {
     implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[F] =
       WalletTxSubmissionTracer.from(rootTracer)
     Resource.pure(
-      new WalletTxSubmissionService.Live[F, TWallet](submitTxService),
+      new WalletTxSubmissionService.Live[F, TWallet](submitTxService, walletStateContainer),
     )
   }
 
@@ -124,8 +138,15 @@ object WalletBuilder {
       walletStateContainer: WalletStateContainer[F, TWallet],
       provingService: ProvingService[F],
   )(implicit
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.CoinInfo],
+      rootTracer: Tracer[F, StructuredLog],
+      walletTxBalancing: WalletTxBalancing[
+        TWallet,
+        zswap.Transaction,
+        zswap.UnprovenTransaction,
+        zswap.CoinInfo,
+      ],
   ): Resource[F, WalletTransactionService[F]] = {
+    given WalletTxServiceTracer[F] = WalletTxServiceTracer.from(rootTracer)
     Resource.pure(new WalletTransactionService.Live(walletStateContainer, provingService))
   }
 }

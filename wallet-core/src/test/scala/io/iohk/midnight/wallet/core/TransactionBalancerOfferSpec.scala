@@ -42,7 +42,6 @@ class TransactionBalancerOfferSpec extends ScalaCheckSuite with BetterOutputSuit
           assert(balancedOffer.deltas.toList.forall(_._2 > BigInt(0)))
           assert(balancedOffer.outputs.length >= imbalancedOffer.outputs.length)
           assert(balancedOffer.inputs.nonEmpty)
-          assert(newState.pendingSpends.sizeIs > 0)
           assert(newState.pendingOutputsSize > 0)
       }
     }

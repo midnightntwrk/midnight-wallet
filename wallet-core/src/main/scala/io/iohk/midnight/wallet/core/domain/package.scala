@@ -11,13 +11,21 @@ import io.iohk.midnight.wallet.zswap.{
 package object domain {
   final case class Address(address: String) extends AnyVal
 
-  sealed trait ProvingRecipe
+  sealed trait ProvingRecipe {
+    def unprovenTransaction: Option[UnprovenTransaction]
+  }
   sealed trait BalanceTransactionRecipe extends ProvingRecipe
 
-  final case class TransactionToProve(transaction: UnprovenTransaction) extends ProvingRecipe
+  final case class TransactionToProve(transaction: UnprovenTransaction) extends ProvingRecipe {
+    override def unprovenTransaction: Option[UnprovenTransaction] = Some(transaction)
+  }
   final case class BalanceTransactionToProve(toProve: UnprovenTransaction, toBalance: Transaction)
-      extends BalanceTransactionRecipe
-  final case class NothingToProve(transaction: Transaction) extends BalanceTransactionRecipe
+      extends BalanceTransactionRecipe {
+    override def unprovenTransaction: Option[UnprovenTransaction] = Some(toProve)
+  }
+  final case class NothingToProve(transaction: Transaction) extends BalanceTransactionRecipe {
+    override def unprovenTransaction: Option[UnprovenTransaction] = None
+  }
 
   final case class TokenTransfer(amount: BigInt, tokenType: TokenType, receiverAddress: Address)
 

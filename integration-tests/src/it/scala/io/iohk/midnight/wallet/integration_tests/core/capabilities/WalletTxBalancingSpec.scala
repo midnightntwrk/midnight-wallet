@@ -11,11 +11,11 @@ import io.iohk.midnight.wallet.core.domain.{
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.CatsEffectSuite
 
-trait WalletTxBalancingSpec[TWallet, TTransaction, TCoin]
+trait WalletTxBalancingSpec[TWallet, TTransaction, TUnprovenTransaction, TCoin]
     extends CatsEffectSuite
     with BetterOutputSuite {
 
-  val walletTxBalancing: WalletTxBalancing[TWallet, TTransaction, TCoin]
+  val walletTxBalancing: WalletTxBalancing[TWallet, TTransaction, TUnprovenTransaction, TCoin]
   val walletWithFundsForBalancing: IO[TWallet]
   val walletWithoutFundsForBalancing: TWallet
 

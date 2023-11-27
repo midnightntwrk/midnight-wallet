@@ -14,6 +14,9 @@ object ProofErasedTransaction {
 
     def guaranteedCoins: ProofErasedOffer = ProofErasedOffer.fromJs(tx.guaranteedCoins)
 
+    def fallibleCoins: Option[ProofErasedOffer] =
+      tx.fallibleCoins.toOption.map(ProofErasedOffer.fromJs)
+
     def merge(other: ProofErasedTransaction): ProofErasedTransaction = tx.merge(other)
 
     def imbalances(guaranteed: Boolean, fees: BigInt): Map[TokenType, BigInt] =

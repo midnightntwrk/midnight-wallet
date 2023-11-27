@@ -37,6 +37,12 @@ object WalletTxSubmissionEvent {
     val id: Event.Id[TxValidationError] = Event.Id("wallet_tx_validation_error")
   }
 
+  final case class RevertTransactionError(txId: TransactionIdentifier, error: Throwable)
+      extends WalletTxSubmissionEvent
+  object RevertTransactionError {
+    val id: Event.Id[RevertTransactionError] = Event.Id("wallet_tx_reversion_error")
+  }
+
   object DefaultInstances {
     implicit val txSubmissionStartContext: AsStringLogContext[TransactionSubmissionStart] =
       AsStringLogContext.fromMap(evt => Map("transaction_identifier" -> evt.txId.txId))
@@ -52,7 +58,11 @@ object WalletTxSubmissionEvent {
       AsStringLogContext.fromMap(evt => Map("transaction_identifier" -> evt.txId.txId))
     implicit val txValidationErrorContext: AsStringLogContext[TxValidationError] =
       AsStringLogContext.fromMap(evt =>
-        Map("transaction_identifier" -> evt.txId.txId, "error" -> evt.error.getMessage()),
+        Map("transaction_identifier" -> evt.txId.txId, "error" -> evt.error.getMessage),
+      )
+    implicit val revertTransactionErrorContext: AsStringLogContext[RevertTransactionError] =
+      AsStringLogContext.fromMap(evt =>
+        Map("transaction_identifier" -> evt.txId.txId, "error" -> evt.error.getMessage),
       )
   }
 

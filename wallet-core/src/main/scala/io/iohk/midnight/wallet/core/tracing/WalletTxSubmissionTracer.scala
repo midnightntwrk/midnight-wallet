@@ -32,6 +32,8 @@ class WalletTxSubmissionTracer[F[_]](val tracer: Tracer[F, WalletTxSubmissionEve
   def submitTxError(txId: TransactionIdentifier, error: Throwable): F[Unit] =
     tracer(TransactionSubmissionError(txId, error))
 
+  def revertError(txId: TransactionIdentifier, error: Throwable): F[Unit] =
+    tracer(RevertTransactionError(txId, error))
 }
 
 object WalletTxSubmissionTracer {
@@ -46,6 +48,7 @@ object WalletTxSubmissionTracer {
     case evt: TransactionSubmissionError   => evt.asContextAwareLog
     case evt: TxValidationSuccess          => evt.asContextAwareLog
     case evt: TxValidationError            => evt.asContextAwareLog
+    case evt: RevertTransactionError       => evt.asContextAwareLog
   }
 
   implicit val submitTxStartAsStructuredLog: AsStructuredLog[TransactionSubmissionStart] =
@@ -91,6 +94,15 @@ object WalletTxSubmissionTracer {
       component = Component,
       level = LogLevel.Warn,
       message = evt => s"Transaction [${evt.txId.txId}] is invalid.",
+      context = _.stringLogContext,
+    )
+
+  implicit val txReversionErrorAsStructuredLog: AsStructuredLog[RevertTransactionError] =
+    AsContextAwareLog.instance(
+      id = RevertTransactionError.id,
+      component = Component,
+      level = LogLevel.Error,
+      message = evt => s"Error reverting failed tx [${evt.txId.txId}]: ${evt.error.getMessage}",
       context = _.stringLogContext,
     )
 

@@ -56,7 +56,6 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
                 .forall(_._2 >= BigInt(0)),
             )
             assert(balancedTransaction.imbalances(false).forall(_._2 >= BigInt(0)))
-            assert(newState.pendingSpends.sizeIs > 0)
             assert(newState.pendingOutputsSize > 0)
           case Right(_) => fail("No-op path: transaction was already balanced")
         }

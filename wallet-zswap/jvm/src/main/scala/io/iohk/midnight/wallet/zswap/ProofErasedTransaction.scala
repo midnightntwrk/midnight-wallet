@@ -6,6 +6,7 @@ opaque type ProofErasedTransaction = Nothing
 object ProofErasedTransaction {
   extension (tx: ProofErasedTransaction) {
     def guaranteedCoins: ProofErasedOffer = ???
+    def fallibleCoins: Option[ProofErasedOffer] = ???
     def merge(other: ProofErasedTransaction): ProofErasedTransaction = ???
     def imbalances(guaranteed: Boolean, fees: BigInt): Map[TokenType, BigInt] = ???
     @SuppressWarnings(Array("org.wartremover.warts.Overloading"))

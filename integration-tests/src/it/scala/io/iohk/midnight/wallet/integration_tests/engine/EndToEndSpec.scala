@@ -3,9 +3,11 @@ package io.iohk.midnight.wallet.integration_tests.engine
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.effect.std.Queue
+import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.Wallet.Snapshot
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.engine.WalletBuilder as Wallet
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
@@ -50,7 +52,7 @@ trait EndToEndSpecSetup {
   }
 
   def makeRunningWalletResource(
-      initialState: LocalState,
+      initialState: Snapshot,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] =
     Resource.make(
       Wallet
@@ -60,21 +62,21 @@ trait EndToEndSpecSetup {
             indexerWSUri,
             proverServerUri,
             substrateNodeUri,
-            LogLevel.Warn,
-            core.Wallet.Snapshot(initialState, Seq.empty, None),
+            LogLevel.Info,
+            initialState,
           ),
         )
         .flatTap(_.dependencies.walletSyncService.updates.compile.drain.start),
     )(_.finalizer)
 
-  def withRunningWallet(initialWalletState: LocalState)(
+  def withRunningWallet(initialWalletState: Snapshot)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
     makeRunningWalletResource(initialWalletState)
       .use(body(_))
 
   def makeWalletResource(
-      initialState: LocalState,
+      initialState: Snapshot,
   ): Resource[IO, AllocatedWallet[IO, Wallet]] = {
     Resource.make(
       Wallet
@@ -84,26 +86,86 @@ trait EndToEndSpecSetup {
             indexerWSUri,
             proverServerUri,
             substrateNodeUri,
-            LogLevel.Warn,
-            core.Wallet.Snapshot(initialState, Seq.empty, None),
+            LogLevel.Info,
+            initialState,
           ),
         ),
     )(_.finalizer)
   }
 
-  def withWallet(initialWalletState: LocalState)(
+  def withWallet(initialWalletState: Snapshot)(
       body: AllocatedWallet[IO, Wallet] => IO[Unit],
   ): IO[Unit] =
     makeWalletResource(initialWalletState)
       .use(body(_))
 }
 
+@SuppressWarnings(Array("org.wartremover.warts.TryPartial", "org.wartremover.warts.SeqApply"))
 class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
 
-  override val munitIOTimeout: Duration = 60.seconds
+  override val munitIOTimeout: Duration = 2.minutes
 
-  test("Submit transfer tx spending wallet balance".ignore) {
-    val initialState = prepareStateWithCoins(List(coin))
+  test("Submit tx and sync".ignore) {
+    val initialState =
+      Snapshot
+        .fromSeed("0000000000000000000000000000000000000000000000000000000000000042")
+        .toTry
+        .get
+
+    withRunningWallet(initialState) {
+      case AllocatedWallet(
+            WalletDependencies(_, walletState, txSubmission, walletTransactionService),
+            _,
+          ) =>
+        val initialSync =
+          walletState.state
+            .find(s => s.syncProgress.exists(p => p.synced.value === p.total.value))
+            .map(_.balances.getOrElse(tokenType, BigInt(0)))
+            .compile
+            .lastOrError
+
+        val sendTx =
+          walletTransactionService
+            .prepareTransferRecipe(
+              prepareOutputs(List(CoinInfo(tokenType, BigInt(100_000))), randomRecipient()),
+            )
+            .flatMap(walletTransactionService.proveTransaction)
+            .flatMap(txSubmission.submitTransaction)
+
+        val waitConfirmation =
+          walletState.state
+            .find(s => s.coins.size === s.availableCoins.size)
+            .map(_.balances.getOrElse(tokenType, BigInt(0)))
+            .compile
+            .lastOrError
+
+        val init = for {
+          _ <- IO.println("Syncing...")
+          balance <- initialSync
+          _ <- IO.println(s"Synced. Initial balance: $balance")
+        } yield ()
+
+        val sendAndWait = for {
+          _ <- IO.println("Sending tx...")
+          _ <- sendTx
+          _ <- IO.println("Tx sent. Waiting for confirmation...")
+          balance <- waitConfirmation
+          _ <- IO.println(s"Confirmed. Balance left: $balance")
+        } yield ()
+
+        init >> sendAndWait.foreverM
+    }
+  }
+
+  // Turn off the proof server for this test
+  test("Recover balance after failed call to proof server".ignore) {
+    val initialState =
+      Snapshot
+        .fromSeed("0000000000000000000000000000000000000000000000000000000000000042")
+        .toTry
+        .get
+
+    val initialBalance = BigInt("25000000000000000")
 
     withRunningWallet(initialState) {
       case AllocatedWallet(
@@ -111,26 +173,97 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
             _,
           ) =>
         for {
-          balanceBeforeSend <- walletState.state
-            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
-            .find(_ >= coin.value)
+          _ <- walletState.state
+            .evalTap(s => IO.println(s"Balance: ${s.balances.getOrElse(TokenType.Native, 0)}"))
+            .find(_.balances.getOrElse(TokenType.Native, BigInt(0)) === initialBalance)
             .compile
-            .lastOrError
+            .drain
           transferRecipe <- walletTransactionService.prepareTransferRecipe(
-            prepareOutputs(List(spendCoin), randomRecipient()),
+            prepareOutputs(List(CoinInfo(tokenType, BigInt(1_000_000))), randomRecipient()),
           )
-          spendTx <- walletTransactionService.proveTransaction(transferRecipe)
-          txId <- txSubmission.submitTransaction(spendTx)
-          balanceAfterSend <- walletState.state
-            .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
-            .find(_ < coin.value)
-            .compile
-            .lastOrError
+          _ <- walletTransactionService.proveTransaction(transferRecipe).attempt
+          balanceAfterProof <-
+            walletState.state
+              .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+              .evalTap(balance => IO.println(s"Balance: $balance"))
+              .head
+              .compile
+              .lastOrError
+          _ <- IO.println("Sleeping for 10 seconds. Turn proof server on.")
+          _ <- IO.sleep(10.seconds)
+          _ <- IO.println("Proving transaction")
+          transferRecipe2 <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(CoinInfo(tokenType, BigInt(1_000_000))), randomRecipient()),
+          )
+          txToSubmit <- walletTransactionService.proveTransaction(transferRecipe2)
+          _ <- IO.println("Submitting transaction")
+          _ <- txSubmission.submitTransaction(txToSubmit)
+          _ <- IO.println("Transaction submitted")
+          balancesAfterSubmission <-
+            walletState.state
+              .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+              .evalTap(balance => IO.println(s"Balance: $balance"))
+              .take(2)
+              .compile
+              .toList
         } yield {
-          // TODO: add better assertions, when wallet state API be ready
-          assertEquals(txId.txId, spendTx.identifiers(0))
-          assertEquals(balanceBeforeSend, coin.value)
-          assert(balanceAfterSend < coin.value - spendCoin.value) // spend amount + fee
+          assertEquals(balanceAfterProof, initialBalance)
+          assert(balancesAfterSubmission(0) < initialBalance)
+          assert(balancesAfterSubmission(1) < initialBalance)
+          assert(balancesAfterSubmission(0) < balancesAfterSubmission(1))
+        }
+    }
+  }
+
+  // Turn off the node for this test
+  test("Recover balance after failed call to submit tx".ignore) {
+    val initialState =
+      Snapshot
+        .fromSeed("0000000000000000000000000000000000000000000000000000000000000042")
+        .toTry
+        .get
+
+    val initialBalance = BigInt("25000000000000000")
+
+    withRunningWallet(initialState) {
+      case AllocatedWallet(
+            WalletDependencies(_, walletState, txSubmission, walletTransactionService),
+            _,
+          ) =>
+        for {
+          _ <- walletState.state
+            .evalTap(s => IO.println(s"Balance: ${s.balances.getOrElse(TokenType.Native, 0)}"))
+            .map(_.syncProgress)
+            .flattenOption
+            .find(s => s.synced.value === s.total.value)
+            .compile
+            .drain
+          transferRecipe <- walletTransactionService.prepareTransferRecipe(
+            prepareOutputs(List(CoinInfo(tokenType, BigInt(1_000_000))), randomRecipient()),
+          )
+          txToSubmit <- walletTransactionService.proveTransaction(transferRecipe)
+          balanceAfterProof <-
+            walletState.state
+              .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+              .evalTap(balance => IO.println(s"Balance: $balance"))
+              .head
+              .compile
+              .lastOrError
+          _ <- txSubmission.submitTransaction(txToSubmit).attempt
+          balanceAfterSubmission <-
+            walletState.state
+              .evalTap(state => IO.println(s"Coins: ${state.coins.map(_.value)}"))
+              .evalTap(state =>
+                IO.println(s"Available coins: ${state.availableCoins.map(_.value)}"),
+              )
+              .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+              .evalTap(balance => IO.println(s"Balance: $balance"))
+              .head
+              .compile
+              .lastOrError
+        } yield {
+          assertEquals(balanceAfterSubmission, initialBalance)
+          assert(balanceAfterProof < initialBalance)
         }
     }
   }
@@ -138,7 +271,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
   test(
     "Submit tx one after another with waiting for blocks apply and doesn't spend the same coin (no double spend)".ignore,
   ) {
-    val initialState = prepareStateWithCoins(List(coin))
+    val initialState = Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None)
 
     withWallet(initialState) {
       case AllocatedWallet(
@@ -197,7 +330,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
   test(
     "Prepare transfer tx one after another and doesn't spend the same coin (no double spend)".ignore,
   ) {
-    val initialState = prepareStateWithCoins(List(coin))
+    val initialState = Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None)
 
     val quickTxSend = withWallet(initialState) {
       case AllocatedWallet(

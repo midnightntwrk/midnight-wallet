@@ -49,18 +49,19 @@ class WalletsSpec extends WithProvingServerSuite {
 
   test("ViewingWallet must prepare updates for Wallet") {
     val (regularWalletUsedForTransfer, transferRecipe) =
-      summon[WalletTxBalancing[Wallet, Transaction, CoinInfo]].prepareTransferRecipe(
-        regularWallet,
-        List(
-          TokenTransfer(
-            BigInt(1000),
-            TokenType.Native,
-            DomainAddress(
-              Address(receiverState.coinPublicKey, receiverState.encryptionPublicKey).asString,
+      summon[WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo]]
+        .prepareTransferRecipe(
+          regularWallet,
+          List(
+            TokenTransfer(
+              BigInt(1000),
+              TokenType.Native,
+              DomainAddress(
+                Address(receiverState.coinPublicKey, receiverState.encryptionPublicKey).asString,
+              ),
             ),
           ),
-        ),
-      ) match
+        ) match
         case Left(value)   => fail(s"Preparing tx failed: ${value.message}")
         case Right(result) => result
 

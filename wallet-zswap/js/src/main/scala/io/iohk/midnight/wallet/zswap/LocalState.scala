@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.zswap
 
 import cats.syntax.functor.*
+import cats.syntax.eq.*
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
@@ -24,8 +25,12 @@ object LocalState {
 
     def coins: List[QualifiedCoinInfo] =
       localState.coins.toList.map(QualifiedCoinInfo.fromJs)
-    def pendingSpends: List[QualifiedCoinInfo] =
-      localState.pendingSpends.valuesList.map(QualifiedCoinInfo.fromJs)
+    def availableCoins: List[QualifiedCoinInfo] = {
+      val pending = localState.pendingSpends.valuesList.map(QualifiedCoinInfo.fromJs)
+      localState.coins.toList
+        .filterNot(coin => pending.exists(_.nonce === coin.nonce))
+        .map(QualifiedCoinInfo.fromJs)
+    }
     def coinPublicKey: CoinPublicKey =
       localState.coinPublicKey
     def encryptionSecretKey: EncryptionSecretKey =
@@ -45,6 +50,8 @@ object LocalState {
       localState.applyProofErased(offer.toJs)
     def applyFailed(offer: Offer): LocalState =
       localState.applyFailed(offer.toJs)
+    def applyFailedProofErased(offer: ProofErasedOffer): LocalState =
+      localState.applyFailedProofErased(offer.toJs)
     def pendingOutputsSize: Int =
       localState.pendingOutputs.valuesList.size
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState =

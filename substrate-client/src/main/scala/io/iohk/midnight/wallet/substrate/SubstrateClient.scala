@@ -1,8 +1,7 @@
 package io.iohk.midnight.wallet.substrate
 
 import cats.effect.{Async, Resource}
-import cats.syntax.applicative.*
-import cats.syntax.functor.*
+import cats.syntax.all.*
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.client3.{ResponseAs, SttpBackend, emptyRequest}
 import sttp.model.Uri
@@ -18,7 +17,9 @@ class SubstrateClient[F[_]: Async](substrateUri: Uri, backend: SttpBackend[F, An
       .post(substrateUri)
       .response(asJson[SubmitTransactionResponse].getRight)
 
-    backend.send(request).map(_.body)
+    backend.send(request).map(_.body).adaptError { case error =>
+      Exception(s"There was an error submitting the transaction: ${error.getMessage}", error)
+    }
   }
 
 }

@@ -14,7 +14,7 @@ object LocalState {
     def serialize: Array[Byte] = ???
 
     def coins: List[QualifiedCoinInfo] = ???
-    def pendingSpends: List[QualifiedCoinInfo] = ???
+    def availableCoins: List[QualifiedCoinInfo] = ???
     def coinPublicKey: CoinPublicKey = ???
     def encryptionSecretKey: EncryptionSecretKey = ???
     def encryptionPublicKey: EncryptionPublicKey = ???
@@ -24,6 +24,7 @@ object LocalState {
     def apply(offer: Offer): LocalState = ???
     def applyProofErased(offer: ProofErasedOffer): LocalState = ???
     def applyFailed(offer: Offer): LocalState = ???
+    def applyFailedProofErased(offer: ProofErasedOffer): LocalState = ???
     def pendingOutputsSize: Int = ???
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState = ???
     def firstFree: BigInt = ???

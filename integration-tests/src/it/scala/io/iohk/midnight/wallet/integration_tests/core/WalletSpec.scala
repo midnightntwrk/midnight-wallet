@@ -21,7 +21,7 @@ import io.iohk.midnight.wallet.zswap.*
 abstract class WalletSpec
     extends WalletKeysSpec[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey]
     with WalletBalancesSpec[Wallet]
-    with WalletTxBalancingSpec[Wallet, Transaction, CoinInfo]
+    with WalletTxBalancingSpec[Wallet, Transaction, UnprovenTransaction, CoinInfo]
     with WalletSyncSpec[Wallet, IndexerUpdate]
     with WithProvingServerSuite {
 
@@ -61,7 +61,8 @@ abstract class WalletSpec
       ),
     )
 
-  override val walletTxBalancing: WalletTxBalancing[Wallet, Transaction, CoinInfo] =
+  override val walletTxBalancing
+      : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] =
     Wallet.walletTxBalancing
   override val transactionToBalance: IO[Transaction] =
     Generators.ledgerTransactionArbitrary.arbitrary.sample.get

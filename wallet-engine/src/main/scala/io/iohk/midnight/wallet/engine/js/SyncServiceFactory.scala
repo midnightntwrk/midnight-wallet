@@ -3,7 +3,8 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.Resource
 import cats.effect.kernel.Async
 import cats.syntax.all.*
-import cats.{Applicative, ApplicativeThrow}
+import cats.ApplicativeThrow
+import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.Block
@@ -49,12 +50,7 @@ object SyncServiceFactory {
               viewingKey.serialize,
               blockHeight.map(_.value),
             )
-            .attempt
-            .evalTap {
-              case Left(error) => syncServiceTracer.syncFailed(error)
-              case _           => Applicative[F].unit
-            }
-            .collect { case Right(viewingUpdate) => viewingUpdate }
+            .onError(error => Stream.eval(syncServiceTracer.syncFailed(error)))
             .evalTap(syncServiceTracer.viewingUpdateReceived)
             .evalMap {
               case RawViewingUpdate(blockHeight, rawUpdates) =>

@@ -10,6 +10,7 @@ object UnprovenTransaction {
 
   extension (unprovenTx: UnprovenTransaction) {
     def serialize: Array[Byte] = ???
+    def identifiers: Array[String] = ???
     def eraseProofs: ProofErasedTransaction = ???
     def guaranteedCoins: UnprovenOffer = ???
   }

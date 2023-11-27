@@ -18,6 +18,7 @@ object UnprovenTransaction {
   extension (unprovenTx: UnprovenTransaction) {
     def serialize: Array[Byte] = unprovenTx.serialize().toByteArray
     def toJs: mod.UnprovenTransaction = unprovenTx
+    def identifiers: Array[String] = unprovenTx.identifiers().toArray
     def eraseProofs: ProofErasedTransaction =
       ProofErasedTransaction.fromJs(unprovenTx.eraseProofs())
     def guaranteedCoins: UnprovenOffer =

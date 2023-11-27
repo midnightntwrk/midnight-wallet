@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.prover
 
 import cats.effect.{Async, Resource}
-import cats.syntax.functor.*
+import cats.syntax.all.*
 import io.borsh4s.{Borsh4s, given}
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
 import scala.concurrent.duration.DurationInt
@@ -25,7 +25,9 @@ class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
       .response(asTransaction)
       .readTimeout(readTimeout)
 
-    backend.send(request).map(_.body)
+    backend.send(request).map(_.body).adaptError { case error =>
+      Exception(s"There was an error proving the transaction: ${error.getMessage}", error)
+    }
   }
 }
 
