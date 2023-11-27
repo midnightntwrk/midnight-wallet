@@ -7,7 +7,8 @@
     "dependencies": {
         "isomorphic-ws": "^5.0.0",
         "ws": "^8.8.1",
-        "testcontainers": "^10.2.1"
+        "testcontainers": "^10.2.1",
+        "@peculiar/webcrypto": "^1.4.3"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

@@ -214,6 +214,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "io-ts-types",
       "newtype-ts",
       "monocle-ts",
+      "@peculiar/webcrypto",
     ),
     useNodeModuleResolution,
 
@@ -349,10 +350,8 @@ lazy val pubSubIndexerClient = project
       "com.github.ghostdogpr" %%% "caliban-client" % "2.3.0",
       "com.github.ghostdogpr" %%% "caliban-client-laminext" % "2.3.0",
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
-      // Caliban client-laminext uses java.util.UUID and here is the ScalaJS implementation
-      "org.scala-js" %%% "scalajs-java-securerandom" % "1.0.0" cross (CrossVersion.for3Use2_13),
     ),
-    stIgnore ++= List("ws", "isomorphic-ws"),
+    stIgnore ++= List("ws", "isomorphic-ws", "@peculiar/webcrypto"),
   )
 
 lazy val integrationTests = project
@@ -375,6 +374,7 @@ lazy val integrationTests = project
       "scale-ts",
       "ws",
       "isomorphic-ws",
+      "@peculiar/webcrypto",
       "fp-ts",
       "io-ts",
       "io-ts-types",

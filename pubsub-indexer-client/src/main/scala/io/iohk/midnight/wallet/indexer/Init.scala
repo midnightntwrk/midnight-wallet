@@ -9,6 +9,8 @@ import scala.scalajs.js.annotation.*
 object Init {
   @js.native @JSImport("isomorphic-ws", JSImport.Namespace)
   val ws: js.Dynamic = js.native
+  @js.native @JSImport("@peculiar/webcrypto", "Crypto")
+  val webcrypto: js.Dynamic = js.native
 
   /** Updates the `global object` so that websocket related code works in both the browser and
     * NodeJS.
@@ -19,5 +21,5 @@ object Init {
     */
   private val g = scalajs.js.Dynamic.global.globalThis
   g.WebSocket = ws.default
-
+  g.crypto = js.Dynamic.newInstance(webcrypto)()
 }

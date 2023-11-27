@@ -9,6 +9,7 @@
         "@midnight-ntwrk/zswap": "^0.3.9",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
+        "@peculiar/webcrypto": "^1.4.3",
         "rxjs": "^7.5",
         "scale-ts": "^1.1.0",
         "testcontainers": "^10.2.1",
