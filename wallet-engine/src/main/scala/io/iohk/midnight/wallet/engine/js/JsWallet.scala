@@ -126,7 +126,7 @@ class JsWallet(
     walletSyncService.updates.compile.drain.unsafeRunAndForget()
 
   def close(): js.Promise[Unit] =
-    finalizer.unsafeRunSyncToPromise()
+    finalizer.unsafeToPromise()
 }
 
 @JSExportTopLevel("WalletBuilder")

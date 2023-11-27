@@ -56,7 +56,7 @@ jobs:
         with:
           registry: 'https://ghcr.io'
           username: ${{ secrets.GH_USERNAME }}
-          password: ${{ secrets.GH_GHRC_TOKEN }}
+          password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
       - name: Check format and run tests
         run: |
           nix fmt -- -c flake.nix

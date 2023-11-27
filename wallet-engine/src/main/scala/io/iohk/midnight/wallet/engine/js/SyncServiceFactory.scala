@@ -41,49 +41,46 @@ object SyncServiceFactory {
   ): Resource[F, SyncService[F]] = {
     val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
-    IndexerClient[F](indexerUri, indexerWsUri)
-      .evalMap(client => walletStateService.keys.map(_._3).map((client, _)))
-      .map { case (client, viewingKey) =>
-        (blockHeight: Option[Block.Height]) =>
-          client
-            .viewingUpdates(
-              viewingKey.serialize,
-              blockHeight.map(_.value),
-            )
-            .onError(error => Stream.eval(syncServiceTracer.syncFailed(error)))
-            .evalTap(syncServiceTracer.viewingUpdateReceived)
-            .evalMap {
-              case RawViewingUpdate(blockHeight, rawUpdates) =>
-                val viewingUpdate =
-                  rawUpdates
-                    .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
-                      case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
-                        HexUtil
-                          .decodeHex(mt)
-                          .flatMap(MerkleTreeCollapsedUpdate.deserialize)
-                          .map(_.asLeft)
-                      case SingleUpdate.RawTransaction(_, raw, applyStage) =>
-                        (
-                          HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
-                          Try(ApplyStage.valueOf(applyStage)),
-                        )
-                          .mapN(AppliedTransaction(_, _).asRight)
-                    }
-                    .flatMap { updates =>
-                      Block
-                        .Height(blockHeight)
-                        .map(ViewingUpdate(_, updates))
-                        .leftMap(Exception(_))
-                        .toTry
-                    }
+    Resource
+      .eval(walletStateService.keys.map(_._3.serialize))
+      .flatMap(IndexerClient[F](indexerUri, indexerWsUri, _))
+      .map { client => (blockHeight: Option[Block.Height]) =>
+        client
+          .viewingUpdates(blockHeight.map(_.value))
+          .onError(error => Stream.eval(syncServiceTracer.syncFailed(error)))
+          .evalTap(syncServiceTracer.viewingUpdateReceived)
+          .evalMap {
+            case RawViewingUpdate(blockHeight, rawUpdates) =>
+              val viewingUpdate =
+                rawUpdates
+                  .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
+                    case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
+                      HexUtil
+                        .decodeHex(mt)
+                        .flatMap(MerkleTreeCollapsedUpdate.deserialize)
+                        .map(_.asLeft)
+                    case SingleUpdate.RawTransaction(_, raw, applyStage) =>
+                      (
+                        HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
+                        Try(ApplyStage.valueOf(applyStage)),
+                      )
+                        .mapN(AppliedTransaction(_, _).asRight)
+                  }
+                  .flatMap { updates =>
+                    Block
+                      .Height(blockHeight)
+                      .map(ViewingUpdate(_, updates))
+                      .leftMap(Exception(_))
+                      .toTry
+                  }
 
-                ApplicativeThrow[F].fromTry(viewingUpdate)
-              case RawProgressUpdate(synced, total) =>
-                (Block.Height(synced), Block.Height(total))
-                  .mapN(ProgressUpdate.apply)
-                  .leftMap(Exception(_))
-                  .liftTo[F]
-            }
+              ApplicativeThrow[F].fromTry(viewingUpdate)
+            case RawProgressUpdate(synced, total) =>
+              (Block.Height(synced), Block.Height(total))
+                .mapN(ProgressUpdate.apply)
+                .leftMap(Exception(_))
+                .liftTo[F]
+          }
       }
   }
 }

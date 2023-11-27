@@ -2,53 +2,34 @@ package io.iohk.midnight.wallet.indexer
 
 import caliban.client.Operations.RootSubscription
 import caliban.client.SelectionBuilder
-import cats.effect.kernel.Concurrent
-import cats.effect.{Async, Resource}
-import cats.syntax.applicative.*
-import cats.syntax.functor.*
-import cats.syntax.monadError.*
+import cats.effect.{Async, Deferred, Resource}
+import cats.syntax.all.*
 import fs2.Stream
-import io.iohk.midnight.wallet.indexer.IndexerClient.{
-  RawIndexerUpdate,
-  RawProgressUpdate,
-  RawViewingUpdate,
-  SingleUpdate,
-}
+import io.iohk.midnight.wallet.indexer.IndexerClient.*
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import sttp.client3.SttpBackend
 import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
-class IndexerClient[F[_]: Async: Concurrent](
-    indexerUri: Uri,
+class IndexerClient[F[_]: Async](
     indexerWsUri: Uri,
-    backend: SttpBackend[F, Any],
+    sessionId: SessionId,
+    stopSignal: Deferred[F, Unit],
 ) {
 
-  def viewingUpdates(
-      viewingKey: String,
-      blockHeight: Option[BigInt],
-  ): Stream[F, RawIndexerUpdate] =
-    for {
-      sessionId <- Stream.resource(
-        Resource.make(connect(viewingKey))(disconnect),
-      )
-      rawIndexerUpdate <- GraphQLSubscriber.subscribe(
+  def viewingUpdates(blockHeight: Option[BigInt]): Stream[F, RawIndexerUpdate] = {
+    val stream = GraphQLSubscriber
+      .subscribe(
         indexerWsUri,
-        subscribeForViewingUpdates(Some(sessionId), blockHeight),
+        subscribeForViewingUpdates(sessionId, blockHeight),
       )
-    } yield rawIndexerUpdate
+      .map(rawIndexerUpdate => rawIndexerUpdate)
 
-  private def connect(viewingKey: String) =
-    Mutation
-      .connect(viewingKey)
-      .toRequest(indexerUri)
-      .send[F, Any](backend)
-      .map(_.body)
-      .rethrow
+    stream.interruptWhen(stopSignal.get.attempt)
+  }
 
   private def subscribeForViewingUpdates(
-      sessionId: Option[SessionId],
+      sessionId: SessionId,
       blockHeight: Option[BigInt],
   ): SelectionBuilder[RootSubscription, RawIndexerUpdate] =
     Subscription.wallet(
@@ -65,23 +46,44 @@ class IndexerClient[F[_]: Async: Concurrent](
       onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map(RawProgressUpdate.apply),
     )
 
-  private def disconnect(sessionId: SessionId) =
-    Mutation
-      .disconnect(sessionId)
-      .toRequest(indexerUri)
-      .send[F, Any](backend)
-      .map(_.body.getOrElse(()))
+  private def stop: F[Unit] =
+    stopSignal.complete(()).void
+}
 
+private class IndexerHttpClient[F[_]: Async](indexerUri: Uri, backend: SttpBackend[F, Any]) {
+  def connect(viewingKey: String): F[SessionId] =
+    Async[F].defer {
+      Mutation
+        .connect(viewingKey)
+        .toRequest(indexerUri)
+        .send[F, Any](backend)
+        .map(_.body)
+        .rethrow
+    }
+
+  def disconnect(sessionId: SessionId): F[Unit] =
+    Async[F].defer {
+      Mutation
+        .disconnect(sessionId)
+        .toRequest(indexerUri)
+        .send[F, Any](backend)
+        .void
+    }
 }
 
 object IndexerClient {
-  def apply[F[_]: Async: Concurrent](
+  def apply[F[_]: Async](
       indexerUri: Uri,
       indexerWsUri: Uri,
-  ): Resource[F, IndexerClient[F]] = {
-    val backend = FetchCatsBackend[F]()
-    Resource.make(backend.pure)(_.close()).map(new IndexerClient[F](indexerUri, indexerWsUri, _))
-  }
+      viewingKey: String,
+  ): Resource[F, IndexerClient[F]] =
+    Resource
+      .make(Async[F].delay(FetchCatsBackend[F]()))(_.close())
+      .map(new IndexerHttpClient[F](indexerUri, _))
+      .flatMap(httpClient => Resource.make(httpClient.connect(viewingKey))(httpClient.disconnect))
+      .flatMap { sessionId =>
+        Resource.make(Deferred[F, Unit].map(new IndexerClient(indexerWsUri, sessionId, _)))(_.stop)
+      }
 
   sealed trait RawIndexerUpdate
 

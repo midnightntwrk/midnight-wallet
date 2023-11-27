@@ -82,13 +82,13 @@ object IndexerSchema {
   type Subscription = Operations.RootSubscription
   object Subscription {
     def wallet[A](
-        sessionId: Option[SessionId] = None,
+        sessionId: SessionId,
         blockHeight: Option[BigInt] = None,
     )(
         onProgressUpdate: SelectionBuilder[ProgressUpdate, A],
         onViewingUpdate: SelectionBuilder[ViewingUpdate, A],
     )(implicit
-        encoder0: ArgEncoder[Option[SessionId]],
+        encoder0: ArgEncoder[SessionId],
         encoder1: ArgEncoder[Option[BigInt]],
     ): SelectionBuilder[Operations.RootSubscription, A] =
       SelectionBuilder.Field(

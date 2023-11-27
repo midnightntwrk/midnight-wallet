@@ -74,18 +74,13 @@ object WalletBuilder {
         new WalletStateService.Live(walletQueryStateService),
       )
       submitTxService <- TxSubmissionServiceFactory(config.substrateNodeUri)
-      stateSyncService <- SyncServiceFactory(
-        config.indexerUri,
-        config.indexerWsUri,
-        walletStateService,
-      )
       provingService <- ProvingServiceFactory(config.provingServerUri)
       walletTxSubmissionService <- buildWalletTxSubmissionService(
         submitTxService,
         walletStateContainer,
       )
       walletBlockProcessingService <- buildWalletSyncService(
-        stateSyncService,
+        SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService),
         walletStateContainer,
         config.initialState.blockHeight,
       )
@@ -109,7 +104,7 @@ object WalletBuilder {
   }
 
   private def buildWalletSyncService[F[_]: Async, TWallet](
-      syncService: SyncService[F],
+      syncService: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
       blockHeight: Option[Block.Height],
   )(implicit

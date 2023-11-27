@@ -17,7 +17,7 @@ trait WalletSyncService[F[_]] {
 
 object WalletSyncService {
   class Live[F[_]: Async, TWallet](
-      syncService: SyncService[F],
+      syncServiceResource: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
       deferred: Deferred[F, Either[Throwable, Unit]],
       blockHeight: Option[Block.Height],
@@ -27,10 +27,14 @@ object WalletSyncService {
   ) extends WalletSyncService[F] {
 
     override val updates: Stream[F, Either[WalletError, IndexerUpdate]] =
-      BlockProcessingFactory
-        .pipe(walletStateContainer)
-        .apply(syncService.sync(blockHeight))
-        .map(_.map { case (viewingUpdate, _) => viewingUpdate })
+      Stream
+        .resource(syncServiceResource)
+        .flatMap { syncService =>
+          BlockProcessingFactory
+            .pipe(walletStateContainer)
+            .apply(syncService.sync(blockHeight))
+            .map(_.map { case (viewingUpdate, _) => viewingUpdate })
+        }
         .interruptWhen(deferred)
 
     override val stop: F[Unit] =
@@ -38,7 +42,7 @@ object WalletSyncService {
   }
 
   def apply[F[_]: Async, TWallet](
-      syncService: SyncService[F],
+      syncService: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
       blockHeight: Option[Block.Height],
   )(implicit
