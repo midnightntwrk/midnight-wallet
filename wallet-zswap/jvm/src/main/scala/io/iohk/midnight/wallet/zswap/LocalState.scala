@@ -25,6 +25,7 @@ object LocalState {
     def applyProofErased(offer: ProofErasedOffer): LocalState = ???
     def applyFailed(offer: Offer): LocalState = ???
     def applyFailedProofErased(offer: ProofErasedOffer): LocalState = ???
+    def pendingOutputs: List[CoinInfo] = ???
     def pendingOutputsSize: Int = ???
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState = ???
     def firstFree: BigInt = ???

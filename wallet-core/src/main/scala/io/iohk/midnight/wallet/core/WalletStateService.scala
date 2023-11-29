@@ -52,6 +52,7 @@ object WalletStateService {
           balances = walletBalances.balance(wallet),
           coins = walletCoins.coins(wallet),
           availableCoins = walletCoins.availableCoins(wallet),
+          pendingCoins = walletCoins.pendingCoins(wallet),
           transactionHistory = walletTxHistory.transactionHistory(wallet),
           syncProgress = walletTxHistory.progress(wallet),
         )
@@ -75,6 +76,7 @@ object WalletStateService {
       balances: Map[TokenType, BigInt],
       coins: Seq[QualifiedCoinInfo],
       availableCoins: Seq[QualifiedCoinInfo],
+      pendingCoins: Seq[CoinInfo],
       transactionHistory: Seq[Transaction],
       syncProgress: Option[ProgressUpdate],
   ) {

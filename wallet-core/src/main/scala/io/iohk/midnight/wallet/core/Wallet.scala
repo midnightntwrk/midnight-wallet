@@ -62,6 +62,7 @@ object Wallet {
         wallet.state.coins
       override def availableCoins(wallet: Wallet): Seq[QualifiedCoinInfo] =
         wallet.state.availableCoins
+      override def pendingCoins(wallet: Wallet): Seq[CoinInfo] = wallet.state.pendingOutputs
     }
 
   implicit val walletTxBalancing

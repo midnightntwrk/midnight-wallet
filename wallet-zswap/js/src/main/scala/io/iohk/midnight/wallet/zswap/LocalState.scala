@@ -31,6 +31,8 @@ object LocalState {
         .filterNot(coin => pending.exists(_.nonce === coin.nonce))
         .map(QualifiedCoinInfo.fromJs)
     }
+    def pendingOutputs: List[CoinInfo] =
+      localState.pendingOutputs.valuesList.map(CoinInfo.fromJs)
     def coinPublicKey: CoinPublicKey =
       localState.coinPublicKey
     def encryptionSecretKey: EncryptionSecretKey =

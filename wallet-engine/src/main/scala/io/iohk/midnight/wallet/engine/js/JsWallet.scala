@@ -80,6 +80,7 @@ class JsWallet(
       .map { localState =>
         val mappedWalletState = WalletState(
           availableCoins = localState.availableCoins.map(_.toJs).toJSArray,
+          pendingCoins = localState.pendingCoins.map(_.toJs).toJSArray,
           balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
           coins = localState.coins.map(_.toJs).toJSArray,
           coinPublicKey = localState.coinPublicKey,

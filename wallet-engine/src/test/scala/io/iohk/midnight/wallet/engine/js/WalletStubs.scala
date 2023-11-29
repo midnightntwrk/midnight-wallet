@@ -67,6 +67,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
         state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _),
         state.coins,
         state.coins,
+        state.pendingOutputs,
         Seq.empty,
         None,
       ),
@@ -106,6 +107,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        Seq.empty,
         None,
       ),
     )
@@ -135,6 +137,7 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
         encPubKey,
         LocalState().encryptionSecretKey,
         Map.empty,
+        Seq.empty,
         Seq.empty,
         Seq.empty,
         Seq.empty,
