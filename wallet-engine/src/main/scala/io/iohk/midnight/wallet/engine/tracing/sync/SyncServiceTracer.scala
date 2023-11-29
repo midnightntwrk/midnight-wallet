@@ -10,12 +10,12 @@ import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceEvent.{
   IndexerUpdateReceived,
   SyncFailed,
 }
-import io.iohk.midnight.wallet.indexer.IndexerClient.RawIndexerUpdate
+import io.iohk.midnight.wallet.indexer.IndexerClient.IndexerEvent
 
 class SyncServiceTracer[F[_]](val tracer: Tracer[F, SyncServiceEvent]) {
 
   def syncFailed(error: Throwable): F[Unit] = tracer(SyncFailed(error))
-  def viewingUpdateReceived(viewingUpdate: RawIndexerUpdate): F[Unit] = tracer(
+  def viewingUpdateReceived(viewingUpdate: IndexerEvent): F[Unit] = tracer(
     IndexerUpdateReceived(viewingUpdate),
   )
 }

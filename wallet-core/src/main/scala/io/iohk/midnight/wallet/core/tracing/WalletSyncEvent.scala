@@ -3,7 +3,12 @@ package io.iohk.midnight.wallet.core.tracing
 import cats.syntax.show.*
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
 import io.iohk.midnight.wallet.core.WalletError
-import io.iohk.midnight.wallet.core.domain.{IndexerUpdate, ProgressUpdate, ViewingUpdate}
+import io.iohk.midnight.wallet.core.domain.{
+  ConnectionLost,
+  IndexerUpdate,
+  ProgressUpdate,
+  ViewingUpdate,
+}
 
 sealed trait WalletSyncEvent
 
@@ -37,6 +42,7 @@ object WalletSyncEvent {
               .map(_.tx.hash)
               .mkString("[", ",", "]")}"
         case ProgressUpdate(synced, total) => s"Progress: $synced/$total"
+        case ConnectionLost                => "Connection lost"
       }
 
     implicit val syncHandlingTransactionContext: AsStringLogContext[SyncHandlingUpdate] =

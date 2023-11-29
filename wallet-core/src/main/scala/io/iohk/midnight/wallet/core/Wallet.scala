@@ -12,6 +12,7 @@ import io.iohk.midnight.wallet.core.domain.{
   ApplyStage,
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
+  ConnectionLost,
   NothingToProve,
   Seed,
   TokenTransfer,
@@ -29,6 +30,7 @@ final case class Wallet private (
     txHistory: Vector[Transaction] = Vector.empty,
     blockHeight: Option[Block.Height] = None,
     progress: Option[ProgressUpdate] = None,
+    isConnected: Boolean = false,
 )
 
 object Wallet {
@@ -161,11 +163,15 @@ object Wallet {
           state = newState,
           txHistory = wallet.txHistory ++ newTxs.map(_.tx),
           blockHeight = Some(update.blockHeight),
+          isConnected = true,
         )
         .asRight
 
     case (wallet: Wallet, update: ProgressUpdate) =>
       wallet.copy(progress = Some(update)).asRight
+
+    case (wallet: Wallet, ConnectionLost) =>
+      wallet.copy(isConnected = false).asRight
   }
 
   private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState = {

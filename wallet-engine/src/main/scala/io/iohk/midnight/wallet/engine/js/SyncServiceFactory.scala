@@ -14,11 +14,6 @@ import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
-import io.iohk.midnight.wallet.indexer.IndexerClient.{
-  RawProgressUpdate,
-  RawViewingUpdate,
-  SingleUpdate,
-}
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.{HexUtil, MerkleTreeCollapsedUpdate}
 import scala.util.Try
@@ -41,25 +36,24 @@ object SyncServiceFactory {
   ): Resource[F, SyncService[F]] = {
     val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
-    Resource
-      .eval(walletStateService.keys.map(_._3.serialize))
-      .flatMap(IndexerClient[F](indexerUri, indexerWsUri, _))
-      .map { client => (blockHeight: Option[Block.Height]) =>
+    IndexerClient[F](indexerUri, indexerWsUri)
+      .evalMap(client => walletStateService.keys.map(_._3).map((client, _)))
+      .map { (client, viewingKey) => blockHeight =>
         client
-          .viewingUpdates(blockHeight.map(_.value))
+          .viewingUpdates(viewingKey.serialize, blockHeight.map(_.value))
           .onError(error => Stream.eval(syncServiceTracer.syncFailed(error)))
           .evalTap(syncServiceTracer.viewingUpdateReceived)
           .evalMap {
-            case RawViewingUpdate(blockHeight, rawUpdates) =>
+            case IndexerClient.RawViewingUpdate(blockHeight, rawUpdates) =>
               val viewingUpdate =
                 rawUpdates
                   .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
-                    case SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
+                    case IndexerClient.SingleUpdate.MerkleTreeCollapsedUpdate(mt) =>
                       HexUtil
                         .decodeHex(mt)
                         .flatMap(MerkleTreeCollapsedUpdate.deserialize)
                         .map(_.asLeft)
-                    case SingleUpdate.RawTransaction(_, raw, applyStage) =>
+                    case IndexerClient.SingleUpdate.RawTransaction(_, raw, applyStage) =>
                       (
                         HexUtil.decodeHex(raw).map(zswap.Transaction.deserialize),
                         Try(ApplyStage.valueOf(applyStage)),
@@ -75,11 +69,14 @@ object SyncServiceFactory {
                   }
 
               ApplicativeThrow[F].fromTry(viewingUpdate)
-            case RawProgressUpdate(synced, total) =>
+            case IndexerClient.RawProgressUpdate(synced, total) =>
               (Block.Height(synced), Block.Height(total))
                 .mapN(ProgressUpdate.apply)
                 .leftMap(Exception(_))
                 .liftTo[F]
+
+            case IndexerClient.ConnectionLost =>
+              ConnectionLost.pure
           }
       }
   }

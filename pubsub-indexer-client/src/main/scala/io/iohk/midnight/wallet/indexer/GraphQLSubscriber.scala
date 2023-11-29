@@ -7,8 +7,8 @@ import cats.effect.{Async, Resource, Sync}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.indexer.EventStreamOps.*
-import io.laminext.syntax.core.*
 import io.laminext.websocket.WebSocket
+import scala.concurrent.duration.DurationInt
 import sttp.model.Uri
 
 object GraphQLSubscriber {
@@ -23,9 +23,8 @@ object GraphQLSubscriber {
     val eventStreamResource =
       webSocketResource(indexerWsUri)
         .flatMap(subscriptionResource(_, selectionBuilder))
-        .map(_.received.collectRight)
 
-    Stream.resource(eventStreamResource).flatMap(_.toStream)
+    Stream.resource(eventStreamResource).flatten
   }
 
   private def webSocketResource[F[_]: Sync](indexerWsUri: Uri): Resource[F, GraphQLWebSocket] =
@@ -39,8 +38,23 @@ object GraphQLSubscriber {
   private def subscriptionResource[T, F[_]: Async](
       ws: GraphQLWebSocket,
       selection: RootSelectionBuilder[T],
-  ): Resource[F, Subscription[T]] =
-    Resource.make(subscribeToWebSocket(ws, selection))(s => Sync[F].delay(s.unsubscribe()))
+  ): Resource[F, Stream[F, T]] = {
+    val closed =
+      ws.closed.toStream.void.attempt.head.compile.lastOrError
+
+    val connectionFail =
+      Stream
+        .awakeEvery(10.seconds)
+        .evalMap(_ => Sync[F].delay(ws.sendOne(GraphQLWSRequest("ping", none, none))))
+        .attempt
+        .find(_.isLeft)
+        .compile
+        .lastOrError
+
+    Resource
+      .make(subscribeToWebSocket(ws, selection))(s => Sync[F].delay(s.unsubscribe()))
+      .map(_.received.toStream.rethrow.interruptWhen(closed).interruptWhen(connectionFail))
+  }
 
   private def subscribeToWebSocket[F[_]: Async, T](
       ws: GraphQLWebSocket,

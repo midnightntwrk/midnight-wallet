@@ -3,6 +3,8 @@ package io.iohk.midnight.wallet.integration_tests.indexer
 import cats.effect.IO
 import cats.effect.IO.asyncForIO
 import io.iohk.midnight.testcontainers.buildMod.Wait
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.integration_tests.TestContainers
 import munit.{AnyFixture, CatsEffectSuite}
@@ -31,17 +33,17 @@ class IndexerClientSpec extends CatsEffectSuite {
 
   private def withIndexerClient(body: IndexerClient[IO] => IO[Unit]): IO[Unit] = {
     val mappedPort = pubSubIndexerServiceFixture().getMappedPort(pubSubIndexerPort).toInt
+    given Tracer[IO, StructuredLog] = Tracer.noOpTracer
     IndexerClient(
       indexerUri(mappedPort),
       indexerWsUri(mappedPort),
-      "2045b931b0bd3d4b7d2e9e3b5a28361fc0b7d6d9f633a912f56fe3d7040d645d05",
     ).use(body(_))
   }
 
   test("Indexer client must expose a stream with raw transactions") {
     withIndexerClient { indexerClient =>
       indexerClient
-        .viewingUpdates(None)
+        .viewingUpdates("2045b931b0bd3d4b7d2e9e3b5a28361fc0b7d6d9f633a912f56fe3d7040d645d05", None)
         .take(5)
         .compile
         .toList

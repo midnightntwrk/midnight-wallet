@@ -350,6 +350,8 @@ lazy val pubSubIndexerClient = project
       "com.github.ghostdogpr" %%% "caliban-client" % "2.3.0",
       "com.github.ghostdogpr" %%% "caliban-client-laminext" % "2.3.0",
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
+      "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
+      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion
     ),
     stIgnore ++= List("ws", "isomorphic-ws", "@peculiar/webcrypto"),
   )

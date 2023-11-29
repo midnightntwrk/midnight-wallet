@@ -48,5 +48,7 @@ package object domain {
 
   final case class ProgressUpdate(synced: Block.Height, total: Block.Height) extends IndexerUpdate
 
+  case object ConnectionLost extends IndexerUpdate
+
   final case class Seed(seed: Array[Byte]) extends AnyVal
 }

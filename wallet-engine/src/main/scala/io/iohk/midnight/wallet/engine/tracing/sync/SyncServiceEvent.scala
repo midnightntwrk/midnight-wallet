@@ -2,12 +2,7 @@ package io.iohk.midnight.wallet.engine.tracing.sync
 
 import io.iohk.midnight.tracer.logging.{AsStringLogContext, Event}
 import io.iohk.midnight.wallet.indexer.IndexerClient
-import io.iohk.midnight.wallet.indexer.IndexerClient.{
-  RawIndexerUpdate,
-  RawProgressUpdate,
-  RawViewingUpdate,
-  SingleUpdate,
-}
+import io.iohk.midnight.wallet.indexer.IndexerClient.*
 
 sealed trait SyncServiceEvent
 
@@ -23,7 +18,7 @@ object SyncServiceEvent {
 
   /** Sync event received.
     */
-  final case class IndexerUpdateReceived(update: RawIndexerUpdate) extends SyncServiceEvent
+  final case class IndexerUpdateReceived(update: IndexerEvent) extends SyncServiceEvent
 
   object IndexerUpdateReceived {
     val id: Event.Id[IndexerUpdateReceived] = Event.Id("viewing_update_received")
@@ -37,13 +32,14 @@ object SyncServiceEvent {
       AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.getMessage))
     // $COVERAGE-ON$
 
-    def showIndexerUpdate(indexerUpdate: RawIndexerUpdate): String =
+    def showIndexerUpdate(indexerUpdate: IndexerEvent): String =
       indexerUpdate match {
         case RawProgressUpdate(synced, total) => s"Progress: $synced/$total"
         case RawViewingUpdate(blockHeight, updates) =>
           s"ViewingUpdate: @$blockHeight ${updates
               .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
               .mkString("[", ",", "]")}"
+        case ConnectionLost => "ConnectionLost"
       }
 
     implicit val indexerUpdateReceivedContext: AsStringLogContext[IndexerUpdateReceived] =

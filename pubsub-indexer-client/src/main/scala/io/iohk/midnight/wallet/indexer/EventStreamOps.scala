@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.indexer
 
 import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{Async, Resource}
+import cats.syntax.all.*
 import com.raquo.airstream.core.{EventStream, Observer}
 import com.raquo.airstream.ownership.ManualOwner
 import fs2.Stream
@@ -12,11 +13,16 @@ object EventStreamOps {
     def toStream[F[_]: Async]: Stream[F, T] = {
       for {
         dispatcher <- Stream.resource(Dispatcher.sequential[F])
-        queue <- Stream.resource(Resource.make(Queue.unbounded[F, Option[T]])(_.offer(None)))
+        queue <- Stream.resource(
+          Resource.make(Queue.unbounded[F, Option[Either[Throwable, T]]])(_.offer(None)),
+        )
         stream = Stream.fromQueueNoneTerminated(queue)
         observer <- Stream.eval(
           Async[F].delay(
-            Observer[T](element => dispatcher.unsafeRunAndForget(queue.offer(Some(element)))),
+            Observer.withRecover[T](
+              onNext = element => dispatcher.unsafeRunAndForget(queue.offer(element.asRight.some)),
+              onError = { case err => dispatcher.unsafeRunAndForget(queue.offer(err.asLeft.some)) },
+            ),
           ),
         )
         owner <- Stream.eval(Async[F].delay(new ManualOwner()))
@@ -25,7 +31,7 @@ object EventStreamOps {
             Async[F].delay(subscription.kill()),
           ),
         )
-        value <- stream
+        value <- stream.rethrow
       } yield value
     }
   }
