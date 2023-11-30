@@ -214,7 +214,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "io-ts-types",
       "newtype-ts",
       "monocle-ts",
-      "@peculiar/webcrypto",
     ),
     useNodeModuleResolution,
 
@@ -353,7 +352,7 @@ lazy val pubSubIndexerClient = project
       "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
       "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion
     ),
-    stIgnore ++= List("ws", "isomorphic-ws", "@peculiar/webcrypto"),
+    stIgnore ++= List("ws", "isomorphic-ws"),
   )
 
 lazy val integrationTests = project
@@ -376,7 +375,6 @@ lazy val integrationTests = project
       "scale-ts",
       "ws",
       "isomorphic-ws",
-      "@peculiar/webcrypto",
       "fp-ts",
       "io-ts",
       "io-ts-types",
