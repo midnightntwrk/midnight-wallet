@@ -1,11 +1,11 @@
 services:
   proof-server:
-    image: registry.ci.iog.io/proof-server:master
+    image: ghcr.io/midnight-ntwrk/proof-server:latest
     container_name: proof-server_$TESTCONTAINERS_UID
     ports:
       - '0:6300'
   node:
-    image: 596662952274.dkr.ecr.eu-north-1.amazonaws.com/mn:node-a608c355b9474231becb3693ce8923e5a69eb01e
+    image: ghcr.io/midnight-ntwrk/midnight-node:latest
     container_name: node_$TESTCONTAINERS_UID
     environment:
       - RUN_DEV_NET=TRUE
@@ -19,7 +19,7 @@ services:
       retries: 5
       start_period: 40s
   indexer:
-    image: ghcr.io/input-output-hk/midnight-pubsub-indexer:556b2bf03cf9d353a9631b8f76510b9cf5b727ac
+    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:latest
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - '0:8088'

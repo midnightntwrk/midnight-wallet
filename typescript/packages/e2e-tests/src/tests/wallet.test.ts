@@ -3,22 +3,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { firstValueFrom } from 'rxjs';
-import { WalletBuilder } from '@midnight/wallet';
+import { WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { useTestContainersFixture } from './test-fixture';
 
-const encodeToHexString = (str: string): string => {
-  const grouped = [];
-  for (let i = 0; i < str.length; i += 2) {
-    grouped.push(str.slice(i, i + 2));
-  }
-  return grouped.map((element) => element.charCodeAt(0).toString(16).padStart(2, '0')).join('');
-};
-
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
-  const entropy = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const seed = encodeToHexString(entropy);
+  const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', async () => {
     const mnemonics = [
@@ -48,33 +39,76 @@ describe('Fresh wallet with empty state', () => {
       'economy',
     ];
 
-    const mnPattern = /^[0-9a-f]{64}$/;
     const entropy = KeyManagement.util.mnemonicWordsToEntropy(mnemonics);
-    const seed = encodeToHexString(entropy);
     const fixture = getFixture();
-
-    try {
-      const wallet = await WalletBuilder.buildFromSeed(
+    await expect(
+      WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
         fixture.getNodeUri(),
-        seed,
+        entropy,
         'info',
-      );
-
-      const state = await firstValueFrom(wallet.state());
-      expect(state.address).toMatch(mnPattern);
-      await wallet.close();
-    } catch (error: any) {
-      if (error instanceof Error) {
-        console.error(error.message);
-      }
-      console.error(error);
-    }
+      ),
+    ).resolves.not.toThrow();
   });
 
-  test('Midnight wallet returns empty array of balances', async () => {
+  test('Wallet state returns coinPublicKey hex string', async () => {
+    const fixture = getFixture();
+
+    const wallet = await WalletBuilder.buildFromSeed(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seed,
+      'info',
+    );
+
+    wallet.start();
+    const state = await firstValueFrom(wallet.state());
+    expect(state.coinPublicKey).toMatch(/^[0-9a-f]{64}$/);
+    await wallet.close();
+  });
+
+  test('Wallet state returns encryptionPublicKey hex string', async () => {
+    const fixture = getFixture();
+
+    const wallet = await WalletBuilder.buildFromSeed(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seed,
+      'info',
+    );
+
+    wallet.start();
+    const state = await firstValueFrom(wallet.state());
+    expect(state.encryptionPublicKey).toMatch(/^[0-9a-f]{70}$/);
+    await wallet.close();
+  });
+
+  test('Wallet state returns address as the concatenation of coinPublicKey and encryptionPublicKey', async () => {
+    const fixture = getFixture();
+
+    const wallet = await WalletBuilder.buildFromSeed(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seed,
+      'info',
+    );
+
+    wallet.start();
+    const state = await firstValueFrom(wallet.state());
+    expect(state.address).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{70}$/);
+    expect(state.address).toBe(state.coinPublicKey + '|' + state.encryptionPublicKey);
+    await wallet.close();
+  });
+
+  test('Midnight wallet returns empty object of balances', async () => {
     const fixture = getFixture();
     try {
       const wallet = await WalletBuilder.buildFromSeed(
@@ -88,7 +122,7 @@ describe('Fresh wallet with empty state', () => {
 
       wallet.start();
       const state = await firstValueFrom(wallet.state());
-      expect(state.balances).toHaveLength(0);
+      expect(state.balances).toMatchObject({});
       await wallet.close();
     } catch (error: any) {
       if (error instanceof Error) {

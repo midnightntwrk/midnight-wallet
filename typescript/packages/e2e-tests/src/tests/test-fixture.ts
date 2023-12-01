@@ -59,12 +59,12 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     const indexerPort = this.getIndexerPort();
-    return `http://localhost:${indexerPort}/api/graphql`;
+    return `http://localhost:${indexerPort}/api/v0/graphql`;
   }
 
   public getIndexerWsUri(): string {
     const indexerPort = this.getIndexerPort();
-    return `ws://localhost:${indexerPort}/api/graphql/ws`;
+    return `ws://localhost:${indexerPort}/api/v0/graphql/ws`;
   }
 
   public getNodeUri(): string {
