@@ -99,7 +99,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     }
   }
 
-  test("Fails when submission fails".only) {
+  test("Fails when submission fails") {
     forAllF { (txWithCtxIO: IO[TransactionWithContext]) =>
       for {
         txWithCtx <- txWithCtxIO
