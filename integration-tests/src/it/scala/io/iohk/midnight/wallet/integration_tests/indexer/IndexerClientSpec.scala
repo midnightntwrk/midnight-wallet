@@ -28,16 +28,12 @@ class IndexerClientSpec extends CatsEffectSuite {
 
   override def munitFixtures: Seq[AnyFixture[_]] = List(pubSubIndexerServiceFixture)
 
-  private def indexerUri(port: Int): Uri = uri"http://localhost:$port/api/graphql"
   private def indexerWsUri(port: Int): Uri = uri"ws://localhost:$port/api/graphql/ws"
 
   private def withIndexerClient(body: IndexerClient[IO] => IO[Unit]): IO[Unit] = {
     val mappedPort = pubSubIndexerServiceFixture().getMappedPort(pubSubIndexerPort).toInt
     given Tracer[IO, StructuredLog] = Tracer.noOpTracer
-    IndexerClient(
-      indexerUri(mappedPort),
-      indexerWsUri(mappedPort),
-    ).use(body(_))
+    IndexerClient(indexerWsUri(mappedPort)).use(body(_))
   }
 
   test("Indexer client must expose a stream with raw transactions") {

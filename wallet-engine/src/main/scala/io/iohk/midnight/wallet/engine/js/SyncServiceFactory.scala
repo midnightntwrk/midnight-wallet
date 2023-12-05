@@ -36,7 +36,7 @@ object SyncServiceFactory {
   ): Resource[F, SyncService[F]] = {
     val syncServiceTracer = SyncServiceTracer.from(rootTracer)
 
-    IndexerClient[F](indexerUri, indexerWsUri)
+    IndexerClient[F](indexerWsUri)
       .evalMap(client => walletStateService.keys.map(_._3).map((client, _)))
       .map { (client, viewingKey) => blockHeight =>
         client

@@ -2,24 +2,28 @@ package io.iohk.midnight.wallet.indexer
 
 import caliban.client.Operations.RootSubscription
 import caliban.client.SelectionBuilder
+import caliban.client.__Value.{__ObjectValue, __StringValue}
+import caliban.client.laminext.*
+import caliban.client.ws.{GraphQLWSRequest, GraphQLWSResponse}
 import cats.effect.*
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.indexer.EventStreamOps.*
+import io.iohk.midnight.wallet.indexer.GraphQLSubscriber.WebSocketClosed
 import io.iohk.midnight.wallet.indexer.IndexerClient.*
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import io.iohk.midnight.wallet.indexer.tracing.IndexerClientTracer
+import io.laminext.websocket.WebSocket
+import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 import scala.util.Try
-import sttp.client3.SttpBackend
-import sttp.client3.impl.cats.FetchCatsBackend
 import sttp.model.Uri
 
 class IndexerClient[F[_]: Async](
     indexerWsUri: Uri,
-    httpClient: IndexerHttpClient[F],
     stopSignal: Deferred[F, Unit],
 )(using tracer: IndexerClientTracer[F]) {
 
@@ -33,15 +37,26 @@ class IndexerClient[F[_]: Async](
       .interruptWhen(stopSignal.get.attempt)
 
   private def viewingUpdatesWithRetry(
-      viewingKey: SessionId,
+      viewingKey: String,
       blockHeightRef: Ref[F, Option[BigInt]],
   ): Stream[F, IndexerEvent] =
-    Stream
-      .bracket(httpClient.connect(viewingKey))(httpClient.disconnect)
-      .evalMap(sessionId => blockHeightRef.get.map(buildQuery(sessionId, _)))
-      .flatMap(GraphQLSubscriber.subscribe(indexerWsUri, _))
-      .evalTap(update => blockHeightRef.set(update.blockHeight.some))
-      .handleErrorWith(retryOnConnectionError(viewingKey, blockHeightRef))
+    Stream.resource(webSocketResource(indexerWsUri)).flatMap { ws =>
+      Stream
+        .bracket(connect(viewingKey, ws))(disconnect(_, ws))
+        .evalMap(sessionId => blockHeightRef.get.map(buildQuery(sessionId, _)))
+        .flatMap(GraphQLSubscriber.subscribe(ws, _))
+        .evalTap(update => blockHeightRef.set(update.blockHeight.some))
+        .handleErrorWith(retryOnConnectionError(viewingKey, blockHeightRef))
+    }
+
+  private def webSocketResource(indexerWsUri: Uri): Resource[F, GraphQLWebSocket] =
+    Resource.make(connectWebSocket(indexerWsUri))(ws => Sync[F].delay(ws.disconnectNow()))
+
+  private def connectWebSocket(indexerWsUri: Uri): F[GraphQLWebSocket] =
+    Sync[F]
+      .delay(WebSocket.url(indexerWsUri.toString, "graphql-ws").graphql.build(managed = false))
+      .flatTap(ws => Sync[F].delay(ws.reconnectNow()))
+      .flatTap(ws => Sync[F].delay(ws.init()))
 
   private def retryOnConnectionError(
       viewingKey: String,
@@ -52,6 +67,16 @@ class IndexerClient[F[_]: Async](
         .eval(tracer.connectionLost(err)) >>
         Stream.emit(ConnectionLost) ++
         viewingUpdatesWithRetry(viewingKey, blockHeight).delayBy(5.seconds)
+    case WebSocketClosed =>
+      Stream
+        .eval(tracer.connectionLost(WebSocketClosed)) >>
+        Stream.emit(ConnectionLost) ++
+        viewingUpdatesWithRetry(viewingKey, blockHeight).delayBy(5.seconds)
+    case _: TimeoutException =>
+      Stream
+        .eval(tracer.connectTimeout) >>
+        Stream.emit(ConnectionLost) ++
+        viewingUpdatesWithRetry(viewingKey, blockHeight)
     case err =>
       Stream.raiseError(err)
   }
@@ -76,41 +101,53 @@ class IndexerClient[F[_]: Async](
 
   private def stop: F[Unit] =
     stopSignal.complete(()).void
-}
 
-private class IndexerHttpClient[F[_]: Async](indexerUri: Uri, backend: SttpBackend[F, Any]) {
-  def connect(viewingKey: String): F[SessionId] =
+  private def connect(
+      viewingKey: String,
+      ws: WebSocket[GraphQLWSResponse, GraphQLWSRequest],
+  ): F[SessionId] =
     Async[F].defer {
-      Mutation
-        .connect(viewingKey)
-        .toRequest(indexerUri)
-        .send[F, Any](backend)
-        .map(_.body)
-        .rethrow
+      val selection = Mutation.connect(viewingKey)
+      val request = GraphQLWSRequest("start", None, selection.toGraphQL().some)
+      Sync[F].delay(ws.sendOne(request)) >> waitForSessionId(ws)
     }
 
-  def disconnect(sessionId: SessionId): F[Unit] =
+  private def waitForSessionId(ws: WebSocket[GraphQLWSResponse, GraphQLWSRequest]): F[String] =
+    ws.received.toStream
+      .collectFirst(matchSessionId)
+      .timeout(5.seconds)
+      .compile
+      .lastOrError
+
+  private val matchSessionId: PartialFunction[GraphQLWSResponse, String] = {
+    case GraphQLWSResponse(
+          _,
+          _,
+          Some(
+            __ObjectValue(
+              List(("data", __ObjectValue(List(("connect", __StringValue(sessionId)))))),
+            ),
+          ),
+        ) =>
+      sessionId
+  }
+
+  private def disconnect(sessionId: SessionId, ws: GraphQLWebSocket): F[Unit] =
     Async[F].defer {
-      Mutation
-        .disconnect(sessionId)
-        .toRequest(indexerUri)
-        .send[F, Any](backend)
-        .void
+      val selection = Mutation.disconnect(sessionId)
+      val request = GraphQLWSRequest("start", None, selection.toGraphQL().some)
+      Sync[F].delay(ws.sendOne(request))
     }
 }
 
 object IndexerClient {
+  private type GraphQLWebSocket = WebSocket[GraphQLWSResponse, GraphQLWSRequest]
+
   def apply[F[_]: Async](
-      indexerUri: Uri,
       indexerWsUri: Uri,
   )(using rootTracer: Tracer[F, StructuredLog]): Resource[F, IndexerClient[F]] = {
     given IndexerClientTracer[F] = IndexerClientTracer.from(rootTracer)
-    Resource
-      .make(Async[F].delay(FetchCatsBackend[F]()))(_.close())
-      .map(new IndexerHttpClient[F](indexerUri, _))
-      .flatMap { httpClient =>
-        Resource.make(Deferred[F, Unit].map(new IndexerClient(indexerWsUri, httpClient, _)))(_.stop)
-      }
+    Resource.make(Deferred[F, Unit].map(new IndexerClient(indexerWsUri, _)))(_.stop)
   }
 
   private val FetchErrorName = "FetchError"
