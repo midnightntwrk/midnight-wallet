@@ -37,7 +37,7 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     TestContainers.resource(
-      "registry.ci.iog.io/proof-server@sha256:0790c3b85abeaa681799d782e565bf5c0839354124de128e2722c1ccb997d0f6",
+      "ghcr.io/midnight-ntwrk/proof-server:2.0.6",
     )(
       _.withExposedPorts(proverServerPort)
         .withWaitStrategy(Wait.forListeningPorts()),

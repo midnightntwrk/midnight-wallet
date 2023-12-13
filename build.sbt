@@ -1,5 +1,6 @@
 import scala.sys.process.*
-import sbt.util.CacheImplicits.*
+import LedgerBinariesDownloader.*
+import sbt.io.FileFilter
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -244,7 +245,7 @@ lazy val jsInterop = project
     coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
   )
 
-lazy val downloadLedgerBinaries = taskKey[File]("Download ledger binaries")
+lazy val downloadLedgerBinaries = taskKey[Unit]("Download ledger binaries")
 lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .in(file("wallet-zswap"))
@@ -257,27 +258,29 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
   .jvmSettings(
+    cleanFiles ++= (Compile / resourceDirectory).value
+      .listFiles(new FileFilter {
+        override def accept(pathname: File): Boolean = {
+          List("libmidnight_zswap_jnr.", "archive_info.txt")
+            .exists(pathname.getName.contains)
+        }
+      })
+      .toList,
     libraryDependencies += "com.github.jnr" % "jnr-ffi" % "2.2.13",
     downloadLedgerBinaries := {
-      val store = streams.value.cacheStoreFactory.make("jnr-files")
-      val downloadFile = Cache.cached[String, File](store) { assetId =>
-        val downloadedFile = taskTemporaryDirectory.value / "jnr-bin.tar.gz"
-        val url =
-          s"https://api.github.com/repos/input-output-hk/midnight-ledger-prototype/releases/assets/$assetId"
-        val authToken = sys.env("MIDNIGHT_GH_TOKEN")
+      val resourcesDir = (Compile / resourceDirectory).value
+      IO.createDirectory(resourcesDir)
 
-        s"curl -o $downloadedFile -H @wallet-zswap/headers.txt --oauth2-bearer $authToken -L $url".!!
-        val resourcesDir = (Compile / resourceDirectory).value
-        IO.createDirectory(resourcesDir)
-        s"tar -xzf $downloadedFile --strip-components=2 -C $resourcesDir".!!
-        downloadedFile
-      }
-
-      val linuxAssetId = "134358211"
-      downloadFile(linuxAssetId)
-
-      val darwinAssetId = "134359209"
-      downloadFile(darwinAssetId)
+      downloadBinaries(
+        Config(
+          requiredAssets = List(Linux, Darwin),
+          releaseTag = "zswap-jnr-0.3.9",
+          ghAuthToken = sys.env("MIDNIGHT_GH_TOKEN"),
+          tempDir = taskTemporaryDirectory.value.getPath,
+          resourcesDir = resourcesDir.getPath,
+          logger = streams.value.log,
+        ),
+      )
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
   )
@@ -350,7 +353,7 @@ lazy val pubSubIndexerClient = project
       "com.github.ghostdogpr" %%% "caliban-client-laminext" % "2.3.0",
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
-      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion
+      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
     ),
     stIgnore ++= List("ws", "isomorphic-ws"),
   )
