@@ -33,10 +33,6 @@ an error with the shape can be thrown.
 
 [`APIError`](APIError.md)
 
-#### Defined in
-
-[errors.ts:28](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L28)
-
 ## Properties
 
 ### code
@@ -45,10 +41,6 @@ an error with the shape can be thrown.
 
 The code of the error that's thrown
 
-#### Defined in
-
-[errors.ts:24](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L24)
-
 ___
 
 ### reason
@@ -56,7 +48,3 @@ ___
 • **reason**: `string`
 
 The reason the error is thrown
-
-#### Defined in
-
-[errors.ts:26](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/errors.ts#L26)

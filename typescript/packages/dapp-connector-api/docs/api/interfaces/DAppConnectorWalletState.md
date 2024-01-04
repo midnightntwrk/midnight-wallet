@@ -20,10 +20,6 @@ The shape of the wallet state that must be exposed
 
 The wallet address, which is a concatenation of coinPublicKey and encryptionPublicKey
 
-#### Defined in
-
-[api.ts:8](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L8)
-
 ___
 
 ### coinPublicKey
@@ -32,10 +28,6 @@ ___
 
 The coin public key
 
-#### Defined in
-
-[api.ts:10](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L10)
-
 ___
 
 ### encryptionPublicKey
@@ -43,7 +35,3 @@ ___
 • **encryptionPublicKey**: `string`
 
 The encryption public key
-
-#### Defined in
-
-[api.ts:12](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L12)

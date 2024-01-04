@@ -24,10 +24,6 @@ When errors occur in functions returning a promise, they should be thrown in the
 
 Semver string. DApps are encouraged to check the compatibility whenever this changes.
 
-#### Defined in
-
-[api.ts:46](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L46)
-
 ___
 
 ### enable
@@ -43,10 +39,6 @@ Request access to the wallet, returns the wallet api on approval
 ##### Returns
 
 `Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
-
-#### Defined in
-
-[api.ts:52](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L52)
 
 ___
 
@@ -64,10 +56,6 @@ Check if the wallet has authorized the dapp
 
 `Promise`\<`boolean`\>
 
-#### Defined in
-
-[api.ts:48](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L48)
-
 ___
 
 ### name
@@ -75,10 +63,6 @@ ___
 • **name**: `string`
 
 The name of the wallet
-
-#### Defined in
-
-[api.ts:44](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L44)
 
 ___
 
@@ -95,7 +79,3 @@ Request the services (pubsub, node and proof server) uris.
 ##### Returns
 
 `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
-
-#### Defined in
-
-[api.ts:50](https://github.com/input-output-hk/midnight-wallet/blob/6a617cb/typescript/packages/dapp-connector-api/src/api.ts#L50)
