@@ -45,7 +45,10 @@ class IndexerClient[F[_]: Async](
         .bracket(connect(viewingKey, ws))(disconnect(_, ws))
         .evalMap(sessionId => blockHeightRef.get.map(buildQuery(sessionId, _)))
         .flatMap(GraphQLSubscriber.subscribe(ws, _))
-        .evalTap(update => blockHeightRef.set(update.blockHeight.some))
+        .evalTap {
+          case RawViewingUpdate(height, _) => blockHeightRef.set(height.some)
+          case _                           => Async[F].unit
+        }
         .handleErrorWith(retryOnConnectionError(viewingKey, blockHeightRef))
     }
 
@@ -160,13 +163,9 @@ object IndexerClient {
 
   case object ConnectionLost extends IndexerEvent
 
-  sealed trait RawIndexerUpdate extends IndexerEvent {
-    def blockHeight: BigInt
-  }
+  sealed trait RawIndexerUpdate extends IndexerEvent
 
-  final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate {
-    override def blockHeight: BigInt = synced
-  }
+  final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate
 
   sealed trait SingleUpdate
 
