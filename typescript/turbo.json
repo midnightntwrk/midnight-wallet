@@ -13,6 +13,9 @@
       "outputMode": "new-only",
       "dependsOn": ["^build"]
     },
+    "test-e2e": {
+      "cache": false
+    },
     "check": {
       "outputMode": "new-only",
       "dependsOn": ["build", "lint", "test"]

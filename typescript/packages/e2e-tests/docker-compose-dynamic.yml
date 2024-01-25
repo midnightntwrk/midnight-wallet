@@ -1,11 +1,11 @@
 services:
   proof-server:
-    image: ghcr.io/midnight-ntwrk/proof-server:latest
+    image: ghcr.io/midnight-ntwrk/proof-server:2.0.7
     container_name: proof-server_$TESTCONTAINERS_UID
     ports:
       - '0:6300'
   node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:latest
+    image: ghcr.io/midnight-ntwrk/midnight-node:bbe1f8ec774b360033d24ede3cd0b8d501daeb09
     container_name: node_$TESTCONTAINERS_UID
     environment:
       - RUN_DEV_NET=TRUE
@@ -19,7 +19,7 @@ services:
       retries: 5
       start_period: 40s
   indexer:
-    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:latest
+    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:0.2.20
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - '0:8088'

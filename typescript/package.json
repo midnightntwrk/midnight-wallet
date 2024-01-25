@@ -9,7 +9,8 @@
     "test": "turbo run test",
     "lint": "turbo run lint",
     "wallet-server": "turbo run start --filter=wallet-server",
-    "deploy": "turbo run deploy"
+    "deploy": "turbo run deploy",
+    "test-e2e": "turbo run test-e2e"
   },
   "devDependencies": {
     "jest-junit": "^16.0.0",
