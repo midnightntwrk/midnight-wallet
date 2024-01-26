@@ -80,9 +80,12 @@ object TransactionBalancer {
       for {
         offerAndState <- tryBalanceImbalances(imbalancesWithoutNativeToken, state)
         (offerContainer, offerState) = offerAndState
+        isNativeToken = imbalancesWithoutNativeToken.isEmpty
+        fee = calculateFee(OfferContainer(Some(offer)), isNativeToken)
+
         nativeTokenOfferAndState <- tryBalanceImbalances(
           Map(
-            nativeTokenType -> (nativeTokenImbalance - calculateFee(OfferContainer(Some(offer)))),
+            nativeTokenType -> (nativeTokenImbalance - fee),
           ),
           offerState,
         )
@@ -227,10 +230,14 @@ object TransactionBalancer {
     (offer, newState)
   }
 
-  private def calculateFee(offer: OfferContainer): BigInt = {
+  private def calculateFee(offer: OfferContainer, isNativeToken: Boolean = true): BigInt = {
     val inputsFee = TokenType.InputFeeOverhead * BigInt(offer.inputsLength)
     val outputsFee = TokenType.OutputFeeOverhead * BigInt(offer.outputsLength)
-    inputsFee + outputsFee + TokenType.OutputFeeOverhead
+    // in case a native token type is used, the output fee is doubled
+    val overheadOutputFee =
+      if (isNativeToken) TokenType.OutputFeeOverhead else (2 * TokenType.OutputFeeOverhead)
+
+    inputsFee + outputsFee + overheadOutputFee
   }
 
   sealed abstract class Error(message: String) extends Throwable(message)
