@@ -1095,10 +1095,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/midnight-js-network-id@npm:0.1.8":
-  version: 0.1.8
-  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.1.8::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.1.8%2F5490c89c4ec4ca90e1cf851318f69a6c22218d53"
-  checksum: 753b5f609fcd755d360c24af362f5c5939b36a67b9f41786049218c6ae1f50ae6142e06e136588603e80c70479ac0771a367e129b398544bc67df4f0db4d91ba
+"@midnight-ntwrk/midnight-js-network-id@npm:0.1.10":
+  version: 0.1.10
+  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.1.10::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.1.10%2Fc9a025db2a43bfbb644d78508b52d1ce3402cc65"
+  checksum: e92f0b8dc9f90856f716887989fe82a237238e14569e52ea3cf41dddd7117b78f96085cdd909867cf6a08467c23dc6f34c9d4755b8b363b4f96d7c3fe20e41cc
   languageName: node
   linkType: hard
 
@@ -1124,9 +1124,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet@npm:^3.5.1":
-  version: 3.5.1
-  resolution: "@midnight-ntwrk/wallet@npm:3.5.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.5.1%2F04659bfb86730a558efcfcf529f32083b17ce35e"
+"@midnight-ntwrk/wallet@npm:^3.5.3":
+  version: 3.5.3
+  resolution: "@midnight-ntwrk/wallet@npm:3.5.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.5.3%2F2163513d1dc6f903644eed7447b7855f17abf98b"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.3.1
     "@midnight-ntwrk/zswap": ^0.3.11
@@ -1136,7 +1136,7 @@ __metadata:
     scale-ts: ^1.1.0
     testcontainers: ^10.2.1
     ws: ^8.8.1
-  checksum: 6a3fc95c12ee61290c272d88d97f0535e10ba3732f49a260cee4f8ab9714d8c0717749632487849ba22c3ad44ce0bb663b9867092ed5e75decd0f3bff913ce0c
+  checksum: fbdaa4e975e358aa72d23d110e6c983710e52700a2ab3c55090d1ef65733b58840312fb36d17f6971df012a56893df04631318f87e3d770ee89ec8fad55d0616
   languageName: node
   linkType: hard
 
@@ -1437,8 +1437,8 @@ __metadata:
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
-    "@midnight-ntwrk/midnight-js-network-id": 0.1.8
-    "@midnight-ntwrk/wallet": ^3.5.1
+    "@midnight-ntwrk/midnight-js-network-id": 0.1.10
+    "@midnight-ntwrk/wallet": ^3.5.3
     "@midnight-ntwrk/wallet-api": ^3.3.1
     "@midnight-ntwrk/zswap": 0.3.11
     "@types/jest": ^29.2.0
@@ -1455,6 +1455,7 @@ __metadata:
     fp-ts: ^2.13.1
     jest: ^29.2.1
     jest-html-reporters: ^3.1.4
+    jest-runner-groups: ^2.2.0
     prettier: ^2.7.1
     rxjs: ^7.5
     testcontainers: ^10.2.1
@@ -6511,6 +6512,16 @@ __metadata:
     resolve.exports: ^2.0.0
     slash: ^3.0.0
   checksum: 0ca218e10731aa17920526ec39deaec59ab9b966237905ffc4545444481112cd422f01581230eceb7e82d86f44a543d520a71391ec66e1b4ef1a578bd5c73487
+  languageName: node
+  linkType: hard
+
+"jest-runner-groups@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "jest-runner-groups@npm:2.2.0"
+  peerDependencies:
+    jest-docblock: ">= 24"
+    jest-runner: ">= 24"
+  checksum: 4cd69ba7c14b1988ca1e4b15194f5011d3ad3cbb554098afdee336d5c0a78bd27c2bde2a58ce0b68984a8d3d1781e15c020a0db64db059116721b47de1ba5287
   languageName: node
   linkType: hard
 

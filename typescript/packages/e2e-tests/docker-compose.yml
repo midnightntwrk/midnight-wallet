@@ -5,7 +5,7 @@ services:
     ports:
       - '6300:6300'
   node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:bbe1f8ec774b360033d24ede3cd0b8d501daeb09
+    image: ghcr.io/midnight-ntwrk/midnight-node:27d79e8d2618afa74db5c80278956af56f1a0232
     container_name: node
     environment:
       - RUN_DEV_NET=TRUE

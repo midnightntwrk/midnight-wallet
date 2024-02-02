@@ -22,6 +22,14 @@ on:
                 description: Midnight deployment to use (devnet/qanet/local)
                 required: true
                 default: 'devnet'
+            seed:
+                type: string
+                description: Seed of a funded wallet
+                required: true
+            seed2:
+                type: string
+                description: Seed of another receiving wallet
+                required: true
             modifier:
                 type: string
                 description: Suite or a testname to run (refer to Jest docs)
@@ -32,10 +40,6 @@ on:
             MIDNIGHT_REPO_USER:
               required: true
             MIDNIGHT_REPO_PASS:
-              required: true
-            DOCKER_USERNAME:
-              required: true
-            DOCKER_PASSWORD:
               required: true
             GH_USERNAME:
               required: true
@@ -81,13 +85,6 @@ jobs:
                     //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
                     " >> ./.npmrc
 
-            - name: Log in to IOG Container registry
-              uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
-              with:
-                registry: 'https://registry.ci.iog.io'
-                username: ${{ secrets.DOCKER_USERNAME }}
-                password: ${{ secrets.DOCKER_PASSWORD }}
-
             - name: Log in to GitHub Container registry
               uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
               with:
@@ -106,6 +103,8 @@ jobs:
               env:
                 NETWORK: ${{ inputs.network }}
                 DEPLOYMENT: ${{ inputs.deployment }}
+                SEED: ${{ inputs.seed }}
+                SEED2: ${{ inputs.seed2 }}
               run: |
                 nix develop .#typescript --command yarn
                 nix develop .#typescript --command yarn test-e2e -- ${{inputs.modifier}}
@@ -117,7 +116,7 @@ jobs:
                 name: Wallet TS packages Jest Tests Report
                 reporter: jest-junit
                 path: |
-                    ./typescript/**/reports/report.xml                    
+                    ./typescript/packages/e2e-tests/reports/report.xml
 
             - name: Publish Wallet TS Test Summary
               uses: EnricoMi/publish-unit-test-result-action@v2
@@ -125,5 +124,4 @@ jobs:
               with:
                 check_name: Wallet TS Packages Jest Tests Results
                 files: |
-                    ./typescript/**/reports/report.xml
-                    !(node_modules)/**/reports/report.xml
+                    ./typescript/packages/e2e-tests/reports/report.xml

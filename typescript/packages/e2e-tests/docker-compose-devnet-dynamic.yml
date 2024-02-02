@@ -1,0 +1,13 @@
+services:
+  proof-server:
+    image: ghcr.io/midnight-ntwrk/proof-server:2.0.7
+    container_name: proof-server_$TESTCONTAINERS_UID
+    command: ["midnight-proof-server --network devnet"]
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    ports:
+      - '0:6300'

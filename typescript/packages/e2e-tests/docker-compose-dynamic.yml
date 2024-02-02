@@ -2,10 +2,16 @@ services:
   proof-server:
     image: ghcr.io/midnight-ntwrk/proof-server:2.0.7
     container_name: proof-server_$TESTCONTAINERS_UID
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
     ports:
       - '0:6300'
   node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:bbe1f8ec774b360033d24ede3cd0b8d501daeb09
+    image: ghcr.io/midnight-ntwrk/midnight-node:27d79e8d2618afa74db5c80278956af56f1a0232
     container_name: node_$TESTCONTAINERS_UID
     environment:
       - RUN_DEV_NET=TRUE
@@ -26,6 +32,12 @@ services:
     command: ["midnight-pubsub-indexer", "-Devents-source.node-host=node"]
     environment:
       - SUBSTRATE_NODE_URL=node
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8088/health" ]
+      interval: 3s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       node:
         condition: service_healthy

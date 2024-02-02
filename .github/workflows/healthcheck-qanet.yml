@@ -2,8 +2,8 @@ name: Healthcheck - QAnet
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '*/5 * * * *'
+  schedule:
+    - cron: '*/15 * * * *'
 
 jobs:
   test:
@@ -12,5 +12,7 @@ jobs:
     with:
       network: devnet
       deployment: qanet
+      seed: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+      seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
       modifier: '-t @healthcheck'
     secrets: inherit
