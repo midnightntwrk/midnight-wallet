@@ -73,12 +73,11 @@ describe('Token transfer', () => {
   test(
     'Is working for valid transfer @healthcheck',
     async () => {
-      await waitForSync(walletFunded);
+      await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
       const initialState = await firstValueFrom(walletFunded.state());
-      const initialBalance = initialState.balances[nativeToken()];
+      const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       console.log(`Wallet 1: ${initialBalance}`);
 
-      await waitForSync(wallet2);
       const initialState2 = await firstValueFrom(wallet2.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
       console.log(`Wallet 2: ${initialBalance2}`);
@@ -103,14 +102,14 @@ describe('Token transfer', () => {
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
       const finalState = await waitForFinalizedBalance(walletFunded);
-      expect(finalState.balances[nativeToken()]).toBeLessThan(initialBalance - outputValue);
+      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(finalState.availableCoins.length).toBe(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(initialState.coins.length);
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
 
       const finalState2 = await waitForFinalizedBalance(wallet2);
-      expect(finalState2.balances[nativeToken()]).toBe(initialBalance2 + outputValue);
+      expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
       expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
       expect(finalState2.pendingCoins.length).toBe(0);
       expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);

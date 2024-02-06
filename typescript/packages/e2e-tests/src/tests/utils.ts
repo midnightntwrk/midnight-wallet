@@ -14,7 +14,7 @@ export const waitForSync = (wallet: Wallet) =>
         // Let's allow progress only if wallet is close enough
         const synced = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total ?? 1_000n;
-        return total - synced < 100n;
+        return total - synced < 20n;
       }),
     ),
   );
