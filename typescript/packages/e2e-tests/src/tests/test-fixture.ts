@@ -6,13 +6,19 @@
 import { exit } from 'process';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { MidnightDeployment, MidnightNetwork } from './utils';
+import { MidnightDeployment, MidnightNetwork, createLogger } from './utils';
+import path from 'node:path';
+
+export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
+const logger = await createLogger(
+  path.resolve(currentDir, '..', 'logs', 'test-fixture', `${new Date().toISOString()}.log`),
+);
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
 
   beforeEach(async () => {
-    console.log(`Spinning up ${process.env.NETWORK} test environment...`);
+    logger.info(`Spinning up ${process.env.NETWORK} test environment...`);
     const uid = Math.floor(Math.random() * 1000).toString();
     let composeEnvironment: StartedDockerComposeEnvironment;
     switch (process.env.NETWORK as MidnightNetwork) {
@@ -33,18 +39,18 @@ export function useTestContainersFixture() {
         break;
       }
       default: {
-        console.log(`Unrecognized network: ${process.env.NETWORK}`);
+        logger.warn(`Unrecognized network: ${process.env.NETWORK}`);
         exit(1);
       }
     }
-    console.log('Test environment started');
+    logger.info('Test environment started');
     fixture = new TestContainersFixture(composeEnvironment, uid);
   }, 120_000);
 
   afterEach(async () => {
-    console.log('Tearing down test environment...');
+    logger.info('Tearing down test environment...');
     await fixture?.down();
-    console.log('Test environment torn down');
+    logger.info('Test environment torn down');
   }, 60_000);
 
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion

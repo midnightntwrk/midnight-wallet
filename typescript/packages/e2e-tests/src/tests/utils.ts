@@ -1,5 +1,32 @@
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { type Wallet } from '@midnight-ntwrk/wallet-api';
+import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
+import pinoPretty from 'pino-pretty';
+import pino from 'pino';
+import { createWriteStream } from 'node:fs';
+
+export const createLogger = async (logPath: string): Promise<pino.Logger> => {
+  await fs.mkdir(path.dirname(logPath), { recursive: true });
+  const pretty: pinoPretty.PrettyStream = pinoPretty({
+    colorize: true,
+    sync: true,
+  });
+  const level = 'info' as const;
+  return pino(
+    {
+      level,
+      depthLimit: 20,
+    },
+    pino.multistream([
+      { stream: pretty, level: 'info' },
+      { stream: createWriteStream(logPath), level },
+    ]),
+  );
+};
+
+export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
+const logger = await createLogger(path.resolve(currentDir, '..', 'logs', 'utils', `${new Date().toISOString()}.log`));
 
 export const waitForSync = (wallet: Wallet) =>
   firstValueFrom(
@@ -8,7 +35,7 @@ export const waitForSync = (wallet: Wallet) =>
       tap((state) => {
         const scanned = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total.toString() ?? 'unknown number';
-        console.log(`Wallet scanned ${scanned} blocks out of ${total}`);
+        logger.info(`Wallet scanned ${scanned} blocks out of ${total}`);
       }),
       filter((state) => {
         // Let's allow progress only if wallet is close enough
@@ -24,8 +51,7 @@ export const waitForPending = (wallet: Wallet) =>
     wallet.state().pipe(
       tap((state) => {
         const pending = state.pendingCoins.length;
-        console.log(`Wallet pending coins: ${pending}`);
-        console.log(`Waiting for pending coins...`);
+        logger.info(`Wallet pending coins: ${pending}, waiting for pending coins...`);
       }),
       filter((state) => {
         // Let's allow progress only if pendingCoins are present
@@ -38,11 +64,9 @@ export const waitForPending = (wallet: Wallet) =>
 export const waitForFinalizedBalance = (wallet: Wallet) =>
   firstValueFrom(
     wallet.state().pipe(
-      throttleTime(5_000),
       tap((state) => {
         const pending = state.pendingCoins.length;
-        console.log(`Wallet pending coins: ${pending}`);
-        console.log(`Waiting for pending coins cleared...`);
+        logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
       filter((state) => {
         // Let's allow progress only if pendingCoins are cleared

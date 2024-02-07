@@ -9,14 +9,19 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { waitForFinalizedBalance, waitForPending, waitForSync } from './utils';
+import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync } from './utils';
 import { webcrypto } from 'node:crypto';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
+import path from 'node:path';
 
 // @ts-expect-error: It's needed to make Scala.js and WASM code able to use cryptography
 globalThis.crypto = webcrypto;
+export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
+const logger = await createLogger(
+  path.resolve(currentDir, '..', 'logs', 'tokenTransferDevnet', `${new Date().toISOString()}.log`),
+);
 
 /**
  * Tests performing a token transfer
@@ -26,7 +31,7 @@ globalThis.crypto = webcrypto;
 
 describe('Token transfer', () => {
   if (process.env.SEED2 === undefined || process.env.SEED === undefined) {
-    console.log('SEED or SEED2 env vars not set');
+    logger.info('SEED or SEED2 env vars not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
@@ -76,11 +81,11 @@ describe('Token transfer', () => {
       await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
-      console.log(`Wallet 1: ${initialBalance}`);
+      logger.info(`Wallet 1: ${initialBalance}`);
 
       const initialState2 = await firstValueFrom(wallet2.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
-      console.log(`Wallet 2: ${initialBalance2}`);
+      logger.info(`Wallet 2: ${initialBalance2}`);
 
       const outputsToCreate = [
         {
@@ -92,7 +97,7 @@ describe('Token transfer', () => {
       const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       const provenTx = await walletFunded.proveTransaction(txToProve);
       const id = await walletFunded.submitTransaction(provenTx);
-      console.log('Transaction id: ' + id);
+      logger.info('Transaction id: ' + id);
 
       const pendingState = await waitForPending(walletFunded);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
@@ -107,6 +112,7 @@ describe('Token transfer', () => {
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(initialState.coins.length);
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+      logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
 
       const finalState2 = await waitForFinalizedBalance(wallet2);
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
@@ -114,6 +120,7 @@ describe('Token transfer', () => {
       expect(finalState2.pendingCoins.length).toBe(0);
       expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
       expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
+      logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
     },
     timeout,
   );
@@ -125,13 +132,13 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(walletFunded.state());
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      console.log(`Wallet 1 balance is: ${initialBalance}`);
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
       const balance = 25000000000000000n;
 
       const initialState2 = await firstValueFrom(wallet2.state());
       const initialBalance2 = initialState2.balances[nativeToken()];
       if (initialBalance2 === undefined || initialBalance2 === 0n) {
-        console.log(`Waiting to receive tokens...`);
+        logger.info(`Waiting to receive tokens...`);
       }
 
       // const outputsToCreate = [
@@ -161,10 +168,10 @@ describe('Token transfer', () => {
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);
       // const id = await walletFunded.submitTransaction(provenTx);
-      // console.log('Transaction id: ' + id);
+      // logger.info('Transaction id: ' + id);
 
       // const pendingState = await waitForPending(walletFunded);
-      // console.log(pendingState);
+      // logger.info(pendingState);
       // expect(pendingState.balances[nativeToken()]).toBe(20000000000000000n);
       // expect(pendingState.availableCoins.length).toBe(4);
       // expect(pendingState.pendingCoins.length).toBe(1);
@@ -180,7 +187,7 @@ describe('Token transfer', () => {
       expect(finalState.transactionHistory.length).toBe(1);
 
       // const finalState2 = await waitForFinalizedBalance(wallet2);
-      // console.log(finalState2);
+      // logger.info(finalState2);
       // expect(finalState2.balances[nativeToken()]).toBe(outputValue);
       // expect(finalState2.availableCoins.length).toBe(1);
       // expect(finalState2.pendingCoins.length).toBe(0);
@@ -196,9 +203,9 @@ describe('Token transfer', () => {
     async () => {
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      console.log(`Wallet 1 balance is: ${initialBalance}`);
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
-      console.log('Stopping proof server container..');
+      logger.info('Stopping proof server container..');
       await fixture.getProofServerContainer().stop({ timeout: 10_000 });
 
       const initialState2 = await firstValueFrom(wallet2.state());
@@ -214,7 +221,7 @@ describe('Token transfer', () => {
       await expect(walletFunded.proveTransaction(txToProve)).rejects.toThrow();
 
       // const pendingState = await waitForPending(walletFunded);
-      // console.log(pendingState);
+      // logger.info(pendingState);
       // expect(pendingState.balances[nativeToken()]).toBe(20000000000000000n);
       // expect(pendingState.availableCoins.length).toBe(4);
       // expect(pendingState.pendingCoins.length).toBe(1);
