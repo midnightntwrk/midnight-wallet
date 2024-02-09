@@ -1,0 +1,18 @@
+name: Healthcheck - Topaz
+
+on:
+  workflow_dispatch:
+  # schedule:
+  #   - cron: '45 * * * *'
+
+jobs:
+  test:
+    name: Healthcheck tests
+    uses: ./.github/workflows/e2e-tests.yml
+    with:
+      network: devnet
+      deployment: topaz
+      seed: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+      seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+      modifier: '-t @healthcheck'
+    secrets: inherit

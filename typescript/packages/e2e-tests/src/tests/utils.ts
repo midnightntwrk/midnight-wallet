@@ -78,4 +78,4 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'devnet' | 'qanet' | 'local';
+export type MidnightDeployment = 'devnet' | 'qanet' | 'topaz' | 'jade' | 'local';

@@ -10,6 +10,40 @@ env:
 
 on:
     workflow_dispatch:
+      inputs:
+        network:
+          type: choice
+          description: Midnight network to use
+          required: true
+          default: 'devnet'
+          options:
+            - devnet
+            - undeployed
+        deployment:
+          type: choice
+          description: Midnight deployment to use
+          required: true
+          default: 'qanet'
+          options:
+            - devnet
+            - qanet
+            - local
+            - topaz
+            - jade
+        seed:
+            type: string
+            description: Seed of a funded wallet
+            required: true
+            default: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+        seed2:
+            type: string
+            description: Seed of another receiving wallet
+            required: true
+            default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+        modifier:
+            type: string
+            description: Suite or a testname to run (refer to Jest docs)
+            required: false
     workflow_call:
         inputs:
             network:
@@ -19,7 +53,7 @@ on:
                 default: 'devnet'
             deployment:
                 type: string
-                description: Midnight deployment to use (devnet/qanet/local)
+                description: Midnight deployment to use (devnet/qanet/topaz/jade/local)
                 required: true
                 default: 'devnet'
             seed:

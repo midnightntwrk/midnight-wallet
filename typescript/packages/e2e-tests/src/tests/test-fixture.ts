@@ -99,6 +99,12 @@ export class TestContainersFixture {
       case 'qanet': {
         return 'https://pubsub-qa.devnet-midnight.network:443/api/v0/graphql';
       }
+      case 'topaz': {
+        return 'https://pubsub.topaz.dev.platform.midnight.network:443/api/v0/graphql';
+      }
+      case 'jade': {
+        return 'https://pubsub.jade.midnight.network:443/api/v0/graphql';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}/api/v0/graphql`;
@@ -114,6 +120,12 @@ export class TestContainersFixture {
       case 'qanet': {
         return 'wss://pubsub-qa.devnet-midnight.network:443/api/v0/graphql/ws';
       }
+      case 'topaz': {
+        return 'wss://pubsub.topaz.dev.platform.midnight.network:443/api/v0/graphql';
+      }
+      case 'jade': {
+        return 'wss://pubsub.jade.midnight.network:443/api/v0/graphql';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `ws://localhost:${indexerPort}/api/v0/graphql/ws`;
@@ -128,6 +140,12 @@ export class TestContainersFixture {
       }
       case 'qanet': {
         return 'https://alb-node-peer-1-qa.devnet-midnight.network:9944';
+      }
+      case 'topaz': {
+        return 'https://node-01.topaz.dev.platform.midnight.network:9944';
+      }
+      case 'jade': {
+        return 'https://node-01.jade.midnight.network:9944';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
