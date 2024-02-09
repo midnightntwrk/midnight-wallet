@@ -121,10 +121,10 @@ export class TestContainersFixture {
         return 'wss://pubsub-qa.devnet-midnight.network:443/api/v0/graphql/ws';
       }
       case 'topaz': {
-        return 'wss://pubsub.topaz.dev.platform.midnight.network:443/api/v0/graphql';
+        return 'wss://pubsub.topaz.dev.platform.midnight.network:443/api/v0/graphql/ws';
       }
       case 'jade': {
-        return 'wss://pubsub.jade.midnight.network:443/api/v0/graphql';
+        return 'wss://pubsub.jade.midnight.network:443/api/v0/graphql/ws';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();

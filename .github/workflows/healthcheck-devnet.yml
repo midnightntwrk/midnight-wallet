@@ -3,7 +3,7 @@ name: Healthcheck - Devnet
 on:
   workflow_dispatch:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/30 * * * *'
 
 jobs:
   test:
