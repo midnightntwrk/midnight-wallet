@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / DAppConnectorAPI
+[DApp Connector API Reference - v1.1.0](../README.md) / [Exports](../modules.md) / DAppConnectorAPI
 
 # Interface: DAppConnectorAPI
 
@@ -28,17 +28,17 @@ ___
 
 ### enable
 
-• **enable**: () => `Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+• **enable**: () => `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
 
 #### Type declaration
 
-▸ (): `Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+▸ (): `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
 
 Request access to the wallet, returns the wallet api on approval
 
 ##### Returns
 
-`Promise`\<[`DAppConnectorWalletAPI`](../modules.md#dappconnectorwalletapi)\>
+`Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
 
 ___
 

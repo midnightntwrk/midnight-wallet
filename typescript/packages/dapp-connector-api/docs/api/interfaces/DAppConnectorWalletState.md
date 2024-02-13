@@ -1,4 +1,4 @@
-[DApp Connector API Reference - v1.0.0](../README.md) / [Exports](../modules.md) / DAppConnectorWalletState
+[DApp Connector API Reference - v1.1.0](../README.md) / [Exports](../modules.md) / DAppConnectorWalletState
 
 # Interface: DAppConnectorWalletState
 

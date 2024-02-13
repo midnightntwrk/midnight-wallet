@@ -1077,6 +1077,7 @@ __metadata:
   resolution: "@midnight-ntwrk/dapp-connector-api@workspace:packages/dapp-connector-api"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.2.3
+    "@midnight-ntwrk/zswap": ^0.3.8
     "@types/node": ^18.11.3
     "@typescript-eslint/eslint-plugin": ^5.40.1
     "@typescript-eslint/parser": ^5.60.0

@@ -1,4 +1,5 @@
 import { Wallet, WalletState } from '@midnight-ntwrk/wallet-api';
+import { CoinInfo, Transaction } from '@midnight-ntwrk/zswap';
 
 /**
  * The shape of the wallet state that must be exposed
@@ -25,14 +26,34 @@ export interface ServiceUriConfig {
   /**  Substrate URI */
   substrateNodeUri: string;
 }
-
 /**
  * Shape of the Wallet API in the DApp Connector
  */
-export type DAppConnectorWalletAPI = {
+export interface DAppConnectorWalletAPI {
   /** Returns a promise with the exposed wallet state */
   state: () => Promise<DAppConnectorWalletState>;
-} & Pick<Wallet, 'submitTransaction' | 'balanceTransaction' | 'proveTransaction'>;
+  /**
+   * It will try to balance given transaction and prove it
+   * @param tx Transaction to balance
+   * @param newCoins New coins created by transaction, for which wallet will watch for
+   * @returns Proved transaction or error
+   */
+  balanceAndProveTransaction: (tx: Transaction, newCoins: CoinInfo[]) => Promise<Transaction>;
+  /**
+   * It will submit given transaction to the node
+   * @param tx Transaction to submit
+   * @returns First transaction identifier from identifiers list or error
+   */
+  submitTransaction: Wallet['submitTransaction'];
+  /**
+   * @deprecated Since version 1.1 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
+   */
+  balanceTransaction: Wallet['balanceTransaction'];
+  /**
+   * @deprecated Since version 1.1.0 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
+   */
+  proveTransaction: Wallet['proveTransaction'];
+}
 
 /**
  * DApp Connector API Definition
