@@ -3,7 +3,7 @@ package io.iohk.midnight.wallet.engine
 import cats.effect.{Async, Deferred, Resource}
 import cats.syntax.all.*
 import fs2.Stream
-import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.core.capabilities.WalletSync
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.SyncService
@@ -20,7 +20,7 @@ object WalletSyncService {
       syncServiceResource: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
       deferred: Deferred[F, Either[Throwable, Unit]],
-      blockHeight: Option[Block.Height],
+      offset: Option[Transaction.Offset],
   )(implicit
       walletSync: WalletSync[TWallet, IndexerUpdate],
       tracer: WalletSyncTracer[F],
@@ -32,7 +32,7 @@ object WalletSyncService {
         .flatMap { syncService =>
           BlockProcessingFactory
             .pipe(walletStateContainer)
-            .apply(syncService.sync(blockHeight))
+            .apply(syncService.sync(offset))
             .map(_.map { case (viewingUpdate, _) => viewingUpdate })
         }
         .interruptWhen(deferred)
@@ -44,14 +44,14 @@ object WalletSyncService {
   def apply[F[_]: Async, TWallet](
       syncService: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
-      blockHeight: Option[Block.Height],
+      offset: Option[Transaction.Offset],
   )(implicit
       walletSync: WalletSync[TWallet, IndexerUpdate],
       tracer: WalletSyncTracer[F],
   ): Resource[F, WalletSyncService[F]] = {
     val deferred = Resource.eval(Deferred[F, Either[Throwable, Unit]])
     val walletSyncService =
-      deferred.map(new Live[F, TWallet](syncService, walletStateContainer, _, blockHeight))
+      deferred.map(new Live[F, TWallet](syncService, walletStateContainer, _, offset))
     walletSyncService.map(_.pure).flatMap(Resource.make(_)(_.stop))
   }
 }

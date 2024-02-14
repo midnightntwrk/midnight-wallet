@@ -2,41 +2,23 @@ package io.iohk.midnight.wallet.integration_tests.indexer
 
 import cats.effect.IO
 import cats.effect.IO.asyncForIO
-import io.iohk.midnight.testcontainers.buildMod.Wait
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.indexer.IndexerClient
-import io.iohk.midnight.wallet.integration_tests.TestContainers
-import munit.{AnyFixture, CatsEffectSuite}
-import scala.concurrent.duration.{Duration, DurationInt}
+import munit.CatsEffectSuite
 import sttp.client3.UriContext
-import sttp.model.Uri
 
 class IndexerClientSpec extends CatsEffectSuite {
-  override def munitIOTimeout: Duration = 3.minutes
-  private val pubSubIndexerPort = 8088
-
-  private val pubSubIndexerServiceFixture = ResourceSuiteLocalFixture(
-    "pubSubIndexerService",
-    TestContainers.resource(
-      "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:0.2.14",
-    )(
-      _.withExposedPorts(pubSubIndexerPort)
-        .withWaitStrategy(Wait.forListeningPorts()),
-    ),
-  )
-
-  override def munitFixtures: Seq[AnyFixture[_]] = List(pubSubIndexerServiceFixture)
-
-  private def indexerWsUri(port: Int): Uri = uri"ws://localhost:$port/api/graphql/ws"
-
   private def withIndexerClient(body: IndexerClient[IO] => IO[Unit]): IO[Unit] = {
-    val mappedPort = pubSubIndexerServiceFixture().getMappedPort(pubSubIndexerPort).toInt
     given Tracer[IO, StructuredLog] = Tracer.noOpTracer
-    IndexerClient(indexerWsUri(mappedPort)).use(body(_))
+    IndexerClient(uri"ws://localhost:8088/api/v1/graphql/ws").use(body(_))
   }
 
-  test("Indexer client must expose a stream with raw transactions") {
+  // PubSub new version doesn't come with fake data source,
+  // thus the only way to run an integration test is to run a real node.
+  // The SubstrateClientSpec test itself is ignored, so this test can't be enabled either,
+  // until a good way to run a pair PubSub-Node locally for these tests is found.
+  test("Indexer client must expose a stream with raw transactions".ignore) {
     withIndexerClient { indexerClient =>
       indexerClient
         .viewingUpdates("2045b931b0bd3d4b7d2e9e3b5a28361fc0b7d6d9f633a912f56fe3d7040d645d05", None)

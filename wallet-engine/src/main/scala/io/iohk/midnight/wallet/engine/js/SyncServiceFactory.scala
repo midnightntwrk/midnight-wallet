@@ -7,7 +7,7 @@ import cats.ApplicativeThrow
 import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
-import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.blockchain.data.Transaction
 import io.iohk.midnight.wallet.core.WalletStateService
 import io.iohk.midnight.wallet.core.capabilities.WalletKeys
 import io.iohk.midnight.wallet.core.domain.*
@@ -38,13 +38,13 @@ object SyncServiceFactory {
 
     IndexerClient[F](indexerWsUri)
       .evalMap(client => walletStateService.keys.map(_._3).map((client, _)))
-      .map { (client, viewingKey) => blockHeight =>
+      .map { (client, viewingKey) => offset =>
         client
-          .viewingUpdates(viewingKey.serialize, blockHeight.map(_.value))
+          .viewingUpdates(viewingKey.serialize, offset.map(_.value))
           .onError(error => Stream.eval(syncServiceTracer.syncFailed(error)))
           .evalTap(syncServiceTracer.viewingUpdateReceived)
           .evalMap {
-            case IndexerClient.RawViewingUpdate(blockHeight, rawUpdates) =>
+            case IndexerClient.RawViewingUpdate(offset, rawUpdates) =>
               val viewingUpdate =
                 rawUpdates
                   .traverse[Try, Either[MerkleTreeCollapsedUpdate, AppliedTransaction]] {
@@ -61,8 +61,8 @@ object SyncServiceFactory {
                         .mapN(AppliedTransaction(_, _).asRight)
                   }
                   .flatMap { updates =>
-                    Block
-                      .Height(blockHeight)
+                    Transaction
+                      .Offset(offset)
                       .map(ViewingUpdate(_, updates))
                       .leftMap(Exception(_))
                       .toTry
@@ -70,7 +70,7 @@ object SyncServiceFactory {
 
               ApplicativeThrow[F].fromTry(viewingUpdate)
             case IndexerClient.RawProgressUpdate(synced, total) =>
-              (Block.Height(synced), Block.Height(total))
+              (Transaction.Offset(synced), Transaction.Offset(total))
                 .mapN(ProgressUpdate.apply)
                 .leftMap(Exception(_))
                 .liftTo[F]

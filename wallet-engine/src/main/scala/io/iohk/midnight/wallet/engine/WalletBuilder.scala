@@ -6,7 +6,7 @@ import cats.effect.syntax.resource.*
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
-import io.iohk.midnight.wallet.blockchain.data.Block
+import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
@@ -82,7 +82,7 @@ object WalletBuilder {
       walletBlockProcessingService <- buildWalletSyncService(
         SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService),
         walletStateContainer,
-        config.initialState.blockHeight,
+        config.initialState.offset,
       )
       walletTransactionService <- buildWalletTransactionService(
         walletStateContainer,
@@ -106,13 +106,13 @@ object WalletBuilder {
   private def buildWalletSyncService[F[_]: Async, TWallet](
       syncService: Resource[F, SyncService[F]],
       walletStateContainer: WalletStateContainer[F, TWallet],
-      blockHeight: Option[Block.Height],
+      offset: Option[data.Transaction.Offset],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
       walletSync: WalletSync[TWallet, IndexerUpdate],
   ): Resource[F, WalletSyncService[F]] = {
     implicit val walletSyncTracer: WalletSyncTracer[F] = WalletSyncTracer.from(rootTracer)
-    WalletSyncService(syncService, walletStateContainer, blockHeight)
+    WalletSyncService(syncService, walletStateContainer, offset)
   }
 
   private def buildWalletTxSubmissionService[F[_]: Async, TWallet](

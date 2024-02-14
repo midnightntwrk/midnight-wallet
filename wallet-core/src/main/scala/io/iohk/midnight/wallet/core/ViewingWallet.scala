@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.core
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.blockchain.data.{Block, Transaction as WalletTransaction}
+import io.iohk.midnight.wallet.blockchain.data.Transaction as WalletTransaction
 import io.iohk.midnight.wallet.core.WalletError.{BadTransactionFormat, LedgerExecutionError}
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
@@ -25,7 +25,7 @@ final case class ViewingWallet private (
       start: BigInt,
   ): ViewingUpdate =
     ViewingUpdate(
-      Block.Height.Genesis,
+      WalletTransaction.Offset.Zero,
       lastKnownHash
         .fold(transactions)(hash => transactions.dropWhile(_.hash =!= hash.hash))
         .map(AppliedTransaction(_, ApplyStage.SucceedEntirely).asRight) ++

@@ -33,8 +33,8 @@ object IndexerSchema {
 
   type ViewingUpdate
   object ViewingUpdate {
-    def blockHeight: SelectionBuilder[ViewingUpdate, BigInt] =
-      SelectionBuilder.Field("blockHeight", Scalar())
+    def index: SelectionBuilder[ViewingUpdate, BigInt] =
+      SelectionBuilder.Field("index", Scalar())
     def update[A](
         onMerkleTreeCollapsedUpdate: SelectionBuilder[MerkleTreeCollapsedUpdate, A],
         onRelevantTransaction: SelectionBuilder[RelevantTransaction, A],
@@ -83,7 +83,7 @@ object IndexerSchema {
   object Subscription {
     def wallet[A](
         sessionId: SessionId,
-        blockHeight: Option[BigInt] = None,
+        index: Option[BigInt] = None,
     )(
         onProgressUpdate: SelectionBuilder[ProgressUpdate, A],
         onViewingUpdate: SelectionBuilder[ViewingUpdate, A],
@@ -101,7 +101,7 @@ object IndexerSchema {
         ),
         arguments = List(
           Argument("sessionId", sessionId, "SessionId")(encoder0),
-          Argument("blockHeight", blockHeight, "BigInt")(encoder1),
+          Argument("index", index, "BigInt")(encoder1),
         ),
       )
   }

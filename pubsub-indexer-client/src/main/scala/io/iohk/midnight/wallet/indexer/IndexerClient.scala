@@ -29,27 +29,27 @@ class IndexerClient[F[_]: Async](
 
   def viewingUpdates(
       viewingKey: String,
-      initialBlockHeight: Option[BigInt],
+      initialIndex: Option[BigInt],
   ): Stream[F, IndexerEvent] =
     Stream
-      .eval(Ref[F].of(initialBlockHeight))
+      .eval(Ref[F].of(initialIndex))
       .flatMap(viewingUpdatesWithRetry(viewingKey, _))
       .interruptWhen(stopSignal.get.attempt)
 
   private def viewingUpdatesWithRetry(
       viewingKey: String,
-      blockHeightRef: Ref[F, Option[BigInt]],
+      indexRef: Ref[F, Option[BigInt]],
   ): Stream[F, IndexerEvent] =
     Stream.resource(webSocketResource(indexerWsUri)).flatMap { ws =>
       Stream
         .bracket(connect(viewingKey, ws))(disconnect(_, ws))
-        .evalMap(sessionId => blockHeightRef.get.map(buildQuery(sessionId, _)))
+        .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _)))
         .flatMap(GraphQLSubscriber.subscribe(ws, _))
         .evalTap {
-          case RawViewingUpdate(height, _) => blockHeightRef.set(height.some)
-          case _                           => Async[F].unit
+          case RawViewingUpdate(index, _) => indexRef.set(index.some)
+          case _                          => Async[F].unit
         }
-        .handleErrorWith(retryOnConnectionError(viewingKey, blockHeightRef))
+        .handleErrorWith(retryOnConnectionError(viewingKey, indexRef))
     }
 
   private def webSocketResource(indexerWsUri: Uri): Resource[F, GraphQLWebSocket] =
@@ -63,36 +63,36 @@ class IndexerClient[F[_]: Async](
 
   private def retryOnConnectionError(
       viewingKey: String,
-      blockHeight: Ref[F, Option[BigInt]],
+      index: Ref[F, Option[BigInt]],
   ): Function[Throwable, Stream[F, IndexerEvent]] = {
     case err: js.JavaScriptException if isConnectionError(err) =>
       Stream
         .eval(tracer.connectionLost(err)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, blockHeight).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
     case WebSocketClosed =>
       Stream
         .eval(tracer.connectionLost(WebSocketClosed)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, blockHeight).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
     case _: TimeoutException =>
       Stream
         .eval(tracer.connectTimeout) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, blockHeight)
+        viewingUpdatesWithRetry(viewingKey, index)
     case err =>
       Stream.raiseError(err)
   }
 
   private def buildQuery(
       sessionId: SessionId,
-      blockHeight: Option[BigInt],
+      index: Option[BigInt],
   ): SelectionBuilder[RootSubscription, RawIndexerUpdate] =
     Subscription.wallet(
       sessionId,
-      blockHeight,
+      index,
     )(
-      onViewingUpdate = (ViewingUpdate.blockHeight ~ ViewingUpdate
+      onViewingUpdate = (ViewingUpdate.index ~ ViewingUpdate
         .update[SingleUpdate](
           MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
           RelevantTransaction
@@ -175,6 +175,6 @@ object IndexerClient {
     final case class MerkleTreeCollapsedUpdate(update: String) extends SingleUpdate
   }
 
-  final case class RawViewingUpdate(blockHeight: BigInt, updates: Seq[SingleUpdate])
+  final case class RawViewingUpdate(index: BigInt, updates: Seq[SingleUpdate])
       extends RawIndexerUpdate
 }

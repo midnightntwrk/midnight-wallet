@@ -5,7 +5,6 @@ import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.zswap.{Transaction as LedgerTransaction, Address as LedgerAddress, *}
 import io.iohk.midnight.wallet.blockchain.data.*
-import io.iohk.midnight.wallet.blockchain.data.Generators.{hashGen, heightGen, instantGen}
 import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.ProvingService
 import org.scalacheck.cats.implicits.*
@@ -194,18 +193,6 @@ object Generators {
       .sample
       .get
 
-  given blockHeaderArbitrary: Arbitrary[Block.Header] =
-    Arbitrary {
-      (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
-    }
-
-  def blockIOGen(txsIO: IO[Seq[Transaction]]): Arbitrary[IO[Block]] =
-    Arbitrary {
-      blockHeaderArbitrary.arbitrary.map { header =>
-        txsIO.map(txs => Block(header, Block.Body(txs)))
-      }
-    }
-
   given transactionsArbitrary(using
       provingService: ProvingService[IO],
       txArbitrary: Arbitrary[IO[Transaction]],
@@ -214,18 +201,4 @@ object Generators {
       Gen.listOfN(2, txArbitrary.arbitrary).map(_.sequence)
     }
   }
-
-  given blocksArbitrary(using
-      provingService: ProvingService[IO],
-      txArbitrary: Arbitrary[IO[Transaction]],
-  ): Arbitrary[IO[List[Block]]] = {
-    Arbitrary {
-      for {
-        txs <- Gen.listOfN(2, txArbitrary.arbitrary)
-        blocks <- Gen.listOfN(2, Generators.blockIOGen(txs.sequence).arbitrary)
-      } yield blocks.sequence
-    }
-  }
-
-  given blocksShrink: Shrink[IO[List[Block]]] = noShrink
 }

@@ -35,8 +35,8 @@ object SyncServiceEvent {
     def showIndexerUpdate(indexerUpdate: IndexerEvent): String =
       indexerUpdate match {
         case RawProgressUpdate(synced, total) => s"Progress: $synced/$total"
-        case RawViewingUpdate(blockHeight, updates) =>
-          s"ViewingUpdate: @$blockHeight ${updates
+        case RawViewingUpdate(offset, updates) =>
+          s"ViewingUpdate: @$offset ${updates
               .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
               .mkString("[", ",", "]")}"
         case ConnectionLost => "ConnectionLost"

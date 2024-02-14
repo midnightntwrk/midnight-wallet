@@ -15,24 +15,9 @@ object Generators {
   def hashGen[T]: Gen[Hash[T]] =
     hexStringGen.map(Hash.apply[T])
 
-  val heightGen: Gen[Block.Height] =
-    Gen.posNum[BigInt].map(Block.Height.apply).collect { case Right(n) => n }
+  val heightGen: Gen[Transaction.Offset] =
+    Gen.posNum[BigInt].map(Transaction.Offset.apply).collect { case Right(n) => n }
 
   val instantGen: Gen[Instant] =
     Gen.long.map(Instant.ofEpochMilli)
-
-  private val blockHeaderGen: Gen[Block.Header] =
-    (hashGen[Block], hashGen[Block], heightGen, instantGen).mapN(Block.Header.apply)
-
-  private val transactionGen: Gen[Transaction] =
-    (hashGen[Transaction], hexStringGen).mapN(Transaction.apply)
-
-  private val blockBodyGen: Gen[Block.Body] =
-    Gen.listOf(transactionGen).map(Block.Body.apply)
-
-  /** These blocks cointain transactions that are not real but only a random hex string wrapped in
-    * Json
-    */
-  val blockGen: Gen[Block] =
-    (blockHeaderGen, blockBodyGen).mapN(Block.apply)
 }
