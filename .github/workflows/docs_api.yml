@@ -1,0 +1,68 @@
+name: Publish updated API documentation
+env:
+  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare .netrc to access other repos
+        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
+      - uses: actions/checkout@v3
+      - uses: nixbuild/nix-quick-install-action@v25
+        with:
+          github_access_token: ${{ secrets.GH_TOKEN }}
+          nix_conf: |
+            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.iog.io
+            accept-flake-config = true
+            netrc-file = ~/.netrc
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v4
+        with:
+          gc-linux: true
+          gc-max-store-size-linux: 8000000000
+          key: cache-ubuntu-${{ hashFiles('**/*') }}
+          restore-keys: |
+            cache-ubuntu-
+      - name: Setup .npmrc
+        run: |
+          echo "
+          //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
+          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
+          " >> ./.npmrc
+      - name: Configure yarn
+        run: |
+          cd typescript
+          yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
+          echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
+      - name: Run yarn install
+        run: nix develop .#typescript --command yarn
+      - name: Generate documentation
+        run: nix develop .#typescript --command yarn run build:docs
+      - name: Commit files and push changes
+        run: |
+          if git diff-index HEAD; then
+            echo "Adding new..."
+            git config --global user.email "midnight-ci@users.noreply.github.com"
+            git config --global user.name "Midnight CI GitHub Action"
+            BRANCH=api-docs/merge-prs/`date +'%Y-%m-%dT%H%M%S'`
+            git checkout -b $BRANCH
+            git add -A typescript/packages/dapp-connector-api/docs --verbose
+            git commit typescript/packages/dapp-connector-api/docs -m "API documentation update" --verbose
+            git push origin $BRANCH
+            sleep 3
+            gh pr create --title 'API documentation update' --body 'Update API documentation  - created by Midnight CI Github Action'
+          else
+            echo "Nothing to update"
+          fi
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN }}
