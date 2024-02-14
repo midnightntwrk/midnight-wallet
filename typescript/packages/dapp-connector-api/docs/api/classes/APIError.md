@@ -1,33 +1,25 @@
-[DApp Connector API Reference - v1.1.0](../README.md) / [Exports](../modules.md) / APIError
+**[@midnight-ntwrk/dapp-connector-api v1.1.0](https://github.com/input-output-hk/midnight-wallet/typescript/dapp-connector-api)** • [Readme](../README.md) \| [API](../globals.md)
+
+***
+
+[@midnight-ntwrk/dapp-connector-api v1.1.0](../README.md) / APIError
 
 # Class: APIError
 
 Whenever there's a function called that returns a promise,
 an error with the shape can be thrown.
 
-## Table of contents
-
-### Constructors
-
-- [constructor](APIError.md#constructor)
-
-### Properties
-
-- [code](APIError.md#code)
-- [reason](APIError.md#reason)
-
 ## Constructors
 
-### constructor
+### new APIError(code, reason)
 
-• **new APIError**(`code`, `reason`): [`APIError`](APIError.md)
+> **new APIError**(`code`, `reason`): [`APIError`](APIError.md)
 
 #### Parameters
 
-| Name | Type |
-| :------ | :------ |
-| `code` | [`ErrorCode`](../modules.md#errorcode) |
-| `reason` | `string` |
+• **code**: [`ErrorCode`](../type-aliases/ErrorCode.md)
+
+• **reason**: `string`
 
 #### Returns
 
@@ -37,14 +29,14 @@ an error with the shape can be thrown.
 
 ### code
 
-• **code**: [`ErrorCode`](../modules.md#errorcode)
+> **code**: [`ErrorCode`](../type-aliases/ErrorCode.md)
 
 The code of the error that's thrown
 
-___
+***
 
 ### reason
 
-• **reason**: `string`
+> **reason**: `string`
 
 The reason the error is thrown

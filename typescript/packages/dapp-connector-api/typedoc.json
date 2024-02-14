@@ -1,6 +1,5 @@
 {
   "titleLink": "https://github.com/input-output-hk/midnight-wallet/typescript/dapp-connector-api",
-  "name": "DApp Connector API Reference",
   "out": "docs/api",
   "readme": "README_PUBLIC.md",
   "$schema": "https://typedoc.org/schema.json",

@@ -1,4 +1,8 @@
-[DApp Connector API Reference - v1.1.0](../README.md) / [Exports](../modules.md) / DAppConnectorAPI
+**[@midnight-ntwrk/dapp-connector-api v1.1.0](https://github.com/input-output-hk/midnight-wallet/typescript/dapp-connector-api)** • [Readme](../README.md) \| [API](../globals.md)
+
+***
+
+[@midnight-ntwrk/dapp-connector-api v1.1.0](../README.md) / DAppConnectorAPI
 
 # Interface: DAppConnectorAPI
 
@@ -6,76 +10,54 @@ DApp Connector API Definition
 
 When errors occur in functions returning a promise, they should be thrown in the form of an [APIError](../classes/APIError.md).
 
-## Table of contents
-
-### Properties
-
-- [apiVersion](DAppConnectorAPI.md#apiversion)
-- [enable](DAppConnectorAPI.md#enable)
-- [isEnabled](DAppConnectorAPI.md#isenabled)
-- [name](DAppConnectorAPI.md#name)
-- [serviceUriConfig](DAppConnectorAPI.md#serviceuriconfig)
-
 ## Properties
 
 ### apiVersion
 
-• **apiVersion**: `string`
+> **apiVersion**: `string`
 
 Semver string. DApps are encouraged to check the compatibility whenever this changes.
 
-___
+***
 
 ### enable
 
-• **enable**: () => `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
-
-#### Type declaration
-
-▸ (): `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
+> **enable**: () => `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
 
 Request access to the wallet, returns the wallet api on approval
 
-##### Returns
+#### Returns
 
 `Promise`\<[`DAppConnectorWalletAPI`](DAppConnectorWalletAPI.md)\>
 
-___
+***
 
 ### isEnabled
 
-• **isEnabled**: () => `Promise`\<`boolean`\>
-
-#### Type declaration
-
-▸ (): `Promise`\<`boolean`\>
+> **isEnabled**: () => `Promise`\<`boolean`\>
 
 Check if the wallet has authorized the dapp
 
-##### Returns
+#### Returns
 
 `Promise`\<`boolean`\>
 
-___
+***
 
 ### name
 
-• **name**: `string`
+> **name**: `string`
 
 The name of the wallet
 
-___
+***
 
 ### serviceUriConfig
 
-• **serviceUriConfig**: () => `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
-
-#### Type declaration
-
-▸ (): `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
+> **serviceUriConfig**: () => `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
 
 Request the services (pubsub, node and proof server) uris.
 
-##### Returns
+#### Returns
 
 `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>

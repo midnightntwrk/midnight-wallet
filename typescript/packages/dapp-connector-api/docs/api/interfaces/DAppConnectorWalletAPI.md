@@ -1,128 +1,102 @@
-[DApp Connector API Reference - v1.1.0](../README.md) / [Exports](../modules.md) / DAppConnectorWalletAPI
+**[@midnight-ntwrk/dapp-connector-api v1.1.0](https://github.com/input-output-hk/midnight-wallet/typescript/dapp-connector-api)** • [Readme](../README.md) \| [API](../globals.md)
+
+***
+
+[@midnight-ntwrk/dapp-connector-api v1.1.0](../README.md) / DAppConnectorWalletAPI
 
 # Interface: DAppConnectorWalletAPI
 
 Shape of the Wallet API in the DApp Connector
 
-## Table of contents
-
-### Properties
-
-- [balanceAndProveTransaction](DAppConnectorWalletAPI.md#balanceandprovetransaction)
-- [balanceTransaction](DAppConnectorWalletAPI.md#balancetransaction)
-- [proveTransaction](DAppConnectorWalletAPI.md#provetransaction)
-- [state](DAppConnectorWalletAPI.md#state)
-- [submitTransaction](DAppConnectorWalletAPI.md#submittransaction)
-
 ## Properties
 
 ### balanceAndProveTransaction
 
-• **balanceAndProveTransaction**: (`tx`: `Transaction`, `newCoins`: `CoinInfo`[]) => `Promise`\<`Transaction`\>
-
-#### Type declaration
-
-▸ (`tx`, `newCoins`): `Promise`\<`Transaction`\>
+> **balanceAndProveTransaction**: (`tx`, `newCoins`) => `Promise`\<`Transaction`\>
 
 It will try to balance given transaction and prove it
 
-##### Parameters
+#### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `tx` | `Transaction` | Transaction to balance |
-| `newCoins` | `CoinInfo`[] | New coins created by transaction, for which wallet will watch for |
+• **tx**: `Transaction`
 
-##### Returns
+Transaction to balance
+
+• **newCoins**: `CoinInfo`[]
+
+New coins created by transaction, for which wallet will watch for
+
+#### Returns
 
 `Promise`\<`Transaction`\>
 
 Proved transaction or error
 
-___
+***
 
 ### balanceTransaction
 
-• **balanceTransaction**: (`tx`: `Transaction`, `newCoins`: `CoinInfo`[]) => `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
+> **balanceTransaction**: (`tx`, `newCoins`) => `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
 
-#### Type declaration
+#### Parameters
 
-▸ (`tx`, `newCoins`): `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
+• **tx**: `Transaction`
 
-##### Parameters
+• **newCoins**: `CoinInfo`[]
 
-| Name | Type |
-| :------ | :------ |
-| `tx` | `Transaction` |
-| `newCoins` | `CoinInfo`[] |
-
-##### Returns
+#### Returns
 
 `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
 
-**`Deprecated`**
+#### Deprecated
 
 Since version 1.1 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
 
-___
+***
 
 ### proveTransaction
 
-• **proveTransaction**: (`recipe`: `ProvingRecipe`) => `Promise`\<`Transaction`\>
+> **proveTransaction**: (`recipe`) => `Promise`\<`Transaction`\>
 
-#### Type declaration
+#### Parameters
 
-▸ (`recipe`): `Promise`\<`Transaction`\>
+• **recipe**: `ProvingRecipe`
 
-##### Parameters
-
-| Name | Type |
-| :------ | :------ |
-| `recipe` | `ProvingRecipe` |
-
-##### Returns
+#### Returns
 
 `Promise`\<`Transaction`\>
 
-**`Deprecated`**
+#### Deprecated
 
 Since version 1.1.0 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
 
-___
+***
 
 ### state
 
-• **state**: () => `Promise`\<[`DAppConnectorWalletState`](DAppConnectorWalletState.md)\>
-
-#### Type declaration
-
-▸ (): `Promise`\<[`DAppConnectorWalletState`](DAppConnectorWalletState.md)\>
+> **state**: () => `Promise`\<[`DAppConnectorWalletState`](DAppConnectorWalletState.md)\>
 
 Returns a promise with the exposed wallet state
 
-##### Returns
+#### Returns
 
 `Promise`\<[`DAppConnectorWalletState`](DAppConnectorWalletState.md)\>
 
-___
+***
 
 ### submitTransaction
 
-• **submitTransaction**: (`tx`: `Transaction`) => `Promise`\<`string`\>
-
-#### Type declaration
-
-▸ (`tx`): `Promise`\<`string`\>
+> **submitTransaction**: (`tx`) => `Promise`\<`string`\>
 
 It will submit given transaction to the node
 
-##### Parameters
+#### Parameters
 
-| Name | Type | Description |
-| :------ | :------ | :------ |
-| `tx` | `Transaction` | Transaction to submit |
+• **tx**: `Transaction`
 
-##### Returns
+Transaction to submit
+
+#### Returns
 
 `Promise`\<`string`\>
 
