@@ -1089,6 +1089,7 @@ __metadata:
     eslint-plugin-prettier: ^4.2.1
     eslint-plugin-promise: ^6.1.1
     prettier: ^2.7.1
+    ts-custom-error: ^3.3.1
     tslib: ^2.5.0
     typedoc: ^0.25.3
     typedoc-plugin-markdown: ^4.0.0-next.53
@@ -10011,7 +10012,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ts-custom-error@npm:^3.2.0":
+"ts-custom-error@npm:^3.2.0, ts-custom-error@npm:^3.3.1":
   version: 3.3.1
   resolution: "ts-custom-error@npm:3.3.1"
   checksum: 50a1e825fced68d70049bd8d282379a635e43aa023a370fa8e736b12a6edba7f18a2d731fa194ac35303a8b625be56e121bdb31d8a0318250d1a8b277059fce3

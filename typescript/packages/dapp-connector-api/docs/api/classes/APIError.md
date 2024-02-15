@@ -9,6 +9,10 @@
 Whenever there's a function called that returns a promise,
 an error with the shape can be thrown.
 
+## Extends
+
+- `CustomError`
+
 ## Constructors
 
 ### new APIError(code, reason)
@@ -24,6 +28,10 @@ an error with the shape can be thrown.
 #### Returns
 
 [`APIError`](APIError.md)
+
+#### Overrides
+
+`CustomError.constructor`
 
 ## Properties
 

@@ -1,3 +1,5 @@
+import { CustomError } from 'ts-custom-error';
+
 /**
  * The following error codes can be thrown by the dapp connector.
  */
@@ -19,13 +21,15 @@ export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
  * Whenever there's a function called that returns a promise,
  * an error with the shape can be thrown.
  */
-export class APIError {
+export class APIError extends CustomError {
   /** The code of the error that's thrown */
   code: ErrorCode;
   /** The reason the error is thrown */
   reason: string;
 
   constructor(code: ErrorCode, reason: string) {
+    super();
+
     this.code = code;
     this.reason = reason;
   }
