@@ -100,6 +100,7 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + id);
 
       const pendingState = await waitForPending(walletFunded);
+      logger.info(pendingState);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
       expect(pendingState.pendingCoins.length).toBe(1);
@@ -107,6 +108,7 @@ describe('Token transfer', () => {
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
       const finalState = await waitForFinalizedBalance(walletFunded);
+      logger.info(finalState);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(finalState.availableCoins.length).toBe(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -115,6 +117,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
 
       const finalState2 = await waitForFinalizedBalance(wallet2);
+      logger.info(finalState2);
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
       expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
       expect(finalState2.pendingCoins.length).toBe(0);

@@ -11,27 +11,27 @@ services:
     ports:
       - '0:6300'
   node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:27d79e8d2618afa74db5c80278956af56f1a0232
+    image: ghcr.io/midnight-ntwrk/midnight-node:6dcccbc4fff37d83f6acc38103179e7b2d5fca11
     container_name: node_$TESTCONTAINERS_UID
     environment:
       - RUN_DEV_NET=TRUE
     ports:
-      - '0:9933'
       - '0:9944'
     healthcheck:
-      test: [ "CMD", "curl", "-f", "http://localhost:9933/health" ]
+      test: [ "CMD", "curl", "-f", "http://localhost:9944/health" ]
       interval: 2s
       timeout: 5s
       retries: 5
       start_period: 40s
   indexer:
-    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:0.2.20
+    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.0.3
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - '0:8088'
-    command: ["midnight-pubsub-indexer", "-Devents-source.node-host=node"]
+    command: ["midnight-pubsub-indexer", "-Devents-source.node-http-url=http://node:9944", "-Devents-source.node-ws-url=ws://node:9944"]
     environment:
-      - SUBSTRATE_NODE_URL=node
+      LEDGER_NETWORK_ID: 'Undeployed'
+      OTEL_JAVAAGENT_ENABLED: 'false'
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8088/health" ]
       interval: 3s
