@@ -56,16 +56,12 @@ class IndexerClient[F[_]: Async](
     Resource.make(connectWebSocket(indexerUri))(ws => Sync[F].delay(ws.disconnectNow()))
 
   private def connectWebSocket(indexerUri: Uri): F[GraphQLWebSocket] = {
-    val host = indexerUri.host.getOrElse("localhost")
-    val port = indexerUri.port.getOrElse(8088)
-    val scheme = indexerUri.scheme.getOrElse("wss")
+    val host = indexerUri.host.getOrElse("")
+    val scheme = indexerUri.scheme.fold("")(scheme => s"$scheme://")
+    val port = indexerUri.port.fold("")(port => s":$port")
+    val wsUri = s"$scheme$host$port/api/v1/graphql/ws"
     Sync[F]
-      .delay(
-        WebSocket
-          .url(s"$scheme://$host:$port/api/v1/graphql/ws", "graphql-ws")
-          .graphql
-          .build(managed = false),
-      )
+      .delay(WebSocket.url(wsUri, "graphql-ws").graphql.build(managed = false))
       .flatTap(ws => Sync[F].delay(ws.reconnectNow()))
       .flatTap(ws => Sync[F].delay(ws.init()))
   }
