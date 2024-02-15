@@ -23,7 +23,7 @@ import scala.util.Try
 import sttp.model.Uri
 
 class IndexerClient[F[_]: Async](
-    indexerWsUri: Uri,
+    indexerUri: Uri,
     stopSignal: Deferred[F, Unit],
 )(using tracer: IndexerClientTracer[F]) {
 
@@ -40,7 +40,7 @@ class IndexerClient[F[_]: Async](
       viewingKey: String,
       indexRef: Ref[F, Option[BigInt]],
   ): Stream[F, IndexerEvent] =
-    Stream.resource(webSocketResource(indexerWsUri)).flatMap { ws =>
+    Stream.resource(webSocketResource(indexerUri)).flatMap { ws =>
       Stream
         .bracket(connect(viewingKey, ws))(disconnect(_, ws))
         .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _)))
@@ -52,14 +52,23 @@ class IndexerClient[F[_]: Async](
         .handleErrorWith(retryOnConnectionError(viewingKey, indexRef))
     }
 
-  private def webSocketResource(indexerWsUri: Uri): Resource[F, GraphQLWebSocket] =
-    Resource.make(connectWebSocket(indexerWsUri))(ws => Sync[F].delay(ws.disconnectNow()))
+  private def webSocketResource(indexerUri: Uri): Resource[F, GraphQLWebSocket] =
+    Resource.make(connectWebSocket(indexerUri))(ws => Sync[F].delay(ws.disconnectNow()))
 
-  private def connectWebSocket(indexerWsUri: Uri): F[GraphQLWebSocket] =
+  private def connectWebSocket(indexerUri: Uri): F[GraphQLWebSocket] = {
+    val host = indexerUri.host.getOrElse("localhost")
+    val port = indexerUri.port.getOrElse(8088)
+    val scheme = indexerUri.scheme.getOrElse("wss")
     Sync[F]
-      .delay(WebSocket.url(indexerWsUri.toString, "graphql-ws").graphql.build(managed = false))
+      .delay(
+        WebSocket
+          .url(s"$scheme://$host:$port/api/v1/graphql/ws", "graphql-ws")
+          .graphql
+          .build(managed = false),
+      )
       .flatTap(ws => Sync[F].delay(ws.reconnectNow()))
       .flatTap(ws => Sync[F].delay(ws.init()))
+  }
 
   private def retryOnConnectionError(
       viewingKey: String,
