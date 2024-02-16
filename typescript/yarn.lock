@@ -1092,7 +1092,7 @@ __metadata:
     ts-custom-error: ^3.3.1
     tslib: ^2.5.0
     typedoc: ^0.25.3
-    typedoc-plugin-markdown: ^4.0.0-next.53
+    typedoc-plugin-markdown: 4.0.0-next.53
     typescript: ~4.8.4
   languageName: unknown
   linkType: soft
@@ -10301,7 +10301,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typedoc-plugin-markdown@npm:^4.0.0-next.53":
+"typedoc-plugin-markdown@npm:4.0.0-next.53":
   version: 4.0.0-next.53
   resolution: "typedoc-plugin-markdown@npm:4.0.0-next.53"
   peerDependencies:
