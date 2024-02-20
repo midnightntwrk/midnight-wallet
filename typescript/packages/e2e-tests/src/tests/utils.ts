@@ -35,13 +35,13 @@ export const waitForSync = (wallet: Wallet) =>
       tap((state) => {
         const scanned = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total.toString() ?? 'unknown number';
-        logger.info(`Wallet scanned ${scanned} blocks out of ${total}`);
+        logger.info(`Wallet scanned ${scanned} indices out of ${total}`);
       }),
       filter((state) => {
         // Let's allow progress only if wallet is close enough
         const synced = state.syncProgress?.synced ?? 0n;
-        const total = state.syncProgress?.total ?? 1_000n;
-        return total - synced < 20n;
+        const total = state.syncProgress?.total ?? 200n;
+        return total - synced < 1n;
       }),
     ),
   );
@@ -78,4 +78,4 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'devnet' | 'qanet' | 'topaz' | 'jade' | 'local';
+export type MidnightDeployment = 'topaz' | 'jade' | 'local';

@@ -72,7 +72,7 @@ describe('Token transfer', () => {
   });
 
   test(
-    'Is working for valid transfer',
+    'Is working for valid transfer @healthcheck',
     async () => {
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()];

@@ -23,10 +23,8 @@ on:
           type: choice
           description: Midnight deployment to use
           required: true
-          default: 'qanet'
+          default: 'topaz'
           options:
-            - devnet
-            - qanet
             - local
             - topaz
             - jade
@@ -53,9 +51,9 @@ on:
                 default: 'devnet'
             deployment:
                 type: string
-                description: Midnight deployment to use (devnet/qanet/topaz/jade/local)
+                description: Midnight deployment to use (topaz/jade/local)
                 required: true
-                default: 'devnet'
+                default: 'topaz'
             seed:
                 type: string
                 description: Seed of a funded wallet

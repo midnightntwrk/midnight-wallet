@@ -7,6 +7,7 @@
   "testPathIgnorePatterns": ["node_modules"],
   "testMatch": ["<rootDir>/**/*.test.ts"],
   "extensionsToTreatAsEsm": [".ts"],
+  "maxWorkers": 1,
   "transform": {
     "^.+\\.tsx?$": [
       "ts-jest",

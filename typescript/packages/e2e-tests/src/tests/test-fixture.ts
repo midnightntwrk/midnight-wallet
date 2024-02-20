@@ -93,54 +93,36 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'https://pubsub.devnet-midnight.network:443/api/v0/graphql';
-      }
-      case 'qanet': {
-        return 'https://pubsub-qa.devnet-midnight.network:443/api/v0/graphql';
-      }
       case 'topaz': {
-        return 'https://pubsub.topaz.dev.platform.midnight.network/api/v0/graphql';
+        return 'https://pubsub.topaz.dev.platform.midnight.network:443';
       }
       case 'jade': {
-        return 'https://pubsub.jade.midnight.network/api/v0/graphql';
+        return 'https://pubsub.jade.midnight.network:443';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
-        return `http://localhost:${indexerPort}/api/v0/graphql`;
+        return `http://localhost:${indexerPort}`;
       }
     }
   }
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'wss://pubsub.devnet-midnight.network:443/api/v0/graphql/ws';
-      }
-      case 'qanet': {
-        return 'wss://pubsub-qa.devnet-midnight.network:443/api/v0/graphql/ws';
-      }
       case 'topaz': {
-        return 'wss://pubsub.topaz.dev.platform.midnight.network/api/v0/graphql/ws';
+        return 'wss://pubsub.topaz.dev.platform.midnight.network:443';
       }
       case 'jade': {
-        return 'wss://pubsub.jade.midnight.network/api/v0/graphql/ws';
+        return 'wss://pubsub.jade.midnight.network:443';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
-        return `ws://localhost:${indexerPort}/api/v0/graphql/ws`;
+        return `ws://localhost:${indexerPort}`;
       }
     }
   }
 
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'https://alb-node-peer-1.devnet-midnight.network:9944';
-      }
-      case 'qanet': {
-        return 'https://alb-node-peer-1-qa.devnet-midnight.network:9944';
-      }
       case 'topaz': {
         return 'http://node-01.topaz.dev.platform.midnight.network:9944';
       }

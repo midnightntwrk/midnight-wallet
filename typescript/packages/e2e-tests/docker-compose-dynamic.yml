@@ -11,7 +11,7 @@ services:
     ports:
       - '0:6300'
   node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:6dcccbc4fff37d83f6acc38103179e7b2d5fca11
+    image: ghcr.io/midnight-ntwrk/midnight-node:0c2efadf915b6b0dcd0d362400eb9aa3a3f4253b
     container_name: node_$TESTCONTAINERS_UID
     environment:
       - RUN_DEV_NET=TRUE
@@ -24,7 +24,7 @@ services:
       retries: 5
       start_period: 40s
   indexer:
-    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.0.3
+    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.0.5
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - '0:8088'
