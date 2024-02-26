@@ -2,6 +2,7 @@ name: CD Maven (JVM)
 
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
   GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:

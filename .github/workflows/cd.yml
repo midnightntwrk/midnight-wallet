@@ -4,6 +4,7 @@ env:
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
 
 on:
   push:
