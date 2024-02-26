@@ -1,5 +1,5 @@
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
-import { type Wallet } from '@midnight-ntwrk/wallet-api';
+import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import pinoPretty from 'pino-pretty';
@@ -75,6 +75,11 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
       }),
     ),
   );
+
+export const walletStateTrimmed = (state: WalletState) => {
+  const { transactionHistory, coins, availableCoins, ...rest } = state;
+  return rest;
+};
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 

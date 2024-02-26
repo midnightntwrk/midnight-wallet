@@ -9,7 +9,7 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync } from './utils';
+import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { webcrypto } from 'node:crypto';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
@@ -82,10 +82,12 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance}`);
+      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
 
       const initialState2 = await firstValueFrom(wallet2.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 2: ${initialBalance2}`);
+      logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
 
       const outputsToCreate = [
         {
@@ -100,7 +102,8 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + id);
 
       const pendingState = await waitForPending(walletFunded);
-      logger.info(pendingState);
+      logger.info(walletStateTrimmed(pendingState));
+      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
       expect(pendingState.pendingCoins.length).toBe(1);
@@ -108,7 +111,8 @@ describe('Token transfer', () => {
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
       const finalState = await waitForFinalizedBalance(walletFunded);
-      logger.info(finalState);
+      logger.info(walletStateTrimmed(finalState));
+      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(finalState.availableCoins.length).toBe(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -117,7 +121,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
 
       const finalState2 = await waitForFinalizedBalance(wallet2);
-      logger.info(finalState2);
+      logger.info(walletStateTrimmed(finalState2));
+      logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
       expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
       expect(finalState2.pendingCoins.length).toBe(0);

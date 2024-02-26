@@ -26,7 +26,12 @@ export function useTestContainersFixture() {
         composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
-          .withWaitStrategy(`indexer_${uid}`, Wait.forLogMessage(/http4s v[\d.]+ on blaze v[\d.]+ started at /))
+          .withWaitStrategy(
+            `indexer_${uid}`,
+            Wait.forLogMessage(
+              "Block 'e1a0555cb9d008f56f2984498fd66aca4e70cad3e836aa6ad1fe48deda2d4097' was stored at height 0",
+            ),
+          )
           .withEnvironment({ TESTCONTAINERS_UID: uid })
           .up();
         break;

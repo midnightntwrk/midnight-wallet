@@ -9,7 +9,7 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync } from './utils';
+import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { webcrypto } from 'node:crypto';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
@@ -80,6 +80,8 @@ describe('Token transfer', () => {
         logger.info(`Waiting to receive tokens...`);
         await waitForSync(walletFunded);
       }
+      logger.info(`Wallet 1: ${initialBalance}`);
+      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
       const balance = 25000000000000000n;
 
       const initialState2 = await firstValueFrom(wallet2.state());
@@ -87,6 +89,8 @@ describe('Token transfer', () => {
       if (initialBalance2 === undefined || initialBalance2 === 0n) {
         logger.info(`Waiting to receive tokens...`);
       }
+      logger.info(`Wallet 2: ${initialBalance2}`);
+      logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
 
       const outputsToCreate = [
         {
@@ -101,6 +105,8 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + id);
 
       const pendingState = await waitForPending(walletFunded);
+      logger.info(walletStateTrimmed(pendingState));
+      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()]).toBe(20000000000000000n);
       expect(pendingState.availableCoins.length).toBe(4);
       expect(pendingState.pendingCoins.length).toBe(1);
@@ -108,6 +114,8 @@ describe('Token transfer', () => {
       expect(pendingState.transactionHistory.length).toBe(1);
 
       const finalState = await waitForFinalizedBalance(walletFunded);
+      logger.info(walletStateTrimmed(finalState));
+      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()]).toBeLessThan(balance - outputValue);
       expect(finalState.availableCoins.length).toBe(5);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -115,6 +123,9 @@ describe('Token transfer', () => {
       expect(finalState.transactionHistory.length).toBe(2);
 
       const finalState2 = await waitForFinalizedBalance(wallet2);
+      logger.info(walletStateTrimmed(finalState2));
+      logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
+      logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
       expect(finalState2.balances[nativeToken()]).toBe(outputValue);
       expect(finalState2.availableCoins.length).toBe(1);
       expect(finalState2.pendingCoins.length).toBe(0);

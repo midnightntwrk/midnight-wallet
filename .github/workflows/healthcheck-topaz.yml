@@ -12,7 +12,7 @@ jobs:
     with:
       network: devnet
       deployment: topaz
-      seed: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+      seed: b0dcbe35cba84c11863e973e75c22fc482812b76da09a47e16fabcf534ec6709
       seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
       modifier: '-t @healthcheck'
     secrets: inherit
