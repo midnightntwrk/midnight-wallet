@@ -46,14 +46,14 @@ object WalletSyncEvent {
       }
 
     implicit val syncHandlingTransactionContext: AsStringLogContext[SyncHandlingUpdate] =
-      AsStringLogContext.fromMap(evt => Map("update" -> showIndexerUpdate(evt.update)))
+      AsStringLogContext.fromEvent(evt => "update" -> showIndexerUpdate(evt.update))
 
     implicit val applyUpdateSuccessContext: AsStringLogContext[ApplyUpdateSuccess] =
-      AsStringLogContext.fromMap(evt => Map("update" -> showIndexerUpdate(evt.update)))
+      AsStringLogContext.fromEvent(evt => "update" -> showIndexerUpdate(evt.update))
 
     // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
     implicit val applyUpdateErrorContext: AsStringLogContext[ApplyUpdateError] =
-      AsStringLogContext.fromMap(evt => Map("update" -> showIndexerUpdate(evt.update)))
+      AsStringLogContext.fromEvent(evt => "update" -> showIndexerUpdate(evt.update))
     // $COVERAGE-ON$
   }
 

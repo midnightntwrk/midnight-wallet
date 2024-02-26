@@ -15,8 +15,6 @@ lazy val warts = Warts.allBut(
   Wart.Recursion,
   Wart.Serializable,
 )
-lazy val nexus = "https://nexus.p42.at/repository"
-lazy val repoUrl = taskKey[MavenRepository]("Repository for publishing")
 
 val scala33 = "3.3.0"
 val catsVersion = "2.9.0"
@@ -24,19 +22,21 @@ val catsEffectVersion = "3.5.0"
 val circeVersion = "0.14.6"
 val fs2Version = "3.7.0"
 val log4CatsVersion = "2.4.0"
-val midnightTracingVersion = "1.3.0"
+val midnightTracingVersion = "1.4.2"
 val sttpClientVersion = "3.9.0"
 val munitCatsEffectVersion = "2.0.0-M3"
 
-lazy val nexusRepo =
-  resolvers +=
-    "Sonatype Nexus Repository Manager" at "https://nexus.p42.at/repository/maven-releases"
-lazy val nexusCredentials =
+val ghPackagesRealm = "GitHub Package Registry"
+val ghPackagesHost = "maven.pkg.github.com"
+val ghPackagesUrl = s"https://$ghPackagesHost/midnight-ntwrk/artifacts"
+lazy val ghPackagesResolver =
+  resolvers += ghPackagesRealm at ghPackagesUrl
+lazy val ghPackagesCredentials =
   credentials += Credentials(
-    "Sonatype Nexus Repository Manager",
-    "nexus.p42.at",
-    sys.env("MIDNIGHT_REPO_USER"),
-    sys.env("MIDNIGHT_REPO_PASS"),
+    ghPackagesRealm,
+    ghPackagesHost,
+    sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
+    sys.env.getOrElse("GH_TOKEN", ""),
   )
 
 lazy val commonSettings = Seq(
@@ -49,9 +49,7 @@ lazy val commonSettings = Seq(
   },
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
 
-  // Private Nexus repository config
-  nexusRepo,
-  nexusCredentials,
+  ghPackagesResolver,
 
   // Test dependencies
   libraryDependencies ++= Seq(
@@ -77,19 +75,6 @@ lazy val useNodeModuleResolution = {
       .withArgs(List("--experimental-specifier-resolution=node")),
   )
 }
-
-val ghPackagesRealm = "GitHub Package Registry"
-val ghPackagesHost = "maven.pkg.github.com"
-val ghPackagesUrl = s"https://$ghPackagesHost/input-output-hk/midnight-wallet"
-lazy val ghPackagesResolver =
-  resolvers += ghPackagesRealm at ghPackagesUrl
-lazy val ghPackagesCredentials =
-  credentials += Credentials(
-    ghPackagesRealm,
-    ghPackagesHost,
-    sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
-    sys.env.getOrElse("MIDNIGHT_PUBLISH_TOKEN", ""),
-  )
 
 lazy val commonPublishSettings = Seq(
   ghPackagesResolver,

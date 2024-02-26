@@ -35,27 +35,15 @@ object JsWalletEvent {
   object DefaultInstances {
 
     implicit val jsWalletBuildRequestedContext: AsStringLogContext[JsWalletBuildRequested] =
-      AsStringLogContext.fromMap[JsWalletBuildRequested](evt =>
-        Map(
-          "initialState" -> evt.rawConfig.initialState.show,
-          "minLogLevel" -> evt.rawConfig.minLogLevel.show,
-        ),
+      AsStringLogContext.fromEvent(
+        evt => "initialState" -> evt.rawConfig.initialState.show,
+        evt => "minLogLevel" -> evt.rawConfig.minLogLevel.show,
       )
 
     implicit val configConstructedContext: AsStringLogContext[ConfigConstructed] =
-      AsStringLogContext.fromMap[ConfigConstructed](evt =>
-        Map(
-          "config" -> evt.config.show,
-        ),
-      )
+      AsStringLogContext.fromEvent(evt => "config" -> evt.config.show)
 
     implicit val invalidConfigContext: AsStringLogContext[InvalidConfig] =
-      AsStringLogContext.fromMap[InvalidConfig](evt =>
-        Map(
-          "details" -> evt.details,
-        ),
-      )
-
+      AsStringLogContext.fromEvent(evt => "details" -> evt.details)
   }
-
 }

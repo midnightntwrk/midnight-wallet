@@ -2,14 +2,12 @@ name: CD Maven (JVM)
 
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }}
-  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  MIDNIGHT_PUBLISH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
-  MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
+  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
   contents: read

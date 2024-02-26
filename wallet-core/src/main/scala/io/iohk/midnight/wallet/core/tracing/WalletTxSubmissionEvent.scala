@@ -45,24 +45,24 @@ object WalletTxSubmissionEvent {
 
   object DefaultInstances {
     implicit val txSubmissionStartContext: AsStringLogContext[TransactionSubmissionStart] =
-      AsStringLogContext.fromMap(evt => Map("transaction_identifier" -> evt.txId.txId))
+      AsStringLogContext.fromEvent(evt => "transaction_identifier" -> evt.txId.txId)
     implicit val txSubmissionSuccessContext: AsStringLogContext[TransactionSubmissionSuccess] =
-      AsStringLogContext.fromMap(evt =>
-        Map(
-          "submitted_transaction_identifier" -> evt.submittedTxIdentifier.txId,
-        ),
+      AsStringLogContext.fromEvent(evt =>
+        "submitted_transaction_identifier" -> evt.submittedTxIdentifier.txId,
       )
     implicit val txSubmissionErrorContext: AsStringLogContext[TransactionSubmissionError] =
-      AsStringLogContext.fromMap(evt => Map("transaction_identifier" -> evt.txId.txId))
+      AsStringLogContext.fromEvent(evt => "transaction_identifier" -> evt.txId.txId)
     implicit val txValidationSuccessContext: AsStringLogContext[TxValidationSuccess] =
-      AsStringLogContext.fromMap(evt => Map("transaction_identifier" -> evt.txId.txId))
+      AsStringLogContext.fromEvent(evt => "transaction_identifier" -> evt.txId.txId)
     implicit val txValidationErrorContext: AsStringLogContext[TxValidationError] =
-      AsStringLogContext.fromMap(evt =>
-        Map("transaction_identifier" -> evt.txId.txId, "error" -> evt.error.getMessage),
+      AsStringLogContext.fromEvent(
+        evt => "transaction_identifier" -> evt.txId.txId,
+        evt => "error" -> evt.error.getMessage,
       )
     implicit val revertTransactionErrorContext: AsStringLogContext[RevertTransactionError] =
-      AsStringLogContext.fromMap(evt =>
-        Map("transaction_identifier" -> evt.txId.txId, "error" -> evt.error.getMessage),
+      AsStringLogContext.fromEvent(
+        evt => "transaction_identifier" -> evt.txId.txId,
+        evt => "error" -> evt.error.getMessage,
       )
   }
 

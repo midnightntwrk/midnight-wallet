@@ -29,7 +29,7 @@ object SyncServiceEvent {
     // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
     @SuppressWarnings(Array("org.wartremover.warts.ToString"))
     implicit val syncFailedContext: AsStringLogContext[SyncFailed] =
-      AsStringLogContext.fromMap[SyncFailed](evt => Map("error" -> evt.error.getMessage))
+      AsStringLogContext.fromEvent(evt => "error" -> evt.error.getMessage)
     // $COVERAGE-ON$
 
     def showIndexerUpdate(indexerUpdate: IndexerEvent): String =
@@ -43,10 +43,6 @@ object SyncServiceEvent {
       }
 
     implicit val indexerUpdateReceivedContext: AsStringLogContext[IndexerUpdateReceived] =
-      AsStringLogContext.fromMap[IndexerUpdateReceived](evt =>
-        Map(
-          "update" -> showIndexerUpdate(evt.update),
-        ),
-      )
+      AsStringLogContext.fromEvent(evt => "update" -> showIndexerUpdate(evt.update))
   }
 }

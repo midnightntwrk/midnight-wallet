@@ -33,9 +33,9 @@ object WalletBuilderEvent {
   object DefaultInstances {
 
     implicit val buildRequestedContext: AsStringLogContext[BuildRequested] =
-      AsStringLogContext.fromMap[BuildRequested](evt => Map("config" -> evt.config.show))
+      AsStringLogContext.fromEvent(evt => "config" -> evt.config.show)
     implicit val walletBuildErrorContext: AsStringLogContext[WalletBuildError] =
-      AsStringLogContext.fromMap[WalletBuildError](evt => Map("reason" -> evt.reason))
+      AsStringLogContext.fromEvent(evt => "reason" -> evt.reason)
 
   }
 

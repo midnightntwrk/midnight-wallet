@@ -16,11 +16,9 @@ object WalletTxServiceEvent {
 
   object DefaultInstances {
     implicit val unprovenTxRevertedContext: AsStringLogContext[UnprovenTransactionReverted] =
-      AsStringLogContext.fromMap(evt =>
-        Map(
-          "transaction_identifier" -> evt.txId.fold("empty")(_.txId),
-          "cause" -> evt.error.getMessage,
-        ),
+      AsStringLogContext.fromEvent(
+        evt => "transaction_identifier" -> evt.txId.fold("empty")(_.txId),
+        evt => "cause" -> evt.error.getMessage,
       )
   }
 }

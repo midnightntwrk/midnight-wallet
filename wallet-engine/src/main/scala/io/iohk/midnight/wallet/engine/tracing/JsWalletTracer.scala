@@ -33,7 +33,7 @@ object JsWalletTracer {
   }
 
   implicit val jsWalletBuildRequestedAsStructuredLog: AsStructuredLog[JsWalletBuildRequested] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = JsWalletBuildRequested.id,
       component = Component,
       level = LogLevel.Debug,
@@ -42,7 +42,7 @@ object JsWalletTracer {
     )
 
   implicit val ConfigConstructedAsStructuredLog: AsStructuredLog[ConfigConstructed] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = ConfigConstructed.id,
       component = Component,
       level = LogLevel.Debug,
@@ -51,7 +51,7 @@ object JsWalletTracer {
     )
 
   implicit val InvalidConfigAsStructuredLog: AsStructuredLog[InvalidConfig] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = InvalidConfig.id,
       component = Component,
       level = LogLevel.Debug,

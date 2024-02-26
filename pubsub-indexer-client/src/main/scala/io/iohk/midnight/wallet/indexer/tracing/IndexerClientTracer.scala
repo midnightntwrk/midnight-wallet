@@ -26,7 +26,7 @@ object IndexerClientTracer {
   }
 
   implicit val connectionLostAsStructuredLog: AsStructuredLog[ConnectionLost] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = ConnectionLost.id,
       component = Component,
       level = LogLevel.Warn,
@@ -35,7 +35,7 @@ object IndexerClientTracer {
     )
 
   implicit val connectTimeoutAsStructuredLog: AsStructuredLog[ConnectTimeout.type] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = ConnectTimeout.id,
       component = Component,
       level = LogLevel.Warn,

@@ -34,14 +34,13 @@ object BalanceTransactionEvent {
   object DefaultInstances {
 
     implicit val balanceTxStartContext: AsStringLogContext[BalanceTransactionStart] =
-      AsStringLogContext.fromMap[BalanceTransactionStart](evt => Map("transaction" -> evt.tx.show))
+      AsStringLogContext.fromEvent(evt => "transaction" -> evt.tx.show)
     implicit val balanceTxSuccessContext: AsStringLogContext[BalanceTransactionSuccess] =
-      AsStringLogContext.fromMap[BalanceTransactionSuccess](evt =>
-        Map("updated_transaction" -> evt.tx.show),
-      )
+      AsStringLogContext.fromEvent(evt => "updated_transaction" -> evt.tx.show)
     implicit val balanceTxErrorContext: AsStringLogContext[BalanceTransactionError] =
-      AsStringLogContext.fromMap[BalanceTransactionError](evt =>
-        Map("transaction_hash" -> evt.tx.hash.show, "error" -> evt.error.message),
+      AsStringLogContext.fromEvent(
+        evt => "transaction_hash" -> evt.tx.hash.show,
+        evt => "error" -> evt.error.message,
       )
 
   }

@@ -1,12 +1,11 @@
 name: CI
 
 env:
-  MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
-  MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
   MIDNIGHT_GH_USER: ${{ github.actor }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   pull_request:

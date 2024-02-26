@@ -32,7 +32,7 @@ object SyncServiceTracer {
   }
 
   implicit val syncFailedAsStructuredLog: AsStructuredLog[SyncFailed] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = SyncFailed.id,
       component = Component,
       level = LogLevel.Debug,
@@ -41,7 +41,7 @@ object SyncServiceTracer {
     )
 
   implicit val viewingUpdateReceivedAsStructuredLog: AsStructuredLog[IndexerUpdateReceived] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = IndexerUpdateReceived.id,
       component = Component,
       level = LogLevel.Debug,

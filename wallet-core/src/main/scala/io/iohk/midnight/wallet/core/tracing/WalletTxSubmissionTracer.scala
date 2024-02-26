@@ -52,7 +52,7 @@ object WalletTxSubmissionTracer {
   }
 
   implicit val submitTxStartAsStructuredLog: AsStructuredLog[TransactionSubmissionStart] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = TransactionSubmissionStart.id,
       component = Component,
       level = LogLevel.Debug,
@@ -61,7 +61,7 @@ object WalletTxSubmissionTracer {
     )
 
   implicit val submitTxSuccessAsStructuredLog: AsStructuredLog[TransactionSubmissionSuccess] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = TransactionSubmissionSuccess.id,
       component = Component,
       level = LogLevel.Debug,
@@ -71,7 +71,7 @@ object WalletTxSubmissionTracer {
     )
 
   implicit val submitTxErrorAsStructuredLog: AsStructuredLog[TransactionSubmissionError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = TransactionSubmissionError.id,
       component = Component,
       level = LogLevel.Warn,
@@ -80,7 +80,7 @@ object WalletTxSubmissionTracer {
     )
 
   implicit val txValidationSuccessAsStructuredLog: AsStructuredLog[TxValidationSuccess] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = TxValidationSuccess.id,
       component = Component,
       level = LogLevel.Debug,
@@ -89,7 +89,7 @@ object WalletTxSubmissionTracer {
     )
 
   implicit val txValidationErrorAsStructuredLog: AsStructuredLog[TxValidationError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = TxValidationError.id,
       component = Component,
       level = LogLevel.Warn,
@@ -98,7 +98,7 @@ object WalletTxSubmissionTracer {
     )
 
   implicit val txReversionErrorAsStructuredLog: AsStructuredLog[RevertTransactionError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = RevertTransactionError.id,
       component = Component,
       level = LogLevel.Error,

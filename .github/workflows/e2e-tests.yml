@@ -1,8 +1,6 @@
 name: E2E tests
 
 env:
-    MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
-    MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
     MIDNIGHT_GH_USER: ${{ github.actor }}
     MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
     NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
@@ -68,10 +66,6 @@ on:
                 required: false
         secrets:
             GH_TOKEN:
-              required: true
-            MIDNIGHT_REPO_USER:
-              required: true
-            MIDNIGHT_REPO_PASS:
               required: true
             GH_USERNAME:
               required: true

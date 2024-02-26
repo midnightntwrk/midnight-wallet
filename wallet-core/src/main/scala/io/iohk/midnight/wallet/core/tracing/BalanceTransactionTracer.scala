@@ -42,7 +42,7 @@ object BalanceTransactionTracer {
   }
 
   implicit val balanceTxStartAsStructuredLog: AsStructuredLog[BalanceTransactionStart] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = BalanceTransactionStart.id,
       component = Component,
       level = LogLevel.Debug,
@@ -51,7 +51,7 @@ object BalanceTransactionTracer {
     )
 
   implicit val balanceTxSuccessAsStructuredLog: AsStructuredLog[BalanceTransactionSuccess] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = BalanceTransactionSuccess.id,
       component = Component,
       level = LogLevel.Debug,
@@ -60,7 +60,7 @@ object BalanceTransactionTracer {
     )
 
   implicit val balanceTxErrorAsStructuredLog: AsStructuredLog[BalanceTransactionError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = BalanceTransactionError.id,
       component = Component,
       level = LogLevel.Debug,

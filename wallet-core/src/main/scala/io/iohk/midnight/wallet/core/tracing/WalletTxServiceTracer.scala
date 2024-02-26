@@ -24,7 +24,7 @@ object WalletTxServiceTracer {
   }
 
   implicit val unprovenTxRevertedAsStructuredLog: AsStructuredLog[UnprovenTransactionReverted] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = UnprovenTransactionReverted.id,
       component = Component,
       level = LogLevel.Debug,

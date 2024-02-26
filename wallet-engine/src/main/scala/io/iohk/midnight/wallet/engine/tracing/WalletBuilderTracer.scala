@@ -30,7 +30,7 @@ object WalletBuilderTracer {
   }
 
   implicit val buildRequestedAsStructuredLog: AsStructuredLog[BuildRequested] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = BuildRequested.id,
       component = Component,
       level = LogLevel.Debug,
@@ -39,7 +39,7 @@ object WalletBuilderTracer {
     )
 
   implicit val buildSuccessAsStructuredLog: AsStructuredLog[WalletBuildSuccess.type] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = WalletBuildSuccess.id,
       component = Component,
       level = LogLevel.Debug,
@@ -48,7 +48,7 @@ object WalletBuilderTracer {
     )
 
   implicit val buildErrorAsStructuredLog: AsStructuredLog[WalletBuildError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = WalletBuildError.id,
       component = Component,
       level = LogLevel.Debug,

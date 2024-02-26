@@ -18,9 +18,9 @@ object IndexerClientEvent {
 
   object DefaultInstances {
     implicit val connectionLostContext: AsStringLogContext[ConnectionLost] =
-      AsStringLogContext.fromMap(evt => Map("error" -> evt.error.getMessage))
+      AsStringLogContext.fromEvent(evt => "error" -> evt.error.getMessage)
     implicit val connectTimeoutContext: AsStringLogContext[ConnectTimeout.type] =
-      AsStringLogContext.fromMap(evt => Map.empty)
+      AsStringLogContext.empty
   }
 
 }

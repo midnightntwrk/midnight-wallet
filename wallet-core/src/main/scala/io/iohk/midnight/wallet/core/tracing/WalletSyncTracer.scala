@@ -41,7 +41,7 @@ object WalletSyncTracer {
   }
 
   implicit val syncHandlingUpdateAsStructuredLog: AsStructuredLog[SyncHandlingUpdate] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = SyncHandlingUpdate.id,
       component = Component,
       level = LogLevel.Debug,
@@ -50,7 +50,7 @@ object WalletSyncTracer {
     )
 
   implicit val applyUpdateSuccessAsStructuredLog: AsStructuredLog[ApplyUpdateSuccess] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = ApplyUpdateSuccess.id,
       component = Component,
       level = LogLevel.Debug,
@@ -60,7 +60,7 @@ object WalletSyncTracer {
 
   // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
   implicit val applyUpdateErrorAsStructuredLog: AsStructuredLog[ApplyUpdateError] =
-    AsContextAwareLog.instance(
+    AsContextAwareLog.from(
       id = ApplyUpdateError.id,
       component = Component,
       level = LogLevel.Warn,

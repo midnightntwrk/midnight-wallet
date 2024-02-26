@@ -1,10 +1,9 @@
 name: CD
 
 env:
-  MIDNIGHT_REPO_USER: ${{ secrets.MIDNIGHT_REPO_USER }}
-  MIDNIGHT_REPO_PASS: ${{ secrets.MIDNIGHT_REPO_PASS }}
   NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   push:
@@ -45,11 +44,11 @@ jobs:
           @midnight-ntwrk:registry=https://npm.pkg.github.com/
           " > ./.npmrc
       - name: Build Wallet
-        run: nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
+        run: nix develop -c sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
       - name: Publish Wallet
         run: |
           cd wallet-engine
-          nix develop -k MIDNIGHT_REPO_USER -k MIDNIGHT_REPO_PASS -ic yarn publish
+          nix develop -c yarn publish
       - name: Configure yarn
         run: |
           cd typescript
