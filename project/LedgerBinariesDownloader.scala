@@ -184,17 +184,19 @@ object LedgerBinariesDownloader {
     readArchiveInfo(config).map(!_.contains(config.releaseTag))
 
   private def extractAndSaveAsset(downloadedFile: File, config: Config): IO[Unit] = {
-    val tarCommand =
-      s"tar -xzf ${downloadedFile.getPath} --strip-components=2 -C ${config.resourcesDir}"
+    val targetDir = s"${config.resourcesDir}/${downloadedFile.getName.takeWhile(_ != '.')}"
+    val mkdirCommand = s"mkdir -p $targetDir"
+    val tarCommand = s"tar -xzf ${downloadedFile.getPath} --strip-components=2 -C $targetDir"
 
-    IO.fromTry(Try(Process(tarCommand).!!))
-      .attempt
-      .flatMap {
-        case Left(tarError) =>
-          val message = s"TAR command failed with: ${tarError.getMessage}"
-          logMessage(config, message) >> IO.raiseError(new IllegalStateException(message))
-        case Right(_) => IO.unit
-      } >> logMessage(config, s"Extracted ${downloadedFile.getName} into ${config.resourcesDir}")
+    IO.fromTry(Try(Process(mkdirCommand).!!)) >>
+      IO.fromTry(Try(Process(tarCommand).!!))
+        .attempt
+        .flatMap {
+          case Left(tarError) =>
+            val message = s"TAR command failed with: ${tarError.getMessage}"
+            logMessage(config, message) >> IO.raiseError(new IllegalStateException(message))
+          case Right(_) => IO.unit
+        } >> logMessage(config, s"Extracted ${downloadedFile.getName} into ${config.resourcesDir}")
   }
 
   private def processReleases(

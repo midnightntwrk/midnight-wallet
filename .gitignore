@@ -28,4 +28,4 @@ result
 metals.sbt
 
 archive_info.txt
-libmidnight_zswap_jnr.*
+libmidnight_zswap_c_bindings.*

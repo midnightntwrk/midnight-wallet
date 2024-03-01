@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.jnr
 
-import io.iohk.midnight.wallet.jnr.OSUtils.OS
+import cats.syntax.eq.*
+import io.iohk.midnight.wallet.jnr.SystemUtils.{Architecture, OS, currentOS}
 import jnr.ffi.LibraryLoader
 import cz.adamh.utils.NativeUtils
 import scala.util.{Failure, Success, Try}
@@ -26,11 +27,15 @@ object LedgerLoader {
       LedgerImpl(NativeUtils.loadLibraryFromJar(s"/$libName"), networkId)
     }
 
-  private def getLibName: Try[String] =
-    OSUtils.currentOS() match {
-      case OS.Linux   => Success("libmidnight_zswap_jnr.so")
-      case OS.Mac     => Success("libmidnight_zswap_jnr.dylib")
-      case OS.Windows => Success("libmidnight_zswap_jnr.dll")
-      case OS.Other   => Failure(Exception("Can't load native library file. Unknown OS."))
+  private def getLibName: Try[String] = {
+    val currentArch = SystemUtils.currentArchitecture
+    val currentOs = SystemUtils.currentOS
+    if (currentArch === Architecture.Other || currentOS === OS.Other) {
+      Failure(Exception("Can't load native library file. Unknown OS/Architecture."))
+    } else {
+      val dir = s"zswap-c-bindings_${currentArch.name}-${currentOs.name}"
+      val file = s"libmidnight_zswap_c_bindings.${currentOs.extension}"
+      Success(s"$dir/$file")
     }
+  }
 }
