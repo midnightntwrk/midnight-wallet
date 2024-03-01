@@ -6,6 +6,8 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'typescript/packages/dapp-connector-api/**'
   workflow_dispatch:
 
 jobs:
@@ -48,21 +50,36 @@ jobs:
         run: nix develop .#typescript --command yarn
       - name: Generate documentation
         run: nix develop .#typescript --command yarn run build:docs
-      - name: Commit files and push changes
+      - name: Check if there are changes in docs and create a new branch
+        id: set_update
         run: |
-          if git diff-index HEAD; then
+          if git diff-index HEAD -- typescript/packages/dapp-connector-api/; then
             echo "Adding new..."
             git config --global user.email "midnight-ci@users.noreply.github.com"
             git config --global user.name "Midnight CI GitHub Action"
             BRANCH=api-docs/merge-prs/`date +'%Y-%m-%dT%H%M%S'`
             git checkout -b $BRANCH
-            git add -A typescript/packages/dapp-connector-api/docs --verbose
-            git commit typescript/packages/dapp-connector-api/docs -m "API documentation update" --verbose
-            git push origin $BRANCH
-            sleep 3
-            gh pr create --title 'API documentation update' --body 'Update API documentation  - created by Midnight CI Github Action'
+            git push -u origin $BRANCH
+            echo "UPDATE=true" >> $GITHUB_OUTPUT
+            echo "NEW_BRANCH=$BRANCH" >> $GITHUB_OUTPUT
           else
             echo "Nothing to update"
+            echo "UPDATE=false" >> $GITHUB_OUTPUT
           fi
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      - uses: planetscale/ghcommit-action@v0.1.6
+        if: steps.set_update.outputs.UPDATE == 'true'
+        with:
+          commit_message: "DApp Connector API documentation update - created by Midnight CI Github Action"
+          repo: ${{ github.repository }}
+          branch: ${{ steps.set_update.outputs.NEW_BRANCH }}
+          file_pattern: 'typescript/packages/dapp-connector-api/docs'
+        env:
+          GITHUB_TOKEN: ${{secrets.GH_TOKEN}}
+      - name: Open a PR
+        if: steps.set_update.outputs.UPDATE == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: gh pr create --base main --head ${{ steps.set_update.outputs.NEW_BRANCH }} --title "API documentation update" --body "Update API documentation - created by Midnight CI Github Action"
+
