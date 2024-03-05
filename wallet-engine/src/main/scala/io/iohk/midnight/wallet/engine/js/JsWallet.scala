@@ -96,9 +96,10 @@ class JsWallet(
             )
           }.toJSArray,
         )
-        localState.syncProgress.fold(mappedWalletState.setSyncProgressUndefined) { progress =>
+        val maybeProgress = (localState.syncProgress.synced, localState.syncProgress.total).tupled
+        maybeProgress.fold(mappedWalletState.setSyncProgressUndefined) { (synced, total) =>
           mappedWalletState.setSyncProgress(
-            SyncProgress(progress.synced.value.toJsBigInt, progress.total.value.toJsBigInt),
+            SyncProgress(synced.value.toJsBigInt, total.value.toJsBigInt),
           )
         }
       }

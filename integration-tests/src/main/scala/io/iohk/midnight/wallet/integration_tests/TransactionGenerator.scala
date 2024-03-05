@@ -10,6 +10,7 @@ import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.WalletBuilder.{AllocatedWallet, WalletDependencies}
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
 
@@ -69,7 +70,9 @@ object TransactionGenerator extends IOApp.Simple {
           ) =>
         val initialSync =
           walletState.state
-            .find(s => s.syncProgress.exists(p => p.synced.value === p.total.value))
+            .find { s =>
+              s.syncProgress.synced.isDefined && s.syncProgress.synced === s.syncProgress.total
+            }
             .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
             .compile
             .lastOrError

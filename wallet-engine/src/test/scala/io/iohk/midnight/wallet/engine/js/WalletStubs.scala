@@ -15,6 +15,7 @@ import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
   NothingToProve,
+  ProgressUpdate,
   ProvingRecipe,
   TokenTransfer,
   TransactionIdentifier,
@@ -69,7 +70,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
         state.coins,
         state.pendingOutputs,
         Seq.empty,
-        None,
+        ProgressUpdate.empty,
       ),
     )
 
@@ -108,7 +109,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
         Seq.empty,
         Seq.empty,
         Seq.empty,
-        None,
+        ProgressUpdate.empty,
       ),
     )
   }
@@ -141,7 +142,7 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
         Seq.empty,
         Seq.empty,
         Seq.empty,
-        None,
+        ProgressUpdate.empty,
       ),
     )
 

@@ -5,6 +5,7 @@ import cats.effect.kernel.Resource
 import cats.effect.std.Queue
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.Wallet.Snapshot
@@ -119,7 +120,9 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           ) =>
         val initialSync =
           walletState.state
-            .find(s => s.syncProgress.exists(p => p.synced.value === p.total.value))
+            .find { s =>
+              s.syncProgress.synced.isDefined && s.syncProgress.synced === s.syncProgress.total
+            }
             .map(_.balances.getOrElse(tokenType, BigInt(0)))
             .compile
             .lastOrError
@@ -234,8 +237,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
           _ <- walletState.state
             .evalTap(s => IO.println(s"Balance: ${s.balances.getOrElse(TokenType.Native, 0)}"))
             .map(_.syncProgress)
-            .flattenOption
-            .find(s => s.synced.value === s.total.value)
+            .find(s => s.synced.isDefined && s.synced === s.total)
             .compile
             .drain
           transferRecipe <- walletTransactionService.prepareTransferRecipe(

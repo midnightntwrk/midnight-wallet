@@ -7,6 +7,7 @@ import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.{
   AppliedTransaction,
   ApplyStage,
+  ProgressUpdate,
   TransactionHash,
   ViewingUpdate,
 }
@@ -17,7 +18,7 @@ final case class ViewingWallet private (
     encryptionPublicKey: EncryptionPublicKey,
     viewingKey: EncryptionSecretKey,
     transactions: Vector[Transaction],
-    progress: Option[domain.ProgressUpdate],
+    progress: ProgressUpdate,
 ) {
   def prepareUpdate(
       lastKnownHash: Option[TransactionHash],
@@ -36,7 +37,7 @@ final case class ViewingWallet private (
 object ViewingWallet {
   given WalletRestore[ViewingWallet, (CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
     (coinPubKey, encPubKey, encSecKey) =>
-      new ViewingWallet(coinPubKey, encPubKey, encSecKey, Vector.empty, None)
+      new ViewingWallet(coinPubKey, encPubKey, encSecKey, Vector.empty, ProgressUpdate.empty)
 
   given WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
     new WalletKeys[ViewingWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
@@ -64,7 +65,7 @@ object ViewingWallet {
     new WalletTxHistory[ViewingWallet, Transaction] {
       override def transactionHistory(wallet: ViewingWallet): Seq[Transaction] =
         wallet.transactions
-      override def progress(wallet: ViewingWallet): Option[domain.ProgressUpdate] =
+      override def progress(wallet: ViewingWallet): ProgressUpdate =
         wallet.progress
     }
 }

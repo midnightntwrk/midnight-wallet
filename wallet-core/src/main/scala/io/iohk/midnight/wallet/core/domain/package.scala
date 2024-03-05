@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.zswap.{
   MerkleTreeCollapsedUpdate,
   TokenType,
@@ -42,12 +42,18 @@ package object domain {
   sealed trait IndexerUpdate
 
   final case class ViewingUpdate(
-      offset: data.Transaction.Offset,
+      offset: Offset,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction]],
   ) extends IndexerUpdate
 
-  final case class ProgressUpdate(synced: data.Transaction.Offset, total: data.Transaction.Offset)
+  final case class ProgressUpdate(synced: Option[Offset], total: Option[Offset])
       extends IndexerUpdate
+  object ProgressUpdate {
+    def apply(synced: Offset, total: Offset): ProgressUpdate =
+      new ProgressUpdate(Some(synced), Some(total))
+    def empty: ProgressUpdate =
+      new ProgressUpdate(None, None)
+  }
 
   case object ConnectionLost extends IndexerUpdate
 

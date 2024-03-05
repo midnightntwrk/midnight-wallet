@@ -29,7 +29,7 @@ final case class Wallet private (
     private val state: LocalState = LocalState(),
     txHistory: Vector[Transaction] = Vector.empty,
     offset: Option[data.Transaction.Offset] = None,
-    progress: Option[ProgressUpdate] = None,
+    progress: ProgressUpdate = ProgressUpdate.empty,
     isConnected: Boolean = false,
 )
 
@@ -165,11 +165,12 @@ object Wallet {
           txHistory = wallet.txHistory ++ newTxs.map(_.tx),
           offset = Some(update.offset),
           isConnected = true,
+          progress = wallet.progress.copy(synced = Some(update.offset.decrement)),
         )
         .asRight
 
     case (wallet: Wallet, update: ProgressUpdate) =>
-      wallet.copy(progress = Some(update)).asRight
+      wallet.copy(progress = wallet.progress.copy(total = update.total)).asRight
 
     case (wallet: Wallet, ConnectionLost) =>
       wallet.copy(isConnected = false).asRight
@@ -193,7 +194,7 @@ object Wallet {
   implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] =
     new WalletTxHistory[Wallet, Transaction] {
       override def transactionHistory(wallet: Wallet): Seq[Transaction] = wallet.txHistory
-      override def progress(wallet: Wallet): Option[ProgressUpdate] = wallet.progress
+      override def progress(wallet: Wallet): ProgressUpdate = wallet.progress
     }
 
   implicit val serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =

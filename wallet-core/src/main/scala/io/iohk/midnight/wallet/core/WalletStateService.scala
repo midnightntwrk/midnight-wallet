@@ -78,7 +78,7 @@ object WalletStateService {
       availableCoins: Seq[QualifiedCoinInfo],
       pendingCoins: Seq[CoinInfo],
       transactionHistory: Seq[Transaction],
-      syncProgress: Option[ProgressUpdate],
+      syncProgress: ProgressUpdate,
   ) {
     lazy val address: Address = Address(coinPublicKey, encryptionPublicKey)
   }
