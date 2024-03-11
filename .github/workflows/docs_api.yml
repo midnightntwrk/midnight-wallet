@@ -1,7 +1,6 @@
 name: Publish updated API documentation
 env:
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-  NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
 on:
   push:
     branches:
@@ -37,13 +36,11 @@ jobs:
       - name: Setup .npmrc
         run: |
           echo "
-          //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
           //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
           " >> ./.npmrc
       - name: Configure yarn
         run: |
           cd typescript
-          yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
           echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
       - name: Run yarn install
@@ -82,4 +79,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: gh pr create --base main --head ${{ steps.set_update.outputs.NEW_BRANCH }} --title "API documentation update" --body "Update API documentation - created by Midnight CI Github Action"
-

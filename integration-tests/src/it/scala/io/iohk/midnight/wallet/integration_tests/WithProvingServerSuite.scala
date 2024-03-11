@@ -18,7 +18,7 @@ trait WithProvingServerSuite
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     ProvingServiceImpl.instance(
-      "ghcr.io/midnight-ntwrk/proof-server:2.0.6",
+      "ghcr.io/midnight-ntwrk/proof-server:2.0.7",
     ),
   )
 

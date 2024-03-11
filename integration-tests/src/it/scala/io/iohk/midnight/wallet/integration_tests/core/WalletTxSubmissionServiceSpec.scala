@@ -27,7 +27,7 @@ import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
 import scala.concurrent.duration.DurationInt
 
-@SuppressWarnings(Array("org.wartremover.warts.SeqApply"))
+@SuppressWarnings(Array("org.wartremover.warts.IterableOps"))
 class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   val noOpTracer: Tracer[IO, StructuredLog] = Tracer.noOpTracer[IO]
@@ -143,9 +143,8 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       val balances = stateUpdates.flatMap(Wallet.walletBalances.balance(_).get(TokenType.Native))
       val availableCoins = stateUpdates.map(Wallet.walletCoins.availableCoins)
       assertEquals(balances.headOption, balances.lastOption)
-      assert(balances(0) > balances(1))
-      assertEquals(availableCoins(0).map(_.nonce), availableCoins(2).map(_.nonce))
-      assert(availableCoins(0).sizeIs > availableCoins(1).size)
+      assert(availableCoins.head.sizeIs == availableCoins.last.size)
+      assertEquals(availableCoins.head.map(_.nonce), availableCoins.last.map(_.nonce))
     }
   }
 

@@ -3,7 +3,6 @@ name: CI
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
@@ -41,7 +40,6 @@ jobs:
       - name: Setup .npmrc
         run: |
           echo "
-          //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
           //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
           " >> ./.npmrc
       - name: Log in to GitHub Container registry
@@ -59,7 +57,6 @@ jobs:
       - name: Configure yarn
         run: |
           cd typescript
-          yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
           echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
       - name: Test and build typescript packages
@@ -70,14 +67,6 @@ jobs:
           nix develop .#typescript --command yarn build
           nix develop .#typescript --command yarn lint
           nix develop .#typescript --command yarn test
-      - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Wallet TS packages Jest Tests Report
-          path: |
-            ./typescript/**/reports/report.xml
-          reporter: jest-junit
       - name: Publish Unit Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
@@ -94,14 +83,6 @@ jobs:
           path: |
             !(examples)/**/target/it-reports/TEST-*.xml
           reporter: java-junit
-      - name: Publish Wallet TS Test Summary
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: success() || failure()
-        with:
-          check_name: Wallet TS Packages Jest Tests Results
-          files: |
-            ./typescript/**/reports/report.xml
-            !(node_modules)/**/reports/report.xml
       - name: Publish Unit Test Summary
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: success() || failure()

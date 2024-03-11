@@ -4,7 +4,6 @@ env:
     MIDNIGHT_GH_USER: ${{ github.actor }}
     MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
     GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-    NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
     MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
@@ -72,9 +71,7 @@ on:
               required: true
             MIDNIGHTBOT_PACKAGES_WRITE:
               required: true
-            NEXUS_TOKEN:
-              required: true
-    
+
 
 jobs:
     build:
@@ -108,7 +105,6 @@ jobs:
             - name: Setup .npmrc
               run: |
                     echo "
-                    //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
                     //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
                     " >> ./.npmrc
 
@@ -122,10 +118,9 @@ jobs:
             - name: Configure yarn
               run: |
                 cd typescript
-                yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
                 yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
                 echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
-            
+
             - name: Test and build typescript packages
               env:
                 NETWORK: ${{ inputs.network }}

@@ -1,7 +1,6 @@
 name: CD
 
 env:
-  NEXUS_TOKEN: ${{ secrets.NEXUS_TOKEN }}
   MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
@@ -38,9 +37,6 @@ jobs:
       - name: Setup .npmrc
         run: |
           echo "
-          //nexus.p42.at/repository/npm-midnight/:_authToken=$NEXUS_TOKEN
-          @midnight:registry=https://nexus.p42.at/repository/npm-midnight/
-
           //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
           @midnight-ntwrk:registry=https://npm.pkg.github.com/
           " > ./.npmrc
