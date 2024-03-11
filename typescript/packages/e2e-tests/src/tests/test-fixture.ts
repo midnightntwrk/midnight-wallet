@@ -104,6 +104,9 @@ export class TestContainersFixture {
       case 'jade': {
         return 'https://pubsub.jade.midnight.network:443';
       }
+      case 'ruby': {
+        return 'https://pubsub.ruby.dev.midnight.network:443';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}`;
@@ -119,6 +122,9 @@ export class TestContainersFixture {
       case 'jade': {
         return 'wss://pubsub.jade.midnight.network:443';
       }
+      case 'ruby': {
+        return 'wss://pubsub.ruby.dev.midnight.network:443';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `ws://localhost:${indexerPort}`;
@@ -133,6 +139,9 @@ export class TestContainersFixture {
       }
       case 'jade': {
         return 'http://node-01.jade.midnight.network:9944';
+      }
+      case 'ruby': {
+        return 'http://node-01.ruby.dev.midnight.network:9944';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);

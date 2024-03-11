@@ -40,7 +40,7 @@ export const waitForSync = (wallet: Wallet) =>
       filter((state) => {
         // Let's allow progress only if wallet is close enough
         const synced = state.syncProgress?.synced ?? 0n;
-        const total = state.syncProgress?.total ?? 200n;
+        const total = state.syncProgress?.total ?? 50n;
         return total - synced < 1n;
       }),
     ),
@@ -83,4 +83,4 @@ export const walletStateTrimmed = (state: WalletState) => {
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'topaz' | 'jade' | 'local';
+export type MidnightDeployment = 'topaz' | 'jade' | 'ruby' | 'local';
