@@ -11,6 +11,24 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
 
   private val finalNetworkId = networkIdOpt.getOrElse(NetworkId.Undeployed)
 
+  override def tryDeserializeEncryptionKey(
+      encryptionKeySerialized: String,
+  ): Either[NonEmptyList[JNRError], StringResult] = {
+    val callTry = Try {
+      ledgerAPI.es_key_try_deserialize(
+        encryptionKeySerialized.getBytes(StandardCharsets.UTF_8),
+        encryptionKeySerialized.length,
+        finalNetworkId.id,
+      )
+    }
+
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
+  }
+
   override def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,

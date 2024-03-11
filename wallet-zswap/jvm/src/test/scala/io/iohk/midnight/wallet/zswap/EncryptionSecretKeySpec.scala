@@ -8,19 +8,19 @@ class EncryptionSecretKeySpec extends FunSuite {
 
   test("Return true when transaction is relevant") {
     val key = EncryptionSecretKey.deserialize("", ledgerStub)
-    val result = key.test(Transaction.deserialize(LedgerStub.TxRelevant, ledgerStub))
+    val result = key.flatMap(_.test(Transaction.deserialize(LedgerStub.TxRelevant, ledgerStub)))
     assertEquals(result, Success(true))
   }
 
   test("Return false when transaction is not relevant") {
     val key = EncryptionSecretKey.deserialize("", ledgerStub)
-    val result = key.test(Transaction.deserialize(LedgerStub.TxNotRelevant, ledgerStub))
+    val result = key.flatMap(_.test(Transaction.deserialize(LedgerStub.TxNotRelevant, ledgerStub)))
     assertEquals(result, Success(false))
   }
 
   test("Return error when ledger result is unknown") {
     val key = EncryptionSecretKey.deserialize("", ledgerStub)
-    val result = key.test(Transaction.deserialize(LedgerStub.TxUnknown, ledgerStub))
+    val result = key.flatMap(_.test(Transaction.deserialize(LedgerStub.TxUnknown, ledgerStub)))
     result match {
       case Failure(exception) => assertEquals(exception.getMessage, "Ledger error code 1")
       case other              => fail(s"Expected failure, got $other")
@@ -29,7 +29,7 @@ class EncryptionSecretKeySpec extends FunSuite {
 
   test("Return error when ledger execution fails") {
     val key = EncryptionSecretKey.deserialize("", ledgerStub)
-    val result = key.test(Transaction.deserialize(LedgerStub.ValidTxNoData, ledgerStub))
+    val result = key.flatMap(_.test(Transaction.deserialize(LedgerStub.ValidTxNoData, ledgerStub)))
     result match {
       case Failure(exception) =>
         assertEquals(exception.getMessage, s"Ledger error code 5")

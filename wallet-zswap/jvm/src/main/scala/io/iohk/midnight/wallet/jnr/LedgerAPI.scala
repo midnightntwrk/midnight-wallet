@@ -5,6 +5,12 @@ import jnr.ffi.types.size_t
 
 trait LedgerAPI {
 
+  def es_key_try_deserialize(
+      serialized_encryption_secret_key: Array[Byte],
+      @size_t serialized_encryption_secret_key_len: Int,
+      @size_t networkId: Int,
+  ): Pointer
+
   def is_transaction_relevant(
       tx_borshed: Array[Byte],
       @size_t tx_borshed_len: Int,

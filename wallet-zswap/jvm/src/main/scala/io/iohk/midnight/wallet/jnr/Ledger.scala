@@ -9,6 +9,10 @@ import scala.util.Try
 
 trait Ledger {
 
+  def tryDeserializeEncryptionKey(
+      encryptionKeySerialized: String,
+  ): Either[NonEmptyList[JNRError], StringResult]
+
   def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,

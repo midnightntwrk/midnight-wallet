@@ -259,7 +259,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
       downloadBinaries(
         Config(
           requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-0.3.9",
+          releaseTag = "zswap-c-bindings-0.3.10",
           ghAuthToken = sys.env("MIDNIGHT_GH_TOKEN"),
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,

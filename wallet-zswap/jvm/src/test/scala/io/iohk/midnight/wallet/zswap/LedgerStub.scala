@@ -72,6 +72,11 @@ class LedgerStub extends Ledger {
       tx: String,
   ): Either[NonEmptyList[JNRError], Option[String]] =
     Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
+  override def tryDeserializeEncryptionKey(
+      encryptionKeySerialized: String,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Right(StringResult(encryptionKeySerialized))
 }
 
 object LedgerStub {

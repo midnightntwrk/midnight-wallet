@@ -11,7 +11,7 @@ class LedgerApiSpec extends ScalaCheckSuite {
     "01010001000000000000000000000000000000000000000000"
 
   private val hexedEncryptionSecretKey =
-    "20d70aa9e64eae18b2d0e374b98f429fd3ffc816b0e479606c5ad9e362ea971c0c"
+    "010000206cbc420407d0c7eaaa2ef4f7a622440bf37773cd7f08f3107d16f2be060c1505"
 
   private val localState =
     "010000010000612c52b55b1d8265df62db079961e49a1701ba18239489e5da348811d0911d4b0100002008ef2c4ddcc9855b330b86b636a5b7f73e6ad71b2adf7b5d8f22ef381159a70b00000000000000000000000001000002200000000000000000"
@@ -67,6 +67,22 @@ class LedgerApiSpec extends ScalaCheckSuite {
           case Left(errors)                        => failWithErrors(errors)
           case Right(NumberResult(firstFreeIndex)) => assert(firstFreeIndex >= 0)
         }
+    }
+  }
+
+  test("Validating valid viewing key should succeed") {
+    ledger.tryDeserializeEncryptionKey(hexedEncryptionSecretKey) match {
+      case Left(errors)             => failWithErrors(errors)
+      case Right(StringResult(key)) => assert(key.nonEmpty)
+    }
+  }
+
+  test("Validating invalid viewing key should fail") {
+    ledger.tryDeserializeEncryptionKey("wrong") match {
+      case Left(errors) =>
+        assert(errors.toList.contains(LedgerErrorResult(LedgerError.EncryptionSecretKeyError)))
+      case Right(_) =>
+        fail("Invalid viewing key returned valid")
     }
   }
 
