@@ -45,6 +45,13 @@ class LedgerApiSpec extends ScalaCheckSuite {
     assert(updatedState.data.nonEmpty)
   }
 
+  test("Extracting merkle tree root should work") {
+    val state = ledger.zswapChainStateNew().toOption.get.data
+    val root = ledger.zswapChainStateMerkleTreeRoot(state).toOption.get
+
+    assertEquals(root.data, "00")
+  }
+
   test("Extracting guaranteed coins from transaction should work") {
     ledger.extractGuaranteedCoinsFromTransaction(validTx) match {
       case Left(errors)                         => failWithErrors(errors)

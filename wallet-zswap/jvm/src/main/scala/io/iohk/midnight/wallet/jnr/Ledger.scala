@@ -42,6 +42,10 @@ trait Ledger {
       offer: String,
   ): Either[NonEmptyList[JNRError], StringResult]
 
+  def zswapChainStateMerkleTreeRoot(
+      zswapChainStatesSerialized: String,
+  ): Either[NonEmptyList[JNRError], StringResult]
+
   def merkleTreeCollapsedUpdateNew(
       zswapChainState: String,
       indexStart: Long,

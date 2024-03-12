@@ -56,6 +56,11 @@ class LedgerStub extends Ledger {
   ): Either[NonEmptyList[JNRError], StringResult] =
     Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
 
+  override def zswapChainStateMerkleTreeRoot(
+      zswapChainStatesSerialized: _root_.java.lang.String,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
   override def merkleTreeCollapsedUpdateNew(
       zswapChainState: String,
       indexStart: Long,

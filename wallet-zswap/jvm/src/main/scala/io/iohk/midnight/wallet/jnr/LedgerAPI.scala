@@ -47,6 +47,11 @@ trait LedgerAPI {
       @size_t networkId: Int,
   ): Pointer
 
+  def zswap_chain_state_merkle_tree_root(
+      zswap_chain_state_serialized: Array[Byte],
+      @size_t zswap_chain_state_len: Int,
+  ): Pointer
+
   def zswap_chain_state_try_apply(
       zswap_chain_state: Array[Byte],
       @size_t zswap_chain_state_len: Int,

@@ -152,6 +152,23 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
     )
   }
 
+  override def zswapChainStateMerkleTreeRoot(
+      zswapChainState: String,
+  ): Either[NonEmptyList[JNRError], StringResult] = {
+    val callTry = Try {
+      ledgerAPI.zswap_chain_state_merkle_tree_root(
+        zswapChainState.getBytes(StandardCharsets.UTF_8),
+        zswapChainState.length,
+      )
+    }
+
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
+  }
+
   override def merkleTreeCollapsedUpdateNew(
       zswapChainState: String,
       indexStart: Long,

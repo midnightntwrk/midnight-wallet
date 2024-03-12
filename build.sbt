@@ -48,7 +48,6 @@ lazy val commonSettings = Seq(
     if (Env.devModeEnabled) prev.filterNot(_ == "-Xfatal-warnings") else prev
   },
   Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
-
   ghPackagesResolver,
 
   // Test dependencies
@@ -80,7 +79,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.5.7",
+  version := "3.5.8",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
