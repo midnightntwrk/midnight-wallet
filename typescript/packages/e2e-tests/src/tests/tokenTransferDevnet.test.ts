@@ -10,14 +10,11 @@ import {
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
 import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
-import { webcrypto } from 'node:crypto';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
 import path from 'node:path';
 
-// @ts-expect-error: It's needed to make Scala.js and WASM code able to use cryptography
-globalThis.crypto = webcrypto;
 export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
 const logger = await createLogger(
   path.resolve(currentDir, '..', 'logs', 'tokenTransferDevnet', `${new Date().toISOString()}.log`),
@@ -78,6 +75,13 @@ describe('Token transfer', () => {
   test(
     'Is working for valid transfer @healthcheck',
     async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-8916', 'PM-8916');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Valid transfer transaction');
+
       await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
@@ -137,6 +141,10 @@ describe('Token transfer', () => {
   test.skip(
     'coin becomes available when tx fails on node',
     async () => {
+      allure.tms('PM-8919', 'PM-8919');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid transaction');
       const initialState = await firstValueFrom(walletFunded.state());
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
@@ -209,6 +217,10 @@ describe('Token transfer', () => {
   test.skip(
     'coin becomes available when tx does not get proved',
     async () => {
+      allure.tms('PM-8917', 'PM-8917');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not proved');
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);

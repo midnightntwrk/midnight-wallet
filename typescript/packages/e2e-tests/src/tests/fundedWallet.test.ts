@@ -1,12 +1,8 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { NetworkId, nativeToken, setNetworkId } from '@midnight-ntwrk/zswap';
-import { webcrypto } from 'crypto';
 import { waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
-
-// @ts-expect-error: It's needed to make Scala.js and WASM code able to use cryptography
-globalThis.crypto = webcrypto;
 
 /**
  * Tests using a funded wallet
@@ -22,18 +18,20 @@ describe('Funded wallet', () => {
   let wallet: Wallet & Resource;
 
   beforeEach(async () => {
-    const fixture = getFixture();
-    setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+    await allure.step('Start a funded wallet', async function () {
+      const fixture = getFixture();
+      setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
 
-    wallet = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seedFunded,
-      'info',
-    );
-    wallet.start();
+      wallet = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seedFunded,
+        'info',
+      );
+      wallet.start();
+    });
   });
 
   afterEach(async () => {
@@ -43,6 +41,10 @@ describe('Funded wallet', () => {
   test(
     'Wallet balance for native token is 25B tDUST and there are no other token types',
     async () => {
+      allure.tms('PM-8928', 'PM-8928');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       expect(Object.keys(state.balances)).toHaveLength(1);
       const balance = state?.balances[nativeToken()] ?? 0n;
@@ -54,6 +56,10 @@ describe('Funded wallet', () => {
   test(
     'Wallet has 5 coins',
     async () => {
+      allure.tms('PM-8929', 'PM-8929');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const coins = state?.coins;
       expect(coins).toHaveLength(5);
@@ -68,6 +74,10 @@ describe('Funded wallet', () => {
   test(
     'Wallet has 5 available coins',
     async () => {
+      allure.tms('PM-8930', 'PM-8930');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const coins = state?.availableCoins;
       expect(coins).toHaveLength(5);
@@ -82,6 +92,10 @@ describe('Funded wallet', () => {
   test(
     'Wallet has no pending coins',
     async () => {
+      allure.tms('PM-8931', 'PM-8931');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const coins = state?.pendingCoins;
       expect(coins).toHaveLength(0);
@@ -92,6 +106,10 @@ describe('Funded wallet', () => {
   test(
     'Wallet has one tx in tx history',
     async () => {
+      allure.tms('PM-8932', 'PM-8932');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const txHistory = state?.transactionHistory;
       expect(txHistory).toHaveLength(1);

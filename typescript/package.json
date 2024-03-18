@@ -8,7 +8,6 @@
     "build": "turbo run build",
     "test": "turbo run test",
     "lint": "turbo run lint",
-    "wallet-server": "turbo run start --filter=wallet-server",
     "deploy": "turbo run deploy",
     "test-e2e": "turbo run test-e2e"
   },

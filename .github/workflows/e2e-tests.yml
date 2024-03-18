@@ -121,7 +121,7 @@ jobs:
                 yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
                 echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
 
-            - name: Test and build typescript packages
+            - name: Run e2e tests
               env:
                 NETWORK: ${{ inputs.network }}
                 DEPLOYMENT: ${{ inputs.deployment }}
@@ -129,7 +129,33 @@ jobs:
                 SEED2: ${{ inputs.seed2 }}
               run: |
                 nix develop .#typescript --command yarn
-                nix develop .#typescript --command yarn test-e2e -- ${{inputs.modifier}}
+                nix develop .#typescript --command yarn test-e2e -- ${{ inputs.modifier }}
+
+            - name: Create allure properties
+              if: success() || failure()
+              working-directory: ./typescript/packages/e2e-tests/allure-results
+              run: |
+                echo "
+                env=${{ inputs.network }}
+                tags=${{ inputs.modifier }}
+                deployment=${{ inputs.deployment }}
+                platform=Linux
+                " > environment.properties
+           
+            - name: Generate allure report
+              if: success() || failure()
+              working-directory: ./typescript/packages/e2e-tests
+              run: |
+                yarn allure-generate
+
+            - name: Publish artifacts (test reports)
+              uses: actions/upload-artifact@v3
+              if: success() || failure()
+              with:
+                name: test-reports
+                path: |
+                  ./typescript/packages/e2e-tests/reports/allure-report
+                retention-days: 30
 
             - name: Publish wallet TS Test Report
               uses: dorny/test-reporter@v1
@@ -138,12 +164,4 @@ jobs:
                 name: Wallet TS packages Jest Tests Report
                 reporter: jest-junit
                 path: |
-                    ./typescript/packages/e2e-tests/reports/report.xml
-
-            - name: Publish Wallet TS Test Summary
-              uses: EnricoMi/publish-unit-test-result-action@v2
-              if: success() || failure()
-              with:
-                check_name: Wallet TS Packages Jest Tests Results
-                files: |
                     ./typescript/packages/e2e-tests/reports/report.xml

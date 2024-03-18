@@ -10,13 +10,9 @@ import {
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
 import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
-import { webcrypto } from 'node:crypto';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import path from 'node:path';
-
-// @ts-expect-error: It's needed to make Scala.js and WASM code able to use cryptography
-globalThis.crypto = webcrypto;
 
 export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
 const logger = await createLogger(
@@ -41,29 +37,31 @@ describe('Token transfer', () => {
   let fixture: TestContainersFixture;
 
   beforeEach(async () => {
-    fixture = getFixture();
-    setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+    await allure.step('Start two wallets', async function () {
+      fixture = getFixture();
+      setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
 
-    walletFunded = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seedFunded,
-      'info',
-    );
+      walletFunded = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seedFunded,
+        'info',
+      );
 
-    wallet2 = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seed,
-      'info',
-    );
+      wallet2 = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seed,
+        'info',
+      );
 
-    walletFunded.start();
-    wallet2.start();
+      walletFunded.start();
+      wallet2.start();
+    });
   });
 
   afterEach(async () => {
@@ -74,6 +72,13 @@ describe('Token transfer', () => {
   test(
     'Is working for valid transfer @healthcheck',
     async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-8916', 'PM-8916');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Valid transfer transaction');
+
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()];
       if (initialBalance === undefined || initialBalance === 0n) {
@@ -139,6 +144,10 @@ describe('Token transfer', () => {
   test.skip(
     'coin becomes available when tx fails on node',
     async () => {
+      allure.tms('PM-8919', 'PM-8919');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid transaction');
       const initialState = await firstValueFrom(walletFunded.state());
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
@@ -211,6 +220,10 @@ describe('Token transfer', () => {
   test.skip(
     'coin becomes available when tx does not get proved',
     async () => {
+      allure.tms('PM-8917', 'PM-8917');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not proved');
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -253,6 +266,10 @@ describe('Token transfer', () => {
   test.skip(
     'coin becomes available when tx does not get submitted',
     async () => {
+      allure.tms('PM-8918', 'PM-8918');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not submitted');
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
