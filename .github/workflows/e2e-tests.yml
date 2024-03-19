@@ -26,6 +26,7 @@ on:
             - local
             - topaz
             - jade
+            - ruby
         seed:
             type: string
             description: Seed of a funded wallet
@@ -49,7 +50,7 @@ on:
                 default: 'devnet'
             deployment:
                 type: string
-                description: Midnight deployment to use (topaz/jade/local)
+                description: Midnight deployment to use (topaz/jade/ruby/local)
                 required: true
                 default: 'topaz'
             seed:

@@ -1,0 +1,78 @@
+name: Fund test wallets
+
+env:
+    MIDNIGHT_GH_USER: ${{ github.actor }}
+    MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
+    GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+    MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+    SEED: ${{ secrets.FAUCET_SEED }}
+
+on:
+    workflow_dispatch:
+      inputs:
+        deployment:
+          type: choice
+          description: Midnight deployment to use
+          required: true
+          default: 'topaz'
+          options:
+            - topaz
+            - jade
+            - ruby
+
+
+jobs:
+    runScript:
+        name: Run funding script
+        runs-on: ubuntu-latest-4-cores
+        steps:
+            - name: Prepare .netrc to access other repos
+              run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
+
+            - uses: actions/checkout@v3
+
+            - uses: nixbuild/nix-quick-install-action@v25
+              with:
+                github_access_token: ${{ secrets.GH_TOKEN }}
+                nix_conf: |
+                    access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
+                    extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+                    extra-substituters = https://cache.iog.io
+                    accept-flake-config = true
+                    netrc-file = ~/.netrc
+
+            - name: Restore and cache Nix store
+              uses: nix-community/cache-nix-action@v4
+              with:
+                gc-linux: true
+                gc-max-store-size-linux: 8000000000
+                key: cache-ubuntu-${{ hashFiles('**/*') }}
+                restore-keys: |
+                    cache-ubuntu-
+
+            - name: Setup .npmrc
+              run: |
+                    echo "
+                    //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
+                    " >> ./.npmrc
+
+            - name: Log in to GitHub Container registry
+              uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+              with:
+                registry: 'https://ghcr.io'
+                username: ${{ secrets.GH_USERNAME }}
+                password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+
+            - name: Configure yarn
+              run: |
+                cd typescript
+                yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
+                echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
+
+            - name: Run funding script
+              env:
+                NETWORK: devnet
+                DEPLOYMENT: ${{ inputs.deployment }}
+              run: |
+                nix develop .#typescript --command yarn
+                nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
