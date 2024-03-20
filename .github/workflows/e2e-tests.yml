@@ -37,6 +37,16 @@ on:
             description: Seed of another receiving wallet
             required: true
             default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+        nt_seed:
+          type: string
+          description: Seed of a funded wallet with native tokens
+          required: true
+          default: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
+        nt_seed2:
+            type: string
+            description: Seed of another receiving wallet for native tokens
+            required: true
+            default: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
         modifier:
             type: string
             description: Suite or a testname to run (refer to Jest docs)
@@ -60,6 +70,14 @@ on:
             seed2:
                 type: string
                 description: Seed of another receiving wallet
+                required: true
+            nt_seed:
+                type: string
+                description: Seed of a funded wallet with native tokens
+                required: true
+            nt_seed2:
+                type: string
+                description: Seed of another receiving wallet for native tokens
                 required: true
             modifier:
                 type: string
@@ -128,6 +146,8 @@ jobs:
                 DEPLOYMENT: ${{ inputs.deployment }}
                 SEED: ${{ inputs.seed }}
                 SEED2: ${{ inputs.seed2 }}
+                NT_SEED: ${{ inputs.nt_seed }}
+                NT_SEED2: ${{ inputs.nt_seed2 }}
               run: |
                 nix develop .#typescript --command yarn
                 nix develop .#typescript --command yarn test-e2e -- ${{ inputs.modifier }}
