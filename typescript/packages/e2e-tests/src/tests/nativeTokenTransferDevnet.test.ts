@@ -46,15 +46,15 @@ describe('Token transfer', () => {
     fixture = getFixture();
     setNetworkId(NetworkId.DevNet);
     switch (TestContainersFixture.deployment) {
-      case 'topaz': {
+      case 'ariadne-qa': {
         tokenTypeHash = '010001459a2973cc16b54b106afd8045501974c0ff40f49b3faf0134178c0c721c5c59';
         break;
       }
-      case 'jade': {
+      case 'devnet': {
         tokenTypeHash = '0100017b41a104b2bc7b0d80ebbbce42a92510846e95f7d304643d73a6d4b86c2e7961';
         break;
       }
-      case 'ruby': {
+      case 'qanet': {
         tokenTypeHash = '010001efcae6abf93eb3aa5acef6e0756a22ee3bd3fa20509d8874954838f28cba2f31';
         break;
       }

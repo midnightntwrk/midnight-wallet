@@ -93,13 +93,13 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'topaz': {
+      case 'ariadne-qa': {
         return 'https://pubsub.topaz.dev.platform.midnight.network:443';
       }
-      case 'jade': {
+      case 'devnet': {
         return 'https://pubsub.jade.midnight.network:443';
       }
-      case 'ruby': {
+      case 'qanet': {
         return 'https://pubsub.ruby.dev.midnight.network:443';
       }
       case 'local': {
@@ -111,13 +111,13 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'topaz': {
+      case 'ariadne-qa': {
         return 'wss://pubsub.topaz.dev.platform.midnight.network:443';
       }
-      case 'jade': {
+      case 'devnet': {
         return 'wss://pubsub.jade.midnight.network:443';
       }
-      case 'ruby': {
+      case 'qanet': {
         return 'wss://pubsub.ruby.dev.midnight.network:443';
       }
       case 'local': {
@@ -129,13 +129,13 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'topaz': {
+      case 'ariadne-qa': {
         return 'http://node-01.topaz.dev.platform.midnight.network:9944';
       }
-      case 'jade': {
+      case 'devnet': {
         return 'http://node-01.jade.midnight.network:9944';
       }
-      case 'ruby': {
+      case 'qanet': {
         return 'http://node-01.ruby.dev.midnight.network:9944';
       }
       case 'local': {

@@ -83,4 +83,4 @@ export const walletStateTrimmed = (state: WalletState) => {
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'topaz' | 'jade' | 'ruby' | 'local';
+export type MidnightDeployment = 'ariadne-qa' | 'devnet' | 'qanet' | 'local';

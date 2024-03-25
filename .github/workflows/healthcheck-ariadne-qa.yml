@@ -1,4 +1,4 @@
-name: Healthcheck - Ruby
+name: Healthcheck - ariadne-qa
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     with:
       network: devnet
-      deployment: ruby
+      deployment: ariadne-qa
       seed: b0dcbe35cba84c11863e973e75c22fc482812b76da09a47e16fabcf534ec6709
       seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
       nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83

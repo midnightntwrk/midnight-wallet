@@ -14,11 +14,11 @@ on:
           type: choice
           description: Midnight deployment to use
           required: true
-          default: 'topaz'
+          default: 'ariadne-qa'
           options:
-            - topaz
-            - jade
-            - ruby
+            - ariadne-qa
+            - devnet
+            - qanet
 
 
 jobs:

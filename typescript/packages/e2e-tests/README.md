@@ -34,11 +34,11 @@ export DEPLOYMENT=local; export NETWORK=undeployed
 - for devnet deployments:
 
   ```
-  export DEPLOYMENT=topaz; export NETWORK=devnet
+  export DEPLOYMENT=ariadne-qa; export NETWORK=devnet
   ```
 
   ```
-  export DEPLOYMENT=jade; export NETWORK=devnet
+  export DEPLOYMENT=devnet; export NETWORK=devnet
   ```
 
   - additional environment variables are needed to supply seeds of the test wallets on devnet networks: `SEED` and `SEED2`

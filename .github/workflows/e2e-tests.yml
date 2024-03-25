@@ -21,12 +21,12 @@ on:
           type: choice
           description: Midnight deployment to use
           required: true
-          default: 'topaz'
+          default: 'ariadne-qa'
           options:
             - local
-            - topaz
-            - jade
-            - ruby
+            - ariadne-qa
+            - devnet
+            - qanet
         seed:
             type: string
             description: Seed of a funded wallet
@@ -60,9 +60,9 @@ on:
                 default: 'devnet'
             deployment:
                 type: string
-                description: Midnight deployment to use (topaz/jade/ruby/local)
+                description: Midnight deployment to use (ariadne-qa/devnet/qanet/local)
                 required: true
-                default: 'topaz'
+                default: 'ariadne-qa'
             seed:
                 type: string
                 description: Seed of a funded wallet
