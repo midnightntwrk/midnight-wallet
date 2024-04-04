@@ -93,6 +93,9 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
+      case 'ariadne-temp': {
+        return 'https://pubsub.temp.pre.platform.midnight.network:443';
+      }
       case 'ariadne-qa': {
         return 'https://pubsub.topaz.dev.platform.midnight.network:443';
       }
@@ -111,6 +114,9 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
+      case 'ariadne-temp': {
+        return 'wss://pubsub.temp.pre.platform.midnight.network:443';
+      }
       case 'ariadne-qa': {
         return 'wss://pubsub.topaz.dev.platform.midnight.network:443';
       }
@@ -129,6 +135,9 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
+      case 'ariadne-temp': {
+        return 'http://node-01.temp.pre.platform.midnight.network:9944';
+      }
       case 'ariadne-qa': {
         return 'http://node-01.topaz.dev.platform.midnight.network:9944';
       }

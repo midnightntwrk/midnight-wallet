@@ -1,4 +1,4 @@
-name: Healthcheck - qanet
+name: Healthcheck - ariadne-temp
 
 on:
   workflow_dispatch:
@@ -11,7 +11,7 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     with:
       network: devnet
-      deployment: qanet
+      deployment: ariadne-temp
       seed: 1b2c2d3f981e495b399ae4699a21dd65096037c773bd3c6ad2ee858fc4914b98
       seed2: 8f38fa081073ecfb39856901b96d26dc0441ca6fe9dd259bfa28641d6a5e3321
       nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83

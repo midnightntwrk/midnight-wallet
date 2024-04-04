@@ -37,39 +37,63 @@ describe('Token transfer', () => {
   const timeout = 1_200_000;
   const outputValue = 1_000n;
 
-  let walletFunded: Wallet & Resource;
-  let wallet2: Wallet & Resource;
+  let sender: Wallet & Resource;
+  let receiver: Wallet & Resource;
   let fixture: TestContainersFixture;
 
   beforeEach(async () => {
     fixture = getFixture();
     setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+    const date = new Date();
+    const hour = date.getHours();
 
-    walletFunded = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seedFunded,
-      'info',
-    );
+    if (hour % 2 !== 0) {
+      logger.info('Using SEED2 as receiver');
+      sender = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seedFunded,
+        'info',
+      );
 
-    wallet2 = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seed,
-      'info',
-    );
+      receiver = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seed,
+        'info',
+      );
+    } else {
+      logger.info('Using SEED2 as sender');
+      sender = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seed,
+        'info',
+      );
 
-    walletFunded.start();
-    wallet2.start();
+      receiver = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seedFunded,
+        'info',
+      );
+    }
+
+    sender.start();
+    receiver.start();
   });
 
   afterEach(async () => {
-    await walletFunded.close();
-    await wallet2.close();
+    await sender.close();
+    await receiver.close();
   });
 
   test(
@@ -82,13 +106,13 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer transaction');
 
-      await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
-      const initialState = await firstValueFrom(walletFunded.state());
+      await Promise.all([waitForSync(sender), waitForSync(receiver)]);
+      const initialState = await firstValueFrom(sender.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance}`);
       logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
 
-      const initialState2 = await firstValueFrom(wallet2.state());
+      const initialState2 = await firstValueFrom(receiver.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 2: ${initialBalance2}`);
       logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
@@ -100,12 +124,12 @@ describe('Token transfer', () => {
           receiverAddress: initialState2.address,
         },
       ];
-      const txToProve = await walletFunded.transferTransaction(outputsToCreate);
-      const provenTx = await walletFunded.proveTransaction(txToProve);
-      const id = await walletFunded.submitTransaction(provenTx);
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      const provenTx = await sender.proveTransaction(txToProve);
+      const id = await sender.submitTransaction(provenTx);
       logger.info('Transaction id: ' + id);
 
-      const pendingState = await waitForPending(walletFunded);
+      const pendingState = await waitForPending(sender);
       logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
@@ -114,7 +138,7 @@ describe('Token transfer', () => {
       expect(pendingState.coins.length).toBe(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      const finalState = await waitForFinalizedBalance(walletFunded);
+      const finalState = await waitForFinalizedBalance(sender);
       logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
@@ -124,7 +148,7 @@ describe('Token transfer', () => {
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
 
-      const finalState2 = await waitForFinalizedBalance(wallet2);
+      const finalState2 = await waitForFinalizedBalance(receiver);
       logger.info(walletStateTrimmed(finalState2));
       logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
@@ -145,13 +169,13 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid transaction');
-      const initialState = await firstValueFrom(walletFunded.state());
-      const syncedState = await waitForSync(walletFunded);
+      const initialState = await firstValueFrom(sender.state());
+      const syncedState = await waitForSync(sender);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       const balance = 25000000000000000n;
 
-      const initialState2 = await firstValueFrom(wallet2.state());
+      const initialState2 = await firstValueFrom(receiver.state());
       const initialBalance2 = initialState2.balances[nativeToken()];
       if (initialBalance2 === undefined || initialBalance2 === 0n) {
         logger.info(`Waiting to receive tokens...`);
@@ -172,14 +196,14 @@ describe('Token transfer', () => {
       const output = UnprovenOutput.new(coin, initialState.coinPublicKey, initialState.encryptionPublicKey);
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
-      const provenTx = await walletFunded.proveTransaction({
+      const provenTx = await sender.proveTransaction({
         type: 'TransactionToProve',
         transaction: unprovenTx,
       });
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);
       await expect(
-        Promise.all([walletFunded.submitTransaction(provenTx), walletFunded.submitTransaction(provenTx)]),
+        Promise.all([sender.submitTransaction(provenTx), sender.submitTransaction(provenTx)]),
       ).rejects.toThrow();
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);
@@ -194,7 +218,7 @@ describe('Token transfer', () => {
       // expect(pendingState.coins.length).toBe(5);
       // expect(pendingState.transactionHistory.length).toBe(2);
 
-      const finalState = await waitForFinalizedBalance(walletFunded);
+      const finalState = await waitForFinalizedBalance(sender);
       // const finalState = await waitForTxHistory(walletFunded, 2);
       expect(finalState.balances[nativeToken()]).toBe(balance);
       expect(finalState.availableCoins.length).toBe(5);
@@ -221,14 +245,14 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Transaction not proved');
-      const syncedState = await waitForSync(walletFunded);
+      const syncedState = await waitForSync(sender);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       logger.info('Stopping proof server container..');
       await fixture.getProofServerContainer().stop({ timeout: 10_000 });
 
-      const initialState2 = await firstValueFrom(wallet2.state());
+      const initialState2 = await firstValueFrom(receiver.state());
 
       const outputsToCreate = [
         {
@@ -237,8 +261,8 @@ describe('Token transfer', () => {
           receiverAddress: initialState2.address,
         },
       ];
-      const txToProve = await walletFunded.transferTransaction(outputsToCreate);
-      await expect(walletFunded.proveTransaction(txToProve)).rejects.toThrow();
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      await expect(sender.proveTransaction(txToProve)).rejects.toThrow();
 
       // const pendingState = await waitForPending(walletFunded);
       // logger.info(pendingState);
@@ -248,7 +272,7 @@ describe('Token transfer', () => {
       // expect(pendingState.coins.length).toBe(5);
       // expect(pendingState.transactionHistory.length).toBe(1);
 
-      const finalState = await waitForFinalizedBalance(walletFunded);
+      const finalState = await waitForFinalizedBalance(sender);
       expect(finalState).toMatchObject(syncedState);
       // expect(finalState.balances[nativeToken()]).toBe(initialBalance);
       // expect(finalState.availableCoins.length).toBe(5);

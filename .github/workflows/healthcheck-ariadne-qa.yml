@@ -12,8 +12,8 @@ jobs:
     with:
       network: devnet
       deployment: ariadne-qa
-      seed: b0dcbe35cba84c11863e973e75c22fc482812b76da09a47e16fabcf534ec6709
-      seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+      seed: 1b2c2d3f981e495b399ae4699a21dd65096037c773bd3c6ad2ee858fc4914b98
+      seed2: 8f38fa081073ecfb39856901b96d26dc0441ca6fe9dd259bfa28641d6a5e3321
       nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
       nt_seed2: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
       modifier: '-t @healthcheck'
