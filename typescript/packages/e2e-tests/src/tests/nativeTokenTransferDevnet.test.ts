@@ -38,8 +38,8 @@ describe('Token transfer', () => {
   const outputValue = 1n;
   let tokenTypeHash: string;
 
-  let fundedWallet: Wallet & Resource;
-  let receivingWallet: Wallet & Resource;
+  let sender: Wallet & Resource;
+  let receiver: Wallet & Resource;
   let fixture: TestContainersFixture;
 
   beforeEach(async () => {
@@ -47,44 +47,68 @@ describe('Token transfer', () => {
     setNetworkId(NetworkId.DevNet);
     switch (TestContainersFixture.deployment) {
       case 'ariadne-qa': {
-        tokenTypeHash = '010001459a2973cc16b54b106afd8045501974c0ff40f49b3faf0134178c0c721c5c59';
+        tokenTypeHash = '0100016fdbb01d1f075a0c78a279a089b59c15f9f5f0b6ae78abf5001e00ebded61004';
         break;
       }
       case 'devnet': {
-        tokenTypeHash = '0100017b41a104b2bc7b0d80ebbbce42a92510846e95f7d304643d73a6d4b86c2e7961';
+        tokenTypeHash = '0100016a88f23d9a6764197790c290b29031367a64cb1c3f832c221efd32bf9701f825';
         break;
       }
       case 'qanet': {
-        tokenTypeHash = '010001efcae6abf93eb3aa5acef6e0756a22ee3bd3fa20509d8874954838f28cba2f31';
+        tokenTypeHash = '010001bbbe7ae865e85adface5606a728022920de5f7de78270b1dae71ad21d4f3c717';
         break;
       }
     }
 
-    fundedWallet = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      fundedSeed,
-      'info',
-    );
+    const date = new Date();
+    const hour = date.getHours();
+    if (hour % 2 !== 0) {
+      logger.info('Using NT_SEED2 as receiver');
+      sender = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        fundedSeed,
+        'info',
+      );
 
-    receivingWallet = await WalletBuilder.buildFromSeed(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      receivingSeed,
-      'info',
-    );
+      receiver = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        receivingSeed,
+        'info',
+      );
+    } else {
+      logger.info('Using NT_SEED2 as sender');
+      sender = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        receivingSeed,
+        'info',
+      );
 
-    fundedWallet.start();
-    receivingWallet.start();
+      receiver = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        fundedSeed,
+        'info',
+      );
+    }
+
+    sender.start();
+    receiver.start();
   });
 
   afterEach(async () => {
-    await fundedWallet.close();
-    await receivingWallet.close();
+    await sender.close();
+    await receiver.close();
   });
 
   test(
@@ -97,8 +121,8 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid native token transfer transaction');
 
-      await Promise.all([waitForSync(fundedWallet), waitForSync(receivingWallet)]);
-      const initialState = await firstValueFrom(fundedWallet.state());
+      await Promise.all([waitForSync(sender), waitForSync(receiver)]);
+      const initialState = await firstValueFrom(sender.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(initialState.balances);
       const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
@@ -107,7 +131,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
       logger.info(initialState.availableCoins);
 
-      const initialState2 = await firstValueFrom(receivingWallet.state());
+      const initialState2 = await firstValueFrom(receiver.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
       const initialBalanceNative2 = initialState2.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 2: ${initialBalance2} tDUST`);
@@ -121,12 +145,12 @@ describe('Token transfer', () => {
           receiverAddress: initialState2.address,
         },
       ];
-      const txToProve = await fundedWallet.transferTransaction(outputsToCreate);
-      const provenTx = await fundedWallet.proveTransaction(txToProve);
-      const id = await fundedWallet.submitTransaction(provenTx);
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      const provenTx = await sender.proveTransaction(txToProve);
+      const id = await sender.submitTransaction(provenTx);
       logger.info('Transaction id: ' + id);
 
-      const pendingState = await waitForPending(fundedWallet);
+      const pendingState = await waitForPending(sender);
       logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
@@ -136,7 +160,7 @@ describe('Token transfer', () => {
       expect(pendingState.coins.length).toBe(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      const finalState = await waitForFinalizedBalance(fundedWallet);
+      const finalState = await waitForFinalizedBalance(sender);
       logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
@@ -148,7 +172,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]} tDUST`);
       logger.info(`Wallet 1: ${finalState.balances[tokenTypeHash]} ${tokenTypeHash}`);
 
-      const finalState2 = await waitForFinalizedBalance(receivingWallet);
+      const finalState2 = await waitForSync(receiver);
       logger.info(walletStateTrimmed(finalState2));
       logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2);
@@ -170,14 +194,14 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid native token transaction');
-      const initialState = await firstValueFrom(fundedWallet.state());
-      const syncedState = await waitForSync(fundedWallet);
+      const initialState = await firstValueFrom(sender.state());
+      const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
 
-      const syncedState2 = await waitForSync(receivingWallet);
+      const syncedState2 = await waitForSync(receiver);
       const initialDustBalance2 = syncedState2?.balances[nativeToken()] ?? 0n;
       const initialBalance2 = syncedState2?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance2} tDUST`);
@@ -191,16 +215,16 @@ describe('Token transfer', () => {
       const output = UnprovenOutput.new(coin, initialState.coinPublicKey, initialState.encryptionPublicKey);
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
-      const provenTx = await fundedWallet.proveTransaction({
+      const provenTx = await sender.proveTransaction({
         type: 'TransactionToProve',
         transaction: unprovenTx,
       });
 
       await expect(
-        Promise.all([fundedWallet.submitTransaction(provenTx), fundedWallet.submitTransaction(provenTx)]),
+        Promise.all([sender.submitTransaction(provenTx), sender.submitTransaction(provenTx)]),
       ).rejects.toThrow();
 
-      const finalState = await waitForFinalizedBalance(fundedWallet);
+      const finalState = await waitForFinalizedBalance(sender);
       expect(finalState).toMatchObject(syncedState);
       expect(finalState.balances[nativeToken()]).toBe(initialDustBalance);
       expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
@@ -219,7 +243,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Transaction not proved');
-      const syncedState = await waitForSync(fundedWallet);
+      const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
@@ -228,7 +252,7 @@ describe('Token transfer', () => {
       logger.info('Stopping proof server container..');
       await fixture.getProofServerContainer().stop({ timeout: 10_000 });
 
-      const initialState2 = await firstValueFrom(receivingWallet.state());
+      const initialState2 = await firstValueFrom(receiver.state());
 
       const outputsToCreate = [
         {
@@ -237,10 +261,10 @@ describe('Token transfer', () => {
           receiverAddress: initialState2.address,
         },
       ];
-      const txToProve = await fundedWallet.transferTransaction(outputsToCreate);
-      await expect(fundedWallet.proveTransaction(txToProve)).rejects.toThrow();
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      await expect(sender.proveTransaction(txToProve)).rejects.toThrow();
 
-      const finalState = await waitForFinalizedBalance(fundedWallet);
+      const finalState = await waitForFinalizedBalance(sender);
       expect(finalState).toMatchObject(syncedState);
       expect(finalState.balances[nativeToken()]).toBe(initialDustBalance);
       expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
