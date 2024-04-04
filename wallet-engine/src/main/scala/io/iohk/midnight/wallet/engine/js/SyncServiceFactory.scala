@@ -60,20 +60,11 @@ object SyncServiceFactory {
                       )
                         .mapN(AppliedTransaction(_, _).asRight)
                   }
-                  .flatMap { updates =>
-                    Transaction
-                      .Offset(offset)
-                      .map(ViewingUpdate(_, updates))
-                      .leftMap(Exception(_))
-                      .toTry
-                  }
+                  .map(ViewingUpdate(Transaction.Offset(offset), _))
 
               ApplicativeThrow[F].fromTry(viewingUpdate)
             case IndexerClient.RawProgressUpdate(synced, total) =>
-              (Transaction.Offset(synced), Transaction.Offset(total))
-                .mapN(ProgressUpdate.apply)
-                .leftMap(Exception(_))
-                .liftTo[F]
+              ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total)).pure[F]
 
             case IndexerClient.ConnectionLost =>
               ConnectionLost.pure

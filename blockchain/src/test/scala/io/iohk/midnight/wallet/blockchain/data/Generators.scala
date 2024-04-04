@@ -1,9 +1,7 @@
 package io.iohk.midnight.wallet.blockchain.data
 
-import cats.syntax.all.*
 import java.time.Instant
 import org.scalacheck.Gen
-import org.scalacheck.cats.implicits.*
 
 object Generators {
   private val hexStringGen: Gen[String] =
@@ -16,7 +14,7 @@ object Generators {
     hexStringGen.map(Hash.apply[T])
 
   val heightGen: Gen[Transaction.Offset] =
-    Gen.posNum[BigInt].map(Transaction.Offset.apply).collect { case Right(n) => n }
+    Gen.posNum[BigInt].map(Transaction.Offset.apply)
 
   val instantGen: Gen[Instant] =
     Gen.long.map(Instant.ofEpochMilli)

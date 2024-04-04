@@ -170,7 +170,12 @@ object Wallet {
         .asRight
 
     case (wallet: Wallet, update: ProgressUpdate) =>
-      wallet.copy(progress = wallet.progress.copy(total = update.total)).asRight
+      wallet
+        .copy(
+          progress = wallet.progress.copy(total = update.total),
+          isConnected = true,
+        )
+        .asRight
 
     case (wallet: Wallet, ConnectionLost) =>
       wallet.copy(isConnected = false).asRight
@@ -226,7 +231,7 @@ object Wallet {
     given Decoder[LocalState] = Decoder[String].emapTry(LedgerSerialization.parseState(_).toTry)
     given Decoder[Transaction] =
       Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize)
-    given Decoder[data.Transaction.Offset] = Decoder[BigInt].emap(data.Transaction.Offset.apply)
+    given Decoder[data.Transaction.Offset] = Decoder[BigInt].map(data.Transaction.Offset.apply)
     given Decoder[Snapshot] = deriveDecoder[Snapshot]
   }
 }
