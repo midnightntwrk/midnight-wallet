@@ -38,10 +38,10 @@ export const waitForSync = (wallet: Wallet) =>
         logger.info(`Wallet scanned ${scanned} indices out of ${total}`);
       }),
       filter((state) => {
-        // Let's allow progress only if wallet is close enough
+        // Let's allow progress only if wallet is synced fully
         const synced = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total ?? 50n;
-        return total - synced < 1n;
+        return state.syncProgress !== null && total === synced;
       }),
     ),
   );
