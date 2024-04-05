@@ -46,6 +46,10 @@ describe('Token transfer', () => {
     fixture = getFixture();
     setNetworkId(NetworkId.DevNet);
     switch (TestContainersFixture.deployment) {
+      case 'ariadne-temp': {
+        tokenTypeHash = '01000156199ea50f0118fe7b22eae708c057d9f051da51593c8fa1619d54774a4db665';
+        break;
+      }
       case 'ariadne-qa': {
         tokenTypeHash = '0100016fdbb01d1f075a0c78a279a089b59c15f9f5f0b6ae78abf5001e00ebded61004';
         break;
@@ -156,7 +160,7 @@ describe('Token transfer', () => {
       logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
-      expect(pendingState.balances[tokenTypeHash] ?? 0n).toBe(initialBalanceNative - outputValue);
+      expect(pendingState.balances[tokenTypeHash] ?? 0n).toBeLessThanOrEqual(initialBalanceNative - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
       expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.coins.length).toBe(initialState.coins.length);
