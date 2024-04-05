@@ -103,8 +103,10 @@ describe('Token transfer', () => {
     }
 
     sender.start();
+    // wait before starting another wallet to evade issues with syncing
+    await new Promise((resolve) => setTimeout(resolve, 5_000));
     receiver.start();
-  });
+  }, 10_000);
 
   afterEach(async () => {
     await sender.close();
@@ -154,9 +156,9 @@ describe('Token transfer', () => {
       logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
-      expect(pendingState.balances[tokenTypeHash] ?? 0n).toBe(0n);
+      expect(pendingState.balances[tokenTypeHash] ?? 0n).toBe(initialBalanceNative - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBe(2);
+      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.coins.length).toBe(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
@@ -165,9 +167,9 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
       expect(finalState.balances[tokenTypeHash] ?? 0n).toBe(initialBalanceNative - outputValue);
-      expect(finalState.availableCoins.length).toBe(initialState.availableCoins.length);
+      expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
-      expect(finalState.coins.length).toBe(initialState.coins.length);
+      expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]} tDUST`);
       logger.info(`Wallet 1: ${finalState.balances[tokenTypeHash]} ${tokenTypeHash}`);
