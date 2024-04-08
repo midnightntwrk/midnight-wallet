@@ -9,7 +9,14 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
+import {
+  createLogger,
+  waitForFinalizedBalance,
+  waitForPending,
+  waitForSync,
+  waitForTxInHistory,
+  walletStateTrimmed,
+} from './utils';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import path from 'node:path';
@@ -106,8 +113,8 @@ describe('Token transfer', () => {
       ];
       const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       const provenTx = await walletFunded.proveTransaction(txToProve);
-      const id = await walletFunded.submitTransaction(provenTx);
-      logger.info('Transaction id: ' + id);
+      const txId = await walletFunded.submitTransaction(provenTx);
+      logger.info('Transaction id: ' + txId);
 
       const pendingState = await waitForPending(walletFunded);
       logger.info(walletStateTrimmed(pendingState));
@@ -127,7 +134,8 @@ describe('Token transfer', () => {
       expect(finalState.coins.length).toBe(5);
       expect(finalState.transactionHistory.length).toBe(2);
 
-      const finalState2 = await waitForFinalizedBalance(wallet2);
+      await waitForTxInHistory(txId, wallet2);
+      const finalState2 = await waitForSync(wallet2);
       logger.info(walletStateTrimmed(finalState2));
       logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
       logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);

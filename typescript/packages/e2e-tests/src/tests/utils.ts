@@ -76,6 +76,17 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
     ),
   );
 
+export const waitForTxInHistory = async (txId: string, wallet: Wallet) => {
+  let foundTxId = false;
+  while (!foundTxId) {
+    logger.info('Waiting for a txId...');
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    const state = await waitForSync(wallet);
+    foundTxId = state.transactionHistory.flatMap((tx) => tx.identifiers).some((id) => id === txId);
+    if (foundTxId) logger.info(`TxId ${txId} found`);
+  }
+};
+
 export const walletStateTrimmed = (state: WalletState) => {
   const { transactionHistory, coins, availableCoins, ...rest } = state;
   return rest;
