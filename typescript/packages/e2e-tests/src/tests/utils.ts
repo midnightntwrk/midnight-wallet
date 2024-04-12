@@ -94,4 +94,4 @@ export const walletStateTrimmed = (state: WalletState) => {
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'ariadne-temp' | 'ariadne-qa' | 'devnet' | 'qanet' | 'local';
+export type MidnightDeployment = 'ariadne-qa' | 'devnet' | 'local';

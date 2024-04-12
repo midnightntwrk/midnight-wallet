@@ -93,17 +93,11 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'ariadne-temp': {
-        return 'https://pubsub.temp.pre.platform.midnight.network:443';
+      case 'devnet': {
+        return 'https://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
         return 'https://pubsub.topaz.dev.platform.midnight.network:443';
-      }
-      case 'devnet': {
-        return 'https://pubsub.jade.midnight.network:443';
-      }
-      case 'qanet': {
-        return 'https://pubsub.ruby.dev.midnight.network:443';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -114,17 +108,11 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'ariadne-temp': {
-        return 'wss://pubsub.temp.pre.platform.midnight.network:443';
+      case 'devnet': {
+        return 'wss://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
         return 'wss://pubsub.topaz.dev.platform.midnight.network:443';
-      }
-      case 'devnet': {
-        return 'wss://pubsub.jade.midnight.network:443';
-      }
-      case 'qanet': {
-        return 'wss://pubsub.ruby.dev.midnight.network:443';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -135,17 +123,11 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'ariadne-temp': {
-        return 'http://node-01.temp.pre.platform.midnight.network:9944';
+      case 'devnet': {
+        return 'https://rpc.devnet.midnight.network';
       }
       case 'ariadne-qa': {
         return 'http://node-01.topaz.dev.platform.midnight.network:9944';
-      }
-      case 'devnet': {
-        return 'http://node-01.jade.midnight.network:9944';
-      }
-      case 'qanet': {
-        return 'http://node-01.ruby.dev.midnight.network:9944';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
