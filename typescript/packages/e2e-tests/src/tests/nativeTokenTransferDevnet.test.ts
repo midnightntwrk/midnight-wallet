@@ -53,20 +53,12 @@ describe('Token transfer', () => {
     fixture = getFixture();
     setNetworkId(NetworkId.DevNet);
     switch (TestContainersFixture.deployment) {
-      case 'ariadne-temp': {
+      case 'devnet': {
         tokenTypeHash = '01000156199ea50f0118fe7b22eae708c057d9f051da51593c8fa1619d54774a4db665';
         break;
       }
       case 'ariadne-qa': {
         tokenTypeHash = '0100016fdbb01d1f075a0c78a279a089b59c15f9f5f0b6ae78abf5001e00ebded61004';
-        break;
-      }
-      case 'devnet': {
-        tokenTypeHash = '0100016a88f23d9a6764197790c290b29031367a64cb1c3f832c221efd32bf9701f825';
-        break;
-      }
-      case 'qanet': {
-        tokenTypeHash = '010001bbbe7ae865e85adface5606a728022920de5f7de78270b1dae71ad21d4f3c717';
         break;
       }
     }
