@@ -65,7 +65,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
-      - uses: planetscale/ghcommit-action@v0.1.6
+      - uses: MonikaJassova/ghcommit-action@aee0efc02d3707e178c534477e5c87f70fe6678f
         if: steps.set_update.outputs.UPDATE == 'true'
         with:
           commit_message: "DApp Connector API documentation update - created by Midnight CI Github Action"
