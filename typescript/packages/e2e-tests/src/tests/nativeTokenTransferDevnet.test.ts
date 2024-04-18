@@ -43,7 +43,7 @@ describe('Token transfer', () => {
   const fundedSeed = process.env.NT_SEED;
   const timeout = 1_200_000;
   const outputValue = 1n;
-  let tokenTypeHash: string;
+  let tokenTypeHash: string | undefined;
 
   let sender: Wallet & Resource;
   let receiver: Wallet & Resource;
@@ -52,16 +52,6 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     fixture = getFixture();
     setNetworkId(NetworkId.DevNet);
-    switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        tokenTypeHash = '01000156199ea50f0118fe7b22eae708c057d9f051da51593c8fa1619d54774a4db665';
-        break;
-      }
-      case 'ariadne-qa': {
-        tokenTypeHash = '0100016fdbb01d1f075a0c78a279a089b59c15f9f5f0b6ae78abf5001e00ebded61004';
-        break;
-      }
-    }
 
     const date = new Date();
     const hour = date.getHours();
@@ -130,6 +120,13 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(sender.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(initialState.balances);
+      Object.entries(initialState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
       const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance} tDUST`);
       logger.info(`Wallet 1: ${initialBalanceNative} ${tokenTypeHash}`);
@@ -203,6 +200,13 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(sender.state());
       const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      Object.entries(initialState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
@@ -251,6 +255,13 @@ describe('Token transfer', () => {
       allure.story('Transaction not proved');
       const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      Object.entries(syncedState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
