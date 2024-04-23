@@ -162,7 +162,8 @@ describe('Token transfer', () => {
       expect(pendingState.coins.length).toBe(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      const finalState = await waitForFinalizedBalance(sender);
+      await waitForTxInHistory(txId, sender);
+      const finalState = await waitForSync(sender);
       logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
