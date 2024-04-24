@@ -1,188 +1,193 @@
 name: E2E tests
 
 env:
-    MIDNIGHT_GH_USER: ${{ github.actor }}
-    MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
-    GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-    MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_USER: ${{ github.actor }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
+  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
 
 on:
-    workflow_dispatch:
-      inputs:
-        network:
-          type: choice
-          description: Midnight network to use
-          required: true
-          default: 'devnet'
-          options:
-            - devnet
-            - undeployed
-        deployment:
-          type: choice
-          description: Midnight deployment to use
-          required: true
-          default: 'ariadne-qa'
-          options:
-            - local
-            - ariadne-qa
-            - devnet
-            - qanet
-        seed:
-            type: string
-            description: Seed of a funded wallet
-            required: true
-            default: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
-        seed2:
-            type: string
-            description: Seed of another receiving wallet
-            required: true
-            default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
-        nt_seed:
-          type: string
-          description: Seed of a funded wallet with native tokens
-          required: true
-          default: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
-        nt_seed2:
-            type: string
-            description: Seed of another receiving wallet for native tokens
-            required: true
-            default: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
-        modifier:
-            type: string
-            description: Suite or a testname to run (refer to Jest docs)
-            required: false
-    workflow_call:
-        inputs:
-            network:
-                type: string
-                description: Midnight network to use (devnet/undeployed)
-                required: true
-                default: 'devnet'
-            deployment:
-                type: string
-                description: Midnight deployment to use (ariadne-qa/devnet/qanet/local)
-                required: true
-                default: 'ariadne-qa'
-            seed:
-                type: string
-                description: Seed of a funded wallet
-                required: true
-            seed2:
-                type: string
-                description: Seed of another receiving wallet
-                required: true
-            nt_seed:
-                type: string
-                description: Seed of a funded wallet with native tokens
-                required: true
-            nt_seed2:
-                type: string
-                description: Seed of another receiving wallet for native tokens
-                required: true
-            modifier:
-                type: string
-                description: Suite or a testname to run (refer to Jest docs)
-                required: false
-        secrets:
-            GH_TOKEN:
-              required: true
-            GH_USERNAME:
-              required: true
-            MIDNIGHTBOT_PACKAGES_WRITE:
-              required: true
-
+  workflow_dispatch:
+    inputs:
+      network:
+        type: choice
+        description: Midnight network to use
+        required: true
+        default: 'devnet'
+        options:
+          - devnet
+          - undeployed
+      deployment:
+        type: choice
+        description: Midnight deployment to use
+        required: true
+        default: 'ariadne-qa'
+        options:
+          - local
+          - ariadne-qa
+          - devnet
+          - qanet
+      seed:
+        type: string
+        description: Seed of a funded wallet
+        required: true
+        default: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+      seed2:
+        type: string
+        description: Seed of another receiving wallet
+        required: true
+        default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+      nt_seed:
+        type: string
+        description: Seed of a funded wallet with native tokens
+        required: true
+        default: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
+      nt_seed2:
+        type: string
+        description: Seed of another receiving wallet for native tokens
+        required: true
+        default: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
+      modifier:
+        type: string
+        description: Suite or a testname to run (refer to Jest docs)
+        required: false
+  workflow_call:
+    inputs:
+      network:
+        type: string
+        description: Midnight network to use (devnet/undeployed)
+        required: true
+        default: 'devnet'
+      deployment:
+        type: string
+        description: Midnight deployment to use (ariadne-qa/devnet/qanet/local)
+        required: true
+        default: 'ariadne-qa'
+      seed:
+        type: string
+        description: Seed of a funded wallet
+        required: true
+      seed2:
+        type: string
+        description: Seed of another receiving wallet
+        required: true
+      nt_seed:
+        type: string
+        description: Seed of a funded wallet with native tokens
+        required: true
+      nt_seed2:
+        type: string
+        description: Seed of another receiving wallet for native tokens
+        required: true
+      modifier:
+        type: string
+        description: Suite or a testname to run (refer to Jest docs)
+        required: false
+    secrets:
+      GH_TOKEN:
+        required: true
+      GH_USERNAME:
+        required: true
+      MIDNIGHTBOT_PACKAGES_WRITE:
+        required: true
 
 jobs:
-    build:
-        name: E2E tests
-        runs-on: ubuntu-latest-4-cores
-        steps:
-            - name: Prepare .netrc to access other repos
-              run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
+  build:
+    name: E2E tests
+    runs-on: ubuntu-latest-4-cores
+    steps:
+      - name: Prepare .netrc to access other repos
+        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
 
-            - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-            - uses: nixbuild/nix-quick-install-action@v25
-              with:
-                github_access_token: ${{ secrets.GH_TOKEN }}
-                nix_conf: |
-                    access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-                    extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-                    extra-substituters = https://cache.iog.io
-                    accept-flake-config = true
-                    netrc-file = ~/.netrc
+      - uses: nixbuild/nix-quick-install-action@v25
+        with:
+          github_access_token: ${{ secrets.GH_TOKEN }}
+          nix_conf: |
+            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
+            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
+            extra-substituters = https://cache.iog.io
+            accept-flake-config = true
+            netrc-file = ~/.netrc
 
-            - name: Restore and cache Nix store
-              uses: nix-community/cache-nix-action@v4
-              with:
-                gc-linux: true
-                gc-max-store-size-linux: 8000000000
-                key: cache-ubuntu-${{ hashFiles('**/*') }}
-                restore-keys: |
-                    cache-ubuntu-
+      - name: Restore and cache Nix store
+        uses: nix-community/cache-nix-action@v4
+        with:
+          gc-linux: true
+          gc-max-store-size-linux: 8000000000
+          key: cache-ubuntu-${{ hashFiles('**/*') }}
+          restore-keys: |
+            cache-ubuntu-
 
-            - name: Setup .npmrc
-              run: |
-                    echo "
-                    //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
-                    " >> ./.npmrc
+      - name: Setup .npmrc
+        run: |
+          echo "
+          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
+          " >> ./.npmrc
 
-            - name: Log in to GitHub Container registry
-              uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
-              with:
-                registry: 'https://ghcr.io'
-                username: ${{ secrets.GH_USERNAME }}
-                password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ secrets.GH_USERNAME }}
+          password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
-            - name: Configure yarn
-              run: |
-                cd typescript
-                yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
-                echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
+      - name: Configure yarn
+        run: |
+          cd typescript
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
+          echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
 
-            - name: Run e2e tests
-              env:
-                NETWORK: ${{ inputs.network }}
-                DEPLOYMENT: ${{ inputs.deployment }}
-                SEED: ${{ inputs.seed }}
-                SEED2: ${{ inputs.seed2 }}
-                NT_SEED: ${{ inputs.nt_seed }}
-                NT_SEED2: ${{ inputs.nt_seed2 }}
-              run: |
-                nix develop .#typescript --command yarn
-                nix develop .#typescript --command yarn test-e2e -- ${{ inputs.modifier }}
+      - name: Run e2e tests
+        env:
+          NETWORK: ${{ inputs.network }}
+          DEPLOYMENT: ${{ inputs.deployment }}
+          SEED: ${{ inputs.seed }}
+          SEED2: ${{ inputs.seed2 }}
+          NT_SEED: ${{ inputs.nt_seed }}
+          NT_SEED2: ${{ inputs.nt_seed2 }}
+        run: |
+          nix develop .#typescript --command yarn
+          nix develop .#typescript --command yarn test-e2e -- ${{ inputs.modifier }}
 
-            - name: Create allure properties
-              if: success() || failure()
-              working-directory: ./typescript/packages/e2e-tests/allure-results
-              run: |
-                echo "
-                env=${{ inputs.network }}
-                tags=${{ inputs.modifier }}
-                deployment=${{ inputs.deployment }}
-                platform=Linux
-                " > environment.properties
-           
-            - name: Generate allure report
-              if: success() || failure()
-              working-directory: ./typescript/packages/e2e-tests
-              run: |
-                yarn allure-generate
+      - name: Create allure properties
+        if: success() || failure()
+        working-directory: ./typescript/packages/e2e-tests/allure-results
+        run: |
+          echo "
+          env=${{ inputs.network }}
+          tags=${{ inputs.modifier }}
+          deployment=${{ inputs.deployment }}
+          platform=Linux
+          " > environment.properties
 
-            - name: Publish artifacts (test reports)
-              uses: actions/upload-artifact@v3
-              if: success() || failure()
-              with:
-                name: test-reports
-                path: |
-                  ./typescript/packages/e2e-tests/reports/allure-report
-                retention-days: 30
+      - name: Send allure results
+        if: success() || failure()
+        run: ./typescript/report_allure.sh ./typescript/packages/e2e-tests/allure-results headless-wallet-${{ inputs.deployment }} true false true
 
-            - name: Publish wallet TS Test Report
-              uses: dorny/test-reporter@v1
-              if: success() || failure()
-              with:
-                name: Wallet TS packages Jest Tests Report
-                reporter: jest-junit
-                path: |
-                    ./typescript/packages/e2e-tests/reports/report.xml
+      - name: Generate allure report
+        if: success() || failure()
+        working-directory: ./typescript/packages/e2e-tests
+        run: |
+          yarn allure-generate
+
+      - name: Publish artifacts (test reports)
+        uses: actions/upload-artifact@v3
+        if: success() || failure()
+        with:
+          name: test-reports
+          path: |
+            ./typescript/packages/e2e-tests/reports/allure-report
+          retention-days: 30
+
+      - name: Publish wallet TS Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Wallet TS packages Jest Tests Report
+          reporter: jest-junit
+          path: |
+            ./typescript/packages/e2e-tests/reports/report.xml
