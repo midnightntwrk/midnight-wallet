@@ -92,6 +92,10 @@ on:
         required: true
       MIDNIGHTBOT_PACKAGES_WRITE:
         required: true
+      ALLURE_ADMIN_USER:
+        required: true
+      ALLURE_ADMIN_PASSWORD:
+        required: true
 
 jobs:
   build:
@@ -164,9 +168,15 @@ jobs:
           platform=Linux
           " > environment.properties
 
-      - name: Send allure results
-        if: success() || failure()
-        run: ./typescript/report_allure.sh ./typescript/packages/e2e-tests/allure-results headless-wallet-${{ inputs.deployment }} true false true
+      - name: Send Results to Allure Server
+        uses: robkatona/send-allure-results@1
+        if: ${{ always() }}
+        with:
+          allure-server-url: https://allure-server.stg.midnight.tools
+          allure-results-directory: ./typescript/packages/e2e-tests/allure-results
+          project-id: headless-wallet-${{ inputs.deployment }}
+          security-user: ${{ secrets.ALLURE_ADMIN_USER }}
+          security-pass: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
 
       - name: Generate allure report
         if: success() || failure()
