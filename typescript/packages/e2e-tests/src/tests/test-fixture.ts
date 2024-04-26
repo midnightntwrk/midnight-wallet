@@ -78,8 +78,8 @@ export class TestContainersFixture {
     return this.composeEnvironment.getContainer(`node_${this.uid}`);
   }
 
-  public getIndexerContainer(): StartedGenericContainer {
-    return this.composeEnvironment.getContainer(`indexer_${this.uid}`);
+  public getPubsubContainer(): StartedGenericContainer {
+    return this.composeEnvironment.getContainer(`pubsub_${this.uid}`);
   }
 
   public getProverUri(): string {
@@ -88,7 +88,7 @@ export class TestContainersFixture {
   }
 
   private getIndexerPort(): number {
-    return this.getIndexerContainer().getMappedPort(TestContainersFixture.INDEXER_PORT);
+    return this.getPubsubContainer().getMappedPort(TestContainersFixture.INDEXER_PORT);
   }
 
   public getIndexerUri(): string {

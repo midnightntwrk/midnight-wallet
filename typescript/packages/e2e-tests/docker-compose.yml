@@ -1,31 +1,94 @@
+version: '3.5'
 services:
   proof-server:
-    image: ghcr.io/midnight-ntwrk/proof-server:2.0.7
-    container_name: proof-server
+    image: "ghcr.io/midnight-ntwrk/proof-server:2.0.7"
+    command: ["midnight-proof-server --network undeployed"]
     ports:
-      - '6300:6300'
-  node:
-    image: ghcr.io/midnight-ntwrk/midnight-node:0.2.2-7eff47a
-    container_name: node
+      - "6300:6300"
     environment:
-      - RUN_DEV_NET=TRUE
+      RUST_BACKTRACE: "full"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300/version" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  indexer:
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.1.2"
     ports:
-      - '9944:9944'
+      - "8088"
+    command: ['-Dlogback.configurationFile=logback-json-file.xml']
+    environment:
+      OPERATION_MODE: 'indexer'
+      LOG_LEVEL: 'TRACE'
+      LEDGER_NETWORK_ID: 'Undeployed'
+      SUBSTRATE_NODE_URL: 'node'
+      SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
+      DB_VENDOR: 'postgresql'
+      DB_URL: 'postgres:5432/pubsub-indexer'
+      DB_USER: 'pubsub-indexer'
+      DB_PASS: 'pubsub-indexer'
+      REDIS_URL: 'tcp://redis:6379'
+      OTEL_JAVAAGENT_ENABLED: 'false'
+    healthcheck:
+      test: ['CMD', 'egrep', '"Block .* was stored at height 0"', '/tmp/app_logs/server.log']
+      interval: 1s
+      timeout: 5s
+      retries: 30
+    depends_on:
+      node:
+        condition: service_started
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+  pubsub:
+    image: 'ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.1.2'
+    platform: linux/amd64
+    expose: ['8088']
+    ports:
+      - '8088:8088'
+    environment:
+      OPERATION_MODE: 'pubsub'
+      LOG_LEVEL: 'TRACE'
+      LEDGER_NETWORK_ID: 'Undeployed'
+      SUBSTRATE_NODE_URL: 'node'
+      SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
+      DB_VENDOR: 'postgresql'
+      DB_URL: 'postgres:5432/pubsub-indexer'
+      DB_USER: 'pubsub-indexer'
+      DB_PASS: 'pubsub-indexer'
+      REDIS_URL: 'tcp://redis:6379'
+      OTEL_JAVAAGENT_ENABLED: 'false'
+    depends_on:
+      postgres:
+        condition: service_started
+      redis:
+        condition: service_started
+      indexer:
+        condition: service_healthy
+  postgres:
+    image: postgres:15
+    ports:
+      - '5432:5432'
+    environment:
+      POSTGRES_USER: 'pubsub-indexer'
+      POSTGRES_PASSWORD: 'pubsub-indexer'
+      POSTGRES_DB: 'pubsub-indexer'
+  redis:
+    image: redis:7.2.4
+    ports:
+      - 6379:6379
+  node:
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.3.1-2fdca2b"
+    platform: linux/amd64
+    ports:
+     - "9944:9944"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9944/health" ]
       interval: 2s
       timeout: 5s
       retries: 5
-      start_period: 40s
-  indexer:
-    image: ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.0.11
-    container_name: indexer
-    ports:
-      - '8088:8088'
-    command: ["midnight-pubsub-indexer", "-Devents-source.node-http-url=http://node:9944", "-Devents-source.node-ws-url=ws://node:9944"]
+      start_period: 5s
     environment:
-      LEDGER_NETWORK_ID: 'Undeployed'
-      OTEL_JAVAAGENT_ENABLED: 'false'
-    depends_on:
-      node:
-        condition: service_healthy
+      RUN_DEV_NET: "TRUE"
