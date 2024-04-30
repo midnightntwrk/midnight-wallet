@@ -1,4 +1,4 @@
-name: Fund test wallets
+name: Fund a wallet on all envs
 
 env:
     MIDNIGHT_GH_USER: ${{ github.actor }}
@@ -10,14 +10,10 @@ env:
 on:
     workflow_dispatch:
       inputs:
-        deployment:
-          type: choice
-          description: Midnight deployment to use
+        wallet_address:
+          type: string
+          description: Wallet address to fund
           required: true
-          default: 'ariadne-qa'
-          options:
-            - ariadne-qa
-            - devnet
 
 
 jobs:
@@ -68,10 +64,23 @@ jobs:
                 yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
                 echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
 
-            - name: Run funding script
-              env:
-                NETWORK: devnet
-                DEPLOYMENT: ${{ inputs.deployment }}
+
+            - name: Install deps
               run: |
                 nix develop .#typescript --command yarn
-                nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+
+            - name: Run funding script for devnet
+              env:
+                NETWORK: devnet
+                DEPLOYMENT: devnet
+                WALLET_ADDRESS: ${{ inputs.wallet_address }}
+              run: |
+                nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWalletAcrossEnvs.test.ts
+
+            - name: Run funding script for ariadne-qa
+              env:
+                NETWORK: devnet
+                DEPLOYMENT: ariadne-qa
+                WALLET_ADDRESS: ${{ inputs.wallet_address }}
+              run: |
+                nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWalletAcrossEnvs.test.ts
