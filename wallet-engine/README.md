@@ -1,19 +1,20 @@
-# Midnight Wallet
+# Midnight wallet
 
-## Installation
+## Installing
 
-The Midnight Wallet is available as an NPM package with the namespace `@midnight-ntwrk/wallet`. It can be installed using any Node package manager, such as yarn. To install the package using yarn, please execute the following command:
+The Midnight wallet is provided as an NPM package under the namespace `@midnight-ntwrk/wallet`. You can install it using any node package manager, including Yarn. To install the package using Yarn, run the following command:
 
 `yarn add @midnight-ntwrk/wallet`
 
-## Important information!
-The wallet utilizes the `@midnight-ntwrk/zswap` library to manage its local state and build transactions. The serialization formatting, which ensures that transactions are processed correctly based on the network they belong to (e.g., testnet or mainnet), depends on the Network ID set in the library's context.
+## Important information
 
-When instantiating the wallet in any context, it is crucial to set the appropriate Network ID. To achieve this, import the `setNetworkId` function from `@midnight-ntwrk/zswap` and invoke it before creating the wallet instance.
+The wallet uses the `@midnight-ntwrk/zswap` library to manage its local state and construct transactions. The serialization formatting, which ensures transactions are processed correctly depending on the network (eg, testnet or mainnet) they belong to, relies on the network ID set in the library's context.
 
-For more information on available Network IDs, please refer to the [relevant section](https://docs.midnight.network/develop/reference/midnight-api/zswap/#network-id).
+When setting up the wallet in any context, it's essential to configure the appropriate network ID. To do this, import the `setNetworkId` function from `@midnight-ntwrk/zswap` and call it before initializing the wallet instance.
 
-Below, you can find an example how to set the Network ID for the DevNet network:
+For more information on available network IDs, please refer to the [relevant section](https://docs.midnight.network/develop/reference/midnight-api/zswap/#network-id).
+
+Below is an example of how to set the network ID for the devnet network:
 
 ```ts
 import { setNetworkId, NetworkId } from '@midnight-ntwrk/zswap';
@@ -21,28 +22,27 @@ import { setNetworkId, NetworkId } from '@midnight-ntwrk/zswap';
 setNetworkId(NetworkId.DevNet);
 ```
 
+---
 
-## Instantiation
+## Instantiating
 
-The `@midnight-ntwrk/wallet` package provides a builder that allows you to instantiate an arbitrary number of wallets. Once a wallet is instantiated and started, it will automatically connect to the provided Node, Indexer, and Proving Server.
+The `@midnight-ntwrk/wallet` package offers a builder that enables you to create multiple wallets. Once created and started, each wallet will automatically connect to the specified node, indexer, and proving server.
 
-To instantiate the wallet, first import the builder from the `@midnight-ntwrk/wallet` package:
-
+To create a wallet instance, begin by importing the builder from the `@midnight-ntwrk/wallet` package:
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
 ```
 
-Next, utilize the wallet builder to create a new instance of the wallet. This requires providing the following parameters (in the precise order):
+Next, use the wallet builder to create a new wallet instance. This requires the following parameters (in the precise order):
 
-| Name | Data Type | Required? | Default |
+| Name | Data type | Required? | Default |
 |---|---|---|---|
 | **Indexer URL** | String  | Yes | N/A |
 | **Indexer WebSocket URL** | String  | Yes | N/A |
-| **Proving Server URL** | String  | Yes | N/A |
+| **Proving server URL** | String  | Yes | N/A |
 | **Node URL** | String  | Yes | N/A |
-| **Log Level** | LogLevel  | No | warn |
-
+| **Log level** | LogLevel  | No | warn |
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
@@ -56,15 +56,15 @@ const wallet = await WalletBuilder.build(
 );
 ```
 
-To initiate the synchronization of the wallet with the indexer, the `wallet` variable, which holds an instance of the Wallet & Resource types (available in the wallet api), needs to be started using the following method:
+To begin synchronizing the wallet with the indexer, start the `wallet` variable, which holds an instance of the wallet and resource types from the wallet API, using the following method:
 
 ```ts
  wallet.start();
 ```
 
-## Getting Wallet State
+## Getting the wallet state
 
-The [Wallet State](https://docs.midnight.network/develop/reference/midnight-api/wallet-api/type-aliases/WalletState) is provided through an rx.js observable, the value of the state can be obtained using various methods supported by rx.js. Here is one example:
+The [wallet state](https://docs.midnight.network/develop/reference/midnight-api/wallet-api/type-aliases/WalletState) is provided through an `rx.js` observable. You can retrieve the state value using various methods supported by `rx.js`. Here's an example:
 
 ```ts
 wallet.state().subscribe((state) => {
@@ -76,14 +76,13 @@ wallet.state().subscribe((state) => {
 
 To balance a transaction, you need to use the `balanceTransaction` method, which requires the following parameters:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **transaction** | Transaction  | Yes |
 | **newCoins** | LogLevel  | No |
 
-**Note:** The newCoins parameter should be used in cases where a new coin is created i.e a DApp mints one, and wants to send it to the wallet.
-Due to how Midnight works, such newly created coins must be explicitly passed to the wallet in this method, in order for the wallet to be able to
-watch over them and add them to its state.
+> The `newCoins` parameter is intended for cases where a new coin is created, such as when a DApp mints one and intends to send it to the wallet. Due to the nature of the Midnight devnet,
+> these newly created coins must be explicitly provided to the wallet using this method. This allows the wallet to monitor and incorporate them into its state effectively.
 
 ```ts
 const balancedTransaction = await wallet.balanceTransaction(transaction);
@@ -91,13 +90,13 @@ const balancedTransaction = await wallet.balanceTransaction(transaction);
 
 ## Proving a transaction
 
-To prove a transaction, you need to use the `proveTransaction` method, which requires the following parameter:
+To prove a transaction, you need to use the `proveTransaction` method, which requires the following parameters:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **provingRecipe** | ProvingRecipe  | Yes |
 
-We'll be using the `unprovenTransaction` from the section above in this example:
+This example uses the `unprovenTransaction` from the section above:
 
 ```ts
 import { TRANSACTION_TO_PROVE } from '@midnight-ntwrk/wallet-api';
@@ -113,33 +112,33 @@ const provenTransaction = await wallet.proveTransaction(recipe);
 
 ## Submitting a transaction
 
-To submit a transaction, you need to use the `submitTransaction` method, which requires the following parameter:
+To submit a transaction, you need to use the `submitTransaction` method, which requires the following parameters:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **transaction** | Transaction  | Yes |
 
-The transaction must be balanced and proven (in this order) in order for it to be accepted by the node.
+The transaction must be balanced and proven (in this order) for it to be accepted by the node.
 
-In the example below, we'll be using the the provenTransaction from the section above.
+The example below uses the `provenTransaction` from the section above:
 
 ```ts
 const submittedTransaction = await wallet.submitTransaction(provenTransaction);
 ```
 
-## Transfer transaction API
+## Transferring transaction API
 
-The wallet api provides a `transferTransaction()` method which allows you to build a transactions based on the token type, amount and receiver address, which you can then prove and submit to the node.
+The wallet API includes a `transferTransaction()` method that enables you to construct transactions specifying the token type, amount, and recipient address. You can then validate and submit these transactions to the node.
 
-This method, requires an array of objects which contain the following properties:
+This method requires an array of objects containing the following properties:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **amount** | BigInt  | Yes |
 | **tokenType** | TokenType | Yes |
 | **receiverAddress** | Address | Yes |
 
-Below, you can see an example on how you can utilize the api:
+Below, you can see an example of how you can utilize the API:
 
 ```ts
 const transactionToProve = await wallet.transferTransaction([
@@ -151,31 +150,30 @@ const transactionToProve = await wallet.transferTransaction([
 ]);
 ```
 
-## Serializing State
+## Serializing state
 
 The wallet state can be serialized, allowing it to be stored and later re-instantiated from that serialized checkpoint.
 
-To serialize the state, use the `serialize()` method in the following manner:
-
+To serialize the state, use the `serialize()` method as follows:
 
 ```ts
 const serializedState = await wallet.serializeState();
 ```
 
-## Instantiating from serialized state
+## Instantiating from the serialized state
 
-The wallet builder offers a method to create a wallet instance from the serialized state ([learn more about serialized state here](#serializing-state)). This method requires the following parameters (in the precise order):
+The wallet builder offers a method to create a wallet instance from the serialized state ([learn more about the serialized state here](#serializing-state)). This method requires the following parameters (in the precise order):
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **Indexer URL** | String  | Yes |
 | **Indexer WebSocket URL** | String  | Yes |
-| **Proving Server URL** | String  | Yes |
+| **Proving server URL** | String  | Yes |
 | **Node URL** | String  | Yes |
-| **Serialized State** | String  | Yes |
-| **Log Level** | LogLevel  | No |
+| **Serialized state** | String  | Yes |
+| **Log level** | LogLevel  | No |
 
-In the example below, we're going to use the `serializedState` variable from the example above.
+The example below uses the `serializedState` variable from the example above:
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
@@ -190,22 +188,22 @@ const wallet = await WalletBuilder.restore(
 );
 ```
 
-This will instantiate a wallet with it's state checkpoint being the time when we called the `serializeState()` method. Once the wallet is started - `wallet.start()` it will start syncing and updating the state from that point on.
+This will create a wallet with its state checkpoint set to the time when you called the `serializeState()` method. Once the wallet is started with `wallet.start()`, it will begin syncing and updating the state from that point onward.
 
-This is particularly useful when using the wallet in cases like browser extension where we need to quickly restore the state of the wallet for the user.
+This functionality is especially valuable in scenarios like browser extensions, where it's crucial to swiftly restore the wallet state for the user.
 
 ## Instantiating from a seed
 
-The wallet builder provides a method which allows you to instantiate a wallet with a specific seed, this results in getting the same address and keys but with a fresh state which is then synced with the indexer. The method requires the following parameters (in the exact order):
+The wallet builder offers a method that enables you to instantiate a wallet with a specific seed, resulting in obtaining the same address and keys but with a fresh state that is then synchronized with the indexer. The method requires the following parameters (in the exact order):
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **Indexer URL** | String  | Yes |
 | **Indexer WebSocket URL** | String  | Yes |
-| **Proving Server URL** | String  | Yes |
+| **Proving server URL** | String  | Yes |
 | **Node URL** | String  | Yes |
 | **Seed** | String  | Yes |
-| **Log Level** | LogLevel  | No |
+| **Log level** | LogLevel  | No |
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
@@ -222,7 +220,7 @@ const wallet = await WalletBuilder.buildFromSeed(
 
 ## Closing an instance
 
-To gracefully close a wallet instance, please use the `close()` method.
+To gracefully close a wallet instance, use the `close()` method:
 
 ```ts
 await wallet.close();
@@ -230,16 +228,21 @@ await wallet.close();
 
 
 ## Examples
-In this section you'll find examples on how you can fully utilize the wallet apis.
+
+In this section, you'll find examples of how you can fully utilize the wallet APIs.
 
 ### Transferring tDUST
 
-In this example, we'll instantiate a new wallet, and use it to transfer 1 tDUST to another wallet.
+This example instantiates a new wallet and uses it to transfer one tDUST to another wallet:
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
+import { setNetworkId, NetworkId } from '@midnight-ntwrk/zswap';
 
 try {
+  // set network id to devnet
+  setNetworkId(NetworkId.DevNet);
+
   const wallet = await WalletBuilder.build(
     'https://pubsub.jade.midnight.network/api/v1/graphql',
     'wss://pubsub.jade.midnight.network/ws/api/v1/graphql',
