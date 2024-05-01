@@ -1,6 +1,6 @@
-# Midnight DApp Connector API
+# Midnight DApp connector API
 
-Definition of the Midnight DApp Connector interface.
+Definition of the Midnight DApp connector interface.
 
 ## Structure
 

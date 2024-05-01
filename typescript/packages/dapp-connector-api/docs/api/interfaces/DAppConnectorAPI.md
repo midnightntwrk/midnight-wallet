@@ -56,7 +56,7 @@ The name of the wallet
 
 > **serviceUriConfig**: () => `Promise`\<[`ServiceUriConfig`](ServiceUriConfig.md)\>
 
-Request the services (pubsub, node and proof server) uris.
+Request the services (pub-sub, node, and proof server) URIs.
 
 #### Returns
 

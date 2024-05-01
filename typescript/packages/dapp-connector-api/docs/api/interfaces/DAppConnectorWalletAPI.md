@@ -30,13 +30,15 @@ New coins created by transaction, for which wallet will watch for
 
 `Promise`\<`Transaction`\>
 
-Proved transaction or error
-
 ***
 
-### balanceTransaction
+### ~~balanceTransaction~~
 
 > **balanceTransaction**: (`tx`, `newCoins`) => `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
+
+#### Deprecated
+
+Deprecated since version 1.1 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
 
 #### Parameters
 
@@ -48,15 +50,15 @@ Proved transaction or error
 
 `Promise`\<`BalanceTransactionToProve` \| `NothingToProve`\>
 
-#### Deprecated
-
-Since version 1.1 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
-
 ***
 
-### proveTransaction
+### ~~proveTransaction~~
 
 > **proveTransaction**: (`recipe`) => `Promise`\<`Transaction`\>
+
+#### Deprecated
+
+Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
 
 #### Parameters
 
@@ -65,10 +67,6 @@ Since version 1.1 and will be deleted in version 2.0.0. Please use `balanceAndPr
 #### Returns
 
 `Promise`\<`Transaction`\>
-
-#### Deprecated
-
-Since version 1.1.0 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
 
 ***
 
@@ -99,5 +97,3 @@ Transaction to submit
 #### Returns
 
 `Promise`\<`string`\>
-
-First transaction identifier from identifiers list or error

@@ -17,9 +17,9 @@ export interface DAppConnectorWalletState {
  * The services configuration
  */
 export interface ServiceUriConfig {
-  /**  PubSub Indexer URI */
+  /**  Pub-sub indexer URI */
   indexerUri: string;
-  /**  PubSub Indexer WebSocket URI */
+  /**  Pub-sub indexer WebSocket URI */
   indexerWsUri: string;
   /**  Prover Server URI */
   proverServerUri: string;
@@ -67,7 +67,7 @@ export interface DAppConnectorAPI {
   apiVersion: string;
   /** Check if the wallet has authorized the dapp */
   isEnabled: () => Promise<boolean>;
-  /** Request the services (pubsub, node and proof server) uris. */
+  /** Request the services (pub-sub, node and proof server) uris. */
   serviceUriConfig: () => Promise<ServiceUriConfig>;
   /** Request access to the wallet, returns the wallet api on approval */
   enable: () => Promise<DAppConnectorWalletAPI>;

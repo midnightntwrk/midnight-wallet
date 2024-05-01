@@ -14,7 +14,7 @@ The services configuration
 
 > **indexerUri**: `string`
 
-PubSub Indexer URI
+Pub-sub indexer URI
 
 ***
 
@@ -22,7 +22,7 @@ PubSub Indexer URI
 
 > **indexerWsUri**: `string`
 
-PubSub Indexer WebSocket URI
+Pub-sub indexer WebSocket URI
 
 ***
 
