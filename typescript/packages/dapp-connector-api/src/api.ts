@@ -46,11 +46,11 @@ export interface DAppConnectorWalletAPI {
    */
   submitTransaction: Wallet['submitTransaction'];
   /**
-   * @deprecated Since version 1.1 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
+   * @deprecated Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
    */
   balanceTransaction: Wallet['balanceTransaction'];
   /**
-   * @deprecated Since version 1.1.0 and will be deleted in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
+   * @deprecated Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
    */
   proveTransaction: Wallet['proveTransaction'];
 }
@@ -67,7 +67,7 @@ export interface DAppConnectorAPI {
   apiVersion: string;
   /** Check if the wallet has authorized the dapp */
   isEnabled: () => Promise<boolean>;
-  /** Request the services (pub-sub, node and proof server) uris. */
+  /** Request the services (pub-sub, node, and proof server) URIs. */
   serviceUriConfig: () => Promise<ServiceUriConfig>;
   /** Request access to the wallet, returns the wallet api on approval */
   enable: () => Promise<DAppConnectorWalletAPI>;

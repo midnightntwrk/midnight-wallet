@@ -10,15 +10,15 @@ It's implemented by the Midnight Lace extension for Google Chrome and is injecte
 
 ## Installation
 
-The Midnight DApp connector API is available as an NPM package with the namespace `@midnight-ntwrk/dapp-connector-api`. It can be installed using any Node package manager, such as yarn. To install the package using yarn, please execute the following command:
+The Midnight DApp connector API is available as an NPM package with the namespace `@midnight-ntwrk/dapp-connector-api`. It can be installed using any node package manager, such as Yarn. To install the package using Yarn, execute the following command:
 
 `yarn add @midnight-ntwrk/dapp-connector-api`
 
-## Package Usage
+## Package usage
 
 The package provides the type declarations that are documented in the [documentation](interfaces/DAppConnectorAPI.md) of this package.
 
-The dapp connector api should be exposed through the global variable, in the following namespace:
+The DApp connector API should be exposed through the global variable as follows:
 
 `window.midnight.{walletName}`
 
@@ -26,19 +26,19 @@ The dapp connector api should be exposed through the global variable, in the fol
 
 | Name | Description |
 |---|---|
-| **apiVersion** | Provides a semver string version of the dapp connector api  |
+| **apiVersion** | Provides a semver string version of the DApp connector API  |
 | **enable** | Returns a promise with the [DAppConnectorWalletAPI](interfaces/DAppConnectorWalletAPI.md) or error |
-| **isEnabled** | Returns a promise with a boolean showing whether the dapp is authorized to access the api or not |
-| **name** | The name of the wallet that implements the api |
-| **serviceUriConfig** | Returns a promise with [ServiceUriConfig](interfaces/ServiceUriConfig.md) or error if the dapp is not authorized. |
+| **isEnabled** | Returns a promise with a boolean showing whether the DApp is authorized to access the API or not |
+| **name** | The name of the wallet that implements the API |
+| **serviceUriConfig** | Returns a promise with [ServiceUriConfig](interfaces/ServiceUriConfig.md) or error if the DApp is not authorized. |
 
-## API Usage
+## API usage
 
-We're going to use the Midnight Lace implementation of the DApp connector API for the examples below which is available in this namespace: `window.midnight.mnLace`.
+Below, we will use the Midnight Lace implementation of the DApp connector API. It is accessible within this namespace: `window.midnight.mnLace`.
 
-## Authorizing DApp
+## Authorizing a DApp
 
-To authorize a dapp, call the `enable()` method and wait for the user to respond to the authorize request.
+To authorize a DApp, call the `enable()` method and wait for the user to respond to the request.
 
 ```ts
 try {
@@ -52,7 +52,7 @@ try {
 
 ## Checking if the DApp is authorized
 
-To check if the DApp is authorized, please use the `isEnabled()` method as follows:
+To check if the DApp is authorized, use the `isEnabled()` method as follows:
 
 ```ts
 try {
@@ -73,8 +73,8 @@ const name = window.midnight.mnLace.name;
 console.log('Wallet name', name);
 ```
 
-### API Version
-To get the api version, use the `apiVersion` property as follows:
+### API version
+To get the API version, use the `apiVersion` property as follows:
 
 ```ts
 const apiVersion = window.midnight.mnLace.apiVersion;
@@ -82,18 +82,17 @@ const apiVersion = window.midnight.mnLace.apiVersion;
 console.log('API version', apiVersion);
 ```
 
-### Getting the Service URI Config
+### Getting the service URI config
 
-Midnight Wallet users can set the node, indexer and proving server uris in the wallet settings.
-For DApps to be able to find out those urls, and leverage them, this property is exposed, which contains the following:
+Midnight wallet users can configure the node, indexer, and proving server URIs in the wallet settings. To enable DApps to access and utilize these URLs, the following property is exposed:
 
 | Name | Description |
 |---|---|
 | **Node URL** | The node the wallet is pointing to  |
-| **Indexer URL** | The indexer url the wallet is pointing to |
-| **Proving Server URL** | The proving server url the wallet is pointing to |
+| **Indexer URL** | The indexer URL the wallet is pointing to |
+| **Proving Server URL** | The proving server URL the wallet is pointing to |
 
-In order to get the service uri config, use the api as follows:
+To get the service URI config, use the API as follows:
 
 ```ts
 try {
@@ -109,7 +108,7 @@ try {
 
 ## Interacting with the API
 
-After you call the `enable()` method, and the user approved the authorization request, you'll receive an instance of the [DAppConnectorWalletAPI](interfaces/DAppConnectorWalletAPI.md) which consists of the following properties:
+After calling the `enable()` method and the user approves the authorization request, you will receive an instance of the [DAppConnectorWalletAPI](interfaces/DAppConnectorWalletAPI.md), which includes the following properties:
 
 | Name | Description | Note |
 |---|---|---|
@@ -121,7 +120,7 @@ After you call the `enable()` method, and the user approved the authorization re
 
 ## Getting the wallet state
 
-To get the wallet state, simply call the `state()` api method, which returns a promise with the [DAppConnectorWalletState](interfaces/DAppConnectorWalletState.md) object as follows:
+To get the wallet state, call the `state()` API method, which will return a promise with the [DAppConnectorWalletState](interfaces/DAppConnectorWalletState.md) object as follows:
 
 ```ts
 try {
@@ -135,16 +134,16 @@ try {
 
 ## Balancing and proving a transaction
 
-To balance and prove a transaction, first create a transaction in your dapp ([follow the guide on how to create a transaction here](#)).
+To balance and prove a transaction, begin by creating a transaction in your DApp. You can [follow the guide on how to create a transaction here](#).
 
-This method, accepts the following properties:
+This method accepts the following properties:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **transaction** | Transaction  | Yes |
 | **newCoins** | CoinInfo[] | No |
 
-Below, you'll find an example how to balance and prove a transaction:
+Below, you'll find an example of how to balance and prove a transaction:
 
 ```ts
 try {
@@ -159,15 +158,15 @@ try {
 
 ## Submitting a transaction
 
-Assuming we have the balanced and proven transaction from above, we're going to submit it now.
+With the balanced and proven transaction from above, you can now submit it.
 
 The `submitTransaction()` method accepts the following parameters:
 
-| Name | Data Type | Required? |
+| Name | Data type | Required? |
 |---|---|---|
 | **transaction** | Transaction  | Yes |
 
-Below, you'll find an example how to submit a transaction:
+Below, you'll find an example of how to submit a transaction:
 
 ```ts
 try {
@@ -178,11 +177,11 @@ try {
 ```
 
 ## Examples
-In this section you'll find examples on how you can fully utilize the dapp connector api.
+In this section, you'll find examples demonstrating how to fully utilize the DApp connector API.
 
 ### Submitting a transaction
 
-In this example, we'll authorize and submit a transaction from a DApps perspective using the DApp connector API.
+This example demonstrates how to authorize and submit a transaction from a DApp's perspective using the DApp connector API.
 
 ```ts
 try {

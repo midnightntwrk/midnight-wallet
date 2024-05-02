@@ -38,7 +38,7 @@ New coins created by transaction, for which wallet will watch for
 
 #### Deprecated
 
-Deprecated since version 1.1 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
+Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Deprecated since version 1.1 and will be removed in version 2.0.0. Please use th
 
 #### Deprecated
 
-Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use `balanceAndProveTransaction` method instead.
+Deprecated since version 1.1.0 and will be removed in version 2.0.0. Please use the `balanceAndProveTransaction` method instead.
 
 #### Parameters
 
