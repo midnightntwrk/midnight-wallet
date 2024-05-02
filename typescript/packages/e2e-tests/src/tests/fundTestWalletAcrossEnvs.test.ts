@@ -12,6 +12,12 @@ const logger = await createLogger(
   path.resolve(currentDir, '..', 'logs', 'fundTestWalletAcrossEnvs.test.ts', `${new Date().toISOString()}.log`),
 );
 
+/**
+ * Tests performing a token transfer
+ *
+ * @group devnet
+ */
+
 describe('Token transfer', () => {
   if (process.env.SEED === undefined) {
     logger.info('SEED env var not set');
