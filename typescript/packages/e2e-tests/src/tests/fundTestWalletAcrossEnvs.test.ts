@@ -23,13 +23,8 @@ describe('Token transfer', () => {
     logger.info('SEED env var not set');
     exit(1);
   }
-  if (process.env.WALLET_ADDRESS === undefined) {
-    logger.info('WALLET_ADDRESS env var not set');
-    exit(1);
-  }
-  const getFixture = useTestContainersFixture();
   const seedFunded = process.env.SEED;
-  const address = process.env.WALLET_ADDRESS;
+  const getFixture = useTestContainersFixture();
   const timeout = 3_600_000;
   const outputValue = 100_000_000n;
 
@@ -59,6 +54,11 @@ describe('Token transfer', () => {
   test(
     'Is working for distribution to the test wallet',
     async () => {
+      if (process.env.WALLET_ADDRESS === undefined) {
+        logger.info('WALLET_ADDRESS env var not set');
+        exit(1);
+      }
+      const address = process.env.WALLET_ADDRESS;
       await waitForSync(walletFunded);
 
       const sendTx = async (address: string): Promise<void> => {
