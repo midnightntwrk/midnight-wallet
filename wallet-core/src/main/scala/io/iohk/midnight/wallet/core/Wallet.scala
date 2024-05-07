@@ -37,7 +37,12 @@ object Wallet {
 
   implicit val walletCreation: WalletCreation[Wallet, Wallet.Snapshot] =
     (snapshot: Wallet.Snapshot) =>
-      Wallet(snapshot.state, snapshot.txHistory.toVector, snapshot.offset)
+      Wallet(
+        snapshot.state,
+        snapshot.txHistory.toVector,
+        snapshot.offset,
+        ProgressUpdate(snapshot.offset.map(_.decrement), none),
+      )
 
   implicit val walletRestore: WalletRestore[Wallet, Seed] =
     (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
