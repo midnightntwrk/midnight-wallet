@@ -97,7 +97,7 @@ export class TestContainersFixture {
         return 'https://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
-        return 'https://pubsub.topaz.dev.platform.midnight.network:443';
+        return 'https://pubsub.ariadne-qa.dev.midnight.network';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -112,7 +112,7 @@ export class TestContainersFixture {
         return 'wss://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
-        return 'wss://pubsub.topaz.dev.platform.midnight.network:443';
+        return 'wss://pubsub.ariadne-qa.dev.midnight.network';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -127,7 +127,7 @@ export class TestContainersFixture {
         return 'https://rpc.devnet.midnight.network';
       }
       case 'ariadne-qa': {
-        return 'http://node-01.topaz.dev.platform.midnight.network:9944';
+        return 'https://rpc.ariadne-qa.dev.midnight.network';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
