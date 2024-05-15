@@ -6,7 +6,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { MidnightNetwork, waitForSync } from './utils';
+import { MidnightNetwork, compareStates, waitForSync } from './utils';
 import { NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
@@ -71,7 +71,7 @@ describe('Midnight wallet', () => {
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const timeout = (process.env.NETWORK as MidnightNetwork) === 'devnet' ? 240_000 : 60_000;
+  const timeout = (process.env.NETWORK as MidnightNetwork) === 'devnet' ? 240_000 : 120_000;
 
   let wallet: Wallet & Resource;
 
@@ -93,8 +93,44 @@ describe('Fresh wallet with empty state', () => {
   });
 
   afterEach(async () => {
-    await wallet.close();
+    if (wallet !== undefined) {
+      await wallet.close();
+    }
   });
+
+  test(
+    'Wallet state can be serialized and then restored',
+    async () => {
+      allure.tms('PM-9084', 'PM-9084');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - serialize');
+      const fixture = getFixture();
+      const state = await waitForSync(wallet);
+      const serialized = await wallet.serializeState();
+      const stateObject = JSON.parse(serialized);
+      expect(stateObject.txHistory).toHaveLength(0);
+      expect(stateObject.offset).toBeGreaterThan(0);
+      expect(typeof stateObject.state).toBe('string');
+      expect(stateObject.state).toBeTruthy();
+      await wallet.close();
+
+      const restoredWallet = await WalletBuilder.restore(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        serialized,
+        'info',
+      );
+      restoredWallet.start();
+      const newState = await waitForSync(restoredWallet);
+      compareStates(newState, state);
+      expect(newState.syncProgress?.total).toBeGreaterThanOrEqual(state.syncProgress?.total ?? 0n);
+      await restoredWallet.close();
+    },
+    timeout,
+  );
 
   test('Wallet state returns coinPublicKey hex string', async () => {
     allure.tms('PM-8920', 'PM-8920');

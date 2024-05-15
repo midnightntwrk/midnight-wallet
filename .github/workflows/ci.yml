@@ -62,7 +62,7 @@ jobs:
       - name: Test and build typescript packages
         run: |
           nix develop -c sbt dist
-          # cp ./wallet-engine/package.json ./wallet-engine/dist/
+          cp ./wallet-engine/package.json ./wallet-engine/dist/
           nix develop .#typescript --command yarn
           nix develop .#typescript --command yarn build
           nix develop .#typescript --command yarn lint

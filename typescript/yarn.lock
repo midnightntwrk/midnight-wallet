@@ -1128,9 +1128,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet@npm:^3.5.8":
-  version: 3.5.8
-  resolution: "@midnight-ntwrk/wallet@npm:3.5.8::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.5.8%2Fbdc10488f6dc153f00ff80896551a63dc5743ce3"
+"@midnight-ntwrk/wallet@npm:^3.5.9":
+  version: 3.5.9
+  resolution: "@midnight-ntwrk/wallet@npm:3.5.9::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.5.9%2F4b8e64c7dfb7441ac3cc5280f1a9b73e403b58b3"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.3.1
     "@midnight-ntwrk/zswap": ^0.3.11
@@ -1140,7 +1140,23 @@ __metadata:
     scale-ts: ^1.1.0
     testcontainers: ^10.2.1
     ws: ^8.8.1
-  checksum: c7632cbb168bf9bad8436228a49fc874b087b048cf2f95848140f7c770ce0a5be92894a87299581e1c4d0249c57582e719b488fd24aa59f9d97551e36b6f740b
+  checksum: 0ca81814759a20c87b18e4a5bdda71e95f1007041228adec26b566773a4c7c095a5f81688d175cdd97b8ae33e86fe001e7606cb530687ba6f475ddd3b5278032
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/wallet_built@file:../../../wallet-engine/dist::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
+  version: 3.5.9
+  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine/dist#../../../wallet-engine/dist::hash=2a8edf&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  dependencies:
+    "@midnight-ntwrk/wallet-api": ^3.3.1
+    "@midnight-ntwrk/zswap": ^0.3.11
+    isomorphic-ws: ^5.0.0
+    node-fetch: 3.3.2
+    rxjs: ^7.5
+    scale-ts: ^1.1.0
+    testcontainers: ^10.2.1
+    ws: ^8.8.1
+  checksum: 51138ae8d1f535db0e1f231f2966c051e73a825d19cf9c234a6c265c1433365d20b7620714cb8ab0d35ab72942a73ed4227230f5cafdab1243026bd3fe72a264
   languageName: node
   linkType: hard
 
@@ -1157,8 +1173,9 @@ __metadata:
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
     "@midnight-ntwrk/midnight-js-network-id": 0.1.10
-    "@midnight-ntwrk/wallet": ^3.5.8
+    "@midnight-ntwrk/wallet": ^3.5.9
     "@midnight-ntwrk/wallet-api": ^3.3.1
+    "@midnight-ntwrk/wallet_built": "file:../../../wallet-engine/dist"
     "@midnight-ntwrk/zswap": 0.3.11
     "@types/jest": ^29.2.0
     "@types/node": ^18.11.3

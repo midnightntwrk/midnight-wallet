@@ -28,26 +28,25 @@ on:
           - local
           - ariadne-qa
           - devnet
-          - qanet
       seed:
         type: string
         description: Seed of a funded wallet
-        required: true
+        required: false
         default: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
       seed2:
         type: string
         description: Seed of another receiving wallet
-        required: true
+        required: false
         default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
       nt_seed:
         type: string
         description: Seed of a funded wallet with native tokens
-        required: true
+        required: false
         default: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
       nt_seed2:
         type: string
         description: Seed of another receiving wallet for native tokens
-        required: true
+        required: false
         default: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
       modifier:
         type: string
@@ -68,19 +67,19 @@ on:
       seed:
         type: string
         description: Seed of a funded wallet
-        required: true
+        required: false
       seed2:
         type: string
         description: Seed of another receiving wallet
-        required: true
+        required: false
       nt_seed:
         type: string
         description: Seed of a funded wallet with native tokens
-        required: true
+        required: false
       nt_seed2:
         type: string
         description: Seed of another receiving wallet for native tokens
-        required: true
+        required: false
       modifier:
         type: string
         description: Suite or a testname to run (refer to Jest docs)
@@ -101,6 +100,7 @@ jobs:
   build:
     name: E2E tests
     runs-on: ubuntu-latest-4-cores
+    timeout-minutes: 60
     steps:
       - name: Prepare .netrc to access other repos
         run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc

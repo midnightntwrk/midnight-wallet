@@ -41,7 +41,7 @@ export const waitForSync = (wallet: Wallet) =>
         // Let's allow progress only if wallet is synced fully
         const synced = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total ?? 50n;
-        return state.syncProgress !== null && total === synced;
+        return state.syncProgress !== undefined && total === synced;
       }),
     ),
   );
@@ -91,6 +91,12 @@ export const walletStateTrimmed = (state: WalletState) => {
   const { transactionHistory, coins, availableCoins, ...rest } = state;
   return rest;
 };
+
+export function compareStates(state1: WalletState, state2: WalletState) {
+  const object1 = (({ syncProgress, ...o }) => o)(state1);
+  const object2 = (({ syncProgress, ...o }) => o)(state2);
+  expect(object2).toStrictEqual(object1);
+}
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 

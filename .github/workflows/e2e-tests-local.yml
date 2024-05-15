@@ -1,0 +1,15 @@
+name: E2E tests - local
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '45 8 * * *'
+
+jobs:
+  test:
+    name: E2E tests
+    uses: ./.github/workflows/e2e-tests.yml
+    with:
+      network: undeployed
+      deployment: local
+    secrets: inherit

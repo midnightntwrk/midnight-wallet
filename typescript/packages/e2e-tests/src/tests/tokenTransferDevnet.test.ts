@@ -172,6 +172,57 @@ describe('Token transfer', () => {
     timeout,
   );
 
+  test(
+    'can perform a self-transaction',
+    async () => {
+      allure.tag('smoke');
+      allure.tms('PM-9680', 'PM-9680');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Valid transfer self-transaction');
+
+      const initialState = await waitForSync(sender);
+      const initialBalance = initialState.balances[nativeToken()] ?? 0n;
+      logger.info(initialState.availableCoins);
+      logger.info(`Wallet 1: ${initialBalance}`);
+      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: outputValue,
+          receiverAddress: initialState.address,
+        },
+      ];
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      const provenTx = await sender.proveTransaction(txToProve);
+      const txId = await sender.submitTransaction(provenTx);
+      const fees = provenTx.fees();
+      logger.info('Transaction id: ' + txId);
+
+      const pendingState = await waitForPending(sender);
+      logger.info(walletStateTrimmed(pendingState));
+      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
+      expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+      expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
+      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(1);
+      expect(pendingState.coins.length).toBe(initialState.coins.length);
+      expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+
+      await waitForTxInHistory(txId, sender);
+      const finalState = await waitForSync(sender);
+      logger.info(walletStateTrimmed(finalState));
+      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
+      logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
+      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThanOrEqual(initialBalance - fees);
+      expect(finalState.availableCoins.length).toBeGreaterThanOrEqual(initialState.availableCoins.length);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.coins.length).toBeGreaterThanOrEqual(initialState.coins.length);
+      expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+    },
+    timeout,
+  );
+
   // TO-DO: check why pending is not used
   test.skip(
     'coin becomes available when tx fails on node',
@@ -290,6 +341,131 @@ describe('Token transfer', () => {
       // expect(finalState.pendingCoins.length).toBe(0);
       // expect(finalState.coins.length).toBe(5);
       // expect(finalState.transactionHistory.length).toBe(1);
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting to send to an invalid address',
+    async () => {
+      allure.tms('PM-9678', 'PM-9678');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid address error message');
+      const syncedState = await waitForSync(sender);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      const invalidAddress = 'invalidAddress';
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: outputValue,
+          receiverAddress: invalidAddress,
+        },
+      ];
+      await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+        `Invalid address format ${invalidAddress}`,
+      );
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting to send an invalid amount',
+    async () => {
+      allure.tms('PM-9679', 'PM-9679');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid amount error message');
+      const syncedState = await waitForSync(sender);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      // the max amount that we support: Rust u64 max. The entire Midnight supply is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
+      const invalidAmount = 18446744073709551616n;
+      const initialState2 = await firstValueFrom(receiver.state());
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: invalidAmount,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+        `Error: Couldn't deserialize u64 from a BigInt outside u64::MIN..u64::MAX bounds`,
+      );
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting to send a negative amount',
+    async () => {
+      allure.tms('PM-9679', 'PM-9679');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid amount error message');
+      const syncedState = await waitForSync(sender);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+
+      const initialState2 = await firstValueFrom(receiver.state());
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: -5n,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+        'List of token transfers is empty or there is no positive transfers',
+      );
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting to send a zero amount',
+    async () => {
+      allure.tms('PM-9679', 'PM-9679');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid amount error message');
+      const syncedState = await waitForSync(sender);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      const initialState2 = await firstValueFrom(receiver.state());
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: 0n,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+        'List of token transfers is empty or there is no positive transfers',
+      );
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting to send an empty array of outputs',
+    async () => {
+      allure.tms('PM-9679', 'PM-9679');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid amount error message');
+      const syncedState = await waitForSync(sender);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+
+      await expect(sender.transferTransaction([])).rejects.toThrow(
+        'List of token transfers is empty or there is no positive transfers',
+      );
     },
     timeout,
   );

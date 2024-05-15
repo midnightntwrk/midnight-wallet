@@ -97,7 +97,7 @@ export class TestContainersFixture {
         return 'https://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
-        return 'https://pubsub.ariadne-qa.dev.midnight.network';
+        return 'https://indexer.ariadne-qa.dev.midnight.network';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -112,7 +112,7 @@ export class TestContainersFixture {
         return 'wss://indexer.devnet.midnight.network';
       }
       case 'ariadne-qa': {
-        return 'wss://pubsub.ariadne-qa.dev.midnight.network';
+        return 'wss://indexer.ariadne-qa.dev.midnight.network';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
