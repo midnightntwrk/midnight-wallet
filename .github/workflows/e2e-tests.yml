@@ -146,14 +146,14 @@ jobs:
           echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
 
       - name: Build wallet and install dependencies
-        if: ${{ inputs.deployment }} == 'local'
+        if: ${{ inputs.deployment == 'local' }}
         run: |
           nix develop -c sbt dist
           cp ./wallet-engine/package.json ./wallet-engine/dist/
           nix develop .#typescript --command yarn
 
       - name: Install dependencies
-        if: ${{ inputs.deployment }} != 'local'
+        if: ${{ inputs.deployment != 'local' }}
         run: |
           nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
           nix develop .#typescript --command yarn
