@@ -67,6 +67,7 @@ jobs:
 
             - name: Install deps
               run: |
+                nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
                 nix develop .#typescript --command yarn
 
             - name: Run funding script for devnet

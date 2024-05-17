@@ -44,7 +44,9 @@ jobs:
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
           echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
       - name: Run yarn install
-        run: nix develop .#typescript --command yarn
+        run: |
+          nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
+          nix develop .#typescript --command yarn
       - name: Generate documentation
         run: nix develop .#typescript --command yarn run build:docs
       - name: Check if there are changes in docs and create a new branch

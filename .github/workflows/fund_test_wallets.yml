@@ -73,5 +73,6 @@ jobs:
                 NETWORK: devnet
                 DEPLOYMENT: ${{ inputs.deployment }}
               run: |
+                nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
                 nix develop .#typescript --command yarn
                 nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
