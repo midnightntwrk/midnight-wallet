@@ -183,7 +183,8 @@ object Wallet {
         .asRight
 
     case (wallet: Wallet, ConnectionLost) =>
-      wallet.copy(isConnected = false).asRight
+      val progressUpdated = wallet.progress.copy(wallet.progress.synced, total = None)
+      wallet.copy(isConnected = false, progress = progressUpdated).asRight
   }
 
   private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState = {
