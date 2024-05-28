@@ -78,7 +78,7 @@ describe('Token transfer', () => {
         // Counter Smoke Test
         'cc40d2bea58f4b0236f80d109d6c30c014eaef4f73892d1a78a13661386b7604|0100017effb6eb31085756ad8f3218337565dc6fe6ce10f01652405fc6bd58ffa4ea85',
         // Welcome Smoke Test
-        'fc4246dcc1376ef3d73ecdfacb79fde3dfe867043f3e334b9b0e56fab5d2d316|010001b3ba58e9d808ec6f202b6e55479b71a11aa9f3635363b216dce8cb07563dc21f',
+        '59635b5c800718f646b6d625bd62fb1031e9e1feef476146cceea7de42011759|010001327575f94c032c37baa943a6553f5ee5ed50db460877582eff327108007a800d',
       ];
 
       const sendTx = async (address: string): Promise<void> => {
