@@ -44,14 +44,15 @@ Next, use the wallet builder to create a new wallet instance. This requires the 
 | **Node URL** | String  | Yes | N/A |
 | **Log level** | LogLevel  | No | warn |
 
+
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
 
 const wallet = await WalletBuilder.build(
-  'https://pubsub.jade.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://pubsub.jade.midnight.network/ws/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'http://node-01.jade.midnight.network:9944', // Node URL
+  'https://rpc.devnet.midnight.network', // Node URL
   'error' // LogLevel
 );
 ```
@@ -96,6 +97,7 @@ To prove a transaction, you need to use the `proveTransaction` method, which req
 |---|---|---|
 | **provingRecipe** | ProvingRecipe  | Yes |
 
+
 This example uses the `unprovenTransaction` from the section above:
 
 ```ts
@@ -118,6 +120,7 @@ To submit a transaction, you need to use the `submitTransaction` method, which r
 |---|---|---|
 | **transaction** | Transaction  | Yes |
 
+
 The transaction must be balanced and proven (in this order) for it to be accepted by the node.
 
 The example below uses the `provenTransaction` from the section above:
@@ -137,6 +140,7 @@ This method requires an array of objects containing the following properties:
 | **amount** | BigInt  | Yes |
 | **tokenType** | TokenType | Yes |
 | **receiverAddress** | Address | Yes |
+
 
 Below, you can see an example of how you can utilize the API:
 
@@ -173,16 +177,17 @@ The wallet builder offers a method to create a wallet instance from the serializ
 | **Serialized state** | String  | Yes |
 | **Log level** | LogLevel  | No |
 
+
 The example below uses the `serializedState` variable from the example above:
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
 
 const wallet = await WalletBuilder.restore(
-  'https://pubsub.jade.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://pubsub.jade.midnight.network/ws/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'http://node-01.jade.midnight.network:9944', // Node URL
+  'https://rpc.devnet.midnight.network', // Node URL
   serializedState,
   'error' // LogLevel
 );
@@ -205,14 +210,15 @@ The wallet builder offers a method that enables you to instantiate a wallet with
 | **Seed** | String  | Yes |
 | **Log level** | LogLevel  | No |
 
+
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
 
 const wallet = await WalletBuilder.buildFromSeed(
-  'https://pubsub.jade.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://pubsub.jade.midnight.network/ws/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'http://node-01.jade.midnight.network:9944', // Node URL
+  'https://rpc.devnet.midnight.network', // Node URL
   '0000000000000000000000000000000000000000000000000000000000000000', // Seed
   'error' // LogLevel
 );
@@ -244,10 +250,10 @@ try {
   setNetworkId(NetworkId.DevNet);
 
   const wallet = await WalletBuilder.build(
-    'https://pubsub.jade.midnight.network/api/v1/graphql',
-    'wss://pubsub.jade.midnight.network/ws/api/v1/graphql',
+    'https://indexer.devnet.midnight.network/api/v1/graphql',
+    'wss://indexer.devnet.midnight.network/api/v1/graphql',
     'http://localhost:6300',
-    'http://node-01.jade.midnight.network:9944',
+    'https://rpc.devnet.midnight.network',
   );
 
   const transactionToProve = await wallet.transferTransaction([
