@@ -2,30 +2,24 @@
   description = "Midnight Wallet";
 
   inputs = {
-    midnight-ledger.url = "github:input-output-hk/midnight-ledger-prototype";
-    midnight-ledger-legacy.url = "github:input-output-hk/midnight-ledger-prototype/v1.2.5";
-    nixpkgs.follows = "midnight-ledger/nixpkgs";
-    utils.follows = "midnight-ledger/utils";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-23.05";
+    utils.url = "github:numtide/flake-utils";
   };
 
   outputs = {
     self,
     nixpkgs,
     utils,
-    midnight-ledger,
-    midnight-ledger-legacy,
     ...
   }:
     utils.lib.eachDefaultSystem (
       system: let
         pkgs = nixpkgs.legacyPackages.${system};
-        ledgerPkgs = midnight-ledger.packages.${system};
-        legacyLedgerPkgs = midnight-ledger-legacy.packages.${system};
       in rec {
         formatter = pkgs.alejandra;
 
         devShells.typescript = pkgs.mkShell {
-          packages = [pkgs.yarn pkgs.nodejs-18_x pkgs.which legacyLedgerPkgs.ledger-napi pkgs.git];
+          packages = [pkgs.yarn pkgs.nodejs-18_x pkgs.which pkgs.git];
 
           shellHook = ''
             cd typescript
@@ -41,7 +35,6 @@
           packages = [
             pkgs.sbt
             pkgs.yarn
-            ledgerPkgs.ledger
             pkgs.nodejs-18_x
             pkgs.which
             pkgs.git
