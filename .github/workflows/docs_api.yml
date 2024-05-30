@@ -21,8 +21,6 @@ jobs:
           github_access_token: ${{ secrets.GH_TOKEN }}
           nix_conf: |
             access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-            extra-trusted-public-keys = hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=
-            extra-substituters = https://cache.iog.io
             accept-flake-config = true
             netrc-file = ~/.netrc
       - name: Restore and cache Nix store
