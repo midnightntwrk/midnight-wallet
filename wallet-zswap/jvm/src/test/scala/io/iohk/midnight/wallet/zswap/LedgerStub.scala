@@ -17,6 +17,12 @@ import java.nio.charset.StandardCharsets
 
 class LedgerStub extends Ledger {
 
+  override def zswapChainStateFilter(
+      zswapChainState: String,
+      contractAddress: String,
+  ): Either[NonEmptyList[JNRError], StringResult] =
+    Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
+
   override def isTransactionRelevant(
       tx: String,
       encryptionKeySerialized: String,

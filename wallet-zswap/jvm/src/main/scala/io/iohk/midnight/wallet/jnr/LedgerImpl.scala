@@ -131,6 +131,27 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends 
     )
   }
 
+  override def zswapChainStateFilter(
+      zswapChainState: String,
+      contractAddress: String,
+  ): Either[NonEmptyList[JNRError], StringResult] = {
+    val callTry = Try {
+      ledgerAPI.zswap_chain_state_filter(
+        zswapChainState.getBytes(StandardCharsets.UTF_8),
+        zswapChainState.length,
+        contractAddress.getBytes(StandardCharsets.UTF_8),
+        contractAddress.length,
+        finalNetworkId.id,
+      )
+    }
+
+    createResultAndFreePointer(
+      callTry = callTry,
+      freePointerTry = tryFreeStringResult,
+      createResultEither = StringResult.applyEither,
+    )
+  }
+
   override def zswapChainStateTryApply(
       zswapChainState: String,
       offer: String,

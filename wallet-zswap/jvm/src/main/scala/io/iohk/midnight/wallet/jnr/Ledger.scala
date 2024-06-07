@@ -37,6 +37,11 @@ trait Ledger {
       zswapChainState: String,
   ): Either[NonEmptyList[JNRError], NumberResult]
 
+  def zswapChainStateFilter(
+      zswapChainState: String,
+      contractAddress: String,
+  ): Either[NonEmptyList[JNRError], StringResult]
+
   def zswapChainStateTryApply(
       zswapChainState: String,
       offer: String,
