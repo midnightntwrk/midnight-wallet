@@ -178,10 +178,10 @@ jobs:
           " > environment.properties
 
       - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@1
+        uses: robkatona/send-allure-results@v1.0.2
         if: ${{ always() }}
         with:
-          allure-server-url: https://allure-server.stg.midnight.tools
+          allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./typescript/packages/e2e-tests/allure-results
           project-id: headless-wallet-${{ inputs.deployment }}
           security-user: ${{ secrets.ALLURE_ADMIN_USER }}
