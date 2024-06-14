@@ -26,7 +26,7 @@ export function useTestContainersFixture() {
         composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
-          .withWaitStrategy(`indexer_${uid}`, Wait.forLogMessage(/Block '[\da-f]+' was stored at height 0/))
+          .withWaitStrategy(`indexer_${uid}`, Wait.forLogMessage('Publishing to blocks'))
           .withEnvironment({ TESTCONTAINERS_UID: uid })
           .up();
         break;
@@ -78,8 +78,8 @@ export class TestContainersFixture {
     return this.composeEnvironment.getContainer(`node_${this.uid}`);
   }
 
-  public getPubsubContainer(): StartedGenericContainer {
-    return this.composeEnvironment.getContainer(`pubsub_${this.uid}`);
+  public getIndexerContainer(): StartedGenericContainer {
+    return this.composeEnvironment.getContainer(`indexer_${this.uid}`);
   }
 
   public getProverUri(): string {
@@ -88,7 +88,7 @@ export class TestContainersFixture {
   }
 
   private getIndexerPort(): number {
-    return this.getPubsubContainer().getMappedPort(TestContainersFixture.INDEXER_PORT);
+    return this.getIndexerContainer().getMappedPort(TestContainersFixture.INDEXER_PORT);
   }
 
   public getIndexerUri(): string {
@@ -98,6 +98,9 @@ export class TestContainersFixture {
       }
       case 'ariadne-qa': {
         return 'https://indexer.ariadne-qa.dev.midnight.network';
+      }
+      case 'halo2-qa': {
+        return 'https://indexer.halo2-qa.dev.midnight.network';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -114,6 +117,9 @@ export class TestContainersFixture {
       case 'ariadne-qa': {
         return 'wss://indexer.ariadne-qa.dev.midnight.network';
       }
+      case 'halo2-qa': {
+        return 'wss://indexer.halo2-qa.dev.midnight.network';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `ws://localhost:${indexerPort}`;
@@ -128,6 +134,9 @@ export class TestContainersFixture {
       }
       case 'ariadne-qa': {
         return 'https://rpc.ariadne-qa.dev.midnight.network';
+      }
+      case 'halo2-qa': {
+        return 'https://rpc.halo2-qa.dev.midnight.network';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);

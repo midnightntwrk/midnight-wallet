@@ -15,22 +15,15 @@ services:
       retries: 3
       start_period: 10s
   indexer:
-    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.1.2"
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.2.4"
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - "8088"
     command: ['-Dlogback.configurationFile=logback-json-file.xml']
     environment:
-      OPERATION_MODE: 'indexer'
       LOG_LEVEL: 'TRACE'
       LEDGER_NETWORK_ID: 'Undeployed'
-      SUBSTRATE_NODE_URL: 'node'
       SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
-      DB_VENDOR: 'postgresql'
-      DB_URL: 'postgres:5432/pubsub-indexer'
-      DB_USER: 'pubsub-indexer'
-      DB_PASS: 'pubsub-indexer'
-      REDIS_URL: 'tcp://redis:6379'
       OTEL_JAVAAGENT_ENABLED: 'false'
     healthcheck:
       test: ['CMD', 'egrep', '"Block .* was stored at height 0"', '/tmp/app_logs/server.log']
@@ -40,52 +33,8 @@ services:
     depends_on:
       node:
         condition: service_started
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_started
-  pubsub:
-    container_name: pubsub_$TESTCONTAINERS_UID
-    image: 'ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.1.2'
-    platform: linux/amd64
-    expose: ['8088']
-    ports:
-      - '0:8088'
-    environment:
-      OPERATION_MODE: 'pubsub'
-      LOG_LEVEL: 'TRACE'
-      LEDGER_NETWORK_ID: 'Undeployed'
-      SUBSTRATE_NODE_URL: 'node'
-      SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
-      DB_VENDOR: 'postgresql'
-      DB_URL: 'postgres:5432/pubsub-indexer'
-      DB_USER: 'pubsub-indexer'
-      DB_PASS: 'pubsub-indexer'
-      REDIS_URL: 'tcp://redis:6379'
-      OTEL_JAVAAGENT_ENABLED: 'false'
-    depends_on:
-      postgres:
-        condition: service_started
-      redis:
-        condition: service_started
-      indexer:
-        condition: service_healthy
-  postgres:
-    container_name: 'postgres_$TESTCONTAINERS_UID'
-    image: postgres:15
-    ports:
-      - '0:5432'
-    environment:
-      POSTGRES_USER: 'pubsub-indexer'
-      POSTGRES_PASSWORD: 'pubsub-indexer'
-      POSTGRES_DB: 'pubsub-indexer'
-  redis:
-    container_name: 'redis_$TESTCONTAINERS_UID'
-    image: redis:7.2.4
-    ports:
-      - 0:6379
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.3.1-2fdca2b"
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.3.5-65fc718"
     platform: linux/amd64
     container_name: node_$TESTCONTAINERS_UID
     ports:

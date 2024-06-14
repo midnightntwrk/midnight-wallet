@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "pretest-e2e": "rimraf ./allure-results",
-    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node' jest --group=${NETWORK}",
+    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node' jest --group=${NETWORK} --detectOpenHandles",
     "lint": "eslint src/",
     "allure-generate": "allure generate ./allure-results --clean -o ./reports/allure-report",
     "allure-history": "shx mkdir -p reports/allure-results/history && shx cp reports/allure-report/history/* reports/allure-results/history",
@@ -17,7 +17,7 @@
   "devDependencies": {
     "@cardano-sdk/key-management": "0.8.2",
     "@midnight-ntwrk/midnight-js-network-id": "0.1.10",
-    "@midnight-ntwrk/wallet": "^3.5.9",
+    "@midnight-ntwrk/wallet": "^3.5.12",
     "@midnight-ntwrk/wallet-api": "^3.3.1",
     "@midnight-ntwrk/wallet_built": "file:../../../wallet-engine/dist",
     "@midnight-ntwrk/zswap": "0.3.11",

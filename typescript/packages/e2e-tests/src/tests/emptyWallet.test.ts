@@ -6,9 +6,10 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { MidnightNetwork, compareStates, waitForSync } from './utils';
+import { MidnightNetwork, compareStates, createLogger, waitForSync } from './utils';
 import { NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import path from 'node:path';
 
 /**
  * Tests using an empty wallet
@@ -16,6 +17,11 @@ import { Wallet } from '@midnight-ntwrk/wallet-api';
  * @group undeployed
  * @group devnet
  */
+
+export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
+const logger = await createLogger(
+  path.resolve(currentDir, '..', 'logs', 'emptyWallet.test.ts', `${new Date().toISOString()}.log`),
+);
 
 describe('Midnight wallet', () => {
   const getFixture = useTestContainersFixture();
@@ -93,8 +99,14 @@ describe('Fresh wallet with empty state', () => {
   });
 
   afterEach(async () => {
-    if (wallet !== undefined) {
+    try {
       await wallet.close();
+    } catch (e: unknown) {
+      if (typeof e === 'string') {
+        logger.warn(e);
+      } else if (e instanceof Error) {
+        logger.warn(e.message);
+      }
     }
   });
 

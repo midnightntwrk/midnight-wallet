@@ -27,6 +27,7 @@ on:
         options:
           - local
           - ariadne-qa
+          - halo2-qa
           - devnet
       seed:
         type: string
@@ -61,7 +62,7 @@ on:
         default: 'devnet'
       deployment:
         type: string
-        description: Midnight deployment to use (ariadne-qa/devnet/qanet/local)
+        description: Midnight deployment to use (ariadne-qa/halo2-qa/devnet/local)
         required: true
         default: 'ariadne-qa'
       seed:
@@ -106,6 +107,12 @@ jobs:
         run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
 
       - uses: actions/checkout@v3
+        if: inputs.deployment != 'halo2-qa'
+
+      - uses: actions/checkout@v3
+        if: inputs.deployment == 'halo2-qa'
+        with:
+          ref: PM-9630-halo2
 
       - uses: nixbuild/nix-quick-install-action@v25
         with:

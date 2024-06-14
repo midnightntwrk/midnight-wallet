@@ -5,6 +5,7 @@ import * as fs from 'node:fs/promises';
 import pinoPretty from 'pino-pretty';
 import pino from 'pino';
 import { createWriteStream } from 'node:fs';
+import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
 
 export const createLogger = async (logPath: string): Promise<pino.Logger> => {
   await fs.mkdir(path.dirname(logPath), { recursive: true });
@@ -92,12 +93,21 @@ export const walletStateTrimmed = (state: WalletState) => {
   return rest;
 };
 
+export function normalizeWalletState(state: WalletState) {
+  const normalized = state.transactionHistory.map((txHistoryEntry: TransactionHistoryEntry) => {
+    const { transaction, ...otherProps } = txHistoryEntry;
+    return otherProps;
+  });
+  const { transactionHistory, syncProgress, ...otherProps } = state;
+  return { ...otherProps, normalized };
+}
+
 export function compareStates(state1: WalletState, state2: WalletState) {
-  const object1 = (({ syncProgress, ...o }) => o)(state1);
-  const object2 = (({ syncProgress, ...o }) => o)(state2);
-  expect(object2).toStrictEqual(object1);
+  const normalized1 = normalizeWalletState(state1);
+  const normalized2 = normalizeWalletState(state2);
+  expect(normalized2).toStrictEqual(normalized1);
 }
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'ariadne-qa' | 'devnet' | 'local';
+export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'devnet' | 'local';

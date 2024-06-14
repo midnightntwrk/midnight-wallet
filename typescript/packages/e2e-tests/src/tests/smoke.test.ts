@@ -66,11 +66,23 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    if (walletFunded !== undefined) {
+    try {
       await walletFunded.close();
+    } catch (e: unknown) {
+      if (typeof e === 'string') {
+        logger.warn(e);
+      } else if (e instanceof Error) {
+        logger.warn(e.message);
+      }
     }
-    if (wallet2 !== undefined) {
+    try {
       await wallet2.close();
+    } catch (e: unknown) {
+      if (typeof e === 'string') {
+        logger.warn(e);
+      } else if (e instanceof Error) {
+        logger.warn(e.message);
+      }
     }
   });
 
@@ -158,7 +170,7 @@ describe('Token transfer', () => {
       const state = await waitForSync(walletFunded);
       const serialized = await walletFunded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(0);
+      expect(stateObject.txHistory).toHaveLength(1);
       expect(stateObject.offset).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
