@@ -98,7 +98,7 @@ jobs:
             **/target/it-reports/TEST-*.xml
             !examples/node_modules/@midnight-ntwrk/wallet/target/it-reports/TEST-*.xml
       - name: Upload Scala coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
           name: scoverage-report
@@ -118,7 +118,7 @@ jobs:
           mv coverage coverage_$(date +"%Y%m%d%H%M%S")
 
       - name: Upload TS coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wallet-ts-coverage-report
           path: typescript/coverage*
