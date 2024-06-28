@@ -2,8 +2,8 @@ name: Healthcheck - halo2-qa
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 * * * *'
+  schedule:
+    - cron: '*/30 * * * *'
 
 jobs:
   test:
