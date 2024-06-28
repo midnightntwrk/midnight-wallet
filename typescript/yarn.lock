@@ -1145,8 +1145,8 @@ __metadata:
   linkType: hard
 
 "@midnight-ntwrk/wallet_built@file:../../../wallet-engine/dist::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.5.11
-  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine/dist#../../../wallet-engine/dist::hash=91b6c4&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  version: 3.5.12
+  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine/dist#../../../wallet-engine/dist::hash=dd0b05&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.3.1
     "@midnight-ntwrk/zswap": ^0.3.11
@@ -1156,7 +1156,7 @@ __metadata:
     scale-ts: ^1.1.0
     testcontainers: ^10.2.1
     ws: ^8.8.1
-  checksum: dd175037c6a78a8e611b369b7a4eb276667b3d365edf60f84f8b350971bfc3158a5e443ea1c156a59b47fdfdd7004fd5103bea85bc6bd8b89c9cc00a9b3eae06
+  checksum: 5f83280e41810b4a12e807dd9e1c12b52bdc1d7943a1ec64ba22f2ac2f4ec7a705ce9cbd3e9c7187a06fc1e6151cd0795da1b29886ba2cbd1c86538a55e8fbb6
   languageName: node
   linkType: hard
 

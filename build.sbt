@@ -16,7 +16,6 @@ lazy val warts = Warts.allBut(
   Wart.Serializable,
 )
 
-val scala33 = "3.3.0"
 val catsVersion = "2.9.0"
 val catsEffectVersion = "3.5.0"
 val circeVersion = "0.14.6"
@@ -36,12 +35,12 @@ lazy val ghPackagesCredentials =
     ghPackagesRealm,
     ghPackagesHost,
     sys.env.getOrElse("MIDNIGHT_GH_USER", ""),
-    sys.env.getOrElse("GH_TOKEN", ""),
+    sys.env.getOrElse("MIDNIGHT_GH_TOKEN", ""),
   )
 
 lazy val commonSettings = Seq(
   // Scala compiler options
-  scalaVersion := scala33,
+  scalaVersion := "3.4.2",
   scalacOptions ++= Seq("-Wunused:all", "-Wvalue-discard"),
   scalacOptions ~= { prev =>
     // Treat linting errors as warnings for quick development
@@ -79,14 +78,14 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.5.12",
+  version := "3.5.13-rc.1",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
 
 lazy val commonScalablyTypedSettings = Seq(
   externalNpm := {
-    if (!Env.nixBuild) Process("yarn", baseDirectory.value).!!
+    Process("yarn", baseDirectory.value).!!
     baseDirectory.value
   },
   stOutputPackage := "io.iohk.midnight",
@@ -259,7 +258,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
         Config(
           requiredAssets = List(Linux, Darwin),
           releaseTag = "zswap-c-bindings-0.3.11",
-          ghAuthToken = sys.env("MIDNIGHT_GH_TOKEN"),
+          ghAuthToken = sys.env("IOG_GH_TOKEN"),
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,
           logger = streams.value.log,

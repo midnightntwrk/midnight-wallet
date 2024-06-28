@@ -5,7 +5,6 @@ import cats.syntax.all.*
 import io.iohk.midnight.testcontainers.buildMod.{GenericContainer, Wait}
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.prover.ProverClient
-import io.iohk.midnight.wallet.zswap.*
 import sttp.client3.UriContext
 
 object ProvingServiceImpl {
@@ -19,11 +18,7 @@ object ProvingServiceImpl {
   def instance(dockerImage: String): Resource[IO, ProvingService[IO]] =
     TestContainers.resource(dockerImage)(testProverServerContainerConfig).flatMap { container =>
       val port = container.getMappedPort(provingServicePort).toInt
-      ProverClient[IO](uri"http://localhost:$port").map { client =>
-        new ProvingService[IO] {
-          override def proveTransaction(tx: UnprovenTransaction): IO[Transaction] =
-            client.proveTransaction(tx)
-        }
-      }
+      ProverClient[IO](uri"http://localhost:$port")
+        .map(client => client.proveTransaction)
     }
 }

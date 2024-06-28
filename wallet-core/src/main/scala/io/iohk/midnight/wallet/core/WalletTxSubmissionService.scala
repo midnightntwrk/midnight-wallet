@@ -21,7 +21,7 @@ object WalletTxSubmissionService {
       walletStateContainer: WalletStateContainer[F, TWallet],
   )(implicit
       tracer: WalletTxSubmissionTracer[F],
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, _],
+      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, ?],
   ) extends WalletTxSubmissionService[F] {
 
     override def submitTransaction(

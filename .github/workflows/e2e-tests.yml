@@ -1,10 +1,10 @@
 name: E2E tests
 
 env:
-  MIDNIGHT_GH_USER: ${{ github.actor }}
-  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
-  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
+  IOG_GH_TOKEN: ${{ secrets.GH_TOKEN }} # For sbt to download ledger binaries from IOG org
+  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # Used by setup-node
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
 
@@ -103,39 +103,34 @@ jobs:
     runs-on: ubuntu-latest-4-cores
     timeout-minutes: 60
     steps:
-      - name: Prepare .netrc to access other repos
-        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
-
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.deployment != 'halo2-qa'
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         if: inputs.deployment == 'halo2-qa'
         with:
           ref: PM-9630-halo2
 
-      - uses: nixbuild/nix-quick-install-action@v25
+      - uses: actions/setup-java@v4
         with:
-          github_access_token: ${{ secrets.GH_TOKEN }}
-          nix_conf: |
-            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-            accept-flake-config = true
-            netrc-file = ~/.netrc
+          distribution: 'temurin'
+          java-version-file: '.tool-versions'
+          cache: 'sbt'
 
-      - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v4
+      - uses: actions/setup-node@v4
         with:
-          gc-linux: true
-          gc-max-store-size-linux: 8000000000
-          key: cache-ubuntu-${{ hashFiles('**/*') }}
-          restore-keys: |
-            cache-ubuntu-
+          node-version-file: '.tool-versions'
+          cache: 'yarn'
+          cache-dependency-path: '**/yarn.lock'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
+          always-auth: true
 
-      - name: Setup .npmrc
+      - name: Configure yarn
         run: |
-          echo "
-          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
-          " >> ./.npmrc
+          cd typescript
+          yarn config set npmScopes.midnight-ntwrk.npmAuthToken $NODE_AUTH_TOKEN
+          yarn config set 'enableImmutableInstalls' false
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -144,24 +139,20 @@ jobs:
           username: ${{ secrets.GH_USERNAME }}
           password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
-      - name: Configure yarn
-        run: |
-          cd typescript
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
-          echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
-
       - name: Build wallet and install dependencies
         if: ${{ inputs.deployment == 'local' }}
         run: |
-          nix develop -c sbt dist
+          sbt dist
           cp ./wallet-engine/package.json ./wallet-engine/dist/
-          nix develop .#typescript --command yarn
+          cd typescript
+          yarn
 
       - name: Install dependencies
         if: ${{ inputs.deployment != 'local' }}
         run: |
-          nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-          nix develop .#typescript --command yarn
+          cd typescript
+          yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
+          yarn
 
       - name: Run e2e tests
         env:
@@ -171,7 +162,9 @@ jobs:
           SEED2: ${{ inputs.seed2 }}
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
-        run: nix develop .#typescript --command yarn test-e2e -- ${{ inputs.modifier }}
+        run: |
+          cd typescript
+          yarn test-e2e -- ${{ inputs.modifier }}
 
       - name: Create allure properties
         if: success() || failure()

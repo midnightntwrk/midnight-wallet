@@ -95,7 +95,7 @@ object WalletBuilder {
       walletTransactionService,
     )
 
-    val allocatedWallet = dependencies.allocated.map((AllocatedWallet[F, TWallet] _).tupled)
+    val allocatedWallet = dependencies.allocated.map(AllocatedWallet[F, TWallet].tupled)
 
     allocatedWallet.attemptTap {
       case Right(_) => builderTracer.walletBuildSuccess
@@ -120,7 +120,7 @@ object WalletBuilder {
       walletStateContainer: WalletStateContainer[F, TWallet],
   )(implicit
       rootTracer: Tracer[F, StructuredLog],
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, _],
+      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, ?],
   ): Resource[F, WalletTxSubmissionService[F]] = {
     implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[F] =
       WalletTxSubmissionTracer.from(rootTracer)

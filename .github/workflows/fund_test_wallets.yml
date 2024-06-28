@@ -1,10 +1,6 @@
 name: Fund test wallets
 
 env:
-    MIDNIGHT_GH_USER: ${{ github.actor }}
-    MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
-    GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-    MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
     SEED: ${{ secrets.FAUCET_SEED }}
 
 on:
@@ -25,33 +21,19 @@ jobs:
         name: Run funding script
         runs-on: ubuntu-latest
         steps:
-            - name: Prepare .netrc to access other repos
-              run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
+            - uses: actions/checkout@v4
 
-            - uses: actions/checkout@v3
-
-            - uses: nixbuild/nix-quick-install-action@v25
+            - uses: actions/setup-node@v4
               with:
-                github_access_token: ${{ secrets.GH_TOKEN }}
-                nix_conf: |
-                    access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-                    accept-flake-config = true
-                    netrc-file = ~/.netrc
+                node-version-file: '.tool-versions'
+                cache: 'yarn'
+                cache-dependency-path: 'typescript/yarn.lock'
 
-            - name: Restore and cache Nix store
-              uses: nix-community/cache-nix-action@v4
-              with:
-                gc-linux: true
-                gc-max-store-size-linux: 8000000000
-                key: cache-ubuntu-${{ hashFiles('**/*') }}
-                restore-keys: |
-                    cache-ubuntu-
-
-            - name: Setup .npmrc
+            - name: Configure yarn
               run: |
-                    echo "
-                    //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
-                    " >> ./.npmrc
+                cd typescript
+                yarn config set npmScopes.midnight-ntwrk.npmAuthToken ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+                yarn config set 'enableImmutableInstalls' false
 
             - name: Log in to GitHub Container registry
               uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -60,17 +42,12 @@ jobs:
                 username: ${{ secrets.GH_USERNAME }}
                 password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
-            - name: Configure yarn
-              run: |
-                cd typescript
-                yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
-                echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
-
             - name: Run funding script
               env:
                 NETWORK: devnet
                 DEPLOYMENT: ${{ inputs.deployment }}
               run: |
-                nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-                nix develop .#typescript --command yarn
-                nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+                cd typescript
+                yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
+                yarn
+                yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts

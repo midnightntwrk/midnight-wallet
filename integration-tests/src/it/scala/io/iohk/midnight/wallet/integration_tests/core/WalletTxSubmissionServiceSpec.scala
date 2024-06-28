@@ -46,7 +46,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       txSubmissionService: TxSubmissionService[IO] = txSubmissionService,
   )(using
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
-      walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, _],
+      walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, ?],
   ): IO[(WalletTxSubmissionService[IO], WalletStateContainer[IO, TWallet])] = {
     val snapshot = Wallet.Snapshot(initialState, Seq.empty, None)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>

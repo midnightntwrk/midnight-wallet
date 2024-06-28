@@ -1,0 +1,33 @@
+name: Deploy dapp connector API
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Build & Publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.tool-versions'
+          cache: 'yarn'
+          cache-dependency-path: 'typescript/yarn.lock'
+
+      - name: Configure yarn
+        run: |
+          cd typescript
+          yarn config set npmScopes.midnight-ntwrk.npmAuthToken ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+          yarn config set 'enableImmutableInstalls' false
+
+      - name: Install typescript dependencies
+        run: |
+          cd typescript
+          yarn install
+
+      - name: Deploy typescript packages
+        run: |
+          cd typescript
+          yarn deploy

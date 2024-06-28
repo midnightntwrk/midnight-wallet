@@ -1,16 +1,11 @@
 # Midnight Wallet
-[![CI](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml/badge.svg?event=push)](https://github.com/input-output-hk/midnight-wallet/actions/workflows/ci.yml)
-
 
 This is an implementation of the [Wallet API](https://github.com/input-output-hk/midnight-wallet-api),
-used by dapp developers and [client SDK](https://github.com/input-output-hk/midnight-client-sdk) to:
+used by dapp developers and [Midnight.js](https://github.com/input-output-hk/midnight-js) to:
 
 - Build transactions
-- Submit transactions to a node
-- Obtain transactions from a node
-
-The current reference node implementation, which this wallet is able to connect, is 
-the [Mocked Node](https://github.com/input-output-hk/midnight-mocked-node).
+- Submit transactions to a [node](https://github.com/input-output-hk/midnight-substrate-prototype)
+- Sync state with an [indexer](https://github.com/input-output-hk/midnight-pubsub-indexer)
 
 ## Modules structure
 
@@ -48,31 +43,19 @@ npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will fin
 
 ## Development setup
 
-### 1. Nix
+### Tools
 
-To start developing, first install [Nix](https://nixos.org). Then [direnv](https://direnv.net) is 
-optional but strongly recommended.
-This project provides a [flake](flake.nix) with a dev shell definition.
+The tools with the corresponding versions used to build the code are listed in the [.tool-versions](.tool-versions) file.
 
-### 2. Internal private registry and credentials
+You can use [asdf](https://asdf-vm.com) and just run `asdf install` to get the correct versions. 
+
+Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell definition.
+
+Finally, [direnv](https://direnv.net) is optional but strongly recommended.
+
+### Internal private registry and credentials
 
 Follow all authentication steps from the [Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
-
-### 3. Developing
-
-After installing Nix and configuring the credentials you are all set up to start developing.
-
-If you're using direnv, only the first time you will need to do:
-```shell
-direnv allow
-```
-After that `sbt` and `yarn` should be available in your path. 
-
-If you're not using direnv, you will have to manually start the dev shell every time with:
-
-```nix
-nix develop
-```
 
 ## Build
 
@@ -102,7 +85,7 @@ sbt IntegrationTest/test
 sbt coverage test coverageAggregate
 ```
 
-An HTML report is written to each module's `target/scala-2.13/scoverage-report/index.html`
+An HTML report is written to each module's `target/scala-3.4/scoverage-report/index.html`
 
 ## Contributing
 
@@ -117,7 +100,7 @@ does the following:
 - Compile the code with strict scala compiler flags through the use of 
 [sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
 - Check the code with [wartremover](https://www.wartremover.org/)
-- Run the unit and integration tests to verify that the minimum code coverage is reached
+- Run the unit and integration tests
 - Generate coverage reports
 
 To develop quickly, without the linting tools getting in the way, the
@@ -133,24 +116,4 @@ In order to release a new version, the versions inside `wallet-engine/package.js
 
 After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 
 from GitHub to create a tag with a name following the pattern `vX.Y.Z`.
-Cicero will detect it and automatically build and publish the new version.
-
-## Maintenance
-
-The nix build captures or "vendors" the scala dependencies, and represents
-these dependencies through a hash. This hash will need to be updated when
-changing sbt dependencies. Fortunately there's a script to make this easy:
-
-`./update-nix.sh`
-
-to verify the hash is correct
-
-`./update-nix.sh --check`
-
-Notes:
-- The hash represents the content of the vendored libraries, and
-  if a previous vendored directory exists, nix will not check
-  if the directory is the "latest". To avoid this situation,
-  please use `./update-nix.sh --check`
-- The environment flag `MIDNIGHT_DEV` (`export MIDNIGHT_DEV=true`) could be used to disable compilation and linter checks to speed up development cycle.
-  It SHOULD NOT be used on CI server.
+A GitHub action will automatically build and publish the new version.

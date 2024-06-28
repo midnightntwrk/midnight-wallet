@@ -1,9 +1,10 @@
 name: CD
 
 env:
-  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-  GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-  MIDNIGHT_GH_TOKEN: ${{ secrets.GH_TOKEN }}
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }} # For sbt to download dependencies from Midnight org
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
+  IOG_GH_TOKEN: ${{ secrets.GH_TOKEN }} # For sbt to download ledger binaries from IOG org
+  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # Used by setup-node
 
 on:
   push:
@@ -12,44 +13,30 @@ on:
 jobs:
   publish:
     name: Build & Publish
-    runs-on: ubuntu-latest-4-cores
+    runs-on: ubuntu-latest
     steps:
-      - name: Prepare .netrc to access other repos
-        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
-      - uses: actions/checkout@v3
-      - uses: nixbuild/nix-quick-install-action@v25
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
         with:
-          github_access_token: ${{ secrets.GH_TOKEN }}
-          nix_conf: |
-            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-            accept-flake-config = true
-            netrc-file = ~/.netrc
-      - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v1
+          distribution: 'temurin'
+          java-version-file: '.tool-versions'
+          cache: 'sbt'
+
+      - uses: actions/setup-node@v4
         with:
-          linux-gc-enabled: true
-          linux-max-store-size: 8000000000
-          key: cache-ubuntu-${{ hashFiles('**/*') }}
-          restore-keys: |
-            cache-ubuntu-
-      - name: Setup .npmrc
-        run: |
-          echo "
-          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
-          @midnight-ntwrk:registry=https://npm.pkg.github.com/
-          " > ./.npmrc
+          node-version-file: '.tool-versions'
+          cache: 'yarn'
+          cache-dependency-path: '**/yarn.lock'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
+          always-auth: true
+
       - name: Build Wallet
-        run: nix develop -c sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
+        run: |
+          sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
+
       - name: Publish Wallet
         run: |
           cd wallet-engine
-          nix develop -c yarn publish
-      - name: Configure yarn
-        run: |
-          cd typescript
-          yarn config set 'npmScopes.midnight.npmAuthToken' "$NEXUS_TOKEN"
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
-      - name: Install typescript dependencies
-        run: nix develop .#typescript --command yarn
-      - name: Deploy typescript packages
-        run: nix develop .#typescript --command yarn deploy
+          yarn publish

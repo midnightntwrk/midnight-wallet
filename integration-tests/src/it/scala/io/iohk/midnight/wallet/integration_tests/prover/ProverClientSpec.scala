@@ -44,7 +44,7 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
     ),
   )
 
-  override def munitFixtures: Seq[AnyFixture[_]] = List(provingServiceFixture)
+  override def munitFixtures: Seq[AnyFixture[?]] = List(provingServiceFixture)
 
   private def withProvingClient(body: ProverClient[IO] => IO[Unit]): IO[Unit] = {
     val port = provingServiceFixture().getMappedPort(proverServerPort).toInt

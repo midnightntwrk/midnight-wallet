@@ -1,6 +1,5 @@
 name: Publish updated API documentation
-env:
-  MIDNIGHTBOT_PACKAGES_WRITE: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+
 on:
   push:
     branches:
@@ -13,40 +12,31 @@ jobs:
   docs:
     runs-on: ubuntu-latest
     steps:
-      - name: Prepare .netrc to access other repos
-        run: echo -e "machine github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}\n\nmachine api.github.com\nlogin git\npassword ${{ secrets.GH_TOKEN }}" > ~/.netrc && chmod 755 ~/.netrc
-      - uses: actions/checkout@v3
-      - uses: nixbuild/nix-quick-install-action@v25
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
-          github_access_token: ${{ secrets.GH_TOKEN }}
-          nix_conf: |
-            access-tokens = github.com=${{ secrets.GH_TOKEN }} api.github.com=${{ secrets.GH_TOKEN }}
-            accept-flake-config = true
-            netrc-file = ~/.netrc
-      - name: Restore and cache Nix store
-        uses: nix-community/cache-nix-action@v4
-        with:
-          gc-linux: true
-          gc-max-store-size-linux: 8000000000
-          key: cache-ubuntu-${{ hashFiles('**/*') }}
-          restore-keys: |
-            cache-ubuntu-
-      - name: Setup .npmrc
-        run: |
-          echo "
-          //npm.pkg.github.com/:_authToken=$MIDNIGHTBOT_PACKAGES_WRITE
-          " >> ./.npmrc
+          node-version-file: '.tool-versions'
+          cache: 'yarn'
+          cache-dependency-path: 'typescript/yarn.lock'
+
       - name: Configure yarn
         run: |
           cd typescript
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "$MIDNIGHTBOT_PACKAGES_WRITE"
-          echo 'enableImmutableInstalls: false' >> ./.yarnrc.yml
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}"
+          yarn config set 'enableImmutableInstalls' false
+
       - name: Run yarn install
         run: |
-          nix develop .#typescript --command yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-          nix develop .#typescript --command yarn
+          cd typescript
+          yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
+          yarn
+
       - name: Generate documentation
-        run: nix develop .#typescript --command yarn run build:docs
+        run: |
+          cd typescript
+          yarn run build:docs
+
       - name: Check if there are changes in docs and create a new branch
         id: set_update
         run: |
@@ -65,6 +55,7 @@ jobs:
           fi
         env:
           GH_TOKEN: ${{ secrets.GH_TOKEN }}
+
       - uses: MonikaJassova/ghcommit-action@aee0efc02d3707e178c534477e5c87f70fe6678f
         if: steps.set_update.outputs.UPDATE == 'true'
         with:
