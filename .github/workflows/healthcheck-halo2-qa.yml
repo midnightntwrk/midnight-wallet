@@ -13,7 +13,7 @@ jobs:
       network: devnet
       deployment: halo2-qa
       seed: 1b2c2d3f981e495b399ae4699a21dd65096037c773bd3c6ad2ee858fc4914b98
-      seed2: 8f38fa081073ecfb39856901b96d26dc0441ca6fe9dd259bfa28641d6a5e3321
+      seed2: b5583ac1b80f74447c1a325a504002afcea2c812def06c1c3a662e6b58befb99
       nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
       nt_seed2: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
       modifier: '-t @healthcheck'
