@@ -60,9 +60,6 @@ lazy val commonSettings = Seq(
   // Linting
   wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
   wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
-  coverageFailOnMinimum := true,
-  coverageMinimumStmtTotal := 100,
-  coverageMinimumBranchTotal := 100,
 )
 
 lazy val useNodeModuleResolution = {
@@ -103,7 +100,6 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
     ),
-    coverageExcludedPackages := "io.iohk.midnight.wallet.blockchain.*",
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -131,7 +127,6 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
   .dependsOn(
     bloc,
     blockchain % "compile->compile;test->test",
-    proverClient % "test->test",
     walletZswap,
   )
   .settings(commonSettings, commonPublishSettings)
@@ -152,14 +147,6 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
       "io.circe" %%% "circe-parser" % circeVersion,
       "io.circe" %%% "circe-generic" % circeVersion,
     ),
-
-    // Test dependencies
-    libraryDependencies += "org.typelevel" %%% "kittens" % "3.0.0" % Test,
-
-    // Coverage
-    coverageExcludedPackages := "" +
-      "io.iohk.midnight.wallet.core.WalletError.BadTransactionFormat;" +
-      "io.iohk.midnight.wallet.core.Instances;",
   )
   .jsConfigure(_.dependsOn(jsInterop))
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
@@ -173,8 +160,8 @@ lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(
     walletCore.js % "compile->compile;test->test",
-    proverClient.js % "compile->compile;test->test",
-    pubSubIndexerClient % "compile->compile;test->test",
+    proverClient,
+    pubSubIndexerClient,
     substrateClient % "compile->compile;test->test",
     walletZswap.js,
   )
@@ -200,17 +187,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "monocle-ts",
     ),
     useNodeModuleResolution,
-
-    // Coverage
-    coverageExcludedPackages := "" +
-      "io.iohk.midnight.wallet.engine.WalletBuilder;" +
-      "io.iohk.midnight.wallet.engine.config;" +
-      "io.iohk.midnight.wallet.engine.tracing.JsWalletTracer;" +
-      "io.iohk.midnight.wallet.engine.tracing.JsWalletEvent.DefaultInstances;" +
-      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderEvent.DefaultInstances;" +
-      "io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer;" +
-      "io.iohk.midnight.wallet.engine.tracing.sync.SyncServiceTracer;" +
-      "io.iohk.midnight.wallet.engine.js.SyncServiceFactory;",
   )
 
 lazy val jsInterop = project
@@ -225,7 +201,6 @@ lazy val jsInterop = project
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
     ),
-    coverageExcludedPackages := "io.iohk.midnight.js.interop.util.ObservableOps",
   )
 
 lazy val downloadLedgerBinaries = taskKey[Unit]("Download ledger binaries")
@@ -281,22 +256,18 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
     Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
   )
 
-lazy val proverClient = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+lazy val proverClient = project
   .in(file("prover-client"))
-  .dependsOn(walletZswap)
-  .jsConfigure(_.dependsOn(jsInterop))
-  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
+  .dependsOn(walletZswap.js)
+  .dependsOn(jsInterop)
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings, commonPublishSettings)
   .settings(name := "wallet-prover-client")
-  .jsSettings(
+  .settings(
     commonScalablyTypedSettings,
     stIgnore ++= List("node-fetch"),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     useNodeModuleResolution,
-  )
-  .jvmSettings(
-    libraryDependencies += "com.softwaremill.sttp.client3" %% "fs2" % sttpClientVersion,
   )
   .settings(
     libraryDependencies ++= Seq(
@@ -344,15 +315,12 @@ lazy val pubSubIndexerClient = project
 lazy val integrationTests = project
   .in(file("integration-tests"))
   .dependsOn(
-    walletEngine % "compile->compile;it->test",
-    walletCore.js % "compile->compile;it->test",
+    walletEngine % "compile->compile;test->test",
+    walletCore.js % "compile->compile;test->test",
   )
-  .configs(IntegrationTest)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings, commonScalablyTypedSettings)
   .settings(
-    Defaults.itSettings,
-    inConfig(IntegrationTest)(ScalaJSPlugin.testConfigSettings),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     useNodeModuleResolution,
     stIgnore ++= List(
@@ -371,10 +339,8 @@ lazy val integrationTests = project
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
       "org.scalacheck" %%% "scalacheck" % "1.17.0",
       "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.2",
-      "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2",
-      // scalajs-test-bridge is not visible in IT context and needs to be explicitly added as dependency
-      "org.scala-js" %% "scalajs-test-bridge" % "1.13.2" cross (CrossVersion.for3Use2_13),
-    ).map(_ % IntegrationTest),
+      "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2"
+    ).map(_ % Test),
   )
 
 lazy val dist = taskKey[Unit]("Builds the lib")
@@ -392,6 +358,7 @@ lazy val distImpl = Def.task {
 
   streams.value.log.info(s"Dist done at ${distDir.absolutePath}")
 }
+
 // coverage temporary removed - sbt-scoverage doesn't support scala 3 with scalajs yet
 addCommandAlias(
   "verify",
@@ -402,21 +369,21 @@ addCommandAlias(
     "jsInterop/stImport",
     "substrateClient/stImport",
     "walletZswapJS/stImport",
-    "proverClientJS/stImport",
+    "proverClient/stImport",
     "walletCoreJS/stImport",
     "walletEngine/stImport",
     "scalafmtCheckAll",
-    // "coverage",
+//     "coverage",
     "jsInterop/test",
     "blocJS/test",
     "blockchainJS/test",
     "walletZswapJVM/test",
     "substrateClient/test",
     "walletZswapJS/Test/compile",
-    "proverClientJS/test",
+    "proverClient/test",
     "walletCoreJS/test",
     "walletCoreJVM/compile",
     "walletEngine/test",
-    // "coverageReport",
+//     "coverageReport",
   ).mkString(";", " ;", ""),
 )

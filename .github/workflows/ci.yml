@@ -50,7 +50,7 @@ jobs:
       - name: Check format and run tests
         run: |
           sbt verify
-          sbt IntegrationTest/test
+          sbt integrationTests/test
           sbt coverageAggregate
 
       - name: Test and build typescript packages
@@ -62,7 +62,7 @@ jobs:
           yarn build
           yarn lint
 
-      - name: Publish Unit Test Report
+      - name: Publish Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
@@ -71,16 +71,7 @@ jobs:
             !(examples)/**/target/test-reports/TEST-*.xml
           reporter: java-junit
 
-      - name: Publish Integration Test Report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Scala Integration Tests Report
-          path: |
-            !(examples)/**/target/it-reports/TEST-*.xml
-          reporter: java-junit
-
-      - name: Publish Unit Test Summary
+      - name: Publish Test Summary
         uses: EnricoMi/publish-unit-test-result-action@v2
         if: success() || failure()
         with:
@@ -89,18 +80,9 @@ jobs:
             **/target/test-reports/TEST-*.xml
             !examples/node_modules/@midnight-ntwrk/wallet/target/test-reports/TEST-*.xml
 
-      - name: Publish Integration Test Summary
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: success() || failure()
-        with:
-          check_name: Scala Integration Tests Results
-          files: |
-            **/target/it-reports/TEST-*.xml
-            !examples/node_modules/@midnight-ntwrk/wallet/target/it-reports/TEST-*.xml
-
       - name: Upload Scala coverage report
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
           name: scoverage-report
-          path: target/scala-2.12/scoverage-report
+          path: target/scala-3.4.2/scoverage-report

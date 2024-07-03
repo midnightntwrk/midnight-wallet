@@ -76,7 +76,7 @@ sbt test
 ### Integration tests
 
 ```shell
-sbt IntegrationTest/test
+sbt integrationTests/test
 ```
 
 ## Generate test coverage report
