@@ -1,14 +1,18 @@
 package io.iohk.midnight.wallet.engine
 
-import cats.effect.Resource
-import cats.effect.kernel.Async
+import cats.effect.{Async, Ref, Resource}
 import cats.effect.syntax.resource.*
-import cats.syntax.all.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
+import io.iohk.midnight.wallet.core.combinator.{
+  ProtocolVersion,
+  V1Combination,
+  VersionCombination,
+  VersionCombinator,
+}
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{
@@ -26,45 +30,19 @@ import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.zswap
 
 object WalletBuilder {
-  final case class WalletDependencies[F[_], TWallet](
-      walletSyncService: WalletSyncService[F],
-      walletStateService: WalletStateService[F, TWallet],
-      walletTxSubmissionService: WalletTxSubmissionService[F],
-      walletTransactionService: WalletTransactionService[F],
-  )
-  final case class AllocatedWallet[F[_], TWallet](
-      dependencies: WalletDependencies[F, TWallet],
-      finalizer: F[Unit],
-  )
+  def build[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] =
+    config.initialState.protocolVersion match {
+      case ProtocolVersion.V1 =>
+        buildWalletV1[F](config)
+    }
 
-  def build[F[_]: Async](
-      config: Config,
-  ): F[AllocatedWallet[F, Wallet]] = {
+  private def buildWalletV1[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] = {
     import Wallet.*
-    buildWallet[F, Wallet](config)
-  }
-
-  private def buildWallet[F[_]: Async, TWallet](config: Config)(implicit
-      walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
-      walletKeys: WalletKeys[
-        TWallet,
-        zswap.CoinPublicKey,
-        zswap.EncryptionPublicKey,
-        zswap.EncryptionSecretKey,
-      ],
-      walletSync: WalletSync[TWallet, IndexerUpdate],
-      walletTxBalancing: WalletTxBalancing[
-        TWallet,
-        zswap.Transaction,
-        zswap.UnprovenTransaction,
-        zswap.CoinInfo,
-      ],
-  ): F[AllocatedWallet[F, TWallet]] = {
     implicit val rootTracer: Tracer[F, StructuredLog] =
       ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
     val builderTracer = WalletBuilderTracer.from(rootTracer)
 
-    val dependencies = for {
+    for {
       _ <- builderTracer.buildRequested(config).toResource
       walletStateContainer <- WalletStateContainer.Live(walletCreation.create(config.initialState))
       walletQueryStateService <- Resource.pure(
@@ -79,8 +57,9 @@ object WalletBuilder {
         submitTxService,
         walletStateContainer,
       )
+      syncService = SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService)
       walletBlockProcessingService <- buildWalletSyncService(
-        SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService),
+        syncService,
         walletStateContainer,
         config.initialState.offset,
       )
@@ -88,18 +67,19 @@ object WalletBuilder {
         walletStateContainer,
         provingService,
       )
-    } yield WalletDependencies(
-      walletBlockProcessingService,
-      walletStateService,
-      walletTxSubmissionService,
-      walletTransactionService,
-    )
-
-    val allocatedWallet = dependencies.allocated.map(AllocatedWallet[F, TWallet].tupled)
-
-    allocatedWallet.attemptTap {
-      case Right(_) => builderTracer.walletBuildSuccess
-      case Left(t)  => builderTracer.walletBuildError(t.getMessage)
+      v1Combination = V1Combination(
+        config.initialState,
+        syncService,
+        walletStateContainer,
+        walletStateService,
+      )
+      combinationRef <- Resource.eval(Ref[F].of[VersionCombination[F]](v1Combination))
+    } yield {
+      WalletDependencies(
+        VersionCombinator(combinationRef),
+        walletTxSubmissionService,
+        walletTransactionService,
+      )
     }
   }
 
@@ -144,4 +124,10 @@ object WalletBuilder {
     given WalletTxServiceTracer[F] = WalletTxServiceTracer.from(rootTracer)
     Resource.pure(new WalletTransactionService.Live(walletStateContainer, provingService))
   }
+
+  final case class WalletDependencies[F[_]](
+      versionCombinator: VersionCombinator[F],
+      submissionService: WalletTxSubmissionService[F],
+      txService: WalletTransactionService[F],
+  )
 }

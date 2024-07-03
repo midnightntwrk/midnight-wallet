@@ -7,7 +7,7 @@ sealed trait ReadableMessage {
   def message: String
 }
 
-sealed trait ThrowableError {
+sealed trait ThrowableError extends Exception {
   def toThrowable: Throwable
 }
 

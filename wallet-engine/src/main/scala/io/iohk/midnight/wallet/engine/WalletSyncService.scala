@@ -30,9 +30,9 @@ object WalletSyncService {
       Stream
         .resource(syncServiceResource)
         .flatMap { syncService =>
-          BlockProcessingFactory
-            .pipe(walletStateContainer)
-            .apply(syncService.sync(offset))
+          syncService
+            .sync(offset)
+            .through(BlockProcessingFactory.pipe(walletStateContainer))
             .map(_.map { case (viewingUpdate, _) => viewingUpdate })
         }
         .interruptWhen(deferred)

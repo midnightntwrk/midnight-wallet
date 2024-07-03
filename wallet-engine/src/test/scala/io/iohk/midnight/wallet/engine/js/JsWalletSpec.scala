@@ -1,9 +1,11 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.kernel.Deferred
+import cats.effect.kernel.{Deferred, Resource}
 import cats.effect.{IO, Ref}
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.rxjs.mod.firstValueFrom
+import io.iohk.midnight.wallet.core.Wallet
+import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
@@ -17,11 +19,20 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
       val wallet =
         new JsWallet(
-          new WalletSyncServiceStub(),
-          new WalletStateServiceBalanceStub(balance),
+          VersionCombinator(
+            Ref.unsafe(
+              V1Combination[IO](
+                Wallet.Snapshot.create,
+                Resource.pure(new WalletSyncServiceStub()),
+                new WalletStateContainerStub(),
+                new WalletStateServiceBalanceStub(balance),
+              ),
+            ),
+          ),
           new WalletTxSubmissionServiceStub(),
           new WalletTransactionServiceStub(),
           IO.unit,
+          Deferred.unsafe[IO, Unit],
         )
       val observable = wallet.state()
       IO.fromPromise(IO(firstValueFrom(observable)))
@@ -35,11 +46,20 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     val encPubKey = "test-encPubKey"
     val wallet =
       new JsWallet(
-        new WalletSyncServiceStub(),
-        new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
+        VersionCombinator(
+          Ref.unsafe(
+            new V1Combination[IO](
+              Wallet.Snapshot.create,
+              Resource.pure(new WalletSyncServiceStub()),
+              new WalletStateContainerStub(),
+              new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
+            ),
+          ),
+        ),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         IO.unit,
+        Deferred.unsafe[IO, Unit],
       )
     IO.fromPromise(IO(firstValueFrom(wallet.state())))
       .map(state => (state.coinPublicKey, state.encryptionPublicKey))
@@ -50,11 +70,20 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       ref <- Ref.of[IO, Boolean](false)
       wallet = new JsWallet(
-        new WalletSyncServiceStub(),
-        new WalletStateServiceStub(),
+        VersionCombinator(
+          Ref.unsafe(
+            new V1Combination[IO](
+              Wallet.Snapshot.create,
+              Resource.pure(new WalletSyncServiceStub()),
+              new WalletStateContainerStub(),
+              new WalletStateServiceStub(),
+            ),
+          ),
+        ),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         ref.set(true),
+        Deferred.unsafe[IO, Unit],
       )
       _ <- IO.fromPromise(IO(wallet.close()))
       result <- ref.get
@@ -65,11 +94,20 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       isFinished <- Deferred[IO, Boolean]
       wallet = new JsWallet(
-        new WalletSyncServiceStartStub(isFinished),
-        new WalletStateServiceStub(),
+        VersionCombinator(
+          Ref.unsafe(
+            new V1Combination[IO](
+              Wallet.Snapshot.create,
+              Resource.pure(new WalletSyncServiceStartStub(isFinished)),
+              new WalletStateContainerStub(),
+              new WalletStateServiceStub(),
+            ),
+          ),
+        ),
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         IO.unit,
+        Deferred.unsafe[IO, Unit],
       )
       _ <- IO(wallet.start())
       result <- isFinished.get.timeout(5.seconds)

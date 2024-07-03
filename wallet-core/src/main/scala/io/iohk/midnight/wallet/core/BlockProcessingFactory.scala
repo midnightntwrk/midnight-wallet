@@ -15,7 +15,7 @@ object BlockProcessingFactory {
     _.evalTap(tracer.handlingUpdate)
       .evalMap { indexerUpdate =>
         walletStateContainer
-          .updateStateEither(walletSync.applyUpdate(_, indexerUpdate))
+          .updateStateEither(_.apply(indexerUpdate))
           .flatTap {
             case Right(_) => tracer.applyUpdateSuccess(indexerUpdate)
             // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage

@@ -13,17 +13,18 @@ import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
   ConnectionLost,
+  IndexerUpdate,
   NothingToProve,
+  ProgressUpdate,
   Seed,
   TokenTransfer,
   TransactionToProve,
-  IndexerUpdate,
-  ProgressUpdate,
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
+import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 
 final case class Wallet private (
     private val state: LocalState = LocalState(),
@@ -156,36 +157,40 @@ object Wallet {
       }
     }
 
-  implicit val walletSync: WalletSync[Wallet, IndexerUpdate] = {
-    case (wallet: Wallet, update: ViewingUpdate) =>
-      val newState =
-        update.updates.foldLeft(wallet.state) {
-          case (state, Left(mt))  => state.applyCollapsedUpdate(mt)
-          case (state, Right(tx)) => applyTransaction(state, tx)
+  given walletSync: WalletSync[Wallet, IndexerUpdate] with
+    extension (wallet: Wallet) {
+      override def apply(update: IndexerUpdate): Either[WalletError, Wallet] =
+        update match {
+          case update: ViewingUpdate =>
+            val newState =
+              update.updates.foldLeft(wallet.state) {
+                case (state, Left(mt))  => state.applyCollapsedUpdate(mt)
+                case (state, Right(tx)) => applyTransaction(state, tx)
+              }
+            val newTxs = update.updates.collect { case Right(tx) => tx }
+            wallet
+              .copy(
+                state = newState,
+                txHistory = wallet.txHistory ++ newTxs.map(_.tx),
+                offset = Some(update.offset),
+                isConnected = true,
+                progress = wallet.progress.copy(synced = Some(update.offset.decrement)),
+              )
+              .asRight
+
+          case update: ProgressUpdate =>
+            wallet
+              .copy(
+                progress = wallet.progress.copy(total = update.total),
+                isConnected = true,
+              )
+              .asRight
+
+          case ConnectionLost =>
+            val progressUpdated = wallet.progress.copy(wallet.progress.synced, total = None)
+            wallet.copy(isConnected = false, progress = progressUpdated).asRight
         }
-      val newTxs = update.updates.collect { case Right(tx) => tx }
-      wallet
-        .copy(
-          state = newState,
-          txHistory = wallet.txHistory ++ newTxs.map(_.tx),
-          offset = Some(update.offset),
-          isConnected = true,
-          progress = wallet.progress.copy(synced = Some(update.offset.decrement)),
-        )
-        .asRight
-
-    case (wallet: Wallet, update: ProgressUpdate) =>
-      wallet
-        .copy(
-          progress = wallet.progress.copy(total = update.total),
-          isConnected = true,
-        )
-        .asRight
-
-    case (wallet: Wallet, ConnectionLost) =>
-      val progressUpdated = wallet.progress.copy(wallet.progress.synced, total = None)
-      wallet.copy(isConnected = false, progress = progressUpdated).asRight
-  }
+    }
 
   private def applyTransaction(state: LocalState, transaction: AppliedTransaction): LocalState = {
     val tx = transaction.tx
@@ -211,13 +216,14 @@ object Wallet {
   implicit val serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
     (wallet: Wallet) =>
       SerializedWalletState(
-        Snapshot(wallet.state, wallet.txHistory, wallet.offset).serialize,
+        Snapshot(wallet.state, wallet.txHistory, wallet.offset, ProtocolVersion.V1).serialize,
       )
 
   final case class Snapshot(
       state: LocalState,
       txHistory: Seq[Transaction],
       offset: Option[data.Transaction.Offset],
+      protocolVersion: ProtocolVersion,
   ) {
     def serialize: String = this.asJson.noSpaces
   }
@@ -226,9 +232,9 @@ object Wallet {
       decode[Snapshot](serialized)
 
     def fromSeed(seed: String): Either[Throwable, Snapshot] =
-      LedgerSerialization.fromSeed(seed).map(Snapshot(_, Seq.empty, None))
+      LedgerSerialization.fromSeed(seed).map(Snapshot(_, Seq.empty, None, ProtocolVersion.V1))
 
-    def create: Snapshot = Snapshot(LocalState(), Seq.empty, None)
+    def create: Snapshot = Snapshot(LocalState(), Seq.empty, None, ProtocolVersion.V1)
 
     given Encoder[LocalState] = Encoder.instance(LedgerSerialization.serializeState(_).asJson)
     given Encoder[Transaction] = Encoder.instance(_.serialize.asJson)

@@ -5,6 +5,7 @@ import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.wallet.core.capabilities.WalletCreation
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.{LocalState, TokenType}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
@@ -20,7 +21,7 @@ class WalletStateServiceSpec
   )(implicit
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
   ): Resource[IO, WalletStateService[IO, TWallet]] = {
-    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None)
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).map { bloc =>
       new WalletStateService.Live[IO, TWallet](
         new WalletQueryStateService.Live(

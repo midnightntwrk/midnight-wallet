@@ -1,8 +1,9 @@
 package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.{Deferred, IO}
-import cats.syntax.applicative.*
+import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.{
   WalletBalances,
@@ -11,6 +12,7 @@ import io.iohk.midnight.wallet.core.capabilities.{
   WalletStateSerialize,
   WalletTxHistory,
 }
+import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
@@ -20,17 +22,16 @@ import io.iohk.midnight.wallet.core.domain.{
   TokenTransfer,
   TransactionIdentifier,
   TransactionToProve,
-  ViewingUpdate,
 }
-import io.iohk.midnight.wallet.core.services.ProvingService
+import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService}
 import io.iohk.midnight.wallet.core.{
   Wallet,
-  WalletError,
+  WalletStateContainer,
   WalletStateService,
   WalletTransactionService,
   WalletTxSubmissionService,
+  domain,
 }
-import io.iohk.midnight.wallet.engine.WalletSyncService
 import io.iohk.midnight.wallet.zswap.{
   CoinInfo,
   CoinPublicKey,
@@ -41,9 +42,22 @@ import io.iohk.midnight.wallet.zswap.{
   Transaction,
 }
 
-class WalletSyncServiceStub extends WalletSyncService[IO] {
-  override def updates: Stream[IO, Either[WalletError, ViewingUpdate]] = Stream.empty
-  override def stop: IO[Unit] = IO.unit
+class WalletSyncServiceStub extends SyncService[IO] {
+  override def sync(offset: Option[Offset]): Stream[IO, domain.IndexerUpdate] =
+    Stream.empty
+}
+
+class WalletStateContainerStub extends WalletStateContainer[IO, Wallet] {
+  override def updateStateEither[E](updater: Wallet => Either[E, Wallet]): IO[Either[E, Wallet]] =
+    IO.raiseError(UnsupportedOperationException("Stubbed"))
+
+  override def modifyStateEither[E, Output](
+      action: Wallet => Either[E, (Wallet, Output)],
+  ): IO[Either[E, Output]] =
+    IO.raiseError(UnsupportedOperationException("Stubbed"))
+
+  override def subscribe: Stream[IO, Wallet] =
+    Stream.raiseError(UnsupportedOperationException("Stubbed"))
 }
 
 class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
@@ -77,13 +91,14 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
   def serializeState(using
       stateSerializer: WalletStateSerialize[Wallet, SerializedWalletState],
   ): IO[SerializedWalletState] =
-    IO.pure(SerializedWalletState(Wallet.Snapshot(state, Seq.empty, None).serialize))
+    IO.pure(
+      SerializedWalletState(Wallet.Snapshot(state, Seq.empty, None, ProtocolVersion.V1).serialize),
+    )
 }
 
-class WalletSyncServiceStartStub(ref: Deferred[IO, Boolean]) extends WalletSyncService[IO] {
-  override val updates: Stream[IO, Either[WalletError, ViewingUpdate]] =
+class WalletSyncServiceStartStub(ref: Deferred[IO, Boolean]) extends SyncService[IO] {
+  override def sync(offset: Option[Offset]): Stream[IO, domain.IndexerUpdate] =
     Stream.eval(ref.complete(true)).flatMap(_ => Stream.empty)
-  override def stop: IO[Unit] = IO.unit
 }
 
 class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[IO, Wallet] {

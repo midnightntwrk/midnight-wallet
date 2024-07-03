@@ -19,6 +19,7 @@ import io.iohk.midnight.wallet.core.WalletTxSubmissionService.{
   TransactionSubmissionFailed,
 }
 import io.iohk.midnight.wallet.core.capabilities.{WalletCreation, WalletTxBalancing}
+import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
@@ -48,7 +49,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, ?],
   ): IO[(WalletTxSubmissionService[IO], WalletStateContainer[IO, TWallet])] = {
-    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None)
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val service =

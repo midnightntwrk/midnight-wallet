@@ -14,6 +14,7 @@ import io.iohk.midnight.wallet.core.domain.{
 }
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*
 import io.iohk.midnight.wallet.core.capabilities.*
+import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.*
 
@@ -58,6 +59,7 @@ abstract class WalletSpec
         Generators.generateStateWithFunds(NonEmptyList.one((TokenType.Native, expectedBalance))),
         Seq.empty,
         None,
+        ProtocolVersion.V1,
       ),
     )
 
@@ -79,6 +81,7 @@ abstract class WalletSpec
           ),
           Seq.empty,
           None,
+          ProtocolVersion.V1,
         ),
       )
     }
@@ -92,7 +95,9 @@ abstract class WalletSpec
     )
   override val walletForUpdates: IO[Wallet] =
     txWithContext.map((tx, _) =>
-      Wallet.walletCreation.create(Wallet.Snapshot(tx.state, Seq(tx.transaction), None)),
+      Wallet.walletCreation.create(
+        Wallet.Snapshot(tx.state, Seq(tx.transaction), None, ProtocolVersion.V1),
+      ),
     )
   override val validUpdateToApply: IO[IndexerUpdate] =
     txWithContext.map { (txCtx, chainState) =>

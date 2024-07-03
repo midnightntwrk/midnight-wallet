@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.integration_tests.engine
 
 import cats.data.NonEmptyList
-import cats.effect.IO
+import cats.effect.{Deferred, IO, Ref, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
@@ -12,9 +12,10 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   TokenTransfer as ApiTokenTransfer,
 }
 import io.iohk.midnight.wallet.core.Generators.{*, given}
-import io.iohk.midnight.wallet.core.domain
+import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
+import io.iohk.midnight.wallet.core.{Wallet, domain}
 import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
-import io.iohk.midnight.wallet.engine.WalletSyncService
+import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.engine.js.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
@@ -27,13 +28,22 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   private val transferRecipe =
     domain.TransactionToProve(unprovenTransactionArbitrary.arbitrary.sample.get)
 
-  def jsWallet(syncService: WalletSyncService[IO] = new WalletSyncServiceStub()): JsWallet =
+  def jsWallet(syncService: SyncService[IO] = new WalletSyncServiceStub()): JsWallet =
     new JsWallet(
-      syncService,
-      new WalletStateServiceStub(),
+      VersionCombinator(
+        Ref.unsafe(
+          V1Combination[IO](
+            Wallet.Snapshot.create,
+            syncService.pure[Resource[IO, *]],
+            new WalletStateContainerStub(),
+            new WalletStateServiceStub(),
+          ),
+        ),
+      ),
       new WalletTxSubmissionServiceStub(),
       new WalletTransactionServiceWithProvingStub(provingService, transferRecipe),
       IO.unit,
+      Deferred.unsafe[IO, Unit],
     )
 
   test("submitting a generic tx successfully should return the tx identifier") {

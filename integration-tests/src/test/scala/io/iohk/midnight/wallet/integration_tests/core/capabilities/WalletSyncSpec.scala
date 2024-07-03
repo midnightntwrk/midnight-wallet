@@ -7,7 +7,7 @@ import munit.CatsEffectSuite
 
 trait WalletSyncSpec[TWallet, TUpdate] extends CatsEffectSuite with BetterOutputSuite {
 
-  val walletSync: WalletSync[TWallet, TUpdate]
+  given walletSync: WalletSync[TWallet, TUpdate]
   val walletForUpdates: IO[TWallet]
   val validUpdateToApply: IO[TUpdate]
   val isUpdateApplied: TWallet => Boolean
@@ -15,8 +15,8 @@ trait WalletSyncSpec[TWallet, TUpdate] extends CatsEffectSuite with BetterOutput
   test("apply update to the wallet") {
     walletForUpdates.product(validUpdateToApply).map { (wallet, update) =>
       val isApplied =
-        walletSync
-          .applyUpdate(wallet, update)
+        wallet
+          .apply(update)
           .map(isUpdateApplied)
       assert(isApplied.getOrElse(false))
     }
