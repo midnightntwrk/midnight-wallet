@@ -6,11 +6,10 @@ import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
-  NOTHING_TO_PROVE,
-  TRANSACTION_TO_PROVE,
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
 }
+import io.iohk.midnight.midnightNtwrkWalletApi.mod.{NOTHING_TO_PROVE, TRANSACTION_TO_PROVE}
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
 import io.iohk.midnight.wallet.core.{Wallet, domain}
