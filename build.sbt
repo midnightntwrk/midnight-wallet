@@ -1,6 +1,7 @@
 import scala.sys.process.*
 import LedgerBinariesDownloader.*
 import sbt.io.FileFilter
+import org.scalajs.jsenv.nodejs.NodeJSEnv
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
@@ -62,15 +63,6 @@ lazy val commonSettings = Seq(
   wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
 )
 
-lazy val useNodeModuleResolution = {
-  import org.scalajs.jsenv.nodejs.NodeJSEnv
-  jsEnv := new NodeJSEnv(
-    NodeJSEnv
-      .Config()
-      .withArgs(List("--experimental-specifier-resolution=node")),
-  )
-}
-
 lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
@@ -118,7 +110,6 @@ lazy val bloc = crossProject(JVMPlatform, JSPlatform)
   )
   .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution,
   )
 
 lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
@@ -153,7 +144,6 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
   .jsSettings(
     commonScalablyTypedSettings,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution,
   )
 
 lazy val walletEngine = (project in file("wallet-engine"))
@@ -186,7 +176,6 @@ lazy val walletEngine = (project in file("wallet-engine"))
       "newtype-ts",
       "monocle-ts",
     ),
-    useNodeModuleResolution,
   )
 
 lazy val jsInterop = project
@@ -267,13 +256,11 @@ lazy val proverClient = project
     commonScalablyTypedSettings,
     stIgnore ++= List("node-fetch"),
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution,
   )
   .settings(
     libraryDependencies ++= Seq(
       "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
-      "io.github.enriquerodbe" %%% "borsh4s" % "3.0.0",
     ),
   )
 
@@ -301,7 +288,6 @@ lazy val pubSubIndexerClient = project
   .settings(
     name := "wallet-pubsub-indexer-client",
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution,
     libraryDependencies ++= Seq(
       "com.github.ghostdogpr" %%% "caliban-client" % "2.3.0",
       "com.github.ghostdogpr" %%% "caliban-client-laminext" % "2.3.0",
@@ -322,9 +308,12 @@ lazy val integrationTests = project
   .settings(commonSettings, commonScalablyTypedSettings)
   .settings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-    useNodeModuleResolution,
+    // This is a workaround just to run these integration tests,
+    // because ScalablyTyped generates directory imports for testcontainers,
+    // which aren't allowed in newer nodejs versions
+    jsEnv := new NodeJSEnv(NodeJSEnv.Config().withArgs(List("--import=extensionless/register"))),
     stIgnore ++= List(
-      "testcontainers",
+      "extensionless",
       "node-fetch",
       "scale-ts",
       "ws",

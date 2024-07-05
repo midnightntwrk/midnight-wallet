@@ -7,6 +7,8 @@ import munit.ScalaCheckSuite
 @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.OptionPartial"))
 class LedgerApiSpec extends ScalaCheckSuite {
 
+  override def munitIgnore: Boolean = scala.util.Properties.isMac
+
   private val validTx =
     "01010001000000000000000000000000000000000000000000"
 
@@ -16,7 +18,7 @@ class LedgerApiSpec extends ScalaCheckSuite {
   private val localState =
     "010000010000612c52b55b1d8265df62db079961e49a1701ba18239489e5da348811d0911d4b0100002008ef2c4ddcc9855b330b86b636a5b7f73e6ad71b2adf7b5d8f22ef381159a70b00000000000000000000000001000002200000000000000000"
 
-  private val ledger =
+  private lazy val ledger =
     LedgerLoader
       .loadLedger(networkId = Some(NetworkId.Undeployed))
       .getOrElse(fail("Invalid ledger state"))

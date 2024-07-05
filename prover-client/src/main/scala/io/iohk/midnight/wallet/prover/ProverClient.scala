@@ -2,7 +2,6 @@ package io.iohk.midnight.wallet.prover
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
-import io.borsh4s.{Borsh4s, given}
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
 import scala.concurrent.duration.DurationInt
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
@@ -14,10 +13,11 @@ class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
   private val asTransaction: ResponseAs[Transaction, Any] =
     asByteArray.getRight.map(bytes => Transaction.deserialize(bytes))
 
+  private val borshSerializedEmptyMap = Array[Byte](0, 0, 0, 0)
+
   def proveTransaction(tx: UnprovenTransaction): F[Transaction] = {
     val serializedTx = tx.serialize
-    val serializedEmptyMap = Borsh4s.encode[Map[Int, Int]](Map.empty)
-    val body = serializedTx ++ serializedEmptyMap
+    val body = serializedTx ++ borshSerializedEmptyMap
 
     val request = emptyRequest
       .body(body)

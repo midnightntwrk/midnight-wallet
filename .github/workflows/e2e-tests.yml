@@ -4,7 +4,7 @@ env:
   MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
   IOG_GH_TOKEN: ${{ secrets.GH_TOKEN }} # For sbt to download ledger binaries from IOG org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # Used by setup-node
+  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
 
@@ -122,15 +122,6 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: '**/yarn.lock'
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
-          always-auth: true
-
-      - name: Configure yarn
-        run: |
-          cd typescript
-          yarn config set npmScopes.midnight-ntwrk.npmAuthToken $NODE_AUTH_TOKEN
-          yarn config set 'enableImmutableInstalls' false
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -145,14 +136,14 @@ jobs:
           sbt dist
           cp ./wallet-engine/package.json ./wallet-engine/dist/
           cd typescript
-          yarn
+          yarn install --no-immutable
 
       - name: Install dependencies
         if: ${{ inputs.deployment != 'local' }}
         run: |
           cd typescript
           yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-          yarn
+          yarn install --no-immutable
 
       - name: Run e2e tests
         env:

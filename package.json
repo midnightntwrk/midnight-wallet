@@ -1,0 +1,6 @@
+{
+  "packageManager": "yarn@4.3.1",
+  "dependencies": {
+    "extensionless": "^1.9.9"
+  }
+}

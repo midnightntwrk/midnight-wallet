@@ -1,12 +1,13 @@
 {
     "name": "@midnight/wallet-integration-tests",
     "type": "module",
-    "packageManager": "yarn@1.22.18",
+    "packageManager": "yarn@4.3.1",
     "author": "IOHK",
     "license": "Apache-2.0",
     "dependencies": {
         "@midnight-ntwrk/wallet-api": "^3.3.2",
         "@midnight-ntwrk/zswap": "^0.3.11",
+        "extensionless": "^1.9.9",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

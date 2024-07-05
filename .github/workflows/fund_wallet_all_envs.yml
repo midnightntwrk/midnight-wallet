@@ -2,6 +2,7 @@ name: Fund a wallet on all envs
 
 env:
     SEED: ${{ secrets.FAUCET_SEED }}
+    NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
     workflow_dispatch:
@@ -25,12 +26,6 @@ jobs:
                 cache: 'yarn'
                 cache-dependency-path: 'typescript/yarn.lock'
 
-            - name: Configure yarn
-              run: |
-                cd typescript
-                yarn config set npmScopes.midnight-ntwrk.npmAuthToken ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-                yarn config set 'enableImmutableInstalls' false
-
             - name: Log in to GitHub Container registry
               uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
               with:
@@ -42,7 +37,7 @@ jobs:
               run: |
                 cd typescript
                 yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-                yarn
+                yarn install --no-immutable
 
             - name: Run funding script for devnet
               env:

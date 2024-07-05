@@ -5,7 +5,7 @@
     "types": "dist/main.d.ts",
     "module": "dist/main.js",
     "type": "module",
-    "packageManager": "yarn@1.22.18",
+    "packageManager": "yarn@4.3.1",
     "author": "IOHK",
     "license": "Apache-2.0",
     "files": [
@@ -25,7 +25,6 @@
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",
         "scale-ts": "^1.1.0",
-        "testcontainers": "^10.2.1",
         "ws": "^8.8.1"
     },
     "devDependencies": {

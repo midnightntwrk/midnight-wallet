@@ -1,5 +1,8 @@
 name: Deploy dapp connector API
 
+env:
+  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+
 on:
   workflow_dispatch:
 
@@ -15,12 +18,6 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: 'typescript/yarn.lock'
-
-      - name: Configure yarn
-        run: |
-          cd typescript
-          yarn config set npmScopes.midnight-ntwrk.npmAuthToken ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-          yarn config set 'enableImmutableInstalls' false
 
       - name: Install typescript dependencies
         run: |

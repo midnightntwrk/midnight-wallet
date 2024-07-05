@@ -1,13 +1,13 @@
 {
     "name": "@midnight/wallet-substrate-client",
-    "packageManager": "yarn@1.22.18",
+    "packageManager": "yarn@4.3.1",
     "author": "IOHK",
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight-ntwrk/zswap": "^0.3.9",
-        "scale-ts": "^1.1.0",
-        "buffer": "^6.0.3"
+        "@midnight-ntwrk/zswap": "^0.3.11",
+        "buffer": "^6.0.3",
+        "scale-ts": "^1.1.0"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

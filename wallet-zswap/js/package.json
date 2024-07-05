@@ -1,12 +1,12 @@
 {
     "name": "@midnight/wallet-zswap",
     "version": "2.9.2",
-    "packageManager": "yarn@1.22.18",
+    "packageManager": "yarn@4.3.1",
     "author": "IOHK",
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight-ntwrk/zswap": "^0.3.9"
+        "@midnight-ntwrk/zswap": "^0.3.11"
     },
     "devDependencies": {
         "typescript": "^4.8.3"
