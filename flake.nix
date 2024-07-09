@@ -17,7 +17,7 @@
         pkgs = nixpkgs.legacyPackages.${system};
       in {
         devShells.default = pkgs.mkShell {
-          packages = [pkgs.sbt pkgs.yarn pkgs.nodejs-20_x];
+          packages = [pkgs.sbt pkgs.yarn pkgs.nodejs_20];
         };
       }
     );
