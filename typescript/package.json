@@ -8,6 +8,7 @@
     "test-e2e": "turbo run test-e2e"
   },
   "devDependencies": {
+    "jest-junit": "^16.0.0",
     "turbo": "^1.10.12"
   }
 }
