@@ -1,19 +1,13 @@
 {
   "packageManager": "yarn@3.6.1",
   "workspaces": [
-    "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "build": "turbo run build",
-    "test": "turbo run test",
     "lint": "turbo run lint",
-    "deploy": "turbo run deploy",
     "test-e2e": "turbo run test-e2e"
   },
   "devDependencies": {
-    "jest-junit": "^16.0.0",
-    "nyc": "^15.1.0",
     "turbo": "^1.10.12"
   }
 }

@@ -53,7 +53,6 @@ jobs:
           cp ./wallet-engine/package.json ./wallet-engine/dist/
           cd typescript
           yarn install --no-immutable
-          yarn build
           yarn lint
 
       - name: Publish Test Report

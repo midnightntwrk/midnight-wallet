@@ -1,38 +1,12 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "pipeline": {
-    "build": {
-      "dependsOn": ["^build"],
-      "outputMode": "new-only"
-    },
     "lint": {
-      "outputMode": "new-only",
-      "dependsOn": ["^build"]
-    },
-    "test": {
       "outputMode": "new-only",
       "dependsOn": ["^build"]
     },
     "test-e2e": {
       "cache": false
-    },
-    "check": {
-      "outputMode": "new-only",
-      "dependsOn": ["build", "lint", "test"]
-    },
-    "start": {
-      "cache": false,
-      "persistent": true,
-      "dependsOn": ["build"]
-    },
-    "dev": {
-      "cache": false,
-      "persistent": true
-    },
-    "deploy": {
-      "cache": false,
-      "persistent": true,
-      "dependsOn": ["^build"]
     }
   }
 }
