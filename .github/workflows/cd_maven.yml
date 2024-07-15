@@ -4,7 +4,6 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }} # For sbt to download dependencies from Midnight org
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
   IOG_GH_TOKEN: ${{ secrets.GH_TOKEN }} # For sbt to download ledger binaries from IOG org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
   push:
@@ -28,11 +27,5 @@ jobs:
         java-version-file: '.tool-versions'
         cache: 'sbt'
 
-    - uses: actions/setup-node@v4
-      with:
-        node-version-file: '.tool-versions'
-        cache: 'yarn'
-        cache-dependency-path: '**/yarn.lock'
-
     - name: Publish Scala packages
-      run: sbt blocJVM/publish blockchainJVM/publish proverClientJVM/publish walletZswapJVM/publish walletCoreJVM/publish
+      run: sbt walletZswapJVM/publish

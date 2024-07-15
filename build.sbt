@@ -81,10 +81,10 @@ lazy val commonScalablyTypedSettings = Seq(
   Global / stQuiet := true,
 )
 
-lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+lazy val blockchain = project
   .in(file("blockchain"))
-  .settings(commonSettings, commonPublishSettings)
+  .enablePlugins(ScalaJSPlugin)
+  .settings(commonSettings)
   .settings(
     name := "wallet-blockchain",
     conflictWarning := ConflictWarning.disable,
@@ -92,35 +92,32 @@ lazy val blockchain = crossProject(JVMPlatform, JSPlatform)
       "org.typelevel" %%% "cats-core" % catsVersion,
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
     ),
-  )
-  .jsSettings(
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
   )
 
-lazy val bloc = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+lazy val bloc = project
   .in(file("bloc"))
-  .settings(commonSettings, commonPublishSettings)
+  .enablePlugins(ScalaJSPlugin)
+  .settings(commonSettings)
   .settings(
     name := "wallet-bloc",
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
     ),
-  )
-  .jsSettings(
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
 
-lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Pure)
+lazy val walletCore = project
   .in(file("wallet-core"))
+  .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(
+    jsInterop,
     bloc,
     blockchain % "compile->compile;test->test",
-    walletZswap,
+    walletZswap.js,
   )
-  .settings(commonSettings, commonPublishSettings)
+  .settings(commonSettings)
   .settings(
     name := "wallet-core",
     Test / parallelExecution := false,
@@ -138,10 +135,6 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
       "io.circe" %%% "circe-parser" % circeVersion,
       "io.circe" %%% "circe-generic" % circeVersion,
     ),
-  )
-  .jsConfigure(_.dependsOn(jsInterop))
-  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .jsSettings(
     commonScalablyTypedSettings,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
   )
@@ -149,7 +142,7 @@ lazy val walletCore = crossProject(JVMPlatform, JSPlatform)
 lazy val walletEngine = (project in file("wallet-engine"))
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .dependsOn(
-    walletCore.js % "compile->compile;test->test",
+    walletCore % "compile->compile;test->test",
     proverClient,
     pubSubIndexerClient,
     substrateClient % "compile->compile;test->test",
@@ -250,7 +243,7 @@ lazy val proverClient = project
   .dependsOn(walletZswap.js)
   .dependsOn(jsInterop)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
-  .settings(commonSettings, commonPublishSettings)
+  .settings(commonSettings)
   .settings(name := "wallet-prover-client")
   .settings(
     commonScalablyTypedSettings,
@@ -302,7 +295,7 @@ lazy val integrationTests = project
   .in(file("integration-tests"))
   .dependsOn(
     walletEngine % "compile->compile;test->test",
-    walletCore.js % "compile->compile;test->test",
+    walletCore % "compile->compile;test->test",
   )
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings, commonScalablyTypedSettings)
@@ -359,19 +352,18 @@ addCommandAlias(
     "substrateClient/stImport",
     "walletZswapJS/stImport",
     "proverClient/stImport",
-    "walletCoreJS/stImport",
+    "walletCore/stImport",
     "walletEngine/stImport",
     "scalafmtCheckAll",
 //     "coverage",
     "jsInterop/test",
-    "blocJS/test",
-    "blockchainJS/test",
+    "bloc/test",
+    "blockchain/test",
     "walletZswapJVM/test",
     "substrateClient/test",
     "walletZswapJS/Test/compile",
     "proverClient/test",
-    "walletCoreJS/test",
-    "walletCoreJVM/compile",
+    "walletCore/test",
     "walletEngine/test",
 //     "coverageReport",
   ).mkString(";", " ;", ""),

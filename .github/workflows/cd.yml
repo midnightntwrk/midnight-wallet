@@ -31,7 +31,7 @@ jobs:
 
       - name: Build Wallet
         run: |
-          sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClientJS/stImport walletCoreJS/stImport walletEngine/stImport dist
+          sbt jsInterop/stImport substrateClient/stImport walletZswapJS/stImport proverClient/stImport walletCore/stImport walletEngine/stImport dist
 
       - name: Publish Wallet
         run: |
