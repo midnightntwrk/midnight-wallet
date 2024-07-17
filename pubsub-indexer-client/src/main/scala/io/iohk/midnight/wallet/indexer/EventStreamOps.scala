@@ -1,10 +1,12 @@
 package io.iohk.midnight.wallet.indexer
 
+import caliban.client.CalibanClientError
+import caliban.client.laminext.Subscription
 import cats.effect.std.{Dispatcher, Queue}
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import com.raquo.airstream.core.{EventStream, Observer}
-import com.raquo.airstream.ownership.ManualOwner
+import com.raquo.airstream.ownership.{ManualOwner, Owner}
 import fs2.Stream
 
 object EventStreamOps {
@@ -33,6 +35,28 @@ object EventStreamOps {
         )
         value <- stream.rethrow
       } yield value
+    }
+  }
+
+  extension [F[_]: Async, T](subscriptionResource: Resource[F, Subscription[T]]) {
+    def toStream: Stream[F, T] = {
+      val resource = for {
+        dispatcher <- Dispatcher.sequential[F]
+        queue <- Resource.eval(Queue.unbounded[F, Option[Either[Throwable, T]]])
+        observer = Observer.withRecover[Either[CalibanClientError, T]](
+          onNext = element => dispatcher.unsafeRunAndForget(queue.offer(element.some)),
+          onError = { case err =>
+            dispatcher.unsafeRunAndForget(queue.offer(err.asLeft.some) >> queue.offer(none))
+          },
+        )
+        subscription <- subscriptionResource
+        given Owner = new ManualOwner()
+        _ <- Resource.make(Async[F].delay(subscription.received.addObserver(observer)))(s =>
+          Async[F].delay(s.kill()),
+        )
+      } yield Stream.fromQueueNoneTerminated(queue).rethrow
+
+      Stream.resource(resource).flatten
     }
   }
 }

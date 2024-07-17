@@ -3,7 +3,8 @@ package io.iohk.midnight.wallet.indexer
 import caliban.client.laminext.*
 import caliban.client.ws.{GraphQLWSRequest, GraphQLWSResponse}
 import caliban.client.{Operations, SelectionBuilder}
-import cats.effect.{Async, Resource, Sync}
+import cats.effect.kernel.Resource
+import cats.effect.{Async, Sync}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.wallet.indexer.EventStreamOps.*
@@ -20,15 +21,13 @@ object GraphQLSubscriber {
   def subscribe[F[_]: Async, T](
       ws: GraphQLWebSocket,
       selectionBuilder: RootSelectionBuilder[T],
-  ): Stream[F, T] =
-    Stream.resource(subscriptionResource(ws, selectionBuilder)).flatten
-
-  private def subscriptionResource[T, F[_]: Async](
-      ws: GraphQLWebSocket,
-      selection: RootSelectionBuilder[T],
-  ): Resource[F, Stream[F, T]] = {
+  ): Stream[F, T] = {
     val closed: F[Either[Throwable, Unit]] =
-      ws.closed.toStream.as(WebSocketClosed.asLeft[Unit]).head.compile.lastOrError
+      ws.closed.toStream
+        .as(WebSocketClosed.asLeft[Unit])
+        .head
+        .compile
+        .lastOrError
 
     val connectionFail =
       Stream
@@ -39,18 +38,14 @@ object GraphQLSubscriber {
         .compile
         .lastOrError
 
-    Resource
-      .make(subscribeToWebSocket(ws, selection))(s => Sync[F].delay(s.unsubscribe()))
-      .map(
-        _.received.toStream.rethrow
-          .interruptWhen(closed)
-          .interruptWhen(connectionFail),
-      )
+    subscribeToWebSocket(ws, selectionBuilder).toStream
+      .interruptWhen(closed)
+      .interruptWhen(connectionFail)
   }
 
   private def subscribeToWebSocket[F[_]: Async, T](
       ws: GraphQLWebSocket,
       selection: RootSelectionBuilder[T],
-  ): F[Subscription[T]] =
-    Sync[F].delay(selection.toSubscription(ws))
+  ): Resource[F, Subscription[T]] =
+    Resource.make(Sync[F].delay(selection.toSubscription(ws)))(s => Sync[F].delay(s.unsubscribe()))
 }
