@@ -2,12 +2,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built/main';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import {
   compareStates,
-  createLogger,
   waitForFinalizedBalance,
   waitForPending,
   waitForSync,
@@ -15,10 +14,7 @@ import {
   walletStateTrimmed,
 } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
-import path from 'node:path';
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(path.resolve(currentDir, '..', 'logs', 'smoke', `${new Date().toISOString()}.log`));
+import { logger } from './logger';
 
 /**
  * Smoke tests

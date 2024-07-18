@@ -6,13 +6,8 @@
 import { exit } from 'process';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { MidnightDeployment, MidnightNetwork, createLogger } from './utils';
-import path from 'node:path';
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(
-  path.resolve(currentDir, '..', 'logs', 'test-fixture', `${new Date().toISOString()}.log`),
-);
+import { MidnightDeployment, MidnightNetwork } from './utils';
+import { logger } from './logger';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;

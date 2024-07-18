@@ -50,7 +50,6 @@ jobs:
       - name: Test and build typescript packages
         run: |
           sbt dist
-          cp ./wallet-engine/package.json ./wallet-engine/dist/
           cd typescript
           yarn install --no-immutable
           yarn lint

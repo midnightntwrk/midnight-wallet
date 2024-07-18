@@ -15,7 +15,7 @@ services:
       retries: 3
       start_period: 10s
   indexer:
-    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.2.4"
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:1.3.1"
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - "8088"
@@ -34,7 +34,7 @@ services:
       node:
         condition: service_started
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.3.5-65fc718"
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.3.6-b6c0c8e"
     platform: linux/amd64
     container_name: node_$TESTCONTAINERS_UID
     ports:

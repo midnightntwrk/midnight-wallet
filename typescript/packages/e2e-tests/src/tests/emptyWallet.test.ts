@@ -6,10 +6,10 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { MidnightNetwork, compareStates, createLogger, waitForSync } from './utils';
+import { MidnightNetwork, compareStates, waitForSync } from './utils';
 import { NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
-import path from 'node:path';
+import { logger } from './logger';
 
 /**
  * Tests using an empty wallet
@@ -17,11 +17,6 @@ import path from 'node:path';
  * @group undeployed
  * @group devnet
  */
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(
-  path.resolve(currentDir, '..', 'logs', 'emptyWallet.test.ts', `${new Date().toISOString()}.log`),
-);
 
 describe('Midnight wallet', () => {
   const getFixture = useTestContainersFixture();

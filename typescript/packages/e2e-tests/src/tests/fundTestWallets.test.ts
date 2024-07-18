@@ -2,15 +2,10 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
-import { createLogger, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
+import { waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import { logger } from './logger';
 import { exit } from 'node:process';
-import path from 'node:path';
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(
-  path.resolve(currentDir, '..', 'logs', 'fundTestWallets.test.ts', `${new Date().toISOString()}.log`),
-);
 
 /**
  * Tests performing a token transfer

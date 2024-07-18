@@ -1,33 +1,7 @@
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
-import * as path from 'node:path';
-import * as fs from 'node:fs/promises';
-import pinoPretty from 'pino-pretty';
-import pino from 'pino';
-import { createWriteStream } from 'node:fs';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
-
-export const createLogger = async (logPath: string): Promise<pino.Logger> => {
-  await fs.mkdir(path.dirname(logPath), { recursive: true });
-  const pretty: pinoPretty.PrettyStream = pinoPretty({
-    colorize: true,
-    sync: true,
-  });
-  const level = 'info' as const;
-  return pino(
-    {
-      level,
-      depthLimit: 20,
-    },
-    pino.multistream([
-      { stream: pretty, level: 'info' },
-      { stream: createWriteStream(logPath), level },
-    ]),
-  );
-};
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(path.resolve(currentDir, '..', 'logs', 'utils', `${new Date().toISOString()}.log`));
+import { logger } from './logger';
 
 export const waitForSync = (wallet: Wallet) =>
   firstValueFrom(
@@ -36,7 +10,8 @@ export const waitForSync = (wallet: Wallet) =>
       tap((state) => {
         const scanned = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total.toString() ?? 'unknown number';
-        logger.info(`Wallet scanned ${scanned} indices out of ${total}`);
+        const txs = state.transactionHistory.length;
+        logger.info(`Wallet scanned ${scanned} indices out of ${total}, transactions=${txs}`);
       }),
       filter((state) => {
         // Let's allow progress only if wallet is synced fully

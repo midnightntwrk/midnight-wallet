@@ -134,7 +134,6 @@ jobs:
         if: ${{ inputs.deployment == 'local' }}
         run: |
           sbt dist
-          cp ./wallet-engine/package.json ./wallet-engine/dist/
           cd typescript
           yarn install --no-immutable
 

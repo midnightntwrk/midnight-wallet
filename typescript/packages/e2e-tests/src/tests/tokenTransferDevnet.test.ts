@@ -9,23 +9,11 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import {
-  createLogger,
-  waitForFinalizedBalance,
-  waitForPending,
-  waitForSync,
-  waitForTxInHistory,
-  walletStateTrimmed,
-} from './utils';
+import { waitForFinalizedBalance, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
-import path from 'node:path';
-
-export const currentDir = path.resolve(new URL(import.meta.url).pathname, '..');
-const logger = await createLogger(
-  path.resolve(currentDir, '..', 'logs', 'tokenTransferDevnet', `${new Date().toISOString()}.log`),
-);
+import { logger } from './logger';
 
 /**
  * Tests performing a token transfer
