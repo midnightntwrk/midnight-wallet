@@ -1,6 +1,17 @@
+/* eslint-disable @typescript-eslint/naming-convention */
 import pinoPretty from 'pino-pretty';
 import pino, { Logger } from 'pino';
-import { createWriteStream } from 'node:fs';
+import fs, { createWriteStream } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const logDir = path.join(__dirname, '..', 'logs');
+if (!fs.existsSync(logDir)) {
+  fs.mkdirSync(logDir, { recursive: true });
+}
 
 export const createLogger = (): pino.Logger => {
   const pretty: pinoPretty.PrettyStream = pinoPretty({
@@ -15,7 +26,7 @@ export const createLogger = (): pino.Logger => {
     },
     pino.multistream([
       { stream: pretty, level: 'info' },
-      { stream: createWriteStream(`./logs/e2e-tests-${new Date().toISOString()}.log`), level },
+      { stream: createWriteStream(`./src/logs/e2e-tests-${new Date().toISOString()}.log`), level },
     ]),
   );
 };
