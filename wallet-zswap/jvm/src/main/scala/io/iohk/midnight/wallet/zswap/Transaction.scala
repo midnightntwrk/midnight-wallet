@@ -1,9 +1,9 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.wallet.jnr.Ledger
-import io.iohk.midnight.wallet.jnr.Ledger.StringResult
+import io.iohk.midnight.wallet.jnr.LedgerV1
+import io.iohk.midnight.wallet.jnr.StringResult
 
-final case class Transaction(data: String, ledger: Ledger) {
+final case class Transaction(data: String, ledger: LedgerV1) {
   def serialize: String = data
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
@@ -21,8 +21,8 @@ final case class Transaction(data: String, ledger: Ledger) {
 }
 
 object Transaction {
-  def deserialize(data: String, ledger: Ledger): Transaction = Transaction(data, ledger)
+  def deserialize(data: String, ledger: LedgerV1): Transaction = Transaction(data, ledger)
   @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
   def deserialize(bytes: Array[Byte]): Transaction =
-    deserialize(HexUtil.encodeHex(bytes), Ledger.instance.get)
+    deserialize(HexUtil.encodeHex(bytes), LedgerV1.instance.get)
 }

@@ -1,35 +1,38 @@
 package io.iohk.midnight.wallet.core.combinator
 
-import cats.effect.{Concurrent, Ref}
+import cats.effect.{Async, Resource}
 import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
-import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 
-class VersionCombinator[F[_]: Concurrent](currentCombination: Ref[F, VersionCombination[F]]) {
+class VersionCombinator[F[_]: Async](
+    currentCombination: Bloc[F, VersionCombination[F]],
+    combinationMigrations: CombinationMigrations[F],
+) {
   def sync: F[Unit] =
-    Stream
-      .repeatEval(currentCombination.get)
-      .evalTap(internalSync(_).compile.drain)
+    currentCombination.subscribe
+      .evalTap(_.sync)
       .evalMap(migrate)
       .evalMap(currentCombination.set)
       .compile
       .drain
 
-  private def internalSync(versionCombination: VersionCombination[F]): Stream[F, IndexerUpdate] =
-    versionCombination.updatesStream
-      .takeWhile(versionCombination.predicate)
-      .evalTap(versionCombination.updateState)
-
   private def migrate(versionCombination: VersionCombination[F]): F[VersionCombination[F]] =
-    versionCombination match {
-      case _: V1Combination[F] => Exception("No hard fork planned").raiseError
-    }
+    combinationMigrations.migrate(versionCombination)
 
   def state: Stream[F, State] =
-    Stream.force(currentCombination.get.map(_.state))
+    currentCombination.subscribe.flatMap(_.state)
 
   def serializeState: F[SerializedWalletState] =
-    currentCombination.get.flatMap(_.serializeState)
+    currentCombination.subscribe.head.compile.lastOrError.flatMap(_.serializeState)
+}
+
+object VersionCombinator {
+  def apply[F[_]: Async](
+      currentCombination: VersionCombination[F],
+  ): Resource[F, VersionCombinator[F]] =
+    Bloc[F, VersionCombination[F]](currentCombination)
+      .map(new VersionCombinator(_, CombinationMigrations.default))
 }

@@ -1,13 +1,11 @@
 package io.iohk.midnight.wallet.jnr
 
 import cats.data.NonEmptyList
-import io.iohk.midnight.wallet.jnr.Ledger.*
-import jnr.ffi.Pointer
-
 import java.nio.charset.StandardCharsets
+import jnr.ffi.Pointer
 import scala.util.Try
 
-class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends Ledger {
+class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends LedgerV1 {
 
   private val finalNetworkId = networkIdOpt.getOrElse(NetworkId.Undeployed)
 

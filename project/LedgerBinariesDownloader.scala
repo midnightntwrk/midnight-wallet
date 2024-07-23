@@ -32,6 +32,7 @@ object LedgerBinariesDownloader {
       requiredAssets: List[AssetType],
       releaseTag: String,
       logger: ManagedLogger,
+      versionAlias: String,
   )
 
   sealed abstract class AssetType(val name: String)
@@ -186,17 +187,18 @@ object LedgerBinariesDownloader {
   private def extractAndSaveAsset(downloadedFile: File, config: Config): IO[Unit] = {
     val targetDir = s"${config.resourcesDir}/${downloadedFile.getName.takeWhile(_ != '.')}"
     val mkdirCommand = s"mkdir -p $targetDir"
-    val tarCommand = s"tar -xzf ${downloadedFile.getPath} --strip-components=2 -C $targetDir"
+    val tarCommand = s"tar -xzf ${downloadedFile.getPath} " +
+      s"--transform=s|libmidnight_zswap_c_bindings.so|libmidnight_zswap_c_bindings_${config.versionAlias}.so| " +
+      s"--transform=s|libmidnight_zswap_c_bindings.dylib|libmidnight_zswap_c_bindings_${config.versionAlias}.dylib| " +
+      s"--strip-components=2 -C $targetDir"
 
     IO.fromTry(Try(Process(mkdirCommand).!!)) >>
       IO.fromTry(Try(Process(tarCommand).!!))
         .attempt
-        .flatMap {
-          case Left(tarError) =>
-            val message = s"TAR command failed with: ${tarError.getMessage}"
-            logMessage(config, message) >> IO.raiseError(new IllegalStateException(message))
-          case Right(_) => IO.unit
-        } >> logMessage(config, s"Extracted ${downloadedFile.getName} into ${config.resourcesDir}")
+        .handleErrorWith { tarError =>
+          val message = s"TAR command failed with: ${tarError.getMessage}"
+          logMessage(config, message) >> IO.raiseError(new IllegalStateException(message))
+        } >> logMessage(config, s"Extracted ${downloadedFile.getName} into $targetDir")
   }
 
   private def processReleases(
@@ -224,7 +226,7 @@ object LedgerBinariesDownloader {
     }
   }
 
-  private def logMessage(config: Config, message: String) = {
-    IO(config.logger.info(s"*** $message ***"))
+  private def logMessage(config: Config, message: String): IO[Unit] = {
+    IO(config.logger.info(message))
   }
 }

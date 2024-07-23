@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.jnr
 
 import cats.data.NonEmptyList
 import cats.effect.{IO, Resource}
-import io.iohk.midnight.wallet.jnr.Ledger.*
+import io.iohk.midnight.wallet.jnr.LedgerV1.*
 import munit.{CatsEffectSuite, ScalaCheckSuite}
 
 import scala.io.{Codec, Source}
@@ -22,7 +22,7 @@ class LedgerApiDevNetSpec extends CatsEffectSuite with ScalaCheckSuite {
   test("Extracting guaranteed coins from DEV NET transaction should work") {
     val devNetLedger =
       LedgerLoader
-        .loadLedger(networkId = Some(NetworkId.DevNet))
+        .loadLedger(networkId = Some(NetworkId.DevNet), ProtocolVersion.V1)
         .getOrElse(fail("Invalid ledger state"))
 
     devNetLedger.extractGuaranteedCoinsFromTransaction(validDevNetTx) match {
@@ -34,7 +34,7 @@ class LedgerApiDevNetSpec extends CatsEffectSuite with ScalaCheckSuite {
   test("Extracting guaranteed coins from wrong network transaction should NOT work") {
     val undeployedLedger =
       LedgerLoader
-        .loadLedger(networkId = Some(NetworkId.Undeployed))
+        .loadLedger(networkId = Some(NetworkId.Undeployed), ProtocolVersion.V1)
         .getOrElse(fail("Invalid ledger state"))
 
     undeployedLedger.extractGuaranteedCoinsFromTransaction(validDevNetTx) match {
@@ -52,7 +52,7 @@ class LedgerApiDevNetSpec extends CatsEffectSuite with ScalaCheckSuite {
   test("Contract zswap chain state can be derived from local ledger state (zswap)") {
     val devNetLedger =
       LedgerLoader
-        .loadLedger(networkId = Some(NetworkId.DevNet))
+        .loadLedger(networkId = Some(NetworkId.DevNet), ProtocolVersion.V1)
         .getOrElse(fail("Invalid ledger state"))
 
     val testR = for {

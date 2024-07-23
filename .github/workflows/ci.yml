@@ -42,7 +42,7 @@ jobs:
 
       - name: Check format and run tests
         run: |
-          sbt verify
+          sbt downloadLedgerBinaries testDownloadLedgerBinaries verify
           yarn install
           sbt integrationTests/test
           sbt coverageAggregate

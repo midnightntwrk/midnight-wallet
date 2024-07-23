@@ -1,18 +1,13 @@
 package io.iohk.midnight.wallet.engine
 
-import cats.effect.{Async, Ref, Resource}
+import cats.effect.{Async, Resource}
 import cats.effect.syntax.resource.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
-import io.iohk.midnight.wallet.core.combinator.{
-  ProtocolVersion,
-  V1Combination,
-  VersionCombination,
-  VersionCombinator,
-}
+import io.iohk.midnight.wallet.core.combinator.{ProtocolVersion, V1Combination, VersionCombinator}
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{
@@ -73,10 +68,10 @@ object WalletBuilder {
         walletStateContainer,
         walletStateService,
       )
-      combinationRef <- Resource.eval(Ref[F].of[VersionCombination[F]](v1Combination))
+      combinator <- VersionCombinator(v1Combination)
     } yield {
       WalletDependencies(
-        VersionCombinator(combinationRef),
+        combinator,
         walletTxSubmissionService,
         walletTransactionService,
       )

@@ -3,9 +3,9 @@ package io.iohk.midnight.wallet.core
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.zswap.{Transaction as LedgerTransaction, Address as LedgerAddress, *}
+import io.iohk.midnight.wallet.zswap.{Address as LedgerAddress, Transaction as LedgerTransaction, *}
 import io.iohk.midnight.wallet.blockchain.data.*
-import io.iohk.midnight.wallet.core.domain.{Address, TokenTransfer}
+import io.iohk.midnight.wallet.core.domain.{Address, ProgressUpdate, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.ProvingService
 import org.scalacheck.cats.implicits.*
 import org.scalacheck.{Arbitrary, Gen, Shrink}
@@ -201,4 +201,19 @@ object Generators {
       Gen.listOfN(2, txArbitrary.arbitrary).map(_.sequence)
     }
   }
+
+  val WalletStateGen: Gen[WalletStateService.State] =
+    (localStateGen, Gen.posNum[BigInt]).mapN { (localState, balance) =>
+      WalletStateService.State(
+        localState.coinPublicKey,
+        localState.encryptionPublicKey,
+        localState.encryptionSecretKey,
+        Map(TokenType.Native -> balance),
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+        ProgressUpdate.empty,
+      )
+    }
 }

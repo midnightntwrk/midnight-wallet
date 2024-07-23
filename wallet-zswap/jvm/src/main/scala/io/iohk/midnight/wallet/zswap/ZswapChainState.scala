@@ -1,11 +1,11 @@
 package io.iohk.midnight.wallet.zswap
 
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.jnr.Ledger
-import io.iohk.midnight.wallet.jnr.Ledger.{NumberResult, StringResult}
+import io.iohk.midnight.wallet.jnr.LedgerV1
+import io.iohk.midnight.wallet.jnr.{NumberResult, StringResult}
 import scala.util.{Failure, Success, Try}
 
-final case class ZswapChainState(state: String, ledger: Ledger) {
+final case class ZswapChainState(state: String, ledger: LedgerV1) {
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
   def firstFree: BigInt =
     ledger.zswapChainStateFirstFree(state) match {
@@ -22,14 +22,14 @@ final case class ZswapChainState(state: String, ledger: Ledger) {
 }
 
 object ZswapChainState {
-  def apply(ledger: Ledger): Try[ZswapChainState] =
+  def apply(ledger: LedgerV1): Try[ZswapChainState] =
     ledger.zswapChainStateNew() match {
       case Right(StringResult(data)) => Success(ZswapChainState(data, ledger))
       case Left(errors) => Failure(Exception(errors.map(_.getMessage).toList.mkString(", ")))
     }
 
   def apply(): Try[ZswapChainState] =
-    Ledger.instance.flatMap(apply)
+    LedgerV1.instance.flatMap(apply)
 
-  def deserialize(state: String, ledger: Ledger): ZswapChainState = ZswapChainState(state, ledger)
+  def deserialize(state: String, ledger: LedgerV1): ZswapChainState = ZswapChainState(state, ledger)
 }

@@ -37,7 +37,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/zswap@npm:^0.3.11":
+"@midnight-ntwrk/zswap@npm:^0.3.11, @midnight-ntwrk/zswap_v1@npm:@midnight-ntwrk/zswap@^0.3.11, @midnight-ntwrk/zswap_v2@npm:@midnight-ntwrk/zswap@^0.3.11":
   version: 0.3.11
   resolution: "@midnight-ntwrk/zswap@npm:0.3.11::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F0.3.11%2F73888ad1b7ff4676498bba0fc4dd930db8be3097"
   checksum: 10c0/45ba3a3ec3d03eb9ebcfbd8ae9a780bf8ead72ab92d80c370201da4b25c3f917e230b3f77605b81ea479de7191fc4fff872900dad725094632f78ed11862974a
@@ -50,6 +50,8 @@ __metadata:
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^3.3.2"
     "@midnight-ntwrk/zswap": "npm:^0.3.11"
+    "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11"
+    "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11"
     extensionless: "npm:^1.9.9"
     fp-ts: "npm:^2.12.2"
     io-ts: "npm:^2.2.18"

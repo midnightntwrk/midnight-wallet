@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.engine.js
 
 import cats.effect.kernel.{Deferred, Resource}
 import cats.effect.{IO, Ref}
+import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.rxjs.mod.firstValueFrom
 import io.iohk.midnight.wallet.core.Wallet
@@ -17,69 +18,68 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
 
   test("balance should return wallet balance") {
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
-      val wallet =
-        new JsWallet(
-          VersionCombinator(
-            Ref.unsafe(
-              V1Combination[IO](
-                Wallet.Snapshot.create,
-                Resource.pure(new WalletSyncServiceStub()),
-                new WalletStateContainerStub(),
-                new WalletStateServiceBalanceStub(balance),
-              ),
-            ),
-          ),
-          new WalletTxSubmissionServiceStub(),
-          new WalletTransactionServiceStub(),
-          IO.unit,
-          Deferred.unsafe[IO, Unit],
-        )
-      val observable = wallet.state()
-      IO.fromPromise(IO(firstValueFrom(observable)))
-        .map(_.balances)
-        .map(r => assertEquals(r.get(TokenType.Native), Some(balance.toJsBigInt)))
+      VersionCombinator(
+        V1Combination[IO](
+          Wallet.Snapshot.create,
+          Resource.pure(new WalletSyncServiceStub()),
+          new WalletStateContainerStub(),
+          new WalletStateServiceBalanceStub(balance),
+        ),
+      ).use { combinator =>
+        val wallet =
+          new JsWallet(
+            combinator,
+            new WalletTxSubmissionServiceStub(),
+            new WalletTransactionServiceStub(),
+            IO.unit,
+            Deferred.unsafe[IO, Unit],
+          )
+        val observable = wallet.state()
+        IO.fromPromise(IO(firstValueFrom(observable)))
+          .map(_.balances)
+          .map(r => assertEquals(r.get(TokenType.Native), Some(balance.toJsBigInt)))
+      }
     }
   }
 
   test("publicKey should return wallet coin public key") {
     val coinPubKey = CoinPublicKey("test-coinPubKey")
     val encPubKey = "test-encPubKey"
-    val wallet =
-      new JsWallet(
-        VersionCombinator(
-          Ref.unsafe(
-            new V1Combination[IO](
-              Wallet.Snapshot.create,
-              Resource.pure(new WalletSyncServiceStub()),
-              new WalletStateContainerStub(),
-              new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
-            ),
-          ),
-        ),
-        new WalletTxSubmissionServiceStub(),
-        new WalletTransactionServiceStub(),
-        IO.unit,
-        Deferred.unsafe[IO, Unit],
-      )
-    IO.fromPromise(IO(firstValueFrom(wallet.state())))
-      .map(state => (state.coinPublicKey, state.encryptionPublicKey))
-      .assertEquals((coinPubKey, encPubKey))
+    VersionCombinator(
+      new V1Combination[IO](
+        Wallet.Snapshot.create,
+        Resource.pure(new WalletSyncServiceStub()),
+        new WalletStateContainerStub(),
+        new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
+      ),
+    ).use { combinator =>
+      val wallet =
+        new JsWallet(
+          combinator,
+          new WalletTxSubmissionServiceStub(),
+          new WalletTransactionServiceStub(),
+          IO.unit,
+          Deferred.unsafe[IO, Unit],
+        )
+      IO.fromPromise(IO(firstValueFrom(wallet.state())))
+        .map(state => (state.coinPublicKey, state.encryptionPublicKey))
+        .assertEquals((coinPubKey, encPubKey))
+    }
   }
 
   test("should close") {
     for {
       ref <- Ref.of[IO, Boolean](false)
-      wallet = new JsWallet(
-        VersionCombinator(
-          Ref.unsafe(
-            new V1Combination[IO](
-              Wallet.Snapshot.create,
-              Resource.pure(new WalletSyncServiceStub()),
-              new WalletStateContainerStub(),
-              new WalletStateServiceStub(),
-            ),
-          ),
+      combinator <- VersionCombinator(
+        new V1Combination[IO](
+          Wallet.Snapshot.create,
+          Resource.pure(new WalletSyncServiceStub()),
+          new WalletStateContainerStub(),
+          new WalletStateServiceStub(),
         ),
+      ).allocated._1F
+      wallet = new JsWallet(
+        combinator,
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         ref.set(true),
@@ -93,17 +93,17 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
   test("wallet should start") {
     for {
       isFinished <- Deferred[IO, Boolean]
-      wallet = new JsWallet(
+      combinator <-
         VersionCombinator(
-          Ref.unsafe(
-            new V1Combination[IO](
-              Wallet.Snapshot.create,
-              Resource.pure(new WalletSyncServiceStartStub(isFinished)),
-              new WalletStateContainerStub(),
-              new WalletStateServiceStub(),
-            ),
+          new V1Combination[IO](
+            Wallet.Snapshot.create,
+            Resource.pure(new WalletSyncServiceStartStub(isFinished)),
+            new WalletStateContainerStub(),
+            new WalletStateServiceStub(),
           ),
-        ),
+        ).allocated._1F
+      wallet = new JsWallet(
+        combinator,
         new WalletTxSubmissionServiceStub(),
         new WalletTransactionServiceStub(),
         IO.unit,

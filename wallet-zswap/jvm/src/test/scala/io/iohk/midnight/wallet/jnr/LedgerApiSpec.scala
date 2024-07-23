@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.jnr
 
 import cats.data.NonEmptyList
-import io.iohk.midnight.wallet.jnr.Ledger.*
+import io.iohk.midnight.wallet.jnr.LedgerV1.*
 import munit.ScalaCheckSuite
 
 @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.OptionPartial"))
@@ -20,7 +20,7 @@ class LedgerApiSpec extends ScalaCheckSuite {
 
   private lazy val ledger =
     LedgerLoader
-      .loadLedger(networkId = Some(NetworkId.Undeployed))
+      .loadLedger(networkId = Some(NetworkId.Undeployed), ProtocolVersion.V1)
       .getOrElse(fail("Invalid ledger state"))
 
   private def failWithErrors(errors: NonEmptyList[JNRError]): Nothing = {

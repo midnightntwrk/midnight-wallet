@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.wallet.jnr.Ledger
-import io.iohk.midnight.wallet.jnr.Ledger.StringResult
+import io.iohk.midnight.wallet.jnr.LedgerV1
+import io.iohk.midnight.wallet.jnr.StringResult
 
 opaque type MerkleTreeCollapsedUpdate = String
 
@@ -11,7 +11,7 @@ object MerkleTreeCollapsedUpdate {
       zswapChainState: ZswapChainState,
       startIndex: BigInt,
       endIndex: BigInt,
-      ledger: Ledger,
+      ledger: LedgerV1,
   ): MerkleTreeCollapsedUpdate =
     ledger.merkleTreeCollapsedUpdateNew(
       zswapChainState.state,
@@ -28,7 +28,7 @@ object MerkleTreeCollapsedUpdate {
       startIndex: BigInt,
       endIndex: BigInt,
   ): MerkleTreeCollapsedUpdate =
-    apply(zswapChainState, startIndex, endIndex, Ledger.instance.get)
+    apply(zswapChainState, startIndex, endIndex, LedgerV1.instance.get)
 
   extension (update: MerkleTreeCollapsedUpdate) {
     def serialize: String = update

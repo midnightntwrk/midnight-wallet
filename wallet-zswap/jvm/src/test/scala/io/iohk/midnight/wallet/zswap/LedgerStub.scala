@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.zswap
 
 import cats.data.NonEmptyList
 import cats.syntax.eq.*
-import io.iohk.midnight.wallet.jnr.Ledger.{
+import io.iohk.midnight.wallet.jnr.{
   BooleanResult,
   JNRError,
   LedgerErrorResult,
@@ -10,12 +10,12 @@ import io.iohk.midnight.wallet.jnr.Ledger.{
   StringResult,
   UnexpectedJNRError,
 }
-import io.iohk.midnight.wallet.jnr.{Ledger, LedgerError, LedgerResult}
+import io.iohk.midnight.wallet.jnr.{LedgerV1, LedgerError, LedgerResult}
 import io.iohk.midnight.wallet.zswap.LedgerStub.*
 
 import java.nio.charset.StandardCharsets
 
-class LedgerStub extends Ledger {
+class LedgerStub extends LedgerV1 {
 
   override def zswapChainStateFilter(
       zswapChainState: String,

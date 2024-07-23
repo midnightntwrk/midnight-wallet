@@ -7,6 +7,8 @@
     "dependencies": {
         "@midnight-ntwrk/wallet-api": "^3.3.2",
         "@midnight-ntwrk/zswap": "^0.3.11",
+        "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11",
+        "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11",
         "extensionless": "^1.9.9",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",

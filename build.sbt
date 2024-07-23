@@ -186,6 +186,7 @@ lazy val jsInterop = project
   )
 
 lazy val downloadLedgerBinaries = taskKey[Unit]("Download ledger binaries")
+lazy val testDownloadLedgerBinaries = taskKey[Unit]("Download ledger binaries for tests")
 lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
   .crossType(CrossType.Full)
   .in(file("wallet-zswap"))
@@ -219,10 +220,27 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,
           logger = streams.value.log,
+          versionAlias = "v1",
+        ),
+      )
+    },
+    testDownloadLedgerBinaries := {
+      val resourcesDir = (Test / resourceDirectory).value
+      IO.createDirectory(resourcesDir)
+      downloadBinaries(
+        Config(
+          requiredAssets = List(Linux, Darwin),
+          releaseTag = "zswap-c-bindings-3.0.0-beta.1",
+          ghAuthToken = sys.env("IOG_GH_TOKEN"),
+          tempDir = taskTemporaryDirectory.value.getPath,
+          resourcesDir = resourcesDir.getPath,
+          logger = streams.value.log,
+          versionAlias = "v2",
         ),
       )
     },
     Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
+    Test / update := { (Test /update).dependsOn(testDownloadLedgerBinaries).value },
   )
   .settings(
     libraryDependencies ++= Seq(
