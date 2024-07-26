@@ -32,7 +32,9 @@ object WalletBuilder {
     }
 
   private def buildWalletV1[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] = {
-    import Wallet.*
+    import Wallet.given
+    given WalletTxHistory[Wallet, zswap.Transaction] =
+      if (config.discardTxHistory) Wallet.walletDiscardTxHistory else Wallet.walletTxHistory
     implicit val rootTracer: Tracer[F, StructuredLog] =
       ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
     val builderTracer = WalletBuilderTracer.from(rootTracer)

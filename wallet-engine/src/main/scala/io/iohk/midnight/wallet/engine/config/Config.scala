@@ -19,6 +19,7 @@ final case class Config(
     substrateNodeUri: Uri,
     minLogLevel: LogLevel,
     initialState: Wallet.Snapshot,
+    discardTxHistory: Boolean,
 )
 
 object Config {
@@ -30,6 +31,7 @@ object Config {
       Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
       parseLogLevel(rawConfig.minLogLevel),
       parseInitialState(rawConfig.initialState),
+      rawConfig.discardTxHistory.getOrElse(false).asRight,
     )
       .mapN(Config.apply)
 

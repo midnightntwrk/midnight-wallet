@@ -10,6 +10,7 @@ final case class RawConfig(
     substrateNodeUri: String,
     minLogLevel: Option[String],
     initialState: Option[InitialState],
+    discardTxHistory: Option[Boolean],
 )
 
 object RawConfig {

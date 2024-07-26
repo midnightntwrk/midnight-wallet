@@ -28,6 +28,8 @@ abstract class WalletSpec
 
   private val zero = BigInt(0)
 
+  given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+
   override val walletKeys
       : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
     Wallet.walletKeys

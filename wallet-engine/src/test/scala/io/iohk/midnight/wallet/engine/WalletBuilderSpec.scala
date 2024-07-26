@@ -25,6 +25,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(minLogLevel),
           None,
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -45,6 +46,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(minLogLevel),
           None,
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -65,6 +67,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(minLogLevel),
           None,
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -85,6 +88,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           invalidSubstrateNodeUri,
           Some(minLogLevel),
           None,
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -105,6 +109,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(minLogLevel),
           Some(RawConfig.InitialState.SerializedSnapshot(invalidInitialState)),
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -125,6 +130,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(invalidMinLogLevel),
           None,
+          discardTxHistory = Some(true),
         ),
       )
 
@@ -144,6 +150,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeSubstrateNodeUri,
           Some(minLogLevel),
           Some(RawConfig.InitialState.SerializedSnapshot(initialState)),
+          discardTxHistory = Some(true),
         ),
       )
     assert(config.isRight)

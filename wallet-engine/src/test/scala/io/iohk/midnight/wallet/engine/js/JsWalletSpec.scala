@@ -6,15 +6,18 @@ import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.rxjs.mod.firstValueFrom
 import io.iohk.midnight.wallet.core.Wallet
+import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
 import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType}
+import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType, Transaction}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
 import scala.concurrent.duration.DurationInt
 
 class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
+
+  given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
 
   test("balance should return wallet balance") {
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
@@ -126,6 +129,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
             "http://node",
             generated,
             "warn",
+            discardTxHistory = false,
           ),
         ),
       )

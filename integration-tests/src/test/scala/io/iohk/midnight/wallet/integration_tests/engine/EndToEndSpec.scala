@@ -65,6 +65,7 @@ trait EndToEndSpecSetup {
           substrateNodeUri,
           LogLevel.Info,
           initialState,
+          discardTxHistory = true,
         ),
       )
       .evalTap(_.versionCombinator.sync.start)
@@ -86,6 +87,7 @@ trait EndToEndSpecSetup {
         substrateNodeUri,
         LogLevel.Info,
         initialState,
+        discardTxHistory = true,
       ),
     )
 

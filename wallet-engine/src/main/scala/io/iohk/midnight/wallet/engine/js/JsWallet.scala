@@ -142,6 +142,7 @@ object JsWallet {
       proverServerUri: String,
       substrateNodeUri: String,
       minLogLevel: js.UndefOr[String],
+      discardTxHistory: js.UndefOr[Boolean],
   ): js.Promise[api.Wallet] =
     internalBuild(
       indexerUri,
@@ -150,6 +151,7 @@ object JsWallet {
       substrateNodeUri,
       minLogLevel.toOption,
       none[RawConfig.InitialState],
+      discardTxHistory.toOption,
     ).unsafeToPromise()
 
   @JSExport
@@ -160,6 +162,7 @@ object JsWallet {
       substrateNodeUri: String,
       seed: String,
       minLogLevel: js.UndefOr[String],
+      discardTxHistory: js.UndefOr[Boolean],
   ): js.Promise[api.Wallet] =
     internalBuild(
       indexerUri,
@@ -168,6 +171,7 @@ object JsWallet {
       substrateNodeUri,
       minLogLevel.toOption,
       RawConfig.InitialState.Seed(seed).some,
+      discardTxHistory.toOption,
     ).unsafeToPromise()
 
   @JSExport
@@ -178,6 +182,7 @@ object JsWallet {
       substrateNodeUri: String,
       serializedState: String,
       minLogLevel: js.UndefOr[String],
+      discardTxHistory: js.UndefOr[Boolean],
   ): js.Promise[api.Wallet] =
     internalBuild(
       indexerUri,
@@ -186,6 +191,7 @@ object JsWallet {
       substrateNodeUri,
       minLogLevel.toOption,
       RawConfig.InitialState.SerializedSnapshot(serializedState).some,
+      discardTxHistory.toOption,
     ).unsafeToPromise()
 
   private def internalBuild(
@@ -195,6 +201,7 @@ object JsWallet {
       substrateNodeUri: String,
       minLogLevel: Option[String],
       initialState: Option[RawConfig.InitialState],
+      discardTxHistory: Option[Boolean],
   ): IO[api.Wallet] = {
     val rawConfig =
       RawConfig(
@@ -204,6 +211,7 @@ object JsWallet {
         substrateNodeUri,
         minLogLevel,
         initialState,
+        discardTxHistory,
       )
 
     for {

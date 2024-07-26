@@ -36,7 +36,7 @@ final case class Wallet private (
 
 object Wallet {
 
-  implicit val walletCreation: WalletCreation[Wallet, Wallet.Snapshot] =
+  given walletCreation: WalletCreation[Wallet, Wallet.Snapshot] =
     (snapshot: Wallet.Snapshot) =>
       Wallet(
         snapshot.state,
@@ -45,14 +45,13 @@ object Wallet {
         ProgressUpdate(snapshot.offset.map(_.decrement), none),
       )
 
-  implicit val walletRestore: WalletRestore[Wallet, Seed] =
+  given walletRestore: WalletRestore[Wallet, Seed] =
     (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
 
-  implicit val walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
+  given walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
     wallet.state.availableCoins.groupMapReduce(_.tokenType)(_.value)(_ + _)
 
-  implicit val walletKeys
-      : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
+  given walletKeys: WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
     new WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
       override def coinPublicKey(wallet: Wallet): CoinPublicKey =
         wallet.state.coinPublicKey
@@ -62,7 +61,7 @@ object Wallet {
         wallet.state.encryptionSecretKey
     }
 
-  implicit val walletCoins: WalletCoins[Wallet] =
+  given walletCoins: WalletCoins[Wallet] =
     new WalletCoins[Wallet] {
       override def coins(wallet: Wallet): Seq[QualifiedCoinInfo] =
         wallet.state.coins
@@ -71,8 +70,7 @@ object Wallet {
       override def pendingCoins(wallet: Wallet): Seq[CoinInfo] = wallet.state.pendingOutputs
     }
 
-  implicit val walletTxBalancing
-      : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] =
+  given walletTxBalancing: WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] =
     new WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] {
       override def prepareTransferRecipe(
           wallet: Wallet,
@@ -157,7 +155,9 @@ object Wallet {
       }
     }
 
-  given walletSync: WalletSync[Wallet, IndexerUpdate] with
+  given walletSync(using
+      walletTxHistory: WalletTxHistory[Wallet, Transaction],
+  ): WalletSync[Wallet, IndexerUpdate] with
     extension (wallet: Wallet) {
       override def apply(update: IndexerUpdate): Either[WalletError, Wallet] =
         update match {
@@ -171,7 +171,8 @@ object Wallet {
             wallet
               .copy(
                 state = newState,
-                txHistory = wallet.txHistory ++ newTxs.map(_.tx),
+                txHistory =
+                  walletTxHistory.updateTxHistory(wallet.txHistory, newTxs.map(_.tx)).toVector,
                 offset = Some(update.offset),
                 isConnected = true,
                 progress = wallet.progress.copy(synced = Some(update.offset.decrement)),
@@ -207,13 +208,27 @@ object Wallet {
     }
   }
 
-  implicit val walletTxHistory: WalletTxHistory[Wallet, Transaction] =
+  val walletTxHistory: WalletTxHistory[Wallet, Transaction] =
     new WalletTxHistory[Wallet, Transaction] {
+      override def updateTxHistory(
+          currentTxs: Seq[Transaction],
+          newTxs: Seq[Transaction],
+      ): Seq[Transaction] = currentTxs ++ newTxs
       override def transactionHistory(wallet: Wallet): Seq[Transaction] = wallet.txHistory
       override def progress(wallet: Wallet): ProgressUpdate = wallet.progress
     }
 
-  implicit val serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
+  val walletDiscardTxHistory: WalletTxHistory[Wallet, Transaction] =
+    new WalletTxHistory[Wallet, Transaction] {
+      override def updateTxHistory(
+          currentTxs: Seq[Transaction],
+          newTxs: Seq[Transaction],
+      ): Seq[Transaction] = Seq.empty
+      override def transactionHistory(wallet: Wallet): Seq[Transaction] = wallet.txHistory
+      override def progress(wallet: Wallet): ProgressUpdate = wallet.progress
+    }
+
+  given serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
     (wallet: Wallet) =>
       SerializedWalletState(
         Snapshot(wallet.state, wallet.txHistory, wallet.offset, ProtocolVersion.V1).serialize,

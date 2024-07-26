@@ -18,6 +18,7 @@ export declare class WalletBuilder {
    * @param proverServerUri Prover server URI
    * @param substrateNodeUri Node URI
    * @param minLogLevel Only statements with this level and above will be logged
+   * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
   static build(
     indexerUri: string,
@@ -25,6 +26,7 @@ export declare class WalletBuilder {
     proverServerUri: string,
     substrateNodeUri: string,
     minLogLevel?: LogLevel,
+    discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
 
   /**
@@ -35,6 +37,7 @@ export declare class WalletBuilder {
    * @param substrateNodeUri Node URI
    * @param seed A BIP32 compatible mnemonic seed phrase hex encoded
    * @param minLogLevel Only statements with this level and above will be logged
+   * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
   static buildFromSeed(
     indexerUri: string,
@@ -43,6 +46,7 @@ export declare class WalletBuilder {
     substrateNodeUri: string,
     seed: string,
     minLogLevel?: LogLevel,
+    discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
 
   /**
@@ -53,6 +57,7 @@ export declare class WalletBuilder {
    * @param substrateNodeUri Node URI
    * @param serializedState Serialized (JSON) state containing LocalState, Transaction History and Block Height
    * @param minLogLevel Only statements with this level and above will be logged
+   * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
   static restore(
     indexerUri: string,
@@ -61,6 +66,7 @@ export declare class WalletBuilder {
     substrateNodeUri: string,
     serializedState: string,
     minLogLevel?: LogLevel,
+    discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
 
   static calculateCost(tx: Transaction): bigint;

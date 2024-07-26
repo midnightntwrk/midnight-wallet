@@ -41,6 +41,7 @@ object TransactionGenerator extends IOApp.Simple {
           substrateNodeUri,
           LogLevel.Info,
           initialState,
+          discardTxHistory = true,
         ),
       )
       .evalTap(_.versionCombinator.sync)
