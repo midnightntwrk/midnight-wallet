@@ -189,3 +189,127 @@ describe('Token transfer', () => {
     timeout,
   );
 });
+
+describe('Wallet building', () => {
+  const getFixture = useTestContainersFixture();
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000042';
+  const timeout = 60_000;
+
+  let walletFunded: Wallet & Resource;
+  let fixture: TestContainersFixture;
+
+  afterEach(async () => {
+    try {
+      await walletFunded.close();
+    } catch (e: unknown) {
+      if (typeof e === 'string') {
+        logger.warn(e);
+      } else if (e instanceof Error) {
+        logger.warn(e.message);
+      }
+    }
+  });
+
+  test(
+    'Is working if discardTxHistory not defined @healthcheck',
+    async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-11088', 'PM-11088');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet building');
+      allure.story('Building with discardTxHistory undefined');
+
+      await allure.step('Start a wallet', async function () {
+        fixture = getFixture();
+        setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+
+        walletFunded = await WalletBuilder.buildFromSeed(
+          fixture.getIndexerUri(),
+          fixture.getIndexerWsUri(),
+          fixture.getProverUri(),
+          fixture.getNodeUri(),
+          seedFunded,
+          'info',
+        );
+
+        walletFunded.start();
+      });
+      logger.info(`Waiting to receive tokens...`);
+      const syncedState = await waitForSync(walletFunded);
+      logger.info(`Wallet 1 balance: ${syncedState.balances[nativeToken()]}`);
+      expect(syncedState.transactionHistory).toHaveLength(1);
+    },
+    timeout,
+  );
+
+  test(
+    'Is working if discardTxHistory is set to false @healthcheck',
+    async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-11090', 'PM-11090');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet building');
+      allure.story('Building with discardTxHistory set to false');
+
+      await allure.step('Start a wallet', async function () {
+        fixture = getFixture();
+        setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+
+        walletFunded = await WalletBuilder.buildFromSeed(
+          fixture.getIndexerUri(),
+          fixture.getIndexerWsUri(),
+          fixture.getProverUri(),
+          fixture.getNodeUri(),
+          seedFunded,
+          'info',
+          false,
+        );
+
+        walletFunded.start();
+      });
+
+      logger.info(`Waiting to receive tokens...`);
+      const syncedState = await waitForSync(walletFunded);
+      logger.info(`Wallet 1 balance: ${syncedState.balances[nativeToken()]}`);
+      expect(syncedState.transactionHistory).toHaveLength(1);
+    },
+    timeout,
+  );
+
+  test(
+    'Is working if discardTxHistory is set to true @healthcheck',
+    async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-11091', 'PM-11091');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet building');
+      allure.story('Building with discardTxHistory set to true');
+
+      await allure.step('Start a wallet', async function () {
+        fixture = getFixture();
+        setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+
+        walletFunded = await WalletBuilder.buildFromSeed(
+          fixture.getIndexerUri(),
+          fixture.getIndexerWsUri(),
+          fixture.getProverUri(),
+          fixture.getNodeUri(),
+          seedFunded,
+          'info',
+          true,
+        );
+
+        walletFunded.start();
+      });
+
+      logger.info(`Waiting to receive tokens...`);
+      const syncedState = await waitForSync(walletFunded);
+      logger.info(`Wallet 1 balance: ${syncedState.balances[nativeToken()]}`);
+      expect(syncedState.transactionHistory).toHaveLength(0);
+    },
+    timeout,
+  );
+});
