@@ -1,0 +1,41 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    "schedule:weekly",
+    ":disableRateLimiting"
+  ],
+  "ignoreDeps": ["rxjs"],
+  "nix": {
+    "enabled": false
+  },
+  "packageRules": [
+    {
+      "matchDatasources": ["sbt-package"],
+      "matchPackagePrefixes": ["io.iohk"],
+      "enabled": false
+    },
+    {
+      "matchDatasources": ["sbt-package"],
+      "matchPackagePrefixes": ["com.github.ghostdogpr"],
+      "enabled": false
+    }
+  ],
+  "hostRules": [
+    {
+      "hostType": "npm",
+      "matchHost": "https://npm.pkg.github.com/",
+      "encrypted": {
+        "token": "wcFMA/xDdHCJBTolAQ/9GdH+1gvRq8v/Ry7iojnxDmqP1D827dxWDxgNARsw4+c7/Y7Qkkuq2G3XZ1y8QVMdDosswCjT9fRfssRWqbKs7robQOiarWZv7cJwugZm0k9GMDCdt3BeHq9tMy7Byjgfmj9OHv3nfjvPPjEEd+5PMs+gf1nTtdilreHFlZL3wVrOuWxUPldDEHOMSb7wteGeVZHnNZK0jl+JRoq5KAjLGn0ZPHCmg7eNvoG8XgVcbFtzEezMCCGha3FF/9D38s82H3IPNtJSdYyR4Z5ImkxahbbSttNkP1BkBOQPwueO3g5OQTUFv/7i7v27Co0qUtkX6v/vu7qymfjjAX/f3+we3Hk9BZOPAM5A7Ugv+RNh3vJhmv6gzeVot8z0vkUfB5kDs3tEEWlB8T9cj6SOy0Zf0snUUg9IaT7Ac3moAdSkMd+swwwgp8vj/6JLO29nt1vTuqQTzmVJ39/vy8rz+zrUN2iPIwyLjkvRFR6yanL62Ed2gxdlyjZJImnp73lFLVhsWuXJ5/cxuas//Vz2Ftb8KwX/0z+tE0xU6DU4myx+OXnRYuxZMxYZ6HbQJpZA0Cl36F+1dp7sJSuvu0YFNnfoc6t7i6IuWI224woJHC2x+WuD1NKHNSpLyVgI93v3M+2gQTIG/FgpPx9yMAfZh/vdQs6oyGoOr3isO99ITYO1zQ7SfgHm2kXhfXBqXS9kCM+76vGGt6DvGSRI1+S9s6z72FXaVlVyoRKHvdT+ruerbek83E5p+JTdGQbbHNh+tMDkW0WmDclUg3lM3HP+ynERWYE6mGCZa/rq94yHSG8fpsQd8NSfMQqbGyjNMQoAzK4zPrPhX67SK1HnBSNlObWvlg"
+      },
+      "npmrc": "@midnight-ntwrk:registry=https://npm.pkg.github.com/"
+    },
+    {
+      "matchHost": "ghcr.io",
+      "hostType": "docker",
+      "encrypted": {
+        "password": "wcFMA/xDdHCJBTolAQ/9GdH+1gvRq8v/Ry7iojnxDmqP1D827dxWDxgNARsw4+c7/Y7Qkkuq2G3XZ1y8QVMdDosswCjT9fRfssRWqbKs7robQOiarWZv7cJwugZm0k9GMDCdt3BeHq9tMy7Byjgfmj9OHv3nfjvPPjEEd+5PMs+gf1nTtdilreHFlZL3wVrOuWxUPldDEHOMSb7wteGeVZHnNZK0jl+JRoq5KAjLGn0ZPHCmg7eNvoG8XgVcbFtzEezMCCGha3FF/9D38s82H3IPNtJSdYyR4Z5ImkxahbbSttNkP1BkBOQPwueO3g5OQTUFv/7i7v27Co0qUtkX6v/vu7qymfjjAX/f3+we3Hk9BZOPAM5A7Ugv+RNh3vJhmv6gzeVot8z0vkUfB5kDs3tEEWlB8T9cj6SOy0Zf0snUUg9IaT7Ac3moAdSkMd+swwwgp8vj/6JLO29nt1vTuqQTzmVJ39/vy8rz+zrUN2iPIwyLjkvRFR6yanL62Ed2gxdlyjZJImnp73lFLVhsWuXJ5/cxuas//Vz2Ftb8KwX/0z+tE0xU6DU4myx+OXnRYuxZMxYZ6HbQJpZA0Cl36F+1dp7sJSuvu0YFNnfoc6t7i6IuWI224woJHC2x+WuD1NKHNSpLyVgI93v3M+2gQTIG/FgpPx9yMAfZh/vdQs6oyGoOr3isO99ITYO1zQ7SfgHm2kXhfXBqXS9kCM+76vGGt6DvGSRI1+S9s6z72FXaVlVyoRKHvdT+ruerbek83E5p+JTdGQbbHNh+tMDkW0WmDclUg3lM3HP+ynERWYE6mGCZa/rq94yHSG8fpsQd8NSfMQqbGyjNMQoAzK4zPrPhX67SK1HnBSNlObWvlg"
+      }
+    }
+  ]
+}
