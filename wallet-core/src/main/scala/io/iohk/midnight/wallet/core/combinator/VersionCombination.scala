@@ -6,7 +6,7 @@ import fs2.Stream
 import io.iohk.midnight.wallet.core.{Wallet, WalletStateContainer, WalletStateService}
 import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
-import io.iohk.midnight.wallet.core.domain.IndexerUpdate
+import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.zswap.Transaction
 
@@ -35,7 +35,11 @@ final class V1Combination[F[_]: Async](
     stateContainer.updateStateEither(_.apply(update)).rethrow.void
 
   private def predicate(update: IndexerUpdate): Boolean =
-    update.protocolVersion === ProtocolVersion.V1
+    update match {
+      case _: ProgressUpdate | ConnectionLost      => true
+      case ViewingUpdate(ProtocolVersion.V1, _, _) => true
+      // case ViewingUpdate(ProtocolVersion.V2)    => false
+    }
 
   override def state: Stream[F, WalletStateService.State] =
     stateService.state

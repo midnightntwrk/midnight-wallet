@@ -28,6 +28,7 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
   private lazy val validUpdateToApply: IO[IndexerUpdate] =
     txWithContext.map { (txCtx, _) =>
       ViewingUpdate(
+        ProtocolVersion.V1,
         data.Transaction.Offset.Zero,
         Seq(
           Right(AppliedTransaction(txCtx.transaction, ApplyStage.SucceedEntirely)),

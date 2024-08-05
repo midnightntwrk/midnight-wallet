@@ -99,9 +99,12 @@ class IndexerClient[F[_]: Async](
     )(
       onViewingUpdate = (ViewingUpdate.index ~ ViewingUpdate
         .update[SingleUpdate](
-          MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
+          (MerkleTreeCollapsedUpdate.protocolVersion ~ MerkleTreeCollapsedUpdate.update)
+            .map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
           RelevantTransaction
-            .transaction(Transaction.hash ~ Transaction.raw ~ Transaction.applyStage)
+            .transaction(
+              Transaction.protocolVersion ~ Transaction.hash ~ Transaction.raw ~ Transaction.applyStage,
+            )
             .map(SingleUpdate.RawTransaction.apply.tupled),
         )).map(RawViewingUpdate.apply),
       onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map(RawProgressUpdate.apply),
@@ -172,12 +175,19 @@ object IndexerClient {
 
   final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate
 
-  sealed trait SingleUpdate
+  sealed trait SingleUpdate {
+    def protocolVersion: Option[Int]
+  }
 
   case object SingleUpdate {
-    final case class RawTransaction(hash: String, raw: String, applyStage: String)
+    final case class RawTransaction(
+        protocolVersion: Option[Int],
+        hash: String,
+        raw: String,
+        applyStage: String,
+    ) extends SingleUpdate
+    final case class MerkleTreeCollapsedUpdate(protocolVersion: Option[Int], update: String)
         extends SingleUpdate
-    final case class MerkleTreeCollapsedUpdate(update: String) extends SingleUpdate
   }
 
   final case class RawViewingUpdate(index: BigInt, updates: Seq[SingleUpdate])

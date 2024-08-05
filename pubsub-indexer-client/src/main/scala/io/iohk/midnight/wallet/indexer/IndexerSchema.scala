@@ -11,6 +11,8 @@ object IndexerSchema {
   object MerkleTreeCollapsedUpdate {
     def update: SelectionBuilder[MerkleTreeCollapsedUpdate, String] =
       SelectionBuilder.Field("update", Scalar())
+    def protocolVersion: SelectionBuilder[MerkleTreeCollapsedUpdate, Option[Int]] =
+      SelectionBuilder.Field("protocolVersion", OptionOf(Scalar()))
   }
 
   type RelevantTransaction
@@ -29,6 +31,8 @@ object IndexerSchema {
       SelectionBuilder.Field("raw", Scalar())
     def applyStage: SelectionBuilder[Transaction, String] =
       SelectionBuilder.Field("applyStage", Scalar())
+    def protocolVersion: SelectionBuilder[Transaction, Option[Int]] =
+      SelectionBuilder.Field("protocolVersion", OptionOf(Scalar()))
   }
 
   type ViewingUpdate
