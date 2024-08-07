@@ -40,10 +40,11 @@ package object domain {
 
   final case class AppliedTransaction(tx: Transaction, applyStage: ApplyStage)
 
-  sealed trait IndexerUpdate
+  sealed trait IndexerUpdate {
+    def protocolVersion: ProtocolVersion = ProtocolVersion.V1
+  }
 
   final case class ViewingUpdate(
-      protocolVersion: ProtocolVersion,
       offset: Offset,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction]],
   ) extends IndexerUpdate

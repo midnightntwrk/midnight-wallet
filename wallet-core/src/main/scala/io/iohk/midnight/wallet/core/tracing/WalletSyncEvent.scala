@@ -36,8 +36,8 @@ object WalletSyncEvent {
   object DefaultInstances {
     def showIndexerUpdate(update: IndexerUpdate): String =
       update match {
-        case ViewingUpdate(protocolVersion, offset, updates) =>
-          s"Viewing update v$protocolVersion: @${offset.show} ${updates
+        case ViewingUpdate(offset, updates) =>
+          s"Viewing update: @${offset.show} ${updates
               .collect { case Right(tx) => tx }
               .map(_.tx.hash)
               .mkString("[", ",", "]")}"

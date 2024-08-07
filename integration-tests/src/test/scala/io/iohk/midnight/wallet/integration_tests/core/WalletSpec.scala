@@ -104,7 +104,6 @@ abstract class WalletSpec
   override val validUpdateToApply: IO[IndexerUpdate] =
     txWithContext.map { (txCtx, chainState) =>
       ViewingUpdate(
-        ProtocolVersion.V1,
         data.Transaction.Offset.Zero,
         Seq(
           Left(MerkleTreeCollapsedUpdate(chainState, BigInt(0), BigInt(1))),

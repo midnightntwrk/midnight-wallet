@@ -37,7 +37,7 @@ object SyncServiceEvent {
         case RawProgressUpdate(synced, total) => s"Progress: $synced/$total"
         case RawViewingUpdate(offset, updates) =>
           s"ViewingUpdate: @$offset ${updates
-              .collect { case SingleUpdate.RawTransaction(_, hash, _, _) => hash }
+              .collect { case SingleUpdate.RawTransaction(hash, _, _) => hash }
               .mkString("[", ",", "]")}"
         case ConnectionLost => "ConnectionLost"
       }
