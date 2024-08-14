@@ -7,12 +7,15 @@ import io.iohk.midnight.js.interop.util.MapOps.*
 opaque type ProofErasedTransaction = mod.ProofErasedTransaction
 
 object ProofErasedTransaction {
+  private val DummyLedgerParameters = mod.LedgerParameters.dummyParameters()
+
   def fromJs(tx: mod.ProofErasedTransaction): ProofErasedTransaction = tx
 
   extension (tx: ProofErasedTransaction) {
     private[zswap] def toJs: mod.ProofErasedTransaction = tx
 
-    def guaranteedCoins: ProofErasedOffer = ProofErasedOffer.fromJs(tx.guaranteedCoins)
+    def guaranteedCoins: Option[ProofErasedOffer] =
+      tx.guaranteedCoins.toOption.map(ProofErasedOffer.fromJs)
 
     def fallibleCoins: Option[ProofErasedOffer] =
       tx.fallibleCoins.toOption.map(ProofErasedOffer.fromJs)
@@ -28,6 +31,6 @@ object ProofErasedTransaction {
     def imbalances(guaranteed: Boolean): Map[TokenType, BigInt] =
       tx.imbalances(guaranteed).toMap.map((tt, a) => (TokenType(tt), a.toScalaBigInt))
 
-    def fees: BigInt = tx.fees().toScalaBigInt
+    def fees: BigInt = tx.fees(DummyLedgerParameters).toScalaBigInt
   }
 }

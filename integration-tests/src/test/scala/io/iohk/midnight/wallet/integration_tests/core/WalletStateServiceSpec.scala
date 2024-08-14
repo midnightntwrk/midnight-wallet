@@ -49,10 +49,16 @@ class WalletStateServiceSpec
     forAllF(Generators.txWithContextArbitrary.arbitrary) { txWithContextIO =>
       for {
         txWithContext <- txWithContextIO
-        initialState = txWithContext.state.apply(txWithContext.transaction.guaranteedCoins)
-        expected = txWithContext.transaction.guaranteedCoins.deltas
-          .get(TokenType.Native)
-          .map(value => -value)
+        initialState =
+          txWithContext.transaction.guaranteedCoins.fold(txWithContext.state)(
+            txWithContext.state.apply,
+          )
+        expected =
+          txWithContext.transaction.guaranteedCoins.flatMap(
+            _.deltas
+              .get(TokenType.Native)
+              .map(value => -value),
+          )
         result <- buildWalletStateService(initialState = initialState).use(
           _.state.head.compile.lastOrError
             .map(_.balances.get(TokenType.Native))
@@ -65,7 +71,7 @@ class WalletStateServiceSpec
   test("Not sum transaction outputs to another wallet") {
     forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txWithCtxIO =>
       txWithCtxIO.flatMap { tx =>
-        val anotherState = LocalState.apply().apply(tx.guaranteedCoins)
+        val anotherState = tx.guaranteedCoins.fold(LocalState())(LocalState.apply().apply)
         buildWalletStateService(initialState = anotherState).use(
           _.state.head.compile.lastOrError
             .map(_.balances.get(TokenType.Native))

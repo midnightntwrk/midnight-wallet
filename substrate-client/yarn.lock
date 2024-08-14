@@ -5,10 +5,10 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@midnight-ntwrk/zswap@npm:^0.3.11":
-  version: 0.3.11
-  resolution: "@midnight-ntwrk/zswap@npm:0.3.11::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F0.3.11%2F73888ad1b7ff4676498bba0fc4dd930db8be3097"
-  checksum: 10c0/45ba3a3ec3d03eb9ebcfbd8ae9a780bf8ead72ab92d80c370201da4b25c3f917e230b3f77605b81ea479de7191fc4fff872900dad725094632f78ed11862974a
+"@midnight-ntwrk/zswap@npm:^3.0.0-beta.3":
+  version: 3.0.0-beta.3
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.0-beta.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.0-beta.3%2F7dac5e36abd651a5e7ad12609b2cbcf89a8e85ca"
+  checksum: 10c0/4758a0c4edc8b15664c2ed220b14097a2102b575fdcf9c6ddf941c2761ca3cd2f0eb9a954aa941a88e670f1e86006571297e1892c92e9be9bab74fb6d2ea5bfb
   languageName: node
   linkType: hard
 
@@ -16,7 +16,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-substrate-client@workspace:."
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^0.3.11"
+    "@midnight-ntwrk/zswap": "npm:^3.0.0-beta.3"
     buffer: "npm:^6.0.3"
     scale-ts: "npm:^1.1.0"
     typescript: "npm:^4.8.3"

@@ -42,9 +42,9 @@ trait EndToEndSpecSetup {
     def applyCoinToState(coin: CoinInfo, state: LocalState): LocalState = {
       val output = UnprovenOutput(coin, state.coinPublicKey, state.encryptionPublicKey)
       val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value)
-      state
-        .watchFor(coin)
-        .applyProofErased(UnprovenTransaction(offer).eraseProofs.guaranteedCoins)
+      val stateWatchForCoin = state.watchFor(coin)
+      UnprovenTransaction(offer).eraseProofs.guaranteedCoins
+        .fold(stateWatchForCoin)(stateWatchForCoin.applyProofErased)
     }
     val state = LocalState()
     coins

@@ -36,4 +36,4 @@ jobs:
       - name: Publish Wallet
         run: |
           cd wallet-engine
-          yarn publish
+          yarn npm publish

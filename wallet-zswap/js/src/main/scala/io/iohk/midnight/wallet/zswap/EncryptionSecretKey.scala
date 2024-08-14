@@ -12,7 +12,7 @@ object EncryptionSecretKey {
     def serialize: String =
       HexUtil.encodeHex(key.yesIKnowTheSecurityImplicationsOfThis_serialize().toByteArray)
     def test(tx: Transaction): Try[Boolean] = Try {
-      key.test(tx.toJs.guaranteedCoins) || tx.toJs.fallibleCoins.exists(key.test)
+      tx.toJs.guaranteedCoins.exists(key.test) || tx.toJs.fallibleCoins.exists(key.test)
     }
   }
 }

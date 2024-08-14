@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.integration_tests
 
-import cats.effect.{Async, IO}
+import cats.effect.{Async, Deferred, IO, Resource}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.bloc.Bloc
@@ -18,7 +18,8 @@ class VersionCombinatorSpec extends CatsEffectSuite {
   test("Handle a different version") {
     for {
       v1 <- DummyV1Combination[IO](Offset.Zero)
-      combinator = new VersionCombinator[IO](v1, DummyCombinationMigrations[IO])
+      deferred <- Deferred[IO, Unit]
+      combinator = new VersionCombinator[IO](v1, DummyCombinationMigrations[IO], deferred)
       initialState <- combinator.serializeState
       fiber <- combinator.state
         .take(20)
@@ -36,6 +37,7 @@ class VersionCombinatorSpec extends CatsEffectSuite {
         states.map(_.syncProgress).toList,
         List.tabulate(10)(n => ProgressUpdate(Offset(1), Offset(n))) ++
           List.tabulate(10)(n => ProgressUpdate(Offset(2), Offset(n + 10))),
+        states.map(_.syncProgress).toList,
       )
       assertEquals(
         states.head.encryptionPublicKey,
@@ -47,6 +49,39 @@ class VersionCombinatorSpec extends CatsEffectSuite {
       )
     }
   }
+
+  test("Stop successfully") {
+    val resource =
+      NeverEndingCombination[IO]
+        .flatMap(VersionCombinator.apply)
+
+    for {
+      (combinator, finalizer) <- resource.allocated
+      fiber <- combinator.sync.start
+      _ <- finalizer
+      _ <- fiber.joinWithNever
+    } yield ()
+  }
+}
+
+class NeverEndingCombination[F[_]: Async](localState: Bloc[F, Int]) extends VersionCombination[F] {
+  override def sync: F[Unit] =
+    Stream
+      .constant[F, Int](1)
+      .evalTap(localState.set)
+      .compile
+      .drain
+
+  override def state: Stream[F, State] =
+    UnsupportedOperationException("Test").raiseError
+
+  override def serializeState: F[SerializedWalletState] =
+    UnsupportedOperationException("Test").raiseError
+}
+
+object NeverEndingCombination {
+  def apply[F[_]: Async]: Resource[F, NeverEndingCombination[F]] =
+    Bloc[F, Int](1).map(new NeverEndingCombination[F](_))
 }
 
 class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
@@ -100,7 +135,7 @@ class DummyV2Combination[F[_]: Async](val localState: Bloc[F, Offset])
 
   override def sync: F[Unit] =
     Stream
-      .iterate[F, BigInt](10)(_ + 1)
+      .iterate[F, BigInt](11)(_ + 1)
       .map(Offset(_))
       .evalMap(localState.set)
       .compile

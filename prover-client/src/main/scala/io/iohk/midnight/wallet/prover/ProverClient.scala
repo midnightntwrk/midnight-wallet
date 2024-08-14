@@ -8,7 +8,7 @@ import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequ
 import sttp.model.Uri
 
 class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
-  private val readTimeout = 5.minutes // TODO: Make this configurable
+  private val readTimeout = 20.minutes // TODO: Make this configurable
 
   private val asTransaction: ResponseAs[Transaction, Any] =
     asByteArray.getRight.map(bytes => Transaction.deserialize(bytes))

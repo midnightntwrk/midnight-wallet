@@ -28,4 +28,4 @@ jobs:
         cache: 'sbt'
 
     - name: Publish Scala packages
-      run: sbt walletZswapJVM/publish
+      run: sbt downloadLedgerBinaries walletZswapJVM/publish

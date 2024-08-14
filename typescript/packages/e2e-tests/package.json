@@ -17,10 +17,10 @@
   "devDependencies": {
     "@cardano-sdk/key-management": "0.8.2",
     "@midnight-ntwrk/midnight-js-network-id": "0.1.10",
-    "@midnight-ntwrk/wallet": "^3.5.12",
-    "@midnight-ntwrk/wallet-api": "^3.3.1",
+    "@midnight-ntwrk/wallet": "3.6.0-rc.14",
+    "@midnight-ntwrk/wallet-api": "^3.4.0-rc.3",
     "@midnight-ntwrk/wallet_built": "file:../../../wallet-engine",
-    "@midnight-ntwrk/zswap": "0.3.11",
+    "@midnight-ntwrk/zswap": "^3.0.0-beta.3",
     "@types/jest": "^29.2.0",
     "@types/node": "^18.11.3",
     "@types/ws": "^8.5.4",

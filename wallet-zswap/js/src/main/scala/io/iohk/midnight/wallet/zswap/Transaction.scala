@@ -25,7 +25,7 @@ final case class Transaction(value: mod.Transaction) {
     value.imbalances(true).toMap.map(_.map(_.toScalaBigInt))
 
   lazy val fees: BigInt =
-    BigInt(value.fees().toString)
+    BigInt(value.fees(Transaction.DummyLedgerParameters).toString)
 
   def imbalances(guaranteed: Boolean, fees: BigInt): Map[TokenType, BigInt] =
     toScalaStd(value.imbalances(guaranteed, js.BigInt(fees.toString)))
@@ -36,14 +36,14 @@ final case class Transaction(value: mod.Transaction) {
   private def toScalaStd(x: JsMap[TokenType, js.BigInt]): Map[TokenType, BigInt] =
     x.toMap.map(_.map(_.toScalaBigInt))
 
-  lazy val guaranteedCoins: Offer =
-    Offer.fromJs(value.guaranteedCoins)
+  lazy val guaranteedCoins: Option[Offer] =
+    value.guaranteedCoins.toOption.map(Offer.fromJs)
 
   lazy val fallibleCoins: Option[Offer] =
     value.fallibleCoins.toOption.map(Offer.fromJs)
 
-  def wellFormedNoProofs(enforceBalancing: Boolean): Unit =
-    value.eraseProofs().wellFormed(enforceBalancing)
+  // FIXME: Use real ledger method for well formed transactions
+  def wellFormedNoProofs(enforceBalancing: Boolean): Unit = ()
 
   def merge(other: Transaction): Transaction =
     Transaction(value.merge(other.value))
@@ -53,6 +53,8 @@ final case class Transaction(value: mod.Transaction) {
 }
 
 object Transaction {
+  private val DummyLedgerParameters = mod.LedgerParameters.dummyParameters()
+
   def deserialize(bytes: Array[Byte]): Transaction =
     Transaction(mod.Transaction.deserialize(bytes.toUInt8Array))
 

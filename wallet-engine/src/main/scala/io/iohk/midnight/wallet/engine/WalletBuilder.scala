@@ -4,17 +4,11 @@ import cats.effect.{Async, Resource}
 import cats.effect.syntax.resource.*
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
-import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.combinator.{ProtocolVersion, V1Combination, VersionCombinator}
-import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.core.tracing.{
-  WalletSyncTracer,
-  WalletTxServiceTracer,
-  WalletTxSubmissionTracer,
-}
+import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.js.{
   ProvingServiceFactory,
@@ -54,19 +48,13 @@ object WalletBuilder {
         submitTxService,
         walletStateContainer,
       )
-      syncService = SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService)
-      walletBlockProcessingService <- buildWalletSyncService(
-        syncService,
-        walletStateContainer,
-        config.initialState.offset,
-      )
       walletTransactionService <- buildWalletTransactionService(
         walletStateContainer,
         provingService,
       )
-      v1Combination = V1Combination(
+      v1Combination <- V1Combination(
         config.initialState,
-        syncService,
+        SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService),
         walletStateContainer,
         walletStateService,
       )
@@ -78,18 +66,6 @@ object WalletBuilder {
         walletTransactionService,
       )
     }
-  }
-
-  private def buildWalletSyncService[F[_]: Async, TWallet](
-      syncService: Resource[F, SyncService[F]],
-      walletStateContainer: WalletStateContainer[F, TWallet],
-      offset: Option[data.Transaction.Offset],
-  )(implicit
-      rootTracer: Tracer[F, StructuredLog],
-      walletSync: WalletSync[TWallet, IndexerUpdate],
-  ): Resource[F, WalletSyncService[F]] = {
-    implicit val walletSyncTracer: WalletSyncTracer[F] = WalletSyncTracer.from(rootTracer)
-    WalletSyncService(syncService, walletStateContainer, offset)
   }
 
   private def buildWalletTxSubmissionService[F[_]: Async, TWallet](

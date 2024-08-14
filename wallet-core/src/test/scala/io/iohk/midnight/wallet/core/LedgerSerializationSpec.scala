@@ -10,7 +10,7 @@ class LedgerSerializationSpec extends FunSuite {
     "e9c2cf81bb8522a1ed73ba32d97e9df39bb3b4d7e7154f472e7d0989edeb9c42"
 
   private val publicKey =
-    CoinPublicKey("411c0c671563eb74173179e7dd976c12c59d1468d7408a5b03e478cf8aae9d70")
+    CoinPublicKey("0361d074be922be7f8f69c45294e5656ca3dce47794df31a0dde259d72aa41c7")
 
   test("generates state from seed") {
     given Eq[CoinPublicKey] = Eq.fromUniversalEquals

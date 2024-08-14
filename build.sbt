@@ -67,7 +67,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.5.13-rc.1",
+  version := "3.6.0-rc.17",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -199,14 +199,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
   )
   .jvmSettings(
-    cleanFiles ++= (Compile / resourceDirectory).value
-      .listFiles(new FileFilter {
-        override def accept(pathname: File): Boolean = {
-          List("libmidnight_zswap_jnr.", "archive_info.txt")
-            .exists(pathname.getName.contains)
-        }
-      })
-      .toList,
+    cleanFiles += (Compile / resourceDirectory).value,
     libraryDependencies += "com.github.jnr" % "jnr-ffi" % "2.2.13",
     downloadLedgerBinaries := {
       val resourcesDir = (Compile / resourceDirectory).value
@@ -215,7 +208,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
       downloadBinaries(
         Config(
           requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-0.3.11",
+          releaseTag = "zswap-c-bindings-3.0.0-beta.3",
           ghAuthToken = sys.env("IOG_GH_TOKEN"),
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,
@@ -230,7 +223,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
       downloadBinaries(
         Config(
           requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-3.0.0-beta.1",
+          releaseTag = "zswap-c-bindings-0.3.11",
           ghAuthToken = sys.env("IOG_GH_TOKEN"),
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,
@@ -339,7 +332,7 @@ lazy val integrationTests = project
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,
       "org.scalacheck" %%% "scalacheck" % "1.17.0",
       "io.chrisdavenport" %%% "cats-scalacheck" % "0.3.2",
-      "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2"
+      "org.typelevel" %%% "scalacheck-effect-munit" % "2.0.0-M2",
     ).map(_ % Test),
   )
 

@@ -7,9 +7,11 @@ import io.iohk.midnight.midnightNtwrkZswap.mod
 type TokenType = mod.TokenType
 
 object TokenType {
+  private val DummyCostModel = mod.TransactionCostModel.dummyTransactionCostModel()
+
   lazy val Native: TokenType = mod.nativeToken()
-  lazy val InputFeeOverhead: BigInt = mod.inputFeeOverhead().toScalaBigInt
-  lazy val OutputFeeOverhead: BigInt = mod.outputFeeOverhead().toScalaBigInt
+  lazy val InputFeeOverhead: BigInt = DummyCostModel.inputFeeOverhead.toScalaBigInt
+  lazy val OutputFeeOverhead: BigInt = DummyCostModel.outputFeeOverhead.toScalaBigInt
 
   def apply(name: String): TokenType = name
 

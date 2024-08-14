@@ -31,14 +31,12 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
 
   def jsWallet(syncService: SyncService[IO] = new WalletSyncServiceStub()): IO[JsWallet] =
-    VersionCombinator(
-      V1Combination[IO](
-        Wallet.Snapshot.create,
-        syncService.pure[Resource[IO, *]],
-        new WalletStateContainerStub(),
-        new WalletStateServiceStub(),
-      ),
-    ).use { combinator =>
+    V1Combination[IO](
+      Wallet.Snapshot.create,
+      syncService.pure[Resource[IO, *]],
+      new WalletStateContainerStub(),
+      new WalletStateServiceStub(),
+    ).flatMap(VersionCombinator(_)).use { combinator =>
       new JsWallet(
         combinator,
         new WalletTxSubmissionServiceStub(),
@@ -85,8 +83,8 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
       IO.fromPromise(promise)
         .map { tx =>
           assertEquals(
-            tx.guaranteedCoins.deltas.toMap,
-            unprovenTx.toJs.guaranteedCoins.deltas.toMap,
+            tx.guaranteedCoins.map(_.deltas.toMap),
+            unprovenTx.toJs.guaranteedCoins.map(_.deltas.toMap),
           )
         }
     }

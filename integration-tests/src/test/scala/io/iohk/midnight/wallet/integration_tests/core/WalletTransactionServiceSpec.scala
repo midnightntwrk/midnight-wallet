@@ -46,8 +46,8 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
           .proveTransaction(domain.TransactionToProve(unprovenTx))
           .map { provenTx =>
             assertEquals(
-              provenTx.guaranteedCoins.deltas.toMap,
-              unprovenTx.guaranteedCoins.deltas.toMap,
+              provenTx.guaranteedCoins.map(_.deltas.toMap),
+              unprovenTx.guaranteedCoins.map(_.deltas.toMap),
             )
           }
       }
@@ -63,8 +63,10 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
             domain.BalanceTransactionToProve(unprovenTx, tx),
           )
         } yield assertEquals(
-          result.guaranteedCoins.outputsSize,
-          tx.guaranteedCoins.outputsSize + unprovenTx.guaranteedCoins.outputs.length,
+          result.guaranteedCoins.map(_.outputsSize).getOrElse(0),
+          tx.guaranteedCoins
+            .map(_.outputsSize)
+            .getOrElse(0) + unprovenTx.guaranteedCoins.map(_.outputs.length).getOrElse(0),
         )
       }
     }
@@ -91,9 +93,9 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
       buildWalletTransactionService(initialState).use { (walletTransactionService, _) =>
         walletTransactionService.prepareTransferRecipe(transfers.toList).map {
           case domain.TransactionToProve(toProve) =>
-            assert(toProve.guaranteedCoins.outputs.length >= transfers.size)
-            assert(toProve.guaranteedCoins.inputs.nonEmpty)
-            assert(toProve.guaranteedCoins.deltas.toList.forall(_._2 >= BigInt(0)))
+            assert(toProve.guaranteedCoins.exists(_.outputs.length >= transfers.size))
+            assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+            assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= BigInt(0))))
         }
       }
     }
@@ -111,11 +113,11 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
       buildWalletTransactionService(initialState).use { (walletTransactionService, _) =>
         walletTransactionService.prepareTransferRecipe(invalidTransfer :: transfers.toList).map {
           case domain.TransactionToProve(toProve) =>
-            assert(toProve.guaranteedCoins.outputs.sizeIs >= transfers.size)
-            assert(toProve.guaranteedCoins.inputs.nonEmpty)
-            assert(toProve.guaranteedCoins.deltas.toList.forall(_._2 >= BigInt(0)))
+            assert(toProve.guaranteedCoins.exists(_.outputs.sizeIs >= transfers.size))
+            assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+            assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= BigInt(0))))
             assert(
-              toProve.guaranteedCoins.deltas.get(invalidTransfer.tokenType).isEmpty,
+              toProve.guaranteedCoins.exists(_.deltas.get(invalidTransfer.tokenType).isEmpty),
             )
         }
       }
@@ -186,7 +188,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
   test("Reverts applied transaction when proving fails") {
     buildWalletTransactionService(
-      generateStateWithFunds(NonEmptyList.one((TokenType.Native, 100_000))),
+      generateStateWithFunds(NonEmptyList.one((TokenType.Native, 1_000_000))),
       new FailingProvingService[IO],
     ).use { (walletTransactionService, walletStateContainer) =>
       val randomState = LocalState()

@@ -119,6 +119,8 @@ object Generators {
           provingService
             .proveTransaction(UnprovenTransaction(offer))
             .map(tx => TransactionWithContext(tx, state, coins))
+            .memoize
+            .flatten
       }
     }
   }
@@ -146,7 +148,7 @@ object Generators {
 
   def generateStateWithCoins(coins: NonEmptyList[CoinInfo]): LocalState = {
     val (tx, state) = buildOfferForCoins(coins).leftMap(UnprovenTransaction(_).eraseProofs)
-    state.applyProofErased(tx.guaranteedCoins)
+    tx.guaranteedCoins.fold(state)(state.applyProofErased)
   }
 
   def generateStateWithFunds(balanceData: NonEmptyList[(TokenType, BigInt)]): LocalState =
@@ -162,7 +164,6 @@ object Generators {
   }
 
   given ledgerTransactionArbitrary(using
-      provingService: ProvingService[IO],
       txWithContextArb: Arbitrary[IO[TransactionWithContext]],
   ): Arbitrary[IO[LedgerTransaction]] =
     Arbitrary {

@@ -147,7 +147,8 @@ object Wallet {
           tx: UnprovenTransaction,
       ): Either[WalletError, Wallet] = {
         val txProofErased = tx.eraseProofs
-        val guaranteedReverted = wallet.state.applyFailedProofErased(txProofErased.guaranteedCoins)
+        val guaranteedReverted =
+          txProofErased.guaranteedCoins.fold(wallet.state)(wallet.state.applyFailedProofErased)
         val newState = txProofErased.fallibleCoins.fold(guaranteedReverted)(
           guaranteedReverted.applyFailedProofErased,
         )
@@ -197,13 +198,13 @@ object Wallet {
     val tx = transaction.tx
     transaction.applyStage match {
       case ApplyStage.FailEntirely =>
-        val guaranteed = state.applyFailed(tx.guaranteedCoins)
+        val guaranteed = tx.guaranteedCoins.fold(state)(state.applyFailed)
         tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.FailFallible =>
-        val guaranteed = state.apply(tx.guaranteedCoins)
+        val guaranteed = tx.guaranteedCoins.fold(state)(state.apply)
         tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.SucceedEntirely =>
-        val guaranteed = state.apply(transaction.tx.guaranteedCoins)
+        val guaranteed = transaction.tx.guaranteedCoins.fold(state)(state.apply)
         tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
     }
   }

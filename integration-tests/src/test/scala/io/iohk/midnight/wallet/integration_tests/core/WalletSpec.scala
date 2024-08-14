@@ -92,9 +92,10 @@ abstract class WalletSpec
 
   override val walletSync: WalletSync[Wallet, IndexerUpdate] = Wallet.walletSync
   private val txWithContext =
-    Generators.txWithContextArbitrary.arbitrary.sample.get.fproduct(tx =>
-      ZswapChainState().tryApply(tx.transaction.guaranteedCoins),
-    )
+    Generators.txWithContextArbitrary.arbitrary.sample.get.fproduct { tx =>
+      val state = ZswapChainState()
+      tx.transaction.guaranteedCoins.fold(state)(state.tryApply)
+    }
   override val walletForUpdates: IO[Wallet] =
     txWithContext.map((tx, _) =>
       Wallet.walletCreation.create(

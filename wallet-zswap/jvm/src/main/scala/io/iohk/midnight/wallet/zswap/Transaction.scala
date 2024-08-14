@@ -7,10 +7,10 @@ final case class Transaction(data: String, ledger: LedgerV1) {
   def serialize: String = data
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))
-  def guaranteedCoins: Offer =
+  def guaranteedCoins: Option[Offer] =
     ledger.extractGuaranteedCoinsFromTransaction(data) match {
       case Left(errors) => throw Exception(errors.map(_.getMessage).toList.mkString(", "))
-      case Right(StringResult(data)) => Offer.deserialize(data, ledger)
+      case Right(StringResult(data)) => Option.when(data.nonEmpty)(Offer.deserialize(data, ledger))
     }
 
   @SuppressWarnings(Array("org.wartremover.warts.Throw"))

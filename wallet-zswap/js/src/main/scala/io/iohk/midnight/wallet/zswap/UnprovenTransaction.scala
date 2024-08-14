@@ -21,7 +21,7 @@ object UnprovenTransaction {
     def identifiers: Array[String] = unprovenTx.identifiers().toArray
     def eraseProofs: ProofErasedTransaction =
       ProofErasedTransaction.fromJs(unprovenTx.eraseProofs())
-    def guaranteedCoins: UnprovenOffer =
-      UnprovenOffer.fromJs(unprovenTx.guaranteedCoins)
+    def guaranteedCoins: Option[UnprovenOffer] =
+      unprovenTx.guaranteedCoins.toOption.map(UnprovenOffer.fromJs)
   }
 }
