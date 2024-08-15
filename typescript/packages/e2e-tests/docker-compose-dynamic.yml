@@ -1,4 +1,3 @@
-version: '3.5'
 services:
   proof-server:
     image: "ghcr.io/midnight-ntwrk/proof-server:3.0.0-beta.2"
@@ -15,7 +14,7 @@ services:
       retries: 3
       start_period: 10s
   indexer:
-    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.0.0-RC2"
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.0.0"
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - "8088"
@@ -26,19 +25,21 @@ services:
       SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
       OTEL_JAVAAGENT_ENABLED: 'false'
     healthcheck:
-      test: ['CMD', 'egrep', '"Block .* was stored at height 0"', '/tmp/app_logs/server.log']
-      interval: 1s
+      test: ['CMD', 'sh', '-c', "grep -q 'Successfully applied .* migrations to schema' /tmp/app_logs/server.log"]
+      interval: 3s
       timeout: 5s
       retries: 30
+    volumes:
+      - '/tmp/app_logs:/tmp/app_logs'
     depends_on:
       node:
         condition: service_started
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.5.1-559a6836"
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.6.0-2792215b"
     platform: linux/amd64
     container_name: node_$TESTCONTAINERS_UID
     ports:
-      - "9944"
+     - "9944"
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:9944/health" ]
       interval: 2s
@@ -47,4 +48,3 @@ services:
       start_period: 5s
     environment:
       CFG_PRESET: "dev"
-      ARGV: "midnight-node --rpc-external --rpc-cors=all --dev --node-key 0000000000000000000000000000000000000000000000000000000000000001"

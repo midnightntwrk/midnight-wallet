@@ -1085,21 +1085,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/midnight-js-network-id@npm:0.1.10":
-  version: 0.1.10
-  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.1.10::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.1.10%2Fc9a025db2a43bfbb644d78508b52d1ce3402cc65"
-  checksum: e92f0b8dc9f90856f716887989fe82a237238e14569e52ea3cf41dddd7117b78f96085cdd909867cf6a08467c23dc6f34c9d4755b8b363b4f96d7c3fe20e41cc
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/wallet-api@npm:^3.4.0-rc.1":
-  version: 3.4.0-rc.2
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.0-rc.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.0-rc.2%2F30ad2bb0f2b25b089269f9b4423f5ea02c24e10e"
-  dependencies:
-    "@midnight-ntwrk/zswap": ^3.0.0-beta.2
-  peerDependencies:
-    rxjs: 7.x
-  checksum: ec256b3732dd29bcc5e140c3f7e0fa73538c4b447d3b79fad5a118fcb0700043994f96b0b7c446c70317a385d66b194156410922f8b407b6a5d68b0e52584157
+"@midnight-ntwrk/midnight-js-network-id@npm:0.1.16":
+  version: 0.1.16
+  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.1.16::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.1.16%2F81c41a13733b3fbed149b02cdfb9816b23fd95be"
+  checksum: 49d7513a21d3e5195b1346a5d10c7dc368216c9a2cd87e02a57ccd679061bc4448950874a9670446a325d5fd57e1f07f4db75ab114a70a95ecc4cda2ca90d0bd
   languageName: node
   linkType: hard
 
@@ -1114,24 +1103,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet@npm:3.6.0-rc.14":
-  version: 3.6.0-rc.14
-  resolution: "@midnight-ntwrk/wallet@npm:3.6.0-rc.14::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.6.0-rc.14%2Fbf216f1a73d8f489e53b20546108a4a982261d83"
-  dependencies:
-    "@midnight-ntwrk/wallet-api": ^3.4.0-rc.1
-    "@midnight-ntwrk/zswap": ^3.0.0-beta.1
-    isomorphic-ws: ^5.0.0
-    node-fetch: 3.3.2
-    rxjs: ^7.5
-    scale-ts: ^1.1.0
-    ws: ^8.8.1
-  checksum: 7f94b7d215cdd9d8d84ba965d72396e72f31eb99b799e991cc095f5ebaf2e742880021d0c3ce8f3dd763fdb71bd658a7c64d5a6c98dc0458df6c870e2071cb1f
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/wallet_built@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.6.0-rc.16
-  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine#../../../wallet-engine::hash=ca370a&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+"@midnight-ntwrk/wallet@npm:3.6.0-rc.17":
+  version: 3.6.0-rc.17
+  resolution: "@midnight-ntwrk/wallet@npm:3.6.0-rc.17::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.6.0-rc.17%2Fa0b381aa10f7556a446a4c843d5783d77e84ba9f"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
     "@midnight-ntwrk/zswap": ^3.0.0-beta.3
@@ -1140,11 +1114,26 @@ __metadata:
     rxjs: ^7.5
     scale-ts: ^1.1.0
     ws: ^8.8.1
-  checksum: 3b9045ed72e490d6be5e2280872b61c8078de2827fb3646d592f587bbc7b2d030d09174d0658bb6cbca1592b59b29aa19b12c90cbc7810d1dfe39319fee7ba42
+  checksum: e225b007709031557dc7ad607172b08ad4f0ca5fe79617d37333136762902c7bcf7510c24256835a224296f1e6e7e7ec74cd6df37dd06e4e45739933c35dc7a8
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/zswap@npm:^3.0.0-beta.1, @midnight-ntwrk/zswap@npm:^3.0.0-beta.2, @midnight-ntwrk/zswap@npm:^3.0.0-beta.3":
+"@midnight-ntwrk/wallet_built@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
+  version: 3.6.0-rc.17
+  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine#../../../wallet-engine::hash=a620f2&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  dependencies:
+    "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
+    "@midnight-ntwrk/zswap": ^3.0.0-beta.3
+    isomorphic-ws: ^5.0.0
+    node-fetch: 3.3.2
+    rxjs: ^7.5
+    scale-ts: ^1.1.0
+    ws: ^8.8.1
+  checksum: 06eb29bd20af4d99021a83b8cd410dc2b53f556cf08889a50f7012823d2444b238de0ce9345a713746894c0ce0be0a06a4efe2853b816709bc5288b65077632e
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/zswap@npm:^3.0.0-beta.3":
   version: 3.0.0-beta.3
   resolution: "@midnight-ntwrk/zswap@npm:3.0.0-beta.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.0-beta.3%2F7dac5e36abd651a5e7ad12609b2cbcf89a8e85ca"
   checksum: a3492e78a294ba9049eb4bc73be128891009b21f5133cc7dd699ef32761ae25703098f136cd3a3c4452539b1e97881e9c4760f58e38b6508c9bc08dd35aaff4f
@@ -1156,8 +1145,8 @@ __metadata:
   resolution: "@midnight/wallet-e2e-tests@workspace:packages/e2e-tests"
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
-    "@midnight-ntwrk/midnight-js-network-id": 0.1.10
-    "@midnight-ntwrk/wallet": 3.6.0-rc.14
+    "@midnight-ntwrk/midnight-js-network-id": 0.1.16
+    "@midnight-ntwrk/wallet": 3.6.0-rc.17
     "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
     "@midnight-ntwrk/wallet_built": "file:../../../wallet-engine"
     "@midnight-ntwrk/zswap": ^3.0.0-beta.3

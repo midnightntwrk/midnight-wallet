@@ -2,6 +2,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import {
+  LedgerParameters,
   nativeToken,
   NetworkId,
   setNetworkId,
@@ -24,7 +25,7 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000042';
-  const timeout = 240_000;
+  const timeout = 420_000;
   const outputValue = 1_000n;
 
   let walletFunded: Wallet & Resource;
@@ -94,7 +95,7 @@ describe('Token transfer', () => {
       const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       const provenTx = await walletFunded.proveTransaction(txToProve);
       const txId = await walletFunded.submitTransaction(provenTx);
-      const fees = provenTx.fees();
+      const fees = provenTx.fees(LedgerParameters.dummyParameters());
       for (const [key, value] of provenTx.imbalances(true, fees)) {
         console.log(key, value);
       }

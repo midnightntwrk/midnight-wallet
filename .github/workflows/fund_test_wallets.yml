@@ -1,8 +1,9 @@
 name: Fund test wallets
 
 env:
-    SEED: ${{ secrets.FAUCET_SEED }}
+    SEED: ${{ secrets.FAUCET_SEED_HALO2 }}
     NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+    HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
 
 on:
     workflow_dispatch:
@@ -11,11 +12,11 @@ on:
           type: choice
           description: Midnight deployment to use
           required: true
-          default: 'ariadne-qa'
+          default: 'halo2-qa'
           options:
+            - halo2-qa
             - ariadne-qa
             - devnet
-
 
 jobs:
     runScript:
@@ -23,6 +24,12 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
+              if: inputs.deployment == 'halo2-qa'
+    
+            - uses: actions/checkout@v4
+              if: inputs.deployment != 'halo2-qa'
+              with:
+                ref: plonk-healthcheck
 
             - uses: actions/setup-node@v4
               with:

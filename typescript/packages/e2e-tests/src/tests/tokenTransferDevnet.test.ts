@@ -2,6 +2,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import {
+  LedgerParameters,
   nativeToken,
   NetworkId,
   setNetworkId,
@@ -185,7 +186,7 @@ describe('Token transfer', () => {
       const txToProve = await sender.transferTransaction(outputsToCreate);
       const provenTx = await sender.proveTransaction(txToProve);
       const txId = await sender.submitTransaction(provenTx);
-      const fees = provenTx.fees();
+      const fees = provenTx.fees(LedgerParameters.dummyParameters());
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await waitForPending(sender);

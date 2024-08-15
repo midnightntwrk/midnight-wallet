@@ -7,6 +7,7 @@ env:
   NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
+  HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
 
 on:
   workflow_dispatch:
@@ -23,7 +24,7 @@ on:
         type: choice
         description: Midnight deployment to use
         required: true
-        default: 'ariadne-qa'
+        default: 'halo2-qa'
         options:
           - local
           - ariadne-qa
@@ -64,7 +65,7 @@ on:
         type: string
         description: Midnight deployment to use (ariadne-qa/halo2-qa/devnet/local)
         required: true
-        default: 'ariadne-qa'
+        default: 'halo2-qa'
       seed:
         type: string
         description: Seed of a funded wallet
@@ -104,12 +105,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        if: inputs.deployment != 'halo2-qa'
+        if: inputs.deployment == 'halo2-qa'
 
       - uses: actions/checkout@v4
-        if: inputs.deployment == 'halo2-qa'
+        if: inputs.deployment != 'halo2-qa'
         with:
-          ref: halo2-healtcheck
+          ref: plonk-healthcheck
 
       - uses: actions/setup-java@v4
         with:

@@ -95,7 +95,7 @@ describe('Token transfer', () => {
   });
 
   test(
-    'Is working for valid native token transfer @healthcheck @smoke',
+    'Is working for valid native token transfer @smoke @healthcheck',
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');
