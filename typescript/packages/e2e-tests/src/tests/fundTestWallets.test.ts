@@ -22,6 +22,8 @@ describe('Token transfer', () => {
   const seedFunded = process.env.SEED;
   const timeout = 3_600_000;
   const outputValue = 100_000_000n;
+  const nativeTokenValue = 25n;
+  const nativeTokenHash = '0100010000000000000000000000000000000000000000000000000000000000000001';
 
   let walletFunded: Wallet & Resource;
   let fixture: TestContainersFixture;
@@ -60,14 +62,23 @@ describe('Token transfer', () => {
       const sendTx = async (address: string): Promise<void> => {
         const initialState = await firstValueFrom(walletFunded.state());
         const initialBalance = initialState.balances[nativeToken()] ?? 0n;
-        logger.info(`Wallet 1: ${initialBalance}`);
+        const initialBalanceNative = initialState.balances[nativeTokenHash] ?? 0n;
+        logger.info(`Wallet 1: ${initialBalance} tDUST`);
+        logger.info(`Wallet 1: ${initialBalanceNative} ${nativeTokenHash}`);
         logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
-        logger.info(`Sending ${outputValue / 1_000_000n} tDUST to address: ${address}`);
+        logger.info(
+          `Sending ${outputValue / 1_000_000n} tDUST and ${nativeTokenValue} ${nativeTokenHash} to address: ${address}`,
+        );
 
         const outputsToCreate = [
           {
             type: nativeToken(),
             amount: outputValue,
+            receiverAddress: address,
+          },
+          {
+            type: nativeTokenHash,
+            amount: nativeTokenValue,
             receiverAddress: address,
           },
         ];
@@ -83,11 +94,10 @@ describe('Token transfer', () => {
 
         const finalState = await waitForFinalizedBalance(walletFunded);
         logger.info(walletStateTrimmed(finalState));
-        logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
         expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+        expect(finalState.balances[nativeTokenHash] ?? 0n).toBe(initialBalanceNative - nativeTokenValue);
         expect(finalState.pendingCoins.length).toBe(0);
         expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
-        logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
       };
 
       for (const address of addresses) {

@@ -85,4 +85,4 @@ export function compareStates(state1: WalletState, state2: WalletState) {
 
 export type MidnightNetwork = 'undeployed' | 'devnet';
 
-export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'devnet' | 'local';
+export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'hardfork-qa' | 'devnet' | 'local';

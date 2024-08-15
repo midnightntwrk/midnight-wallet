@@ -4,6 +4,7 @@ env:
     NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
     HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
     PLONK_ADDRESSES: ${{ vars.PLONK_ADDRESSES }}
+    CRYPTO: ${{ (inputs.deployment == 'halo2-qa' || inputs.deployment == 'hardfork-qa') && 'halo2' || 'plonk' }}
 
 on:
     workflow_dispatch:
@@ -15,6 +16,7 @@ on:
           default: 'halo2-qa'
           options:
             - halo2-qa
+            - hardfork-qa
             - ariadne-qa
             - devnet
 
@@ -24,10 +26,10 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - uses: actions/checkout@v4
-              if: inputs.deployment == 'halo2-qa'
+              if: env.CRYPTO == 'halo2'
     
             - uses: actions/checkout@v4
-              if: inputs.deployment != 'halo2-qa'
+              if: env.CRYPTO == 'plonk'
               with:
                 ref: plonk-healthcheck
 
@@ -48,7 +50,7 @@ jobs:
               env:
                 NETWORK: devnet
                 DEPLOYMENT: ${{ inputs.deployment }}
-                SEED:  ${{ inputs.deployment == 'halo2-qa' && secrets.FAUCET_SEED_HALO2 || secrets.FAUCET_SEED }}
+                SEED:  ${{ env.CRYPTO == 'halo2' && secrets.FAUCET_SEED_HALO2 || secrets.FAUCET_SEED }}
               run: |
                 cd typescript
                 yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built

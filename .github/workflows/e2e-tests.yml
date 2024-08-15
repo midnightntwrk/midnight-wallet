@@ -8,6 +8,7 @@ env:
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
+  CRYPTO: ${{ (inputs.deployment == 'halo2-qa' || inputs.deployment == 'hardfork-qa') && 'halo2' || 'plonk' }}
 
 on:
   workflow_dispatch:
@@ -29,6 +30,7 @@ on:
           - local
           - ariadne-qa
           - halo2-qa
+          - hardfork-qa
           - devnet
       seed:
         type: string
@@ -63,7 +65,7 @@ on:
         default: 'devnet'
       deployment:
         type: string
-        description: Midnight deployment to use (ariadne-qa/halo2-qa/devnet/local)
+        description: Midnight deployment to use (ariadne-qa/halo2-qa/hardfork-qa/devnet/local)
         required: true
         default: 'halo2-qa'
       seed:
@@ -105,10 +107,10 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-        if: inputs.deployment == 'halo2-qa'
+        if: env.CRYPTO == 'halo2'
 
       - uses: actions/checkout@v4
-        if: inputs.deployment != 'halo2-qa'
+        if: env.CRYPTO == 'plonk'
         with:
           ref: plonk-healthcheck
 

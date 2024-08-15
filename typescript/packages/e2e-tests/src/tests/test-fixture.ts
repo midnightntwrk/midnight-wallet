@@ -97,6 +97,9 @@ export class TestContainersFixture {
       case 'halo2-qa': {
         return 'https://indexer.halo2-qa.dev.midnight.network';
       }
+      case 'hardfork-qa': {
+        return 'https://indexer.hardfork-qa.dev.midnight.network';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}`;
@@ -115,6 +118,9 @@ export class TestContainersFixture {
       case 'halo2-qa': {
         return 'wss://indexer.halo2-qa.dev.midnight.network';
       }
+      case 'hardfork-qa': {
+        return 'wss://indexer.hardfork-qa.dev.midnight.network';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `ws://localhost:${indexerPort}`;
@@ -132,6 +138,9 @@ export class TestContainersFixture {
       }
       case 'halo2-qa': {
         return 'https://rpc.halo2-qa.dev.midnight.network';
+      }
+      case 'hardfork-qa': {
+        return 'https://rpc.hardfork-qa.dev.midnight.network';
       }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
