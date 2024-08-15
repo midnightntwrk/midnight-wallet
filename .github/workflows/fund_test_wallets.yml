@@ -1,9 +1,9 @@
 name: Fund test wallets
 
 env:
-    SEED: ${{ secrets.FAUCET_SEED_HALO2 }}
     NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
     HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
+    PLONK_ADDRESSES: ${{ vars.PLONK_ADDRESSES }}
 
 on:
     workflow_dispatch:
@@ -48,6 +48,7 @@ jobs:
               env:
                 NETWORK: devnet
                 DEPLOYMENT: ${{ inputs.deployment }}
+                SEED:  ${{ inputs.deployment == 'halo2-qa' && secrets.FAUCET_SEED_HALO2 || secrets.FAUCET_SEED }}
               run: |
                 cd typescript
                 yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
