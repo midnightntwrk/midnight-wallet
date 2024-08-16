@@ -34,9 +34,10 @@ class VersionCombinator[F[_]: Async](
 object VersionCombinator {
   def apply[F[_]: Async](
       currentCombination: VersionCombination[F],
+      combinationMigrations: CombinationMigrations[F],
   ): Resource[F, VersionCombinator[F]] =
     for {
       bloc <- Bloc[F, VersionCombination[F]](currentCombination)
       deferred <- Resource.make(Deferred[F, Unit])(_.complete(()).void)
-    } yield new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+    } yield new VersionCombinator(bloc, combinationMigrations, deferred)
 }

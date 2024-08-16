@@ -1,7 +1,7 @@
 package io.iohk.midnight.wallet.core
 
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.zswap.{
   MerkleTreeCollapsedUpdate,
   TokenType,
@@ -40,11 +40,10 @@ package object domain {
 
   final case class AppliedTransaction(tx: Transaction, applyStage: ApplyStage)
 
-  sealed trait IndexerUpdate {
-    def protocolVersion: ProtocolVersion = ProtocolVersion.V1
-  }
+  sealed trait IndexerUpdate
 
   final case class ViewingUpdate(
+      protocolVersion: ProtocolVersion,
       offset: Offset,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction]],
   ) extends IndexerUpdate

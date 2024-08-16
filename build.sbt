@@ -67,7 +67,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.6.0-rc.17",
+  version := "3.6.0-rc.18",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -192,7 +192,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
   .in(file("wallet-zswap"))
   .settings(commonSettings, commonPublishSettings)
   .settings(name := "wallet-zswap")
-  .jsConfigure(_.dependsOn(jsInterop))
+  .jsConfigure(_.dependsOn(jsInterop, blockchain))
   .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
   .jsSettings(
     commonScalablyTypedSettings,
@@ -285,7 +285,7 @@ lazy val substrateClient = project
 
 lazy val pubSubIndexerClient = project
   .in(file("pubsub-indexer-client"))
-  .dependsOn(jsInterop)
+  .dependsOn(jsInterop, blockchain)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin, CalibanPlugin)
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)

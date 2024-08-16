@@ -7,15 +7,22 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.js.interop.util.SetOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 
 opaque type LocalState = mod.LocalState
 
 object LocalState {
-  def deserialize(bytes: Array[Byte]): LocalState =
-    mod.LocalState.deserialize(bytes.toUInt8Array)
+  def deserialize(bytes: Array[Byte], version: ProtocolVersion): LocalState =
+    version match {
+      case ProtocolVersion.V1 =>
+        mod.LocalState.deserialize(bytes.toUInt8Array)
+    }
 
-  def fromSeed(seed: Array[Byte]): LocalState =
-    mod.LocalState.fromSeed(seed.toUInt8Array)
+  def fromSeed(seed: Array[Byte], version: ProtocolVersion): LocalState =
+    version match {
+      case ProtocolVersion.V1 =>
+        mod.LocalState.fromSeed(seed.toUInt8Array)
+    }
 
   def apply(): LocalState =
     new mod.LocalState()

@@ -8,13 +8,15 @@ import scala.util.{Failure, Success, Try}
 
 object LedgerLoader {
 
-  def loadLedger(networkId: Option[NetworkId], protocolVersion: ProtocolVersion): Try[LedgerV1] =
+  type AllLedgers = LedgerV1 | LedgerV2
+
+  def loadLedger(networkId: Option[NetworkId], protocolVersion: ProtocolVersion): Try[AllLedgers] =
     getLibName(protocolVersion).flatMap(loadNativeCode(_, networkId))
 
-  private def loadNativeCode(libName: String, networkId: Option[NetworkId]): Try[LedgerV1] =
+  private def loadNativeCode(libName: String, networkId: Option[NetworkId]): Try[AllLedgers] =
     loadFromJar(libName, networkId).orElse(loadFromResource(libName, networkId))
 
-  private def loadFromResource(libName: String, networkId: Option[NetworkId]): Try[LedgerV1] =
+  private def loadFromResource(libName: String, networkId: Option[NetworkId]): Try[AllLedgers] =
     Try {
       val path = getClass.getClassLoader.getResource(libName).getPath
       val loader = LibraryLoader.create(classOf[LedgerAPI])
@@ -22,7 +24,7 @@ object LedgerLoader {
       LedgerImpl(loadedLedger, networkId)
     }
 
-  private def loadFromJar(libName: String, networkId: Option[NetworkId]): Try[LedgerV1] =
+  private def loadFromJar(libName: String, networkId: Option[NetworkId]): Try[AllLedgers] =
     Try {
       LedgerImpl(NativeUtils.loadLibraryFromJar(s"/$libName"), networkId)
     }

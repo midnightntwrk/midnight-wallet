@@ -53,7 +53,7 @@ class VersionCombinatorSpec extends CatsEffectSuite {
   test("Stop successfully") {
     val resource =
       NeverEndingCombination[IO]
-        .flatMap(VersionCombinator.apply)
+        .flatMap(VersionCombinator.apply(_, CombinationMigrations.default))
 
     for {
       (combinator, finalizer) <- resource.allocated

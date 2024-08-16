@@ -5,7 +5,9 @@ import java.nio.charset.StandardCharsets
 import jnr.ffi.Pointer
 import scala.util.Try
 
-class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId]) extends LedgerV1 {
+class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId])
+    extends LedgerV1
+    with LedgerV2 {
 
   private val finalNetworkId = networkIdOpt.getOrElse(NetworkId.Undeployed)
 

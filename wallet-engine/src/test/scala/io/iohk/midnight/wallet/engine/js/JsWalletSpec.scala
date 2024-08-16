@@ -1,14 +1,14 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.kernel.{Deferred, Resource}
-import cats.effect.{IO, Ref}
+import cats.effect.{Deferred, IO, Ref}
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.rxjs.mod.firstValueFrom
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
-import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
+import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
+import io.iohk.midnight.wallet.engine.combinator.V1Combination
 import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType, Transaction}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
@@ -23,10 +23,10 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
       V1Combination[IO](
         Wallet.Snapshot.create,
-        Resource.pure(new WalletSyncServiceStub()),
+        new WalletSyncServiceStub(),
         new WalletStateContainerStub(),
         new WalletStateServiceBalanceStub(balance),
-      ).flatMap(VersionCombinator(_)).use { combinator =>
+      ).flatMap(VersionCombinator(_, CombinationMigrations.default)).use { combinator =>
         val wallet =
           new JsWallet(
             combinator,
@@ -48,10 +48,10 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     val encPubKey = "test-encPubKey"
     V1Combination[IO](
       Wallet.Snapshot.create,
-      Resource.pure(new WalletSyncServiceStub()),
+      new WalletSyncServiceStub(),
       new WalletStateContainerStub(),
       new WalletStateServicePubKeyStub(coinPubKey, encPubKey),
-    ).flatMap(VersionCombinator(_)).use { combinator =>
+    ).flatMap(VersionCombinator(_, CombinationMigrations.default)).use { combinator =>
       val wallet =
         new JsWallet(
           combinator,
@@ -70,14 +70,15 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       ref <- Ref.of[IO, Boolean](false)
       deferred <- Deferred[IO, Unit]
+      v1 <- V1Combination[IO](
+        Wallet.Snapshot.create,
+        new WalletSyncServiceStub(),
+        new WalletStateContainerStub(),
+        new WalletStateServiceStub(),
+      ).allocated._1F
       combinator <- VersionCombinator(
-        new V1Combination[IO](
-          Wallet.Snapshot.create,
-          Resource.pure(new WalletSyncServiceStub()),
-          new WalletStateContainerStub(),
-          new WalletStateServiceStub(),
-          deferred,
-        ),
+        v1,
+        CombinationMigrations.default[IO],
       ).allocated._1F
       wallet = new JsWallet(
         combinator,
@@ -95,15 +96,16 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     for {
       isFinished <- Deferred[IO, Boolean]
       deferred <- Deferred[IO, Unit]
+      v1 <- V1Combination[IO](
+        Wallet.Snapshot.create,
+        new WalletSyncServiceStartStub(isFinished),
+        new WalletStateContainerStub(),
+        new WalletStateServiceStub(),
+      ).allocated._1F
       combinator <-
         VersionCombinator(
-          new V1Combination[IO](
-            Wallet.Snapshot.create,
-            Resource.pure(new WalletSyncServiceStartStub(isFinished)),
-            new WalletStateContainerStub(),
-            new WalletStateServiceStub(),
-            deferred,
-          ),
+          v1,
+          CombinationMigrations.default,
         ).allocated._1F
       wallet = new JsWallet(
         combinator,

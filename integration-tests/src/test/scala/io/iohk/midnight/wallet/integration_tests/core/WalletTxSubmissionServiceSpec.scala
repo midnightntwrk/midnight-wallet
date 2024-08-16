@@ -5,6 +5,7 @@ import cats.effect.IO
 import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.{
   Wallet,
@@ -19,7 +20,6 @@ import io.iohk.midnight.wallet.core.WalletTxSubmissionService.{
   TransactionSubmissionFailed,
 }
 import io.iohk.midnight.wallet.core.capabilities.{WalletCreation, WalletTxBalancing}
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite

@@ -4,11 +4,11 @@ import cats.data.NonEmptyList
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.capabilities.{WalletCreation, WalletTxBalancing}
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.tracing.WalletTxServiceTracer

@@ -5,6 +5,7 @@ import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.{Generators, Wallet}
 import io.iohk.midnight.wallet.core.domain.{
   AppliedTransaction,
@@ -14,7 +15,6 @@ import io.iohk.midnight.wallet.core.domain.{
 }
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*
 import io.iohk.midnight.wallet.core.capabilities.*
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.*
 
@@ -105,9 +105,10 @@ abstract class WalletSpec
   override val validUpdateToApply: IO[IndexerUpdate] =
     txWithContext.map { (txCtx, chainState) =>
       ViewingUpdate(
+        ProtocolVersion.V1,
         data.Transaction.Offset.Zero,
         Seq(
-          Left(MerkleTreeCollapsedUpdate(chainState, BigInt(0), BigInt(1))),
+          Left(MerkleTreeCollapsedUpdate(chainState, BigInt(0), BigInt(1), ProtocolVersion.V1)),
           Right(AppliedTransaction(txCtx.transaction, ApplyStage.SucceedEntirely)),
         ),
       )

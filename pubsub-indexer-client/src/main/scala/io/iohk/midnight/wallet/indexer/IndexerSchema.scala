@@ -2,6 +2,8 @@ package io.iohk.midnight.wallet.indexer
 
 import caliban.client.*
 import caliban.client.FieldBuilder.*
+import cats.syntax.all.*
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 
 object IndexerSchema {
 
@@ -11,7 +13,18 @@ object IndexerSchema {
   object MerkleTreeCollapsedUpdate {
     def update: SelectionBuilder[MerkleTreeCollapsedUpdate, String] =
       SelectionBuilder.Field("update", Scalar())
+    def protocolVersion: SelectionBuilder[MerkleTreeCollapsedUpdate, ProtocolVersion] =
+      protocolVersionBuilder[MerkleTreeCollapsedUpdate]
   }
+
+  private def protocolVersionBuilder[T]: SelectionBuilder[T, ProtocolVersion] =
+    SelectionBuilder
+      .Field[T, Int]("protocolVersion", Scalar())
+      .mapEither { v =>
+        ProtocolVersion
+          .fromInt(v)
+          .leftMap(e => CalibanClientError.DecodingError("Invalid protocol version", Some(e)))
+      }
 
   type RelevantTransaction
   object RelevantTransaction {
@@ -29,6 +42,8 @@ object IndexerSchema {
       SelectionBuilder.Field("raw", Scalar())
     def applyStage: SelectionBuilder[Transaction, String] =
       SelectionBuilder.Field("applyStage", Scalar())
+    def protocolVersion: SelectionBuilder[Transaction, ProtocolVersion] =
+      protocolVersionBuilder[Transaction]
   }
 
   type ViewingUpdate

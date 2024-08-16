@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion}
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.{
@@ -12,7 +13,6 @@ import io.iohk.midnight.wallet.core.capabilities.{
   WalletStateSerialize,
   WalletTxHistory,
 }
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.domain.{
   BalanceTransactionRecipe,
   BalanceTransactionToProve,
@@ -43,7 +43,7 @@ import io.iohk.midnight.wallet.zswap.{
 }
 
 class WalletSyncServiceStub extends SyncService[IO] {
-  override def sync(offset: Option[Offset]): Stream[IO, domain.IndexerUpdate] =
+  override def sync(offset: Option[Offset]): Stream[IO, IndexerEvent] =
     Stream.empty
 }
 
@@ -97,7 +97,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
 }
 
 class WalletSyncServiceStartStub(ref: Deferred[IO, Boolean]) extends SyncService[IO] {
-  override def sync(offset: Option[Offset]): Stream[IO, domain.IndexerUpdate] =
+  override def sync(offset: Option[Offset]): Stream[IO, IndexerEvent] =
     Stream.eval(ref.complete(true)).flatMap(_ => Stream.empty)
 }
 

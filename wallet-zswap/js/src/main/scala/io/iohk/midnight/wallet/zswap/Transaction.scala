@@ -6,6 +6,7 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.std.Map as JsMap
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import scala.scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.Overloading"))
@@ -55,8 +56,11 @@ final case class Transaction(value: mod.Transaction) {
 object Transaction {
   private val DummyLedgerParameters = mod.LedgerParameters.dummyParameters()
 
-  def deserialize(bytes: Array[Byte]): Transaction =
-    Transaction(mod.Transaction.deserialize(bytes.toUInt8Array))
+  def deserialize(bytes: Array[Byte], protocolVersion: ProtocolVersion): Transaction =
+    protocolVersion match {
+      case ProtocolVersion.V1 =>
+        Transaction(mod.Transaction.deserialize(bytes.toUInt8Array))
+    }
 
   def fromJs(tx: mod.Transaction): Transaction =
     Transaction(tx)

@@ -10,6 +10,8 @@ import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.blockchain.data.IndexerEvent
+import io.iohk.midnight.wallet.blockchain.data.IndexerEvent.*
 import io.iohk.midnight.wallet.indexer.EventStreamOps.*
 import io.iohk.midnight.wallet.indexer.GraphQLSubscriber.WebSocketClosed
 import io.iohk.midnight.wallet.indexer.IndexerClient.*
@@ -27,10 +29,7 @@ class IndexerClient[F[_]: Async](
     stopSignal: Deferred[F, Unit],
 )(using tracer: IndexerClientTracer[F]) {
 
-  def viewingUpdates(
-      viewingKey: String,
-      initialIndex: Option[BigInt],
-  ): Stream[F, IndexerEvent] =
+  def viewingUpdates(viewingKey: String, initialIndex: Option[BigInt]): Stream[F, IndexerEvent] =
     Stream
       .eval(Ref[F].of(initialIndex))
       .flatMap(viewingUpdatesWithRetry(viewingKey, _))
@@ -99,9 +98,12 @@ class IndexerClient[F[_]: Async](
     )(
       onViewingUpdate = (ViewingUpdate.index ~ ViewingUpdate
         .update[SingleUpdate](
-          MerkleTreeCollapsedUpdate.update.map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
+          (MerkleTreeCollapsedUpdate.protocolVersion ~ MerkleTreeCollapsedUpdate.update)
+            .map(SingleUpdate.MerkleTreeCollapsedUpdate.apply),
           RelevantTransaction
-            .transaction(Transaction.hash ~ Transaction.raw ~ Transaction.applyStage)
+            .transaction(
+              Transaction.protocolVersion ~ Transaction.hash ~ Transaction.raw ~ Transaction.applyStage,
+            )
             .map(SingleUpdate.RawTransaction.apply.tupled),
         )).map(RawViewingUpdate.apply),
       onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map(RawProgressUpdate.apply),
@@ -163,23 +165,4 @@ object IndexerClient {
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.Equals"))
   private def isConnectionError(err: js.JavaScriptException): Boolean =
     Try(FetchErrorName.equals(err.exception.asInstanceOf[js.Dynamic].name)).getOrElse(false)
-
-  sealed trait IndexerEvent
-
-  case object ConnectionLost extends IndexerEvent
-
-  sealed trait RawIndexerUpdate extends IndexerEvent
-
-  final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate
-
-  sealed trait SingleUpdate
-
-  case object SingleUpdate {
-    final case class RawTransaction(hash: String, raw: String, applyStage: String)
-        extends SingleUpdate
-    final case class MerkleTreeCollapsedUpdate(update: String) extends SingleUpdate
-  }
-
-  final case class RawViewingUpdate(index: BigInt, updates: Seq[SingleUpdate])
-      extends RawIndexerUpdate
 }

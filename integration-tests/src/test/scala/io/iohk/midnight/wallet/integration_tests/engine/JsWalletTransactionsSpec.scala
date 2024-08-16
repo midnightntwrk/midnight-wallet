@@ -12,10 +12,11 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
 import io.iohk.midnight.midnightNtwrkWalletApi.mod.{NOTHING_TO_PROVE, TRANSACTION_TO_PROVE}
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
-import io.iohk.midnight.wallet.core.combinator.{V1Combination, VersionCombinator}
+import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
 import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.core.{Wallet, domain}
+import io.iohk.midnight.wallet.engine.combinator.V1Combination
 import io.iohk.midnight.wallet.engine.js.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
@@ -33,10 +34,10 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   def jsWallet(syncService: SyncService[IO] = new WalletSyncServiceStub()): IO[JsWallet] =
     V1Combination[IO](
       Wallet.Snapshot.create,
-      syncService.pure[Resource[IO, *]],
+      syncService,
       new WalletStateContainerStub(),
       new WalletStateServiceStub(),
-    ).flatMap(VersionCombinator(_)).use { combinator =>
+    ).flatMap(VersionCombinator(_, CombinationMigrations.default)).use { combinator =>
       new JsWallet(
         combinator,
         new WalletTxSubmissionServiceStub(),

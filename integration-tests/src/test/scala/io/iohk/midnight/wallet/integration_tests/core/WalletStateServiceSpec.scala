@@ -2,10 +2,10 @@ package io.iohk.midnight.wallet.integration_tests.core
 
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.bloc.Bloc
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.capabilities.{WalletCreation, WalletTxHistory}
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap.{LocalState, TokenType, Transaction}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}

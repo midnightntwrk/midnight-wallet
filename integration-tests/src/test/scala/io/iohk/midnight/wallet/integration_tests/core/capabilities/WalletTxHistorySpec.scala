@@ -4,7 +4,6 @@ import cats.effect.IO
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, txWithContextArbitrary}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.{Generators, Wallet}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
@@ -15,11 +14,12 @@ import org.scalacheck.effect.PropF.forAllF
 class WalletTxHistorySpec extends WithProvingServerSuite {
   private def walletForUpdates(txWithContext: TransactionWithContext): Wallet =
     Wallet.walletCreation.create(
-      Wallet.Snapshot(txWithContext.state, Seq.empty, None, ProtocolVersion.V1),
+      Wallet.Snapshot(txWithContext.state, Seq.empty, None, data.ProtocolVersion.V1),
     )
 
   private def validUpdateToApply(txWithContext: TransactionWithContext): IndexerUpdate =
     ViewingUpdate(
+      data.ProtocolVersion.V1,
       data.Transaction.Offset.Zero,
       Seq(
         Right(AppliedTransaction(txWithContext.transaction, ApplyStage.SucceedEntirely)),

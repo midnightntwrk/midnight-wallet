@@ -1,9 +1,9 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.wallet.jnr.LedgerV1
+import io.iohk.midnight.wallet.jnr.LedgerLoader.AllLedgers
 
-final case class Offer(data: String, ledger: LedgerV1)
+final case class Offer(data: String, allLedgers: AllLedgers)
 
 object Offer {
-  def deserialize(data: String, ledger: LedgerV1): Offer = Offer(data, ledger)
+  def deserialize(data: String, allLedgers: AllLedgers): Offer = Offer(data, allLedgers)
 }

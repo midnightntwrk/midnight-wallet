@@ -16,15 +16,14 @@ import io.iohk.midnight.wallet.core.domain.{
   IndexerUpdate,
   NothingToProve,
   ProgressUpdate,
-  Seed,
   TokenTransfer,
   TransactionToProve,
   ViewingUpdate,
 }
 import io.iohk.midnight.wallet.zswap.*
 import io.iohk.midnight.wallet.blockchain.data
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
-import io.iohk.midnight.wallet.core.combinator.ProtocolVersion
 
 final case class Wallet private (
     private val state: LocalState = LocalState(),
@@ -44,9 +43,6 @@ object Wallet {
         snapshot.offset,
         ProgressUpdate(snapshot.offset.map(_.decrement), none),
       )
-
-  given walletRestore: WalletRestore[Wallet, Seed] =
-    (input: Seed) => new Wallet(LocalState.fromSeed(input.seed))
 
   given walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
     wallet.state.availableCoins.groupMapReduce(_.tokenType)(_.value)(_ + _)
@@ -248,18 +244,30 @@ object Wallet {
       decode[Snapshot](serialized)
 
     def fromSeed(seed: String): Either[Throwable, Snapshot] =
-      LedgerSerialization.fromSeed(seed).map(Snapshot(_, Seq.empty, None, ProtocolVersion.V1))
+      LedgerSerialization
+        .fromSeed(seed, ProtocolVersion.V1)
+        .map(Snapshot(_, Seq.empty, None, ProtocolVersion.V1))
 
     def create: Snapshot = Snapshot(LocalState(), Seq.empty, None, ProtocolVersion.V1)
 
-    given Encoder[LocalState] = Encoder.instance(LedgerSerialization.serializeState(_).asJson)
+    given Encoder[LocalState] =
+      Encoder.instance(localState => HexUtil.encodeHex(localState.serialize).asJson)
     given Encoder[Transaction] = Encoder.instance(_.serialize.asJson)
     given Encoder[data.Transaction.Offset] = Encoder.encodeBigInt.contramap(_.value)
+    given Encoder[ProtocolVersion] = Encoder[Int].contramap(_.version)
     given Encoder[Snapshot] = deriveEncoder[Snapshot]
-    given Decoder[LocalState] = Decoder[String].emapTry(LedgerSerialization.parseState(_).toTry)
-    given Decoder[Transaction] =
-      Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize)
+    given (using version: ProtocolVersion): Decoder[LocalState] =
+      Decoder[String].emapTry(HexUtil.decodeHex).map(LocalState.deserialize(_, version))
+    given (using version: ProtocolVersion): Decoder[Transaction] =
+      Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize(_, version))
     given Decoder[data.Transaction.Offset] = Decoder[BigInt].map(data.Transaction.Offset.apply)
-    given Decoder[Snapshot] = deriveDecoder[Snapshot]
+    given Decoder[ProtocolVersion] = Decoder[Int].emapTry(ProtocolVersion.fromInt(_).toTry)
+    given Decoder[Snapshot] =
+      Decoder
+        .instance(_.get[ProtocolVersion]("protocolVersion"))
+        .flatMap { protocolVersion =>
+          given ProtocolVersion = protocolVersion
+          deriveDecoder[Snapshot]
+        }
   }
 }

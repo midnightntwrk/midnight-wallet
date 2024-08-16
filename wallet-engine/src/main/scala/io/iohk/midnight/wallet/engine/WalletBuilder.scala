@@ -1,21 +1,20 @@
 package io.iohk.midnight.wallet.engine
 
-import cats.effect.{Async, Resource}
 import cats.effect.syntax.resource.*
+import cats.effect.{Async, Resource}
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.*
-import io.iohk.midnight.wallet.core.combinator.{ProtocolVersion, V1Combination, VersionCombinator}
+import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
+import io.iohk.midnight.wallet.engine.combinator.V1Combination
 import io.iohk.midnight.wallet.engine.config.Config
-import io.iohk.midnight.wallet.engine.js.{
-  ProvingServiceFactory,
-  SyncServiceFactory,
-  TxSubmissionServiceFactory,
-}
+import io.iohk.midnight.wallet.engine.js.{ProvingServiceFactory, TxSubmissionServiceFactory}
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
+import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.zswap
 
 object WalletBuilder {
@@ -54,11 +53,11 @@ object WalletBuilder {
       )
       v1Combination <- V1Combination(
         config.initialState,
-        SyncServiceFactory(config.indexerUri, config.indexerWsUri, walletStateService),
+        IndexerClient(config.indexerWsUri),
         walletStateContainer,
         walletStateService,
       )
-      combinator <- VersionCombinator(v1Combination)
+      combinator <- VersionCombinator(v1Combination, CombinationMigrations.default[F])
     } yield {
       WalletDependencies(
         combinator,

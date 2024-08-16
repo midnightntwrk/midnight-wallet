@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.prover
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
 import scala.concurrent.duration.DurationInt
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
@@ -11,7 +12,7 @@ class ProverClient[F[_]: Async](serverUri: Uri, backend: SttpBackend[F, Any]) {
   private val readTimeout = 20.minutes // TODO: Make this configurable
 
   private val asTransaction: ResponseAs[Transaction, Any] =
-    asByteArray.getRight.map(bytes => Transaction.deserialize(bytes))
+    asByteArray.getRight.map(bytes => Transaction.deserialize(bytes, ProtocolVersion.V1))
 
   private val borshSerializedEmptyMap = Array[Byte](0, 0, 0, 0)
 
