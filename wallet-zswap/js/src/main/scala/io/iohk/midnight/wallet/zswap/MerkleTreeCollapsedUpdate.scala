@@ -24,11 +24,13 @@ object MerkleTreeCollapsedUpdate {
 
   def deserialize(
       bytes: Array[Byte],
+  )(using
       protocolVersion: ProtocolVersion,
+      networkId: NetworkId,
   ): Try[MerkleTreeCollapsedUpdate] =
     protocolVersion match {
       case data.ProtocolVersion.V1 =>
-        Try { mod.MerkleTreeCollapsedUpdate.deserialize(bytes.toUInt8Array) }
+        Try { mod.MerkleTreeCollapsedUpdate.deserialize(bytes.toUInt8Array, networkId.toJs) }
     }
 
   extension (update: MerkleTreeCollapsedUpdate) {

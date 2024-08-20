@@ -6,11 +6,12 @@ import io.circe.DecodingFailure.Reason.{CustomReason, MissingField}
 import io.circe.syntax.*
 import JsonSerialization.given
 import TransactionExamples.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.NetworkId
 
 class JsonSerializationSpec extends FunSuite {
 
   test("SubmitTransactionRequest must be serialized to correct JSON RPC request") {
-    val req = SubmitTransactionRequest(transaction).asJson
+    val req = SubmitTransactionRequest(transaction, NetworkId.Undeployed).asJson
 
     val expectedReq = Json.obj(
       "id" -> Json.fromInt(1),

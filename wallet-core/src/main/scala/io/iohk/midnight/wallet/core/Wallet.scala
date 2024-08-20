@@ -30,6 +30,8 @@ final case class Wallet private (
     txHistory: Vector[Transaction] = Vector.empty,
     offset: Option[data.Transaction.Offset] = None,
     progress: ProgressUpdate = ProgressUpdate.empty,
+    protocolVersion: ProtocolVersion,
+    networkId: NetworkId,
     isConnected: Boolean = false,
 )
 
@@ -42,6 +44,8 @@ object Wallet {
         snapshot.txHistory.toVector,
         snapshot.offset,
         ProgressUpdate(snapshot.offset.map(_.decrement), none),
+        snapshot.protocolVersion,
+        snapshot.networkId,
       )
 
   given walletBalances: WalletBalances[Wallet] = (wallet: Wallet) =>
@@ -228,7 +232,13 @@ object Wallet {
   given serializeState: WalletStateSerialize[Wallet, SerializedWalletState] =
     (wallet: Wallet) =>
       SerializedWalletState(
-        Snapshot(wallet.state, wallet.txHistory, wallet.offset, ProtocolVersion.V1).serialize,
+        Snapshot(
+          wallet.state,
+          wallet.txHistory,
+          wallet.offset,
+          wallet.protocolVersion,
+          wallet.networkId,
+        ).serialize,
       )
 
   final case class Snapshot(
@@ -236,6 +246,7 @@ object Wallet {
       txHistory: Seq[Transaction],
       offset: Option[data.Transaction.Offset],
       protocolVersion: ProtocolVersion,
+      networkId: NetworkId,
   ) {
     def serialize: String = this.asJson.noSpaces
   }
@@ -243,30 +254,43 @@ object Wallet {
     def parse(serialized: String): Either[Throwable, Snapshot] =
       decode[Snapshot](serialized)
 
-    def fromSeed(seed: String): Either[Throwable, Snapshot] =
+    def fromSeed(seed: String)(using networkId: NetworkId): Either[Throwable, Snapshot] =
       LedgerSerialization
         .fromSeed(seed, ProtocolVersion.V1)
-        .map(Snapshot(_, Seq.empty, None, ProtocolVersion.V1))
+        .map(Snapshot(_, Seq.empty, None, ProtocolVersion.V1, networkId))
 
-    def create: Snapshot = Snapshot(LocalState(), Seq.empty, None, ProtocolVersion.V1)
+    def create(using networkId: NetworkId): Snapshot =
+      Snapshot(LocalState(), Seq.empty, None, ProtocolVersion.V1, networkId)
 
-    given Encoder[LocalState] =
+    given (using NetworkId): Encoder[LocalState] =
       Encoder.instance(localState => HexUtil.encodeHex(localState.serialize).asJson)
-    given Encoder[Transaction] = Encoder.instance(_.serialize.asJson)
+    given Encoder[NetworkId] = Encoder[String].contramap(_.name)
+    given (using NetworkId): Encoder[Transaction] = Encoder.instance(_.serialize.asJson)
     given Encoder[data.Transaction.Offset] = Encoder.encodeBigInt.contramap(_.value)
     given Encoder[ProtocolVersion] = Encoder[Int].contramap(_.version)
-    given Encoder[Snapshot] = deriveEncoder[Snapshot]
-    given (using version: ProtocolVersion): Decoder[LocalState] =
-      Decoder[String].emapTry(HexUtil.decodeHex).map(LocalState.deserialize(_, version))
-    given (using version: ProtocolVersion): Decoder[Transaction] =
-      Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize(_, version))
+    given Encoder[Snapshot] = Encoder.instance { snapshot =>
+      given NetworkId = snapshot.networkId
+      deriveEncoder[Snapshot].apply(snapshot)
+    }
+
+    given (using ProtocolVersion, NetworkId): Decoder[LocalState] =
+      Decoder[String].emapTry(HexUtil.decodeHex).map(LocalState.deserialize(_))
+    given (using ProtocolVersion, NetworkId): Decoder[Transaction] =
+      Decoder[String].emapTry(HexUtil.decodeHex).map(Transaction.deserialize(_))
     given Decoder[data.Transaction.Offset] = Decoder[BigInt].map(data.Transaction.Offset.apply)
     given Decoder[ProtocolVersion] = Decoder[Int].emapTry(ProtocolVersion.fromInt(_).toTry)
+    given Decoder[NetworkId] = Decoder[String].emapTry(NetworkId.fromString)
     given Decoder[Snapshot] =
       Decoder
-        .instance(_.get[ProtocolVersion]("protocolVersion"))
-        .flatMap { protocolVersion =>
+        .instance { cursor =>
+          (
+            cursor.get[ProtocolVersion]("protocolVersion"),
+            cursor.get[NetworkId]("networkId"),
+          ).tupled
+        }
+        .flatMap { (protocolVersion, networkId) =>
           given ProtocolVersion = protocolVersion
+          given NetworkId = networkId
           deriveDecoder[Snapshot]
         }
   }

@@ -5,7 +5,6 @@ import {
   LedgerParameters,
   nativeToken,
   NetworkId,
-  setNetworkId,
   UnprovenOffer,
   UnprovenOutput,
   UnprovenTransaction,
@@ -39,7 +38,7 @@ describe('Token transfer', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
-    setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+    const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
     const date = new Date();
     const hour = date.getHours();
 
@@ -51,6 +50,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
 
@@ -60,6 +60,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        networkId,
         'info',
       );
     } else {
@@ -70,6 +71,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        networkId,
         'info',
       );
 
@@ -79,6 +81,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
     }

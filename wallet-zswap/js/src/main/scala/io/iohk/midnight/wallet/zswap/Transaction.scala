@@ -11,8 +11,8 @@ import scala.scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.ToString", "org.wartremover.warts.Overloading"))
 final case class Transaction(value: mod.Transaction) {
-  lazy val serialize: String =
-    HexUtil.encodeHex(value.serialize().toByteArray)
+  def serialize(using networkId: NetworkId): String =
+    HexUtil.encodeHex(value.serialize(networkId.toJs).toByteArray)
 
   lazy val toJs: mod.Transaction = value
 
@@ -56,10 +56,12 @@ final case class Transaction(value: mod.Transaction) {
 object Transaction {
   private val DummyLedgerParameters = mod.LedgerParameters.dummyParameters()
 
-  def deserialize(bytes: Array[Byte], protocolVersion: ProtocolVersion): Transaction =
-    protocolVersion match {
+  def deserialize(
+      bytes: Array[Byte],
+  )(using version: ProtocolVersion, networkId: NetworkId): Transaction =
+    version match {
       case ProtocolVersion.V1 =>
-        Transaction(mod.Transaction.deserialize(bytes.toUInt8Array))
+        Transaction(mod.Transaction.deserialize(bytes.toUInt8Array, networkId.toJs))
     }
 
   def fromJs(tx: mod.Transaction): Transaction =

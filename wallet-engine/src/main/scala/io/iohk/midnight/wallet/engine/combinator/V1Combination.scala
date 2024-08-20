@@ -17,7 +17,10 @@ object V1Combination {
       indexerClient: Resource[F, IndexerClient[F]],
       stateContainer: WalletStateContainer[F, Wallet],
       stateService: WalletStateService[F, Wallet],
-  )(using WalletTxHistory[Wallet, zswap.Transaction]): Resource[F, V1Combination[F]] = {
+  )(using
+      WalletTxHistory[Wallet, zswap.Transaction],
+      zswap.NetworkId,
+  ): Resource[F, V1Combination[F]] = {
     indexerClient
       .evalMap { client =>
         stateService.keys.map { (_, _, esk) =>
@@ -35,7 +38,10 @@ object V1Combination {
       syncService: SyncService[F],
       stateContainer: WalletStateContainer[F, Wallet],
       stateService: WalletStateService[F, Wallet],
-  )(using WalletTxHistory[Wallet, zswap.Transaction]): Resource[F, V1Combination[F]] =
+  )(using
+      WalletTxHistory[Wallet, zswap.Transaction],
+      zswap.NetworkId,
+  ): Resource[F, V1Combination[F]] =
     Resource
       .make(Deferred[F, Unit])(_.complete(()).void)
       .map(new V1Combination[F](initialState, syncService, stateContainer, stateService, _))

@@ -1,7 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -30,7 +30,6 @@ describe('Token transfer', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
-    setNetworkId(NetworkId.DevNet);
 
     walletFunded = await WalletBuilder.buildFromSeed(
       fixture.getIndexerUri(),
@@ -38,6 +37,7 @@ describe('Token transfer', () => {
       fixture.getProverUri(),
       fixture.getNodeUri(),
       seedFunded,
+      NetworkId.DevNet,
       'info',
     );
 

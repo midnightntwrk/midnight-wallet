@@ -1,17 +1,16 @@
 package io.iohk.midnight.wallet.substrate
 
 import io.iohk.midnight.buffer.mod.Buffer
-import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.{NetworkId, Transaction}
 import io.iohk.midnight.scaleTs.mod.{Vector, compact, u8}
 import io.iohk.midnight.js.interop.util.ArrayOps.*
-
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 
 object Serializer {
 
-  def toSubstrateTransaction(transaction: Transaction): String = {
-    val txAsBorsh = Buffer.from(transaction.serialize()).toString("hex")
+  def toSubstrateTransaction(transaction: Transaction)(using networkId: NetworkId): String = {
+    val txAsBorsh = Buffer.from(transaction.serialize(networkId)).toString("hex")
     val txAsString = Buffer.from(txAsBorsh, "utf8") // no idea why Substrate wants it this way
 
     val encodedTx = Vector(u8).enc(txAsString.toByteArray.map(_.toDouble).toJSArray)

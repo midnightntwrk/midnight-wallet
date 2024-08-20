@@ -1,4 +1,4 @@
-import { Transaction } from '@midnight-ntwrk/zswap';
+import { NetworkId, Transaction } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -17,6 +17,7 @@ export declare class WalletBuilder {
    * @param indexerWsUri PubSub-Indexer Websockets URI
    * @param proverServerUri Prover server URI
    * @param substrateNodeUri Node URI
+   * @param networkId The network identifier (TestNet, MainNet, or Undeployed)
    * @param minLogLevel Only statements with this level and above will be logged
    * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
@@ -25,6 +26,7 @@ export declare class WalletBuilder {
     indexerWsUri: string,
     proverServerUri: string,
     substrateNodeUri: string,
+    networkId: NetworkId,
     minLogLevel?: LogLevel,
     discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
@@ -36,6 +38,7 @@ export declare class WalletBuilder {
    * @param proverServerUri Prover server URI
    * @param substrateNodeUri Node URI
    * @param seed A BIP32 compatible mnemonic seed phrase hex encoded
+   * @param networkId The network identifier (TestNet, MainNet, or Undeployed)
    * @param minLogLevel Only statements with this level and above will be logged
    * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
@@ -45,6 +48,7 @@ export declare class WalletBuilder {
     proverServerUri: string,
     substrateNodeUri: string,
     seed: string,
+    networkId: NetworkId,
     minLogLevel?: LogLevel,
     discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
@@ -71,5 +75,5 @@ export declare class WalletBuilder {
 
   static calculateCost(tx: Transaction): bigint;
 
-  static generateInitialState(): string;
+  static generateInitialState(networkId: NetworkId): string;
 }

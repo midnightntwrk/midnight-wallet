@@ -6,13 +6,13 @@ import cats.effect.unsafe.implicits.global
 import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.wallet.substrate.SubstrateClient as ScalaSubstrateClient
 import sttp.model.Uri
-
 import scalajs.js
 import scala.scalajs.js.|
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import scala.scalajs.js.typedarray.Uint8Array
 import io.iohk.midnight.wallet.substrate
 import io.iohk.midnight.wallet.substrate.{SubmitTransactionRequest, SubmitTransactionResponse}
+import io.iohk.midnight.wallet.zswap.NetworkId
 
 trait SubstrateClient extends js.Object {
   def submitTransaction(transaction: Transaction): js.Promise[ExtrinsicsHash | RpcError]
@@ -33,7 +33,7 @@ trait RpcError extends js.Object {
 @JSExportTopLevel("SubstrateClient")
 object SubstrateClient {
   @JSExport
-  def create(uri: String): js.Promise[SubstrateClient] = {
+  def create(uri: String)(using networkId: NetworkId): js.Promise[SubstrateClient] = {
     IO.fromEither(Uri.parse(uri).leftMap(new Throwable(_)))
       .flatMap { nodeUri =>
         ScalaSubstrateClient[IO](nodeUri).allocated.map { case (client, finalizer) =>
@@ -42,7 +42,7 @@ object SubstrateClient {
                 transaction: Transaction,
             ): js.Promise[ExtrinsicsHash | RpcError] =
               client
-                .submitTransaction(SubmitTransactionRequest(transaction))
+                .submitTransaction(SubmitTransactionRequest(transaction, networkId.toJs))
                 .flatMap { response =>
                   response match
                     case SubmitTransactionResponse(substrate.ExtrinsicsHash(extrinsicsHash)) =>

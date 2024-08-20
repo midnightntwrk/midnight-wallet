@@ -4,7 +4,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -31,7 +31,7 @@ describe('Syncing', () => {
   beforeEach(async () => {
     await allure.step('Start multiple wallets', async function () {
       fixture = getFixture();
-      setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
 
       async function processSeeds(array: string[]) {
         for (let i = 0; i < array.length; i++) {
@@ -47,6 +47,7 @@ describe('Syncing', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seed,
+          networkId,
           'info',
         );
       }

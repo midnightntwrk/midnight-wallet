@@ -8,15 +8,13 @@ import io.iohk.midnight.midnightNtwrkZswap.mod
 opaque type Offer = mod.Offer
 
 object Offer {
-  def deserialize(bytes: Array[Byte]): Offer =
-    mod.Offer.deserialize(bytes.toUInt8Array)
+  def deserialize(bytes: Array[Byte])(using networkId: NetworkId): Offer =
+    mod.Offer.deserialize(bytes.toUInt8Array, networkId.toJs)
 
   def fromJs(offer: mod.Offer): Offer = offer
 
   extension (offer: Offer) {
     private[zswap] def toJs: mod.Offer = offer
-
-    def serialize: Array[Byte] = offer.serialize().toByteArray
 
     def deltas: Map[TokenType, BigInt] =
       offer.deltas.toMap.map((tt, a) => (TokenType(tt), a.toScalaBigInt))

@@ -7,7 +7,7 @@ import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.HexUtil
 
 object LedgerSerialization {
-  def toTransaction(tx: zswap.Transaction): Transaction =
+  def toTransaction(tx: zswap.Transaction)(using zswap.NetworkId): Transaction =
     Transaction(Hash(tx.hash), tx.serialize)
 
   def fromSeed(seed: String, version: ProtocolVersion): Either[Throwable, zswap.LocalState] =
@@ -20,6 +20,5 @@ object LedgerSerialization {
   abstract class Error(cause: Throwable) extends Exception(cause)
   object Error {
     final case class InvalidInitialState(cause: Throwable) extends Error(cause)
-    final case class InvalidSerializedTransaction(cause: Throwable) extends Error(cause)
   }
 }

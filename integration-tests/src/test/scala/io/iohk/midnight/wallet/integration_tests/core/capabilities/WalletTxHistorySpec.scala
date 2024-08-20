@@ -14,7 +14,13 @@ import org.scalacheck.effect.PropF.forAllF
 class WalletTxHistorySpec extends WithProvingServerSuite {
   private def walletForUpdates(txWithContext: TransactionWithContext): Wallet =
     Wallet.walletCreation.create(
-      Wallet.Snapshot(txWithContext.state, Seq.empty, None, data.ProtocolVersion.V1),
+      Wallet.Snapshot(
+        txWithContext.state,
+        Seq.empty,
+        None,
+        data.ProtocolVersion.V1,
+        NetworkId.Undeployed,
+      ),
     )
 
   private def validUpdateToApply(txWithContext: TransactionWithContext): IndexerUpdate =

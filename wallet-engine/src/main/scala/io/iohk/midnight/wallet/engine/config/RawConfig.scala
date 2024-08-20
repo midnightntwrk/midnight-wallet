@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.engine.config
 
 import cats.Show
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.wallet.engine.config.RawConfig.InitialState
 
 final case class RawConfig(
@@ -8,6 +9,7 @@ final case class RawConfig(
     indexerWsUri: String,
     provingServerUri: String,
     substrateNodeUri: String,
+    networkId: Option[mod.NetworkId],
     minLogLevel: Option[String],
     initialState: Option[InitialState],
     discardTxHistory: Option[Boolean],

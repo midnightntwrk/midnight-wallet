@@ -1,6 +1,6 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { NetworkId, nativeToken, setNetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
@@ -20,7 +20,7 @@ describe('Funded wallet', () => {
   beforeEach(async () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
-      setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
 
       wallet = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -28,6 +28,7 @@ describe('Funded wallet', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
       wallet.start();

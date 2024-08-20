@@ -9,8 +9,10 @@ opaque type EncryptionSecretKey = mod.EncryptionSecretKey
 object EncryptionSecretKey {
   def fromJs(key: mod.EncryptionSecretKey): EncryptionSecretKey = key
   extension (key: EncryptionSecretKey) {
-    def serialize: String =
-      HexUtil.encodeHex(key.yesIKnowTheSecurityImplicationsOfThis_serialize().toByteArray)
+    def serialize(using networkId: NetworkId): String =
+      HexUtil.encodeHex(
+        key.yesIKnowTheSecurityImplicationsOfThis_serialize(networkId.toJs).toByteArray,
+      )
     def test(tx: Transaction): Try[Boolean] = Try {
       tx.toJs.guaranteedCoins.exists(key.test) || tx.toJs.fallibleCoins.exists(key.test)
     }

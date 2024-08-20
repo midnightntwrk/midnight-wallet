@@ -9,7 +9,7 @@ import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
 import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.engine.combinator.V1Combination
-import io.iohk.midnight.wallet.zswap.{CoinPublicKey, TokenType, Transaction}
+import io.iohk.midnight.wallet.zswap.{CoinPublicKey, NetworkId, TokenType, Transaction}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
@@ -18,6 +18,7 @@ import scala.concurrent.duration.DurationInt
 class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
 
   given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+  given networkId: NetworkId = NetworkId.Undeployed
 
   test("balance should return wallet balance") {
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
@@ -120,7 +121,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
   }
 
   test("Serialize wallet state") {
-    val generated = JsWallet.generateInitialState()
+    val generated = JsWallet.generateInitialState(networkId.toJs)
     for {
       restored <- IO.fromPromise(
         IO(

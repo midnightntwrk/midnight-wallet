@@ -20,7 +20,7 @@ final class V1Combination[F[_]: Async](
     stateContainer: WalletStateContainer[F, Wallet],
     stateService: WalletStateService[F, Wallet],
     deferred: Deferred[F, Unit],
-)(using WalletTxHistory[Wallet, zswap.Transaction])
+)(using WalletTxHistory[Wallet, zswap.Transaction], zswap.NetworkId)
     extends VersionCombination[F] {
   override def sync: F[Unit] =
     syncService
@@ -53,12 +53,12 @@ final class V1Combination[F[_]: Async](
         case IndexerEvent.SingleUpdate.MerkleTreeCollapsedUpdate(version, mt) =>
           for {
             decoded <- HexUtil.decodeHex(mt)
-            mtcu <- zswap.MerkleTreeCollapsedUpdate.deserialize(decoded, version)
+            mtcu <- zswap.MerkleTreeCollapsedUpdate.deserialize(decoded)(using version)
           } yield (version, mtcu.asLeft)
         case IndexerEvent.SingleUpdate.RawTransaction(version, _, raw, applyStage) =>
           for {
             decoded <- HexUtil.decodeHex(raw)
-            tx <- Try(zswap.Transaction.deserialize(decoded, version))
+            tx <- Try(zswap.Transaction.deserialize(decoded)(using version))
             applyStage <- Try(ApplyStage.valueOf(applyStage))
           } yield (version, AppliedTransaction(tx, applyStage).asRight)
       }

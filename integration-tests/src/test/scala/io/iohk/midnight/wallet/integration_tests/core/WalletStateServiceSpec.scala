@@ -7,7 +7,7 @@ import io.iohk.midnight.wallet.core.capabilities.{WalletCreation, WalletTxHistor
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.{LocalState, TokenType, Transaction}
+import io.iohk.midnight.wallet.zswap.{LocalState, NetworkId, TokenType, Transaction}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
@@ -21,7 +21,7 @@ class WalletStateServiceSpec
   )(implicit
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
   ): Resource[IO, WalletStateService[IO, TWallet]] = {
-    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1)
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1, networkId)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).map { bloc =>
       new WalletStateService.Live[IO, TWallet](
         new WalletQueryStateService.Live(
@@ -33,6 +33,7 @@ class WalletStateServiceSpec
 
   import Wallet.*
   given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+  given networkId: NetworkId = NetworkId.Undeployed
 
   test("Start with balance zero") {
     buildWalletStateService().use(

@@ -1,6 +1,6 @@
 services:
   proof-server:
-    image: "ghcr.io/midnight-ntwrk/proof-server:3.0.0-beta.2"
+    image: "ghcr.io/midnight-ntwrk/proof-server:3.0.0"
     command: ["midnight-proof-server --network undeployed"]
     ports:
       - "6300:6300"

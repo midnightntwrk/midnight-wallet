@@ -16,6 +16,8 @@ import sttp.client3.UriContext
 
 object TransactionGenerator extends IOApp.Simple {
 
+  given NetworkId = NetworkId.Undeployed
+
   override def runtimeConfig: IORuntimeConfig =
     super.runtimeConfig.copy(cpuStarvationCheckInterval = 5.seconds)
 

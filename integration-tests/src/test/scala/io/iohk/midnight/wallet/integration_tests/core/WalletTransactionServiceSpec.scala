@@ -29,7 +29,8 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, CoinInfo],
   ): Resource[IO, (WalletTransactionService[IO], WalletStateContainer[IO, TWallet])] = {
-    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1)
+    val snapshot =
+      Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1, NetworkId.Undeployed)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).map { bloc =>
       given WalletTxServiceTracer[IO] = WalletTxServiceTracer.from(Tracer.noOpTracer)
       val walletStateContainer = new WalletStateContainer.Live(bloc)

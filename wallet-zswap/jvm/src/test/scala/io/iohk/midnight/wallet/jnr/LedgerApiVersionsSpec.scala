@@ -10,7 +10,7 @@ class LedgerApiVersionsSpec extends ScalaCheckSuite {
   override def munitIgnore: Boolean = scala.util.Properties.isMac
 
   private val hexedEncryptionSecretKeyV1 =
-    "02000038b28a2914ec146b7389bd0c2a0fb1de14328935441aae2126713ee6582196da80676b1bd3a9f825e3f80446e2ab96395aee226c344f801e1a"
+    "000300386d7d8666b2da45253a44dd33ad2afe5c9c8bd6c7263aec19248d80294d6bcfe2b044a0301e54d95c12e22b52d162edbf8347fd4ae18d090b"
 
   private val hexedEncryptionSecretKeyV2 =
     "010000206cbc420407d0c7eaaa2ef4f7a622440bf37773cd7f08f3107d16f2be060c1505"

@@ -3,15 +3,18 @@ package io.iohk.midnight.wallet.engine
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.js.JsWallet
+import io.iohk.midnight.wallet.zswap.NetworkId
 import munit.CatsEffectSuite
 
 class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
+  private val networkId = NetworkId.Undeployed.toJs
+
   private val fakeIndexerUri = "http://localhost"
   private val fakeIndexerWSUri = "ws://localhost"
   private val fakeProverServerUri = "http://localhost"
   private val fakeSubstrateNodeUri = "http://localhost"
 
-  private val initialState = JsWallet.generateInitialState()
+  private val initialState = JsWallet.generateInitialState(networkId)
   private val minLogLevel = "warn"
 
   test("Fail if indexer RPC uri is invalid") {
@@ -23,6 +26,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           None,
           discardTxHistory = Some(true),
@@ -44,6 +48,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           invalidIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           None,
           discardTxHistory = Some(true),
@@ -65,6 +70,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           invalidProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           None,
           discardTxHistory = Some(true),
@@ -86,6 +92,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           invalidSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           None,
           discardTxHistory = Some(true),
@@ -107,6 +114,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           Some(RawConfig.InitialState.SerializedSnapshot(invalidInitialState)),
           discardTxHistory = Some(true),
@@ -128,6 +136,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(invalidMinLogLevel),
           None,
           discardTxHistory = Some(true),
@@ -148,6 +157,7 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
+          Some(networkId),
           Some(minLogLevel),
           Some(RawConfig.InitialState.SerializedSnapshot(initialState)),
           discardTxHistory = Some(true),

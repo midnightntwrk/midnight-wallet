@@ -29,6 +29,7 @@ abstract class WalletSpec
   private val zero = BigInt(0)
 
   given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+  given networkId: NetworkId = NetworkId.Undeployed
 
   override val walletKeys
       : WalletKeys[Wallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] =
@@ -62,6 +63,7 @@ abstract class WalletSpec
         Seq.empty,
         None,
         ProtocolVersion.V1,
+        networkId,
       ),
     )
 
@@ -84,6 +86,7 @@ abstract class WalletSpec
           Seq.empty,
           None,
           ProtocolVersion.V1,
+          networkId,
         ),
       )
     }
@@ -99,7 +102,7 @@ abstract class WalletSpec
   override val walletForUpdates: IO[Wallet] =
     txWithContext.map((tx, _) =>
       Wallet.walletCreation.create(
-        Wallet.Snapshot(tx.state, Seq(tx.transaction), None, ProtocolVersion.V1),
+        Wallet.Snapshot(tx.state, Seq(tx.transaction), None, ProtocolVersion.V1, networkId),
       ),
     )
   override val validUpdateToApply: IO[IndexerUpdate] =

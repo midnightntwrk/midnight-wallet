@@ -33,9 +33,10 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   val noOpTracer: Tracer[IO, StructuredLog] = Tracer.noOpTracer[IO]
 
-  implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[IO] = {
+  given walletTxSubmissionTracer: WalletTxSubmissionTracer[IO] = {
     WalletTxSubmissionTracer.from(noOpTracer)
   }
+  given networkId: NetworkId = NetworkId.Undeployed
 
   private val txSubmissionService = new TxSubmissionServiceStub()
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
@@ -49,7 +50,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       walletCreation: WalletCreation[TWallet, Wallet.Snapshot],
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, ?],
   ): IO[(WalletTxSubmissionService[IO], WalletStateContainer[IO, TWallet])] = {
-    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1)
+    val snapshot = Wallet.Snapshot(initialState, Seq.empty, None, ProtocolVersion.V1, networkId)
     Bloc[IO, TWallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val service =

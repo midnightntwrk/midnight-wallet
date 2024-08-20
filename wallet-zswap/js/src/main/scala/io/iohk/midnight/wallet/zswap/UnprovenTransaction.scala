@@ -16,7 +16,8 @@ object UnprovenTransaction {
     mod.UnprovenTransaction(guaranteedOffer.toJs)
 
   extension (unprovenTx: UnprovenTransaction) {
-    def serialize: Array[Byte] = unprovenTx.serialize().toByteArray
+    def serialize(using networkId: NetworkId): Array[Byte] =
+      unprovenTx.serialize(networkId.toJs).toByteArray
     def toJs: mod.UnprovenTransaction = unprovenTx
     def identifiers: Array[String] = unprovenTx.identifiers().toArray
     def eraseProofs: ProofErasedTransaction =

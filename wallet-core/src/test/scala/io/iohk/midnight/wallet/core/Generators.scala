@@ -178,6 +178,7 @@ object Generators {
       txWithContextArb: Arbitrary[IO[TransactionWithContext]],
   ): Arbitrary[IO[Transaction]] =
     Arbitrary {
+      given NetworkId = NetworkId.Undeployed
       txWithContextArb.arbitrary
         .map(_.map(txWithContext => LedgerSerialization.toTransaction(txWithContext.transaction)))
     }

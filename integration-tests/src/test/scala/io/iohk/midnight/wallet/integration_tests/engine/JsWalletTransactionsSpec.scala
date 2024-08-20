@@ -19,7 +19,7 @@ import io.iohk.midnight.wallet.core.{Wallet, domain}
 import io.iohk.midnight.wallet.engine.combinator.V1Combination
 import io.iohk.midnight.wallet.engine.js.*
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
+import io.iohk.midnight.wallet.zswap.{NetworkId, Transaction, UnprovenTransaction}
 import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js.JSConverters.*
 
@@ -30,6 +30,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     domain.TransactionToProve(unprovenTransactionArbitrary.arbitrary.sample.get)
 
   given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+  given NetworkId = NetworkId.Undeployed
 
   def jsWallet(syncService: SyncService[IO] = new WalletSyncServiceStub()): IO[JsWallet] =
     V1Combination[IO](

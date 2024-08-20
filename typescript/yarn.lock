@@ -1092,6 +1092,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/wallet-api@npm:^3.4.0":
+  version: 3.4.0
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.0%2Fef6a0111e18fcbeabf3666aa87321b437ac365a5"
+  dependencies:
+    "@midnight-ntwrk/zswap": ^3.0.0
+  peerDependencies:
+    rxjs: 7.x
+  checksum: 9ebd982a65384c478746bbfd962df2a6788d0786d0e6a5aabf1995d0b175cd57ab31b36e6ea804f0cddd78f6df60accb85e56742735dd5e5245c0e4af40ac77f
+  languageName: node
+  linkType: hard
+
 "@midnight-ntwrk/wallet-api@npm:^3.4.0-rc.3":
   version: 3.4.0-rc.3
   resolution: "@midnight-ntwrk/wallet-api@npm:3.4.0-rc.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.0-rc.3%2F5ed2becdc5fb431b21c3fb86cb55f33bb3fafb25"
@@ -1103,33 +1114,40 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet@npm:3.6.0-rc.17":
-  version: 3.6.0-rc.17
-  resolution: "@midnight-ntwrk/wallet@npm:3.6.0-rc.17::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.6.0-rc.17%2Fa0b381aa10f7556a446a4c843d5783d77e84ba9f"
+"@midnight-ntwrk/wallet@npm:^3.6.0-rc.19":
+  version: 3.6.0-rc.19
+  resolution: "@midnight-ntwrk/wallet@npm:3.6.0-rc.19::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.6.0-rc.19%2Fe636ab8438f6287917736f2e25ef2834ef5fb293"
   dependencies:
     "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
-    "@midnight-ntwrk/zswap": ^3.0.0-beta.3
+    "@midnight-ntwrk/zswap": ^3.0.0
     isomorphic-ws: ^5.0.0
     node-fetch: 3.3.2
     rxjs: ^7.5
     scale-ts: ^1.1.0
     ws: ^8.8.1
-  checksum: e225b007709031557dc7ad607172b08ad4f0ca5fe79617d37333136762902c7bcf7510c24256835a224296f1e6e7e7ec74cd6df37dd06e4e45739933c35dc7a8
+  checksum: 2d8903f640cd9725390b971ea5d11f5f80f27459660807abe41d4f22529d3899efaa9f241a4c89681ba19f781204ba9709991b6941b28068c5526acea74c208a
   languageName: node
   linkType: hard
 
 "@midnight-ntwrk/wallet_built@file:../../../wallet-engine::locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests":
-  version: 3.6.0-rc.17
-  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine#../../../wallet-engine::hash=a620f2&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
+  version: 3.6.0-rc.19
+  resolution: "@midnight-ntwrk/wallet_built@file:../../../wallet-engine#../../../wallet-engine::hash=6d8057&locator=%40midnight%2Fwallet-e2e-tests%40workspace%3Apackages%2Fe2e-tests"
   dependencies:
-    "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
-    "@midnight-ntwrk/zswap": ^3.0.0-beta.3
+    "@midnight-ntwrk/wallet-api": ^3.4.0
+    "@midnight-ntwrk/zswap": ^3.0.0
     isomorphic-ws: ^5.0.0
     node-fetch: 3.3.2
     rxjs: ^7.5
     scale-ts: ^1.1.0
     ws: ^8.8.1
-  checksum: 06eb29bd20af4d99021a83b8cd410dc2b53f556cf08889a50f7012823d2444b238de0ce9345a713746894c0ce0be0a06a4efe2853b816709bc5288b65077632e
+  checksum: 905216b94ed42e4644c276557015fd829b0a29f1870811daa0b8ccdee0849dbae71ea7e54850f233a51ae590dda89154560b18862a551a1570429ace0becca9e
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/zswap@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.0%2F80188853c3b5326df63ee601a2dc2028361a8522"
+  checksum: 51b21242bb34c2dc36bccf3ebd58c669bbe7c26ec71ad03e3b24df124b75e626eabf70157c86c8a5e8525850db5d3d3357a4b5b66a40fcb5b207dbd213b21e87
   languageName: node
   linkType: hard
 
@@ -1146,10 +1164,10 @@ __metadata:
   dependencies:
     "@cardano-sdk/key-management": 0.8.2
     "@midnight-ntwrk/midnight-js-network-id": 0.1.16
-    "@midnight-ntwrk/wallet": 3.6.0-rc.17
-    "@midnight-ntwrk/wallet-api": ^3.4.0-rc.3
+    "@midnight-ntwrk/wallet": ^3.6.0-rc.19
+    "@midnight-ntwrk/wallet-api": ^3.4.0
     "@midnight-ntwrk/wallet_built": "file:../../../wallet-engine"
-    "@midnight-ntwrk/zswap": ^3.0.0-beta.3
+    "@midnight-ntwrk/zswap": ^3.0.0
     "@types/jest": ^29.2.0
     "@types/node": ^18.11.3
     "@types/ws": ^8.5.4

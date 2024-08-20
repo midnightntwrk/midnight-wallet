@@ -5,7 +5,6 @@ import {
   LedgerParameters,
   nativeToken,
   NetworkId,
-  setNetworkId,
   UnprovenOffer,
   UnprovenOutput,
   UnprovenTransaction,
@@ -35,7 +34,7 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      setNetworkId(TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed);
+      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
 
       walletFunded = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -43,6 +42,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
 
@@ -52,6 +52,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        networkId,
         'info',
       );
 

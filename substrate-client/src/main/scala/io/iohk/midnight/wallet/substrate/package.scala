@@ -1,11 +1,11 @@
 package io.iohk.midnight.wallet
 
-import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.{NetworkId, Transaction}
 import io.iohk.midnight.buffer.mod.Buffer
 
 package object substrate {
 
-  case class SubmitTransactionRequest(transaction: Transaction)
+  case class SubmitTransactionRequest(transaction: Transaction, networkId: NetworkId)
 
   case class SubmitTransactionResponse(result: ExtrinsicsHash | RpcError)
 

@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.IO.asyncForIO
 import cats.syntax.eq.*
 import io.iohk.midnight.testcontainers.buildMod.Wait
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.TestContainers
 import io.iohk.midnight.wallet.prover.ProverClient
 import io.iohk.midnight.wallet.zswap.*
@@ -32,12 +33,14 @@ trait ProverClientSetup {
 class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   override def munitIOTimeout: Duration = 2.minutes
 
+  given NetworkId = NetworkId.Undeployed
+  given ProtocolVersion = ProtocolVersion.V1
   private val proverServerPort = 6300
 
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     TestContainers.resource(
-      "ghcr.io/midnight-ntwrk/proof-server:3.0.0-beta.2",
+      "ghcr.io/midnight-ntwrk/proof-server:3.0.0",
     )(
       _.withExposedPorts(proverServerPort)
         .withWaitStrategy(Wait.forListeningPorts()),

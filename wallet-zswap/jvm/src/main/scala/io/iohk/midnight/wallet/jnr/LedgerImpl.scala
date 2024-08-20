@@ -180,6 +180,7 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId])
       ledgerAPI.zswap_chain_state_merkle_tree_root(
         zswapChainState.getBytes(StandardCharsets.UTF_8),
         zswapChainState.length,
+        finalNetworkId.id,
       )
     }
 

@@ -20,6 +20,7 @@ import scala.concurrent.duration.*
 import sttp.client3.UriContext
 
 trait EndToEndSpecSetup {
+  given networkId: NetworkId = NetworkId.Undeployed
   val indexerRPCUri = uri"http://localhost:8088/api/graphql"
   val indexerWSUri = uri"ws://localhost:8088/api/graphql/ws"
   val proverServerUri = uri"http://localhost:6300"
@@ -257,7 +258,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     "Submit tx one after another with waiting for blocks apply and doesn't spend the same coin (no double spend)".ignore,
   ) {
     val initialState =
-      Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None, ProtocolVersion.V1)
+      Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None, ProtocolVersion.V1, networkId)
 
     withWallet(initialState) { case WalletDependencies(v, submissionService, txService) =>
       for {
@@ -307,7 +308,7 @@ class EndToEndSpec extends CatsEffectSuite with EndToEndSpecSetup {
     "Prepare transfer tx one after another and doesn't spend the same coin (no double spend)".ignore,
   ) {
     val initialState =
-      Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None, ProtocolVersion.V1)
+      Snapshot(prepareStateWithCoins(List(coin)), Seq.empty, None, ProtocolVersion.V1, networkId)
 
     val quickTxSend = withWallet(initialState) {
       case WalletDependencies(v, submissionService, txService) =>

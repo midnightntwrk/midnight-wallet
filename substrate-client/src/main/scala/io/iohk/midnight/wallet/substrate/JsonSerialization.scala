@@ -12,7 +12,9 @@ object JsonSerialization {
       "id" -> Json.fromInt(1),
       "jsonrpc" -> Json.fromString("2.0"),
       "method" -> Json.fromString("author_submitExtrinsic"),
-      "params" -> Json.arr(Json.fromString(Serializer.toSubstrateTransaction(req.transaction))),
+      "params" -> Json.arr(
+        Json.fromString(Serializer.toSubstrateTransaction(req.transaction)(using req.networkId)),
+      ),
     )
   }
 

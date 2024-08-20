@@ -16,15 +16,18 @@ import io.iohk.midnight.wallet.engine.js.{ProvingServiceFactory, TxSubmissionSer
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.NetworkId
 
 object WalletBuilder {
-  def build[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] =
-    config.initialState.protocolVersion match {
-      case ProtocolVersion.V1 =>
-        buildWalletV1[F](config)
-    }
+  def build[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] = {
+    given ProtocolVersion = config.initialState.protocolVersion
+    given NetworkId = config.initialState.networkId
+    buildWallet[F](config)
+  }
 
-  private def buildWalletV1[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] = {
+  private def buildWallet[F[_]: Async](
+      config: Config,
+  )(using ProtocolVersion, NetworkId): Resource[F, WalletDependencies[F]] = {
     import Wallet.given
     given WalletTxHistory[Wallet, zswap.Transaction] =
       if (config.discardTxHistory) Wallet.walletDiscardTxHistory else Wallet.walletTxHistory

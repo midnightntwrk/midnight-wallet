@@ -2,6 +2,7 @@ package io.iohk.midnight.wallet.engine.config
 
 import cats.Show
 import cats.syntax.all.*
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.Wallet
 import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
@@ -10,6 +11,7 @@ import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
   InvalidUri,
 }
 import io.iohk.midnight.wallet.engine.config.RawConfig.InitialState
+import io.iohk.midnight.wallet.zswap.NetworkId
 import sttp.model.Uri
 
 final case class Config(
@@ -30,19 +32,22 @@ object Config {
       Uri.parse(rawConfig.provingServerUri).leftMap(InvalidUri.apply),
       Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
       parseLogLevel(rawConfig.minLogLevel),
-      parseInitialState(rawConfig.initialState),
+      parseInitialState(rawConfig.initialState, rawConfig.networkId),
       rawConfig.discardTxHistory.getOrElse(false).asRight,
     )
       .mapN(Config.apply)
 
   private def parseInitialState(
       initialState: Option[RawConfig.InitialState],
-  ): Either[Throwable, Wallet.Snapshot] =
+      networkId: Option[mod.NetworkId],
+  ): Either[Throwable, Wallet.Snapshot] = {
+    given NetworkId = networkId.map(NetworkId.fromJs).getOrElse(NetworkId.Undeployed)
     (initialState match {
       case None                                              => Wallet.Snapshot.create.asRight
       case Some(InitialState.Seed(seed))                     => Wallet.Snapshot.fromSeed(seed)
       case Some(InitialState.SerializedSnapshot(serialized)) => Wallet.Snapshot.parse(serialized)
     }).leftMap(t => InvalidSerializedSnapshot.apply(t.getMessage))
+  }
 
   def parseLogLevel(minLogLevel: Option[String]): Either[Throwable, LogLevel] =
     minLogLevel match {

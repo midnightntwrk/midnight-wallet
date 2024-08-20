@@ -12,10 +12,12 @@ import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 opaque type LocalState = mod.LocalState
 
 object LocalState {
-  def deserialize(bytes: Array[Byte], version: ProtocolVersion): LocalState =
+  def deserialize(
+      bytes: Array[Byte],
+  )(using version: ProtocolVersion, networkId: NetworkId): LocalState =
     version match {
       case ProtocolVersion.V1 =>
-        mod.LocalState.deserialize(bytes.toUInt8Array)
+        mod.LocalState.deserialize(bytes.toUInt8Array, networkId.toJs)
     }
 
   def fromSeed(seed: Array[Byte], version: ProtocolVersion): LocalState =
@@ -28,7 +30,8 @@ object LocalState {
     new mod.LocalState()
 
   extension (localState: LocalState) {
-    def serialize: Array[Byte] = localState.serialize().toByteArray
+    def serialize(using networkId: NetworkId): Array[Byte] =
+      localState.serialize(networkId.toJs).toByteArray
 
     def coins: List[QualifiedCoinInfo] =
       localState.coins.toList.map(QualifiedCoinInfo.fromJs)

@@ -38,6 +38,7 @@ import io.iohk.midnight.wallet.zswap.{
   EncryptionPublicKey,
   EncryptionSecretKey,
   LocalState,
+  NetworkId,
   TokenType,
   Transaction,
 }
@@ -92,7 +93,9 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
       stateSerializer: WalletStateSerialize[Wallet, SerializedWalletState],
   ): IO[SerializedWalletState] =
     IO.pure(
-      SerializedWalletState(Wallet.Snapshot(state, Seq.empty, None, ProtocolVersion.V1).serialize),
+      SerializedWalletState(
+        Wallet.Snapshot(state, Seq.empty, None, ProtocolVersion.V1, NetworkId.Undeployed).serialize,
+      ),
     )
 }
 

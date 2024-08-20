@@ -5,7 +5,7 @@
     "license": "Apache-2.0",
     "type": "module",
     "dependencies": {
-        "@midnight-ntwrk/zswap": "^3.0.0-beta.3"
+        "@midnight-ntwrk/zswap": "^3.0.0"
     },
     "devDependencies": {
         "typescript": "^4.8.3"

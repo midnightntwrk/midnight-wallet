@@ -141,6 +141,7 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
+      networkId: mod.NetworkId,
       minLogLevel: js.UndefOr[String],
       discardTxHistory: js.UndefOr[Boolean],
   ): js.Promise[api.Wallet] =
@@ -149,6 +150,7 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
+      Some(networkId),
       minLogLevel.toOption,
       none[RawConfig.InitialState],
       discardTxHistory.toOption,
@@ -161,6 +163,7 @@ object JsWallet {
       proverServerUri: String,
       substrateNodeUri: String,
       seed: String,
+      networkId: mod.NetworkId,
       minLogLevel: js.UndefOr[String],
       discardTxHistory: js.UndefOr[Boolean],
   ): js.Promise[api.Wallet] =
@@ -169,6 +172,7 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
+      Some(networkId),
       minLogLevel.toOption,
       RawConfig.InitialState.Seed(seed).some,
       discardTxHistory.toOption,
@@ -189,6 +193,7 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
+      None,
       minLogLevel.toOption,
       RawConfig.InitialState.SerializedSnapshot(serializedState).some,
       discardTxHistory.toOption,
@@ -199,6 +204,7 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
+      networkId: Option[mod.NetworkId],
       minLogLevel: Option[String],
       initialState: Option[RawConfig.InitialState],
       discardTxHistory: Option[Boolean],
@@ -209,6 +215,7 @@ object JsWallet {
         indexerWsUri,
         proverServerUri,
         substrateNodeUri,
+        networkId,
         minLogLevel,
         initialState,
         discardTxHistory,
@@ -256,6 +263,8 @@ object JsWallet {
     WalletStateService.calculateCost(tx).toJsBigInt
 
   @JSExport
-  def generateInitialState(): String =
+  def generateInitialState(networkId: mod.NetworkId): String = {
+    given NetworkId = NetworkId.fromJs(networkId)
     Wallet.Snapshot.create.serialize
+  }
 }

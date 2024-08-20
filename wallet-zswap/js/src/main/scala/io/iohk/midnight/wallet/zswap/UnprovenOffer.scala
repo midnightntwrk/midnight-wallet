@@ -19,7 +19,8 @@ object UnprovenOffer {
   extension (unprovenOffer: UnprovenOffer) {
     private[zswap] def toJs: mod.UnprovenOffer = unprovenOffer
 
-    def serialize: Array[Byte] = unprovenOffer.serialize().toByteArray
+    def serialize(using networkId: NetworkId): Array[Byte] =
+      unprovenOffer.serialize(networkId.toJs).toByteArray
     def merge(other: UnprovenOffer): UnprovenOffer = unprovenOffer.merge(other)
     def inputs: Array[UnprovenInput] = unprovenOffer.inputs.toArray
     def outputs: Array[UnprovenOutput] = unprovenOffer.outputs.toArray
