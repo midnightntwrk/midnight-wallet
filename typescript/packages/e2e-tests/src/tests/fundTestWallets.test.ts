@@ -1,7 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -11,6 +11,7 @@ import { exit } from 'node:process';
  * Tests performing a token transfer
  *
  * @group devnet
+ * @group testnet
  */
 
 describe('Token transfer', () => {
@@ -23,13 +24,26 @@ describe('Token transfer', () => {
   const timeout = 3_600_000;
   const outputValue = 100_000_000n;
   const nativeTokenValue = 25n;
-  const nativeTokenHash = '0100010000000000000000000000000000000000000000000000000000000000000001';
+  const nativeTokenHash =
+    TestContainersFixture.network === 'devnet'
+      ? '0100010000000000000000000000000000000000000000000000000000000000000001'
+      : '0100020000000000000000000000000000000000000000000000000000000000000001';
 
   let walletFunded: Wallet & Resource;
   let fixture: TestContainersFixture;
 
   beforeEach(async () => {
     fixture = getFixture();
+    switch (TestContainersFixture.network) {
+      case 'devnet': {
+        setNetworkId(NetworkId.DevNet);
+        break;
+      }
+      case 'testnet': {
+        setNetworkId(NetworkId.TestNet);
+        break;
+      }
+    }
 
     walletFunded = await WalletBuilder.buildFromSeed(
       fixture.getIndexerUri(),
@@ -37,7 +51,6 @@ describe('Token transfer', () => {
       fixture.getProverUri(),
       fixture.getNodeUri(),
       seedFunded,
-      NetworkId.DevNet,
       'info',
     );
 
@@ -51,11 +64,11 @@ describe('Token transfer', () => {
   test(
     'Is working for distribution to the test wallets',
     async () => {
-      if (process.env.HALO2_ADDRESSES === undefined) {
-        logger.info('HALO2_ADDRESSES env var not set');
+      if (process.env.ADDRESSES === undefined) {
+        logger.info('ADDRESSES env var not set');
         exit(1);
       }
-      const addresses = process.env.HALO2_ADDRESSES.split(',');
+      const addresses = process.env.ADDRESSES.split(',');
 
       await waitForSync(walletFunded);
 

@@ -4,7 +4,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -21,8 +21,8 @@ describe('Syncing', () => {
   const seeds = [
     '0000000000000000000000000000000000000000000000000000000000000042',
     'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82',
-    '0000000000000000000000000000000000000000000000000000000000000043',
     '0000000000000000000000000000000000000000000000000000000000000041',
+    '0000000000000000000000000000000000000000000000000000000000000040',
   ];
 
   const wallets: Array<Wallet & Resource> = [];
@@ -31,7 +31,7 @@ describe('Syncing', () => {
   beforeEach(async () => {
     await allure.step('Start multiple wallets', async function () {
       fixture = getFixture();
-      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+      setNetworkId(NetworkId.Undeployed);
 
       async function processSeeds(array: string[]) {
         for (let i = 0; i < array.length; i++) {
@@ -47,7 +47,6 @@ describe('Syncing', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seed,
-          networkId,
           'info',
         );
       }

@@ -2,13 +2,19 @@ name: Fund test wallets
 
 env:
     NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-    HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
-    PLONK_ADDRESSES: ${{ vars.PLONK_ADDRESSES }}
-    CRYPTO: ${{ (inputs.deployment == 'halo2-qa' || inputs.deployment == 'hardfork-qa') && 'halo2' || 'plonk' }}
+    CRYPTO: ${{ (inputs.deployment == 'devnet' || inputs.deployment == 'ariadne-qa') && 'plonk' || 'halo2' }}
 
 on:
     workflow_dispatch:
       inputs:
+        network:
+          type: choice
+          description: Midnight network to use
+          required: true
+          default: 'devnet'
+          options:
+            - devnet
+            - testnet
         deployment:
           type: choice
           description: Midnight deployment to use
@@ -19,6 +25,7 @@ on:
             - hardfork-qa
             - ariadne-qa
             - devnet
+            - testnet
 
 jobs:
     runScript:
@@ -46,13 +53,26 @@ jobs:
                 username: ${{ secrets.GH_USERNAME }}
                 password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
-            - name: Run funding script
+            - name: Run funding script for devnet envs
+              if: env.NETWORK == 'devnet'
               env:
-                NETWORK: devnet
+                NETWORK: ${{ inputs.network }}
                 DEPLOYMENT: ${{ inputs.deployment }}
                 SEED:  ${{ env.CRYPTO == 'halo2' && secrets.FAUCET_SEED_HALO2 || secrets.FAUCET_SEED }}
+                ADDRESSES: ${{ env.CRYPTO == 'halo2' && vars.HALO2_ADDRESSES || vars.PLONK_ADDRESSES  }}
               run: |
                 cd typescript
-                yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-                yarn install --no-immutable
+                yarn install --immutable
+                yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+            
+            - name: Run funding script for testnet envs
+              if: env.NETWORK == 'testnet'
+              env:
+                NETWORK: ${{ inputs.network }}
+                DEPLOYMENT: ${{ inputs.deployment }}
+                SEED: ${{ secrets.FAUCET_SEED_TESTNET }}
+                ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
+              run: |
+                cd typescript
+                yarn install --immutable
                 yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts

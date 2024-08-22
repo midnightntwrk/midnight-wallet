@@ -8,7 +8,7 @@ env:
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
-  CRYPTO: ${{ (inputs.deployment == 'halo2-qa' || inputs.deployment == 'hardfork-qa') && 'halo2' || 'plonk' }}
+  CRYPTO: ${{ (inputs.deployment == 'devnet' || inputs.deployment == 'ariadne-qa') && 'plonk' || 'halo2' }}
 
 on:
   workflow_dispatch:
@@ -20,6 +20,7 @@ on:
         default: 'devnet'
         options:
           - devnet
+          - testnet
           - undeployed
       deployment:
         type: choice
@@ -32,6 +33,7 @@ on:
           - halo2-qa
           - hardfork-qa
           - devnet
+          - testnet
       seed:
         type: string
         description: Seed of a funded wallet
@@ -60,12 +62,12 @@ on:
     inputs:
       network:
         type: string
-        description: Midnight network to use (devnet/undeployed)
+        description: Midnight network to use (testnet/devnet/undeployed)
         required: true
         default: 'devnet'
       deployment:
         type: string
-        description: Midnight deployment to use (ariadne-qa/halo2-qa/hardfork-qa/devnet/local)
+        description: Midnight deployment to use (ariadne-qa/halo2-qa/hardfork-qa/devnet/testnet/local)
         required: true
         default: 'halo2-qa'
       seed:
@@ -138,14 +140,13 @@ jobs:
         run: |
           sbt dist
           cd typescript
-          yarn install --no-immutable
+          yarn install --immutable
 
       - name: Install dependencies
         if: ${{ inputs.deployment != 'local' }}
         run: |
           cd typescript
-          yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
-          yarn install --no-immutable
+          yarn install --immutable
 
       - name: Run e2e tests
         env:

@@ -30,11 +30,13 @@ describe('Token transfer', () => {
   let walletFunded: Wallet & Resource;
   let wallet2: Wallet & Resource;
   let fixture: TestContainersFixture;
+  const outputValueNativeToken = 1n;
+  let tokenTypeHash: string | undefined;
 
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+      const networkId = NetworkId.Undeployed;
 
       walletFunded = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -109,9 +111,9 @@ describe('Token transfer', () => {
       logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()]).toBe(20000000000000000n);
-      expect(pendingState.availableCoins.length).toBe(4);
+      expect(pendingState.availableCoins.length).toBe(6);
       expect(pendingState.pendingCoins.length).toBe(1);
-      expect(pendingState.coins.length).toBe(5);
+      expect(pendingState.coins.length).toBe(7);
       expect(pendingState.transactionHistory.length).toBe(1);
 
       await waitForTxInHistory(txId, walletFunded);
@@ -120,9 +122,9 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       // actually deducted fees are greater
       expect(finalState.balances[nativeToken()]).toBeLessThanOrEqual(balance - fees);
-      expect(finalState.availableCoins.length).toBe(6);
+      expect(finalState.availableCoins.length).toBe(8);
       expect(finalState.pendingCoins.length).toBe(0);
-      expect(finalState.coins.length).toBe(6);
+      expect(finalState.coins.length).toBe(8);
       expect(finalState.transactionHistory.length).toBe(2);
     },
     timeout,
@@ -324,6 +326,34 @@ describe('Token transfer', () => {
   );
 
   test(
+    'error message when attempting to send an amount greater than available',
+    async () => {
+      allure.tms('PM-9679', 'PM-9679');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid amount error message');
+      const syncedState = await waitForSync(walletFunded);
+      const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      // the max amount that we support: Rust u128 max.
+      const maxAmount = 340_282_366_920_938_463_463_374_607_431_768_211_455n;
+      const initialState2 = await firstValueFrom(wallet2.state());
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: maxAmount,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      await expect(walletFunded.transferTransaction(outputsToCreate)).rejects.toThrow(
+        `Not sufficient funds to balance token: 0100000000000000000000000000000000000000000000000000000000000000000000`,
+      );
+    },
+    timeout,
+  );
+
+  test(
     'error message when attempting to send an invalid amount',
     async () => {
       allure.tms('PM-9679', 'PM-9679');
@@ -333,8 +363,8 @@ describe('Token transfer', () => {
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      // the max amount that we support: Rust u64 max. The entire Midnight supply is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
-      const invalidAmount = 18446744073709551616n;
+      // the max amount that we support: Rust u128 max. The entire Midnight supply is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
+      const invalidAmount = 340_282_366_920_938_463_463_374_607_431_768_211_456n;
       const initialState2 = await firstValueFrom(wallet2.state());
 
       const outputsToCreate = [
@@ -345,7 +375,7 @@ describe('Token transfer', () => {
         },
       ];
       await expect(walletFunded.transferTransaction(outputsToCreate)).rejects.toThrow(
-        `Error: Couldn't deserialize u64 from a BigInt outside u64::MIN..u64::MAX bounds`,
+        `Error: Couldn't deserialize u128 from a BigInt outside u128::MIN..u128::MAX bounds`,
       );
     },
     timeout,
@@ -418,6 +448,194 @@ describe('Token transfer', () => {
       await expect(walletFunded.transferTransaction([])).rejects.toThrow(
         'List of token transfers is empty or there is no positive transfers',
       );
+    },
+    timeout,
+  );
+
+  test(
+    'Is working for valid native token transfer @smoke @healthcheck',
+    async () => {
+      allure.tag('smoke');
+      allure.tag('healthcheck');
+      allure.tms('PM-8933', 'PM-8933');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Valid native token transfer transaction');
+
+      await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
+      const initialState = await firstValueFrom(walletFunded.state());
+      const initialBalance = initialState.balances[nativeToken()] ?? 0n;
+      logger.info(initialState.balances);
+      Object.entries(initialState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
+      const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
+      logger.info(`Wallet 1: ${initialBalance} tDUST`);
+      logger.info(`Wallet 1: ${initialBalanceNative} ${tokenTypeHash}`);
+      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
+      logger.info(initialState.availableCoins);
+
+      const initialState2 = await firstValueFrom(wallet2.state());
+      const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
+      const initialBalanceNative2 = initialState2.balances[tokenTypeHash] ?? 0n;
+      logger.info(`Wallet 2: ${initialBalance2} tDUST`);
+      logger.info(`Wallet 2: ${initialBalanceNative2} ${tokenTypeHash}`);
+      logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
+
+      const outputsToCreate = [
+        {
+          type: tokenTypeHash,
+          amount: outputValueNativeToken,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      const txToProve = await walletFunded.transferTransaction(outputsToCreate);
+      const provenTx = await walletFunded.proveTransaction(txToProve);
+      const txId = await walletFunded.submitTransaction(provenTx);
+      logger.info('Transaction id: ' + txId);
+
+      const pendingState = await waitForPending(walletFunded);
+      logger.info(walletStateTrimmed(pendingState));
+      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
+      expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
+      expect(pendingState.balances[tokenTypeHash] ?? 0n).toBeLessThanOrEqual(initialBalanceNative - outputValue);
+      expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
+      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
+      expect(pendingState.coins.length).toBe(initialState.coins.length);
+      expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+
+      await waitForTxInHistory(txId, walletFunded);
+      const finalState = await waitForSync(walletFunded);
+      logger.info(walletStateTrimmed(finalState));
+      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
+      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
+      expect(finalState.balances[tokenTypeHash] ?? 0n).toBe(initialBalanceNative - outputValueNativeToken);
+      expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
+      expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+      logger.info(`Wallet 1: ${finalState.balances[nativeToken()]} tDUST`);
+      logger.info(`Wallet 1: ${finalState.balances[tokenTypeHash]} ${tokenTypeHash}`);
+
+      await waitForTxInHistory(txId, wallet2);
+      const finalState2 = await waitForSync(wallet2);
+      logger.info(walletStateTrimmed(finalState2));
+      logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
+      expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2);
+      expect(finalState2.balances[tokenTypeHash] ?? 0n).toBe(initialBalanceNative2 + outputValueNativeToken);
+      expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
+      expect(finalState2.pendingCoins.length).toBe(0);
+      expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
+      expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
+      logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]} tDUST`);
+      logger.info(`Wallet 2: ${finalState2.balances[tokenTypeHash]} ${tokenTypeHash}`);
+    },
+    timeout,
+  );
+
+  test(
+    'coins become available when native token tx fails on node',
+    async () => {
+      allure.tms('PM-8936', 'PM-8936');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Invalid native token transaction');
+      const initialState = await firstValueFrom(walletFunded.state());
+      const syncedState = await waitForSync(walletFunded);
+      const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      Object.entries(initialState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
+      const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
+      logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
+
+      const syncedState2 = await waitForSync(wallet2);
+      const initialDustBalance2 = syncedState2?.balances[nativeToken()] ?? 0n;
+      const initialBalance2 = syncedState2?.balances[tokenTypeHash] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialDustBalance2} tDUST`);
+      logger.info(`Wallet 1 balance is: ${initialBalance2} ${tokenTypeHash}`);
+
+      const coin = {
+        type: tokenTypeHash,
+        value: outputValueNativeToken,
+        nonce: crypto2.randomBytes(32).toString('hex'),
+      };
+      const output = UnprovenOutput.new(coin, initialState.coinPublicKey, initialState.encryptionPublicKey);
+      const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
+      const unprovenTx = new UnprovenTransaction(offer);
+      const provenTx = await walletFunded.proveTransaction({
+        type: 'TransactionToProve',
+        transaction: unprovenTx,
+      });
+
+      await expect(
+        Promise.all([walletFunded.submitTransaction(provenTx), walletFunded.submitTransaction(provenTx)]),
+      ).rejects.toThrow();
+
+      const finalState = await waitForFinalizedBalance(walletFunded);
+      expect(finalState).toMatchObject(syncedState);
+      expect(finalState.balances[nativeToken()]).toBe(initialDustBalance);
+      expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
+      expect(finalState.availableCoins.length).toBe(syncedState.availableCoins.length);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.coins.length).toBe(syncedState.coins.length);
+      expect(finalState.transactionHistory.length).toBe(syncedState.transactionHistory.length);
+    },
+    timeout,
+  );
+
+  test(
+    'coins become available when native token tx does not get proved',
+    async () => {
+      allure.tms('PM-8934', 'PM-8934');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not proved');
+      const syncedState = await waitForSync(walletFunded);
+      const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
+      Object.entries(syncedState.balances).forEach(([key, value]) => {
+        if (key !== nativeToken()) tokenTypeHash = key;
+      });
+      if (tokenTypeHash === undefined) {
+        logger.warn('No native tokens found');
+        fail();
+      }
+      const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
+      logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
+
+      logger.info('Stopping proof server container..');
+      await fixture.getProofServerContainer().stop({ timeout: 10_000 });
+
+      const initialState2 = await firstValueFrom(wallet2.state());
+
+      const outputsToCreate = [
+        {
+          type: tokenTypeHash,
+          amount: outputValueNativeToken,
+          receiverAddress: initialState2.address,
+        },
+      ];
+      const txToProve = await walletFunded.transferTransaction(outputsToCreate);
+      await expect(walletFunded.proveTransaction(txToProve)).rejects.toThrow();
+
+      const finalState = await waitForFinalizedBalance(walletFunded);
+      expect(finalState).toMatchObject(syncedState);
+      expect(finalState.balances[nativeToken()]).toBe(initialDustBalance);
+      expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
+      expect(finalState.availableCoins.length).toBe(syncedState.availableCoins.length);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.coins.length).toBe(syncedState.coins.length);
+      expect(finalState.transactionHistory.length).toBe(syncedState.transactionHistory.length);
     },
     timeout,
   );

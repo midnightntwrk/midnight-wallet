@@ -1,7 +1,7 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { waitForSync } from './utils';
+import { useTestContainersFixture } from './test-fixture';
+import { NetworkId, nativeToken, setNetworkId } from '@midnight-ntwrk/zswap';
+import { isArrayUnique, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
 /**
@@ -20,7 +20,7 @@ describe('Funded wallet', () => {
   beforeEach(async () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
-      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+      setNetworkId(NetworkId.Undeployed);
 
       wallet = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -28,7 +28,6 @@ describe('Funded wallet', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
-        networkId,
         'info',
       );
       wallet.start();
@@ -40,22 +39,26 @@ describe('Funded wallet', () => {
   });
 
   test(
-    'Wallet balance for native token is 25B tDUST and there are no other token types',
+    'Wallet balance for native token is 25B tDUST and there are two other token types',
     async () => {
       allure.tms('PM-8928', 'PM-8928');
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
-      expect(Object.keys(state.balances)).toHaveLength(1);
-      const balance = state?.balances[nativeToken()] ?? 0n;
-      expect(balance).toBe(25_000_000_000_000_000n);
+      expect(Object.keys(state.balances)).toHaveLength(3);
+      expect(state?.balances[nativeToken()]).toBe(25_000_000_000_000_000n);
+      const balanceNativeTokens = 5_000_000_000_000_000n;
+      const nativeTokenHash1 = '0100000000000000000000000000000000000000000000000000000000000000000001';
+      const nativeTokenHash2 = '0100000000000000000000000000000000000000000000000000000000000000000002';
+      expect(state?.balances[nativeTokenHash1]).toBe(balanceNativeTokens);
+      expect(state?.balances[nativeTokenHash2]).toBe(balanceNativeTokens);
     },
     timeout,
   );
 
   test(
-    'Wallet has 5 coins',
+    'Wallet has 7 coins',
     async () => {
       allure.tms('PM-8929', 'PM-8929');
       allure.epic('Headless wallet');
@@ -63,17 +66,20 @@ describe('Funded wallet', () => {
       allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const coins = state?.coins;
-      expect(coins).toHaveLength(5);
-      coins.forEach((coin) => {
-        expect(coin.type).toBe('0100000000000000000000000000000000000000000000000000000000000000000000');
-        expect(coin.value).toBe(5000000000000000n);
-      });
+      expect(coins).toHaveLength(7);
+      expect(isArrayUnique(coins.map((c) => c.mt_index))).toBeTruthy();
+      expect(isArrayUnique(coins.map((c) => c.nonce))).toBeTruthy();
+      coins
+        .filter((c) => (c.type = '0100000000000000000000000000000000000000000000000000000000000000000000'))
+        .forEach((coin) => {
+          expect(coin.value).toBe(5000000000000000n);
+        });
     },
     timeout,
   );
 
   test(
-    'Wallet has 5 available coins',
+    'Wallet has 7 available coins',
     async () => {
       allure.tms('PM-8930', 'PM-8930');
       allure.epic('Headless wallet');
@@ -81,11 +87,14 @@ describe('Funded wallet', () => {
       allure.story('Wallet state properties - funded');
       const state = await waitForSync(wallet);
       const coins = state?.availableCoins;
-      expect(coins).toHaveLength(5);
-      coins.forEach((coin) => {
-        expect(coin.type).toBe('0100000000000000000000000000000000000000000000000000000000000000000000');
-        expect(coin.value).toBe(5000000000000000n);
-      });
+      expect(coins).toHaveLength(7);
+      expect(isArrayUnique(coins.map((c) => c.mt_index))).toBeTruthy();
+      expect(isArrayUnique(coins.map((c) => c.nonce))).toBeTruthy();
+      coins
+        .filter((c) => (c.type = '0100000000000000000000000000000000000000000000000000000000000000000000'))
+        .forEach((coin) => {
+          expect(coin.value).toBe(5000000000000000n);
+        });
     },
     timeout,
   );
@@ -117,7 +126,9 @@ describe('Funded wallet', () => {
       txHistory.forEach((tx) => {
         expect(tx.applyStage).toBe('SucceedEntirely');
         expect(tx.deltas).toStrictEqual({
-          '0100000000000000000000000000000000000000000000000000000000000000000000': -50000000000000000n,
+          '0100000000000000000000000000000000000000000000000000000000000000000000': -100000000000000000n,
+          '0100000000000000000000000000000000000000000000000000000000000000000001': -20000000000000000n,
+          '0100000000000000000000000000000000000000000000000000000000000000000002': -20000000000000000n,
         });
         expect(tx.identifiers).not.toHaveLength(0);
       });

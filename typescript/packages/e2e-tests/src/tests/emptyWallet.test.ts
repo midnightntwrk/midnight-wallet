@@ -7,7 +7,7 @@ import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { MidnightNetwork, compareStates, waitForSync } from './utils';
-import { NetworkId } from '@midnight-ntwrk/zswap';
+import { NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 
@@ -16,6 +16,7 @@ import { logger } from './logger';
  *
  * @group undeployed
  * @group devnet
+ * @group testnet
  */
 
 describe('Midnight wallet', () => {
@@ -56,7 +57,18 @@ describe('Midnight wallet', () => {
 
     const entropy = KeyManagement.util.mnemonicWordsToEntropy(mnemonics);
     const fixture = getFixture();
-    const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+    switch (TestContainersFixture.network) {
+      case 'undeployed':
+        setNetworkId(NetworkId.Undeployed);
+        break;
+      case 'devnet':
+        setNetworkId(NetworkId.DevNet);
+        break;
+      case 'testnet':
+        setNetworkId(NetworkId.TestNet);
+        break;
+    }
+
     await expect(
       WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -64,7 +76,6 @@ describe('Midnight wallet', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         entropy,
-        networkId,
         'info',
       ),
     ).resolves.not.toThrow();
@@ -81,7 +92,17 @@ describe('Fresh wallet with empty state', () => {
   beforeEach(async () => {
     await allure.step('Start a fresh wallet', async function () {
       const fixture = getFixture();
-      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+      switch (TestContainersFixture.network) {
+        case 'undeployed':
+          setNetworkId(NetworkId.Undeployed);
+          break;
+        case 'devnet':
+          setNetworkId(NetworkId.DevNet);
+          break;
+        case 'testnet':
+          setNetworkId(NetworkId.TestNet);
+          break;
+      }
 
       wallet = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -89,7 +110,6 @@ describe('Fresh wallet with empty state', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
-        networkId,
         'info',
       );
       wallet.start();
@@ -157,7 +177,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.encryptionPublicKey).toMatch(/^[0-9a-f]{70}$/);
+    expect(state.encryptionPublicKey).toMatch(/^[0-9a-f]{118}$/);
   });
 
   test('Wallet state returns address as the concatenation of coinPublicKey and encryptionPublicKey', async () => {
@@ -166,7 +186,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.address).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{70}$/);
+    expect(state.address).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{118}$/);
     expect(state.address).toBe(state.coinPublicKey + '|' + state.encryptionPublicKey);
   });
 

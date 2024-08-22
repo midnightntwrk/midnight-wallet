@@ -2,9 +2,9 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
 import {
   compareStates,
   waitForFinalizedBalance,
@@ -36,7 +36,7 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+      setNetworkId(NetworkId.Undeployed);
 
       walletFunded = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -44,7 +44,6 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
-        networkId,
         'info',
       );
 
@@ -54,7 +53,6 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
-        networkId,
         'info',
       );
 
@@ -94,15 +92,20 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer transaction');
 
+      logger.info(`Waiting to receive tokens...`);
+      await waitForSync(walletFunded);
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()];
-      if (initialBalance === undefined || initialBalance === 0n) {
-        logger.info(`Waiting to receive tokens...`);
-        await waitForSync(walletFunded);
-      }
       logger.info(`Wallet 1: ${initialBalance}`);
       logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
       const balance = 25000000000000000n;
+      const balanceNativeTokens = 5000000000000000n;
+      const nativeTokenHash1 = '0100000000000000000000000000000000000000000000000000000000000000000001';
+      const nativeTokenHash2 = '0100000000000000000000000000000000000000000000000000000000000000000002';
+      expect(initialState.balances[nativeToken()]).toBe(balance);
+      expect(initialState.balances[nativeTokenHash1]).toBe(balanceNativeTokens);
+      expect(initialState.balances[nativeTokenHash2]).toBe(balanceNativeTokens);
+      expect(Object.keys(initialState.balances)).toHaveLength(3);
 
       const initialState2 = await firstValueFrom(wallet2.state());
       const initialBalance2 = initialState2.balances[nativeToken()];
@@ -224,7 +227,7 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -232,7 +235,6 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
-          networkId,
           'info',
         );
 
@@ -258,7 +260,7 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -266,7 +268,6 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
-          networkId,
           'info',
           false,
         );
@@ -294,7 +295,7 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        const networkId = TestContainersFixture.network === 'devnet' ? NetworkId.DevNet : NetworkId.Undeployed;
+        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -302,7 +303,6 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
-          networkId,
           'info',
           true,
         );

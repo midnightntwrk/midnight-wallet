@@ -33,6 +33,13 @@ export function useTestContainersFixture() {
           .up();
         break;
       }
+      case 'testnet': {
+        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-testnet-dynamic.yml')
+          .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
+          .withEnvironment({ TESTCONTAINERS_UID: uid })
+          .up();
+        break;
+      }
       default: {
         logger.warn(`Unrecognized network: ${process.env.NETWORK}`);
         exit(1);
@@ -91,6 +98,9 @@ export class TestContainersFixture {
       case 'devnet': {
         return 'https://indexer.devnet.midnight.network';
       }
+      case 'testnet': {
+        return 'https://indexer.testnet.midnight.network';
+      }
       case 'ariadne-qa': {
         return 'https://indexer.ariadne-qa.dev.midnight.network';
       }
@@ -112,6 +122,9 @@ export class TestContainersFixture {
       case 'devnet': {
         return 'wss://indexer.devnet.midnight.network';
       }
+      case 'testnet': {
+        return 'wss://indexer.testnet.midnight.network';
+      }
       case 'ariadne-qa': {
         return 'wss://indexer.ariadne-qa.dev.midnight.network';
       }
@@ -132,6 +145,9 @@ export class TestContainersFixture {
     switch (TestContainersFixture.deployment) {
       case 'devnet': {
         return 'https://rpc.devnet.midnight.network';
+      }
+      case 'testnet': {
+        return 'https://rpc.testnet.midnight.network';
       }
       case 'ariadne-qa': {
         return 'https://rpc.ariadne-qa.dev.midnight.network';

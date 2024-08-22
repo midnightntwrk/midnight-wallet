@@ -83,6 +83,8 @@ export function compareStates(state1: WalletState, state2: WalletState) {
   expect(normalized2).toStrictEqual(normalized1);
 }
 
-export type MidnightNetwork = 'undeployed' | 'devnet';
+export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length;
 
-export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'hardfork-qa' | 'devnet' | 'local';
+export type MidnightNetwork = 'undeployed' | 'devnet' | 'testnet';
+
+export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'hardfork-qa' | 'devnet' | 'testnet' | 'local';
