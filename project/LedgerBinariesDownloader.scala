@@ -77,7 +77,7 @@ object LedgerBinariesDownloader {
         assets: List[Asset],
     ) {
       def containsAllRequiredAssets(requiredAssets: List[AssetType]): Boolean =
-        assets.map(_.`type`).forall(requiredAssets.contains)
+        assets.nonEmpty && assets.map(_.`type`).forall(requiredAssets.contains)
     }
 
     object Release {
@@ -123,7 +123,7 @@ object LedgerBinariesDownloader {
         .response(asJson[List[models.Release]])
 
       IO.fromTry(Try(client.send(req).body))
-        .flatTap(_ => logMessage(config, "Downloading GH Ledger JNR releases..."))
+        .flatTap(_ => logMessage(config, s"Downloading GH Ledger [${config.releaseTag}] JNR releases..."))
         .flatMap {
           case Left(error) =>
             logMessage(config, s"Can't download GH releases: $error") >>
