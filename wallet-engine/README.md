@@ -10,17 +10,7 @@ The Midnight wallet is provided as an NPM package under the namespace `@midnight
 
 The wallet uses the `@midnight-ntwrk/zswap` library to manage its local state and construct transactions. The serialization formatting, which ensures transactions are processed correctly depending on the network (eg, testnet or mainnet) they belong to, relies on the network ID set in the library's context.
 
-When setting up the wallet in any context, it's essential to configure the appropriate network ID. To do this, import the `setNetworkId` function from `@midnight-ntwrk/zswap` and call it before initializing the wallet instance.
-
 For more information on available network IDs, please refer to the [relevant section](https://docs.midnight.network/develop/reference/midnight-api/zswap/#network-id).
-
-Below is an example of how to set the network ID for the devnet network:
-
-```ts
-import { setNetworkId, NetworkId } from '@midnight-ntwrk/zswap';
-
-setNetworkId(NetworkId.DevNet);
-```
 
 ---
 
@@ -42,17 +32,20 @@ Next, use the wallet builder to create a new wallet instance. This requires the 
 | **Indexer WebSocket URL** | String  | Yes | N/A |
 | **Proving server URL** | String  | Yes | N/A |
 | **Node URL** | String  | Yes | N/A |
+| **Network ID** | NetworkId | Yes | N/A |
 | **Log level** | LogLevel  | No | warn |
 
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
+import { NetworkId } from '@midnight-ntwrk/zswap';
 
 const wallet = await WalletBuilder.build(
-  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.testnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.testnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'https://rpc.devnet.midnight.network', // Node URL
+  'https://rpc.testnet.midnight.network', // Node URL
+  NetworkId.TestNet, // Network ID
   'error' // LogLevel
 );
 ```
@@ -82,7 +75,7 @@ To balance a transaction, you need to use the `balanceTransaction` method, which
 | **transaction** | Transaction  | Yes |
 | **newCoins** | LogLevel  | No |
 
-> The `newCoins` parameter is intended for cases where a new coin is created, such as when a DApp mints one and intends to send it to the wallet. Due to the nature of the Midnight devnet,
+> The `newCoins` parameter is intended for cases where a new coin is created, such as when a DApp mints one and intends to send it to the wallet. Due to the nature of the Midnight testnet,
 > these newly created coins must be explicitly provided to the wallet using this method. This allows the wallet to monitor and incorporate them into its state effectively.
 
 ```ts
@@ -184,10 +177,10 @@ The example below uses the `serializedState` variable from the example above:
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
 
 const wallet = await WalletBuilder.restore(
-  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.testnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.testnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'https://rpc.devnet.midnight.network', // Node URL
+  'https://rpc.testnet.midnight.network', // Node URL
   serializedState,
   'error' // LogLevel
 );
@@ -196,6 +189,8 @@ const wallet = await WalletBuilder.restore(
 This will create a wallet with its state checkpoint set to the time when you called the `serializeState()` method. Once the wallet is started with `wallet.start()`, it will begin syncing and updating the state from that point onward.
 
 This functionality is especially valuable in scenarios like browser extensions, where it's crucial to swiftly restore the wallet state for the user.
+
+Note that this builder method doesn't provide a network ID parameter, because it is stored in the serialized snapshot.
 
 ## Instantiating from a seed
 
@@ -208,18 +203,21 @@ The wallet builder offers a method that enables you to instantiate a wallet with
 | **Proving server URL** | String  | Yes |
 | **Node URL** | String  | Yes |
 | **Seed** | String  | Yes |
+| **Network ID** | NetworkId | Yes |
 | **Log level** | LogLevel  | No |
 
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
+import { NetworkId } from '@midnight-ntwrk/zswap';
 
 const wallet = await WalletBuilder.buildFromSeed(
-  'https://indexer.devnet.midnight.network/api/v1/graphql', // Indexer URL
-  'wss://indexer.devnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
+  'https://indexer.testnet.midnight.network/api/v1/graphql', // Indexer URL
+  'wss://indexer.testnet.midnight.network/api/v1/graphql', // Indexer WebSocket URL
   'http://localhost:6300', // Proving Server URL
-  'https://rpc.devnet.midnight.network', // Node URL
+  'https://rpc.testnet.midnight.network', // Node URL
   '0000000000000000000000000000000000000000000000000000000000000000', // Seed
+  NetworkId.TestNet,
   'error' // LogLevel
 );
 ```
@@ -243,17 +241,15 @@ This example instantiates a new wallet and uses it to transfer one tDUST to anot
 
 ```ts
 import { WalletBuilder } from '@midnight-ntwrk/wallet';
-import { setNetworkId, NetworkId } from '@midnight-ntwrk/zswap';
+import { NetworkId } from '@midnight-ntwrk/zswap';
 
 try {
-  // set network id to devnet
-  setNetworkId(NetworkId.DevNet);
-
   const wallet = await WalletBuilder.build(
-    'https://indexer.devnet.midnight.network/api/v1/graphql',
-    'wss://indexer.devnet.midnight.network/api/v1/graphql',
+    'https://indexer.testnet.midnight.network/api/v1/graphql',
+    'wss://indexer.testnet.midnight.network/api/v1/graphql',
     'http://localhost:6300',
-    'https://rpc.devnet.midnight.network',
+    'https://rpc.testnet.midnight.network',
+    NetworkId.TestNet
   );
 
   const transactionToProve = await wallet.transferTransaction([
