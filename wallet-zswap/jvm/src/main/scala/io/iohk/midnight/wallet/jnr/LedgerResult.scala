@@ -49,6 +49,7 @@ object LedgerError {
   case object ZswapChainStateFilterError extends LedgerError(16)
   case object ZswapChainStateFilterStateError extends LedgerError(17)
   case object ZswapChainStateFilterAddressError extends LedgerError(18)
+  case object EncodeOfferError extends LedgerError(19)
   case object ExcUnknown extends LedgerError(255)
 
   def apply(code: Int): Either[Int, LedgerError] = {
@@ -70,6 +71,7 @@ object LedgerError {
       case ZswapChainStateFilterError.code        => Right(ZswapChainStateFilterError)
       case ZswapChainStateFilterStateError.code   => Right(ZswapChainStateFilterStateError)
       case ZswapChainStateFilterAddressError.code => Right(ZswapChainStateFilterAddressError)
+      case EncodeOfferError.code                  => Right(EncodeOfferError)
       case ExcUnknown.code                        => Right(ExcUnknown)
       case unknownResultCode                      => Left(unknownResultCode)
     }

@@ -19,14 +19,6 @@ trait LedgerAPI {
       @size_t networkId: Int,
   ): Int
 
-  def apply_transaction_to_state(
-      tx_borshed: Array[Byte],
-      @size_t tx_borshed_len: Int,
-      local_state: Array[Byte],
-      @size_t local_state_len: Int,
-      @size_t networkId: Int,
-  ): Pointer
-
   def extract_guaranteed_coins_from_transaction(
       tx_borshed: Array[Byte],
       @size_t tx_borshed_len: Int,

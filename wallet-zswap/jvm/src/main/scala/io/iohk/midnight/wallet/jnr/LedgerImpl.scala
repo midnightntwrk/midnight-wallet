@@ -49,27 +49,6 @@ class LedgerImpl(ledgerAPI: LedgerAPI, networkIdOpt: Option[NetworkId])
     )
   }
 
-  override def applyTransactionToState(
-      tx: String,
-      localState: String,
-  ): Either[NonEmptyList[JNRError], StringResult] = {
-    val callTry = Try {
-      ledgerAPI.apply_transaction_to_state(
-        tx.getBytes(StandardCharsets.UTF_8),
-        tx.length,
-        local_state = localState.getBytes(StandardCharsets.UTF_8),
-        local_state_len = localState.length,
-        finalNetworkId.id,
-      )
-    }
-
-    createResultAndFreePointer(
-      callTry = callTry,
-      freePointerTry = tryFreeStringResult,
-      createResultEither = StringResult.applyEither,
-    )
-  }
-
   override def extractGuaranteedCoinsFromTransaction(
       tx: String,
   ): Either[NonEmptyList[JNRError], StringResult] = {

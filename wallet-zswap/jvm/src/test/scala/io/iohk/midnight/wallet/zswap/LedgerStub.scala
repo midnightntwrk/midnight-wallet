@@ -36,18 +36,6 @@ class LedgerStub extends LedgerV1 {
     else
       Left(NonEmptyList.one(LedgerErrorResult(LedgerError.StateError)))
 
-  override def applyTransactionToState(
-      tx: String,
-      localState: String,
-  ): Either[NonEmptyList[JNRError], StringResult] = {
-    if (tx === ValidTx)
-      Right(StringResult(AppliedTxState))
-    else if (tx === ValidTxNoData)
-      Left(NonEmptyList.one(LedgerErrorResult(LedgerError.TransactionError)))
-    else
-      Left(NonEmptyList.one(UnexpectedJNRError(Exception("fail!"))))
-  }
-
   override def zswapChainStateNew(): Either[NonEmptyList[JNRError], StringResult] =
     Left(NonEmptyList.one(UnexpectedJNRError(UnsupportedOperationException())))
 

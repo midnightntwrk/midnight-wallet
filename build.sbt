@@ -67,7 +67,7 @@ lazy val commonPublishSettings = Seq(
   ghPackagesResolver,
   ghPackagesCredentials,
   organization := "io.iohk.midnight",
-  version := "3.6.0",
+  version := "3.6.1",
   versionScheme := Some("early-semver"),
   publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
@@ -208,7 +208,7 @@ lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
       downloadBinaries(
         Config(
           requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-3.0.0",
+          releaseTag = "zswap-c-bindings-3.0.1",
           ghAuthToken = sys.env("IOG_GH_TOKEN"),
           tempDir = taskTemporaryDirectory.value.getPath,
           resourcesDir = resourcesDir.getPath,

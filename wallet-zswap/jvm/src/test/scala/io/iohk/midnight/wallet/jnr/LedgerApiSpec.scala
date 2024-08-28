@@ -15,9 +15,6 @@ class LedgerApiSpec extends ScalaCheckSuite {
   private val hexedEncryptionSecretKey =
     "000300386d7d8666b2da45253a44dd33ad2afe5c9c8bd6c7263aec19248d80294d6bcfe2b044a0301e54d95c12e22b52d162edbf8347fd4ae18d090b"
 
-  private val localState =
-    "00030002000138d4842a57c0c60dc7f1fdcea9d8fedab4f636e6978c5994e88e47ead073eb03003801b18751f7763d94556d9c4ac8f9b6e6a25803513cfdcbd5df16b4f4ab1b06c02009bb7673e02e67130e910ce086368b36ed6ae42b6fb704010000000000000000000000000100000000000000000000000001000000000000000000000000020001000000000000000000000001200000000000000000"
-
   private lazy val ledger =
     LedgerLoader
       .loadLedger(networkId = Some(NetworkId.Undeployed), ProtocolVersion.V1)
@@ -107,29 +104,6 @@ class LedgerApiSpec extends ScalaCheckSuite {
         assert(errors.toList.contains(LedgerErrorResult(LedgerError.TransactionError)))
       case Right(BooleanResult(isRelevant)) =>
         fail("Should not be here!")
-    }
-  }
-
-  test("Applying tx to state should succeed") {
-    ledger.applyTransactionToState(validTx, localState) match {
-      case Left(errors)               => failWithErrors(errors)
-      case Right(StringResult(state)) => assert(state.nonEmpty)
-    }
-  }
-
-  test("Applying tx without correct tx should give proper error") {
-    ledger.applyTransactionToState("invalid_tx", localState) match {
-      case Left(errors) =>
-        assert(errors.toList.contains(LedgerErrorResult(LedgerError.TransactionError)))
-      case Right(StringResult(state)) => fail("Wrong case.")
-    }
-  }
-
-  test("Applying tx without correct state should give proper error") {
-    ledger.applyTransactionToState(validTx, "invalid_state") match {
-      case Left(errors) =>
-        assert(errors.toList.contains(LedgerErrorResult(LedgerError.StateError)))
-      case Right(StringResult(state)) => fail("Wrong case.")
     }
   }
 }

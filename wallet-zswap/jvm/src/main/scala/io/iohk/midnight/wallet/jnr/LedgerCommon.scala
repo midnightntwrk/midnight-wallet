@@ -12,11 +12,6 @@ trait LedgerCommon {
       encryptionKeySerialized: String,
   ): Either[NonEmptyList[JNRError], BooleanResult]
 
-  def applyTransactionToState(
-      tx: String,
-      localState: String,
-  ): Either[NonEmptyList[JNRError], StringResult]
-
   def extractGuaranteedCoinsFromTransaction(
       tx: String,
   ): Either[NonEmptyList[JNRError], StringResult]
