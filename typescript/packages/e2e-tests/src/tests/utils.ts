@@ -6,7 +6,7 @@ import { logger } from './logger';
 export const waitForSync = (wallet: Wallet) =>
   firstValueFrom(
     wallet.state().pipe(
-      throttleTime(10_000),
+      throttleTime(5_000),
       tap((state) => {
         const scanned = state.syncProgress?.synced ?? 0n;
         const total = state.syncProgress?.total.toString() ?? 'unknown number';
@@ -54,12 +54,15 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
 
 export const waitForTxInHistory = async (txId: string, wallet: Wallet) => {
   let foundTxId = false;
+  logger.info('Waiting for a txId...');
   while (!foundTxId) {
-    logger.info('Waiting for a txId...');
-    await new Promise((resolve) => setTimeout(resolve, 5000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     const state = await waitForSync(wallet);
     foundTxId = state.transactionHistory.flatMap((tx) => tx.identifiers).some((id) => id === txId);
-    if (foundTxId) logger.info(`TxId ${txId} found`);
+    if (foundTxId) {
+      console.timeEnd('txProcessing');
+      logger.info(`TxId ${txId} found`);
+    }
   }
 };
 

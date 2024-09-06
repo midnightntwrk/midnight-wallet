@@ -1,7 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -24,25 +24,24 @@ describe('Token transfer', () => {
   const timeout = 3_600_000;
   const outputValue = 100_000_000n;
   const nativeTokenValue = 25n;
-  const nativeTokenHash =
-    TestContainersFixture.network === 'devnet'
-      ? '0100010000000000000000000000000000000000000000000000000000000000000001'
-      : '0100020000000000000000000000000000000000000000000000000000000000000001';
+  const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
 
   let walletFunded: Wallet & Resource;
   let fixture: TestContainersFixture;
 
   beforeEach(async () => {
     fixture = getFixture();
+    let networkId: NetworkId;
     switch (TestContainersFixture.network) {
-      case 'devnet': {
-        setNetworkId(NetworkId.DevNet);
+      case 'undeployed':
+        networkId = NetworkId.Undeployed;
         break;
-      }
-      case 'testnet': {
-        setNetworkId(NetworkId.TestNet);
+      case 'devnet':
+        networkId = NetworkId.DevNet;
         break;
-      }
+      case 'testnet':
+        networkId = NetworkId.TestNet;
+        break;
     }
 
     walletFunded = await WalletBuilder.buildFromSeed(
@@ -51,6 +50,7 @@ describe('Token transfer', () => {
       fixture.getProverUri(),
       fixture.getNodeUri(),
       seedFunded,
+      networkId,
       'info',
     );
 

@@ -25,7 +25,7 @@ describe('Token transfer', () => {
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000042';
   const timeout = 420_000;
-  const outputValue = 1_000n;
+  const outputValue = 3_000_000n;
 
   let walletFunded: Wallet & Resource;
   let wallet2: Wallet & Resource;
@@ -98,6 +98,7 @@ describe('Token transfer', () => {
       const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       const provenTx = await walletFunded.proveTransaction(txToProve);
       const txId = await walletFunded.submitTransaction(provenTx);
+      console.time('txProcessing');
       const fees = provenTx.fees(LedgerParameters.dummyParameters());
       for (const [key, value] of provenTx.imbalances(true, fees)) {
         console.log(key, value);
@@ -120,7 +121,7 @@ describe('Token transfer', () => {
       const finalState = await waitForSync(walletFunded);
       logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
-      // actually deducted fees are greater
+      // actually deducted fees are greater - PM-7721
       expect(finalState.balances[nativeToken()]).toBeLessThanOrEqual(balance - fees);
       expect(finalState.availableCoins.length).toBe(8);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -347,7 +348,7 @@ describe('Token transfer', () => {
         },
       ];
       await expect(walletFunded.transferTransaction(outputsToCreate)).rejects.toThrow(
-        `Not sufficient funds to balance token: 0100000000000000000000000000000000000000000000000000000000000000000000`,
+        `Not sufficient funds to balance token: 02000000000000000000000000000000000000000000000000000000000000000000`,
       );
     },
     timeout,

@@ -1,6 +1,6 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { useTestContainersFixture } from './test-fixture';
-import { NetworkId, nativeToken, setNetworkId } from '@midnight-ntwrk/zswap';
+import { NetworkId, nativeToken } from '@midnight-ntwrk/zswap';
 import { isArrayUnique, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
@@ -20,7 +20,6 @@ describe('Funded wallet', () => {
   beforeEach(async () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
-      setNetworkId(NetworkId.Undeployed);
 
       wallet = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -28,6 +27,7 @@ describe('Funded wallet', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        NetworkId.Undeployed,
         'info',
       );
       wallet.start();
@@ -49,8 +49,8 @@ describe('Funded wallet', () => {
       expect(Object.keys(state.balances)).toHaveLength(3);
       expect(state?.balances[nativeToken()]).toBe(25_000_000_000_000_000n);
       const balanceNativeTokens = 5_000_000_000_000_000n;
-      const nativeTokenHash1 = '0100000000000000000000000000000000000000000000000000000000000000000001';
-      const nativeTokenHash2 = '0100000000000000000000000000000000000000000000000000000000000000000002';
+      const nativeTokenHash1 = '02000000000000000000000000000000000000000000000000000000000000000001';
+      const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
       expect(state?.balances[nativeTokenHash1]).toBe(balanceNativeTokens);
       expect(state?.balances[nativeTokenHash2]).toBe(balanceNativeTokens);
     },
@@ -70,7 +70,7 @@ describe('Funded wallet', () => {
       expect(isArrayUnique(coins.map((c) => c.mt_index))).toBeTruthy();
       expect(isArrayUnique(coins.map((c) => c.nonce))).toBeTruthy();
       coins
-        .filter((c) => (c.type = '0100000000000000000000000000000000000000000000000000000000000000000000'))
+        .filter((c) => (c.type = '02000000000000000000000000000000000000000000000000000000000000000000'))
         .forEach((coin) => {
           expect(coin.value).toBe(5000000000000000n);
         });
@@ -91,7 +91,7 @@ describe('Funded wallet', () => {
       expect(isArrayUnique(coins.map((c) => c.mt_index))).toBeTruthy();
       expect(isArrayUnique(coins.map((c) => c.nonce))).toBeTruthy();
       coins
-        .filter((c) => (c.type = '0100000000000000000000000000000000000000000000000000000000000000000000'))
+        .filter((c) => (c.type = '02000000000000000000000000000000000000000000000000000000000000000000'))
         .forEach((coin) => {
           expect(coin.value).toBe(5000000000000000n);
         });
@@ -126,9 +126,9 @@ describe('Funded wallet', () => {
       txHistory.forEach((tx) => {
         expect(tx.applyStage).toBe('SucceedEntirely');
         expect(tx.deltas).toStrictEqual({
-          '0100000000000000000000000000000000000000000000000000000000000000000000': -100000000000000000n,
-          '0100000000000000000000000000000000000000000000000000000000000000000001': -20000000000000000n,
-          '0100000000000000000000000000000000000000000000000000000000000000000002': -20000000000000000n,
+          '02000000000000000000000000000000000000000000000000000000000000000000': -100000000000000000n,
+          '02000000000000000000000000000000000000000000000000000000000000000001': -20000000000000000n,
+          '02000000000000000000000000000000000000000000000000000000000000000002': -20000000000000000n,
         });
         expect(tx.identifiers).not.toHaveLength(0);
       });

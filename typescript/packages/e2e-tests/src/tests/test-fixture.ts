@@ -27,16 +27,16 @@ export function useTestContainersFixture() {
         break;
       }
       case 'devnet': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-devnet-dynamic.yml')
+        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-remote-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
-          .withEnvironment({ TESTCONTAINERS_UID: uid })
+          .withEnvironment({ TESTCONTAINERS_UID: uid, NETWORK_ID: 'devnet' })
           .up();
         break;
       }
       case 'testnet': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-testnet-dynamic.yml')
+        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-remote-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
-          .withEnvironment({ TESTCONTAINERS_UID: uid })
+          .withEnvironment({ TESTCONTAINERS_UID: uid, NETWORK_ID: 'testnet' })
           .up();
         break;
       }

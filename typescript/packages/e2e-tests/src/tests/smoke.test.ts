@@ -4,7 +4,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId, setNetworkId } from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import {
   compareStates,
   waitForFinalizedBalance,
@@ -36,7 +36,6 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      setNetworkId(NetworkId.Undeployed);
 
       walletFunded = await WalletBuilder.buildFromSeed(
         fixture.getIndexerUri(),
@@ -44,6 +43,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        NetworkId.Undeployed,
         'info',
       );
 
@@ -53,6 +53,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        NetworkId.Undeployed,
         'info',
       );
 
@@ -100,8 +101,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
       const balance = 25000000000000000n;
       const balanceNativeTokens = 5000000000000000n;
-      const nativeTokenHash1 = '0100000000000000000000000000000000000000000000000000000000000000000001';
-      const nativeTokenHash2 = '0100000000000000000000000000000000000000000000000000000000000000000002';
+      const nativeTokenHash1 = '02000000000000000000000000000000000000000000000000000000000000000001';
+      const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
       expect(initialState.balances[nativeToken()]).toBe(balance);
       expect(initialState.balances[nativeTokenHash1]).toBe(balanceNativeTokens);
       expect(initialState.balances[nativeTokenHash2]).toBe(balanceNativeTokens);
@@ -227,7 +228,6 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -235,6 +235,7 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
+          NetworkId.Undeployed,
           'info',
         );
 
@@ -260,7 +261,6 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -268,6 +268,7 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
+          NetworkId.Undeployed,
           'info',
           false,
         );
@@ -295,7 +296,6 @@ describe('Wallet building', () => {
 
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
-        setNetworkId(NetworkId.Undeployed);
 
         walletFunded = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
@@ -303,6 +303,7 @@ describe('Wallet building', () => {
           fixture.getProverUri(),
           fixture.getNodeUri(),
           seedFunded,
+          NetworkId.Undeployed,
           'info',
           true,
         );

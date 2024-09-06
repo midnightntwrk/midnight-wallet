@@ -1,14 +1,7 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import {
-  nativeToken,
-  NetworkId,
-  setNetworkId,
-  UnprovenOffer,
-  UnprovenOutput,
-  UnprovenTransaction,
-} from '@midnight-ntwrk/zswap';
+import { nativeToken, NetworkId, UnprovenOffer, UnprovenOutput, UnprovenTransaction } from '@midnight-ntwrk/zswap';
 import { waitForFinalizedBalance, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
 import { randomBytes } from 'node:crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
@@ -41,12 +34,16 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     fixture = getFixture();
 
+    let networkId: NetworkId;
     switch (TestContainersFixture.network) {
+      case 'undeployed':
+        networkId = NetworkId.Undeployed;
+        break;
       case 'devnet':
-        setNetworkId(NetworkId.DevNet);
+        networkId = NetworkId.DevNet;
         break;
       case 'testnet':
-        setNetworkId(NetworkId.TestNet);
+        networkId = NetworkId.TestNet;
         break;
     }
 
@@ -60,6 +57,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         fundedSeed,
+        networkId,
         'info',
       );
 
@@ -69,6 +67,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         receivingSeed,
+        networkId,
         'info',
       );
     } else {
@@ -79,6 +78,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         receivingSeed,
+        networkId,
         'info',
       );
 
@@ -88,6 +88,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         fundedSeed,
+        networkId,
         'info',
       );
     }

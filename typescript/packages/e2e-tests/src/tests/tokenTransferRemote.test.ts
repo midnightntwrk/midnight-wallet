@@ -5,7 +5,6 @@ import {
   LedgerParameters,
   nativeToken,
   NetworkId,
-  setNetworkId,
   UnprovenOffer,
   UnprovenOutput,
   UnprovenTransaction,
@@ -40,12 +39,16 @@ describe('Token transfer', () => {
 
   beforeEach(async () => {
     fixture = getFixture();
+    let networkId: NetworkId;
     switch (TestContainersFixture.network) {
+      case 'undeployed':
+        networkId = NetworkId.Undeployed;
+        break;
       case 'devnet':
-        setNetworkId(NetworkId.DevNet);
+        networkId = NetworkId.DevNet;
         break;
       case 'testnet':
-        setNetworkId(NetworkId.TestNet);
+        networkId = NetworkId.TestNet;
         break;
     }
     const date = new Date();
@@ -59,6 +62,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
 
@@ -68,6 +72,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        networkId,
         'info',
       );
     } else {
@@ -78,6 +83,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seed,
+        networkId,
         'info',
       );
 
@@ -87,6 +93,7 @@ describe('Token transfer', () => {
         fixture.getProverUri(),
         fixture.getNodeUri(),
         seedFunded,
+        networkId,
         'info',
       );
     }
@@ -133,6 +140,7 @@ describe('Token transfer', () => {
       const txToProve = await sender.transferTransaction(outputsToCreate);
       const provenTx = await sender.proveTransaction(txToProve);
       const txId = await sender.submitTransaction(provenTx);
+      console.time('txProcessing');
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await waitForPending(sender);
@@ -211,6 +219,7 @@ describe('Token transfer', () => {
       logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
+      // actually deducted fees are greater - PM-7721
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThanOrEqual(initialBalance - fees);
       expect(finalState.availableCoins.length).toBeGreaterThanOrEqual(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
