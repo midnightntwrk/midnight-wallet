@@ -5,8 +5,8 @@
     "author": "IOHK",
     "license": "Apache-2.0",
     "dependencies": {
-        "@midnight-ntwrk/wallet-api": "^3.4.0",
-        "@midnight-ntwrk/zswap": "^3.0.0",
+        "@midnight-ntwrk/wallet-api": "^3.4.1",
+        "@midnight-ntwrk/zswap": "^3.0.1",
         "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11",
         "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11",
         "extensionless": "^1.9.9",

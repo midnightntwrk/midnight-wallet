@@ -19,8 +19,8 @@
         "url": "https://github.com/midnight-ntwrk/artifacts.git"
     },
     "dependencies": {
-        "@midnight-ntwrk/wallet-api": "^3.4.0",
-        "@midnight-ntwrk/zswap": "^3.0.0",
+        "@midnight-ntwrk/wallet-api": "^3.4.1",
+        "@midnight-ntwrk/zswap": "^3.0.1",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

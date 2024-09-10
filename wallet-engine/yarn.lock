@@ -5,14 +5,14 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@midnight-ntwrk/wallet-api@npm:^3.4.0":
-  version: 3.4.0
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.0%2Fef6a0111e18fcbeabf3666aa87321b437ac365a5"
+"@midnight-ntwrk/wallet-api@npm:^3.4.1":
+  version: 3.4.1
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.1%2F27cd884e37e01d03e7aa3259af433fd19872e163"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.0"
+    "@midnight-ntwrk/zswap": "npm:^3.0.1"
   peerDependencies:
     rxjs: 7.x
-  checksum: 10c0/e3584e653485181cd241dda98f42fc8e9a344adf2dba33542df11af82ecaca63538d06711b065dc998cfd8975ca159fc2f9bdf90057f4d55631107cd33338d8d
+  checksum: 10c0/0302bed83aafff4f7f775420b914d892eec481e9813ff3f587deac56a43bc41fb057eeb1ea2b3b98ce77c17cb80bfdae5b352e18c01e95649cc488111be3a464
   languageName: node
   linkType: hard
 
@@ -20,8 +20,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet@workspace:."
   dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.4.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.0"
+    "@midnight-ntwrk/wallet-api": "npm:^3.4.1"
+    "@midnight-ntwrk/zswap": "npm:^3.0.1"
     fp-ts: "npm:^2.12.2"
     io-ts: "npm:^2.2.18"
     io-ts-types: "npm:^0.5.17"
@@ -36,10 +36,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/zswap@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.0%2F80188853c3b5326df63ee601a2dc2028361a8522"
-  checksum: 10c0/fb7b490b32b01eed0042c71335e93a7979c60607c39d14f826455b20a25f3bcc825d53edf866defeeab0efcd7daad7ce1aa9f4ea0ac6302fba7d9609b75c14d8
+"@midnight-ntwrk/zswap@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.1%2F0bf2c981c6b0150571bf60945130fc2e8d2a1dbb"
+  checksum: 10c0/a7df97411f3a0fe10e6776d1d0cf5639da3ca6170cf7becd3ad816786814a088a643e2c4758ece35d377865e47d4ce5d4b33edbaf87791682612cbae8462b8e8
   languageName: node
   linkType: hard
 

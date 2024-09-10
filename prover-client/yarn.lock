@@ -5,10 +5,10 @@ __metadata:
   version: 8
   cacheKey: 10c0
 
-"@midnight-ntwrk/zswap@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.0%2F80188853c3b5326df63ee601a2dc2028361a8522"
-  checksum: 10c0/fb7b490b32b01eed0042c71335e93a7979c60607c39d14f826455b20a25f3bcc825d53edf866defeeab0efcd7daad7ce1aa9f4ea0ac6302fba7d9609b75c14d8
+"@midnight-ntwrk/zswap@npm:^3.0.1":
+  version: 3.0.1
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.1%2F0bf2c981c6b0150571bf60945130fc2e8d2a1dbb"
+  checksum: 10c0/a7df97411f3a0fe10e6776d1d0cf5639da3ca6170cf7becd3ad816786814a088a643e2c4758ece35d377865e47d4ce5d4b33edbaf87791682612cbae8462b8e8
   languageName: node
   linkType: hard
 
@@ -16,7 +16,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-prover-client@workspace:."
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.0"
+    "@midnight-ntwrk/zswap": "npm:^3.0.1"
     node-fetch: "npm:3.3.2"
     typescript: "npm:^4.8.3"
   languageName: unknown
