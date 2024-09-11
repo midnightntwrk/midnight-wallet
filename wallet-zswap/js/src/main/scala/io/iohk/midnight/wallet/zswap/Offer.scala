@@ -19,7 +19,6 @@ object Offer {
     def deltas: Map[TokenType, BigInt] =
       offer.deltas.toMap.map((tt, a) => (TokenType(tt), a.toScalaBigInt))
 
-    def inputsSize: Int = offer.inputs.size
     def outputsSize: Int = offer.outputs.size
   }
 }

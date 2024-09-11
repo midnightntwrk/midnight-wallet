@@ -3,7 +3,6 @@ package io.iohk.midnight.wallet.zswap
 import cats.syntax.functor.*
 import cats.syntax.eq.*
 import io.iohk.midnight.js.interop.util.ArrayOps.*
-import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.js.interop.util.SetOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
@@ -68,7 +67,5 @@ object LocalState {
       localState.pendingOutputs.valuesList.size
     def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState =
       localState.applyCollapsedUpdate(update.toJs)
-    def firstFree: BigInt =
-      localState.firstFree.toScalaBigInt
   }
 }

@@ -270,7 +270,7 @@ lazy val proverClient = project
 
 lazy val substrateClient = project
   .in(file("substrate-client"))
-  .dependsOn(jsInterop)
+  .dependsOn(jsInterop, walletZswap.js)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
@@ -356,15 +356,6 @@ lazy val distImpl = Def.task {
 addCommandAlias(
   "verify",
   Seq(
-    // Need to execute stImport sequentially before compiling/testing
-    // Because otherwise they'll run in parallel and do yarn install concurrently
-    // And yarn seems to have problems with that
-    "jsInterop/stImport",
-    "substrateClient/stImport",
-    "walletZswapJS/stImport",
-    "proverClient/stImport",
-    "walletCore/stImport",
-    "walletEngine/stImport",
     "scalafmtCheckAll",
 //     "coverage",
     "jsInterop/test",

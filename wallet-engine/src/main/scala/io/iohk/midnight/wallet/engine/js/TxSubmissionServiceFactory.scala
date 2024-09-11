@@ -15,7 +15,7 @@ object TxSubmissionServiceFactory {
   )(using networkId: NetworkId): Resource[F, TxSubmissionService[F]] = {
     SubstrateClient(substrateNodeUri).map { client => (transaction: Transaction) =>
       {
-        client.submitTransaction(SubmitTransactionRequest(transaction.toJs, networkId.toJs)).map {
+        client.submitTransaction(SubmitTransactionRequest(transaction, networkId)).map {
           case SubmitTransactionResponse(result) =>
             result match
               case RpcError(_, message, _) => SubmissionResult.Rejected(message)
