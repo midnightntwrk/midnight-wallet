@@ -26,21 +26,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet-api@npm:^3.4.1":
-  version: 3.4.1
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.1%2F27cd884e37e01d03e7aa3259af433fd19872e163"
+"@midnight-ntwrk/wallet-api@npm:^3.4.2":
+  version: 3.4.2
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.2%2F7a0c898b583cf80a4e9692c81091ee652a382bc3"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.1"
+    "@midnight-ntwrk/zswap": "npm:^3.0.2"
   peerDependencies:
     rxjs: 7.x
-  checksum: 10c0/0302bed83aafff4f7f775420b914d892eec481e9813ff3f587deac56a43bc41fb057eeb1ea2b3b98ce77c17cb80bfdae5b352e18c01e95649cc488111be3a464
+  checksum: 10c0/e0edb8565f0fca9b0be09136135d3885afddd60059da57c3356ee6ce0a251bcbe54a5de582d6ee5338d8614430b305ad16e6a481b6c458233b7fc5826cb533b9
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/zswap@npm:^3.0.1":
-  version: 3.0.1
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.1%2F0bf2c981c6b0150571bf60945130fc2e8d2a1dbb"
-  checksum: 10c0/a7df97411f3a0fe10e6776d1d0cf5639da3ca6170cf7becd3ad816786814a088a643e2c4758ece35d377865e47d4ce5d4b33edbaf87791682612cbae8462b8e8
+"@midnight-ntwrk/zswap@npm:^3.0.2":
+  version: 3.0.2
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.2%2F8b2a97df319ded98a62ac4ae1ef272b0505db8c9"
+  checksum: 10c0/6299580cb8e3f297f2469ec09145ebc28bc54ffe4e0be4dbb75936b598f00e9858f48a55c5bdcdabbe6f18fa1b9a022a88074b0bcb826639ff57ebb86ebeb11a
   languageName: node
   linkType: hard
 
@@ -55,8 +55,8 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-integration-tests@workspace:."
   dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.4.1"
-    "@midnight-ntwrk/zswap": "npm:^3.0.1"
+    "@midnight-ntwrk/wallet-api": "npm:^3.4.2"
+    "@midnight-ntwrk/zswap": "npm:^3.0.2"
     "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11"
     "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11"
     extensionless: "npm:^1.9.9"
