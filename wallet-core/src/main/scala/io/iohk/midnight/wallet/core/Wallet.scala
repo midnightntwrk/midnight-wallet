@@ -175,6 +175,7 @@ object Wallet {
                 txHistory =
                   walletTxHistory.updateTxHistory(wallet.txHistory, newTxs.map(_.tx)).toVector,
                 offset = Some(update.offset),
+                protocolVersion = update.protocolVersion,
                 isConnected = true,
                 progress = wallet.progress.copy(synced = Some(update.offset.decrement)),
               )
