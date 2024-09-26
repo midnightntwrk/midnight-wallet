@@ -8,9 +8,7 @@ The Midnight wallet is provided as an NPM package under the namespace `@midnight
 
 ## Important information
 
-The wallet uses the `@midnight-ntwrk/zswap` library to manage its local state and construct transactions. The serialization formatting, which ensures transactions are processed correctly depending on the network (eg, testnet or mainnet) they belong to, relies on the network ID set in the library's context.
-
-For more information on available network IDs, please refer to the [relevant section](https://docs.midnight.network/develop/reference/midnight-api/zswap/#network-id).
+The wallet uses the `@midnight-ntwrk/zswap` library to manage its local state and construct transactions. The serialization formatting, which ensures transactions are processed correctly depending on the network (eg, TestNet or MainNet) they belong to, relies on the [`NetworkId`](https://docs.midnight.network/develop/reference/midnight-api/zswap/enumerations/NetworkId.md) provided when building the wallet.
 
 ---
 
@@ -34,6 +32,7 @@ Next, use the wallet builder to create a new wallet instance. This requires the 
 | **Node URL** | String  | Yes | N/A |
 | **Network ID** | NetworkId | Yes | N/A |
 | **Log level** | LogLevel  | No | warn |
+| **Discard Transaction History** | Boolean  | No | false |
 
 
 ```ts
@@ -75,7 +74,7 @@ To balance a transaction, you need to use the `balanceTransaction` method, which
 | **transaction** | Transaction  | Yes |
 | **newCoins** | LogLevel  | No |
 
-> The `newCoins` parameter is intended for cases where a new coin is created, such as when a DApp mints one and intends to send it to the wallet. Due to the nature of the Midnight testnet,
+> The `newCoins` parameter is intended for cases where a new coin is created, such as when a DApp mints one and intends to send it to the wallet. Due to the nature of the Midnight TestNet,
 > these newly created coins must be explicitly provided to the wallet using this method. This allows the wallet to monitor and incorporate them into its state effectively.
 
 ```ts
@@ -169,6 +168,7 @@ The wallet builder offers a method to create a wallet instance from the serializ
 | **Node URL** | String  | Yes |
 | **Serialized state** | String  | Yes |
 | **Log level** | LogLevel  | No |
+| **Discard Transaction History** | Boolean  | No | false |
 
 
 The example below uses the `serializedState` variable from the example above:
@@ -205,6 +205,7 @@ The wallet builder offers a method that enables you to instantiate a wallet with
 | **Seed** | String  | Yes |
 | **Network ID** | NetworkId | Yes |
 | **Log level** | LogLevel  | No |
+| **Discard Transaction History** | Boolean  | No | false |
 
 
 ```ts
