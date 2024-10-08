@@ -215,6 +215,7 @@ object Generators {
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        Seq.empty,
         ProgressUpdate.empty,
       )
     }

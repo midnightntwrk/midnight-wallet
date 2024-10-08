@@ -82,6 +82,7 @@ class WalletStateServiceStub extends WalletStateService[IO, Wallet] {
         state.encryptionSecretKey,
         state.coins.groupMapReduce(_.tokenType)(_.value)(_ + _),
         state.coins,
+        state.coins.map(state.spend(_)._2.nullifier),
         state.coins,
         state.pendingOutputs,
         Seq.empty,
@@ -127,6 +128,7 @@ class WalletStateServiceBalanceStub(balance: BigInt) extends WalletStateService[
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        Seq.empty,
         ProgressUpdate.empty,
       ),
     )
@@ -160,6 +162,7 @@ class WalletStateServicePubKeyStub(coinPubKey: CoinPublicKey, encPubKey: Encrypt
         Seq.empty,
         Seq.empty,
         Seq.empty,
+        Seq.empty,
         ProgressUpdate.empty,
       ),
     )
@@ -179,7 +182,7 @@ class WalletTxSubmissionServiceStub extends WalletTxSubmissionService[IO] {
       )
 }
 
-class WalletTransactionServiceStub() extends WalletTransactionService[IO] {
+class WalletTransactionServiceStub extends WalletTransactionService[IO] {
   override def prepareTransferRecipe(outputs: List[TokenTransfer]): IO[TransactionToProve] =
     IO.raiseError(new NotImplementedError())
 

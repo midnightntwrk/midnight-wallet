@@ -26,14 +26,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet-api@npm:^3.4.2":
-  version: 3.4.2
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.4.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.4.2%2F7a0c898b583cf80a4e9692c81091ee652a382bc3"
+"@midnight-ntwrk/wallet-api@npm:^3.5.0":
+  version: 3.5.0
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
   dependencies:
     "@midnight-ntwrk/zswap": "npm:^3.0.2"
   peerDependencies:
     rxjs: 7.x
-  checksum: 10c0/e0edb8565f0fca9b0be09136135d3885afddd60059da57c3356ee6ce0a251bcbe54a5de582d6ee5338d8614430b305ad16e6a481b6c458233b7fc5826cb533b9
+  checksum: 10c0/d9f5a5f739d7acaf4f736705431ffc2318364266a02f62a9bbe9c8f792014b1dbf98e329a76734c1921e886e335aac9b0ba3e3f3e8d7f1dd73a6793f0bfb66b9
   languageName: node
   linkType: hard
 
@@ -55,7 +55,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-integration-tests@workspace:."
   dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.4.2"
+    "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
     "@midnight-ntwrk/zswap": "npm:^3.0.2"
     "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11"
     "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11"

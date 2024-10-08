@@ -83,6 +83,7 @@ class JsWallet(
           pendingCoins = localState.pendingCoins.map(_.toJs).toJSArray,
           balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
           coins = localState.coins.map(_.toJs).toJSArray,
+          nullifiers = localState.nullifiers.map(_.toJs).toJSArray,
           coinPublicKey = localState.coinPublicKey,
           encryptionPublicKey = localState.encryptionPublicKey,
           address = localState.address.asString,

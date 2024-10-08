@@ -65,6 +65,8 @@ object Wallet {
     new WalletCoins[Wallet] {
       override def coins(wallet: Wallet): Seq[QualifiedCoinInfo] =
         wallet.state.coins
+      override def nullifiers(wallet: Wallet): Seq[Nullifier] =
+        wallet.state.coins.map(wallet.state.spend(_)._2.nullifier)
       override def availableCoins(wallet: Wallet): Seq[QualifiedCoinInfo] =
         wallet.state.availableCoins
       override def pendingCoins(wallet: Wallet): Seq[CoinInfo] = wallet.state.pendingOutputs

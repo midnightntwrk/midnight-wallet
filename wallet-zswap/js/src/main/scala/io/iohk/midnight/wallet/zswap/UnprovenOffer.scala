@@ -35,6 +35,7 @@ object UnprovenInput {
 
   extension (unprovenInput: UnprovenInput) {
     private[zswap] def toJs: mod.UnprovenInput = unprovenInput
+    def nullifier: Nullifier = Nullifier.fromJs(unprovenInput.nullifier)
   }
 }
 
