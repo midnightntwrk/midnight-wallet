@@ -17,7 +17,7 @@
   "devDependencies": {
     "@cardano-sdk/key-management": "0.8.2",
     "@midnight-ntwrk/midnight-js-network-id": "0.1.16",
-    "@midnight-ntwrk/wallet": "3.6.1",
+    "@midnight-ntwrk/wallet": "3.7.1",
     "@midnight-ntwrk/wallet-api": "3.5.0",
     "@types/jest": "^29.2.0",
     "@types/node": "^18.11.3",

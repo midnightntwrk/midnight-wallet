@@ -221,6 +221,19 @@ describe('Fresh wallet with empty state', () => {
   );
 
   test(
+    'Midnight wallet returns no nullifiers',
+    async () => {
+      allure.tms('PM-12948', 'PM-12948');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - fresh');
+      const state = await waitForSync(wallet);
+      expect(state.nullifiers).toHaveLength(0);
+    },
+    timeout,
+  );
+
+  test(
     'Midnight wallet returns no available coins',
     async () => {
       allure.tms('PM-8925', 'PM-8925');
