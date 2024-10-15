@@ -35,7 +35,7 @@ services:
       node:
         condition: service_started
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.6.3-5c08562c"
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.6.3-57736721"
     platform: linux/amd64
     container_name: node_$TESTCONTAINERS_UID
     ports:

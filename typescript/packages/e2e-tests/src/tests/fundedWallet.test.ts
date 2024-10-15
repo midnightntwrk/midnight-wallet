@@ -100,6 +100,24 @@ describe('Funded wallet', () => {
   );
 
   test(
+    'Wallet has 7 nullifiers',
+    async () => {
+      allure.tms('PM-12950', 'PM-12950');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state');
+      allure.story('Wallet state properties - funded');
+      const state = await waitForSync(wallet);
+      const nullifiers = state?.nullifiers;
+      expect(nullifiers).toHaveLength(7);
+      nullifiers
+        .forEach((n) => {
+          expect(n).toMatch(/^[0-9a-f]{64}$/);
+        });
+    },
+    timeout,
+  );
+
+  test(
     'Wallet has no pending coins',
     async () => {
       allure.tms('PM-8931', 'PM-8931');

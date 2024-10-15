@@ -115,6 +115,7 @@ describe('Token transfer', () => {
       expect(pendingState.availableCoins.length).toBe(6);
       expect(pendingState.pendingCoins.length).toBe(1);
       expect(pendingState.coins.length).toBe(7);
+      expect(pendingState.nullifiers.length).toBe(7);
       expect(pendingState.transactionHistory.length).toBe(1);
 
       await waitForTxInHistory(txId, walletFunded);
@@ -126,6 +127,7 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBe(8);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(8);
+      expect(finalState.nullifiers.length).toBe(8);
       expect(finalState.transactionHistory.length).toBe(2);
     },
     timeout,
@@ -507,6 +509,7 @@ describe('Token transfer', () => {
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
       expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.coins.length).toBe(initialState.coins.length);
+      expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
       await waitForTxInHistory(txId, walletFunded);
@@ -518,6 +521,7 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
+      expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]} tDUST`);
       logger.info(`Wallet 1: ${finalState.balances[tokenTypeHash]} ${tokenTypeHash}`);
@@ -531,6 +535,7 @@ describe('Token transfer', () => {
       expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
       expect(finalState2.pendingCoins.length).toBe(0);
       expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
+      expect(finalState2.nullifiers.length).toBeGreaterThanOrEqual(initialState2.nullifiers.length + 1);
       expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
       logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]} tDUST`);
       logger.info(`Wallet 2: ${finalState2.balances[tokenTypeHash]} ${tokenTypeHash}`);
@@ -589,6 +594,7 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBe(syncedState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(syncedState.coins.length);
+      expect(finalState.nullifiers.length).toBe(syncedState.nullifiers.length);
       expect(finalState.transactionHistory.length).toBe(syncedState.transactionHistory.length);
     },
     timeout,
@@ -636,6 +642,7 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBe(syncedState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(syncedState.coins.length);
+      expect(finalState.nullifiers.length).toBe(syncedState.nullifiers.length);
       expect(finalState.transactionHistory.length).toBe(syncedState.transactionHistory.length);
     },
     timeout,

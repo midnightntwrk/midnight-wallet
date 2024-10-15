@@ -135,6 +135,7 @@ describe('Token transfer', () => {
       expect(pendingState.availableCoins.length).toBe(6);
       expect(pendingState.pendingCoins.length).toBe(1);
       expect(pendingState.coins.length).toBe(7);
+      expect(pendingState.nullifiers.length).toBe(7);
       expect(pendingState.transactionHistory.length).toBe(1);
 
       const finalState = await waitForFinalizedBalance(walletFunded);
@@ -144,6 +145,7 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBe(7);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(7);
+      expect(finalState.nullifiers.length).toBe(7);
       expect(finalState.transactionHistory.length).toBe(2);
 
       await waitForTxInHistory(txId, wallet2);
@@ -155,6 +157,7 @@ describe('Token transfer', () => {
       expect(finalState2.availableCoins.length).toBe(1);
       expect(finalState2.pendingCoins.length).toBe(0);
       expect(finalState2.coins.length).toBe(1);
+      expect(finalState2.nullifiers.length).toBe(1);
       expect(finalState2.transactionHistory.length).toBe(1);
     },
     timeout,
