@@ -4,7 +4,6 @@ import cats.syntax.all.*
 import scala.annotation.tailrec
 import io.iohk.midnight.wallet.zswap.*
 
-@SuppressWarnings(Array("org.wartremover.warts.Equals"))
 object TransactionBalancer {
   private val Zero = BigInt(0)
   private val nativeTokenType = TokenType.Native
@@ -80,7 +79,6 @@ object TransactionBalancer {
       for {
         offerAndState <- tryBalanceImbalances(imbalancesWithoutNativeToken, state)
         (offerContainer, offerState) = offerAndState
-        isNativeToken = imbalancesWithoutNativeToken.isEmpty
         fee = calculateFee(offerContainer)
 
         nativeTokenOfferAndState <- tryBalanceImbalances(
@@ -154,9 +152,10 @@ object TransactionBalancer {
   ): Either[Error, (OfferContainer, LocalState)] = {
     coinsToUse match {
       case coin :: restOfCoins =>
-        val unbalancedValue = ifNativeTokenOrElse(tokenType)(
-          tokenValue + TokenType.InputFeeOverhead - coin.value,
-        )(tokenValue - coin.value)
+        val fee =
+          if (tokenType === nativeTokenType) TokenType.InputFeeOverhead
+          else BigInt(0)
+        val unbalancedValue = tokenValue + fee - coin.value
         if (unbalancedValue > Zero) {
           val (offer, newState) = prepareOfferWithInput(state, coin)
           balanceToken(
@@ -166,30 +165,30 @@ object TransactionBalancer {
             newState,
             accOffer.mergeOffer(offer),
           )
-        } else if (unbalancedValue == Zero) {
-          val (offer, newState) = prepareOfferWithInput(state, coin)
-          Right((accOffer.mergeOffer(offer), newState))
         } else {
-          ifNativeTokenOrElse(tokenType) {
+          if (tokenType === nativeTokenType) {
             val change = unbalancedValue + TokenType.OutputFeeOverhead
             if (change >= Zero) {
-              // change amount is smaller than output fee, so there is no need to create output with change
+              // The change amount is smaller than output fee, so we need to add another input
+              // in order to create a larger change output to avoid generating dust
+              // (i.e. an output with value smaller than the cost of adding it to a transaction,
+              // not to confuse with Midnight's native token)
               val (offer, newState) = prepareOfferWithInput(state, coin)
-              Right((accOffer.mergeOffer(offer), newState))
+              balanceToken(
+                tokenType,
+                unbalancedValue,
+                restOfCoins,
+                newState,
+                accOffer.mergeOffer(offer),
+              )
             } else {
               Right(finalizeOfferWithChange(accOffer, state, coin, change))
             }
-          }(Right(finalizeOfferWithChange(accOffer, state, coin, unbalancedValue)))
+          } else {
+            Right(finalizeOfferWithChange(accOffer, state, coin, unbalancedValue))
+          }
         }
       case Nil => Left(NotSufficientFunds(tokenType))
-    }
-  }
-
-  private def ifNativeTokenOrElse[T](tokenType: TokenType)(ifNativeToken: => T)(orElse: => T): T = {
-    if (tokenType === nativeTokenType) {
-      ifNativeToken
-    } else {
-      orElse
     }
   }
 
