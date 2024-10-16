@@ -109,10 +109,9 @@ describe('Funded wallet', () => {
       const state = await waitForSync(wallet);
       const nullifiers = state?.nullifiers;
       expect(nullifiers).toHaveLength(7);
-      nullifiers
-        .forEach((n) => {
-          expect(n).toMatch(/^[0-9a-f]{64}$/);
-        });
+      nullifiers.forEach((n) => {
+        expect(n).toMatch(/^[0-9a-f]{64}$/);
+      });
     },
     timeout,
   );
