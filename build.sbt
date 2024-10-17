@@ -1,6 +1,4 @@
 import scala.sys.process.*
-import LedgerBinariesDownloader.*
-import sbt.io.FileFilter
 import org.scalajs.jsenv.nodejs.NodeJSEnv
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
@@ -40,6 +38,8 @@ lazy val ghPackagesCredentials =
   )
 
 lazy val commonSettings = Seq(
+  ghPackagesResolver,
+  ghPackagesCredentials,
   // Scala compiler options
   scalaVersion := "3.4.2",
   scalacOptions ++= Seq("-Wunused:all", "-Wvalue-discard"),
@@ -61,15 +61,6 @@ lazy val commonSettings = Seq(
   // Linting
   wartremoverErrors ++= (if (Env.devModeEnabled) Seq.empty else warts),
   wartremoverWarnings ++= (if (Env.devModeEnabled) warts else Seq.empty),
-)
-
-lazy val commonPublishSettings = Seq(
-  ghPackagesResolver,
-  ghPackagesCredentials,
-  organization := "io.iohk.midnight",
-  version := "3.7.2",
-  versionScheme := Some("early-semver"),
-  publishTo := Some(ghPackagesRealm at ghPackagesUrl),
 )
 
 lazy val commonScalablyTypedSettings = Seq(
@@ -115,7 +106,7 @@ lazy val walletCore = project
     jsInterop,
     bloc,
     blockchain % "compile->compile;test->test",
-    walletZswap.js,
+    walletZswap,
   )
   .settings(commonSettings)
   .settings(
@@ -146,7 +137,7 @@ lazy val walletEngine = (project in file("wallet-engine"))
     proverClient,
     pubSubIndexerClient,
     substrateClient % "compile->compile;test->test",
-    walletZswap.js,
+    walletZswap,
   )
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
@@ -185,73 +176,32 @@ lazy val jsInterop = project
     ),
   )
 
-lazy val downloadLedgerBinaries = taskKey[Unit]("Download ledger binaries")
-lazy val testDownloadLedgerBinaries = taskKey[Unit]("Download ledger binaries for tests")
-lazy val walletZswap = crossProject(JVMPlatform, JSPlatform)
-  .crossType(CrossType.Full)
-  .in(file("wallet-zswap"))
-  .settings(commonSettings, commonPublishSettings)
-  .settings(name := "wallet-zswap")
-  .jsConfigure(_.dependsOn(jsInterop, blockchain))
-  .jsEnablePlugins(ScalablyTypedConverterExternalNpmPlugin)
-  .jsSettings(
-    commonScalablyTypedSettings,
-    scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
-  )
-  .jvmSettings(
-    cleanFiles += (Compile / resourceDirectory).value,
-    libraryDependencies += "com.github.jnr" % "jnr-ffi" % "2.2.13",
-    downloadLedgerBinaries := {
-      val resourcesDir = (Compile / resourceDirectory).value
-      IO.createDirectory(resourcesDir)
-
-      downloadBinaries(
-        Config(
-          requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-3.0.2",
-          ghAuthToken = sys.env("IOG_GH_TOKEN"),
-          tempDir = taskTemporaryDirectory.value.getPath,
-          resourcesDir = resourcesDir.getPath,
-          logger = streams.value.log,
-          versionAlias = "v1",
-        ),
-      )
-    },
-    testDownloadLedgerBinaries := {
-      val resourcesDir = (Test / resourceDirectory).value
-      IO.createDirectory(resourcesDir)
-      downloadBinaries(
-        Config(
-          requiredAssets = List(Linux, Darwin),
-          releaseTag = "zswap-c-bindings-0.3.11",
-          ghAuthToken = sys.env("IOG_GH_TOKEN"),
-          tempDir = taskTemporaryDirectory.value.getPath,
-          resourcesDir = resourcesDir.getPath,
-          logger = streams.value.log,
-          versionAlias = "v2",
-        ),
-      )
-    },
-    Compile / update := { (Compile / update).dependsOn(downloadLedgerBinaries).value },
-    Test / update := { (Test /update).dependsOn(testDownloadLedgerBinaries).value },
-  )
-  .settings(
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "cats-core" % catsVersion,
-      "org.typelevel" %%% "cats-effect" % catsEffectVersion,
-    ),
-    // Test dependencies
-    libraryDependencies ++= Seq(
-      "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
-      "org.scalacheck" %%% "scalacheck" % "1.17.)",
-      "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
-    ).map(_ % Test),
-    Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
-  )
+lazy val walletZswap =
+  project
+    .in(file("wallet-zswap"))
+    .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
+    .dependsOn(jsInterop, blockchain)
+    .settings(commonSettings)
+    .settings(
+      name := "wallet-zswap",
+      commonScalablyTypedSettings,
+      scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
+      libraryDependencies ++= Seq(
+        "org.typelevel" %%% "cats-core" % catsVersion,
+        "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      ),
+      // Test dependencies
+      libraryDependencies ++= Seq(
+        "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
+        "org.scalacheck" %%% "scalacheck" % "1.17.)",
+        "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
+      ).map(_ % Test),
+      Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
+    )
 
 lazy val proverClient = project
   .in(file("prover-client"))
-  .dependsOn(walletZswap.js)
+  .dependsOn(walletZswap)
   .dependsOn(jsInterop)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings)
@@ -270,7 +220,7 @@ lazy val proverClient = project
 
 lazy val substrateClient = project
   .in(file("substrate-client"))
-  .dependsOn(jsInterop, walletZswap.js)
+  .dependsOn(jsInterop, walletZswap)
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings)
   .settings(commonScalablyTypedSettings)
@@ -352,21 +302,18 @@ lazy val distImpl = Def.task {
   streams.value.log.info(s"Dist done at ${distDir.absolutePath}")
 }
 
-// coverage temporary removed - sbt-scoverage doesn't support scala 3 with scalajs yet
 addCommandAlias(
   "verify",
   Seq(
     "scalafmtCheckAll",
-//     "coverage",
     "jsInterop/test",
     "bloc/test",
     "blockchain/test",
-    "walletZswapJVM/test",
+    "walletZswap/test",
     "substrateClient/test",
-    "walletZswapJS/Test/compile",
+    "walletZswap/test",
     "proverClient/test",
     "walletCore/test",
     "walletEngine/test",
-//     "coverageReport",
   ).mkString(";", " ;", ""),
 )

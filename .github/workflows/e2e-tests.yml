@@ -3,7 +3,6 @@ name: E2E tests
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
-  IOG_GH_TOKEN: ${{ secrets.GH_TOKEN }} # For sbt to download ledger binaries from IOG org
   NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}

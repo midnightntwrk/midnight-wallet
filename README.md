@@ -114,8 +114,6 @@ for how to branch and tag releases.
 
 In order to release a new version of the wallet-engine, the version in `wallet-engine/package.json` should be bumped.
 
-In order to release a new version of the JVM wallet-zswap packages, `commonPublishSettings` in `build.sbt` should be updated.
-
 After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 
 from GitHub to create a tag with a name following the pattern `vX.Y.Z`.
 A GitHub action will automatically build and publish the new version.
