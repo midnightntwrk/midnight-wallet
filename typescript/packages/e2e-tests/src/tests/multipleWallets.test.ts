@@ -5,7 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { waitForSync } from './utils';
+import { closeWallet, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 
@@ -61,15 +61,7 @@ describe('Syncing', () => {
 
   afterEach(async () => {
     for (const wallet of wallets) {
-      try {
-        await wallet.close();
-      } catch (e: unknown) {
-        if (typeof e === 'string') {
-          logger.warn(e);
-        } else if (e instanceof Error) {
-          logger.warn(e.message);
-        }
-      }
+      await closeWallet(wallet);
     }
   });
 

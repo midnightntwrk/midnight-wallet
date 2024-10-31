@@ -1,7 +1,103 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { TestContainersFixture } from './test-fixture';
+import { NetworkId } from '@midnight-ntwrk/zswap';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
+export const provideWallet = async (
+  filename: string,
+  seed: string,
+  networkId: NetworkId,
+  fixture: TestContainersFixture,
+): Promise<Wallet & Resource> => {
+  let wallet: Wallet & Resource;
+  if (existsSync(filename)) {
+    logger.info(`Attempting to restore state from ${filename}`);
+    try {
+      const serialized = readFileSync(filename, 'utf-8');
+      wallet = await WalletBuilder.restore(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        serialized,
+        'info',
+      );
+      wallet.start();
+      const stateObject = JSON.parse(serialized);
+      const newState = await waitForSync(wallet);
+      if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset) {
+        logger.info('Wallet was able to sync from restored state');
+      } else {
+        logger.info(stateObject.newState.syncProgress?.total);
+        logger.info(stateObject.offset);
+        logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
+        wallet = await WalletBuilder.buildFromSeed(
+          fixture.getIndexerUri(),
+          fixture.getIndexerWsUri(),
+          fixture.getProverUri(),
+          fixture.getNodeUri(),
+          seed,
+          networkId,
+          'info',
+        );
+      }
+    } catch (error: unknown) {
+      if (typeof error === 'string') {
+        logger.error(error);
+      } else if (error instanceof Error) {
+        logger.error(error.message);
+      }
+      logger.warn('Wallet was not able to restore using the stored state, building wallet from scratch');
+      wallet = await WalletBuilder.buildFromSeed(
+        fixture.getIndexerUri(),
+        fixture.getIndexerWsUri(),
+        fixture.getProverUri(),
+        fixture.getNodeUri(),
+        seed,
+        networkId,
+        'info',
+      );
+    }
+  } else {
+    logger.info(`${filename} not present, building a wallet from scratch`);
+    wallet = await WalletBuilder.buildFromSeed(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seed,
+      networkId,
+      'info',
+    );
+  }
+  return wallet;
+};
+
+export const saveState = async (wallet: Wallet, filename: string) => {
+  logger.info(`Saving state in ${filename}`);
+  const serializedState = await wallet.serializeState();
+  writeFileSync(filename, serializedState, {
+    flag: 'w',
+  });
+};
+
+export const closeWallet = async (wallet: Wallet & Resource) => {
+  try {
+    await wallet.close();
+  } catch (e: unknown) {
+    if (typeof e === 'string') {
+      logger.warn(e);
+    } else if (e instanceof Error) {
+      logger.warn(e.message);
+    }
+  }
+};
 
 export const waitForSync = (wallet: Wallet) =>
   firstValueFrom(
@@ -90,4 +186,4 @@ export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).
 
 export type MidnightNetwork = 'undeployed' | 'devnet' | 'testnet';
 
-export type MidnightDeployment = 'ariadne-qa' | 'halo2-qa' | 'hardfork-qa' | 'devnet' | 'testnet' | 'local';
+export type MidnightDeployment = 'halo2-qa' | 'hardfork-qa' | 'testnet' | 'local';

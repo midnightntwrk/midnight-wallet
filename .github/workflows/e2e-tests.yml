@@ -115,6 +115,16 @@ jobs:
         with:
           ref: plonk-healthcheck
 
+      - name: Download the latest sync_cache
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        run: |
+            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="completed") | .databaseId' | head -n 1)
+            gh run download $LATEST_RUN_ID
+            ls -al
+            mv .sync_cache ./typescript/packages/e2e-tests/.sync_cache
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -158,6 +168,14 @@ jobs:
         run: |
           cd typescript
           yarn test-e2e -- ${{ inputs.modifier }}
+
+      - name: Upload sync cache
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: .sync_cache
+          path: ./typescript/packages/e2e-tests/.sync_cache
+          include-hidden-files: true
 
       - name: Create allure properties
         if: success() || failure()

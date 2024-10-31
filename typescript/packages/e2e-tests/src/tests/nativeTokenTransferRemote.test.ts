@@ -1,8 +1,17 @@
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId, UnprovenOffer, UnprovenOutput, UnprovenTransaction } from '@midnight-ntwrk/zswap';
-import { waitForFinalizedBalance, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
+import {
+  closeWallet,
+  provideWallet,
+  saveState,
+  waitForFinalizedBalance,
+  waitForPending,
+  waitForSync,
+  waitForTxInHistory,
+  walletStateTrimmed,
+} from './utils';
 import { randomBytes } from 'node:crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -30,6 +39,11 @@ describe('Token transfer', () => {
   let sender: Wallet & Resource;
   let receiver: Wallet & Resource;
   let fixture: TestContainersFixture;
+  let wallet: Wallet & Resource;
+  let wallet2: Wallet & Resource;
+
+  const filenameWallet = `./.sync_cache/${fundedSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+  const filenameWallet2 = `./.sync_cache/${receivingSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
 
   beforeEach(async () => {
     fixture = getFixture();
@@ -49,60 +63,32 @@ describe('Token transfer', () => {
 
     const date = new Date();
     const hour = date.getHours();
+
+    wallet = await provideWallet(filenameWallet, fundedSeed, networkId, fixture);
+    wallet2 = await provideWallet(filenameWallet2, receivingSeed, networkId, fixture);
+
     if (hour % 2 !== 0) {
       logger.info('Using NT_SEED2 as receiver');
-      sender = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        fundedSeed,
-        networkId,
-        'info',
-      );
-
-      receiver = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        receivingSeed,
-        networkId,
-        'info',
-      );
+      sender = wallet;
+      receiver = wallet2;
     } else {
       logger.info('Using NT_SEED2 as sender');
-      sender = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        receivingSeed,
-        networkId,
-        'info',
-      );
-
-      receiver = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        fundedSeed,
-        networkId,
-        'info',
-      );
+      sender = wallet2;
+      receiver = wallet;
     }
 
     sender.start();
     // wait before starting another wallet to evade issues with syncing
     await new Promise((resolve) => setTimeout(resolve, 5_000));
     receiver.start();
-  }, 10_000);
+  }, timeout);
 
   afterEach(async () => {
-    await sender.close();
-    await receiver.close();
-  });
+    await saveState(wallet, filenameWallet);
+    await saveState(wallet2, filenameWallet2);
+    await closeWallet(wallet);
+    await closeWallet(wallet2);
+  }, timeout);
 
   test(
     'Is working for valid native token transfer @smoke @healthcheck',

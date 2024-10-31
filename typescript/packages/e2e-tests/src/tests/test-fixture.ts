@@ -95,14 +95,8 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'https://indexer.devnet.midnight.network';
-      }
       case 'testnet': {
         return 'https://indexer.testnet.midnight.network';
-      }
-      case 'ariadne-qa': {
-        return 'https://indexer.ariadne-qa.dev.midnight.network';
       }
       case 'halo2-qa': {
         return 'https://indexer.halo2-qa.dev.midnight.network';
@@ -119,14 +113,8 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'wss://indexer.devnet.midnight.network';
-      }
       case 'testnet': {
         return 'wss://indexer.testnet.midnight.network';
-      }
-      case 'ariadne-qa': {
-        return 'wss://indexer.ariadne-qa.dev.midnight.network';
       }
       case 'halo2-qa': {
         return 'wss://indexer.halo2-qa.dev.midnight.network';
@@ -143,14 +131,8 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
-      case 'devnet': {
-        return 'https://rpc.devnet.midnight.network';
-      }
       case 'testnet': {
         return 'https://rpc.testnet.midnight.network';
-      }
-      case 'ariadne-qa': {
-        return 'https://rpc.ariadne-qa.dev.midnight.network';
       }
       case 'halo2-qa': {
         return 'https://rpc.halo2-qa.dev.midnight.network';

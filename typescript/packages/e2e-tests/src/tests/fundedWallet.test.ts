@@ -1,7 +1,7 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { useTestContainersFixture } from './test-fixture';
 import { NetworkId, nativeToken } from '@midnight-ntwrk/zswap';
-import { isArrayUnique, waitForSync } from './utils';
+import { closeWallet, isArrayUnique, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
 /**
@@ -35,7 +35,7 @@ describe('Funded wallet', () => {
   });
 
   afterEach(async () => {
-    await wallet.close();
+    await closeWallet(wallet);
   });
 
   test(

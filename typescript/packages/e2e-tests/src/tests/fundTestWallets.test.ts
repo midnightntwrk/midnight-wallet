@@ -2,7 +2,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
+import { closeWallet, waitForFinalizedBalance, waitForPending, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
@@ -58,7 +58,7 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    await walletFunded.close();
+    await closeWallet(walletFunded);
   });
 
   test(

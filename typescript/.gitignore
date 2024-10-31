@@ -20,3 +20,6 @@ packages/*/*.tgz
 # reports
 reports
 allure-results
+
+# user files
+.sync_cache/*

@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import {
   LedgerParameters,
@@ -9,7 +9,16 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { waitForFinalizedBalance, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
+import {
+  closeWallet,
+  provideWallet,
+  saveState,
+  waitForFinalizedBalance,
+  waitForPending,
+  waitForSync,
+  waitForTxInHistory,
+  walletStateTrimmed,
+} from './utils';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
@@ -35,7 +44,12 @@ describe('Token transfer', () => {
 
   let sender: Wallet & Resource;
   let receiver: Wallet & Resource;
+  let wallet: Wallet & Resource;
+  let wallet2: Wallet & Resource;
   let fixture: TestContainersFixture;
+
+  const filenameWallet = `./.sync_cache/${seedFunded.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+  const filenameWallet2 = `./.sync_cache/${seed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
 
   beforeEach(async () => {
     fixture = getFixture();
@@ -54,60 +68,31 @@ describe('Token transfer', () => {
     const date = new Date();
     const hour = date.getHours();
 
+    wallet = await provideWallet(filenameWallet, seedFunded, networkId, fixture);
+    wallet2 = await provideWallet(filenameWallet2, seed, networkId, fixture);
+
     if (hour % 2 !== 0) {
       logger.info('Using SEED2 as receiver');
-      sender = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        seedFunded,
-        networkId,
-        'info',
-      );
-
-      receiver = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        seed,
-        networkId,
-        'info',
-      );
+      sender = wallet;
+      receiver = wallet2;
     } else {
       logger.info('Using SEED2 as sender');
-      sender = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        seed,
-        networkId,
-        'info',
-      );
-
-      receiver = await WalletBuilder.buildFromSeed(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        seedFunded,
-        networkId,
-        'info',
-      );
+      sender = wallet2;
+      receiver = wallet;
     }
 
     sender.start();
     // wait before starting another wallet to evade issues with syncing
     await new Promise((resolve) => setTimeout(resolve, 5_000));
     receiver.start();
-  }, 10_000);
+  }, timeout);
 
   afterEach(async () => {
-    await sender.close();
-    await receiver.close();
-  });
+    await saveState(wallet, filenameWallet);
+    await saveState(wallet2, filenameWallet2);
+    await closeWallet(wallet);
+    await closeWallet(wallet2);
+  }, timeout);
 
   test(
     'Is working for valid transfer @healthcheck',

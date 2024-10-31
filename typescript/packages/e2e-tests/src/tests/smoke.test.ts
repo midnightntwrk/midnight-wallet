@@ -6,6 +6,7 @@ import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import {
+  closeWallet,
   compareStates,
   waitForFinalizedBalance,
   waitForPending,
@@ -63,24 +64,8 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    try {
-      await walletFunded.close();
-    } catch (e: unknown) {
-      if (typeof e === 'string') {
-        logger.warn(e);
-      } else if (e instanceof Error) {
-        logger.warn(e.message);
-      }
-    }
-    try {
-      await wallet2.close();
-    } catch (e: unknown) {
-      if (typeof e === 'string') {
-        logger.warn(e);
-      } else if (e instanceof Error) {
-        logger.warn(e.message);
-      }
-    }
+    await closeWallet(walletFunded);
+    await closeWallet(wallet2);
   });
 
   test(

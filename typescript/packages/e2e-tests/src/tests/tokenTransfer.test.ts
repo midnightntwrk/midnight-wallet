@@ -9,7 +9,14 @@ import {
   UnprovenOutput,
   UnprovenTransaction,
 } from '@midnight-ntwrk/zswap';
-import { waitForFinalizedBalance, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
+import {
+  closeWallet,
+  waitForFinalizedBalance,
+  waitForPending,
+  waitForSync,
+  waitForTxInHistory,
+  walletStateTrimmed,
+} from './utils';
 import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
@@ -64,8 +71,8 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    await walletFunded.close();
-    await wallet2.close();
+    await closeWallet(walletFunded);
+    await closeWallet(wallet2);
   });
 
   test(
