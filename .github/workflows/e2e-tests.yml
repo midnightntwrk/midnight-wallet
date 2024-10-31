@@ -127,7 +127,7 @@ jobs:
         continue-on-error: true
         with:
           run-id: ${{ env.LATEST_RUN_ID }}
-          path: ./typescript/packages/e2e-tests
+          path: ./typescript/packages/e2e-tests/.sync_cache
           github-token: ${{ secrets.GH_TOKEN }}
           name: .sync_cache
 
