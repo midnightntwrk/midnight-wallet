@@ -2,7 +2,6 @@ name: Fund test wallets
 
 env:
     NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
-    CRYPTO: ${{ (inputs.deployment == 'devnet' || inputs.deployment == 'ariadne-qa') && 'plonk' || 'halo2' }}
 
 on:
     workflow_dispatch:
@@ -23,7 +22,6 @@ on:
           options:
             - halo2-qa
             - hardfork-qa
-            - ariadne-qa
             - devnet
             - testnet
 
@@ -32,13 +30,7 @@ jobs:
         name: Run funding script
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
-              if: env.CRYPTO == 'halo2'
-    
-            - uses: actions/checkout@v4
-              if: env.CRYPTO == 'plonk'
-              with:
-                ref: plonk-healthcheck
+            - uses: actions/checkout@v4 
 
             - uses: actions/setup-node@v4
               with:
@@ -58,8 +50,9 @@ jobs:
               env:
                 NETWORK: ${{ inputs.network }}
                 DEPLOYMENT: ${{ inputs.deployment }}
-                SEED:  ${{ env.CRYPTO == 'halo2' && secrets.FAUCET_SEED_HALO2 || secrets.FAUCET_SEED }}
-                ADDRESSES: ${{ env.CRYPTO == 'halo2' && vars.HALO2_ADDRESSES || vars.PLONK_ADDRESSES  }}
+                SEED: ${{ secrets.FAUCET_SEED_HALO2 }}
+                SEED_STABLE: ${{ secrets.SEED_STABLE }}
+                ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
               run: |
                 cd typescript
                 yarn install --immutable
@@ -71,6 +64,7 @@ jobs:
                 NETWORK: ${{ inputs.network }}
                 DEPLOYMENT: ${{ inputs.deployment }}
                 SEED: ${{ secrets.FAUCET_SEED_TESTNET }}
+                SEED_STABLE: ${{ secrets.SEED_STABLE }}
                 ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
               run: |
                 cd typescript

@@ -2,7 +2,7 @@ services:
   proof-server:
     image: ghcr.io/midnight-ntwrk/proof-server:3.0.2
     container_name: proof-server_$TESTCONTAINERS_UID
-    command: ["midnight-proof-server --network $NETWORK_ID"]
+    command: ["midnight-proof-server -v --network $NETWORK_ID"]
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:6300/health" ]
       interval: 3s

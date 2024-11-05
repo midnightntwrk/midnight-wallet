@@ -7,8 +7,9 @@
     "lint": "turbo run lint",
     "test-e2e": "turbo run test-e2e"
   },
+  "name": "@midnight/wallet-typescript",
   "devDependencies": {
     "jest-junit": "^16.0.0",
-    "turbo": "^1.10.12"
+    "turbo": "^2.2.3"
   }
 }

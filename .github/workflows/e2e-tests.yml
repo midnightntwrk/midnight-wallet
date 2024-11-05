@@ -172,6 +172,7 @@ jobs:
           DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ inputs.seed }}
           SEED2: ${{ inputs.seed2 }}
+          SEED_STABLE: ${{ secrets.SEED_STABLE }}
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
         run: |

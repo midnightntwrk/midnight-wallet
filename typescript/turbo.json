@@ -1,12 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "pipeline": {
+  "globalEnv": ["NODE_AUTH_TOKEN"],
+  "tasks": {
     "lint": {
-      "outputMode": "new-only",
+      "outputLogs": "new-only",
       "dependsOn": ["^build"]
     },
     "test-e2e": {
-      "cache": false
+      "cache": false,
+      "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2"]
     }
   }
 }
