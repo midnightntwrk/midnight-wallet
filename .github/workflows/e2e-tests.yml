@@ -115,12 +115,12 @@ jobs:
         with:
           ref: plonk-healthcheck
 
-      - name: Determine the latest run ID with appropriate artifact
+      - name: Determine the latest successful run ID with appropriate artifact
         continue-on-error: true
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="completed") | .databaseId' | head -n 1)
+            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="success") | .databaseId' | head -n 1)
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
     
       - uses: actions/download-artifact@v4

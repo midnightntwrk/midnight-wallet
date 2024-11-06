@@ -1,11 +1,10 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { closeWallet, provideWallet, saveState, waitForSync, walletStateTrimmed } from './utils';
+import { closeWallet, provideWallet, saveState, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
-import { readFileSync, writeFileSync } from 'node:fs';
 
 /**
  * Tests checking balance is constant

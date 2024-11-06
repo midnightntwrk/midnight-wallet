@@ -122,45 +122,56 @@ describe('Token transfer', () => {
           receiverAddress: initialState2.address,
         },
       ];
-      const txToProve = await sender.transferTransaction(outputsToCreate);
-      const provenTx = await sender.proveTransaction(txToProve);
-      const txId = await sender.submitTransaction(provenTx);
-      console.time('txProcessing');
-      logger.info('Transaction id: ' + txId);
+      try {
+        const txToProve = await sender.transferTransaction(outputsToCreate);
+        const provenTx = await sender.proveTransaction(txToProve);
+        const txId = await sender.submitTransaction(provenTx);
+        console.time('txProcessing');
+        logger.info('Transaction id: ' + txId);
 
-      const pendingState = await waitForPending(sender);
-      logger.info(walletStateTrimmed(pendingState));
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(1);
-      expect(pendingState.coins.length).toBe(initialState.coins.length);
-      expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
-      expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+        const pendingState = await waitForPending(sender);
+        logger.info(walletStateTrimmed(pendingState));
+        logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
+        expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+        expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
+        expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(1);
+        expect(pendingState.coins.length).toBe(initialState.coins.length);
+        expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
+        expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      await waitForTxInHistory(txId, sender);
-      const finalState = await waitForSync(sender);
-      logger.info(walletStateTrimmed(finalState));
-      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
-      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
-      expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
-      expect(finalState.pendingCoins.length).toBe(0);
-      expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
-      expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
-      expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
-      logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
+        await waitForTxInHistory(txId, sender);
+        const finalState = await waitForSync(sender);
+        logger.info(walletStateTrimmed(finalState));
+        logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
+        expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+        expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
+        expect(finalState.pendingCoins.length).toBe(0);
+        expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
+        expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
+        expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+        logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
 
-      await waitForTxInHistory(txId, receiver);
-      const finalState2 = await waitForSync(receiver);
-      logger.info(walletStateTrimmed(finalState2));
-      logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
-      expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
-      expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
-      expect(finalState2.pendingCoins.length).toBe(0);
-      expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
-      expect(finalState2.nullifiers.length).toBeGreaterThanOrEqual(initialState2.nullifiers.length + 1);
-      expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
-      logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
+        await waitForTxInHistory(txId, receiver);
+        const finalState2 = await waitForSync(receiver);
+        logger.info(walletStateTrimmed(finalState2));
+        logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
+        expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
+        expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
+        expect(finalState2.pendingCoins.length).toBe(0);
+        expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
+        expect(finalState2.nullifiers.length).toBeGreaterThanOrEqual(initialState2.nullifiers.length + 1);
+        expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(
+          initialState2.transactionHistory.length + 1,
+        );
+        logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
+      } catch (error) {
+        if (typeof error === 'string') {
+          logger.warn(error);
+        } else if (error instanceof Error) {
+          logger.warn(error.message);
+        }
+        fail();
+      }
     },
     timeout,
   );
