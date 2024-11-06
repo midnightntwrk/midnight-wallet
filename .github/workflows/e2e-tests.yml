@@ -120,7 +120,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="success") | .databaseId' | head -n 1)
+            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,conclusion,headBranch | jq -r '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
     
       - uses: actions/download-artifact@v4
