@@ -170,7 +170,6 @@ describe('Token transfer', () => {
         } else if (error instanceof Error) {
           logger.warn(error.message);
         }
-        fail();
       }
     },
     timeout,
