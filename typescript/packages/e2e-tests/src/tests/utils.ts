@@ -1,3 +1,6 @@
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/strict-boolean-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
@@ -7,7 +10,40 @@ import { logger } from './logger';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture } from './test-fixture';
 import { NetworkId } from '@midnight-ntwrk/zswap';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { exit } from 'node:process';
+import * as fsAsync from 'node:fs/promises';
+import * as fs from 'node:fs';
+
+export const waitForSyncProgress = async (wallet: Wallet) =>
+  await firstValueFrom(
+    wallet.state().pipe(
+      throttleTime(5_000),
+      tap((state) => {
+        const scanned = state.syncProgress?.synced ?? 0n;
+        const total = state.syncProgress?.total.toString() ?? 'unknown number';
+        logger.info(`Wallet scanned ${scanned} indices out of ${total}`);
+      }),
+      filter((state) => {
+        // Let's allow progress only if syncProgress is defined
+        return state.syncProgress !== undefined;
+      }),
+    ),
+  );
+
+export const isAnotherChain = async (wallet: Wallet, offset: number) => {
+  const state = await waitForSyncProgress(wallet);
+  return state.syncProgress!.total < offset;
+};
+
+export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
+  const chunks: Buffer[] = [];
+  return await new Promise((resolve, reject) => {
+    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('error', (err) => reject(err));
+    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+  });
+};
 
 export const provideWallet = async (
   filename: string,
@@ -16,10 +52,17 @@ export const provideWallet = async (
   fixture: TestContainersFixture,
 ): Promise<Wallet & Resource> => {
   let wallet: Wallet & Resource;
-  if (existsSync(filename)) {
-    logger.info(`Attempting to restore state from ${filename}`);
+  const directoryPath = process.env.SYNC_CACHE;
+  if (!directoryPath) {
+    logger.warn('SYNC_CACHE env var not set');
+    exit(1);
+  }
+  if (existsSync(`${directoryPath}/${filename}`)) {
+    logger.info(`Attempting to restore state from ${directoryPath}/${filename}`);
     try {
-      const serialized = readFileSync(filename, 'utf-8');
+      const serializedStream = fs.createReadStream(`${directoryPath}/${filename}`, 'utf-8');
+      const serialized = await streamToString(serializedStream);
+      serializedStream.on('finish', () => serializedStream.close());
       wallet = await WalletBuilder.restore(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
@@ -30,13 +73,8 @@ export const provideWallet = async (
       );
       wallet.start();
       const stateObject = JSON.parse(serialized);
-      const newState = await waitForSync(wallet);
-      if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset) {
-        logger.info('Wallet was able to sync from restored state');
-      } else {
-        logger.info(stateObject.newState.syncProgress?.total);
-        logger.info(stateObject.offset);
-        logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
+      if (await isAnotherChain(wallet, stateObject.offset)) {
+        logger.warn('The chain was reset, building wallet from scratch');
         wallet = await WalletBuilder.buildFromSeed(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
@@ -46,6 +84,24 @@ export const provideWallet = async (
           networkId,
           'info',
         );
+      } else {
+        const newState = await waitForSync(wallet);
+        if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset) {
+          logger.info('Wallet was able to sync from restored state');
+        } else {
+          logger.info(stateObject.offset);
+          logger.info(newState.syncProgress?.total);
+          logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
+          wallet = await WalletBuilder.buildFromSeed(
+            fixture.getIndexerUri(),
+            fixture.getIndexerWsUri(),
+            fixture.getProverUri(),
+            fixture.getNodeUri(),
+            seed,
+            networkId,
+            'info',
+          );
+        }
       }
     } catch (error: unknown) {
       if (typeof error === 'string') {
@@ -65,7 +121,7 @@ export const provideWallet = async (
       );
     }
   } else {
-    logger.info(`${filename} not present, building a wallet from scratch`);
+    logger.info(`${directoryPath}/${filename} not present, building a wallet from scratch`);
     wallet = await WalletBuilder.buildFromSeed(
       fixture.getIndexerUri(),
       fixture.getIndexerWsUri(),
@@ -80,11 +136,33 @@ export const provideWallet = async (
 };
 
 export const saveState = async (wallet: Wallet, filename: string) => {
-  logger.info(`Saving state in ${filename}`);
-  const serializedState = await wallet.serializeState();
-  writeFileSync(filename, serializedState, {
-    flag: 'w',
-  });
+  const directoryPath = process.env.SYNC_CACHE;
+  if (!directoryPath) {
+    logger.warn('SYNC_CACHE env var not set');
+    exit(1);
+  }
+  logger.info(`Saving state in ${directoryPath}/${filename}`);
+  try {
+    await fsAsync.mkdir(directoryPath, { recursive: true });
+    const serializedState = await wallet.serializeState();
+    const writer = fs.createWriteStream(`${directoryPath}/${filename}`);
+    writer.write(serializedState);
+
+    writer.on('finish', function () {
+      logger.info(`File '${directoryPath}/${filename}' written successfully.`);
+    });
+
+    writer.on('error', function (err) {
+      logger.error(err);
+    });
+    writer.end();
+  } catch (e) {
+    if (typeof e === 'string') {
+      logger.warn(e);
+    } else if (e instanceof Error) {
+      logger.warn(e.message);
+    }
+  }
 };
 
 export const closeWallet = async (wallet: Wallet & Resource) => {

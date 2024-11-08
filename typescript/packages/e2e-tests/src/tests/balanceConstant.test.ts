@@ -25,7 +25,7 @@ describe('Balance constant', () => {
   const expectedDustBalance = 100_000_000n;
   const expectedTokenOneBalance = 25n;
   const expectedTokenTwoBalance = 50n;
-  const filename = `./.sync_cache/stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.deployment}.state`;
+  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.deployment}.state`;
   const timeout = 180_000;
 
   let wallet: Wallet & Resource;
@@ -60,8 +60,11 @@ describe('Balance constant', () => {
   }, timeout);
 
   afterEach(async () => {
-    await saveState(restoredWallet, filename);
     await closeWallet(wallet);
+  }, timeout);
+
+  afterAll(async () => {
+    await saveState(restoredWallet, filename);
     await closeWallet(restoredWallet);
   }, timeout);
 

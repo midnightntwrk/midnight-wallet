@@ -7,7 +7,7 @@ env:
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
-  CRYPTO: ${{ (inputs.deployment == 'devnet' || inputs.deployment == 'ariadne-qa') && 'plonk' || 'halo2' }}
+  SYNC_CACHE: ${{ github.workspace }}/typescript/packages/e2e-tests/.sync_cache
 
 on:
   workflow_dispatch:
@@ -28,10 +28,8 @@ on:
         default: 'halo2-qa'
         options:
           - local
-          - ariadne-qa
           - halo2-qa
           - hardfork-qa
-          - devnet
           - testnet
       seed:
         type: string
@@ -66,7 +64,7 @@ on:
         default: 'devnet'
       deployment:
         type: string
-        description: Midnight deployment to use (ariadne-qa/halo2-qa/hardfork-qa/devnet/testnet/local)
+        description: Midnight deployment to use (halo2-qa/hardfork-qa/testnet/local)
         required: true
         default: 'halo2-qa'
       seed:
@@ -106,14 +104,9 @@ jobs:
     name: E2E tests
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 60
+    permissions: write-all
     steps:
       - uses: actions/checkout@v4
-        if: env.CRYPTO == 'halo2'
-
-      - uses: actions/checkout@v4
-        if: env.CRYPTO == 'plonk'
-        with:
-          ref: plonk-healthcheck
 
       - name: Determine the latest successful run ID with appropriate artifact
         continue-on-error: true
@@ -122,12 +115,13 @@ jobs:
         run: |
             LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,conclusion,headBranch | jq -r '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
+            mkdir -p ${{ env.SYNC_CACHE }}
     
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
           run-id: ${{ env.LATEST_RUN_ID }}
-          path: ./typescript/packages/e2e-tests/.sync_cache
+          path: ${{ env.SYNC_CACHE }}
           github-token: ${{ secrets.GH_TOKEN }}
           name: .sync_cache
 
@@ -175,6 +169,7 @@ jobs:
           SEED_STABLE: ${{ secrets.SEED_STABLE }}
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
+          SYNC_CACHE: ${{ env.SYNC_CACHE }}
         run: |
           cd typescript
           yarn test-e2e -- ${{ inputs.modifier }}
@@ -184,7 +179,7 @@ jobs:
         if: success() || failure()
         with:
           name: .sync_cache
-          path: ./typescript/packages/e2e-tests/.sync_cache
+          path: ${{ env.SYNC_CACHE }}
           include-hidden-files: true
 
       - name: Create allure properties
