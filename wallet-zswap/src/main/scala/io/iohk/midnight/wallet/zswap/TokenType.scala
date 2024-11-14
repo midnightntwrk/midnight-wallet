@@ -2,19 +2,31 @@ package io.iohk.midnight.wallet.zswap
 
 import cats.{Eq, Show}
 import io.iohk.midnight.js.interop.util.BigIntOps.*
-import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
+import io.iohk.midnight.midnightNtwrkZswap.mod.TransactionCostModel
 
-type TokenType = mod.TokenType
+trait TokenType[T, CostModel] {
+  def create(name: String): T
+
+  def dummyCostModel: CostModel
+  def native: T
+  def inputFeeOverhead: BigInt
+  def outputFeeOverhead: BigInt
+}
+
+given TokenType[v1.TokenType, v1.TransactionCostModel] with {
+  override def create(name: v1.CoinPublicKey): v1.TokenType = name
+  override lazy val dummyCostModel: TransactionCostModel =
+    v1.TransactionCostModel.dummyTransactionCostModel()
+  override lazy val native: v1.TokenType =
+    v1.nativeToken()
+  override lazy val inputFeeOverhead: BigInt =
+    dummyCostModel.inputFeeOverhead.toScalaBigInt
+  override lazy val outputFeeOverhead: BigInt =
+    dummyCostModel.outputFeeOverhead.toScalaBigInt
+}
 
 object TokenType {
-  private val DummyCostModel = mod.TransactionCostModel.dummyTransactionCostModel()
-
-  lazy val Native: TokenType = mod.nativeToken()
-  lazy val InputFeeOverhead: BigInt = DummyCostModel.inputFeeOverhead.toScalaBigInt
-  lazy val OutputFeeOverhead: BigInt = DummyCostModel.outputFeeOverhead.toScalaBigInt
-
-  def apply(name: String): TokenType = name
-
-  given Eq[TokenType] = Eq.instance(_.contentEquals(_))
-  given Show[TokenType] = Show.catsShowForString
+  given Eq[v1.TokenType] = Eq.instance(_.contentEquals(_))
+  given Show[v1.TokenType] = Show.catsShowForString
 }

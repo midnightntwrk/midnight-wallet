@@ -2,20 +2,24 @@ package io.iohk.midnight.wallet.prover
 
 import cats.effect.{Async, Resource}
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
-import io.iohk.midnight.wallet.zswap.{NetworkId, Transaction, UnprovenTransaction}
+import io.iohk.midnight.wallet.zswap
 import scala.concurrent.duration.DurationInt
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
 import sttp.model.Uri
 
-class ProverClient[F[_]: Async](
+class ProverClient[F[_]: Async, UnprovenTransaction, Transaction](
     serverUri: Uri,
     backend: SttpBackend[F, Any],
-)(using ProtocolVersion, NetworkId) {
+)(using
+    txSerializable: zswap.Transaction.IsSerializable[Transaction],
+)(using
+    zswap.UnprovenTransaction.IsSerializable[UnprovenTransaction],
+    zswap.NetworkId,
+) {
   private val readTimeout = 20.minutes // TODO: Make this configurable
 
   private val asTransaction: ResponseAs[Transaction, Any] =
-    asByteArray.getRight.map(bytes => Transaction.deserialize(bytes))
+    asByteArray.getRight.map(bytes => txSerializable.deserialize(bytes))
 
   // https://github.com/input-output-hk/midnight-ledger-prototype/blob/9e69c01f3bf02284fcdc0e92674e3f43d8ed895a/proof-server/src/lib.rs#L90
   // Padding for missing data for `/prove-tx` payload.
@@ -38,8 +42,14 @@ class ProverClient[F[_]: Async](
 }
 
 object ProverClient {
-  def apply[F[_]: Async](
-      serverUri: Uri,
-  )(using ProtocolVersion, NetworkId): Resource[F, ProverClient[F]] =
-    SttpBackendFactory.build.map(new ProverClient[F](serverUri, _))
+  def apply[
+      F[_]: Async,
+      UnprovenTransaction: zswap.UnprovenTransaction.IsSerializable,
+      Transaction: zswap.Transaction.IsSerializable,
+  ](serverUri: Uri)(using
+      zswap.NetworkId,
+  ): Resource[F, ProverClient[F, UnprovenTransaction, Transaction]] =
+    SttpBackendFactory.build.map(
+      new ProverClient[F, UnprovenTransaction, Transaction](serverUri, _),
+    )
 }

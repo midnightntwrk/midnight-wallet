@@ -3,37 +3,26 @@ package io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
-import io.iohk.midnight.wallet.blockchain
-import io.iohk.midnight.wallet.blockchain.data
-import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import scala.util.Try
 
-opaque type MerkleTreeCollapsedUpdate = mod.MerkleTreeCollapsedUpdate
+trait MerkleTreeCollapsedUpdate[T, ZswapChainState] {
+  def create(state: ZswapChainState, start: BigInt, end: BigInt): T
+  def deserialize(bytes: Array[Byte])(using networkId: NetworkId): Try[T]
+}
 
-object MerkleTreeCollapsedUpdate {
-  def apply(
-      state: ZswapChainState,
+given MerkleTreeCollapsedUpdate[
+  mod.MerkleTreeCollapsedUpdate,
+  mod.ZswapChainState,
+] with {
+  override def create(
+      state: mod.ZswapChainState,
       start: BigInt,
       end: BigInt,
-      protocolVersion: ProtocolVersion,
-  ): MerkleTreeCollapsedUpdate =
-    protocolVersion match {
-      case blockchain.data.ProtocolVersion.V1 =>
-        mod.MerkleTreeCollapsedUpdate(state.toJs, start.toJsBigInt, end.toJsBigInt)
-    }
+  ): mod.MerkleTreeCollapsedUpdate =
+    mod.MerkleTreeCollapsedUpdate(state, start.toJsBigInt, end.toJsBigInt)
 
-  def deserialize(
-      bytes: Array[Byte],
-  )(using
-      protocolVersion: ProtocolVersion,
+  def deserialize(bytes: Array[Byte])(using
       networkId: NetworkId,
-  ): Try[MerkleTreeCollapsedUpdate] =
-    protocolVersion match {
-      case data.ProtocolVersion.V1 =>
-        Try { mod.MerkleTreeCollapsedUpdate.deserialize(bytes.toUInt8Array, networkId.toJs) }
-    }
-
-  extension (update: MerkleTreeCollapsedUpdate) {
-    private[zswap] def toJs: mod.MerkleTreeCollapsedUpdate = update
-  }
+  ): Try[mod.MerkleTreeCollapsedUpdate] =
+    Try { mod.MerkleTreeCollapsedUpdate.deserialize(bytes.toUInt8Array, networkId.toJs) }
 }

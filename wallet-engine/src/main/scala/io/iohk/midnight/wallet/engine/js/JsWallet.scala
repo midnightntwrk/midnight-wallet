@@ -21,7 +21,9 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distWalletMod as api
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.Config.InitialState
 import io.iohk.midnight.wallet.core.combinator.VersionCombinator
 import io.iohk.midnight.wallet.core.domain.{Address, ProvingRecipe, TokenTransfer}
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
@@ -41,17 +43,18 @@ import scala.scalajs.js.annotation.*
 @JSExportTopLevel("Wallet")
 class JsWallet(
     versionCombinator: VersionCombinator[IO],
-    submissionService: WalletTxSubmissionService[IO],
-    txService: WalletTransactionService[IO],
     finalizer: IO[Unit],
     stopSyncing: Deferred[IO, Unit],
 ) extends api.Wallet {
 
+  import Transaction.{given, *}
+
   override def submitTransaction(
       tx: mod.Transaction,
   ): Promise[TransactionIdentifier] =
-    submissionService
-      .submitTransaction(Transaction.fromJs(tx))
+    versionCombinator
+      .submissionService(ProtocolVersion.V1)
+      .flatMap(_.submitTransaction(tx))
       .map(_.txId)
       .unsafeToPromise()
 
@@ -59,8 +62,9 @@ class JsWallet(
       tx: mod.Transaction,
       newCoins: js.Array[mod.CoinInfo],
   ): Promise[BalanceTransactionToProve | NothingToProve] =
-    txService
-      .balanceTransaction(Transaction.fromJs(tx), newCoins.toSeq.map(CoinInfo.fromJs))
+    versionCombinator
+      .transactionService(ProtocolVersion.V1)
+      .flatMap(_.balanceTransaction(tx, newCoins.toSeq))
       .map(ProvingRecipeTransformer.toApiBalanceTransactionRecipe)
       .unsafeToPromise()
 
@@ -69,9 +73,9 @@ class JsWallet(
       case Left(error) =>
         IO.raiseError(new Error(error)).unsafeToPromise()
       case Right(txRecipe) =>
-        txService
-          .proveTransaction(txRecipe)
-          .map(_.toJs)
+        versionCombinator
+          .transactionService(ProtocolVersion.V1)
+          .flatMap(_.proveTransaction(txRecipe))
           .unsafeToPromise()
   }
 
@@ -79,11 +83,11 @@ class JsWallet(
     versionCombinator.state
       .map { localState =>
         val mappedWalletState = WalletState(
-          availableCoins = localState.availableCoins.map(_.toJs).toJSArray,
-          pendingCoins = localState.pendingCoins.map(_.toJs).toJSArray,
+          availableCoins = localState.availableCoins.toJSArray,
+          pendingCoins = localState.pendingCoins.toJSArray,
           balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
-          coins = localState.coins.map(_.toJs).toJSArray,
-          nullifiers = localState.nullifiers.map(_.toJs).toJSArray,
+          coins = localState.coins.toJSArray,
+          nullifiers = localState.nullifiers.toJSArray,
           coinPublicKey = localState.coinPublicKey,
           encryptionPublicKey = localState.encryptionPublicKey,
           address = localState.address.asString,
@@ -91,8 +95,8 @@ class JsWallet(
             TransactionHistoryEntry(
               ApplyStage.SucceedEntirely,
               StringDictionary(tx.deltas.map(_.map(_.toJsBigInt)).toSeq*),
-              tx.identifiers.toJSArray,
-              tx.toJs,
+              tx.identifiers().toJSArray,
+              tx,
               tx.hash,
             )
           }.toJSArray,
@@ -109,13 +113,16 @@ class JsWallet(
   override def transferTransaction(
       outputs: js.Array[ApiTokenTransfer],
   ): Promise[TransactionToProve] =
-    txService
-      .prepareTransferRecipe(
-        outputs.toList.map((tt: ApiTokenTransfer) =>
-          TokenTransfer(
-            amount = tt.amount.toScalaBigInt,
-            tokenType = TokenType(tt.`type`),
-            receiverAddress = Address(tt.receiverAddress),
+    versionCombinator
+      .transactionService(ProtocolVersion.V1)
+      .flatMap(
+        _.prepareTransferRecipe(
+          outputs.toList.map((tt: ApiTokenTransfer) =>
+            TokenTransfer(
+              amount = tt.amount.toScalaBigInt,
+              tokenType = tt.`type`,
+              receiverAddress = Address(tt.receiverAddress),
+            ),
           ),
         ),
       )
@@ -151,9 +158,8 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      Some(networkId),
       minLogLevel.toOption,
-      none[RawConfig.InitialState],
+      InitialState.CreateNew(NetworkId.fromJs(networkId)),
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -173,9 +179,8 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      Some(networkId),
       minLogLevel.toOption,
-      RawConfig.InitialState.Seed(seed).some,
+      InitialState.Seed(seed, NetworkId.fromJs(networkId)),
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -194,9 +199,8 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      None,
       minLogLevel.toOption,
-      RawConfig.InitialState.SerializedSnapshot(serializedState).some,
+      InitialState.SerializedSnapshot(serializedState),
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -205,9 +209,8 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
-      networkId: Option[mod.NetworkId],
       minLogLevel: Option[String],
-      initialState: Option[RawConfig.InitialState],
+      initialState: InitialState,
       discardTxHistory: Option[Boolean],
   ): IO[api.Wallet] = {
     val rawConfig =
@@ -216,7 +219,6 @@ object JsWallet {
         indexerWsUri,
         proverServerUri,
         substrateNodeUri,
-        networkId,
         minLogLevel,
         initialState,
         discardTxHistory,
@@ -227,13 +229,14 @@ object JsWallet {
       jsWalletTracer = buildJsWalletTracer(minLogLevel)
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig, jsWalletTracer)
-      allocatedVersionCombinator <- WalletBuilder.build[IO](config).allocated
-      (dependencies, finalizer) = allocatedVersionCombinator
+      allocatedVersionCombinator <-
+        new WalletBuilder[IO, mod.LocalState, mod.Transaction]
+          .build(config)
+          .allocated
+      (versionCombinator, finalizer) = allocatedVersionCombinator
       deferred <- Deferred[IO, Unit]
     } yield JsWallet(
-      dependencies.versionCombinator,
-      dependencies.submissionService,
-      dependencies.txService,
+      versionCombinator,
       finalizer,
       deferred,
     )
@@ -252,20 +255,22 @@ object JsWallet {
 
   def apply(
       versionCombinator: VersionCombinator[IO],
-      submissionService: WalletTxSubmissionService[IO],
-      txService: WalletTransactionService[IO],
       finalizer: IO[Unit],
       deferred: Deferred[IO, Unit],
   ): JsWallet =
-    new JsWallet(versionCombinator, submissionService, txService, finalizer, deferred)
+    new JsWallet(versionCombinator, finalizer, deferred)
 
   @JSExport
-  def calculateCost(tx: Transaction): js.BigInt =
-    WalletStateService.calculateCost(tx).toJsBigInt
+  def calculateCost(tx: mod.Transaction): js.BigInt = {
+    import io.iohk.midnight.wallet.zswap.given
+    WalletStateService.calculateCost[mod.Transaction, mod.TokenType](tx).toJsBigInt
+  }
 
   @JSExport
   def generateInitialState(networkId: mod.NetworkId): String = {
     given NetworkId = NetworkId.fromJs(networkId)
-    Wallet.Snapshot.create.serialize
+    val snapshots = new SnapshotInstances[mod.LocalState, mod.Transaction]
+    import snapshots.given
+    snapshots.create.serialize
   }
 }

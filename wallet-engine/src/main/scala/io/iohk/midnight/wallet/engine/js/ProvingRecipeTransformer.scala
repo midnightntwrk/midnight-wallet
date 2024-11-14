@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.syntax.eq.*
+import cats.syntax.all.*
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   BalanceTransactionToProve,
   NothingToProve,
@@ -14,25 +14,27 @@ import io.iohk.midnight.midnightNtwrkWalletApi.mod.{
 }
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.core.domain.ProvingRecipe
-import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
+import io.iohk.midnight.midnightNtwrkZswap.mod.{Transaction, UnprovenTransaction}
 import scala.scalajs.js
 import scala.scalajs.js.|
 
 object ProvingRecipeTransformer {
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
-  def toRecipe(apiRecipe: ApiProvingRecipe): Either[String, ProvingRecipe] = {
+  def toRecipe(
+      apiRecipe: ApiProvingRecipe,
+  ): Either[String, ProvingRecipe[UnprovenTransaction, Transaction]] = {
     val recipeType = apiRecipe.asInstanceOf[js.Dynamic].`type`.asInstanceOf[String]
     if (NOTHING_TO_PROVE === recipeType) {
-      val tx = Transaction.fromJs(apiRecipe.asInstanceOf[NothingToProve].transaction)
+      val tx = apiRecipe.asInstanceOf[NothingToProve].transaction
       Right(domain.NothingToProve(tx))
     } else if (TRANSACTION_TO_PROVE === recipeType) {
-      val tx = UnprovenTransaction.fromJs(apiRecipe.asInstanceOf[TransactionToProve].transaction)
+      val tx = apiRecipe.asInstanceOf[TransactionToProve].transaction
       Right(domain.TransactionToProve(tx))
     } else if (BALANCE_TRANSACTION_TO_PROVE === recipeType) {
       val instance = apiRecipe.asInstanceOf[BalanceTransactionToProve]
-      val unprovenTx = UnprovenTransaction.fromJs(instance.transactionToProve)
-      val txToBalance = Transaction.fromJs(instance.transactionToBalance)
+      val unprovenTx = instance.transactionToProve
+      val txToBalance = instance.transactionToBalance
       Right(domain.BalanceTransactionToProve(unprovenTx, txToBalance))
     } else {
       Left("Recipe match wasn't NothingToProve / TransactionToProve / BalanceTransactionToProve")
@@ -40,17 +42,19 @@ object ProvingRecipeTransformer {
   }
 
   def toApiBalanceTransactionRecipe(
-      recipe: domain.BalanceTransactionRecipe,
+      recipe: domain.BalanceTransactionRecipe[UnprovenTransaction, Transaction],
   ): BalanceTransactionToProve | NothingToProve = {
     recipe match
       case domain.BalanceTransactionToProve(toProve, toBalance) =>
         |.from(
-          BalanceTransactionToProve(toBalance.toJs, toProve.toJs, BALANCE_TRANSACTION_TO_PROVE),
+          BalanceTransactionToProve(toBalance, toProve, BALANCE_TRANSACTION_TO_PROVE),
         )
       case domain.NothingToProve(transaction) =>
-        |.from(NothingToProve(transaction.toJs, NOTHING_TO_PROVE))
+        |.from(NothingToProve(transaction, NOTHING_TO_PROVE))
   }
 
-  def toApiTransactionToProve(recipe: domain.TransactionToProve): TransactionToProve =
-    TransactionToProve(recipe.transaction.toJs, TRANSACTION_TO_PROVE)
+  def toApiTransactionToProve(
+      recipe: domain.TransactionToProve[UnprovenTransaction],
+  ): TransactionToProve =
+    TransactionToProve(recipe.transaction, TRANSACTION_TO_PROVE)
 }

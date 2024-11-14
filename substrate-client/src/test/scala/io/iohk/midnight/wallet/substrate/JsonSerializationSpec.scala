@@ -4,14 +4,19 @@ import munit.FunSuite
 import io.circe.*
 import io.circe.DecodingFailure.Reason.{CustomReason, MissingField}
 import io.circe.syntax.*
-import JsonSerialization.given
 import TransactionExamples.*
-import io.iohk.midnight.wallet.zswap.{NetworkId, Transaction}
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
+import io.iohk.midnight.wallet.zswap.NetworkId
 
 class JsonSerializationSpec extends FunSuite {
 
+  private val jsonSerialization =
+    new JsonSerialization[Transaction]
+
+  import jsonSerialization.given
+
   test("SubmitTransactionRequest must be serialized to correct JSON RPC request") {
-    val req = SubmitTransactionRequest(Transaction.fromJs(transaction), NetworkId.Undeployed).asJson
+    val req = SubmitTransactionRequest(transaction, NetworkId.Undeployed).asJson
 
     val expectedReq = Json.obj(
       "id" -> Json.fromInt(1),

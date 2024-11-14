@@ -5,25 +5,60 @@ import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, txWithContextArbitrary}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
 import io.iohk.midnight.wallet.core.domain.*
-import io.iohk.midnight.wallet.core.{Generators, Wallet}
+import io.iohk.midnight.wallet.core.{
+  Generators,
+  Snapshot,
+  SnapshotInstances,
+  WalletInstances,
+  Wallet as CoreWallet,
+}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.given
 import munit.CatsEffectSuite
 import org.scalacheck.effect.PropF.forAllF
 
 class WalletTxHistorySpec extends WithProvingServerSuite {
+
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private val wallets: WalletInstances[
+    LocalState,
+    Transaction,
+    TokenType,
+    Offer,
+    ProofErasedTransaction,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    CoinPublicKey,
+    EncryptionSecretKey,
+    EncPublicKey,
+    UnprovenInput,
+    ProofErasedOffer,
+    MerkleTreeCollapsedUpdate,
+    UnprovenTransaction,
+    UnprovenOffer,
+    UnprovenOutput,
+  ] = new WalletInstances
+
+  import wallets.given
+  type Wallet = CoreWallet[LocalState, Transaction]
+
   private def walletForUpdates(txWithContext: TransactionWithContext): Wallet =
-    Wallet.walletCreation.create(
-      Wallet.Snapshot(
+    walletCreation.create(
+      Snapshot(
         txWithContext.state,
         Seq.empty,
         None,
         data.ProtocolVersion.V1,
-        NetworkId.Undeployed,
+        zswap.NetworkId.Undeployed,
       ),
     )
 
-  private def validUpdateToApply(txWithContext: TransactionWithContext): IndexerUpdate =
+  private def validUpdateToApply(
+      txWithContext: TransactionWithContext,
+  ): IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction] =
     ViewingUpdate(
       data.ProtocolVersion.V1,
       data.Transaction.Offset.Zero,
@@ -33,15 +68,15 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
     )
 
   test("Keep tx history") {
-    given walletTxHistory: WalletTxHistory[Wallet, Transaction] = Wallet.walletTxHistory
+    given keepHistory: WalletTxHistory[Wallet, Transaction] = wallets.walletTxHistory
     forAllF { (txWithContext: IO[TransactionWithContext]) =>
       for {
         tx <- txWithContext
         wallet = walletForUpdates(tx)
-        before = walletTxHistory.transactionHistory(wallet)
+        before = keepHistory.transactionHistory(wallet)
         updateToApply = validUpdateToApply(tx)
         updated <- IO.fromEither(wallet.apply(updateToApply))
-        after = walletTxHistory.transactionHistory(updated)
+        after = keepHistory.transactionHistory(updated)
       } yield {
         assertEquals(before.size, 0)
         assertEquals(after.size, 1)
@@ -50,15 +85,15 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
   }
 
   test("Discard tx history") {
-    given walletTxHistory: WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
+    given discard: WalletTxHistory[Wallet, Transaction] = wallets.walletDiscardTxHistory
     forAllF { (txWithContext: IO[TransactionWithContext]) =>
       for {
         tx <- txWithContext
         wallet = walletForUpdates(tx)
-        before = walletTxHistory.transactionHistory(wallet)
+        before = discard.transactionHistory(wallet)
         updateToApply = validUpdateToApply(tx)
         updated <- IO.fromEither(wallet.apply(updateToApply))
-        after = walletTxHistory.transactionHistory(updated)
+        after = discard.transactionHistory(updated)
       } yield {
         assertEquals(before.size, 0)
         assertEquals(after.size, 0)

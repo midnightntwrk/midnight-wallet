@@ -2,16 +2,10 @@ package io.iohk.midnight.wallet.engine.config
 
 import cats.Show
 import cats.syntax.all.*
-import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.core.Wallet
-import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
-  InvalidLogLevel,
-  InvalidSerializedSnapshot,
-  InvalidUri,
-}
-import io.iohk.midnight.wallet.engine.config.RawConfig.InitialState
-import io.iohk.midnight.wallet.zswap.NetworkId
+import io.iohk.midnight.wallet.core.Config
+import io.iohk.midnight.wallet.core.Config.InitialState
+import io.iohk.midnight.wallet.engine.config.Config.ParseError.{InvalidLogLevel, InvalidUri}
 import sttp.model.Uri
 
 final case class Config(
@@ -20,7 +14,7 @@ final case class Config(
     provingServerUri: Uri,
     substrateNodeUri: Uri,
     minLogLevel: LogLevel,
-    initialState: Wallet.Snapshot,
+    initialState: InitialState,
     discardTxHistory: Boolean,
 )
 
@@ -32,22 +26,10 @@ object Config {
       Uri.parse(rawConfig.provingServerUri).leftMap(InvalidUri.apply),
       Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
       parseLogLevel(rawConfig.minLogLevel),
-      parseInitialState(rawConfig.initialState, rawConfig.networkId),
+      rawConfig.initialState.asRight,
       rawConfig.discardTxHistory.getOrElse(false).asRight,
     )
       .mapN(Config.apply)
-
-  private def parseInitialState(
-      initialState: Option[RawConfig.InitialState],
-      networkId: Option[mod.NetworkId],
-  ): Either[Throwable, Wallet.Snapshot] = {
-    given NetworkId = networkId.map(NetworkId.fromJs).getOrElse(NetworkId.Undeployed)
-    (initialState match {
-      case None                                              => Wallet.Snapshot.create.asRight
-      case Some(InitialState.Seed(seed))                     => Wallet.Snapshot.fromSeed(seed)
-      case Some(InitialState.SerializedSnapshot(serialized)) => Wallet.Snapshot.parse(serialized)
-    }).leftMap(t => InvalidSerializedSnapshot.apply(t.getMessage))
-  }
 
   def parseLogLevel(minLogLevel: Option[String]): Either[Throwable, LogLevel] =
     minLogLevel match {
@@ -59,12 +41,11 @@ object Config {
         Right(LogLevel.Warn)
     }
 
-  implicit val configShow: Show[Config] = Show.fromToString
+  given configShow: Show[Config] = Show.fromToString
 
   abstract class ParseError(msg: String) extends Throwable(msg)
   object ParseError {
     final case class InvalidLogLevel(msg: String) extends ParseError(msg)
     final case class InvalidUri(msg: String) extends ParseError(msg)
-    final case class InvalidSerializedSnapshot(msg: String) extends ParseError(msg)
   }
 }

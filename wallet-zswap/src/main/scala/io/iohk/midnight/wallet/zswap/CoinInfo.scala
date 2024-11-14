@@ -1,21 +1,24 @@
 package io.iohk.midnight.wallet.zswap
 
 import io.iohk.midnight.js.interop.util.BigIntOps.*
-import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 import scala.scalajs.js
 
-opaque type CoinInfo = mod.CoinInfo
+trait CoinInfo[T, TokenType] {
+  def create(tokenType: TokenType, value: BigInt): T
 
-object CoinInfo {
-  def apply(tokenType: TokenType, value: BigInt): CoinInfo =
-    mod.createCoinInfo(tokenType, value.toJsBigInt)
+  extension (t: T) {
+    def tokenType: TokenType
+    def value: BigInt
+  }
+}
 
-  def fromJs(coin: mod.CoinInfo): CoinInfo = coin
+given CoinInfo[v1.CoinInfo, v1.TokenType] with {
+  override def create(tokenType: v1.TokenType, value: BigInt): v1.CoinInfo =
+    v1.createCoinInfo(tokenType, value.toJsBigInt)
 
-  extension (coin: CoinInfo) {
-    def toJs: mod.CoinInfo = coin
-
-    def tokenType: TokenType = coin.`type`
-    def value: BigInt = coin.value.toScalaBigInt
+  extension (t: v1.CoinInfo) {
+    override def tokenType: v1.TokenType = t.`type`
+    override def value: BigInt = t.value.toScalaBigInt
   }
 }

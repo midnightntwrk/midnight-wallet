@@ -3,22 +3,23 @@ package io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
-import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 
-opaque type Offer = mod.Offer
+trait Offer[T, TokenType] {
+  def deserialize(bytes: Array[Byte])(using networkId: NetworkId): T
+  extension (t: T) {
+    def deltas: Map[TokenType, BigInt]
+    def outputsSize: Int
+  }
+}
 
-object Offer {
-  def deserialize(bytes: Array[Byte])(using networkId: NetworkId): Offer =
-    mod.Offer.deserialize(bytes.toUInt8Array, networkId.toJs)
+given Offer[v1.Offer, v1.TokenType] with {
+  override def deserialize(bytes: Array[Byte])(using networkId: NetworkId): v1.Offer =
+    v1.Offer.deserialize(bytes.toUInt8Array, networkId.toJs)
 
-  def fromJs(offer: mod.Offer): Offer = offer
-
-  extension (offer: Offer) {
-    private[zswap] def toJs: mod.Offer = offer
-
-    def deltas: Map[TokenType, BigInt] =
-      offer.deltas.toMap.map((tt, a) => (TokenType(tt), a.toScalaBigInt))
-
+  extension (offer: v1.Offer) {
+    def deltas: Map[v1.TokenType, BigInt] =
+      offer.deltas.toMap.map((tt, a) => (tt, a.toScalaBigInt))
     def outputsSize: Int = offer.outputs.size
   }
 }

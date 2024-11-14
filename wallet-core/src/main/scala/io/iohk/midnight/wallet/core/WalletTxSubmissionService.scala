@@ -9,24 +9,28 @@ import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResul
 import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 import io.iohk.midnight.wallet.zswap
 
-trait WalletTxSubmissionService[F[_]] {
-  def submitTransaction(
-      transaction: zswap.Transaction,
-  ): F[TransactionIdentifier]
+trait WalletTxSubmissionService[F[_], Transaction] {
+  def submitTransaction(transaction: Transaction): F[TransactionIdentifier]
 }
 
-object WalletTxSubmissionService {
-  class Live[F[_]: Sync, TWallet](
-      submitTxService: TxSubmissionService[F],
-      walletStateContainer: WalletStateContainer[F, TWallet],
-  )(implicit
-      tracer: WalletTxSubmissionTracer[F],
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, ?],
-  ) extends WalletTxSubmissionService[F] {
+class WalletTxSubmissionServiceFactory[
+    F[_]: Sync,
+    TWallet,
+    Transaction,
+](using
+    WalletTxBalancing[TWallet, Transaction, ?, ?, ?],
+    zswap.Transaction.Transaction[Transaction, ?],
+    zswap.Transaction.CanEraseProofs[Transaction, ?],
+) {
+  private type Service = WalletTxSubmissionService[F, Transaction]
 
-    override def submitTransaction(
-        toSubmitLedgerTx: zswap.Transaction,
-    ): F[TransactionIdentifier] = {
+  def create(
+      submitTxService: TxSubmissionService[F, Transaction],
+      walletStateContainer: WalletStateContainer[F, TWallet],
+  )(using
+      tracer: WalletTxSubmissionTracer[F],
+  ): Service = new Service {
+    override def submitTransaction(toSubmitLedgerTx: Transaction): F[TransactionIdentifier] =
       for {
         txId <- getIdentifier(toSubmitLedgerTx)
         _ <- tracer.submitTxStart(txId)
@@ -34,18 +38,15 @@ object WalletTxSubmissionService {
         response <- submitTxService.submitTransaction(toSubmitLedgerTx).attempt
         result <- adaptResponse(toSubmitLedgerTx, txId, response)
       } yield result
-    }
 
-    private def getIdentifier(tx: zswap.Transaction): F[TransactionIdentifier] = {
+    private def getIdentifier(tx: Transaction): F[TransactionIdentifier] = {
       tx.identifiers.headOption
-        .fold(
-          // $COVERAGE-OFF$ Can't generate a test transaction for this scenario
-          NoTransactionIdentifiers.raiseError[F, TransactionIdentifier],
-          // $COVERAGE-ON$
-        )(TransactionIdentifier(_).pure)
+        .fold(NoTransactionIdentifiers.raiseError[F, TransactionIdentifier])(
+          TransactionIdentifier(_).pure,
+        )
     }
 
-    private def validateTx(ledgerTx: zswap.Transaction, txId: TransactionIdentifier): F[Unit] = {
+    private def validateTx(ledgerTx: Transaction, txId: TransactionIdentifier): F[Unit] = {
       Either
         .catchNonFatal(
           ledgerTx.wellFormedNoProofs(enforceBalancing = false),
@@ -59,7 +60,7 @@ object WalletTxSubmissionService {
     }
 
     private def adaptResponse(
-        tx: zswap.Transaction,
+        tx: Transaction,
         txId: TransactionIdentifier,
         submissionResult: Either[Throwable, SubmissionResult],
     ): F[TransactionIdentifier] = {
@@ -74,9 +75,9 @@ object WalletTxSubmissionService {
       }
     }
 
-    private def revertTx(tx: zswap.Transaction, txId: TransactionIdentifier): F[Unit] =
+    private def revertTx(tx: Transaction, txId: TransactionIdentifier): F[Unit] =
       walletStateContainer
-        .updateStateEither(walletTxBalancing.applyFailedTransaction(_, tx))
+        .updateStateEither(_.applyFailedTransaction(tx))
         .flatMap {
           case Right(_)    => Sync[F].unit
           case Left(error) => tracer.revertError(txId, error.toThrowable)

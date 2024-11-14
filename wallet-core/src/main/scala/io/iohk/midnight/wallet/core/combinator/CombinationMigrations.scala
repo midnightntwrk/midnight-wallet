@@ -9,6 +9,12 @@ trait CombinationMigrations[F[_]] {
 
 object CombinationMigrations {
   def default[F[_]: MonadThrow]: CombinationMigrations[F] =
-    case _: V1Combination[F] =>
-      Exception("No hard fork planned").raiseError
+    new CombinationMigrations[F] {
+      override def migrate(versionCombination: VersionCombination[F]): F[VersionCombination[F]] = {
+        versionCombination match
+          case _: V1Combination[F] =>
+            Exception("No hard fork planned").raiseError
+      }
+    }
+
 }

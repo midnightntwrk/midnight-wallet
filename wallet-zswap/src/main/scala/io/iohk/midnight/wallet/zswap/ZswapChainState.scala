@@ -2,15 +2,19 @@ package io.iohk.midnight.wallet.zswap
 
 import io.iohk.midnight.midnightNtwrkZswap.mod
 
-opaque type ZswapChainState = mod.ZswapChainState
+trait ZswapChainState[T, Offer] {
+  def create(): T
 
-object ZswapChainState {
-  def apply(): ZswapChainState = new mod.ZswapChainState()
+  extension (t: T) {
+    def tryApply(offer: Offer): T
+  }
+}
 
-  extension (state: ZswapChainState) {
-    private[zswap] def toJs: mod.ZswapChainState = state
+given ZswapChainState[mod.ZswapChainState, mod.Offer] with {
+  def create(): mod.ZswapChainState = new mod.ZswapChainState()
 
-    def tryApply(offer: Offer): ZswapChainState =
-      state.tryApply(offer.toJs)._1
+  extension (state: mod.ZswapChainState) {
+    def tryApply(offer: mod.Offer): mod.ZswapChainState =
+      state.tryApply(offer)._1
   }
 }

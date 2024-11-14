@@ -1,36 +1,50 @@
 package io.iohk.midnight.wallet.zswap
 
-import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.LedgerParameters
 
-opaque type ProofErasedTransaction = mod.ProofErasedTransaction
+trait ProofErasedTransaction[T, LedgerParameters, ProofErasedOffer, TokenType] {
+  def dummyLedgerParameters: LedgerParameters
 
-object ProofErasedTransaction {
-  private val DummyLedgerParameters = mod.LedgerParameters.dummyParameters()
+  extension (t: T) {
+    def guaranteedCoins: Option[ProofErasedOffer]
+    def fallibleCoins: Option[ProofErasedOffer]
+    def merge(other: T): T
+    def imbalances(guaranteed: Boolean, fees: BigInt): Map[TokenType, BigInt]
+    def imbalances(guaranteed: Boolean): Map[TokenType, BigInt]
+    def fees: BigInt
+  }
+}
 
-  def fromJs(tx: mod.ProofErasedTransaction): ProofErasedTransaction = tx
+given ProofErasedTransaction[
+  v1.ProofErasedTransaction,
+  v1.LedgerParameters,
+  v1.ProofErasedOffer,
+  v1.TokenType,
+] with {
+  override lazy val dummyLedgerParameters: v1.LedgerParameters =
+    v1.LedgerParameters.dummyParameters()
 
-  extension (tx: ProofErasedTransaction) {
-    private[zswap] def toJs: mod.ProofErasedTransaction = tx
+  extension (tx: v1.ProofErasedTransaction) {
+    override def guaranteedCoins: Option[v1.ProofErasedOffer] =
+      tx.guaranteedCoins.toOption
 
-    def guaranteedCoins: Option[ProofErasedOffer] =
-      tx.guaranteedCoins.toOption.map(ProofErasedOffer.fromJs)
+    override def fallibleCoins: Option[v1.ProofErasedOffer] =
+      tx.fallibleCoins.toOption
 
-    def fallibleCoins: Option[ProofErasedOffer] =
-      tx.fallibleCoins.toOption.map(ProofErasedOffer.fromJs)
+    override def merge(other: v1.ProofErasedTransaction): v1.ProofErasedTransaction =
+      tx.merge(other)
 
-    def merge(other: ProofErasedTransaction): ProofErasedTransaction = tx.merge(other)
-
-    def imbalances(guaranteed: Boolean, fees: BigInt): Map[TokenType, BigInt] =
+    override def imbalances(guaranteed: Boolean, fees: BigInt): Map[v1.TokenType, BigInt] =
       tx.imbalances(guaranteed, fees.toJsBigInt)
         .toMap
-        .map((tt, a) => (TokenType(tt), a.toScalaBigInt))
+        .map((tt, a) => (tt, a.toScalaBigInt))
 
-    @SuppressWarnings(Array("org.wartremover.warts.Overloading"))
-    def imbalances(guaranteed: Boolean): Map[TokenType, BigInt] =
-      tx.imbalances(guaranteed).toMap.map((tt, a) => (TokenType(tt), a.toScalaBigInt))
+    override def imbalances(guaranteed: Boolean): Map[v1.TokenType, BigInt] =
+      tx.imbalances(guaranteed).toMap.map((tt, a) => (tt, a.toScalaBigInt))
 
-    def fees: BigInt = tx.fees(DummyLedgerParameters).toScalaBigInt
+    override def fees: BigInt = tx.fees(dummyLedgerParameters).toScalaBigInt
   }
 }

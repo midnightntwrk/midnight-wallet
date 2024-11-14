@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.integration_tests.engine
 import cats.data.NonEmptyList
 import cats.effect.*
 import cats.syntax.all.*
+import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
@@ -12,81 +13,109 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
 import io.iohk.midnight.midnightNtwrkWalletApi.mod.{NOTHING_TO_PROVE, TRANSACTION_TO_PROVE}
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
-import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
+import io.iohk.midnight.wallet.core.combinator.{
+  CombinationMigrations,
+  VersionCombination,
+  VersionCombinator,
+}
 import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
-import io.iohk.midnight.wallet.core.services.SyncService
-import io.iohk.midnight.wallet.core.{Wallet, domain}
-import io.iohk.midnight.wallet.engine.combinator.V1Combination
-import io.iohk.midnight.wallet.engine.js.*
+import io.iohk.midnight.wallet.core.{
+  SnapshotInstances,
+  WalletInstances,
+  domain,
+  Wallet as CoreWallet,
+}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.{NetworkId, Transaction, UnprovenTransaction}
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.given
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.engine.js.{JsWallet, ProvingRecipeTransformer}
 import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js.JSConverters.*
 
 class JsWalletTransactionsSpec extends WithProvingServerSuite {
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private val wallets: WalletInstances[
+    LocalState,
+    Transaction,
+    TokenType,
+    Offer,
+    ProofErasedTransaction,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    CoinPublicKey,
+    EncryptionSecretKey,
+    EncPublicKey,
+    UnprovenInput,
+    ProofErasedOffer,
+    MerkleTreeCollapsedUpdate,
+    UnprovenTransaction,
+    UnprovenOffer,
+    UnprovenOutput,
+  ] = new WalletInstances
+
+  type Wallet = CoreWallet[LocalState, Transaction]
 
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
   private val transferRecipe =
     domain.TransactionToProve(unprovenTransactionArbitrary.arbitrary.sample.get)
 
-  given WalletTxHistory[Wallet, Transaction] = Wallet.walletDiscardTxHistory
-  given NetworkId = NetworkId.Undeployed
+  given WalletTxHistory[Wallet, Transaction] = wallets.walletDiscardTxHistory
+  given zswap.NetworkId = zswap.NetworkId.Undeployed
 
-  def jsWallet(syncService: SyncService[IO] = new WalletSyncServiceStub()): IO[JsWallet] =
-    V1Combination[IO](
-      Wallet.Snapshot.create,
-      syncService,
-      new WalletStateContainerStub(),
-      new WalletStateServiceStub(),
-    ).flatMap(VersionCombinator(_, CombinationMigrations.default)).use { combinator =>
-      new JsWallet(
-        combinator,
-        new WalletTxSubmissionServiceStub(),
-        new WalletTransactionServiceWithProvingStub(provingService, transferRecipe),
-        IO.unit,
-        Deferred.unsafe[IO, Unit],
-      ).pure
-    }
+  def jsWallet: Resource[IO, JsWallet] =
+    for {
+      bloc <- Bloc[IO, VersionCombination[IO]](
+        VersionCombinationStub(provingService, transferRecipe),
+      )
+      deferred <- Deferred[IO, Unit].toResource
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+    } yield new JsWallet(combinator, IO.unit, deferred)
 
   test("submitting a generic tx successfully should return the tx identifier") {
     forAllF { (txIO: IO[Transaction]) =>
       txIO.flatMap { tx =>
         @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-        val txIdentifier = tx.identifiers.headOption.get
+        val txIdentifier = tx.identifiers().headOption.get
 
-        val promise = jsWallet().map(_.submitTransaction(tx.toJs))
-        IO.fromPromise(promise).assertEquals(txIdentifier)
+        jsWallet
+          .use(wallet => IO.fromPromise(IO(wallet.submitTransaction(tx))))
+          .assertEquals(txIdentifier)
       }
     }
   }
 
   test("submitting transfer tokens should return recipe for transaction") {
-    forAllF { (tokenTransfers: NonEmptyList[TokenTransfer]) =>
+    forAllF { (tokenTransfers: NonEmptyList[TokenTransfer[TokenType]]) =>
       val apiTokenTransfers = tokenTransfers
         .map { case TokenTransfer(amount, tokenType, receiverAddress) =>
           ApiTokenTransfer(amount.toJsBigInt, receiverAddress.address, tokenType)
         }
         .toList
         .toJSArray
-      val promise = jsWallet().map(_.transferTransaction(apiTokenTransfers))
-      IO.fromPromise(promise).map { apiRecipe =>
-        assertEquals(ProvingRecipeTransformer.toRecipe(apiRecipe), Right(transferRecipe))
-      }
+      jsWallet
+        .use(wallet => IO.fromPromise(IO(wallet.transferTransaction(apiTokenTransfers))))
+        .map { apiRecipe =>
+          assertEquals(ProvingRecipeTransformer.toRecipe(apiRecipe), Right(transferRecipe))
+        }
     }
   }
 
   test("submitting tx to prove should return proved transaction") {
     forAllF { (unprovenTx: UnprovenTransaction) =>
-      val promise = jsWallet().map(
-        _.proveTransaction(
-          ApiProvingRecipe.TransactionToProve(unprovenTx.toJs, TRANSACTION_TO_PROVE),
-        ),
-      )
-      IO.fromPromise(promise)
+      jsWallet
+        .use(wallet =>
+          IO.fromPromise(IO {
+            wallet.proveTransaction(
+              ApiProvingRecipe.TransactionToProve(unprovenTx, TRANSACTION_TO_PROVE),
+            )
+          }),
+        )
         .map { tx =>
           assertEquals(
             tx.guaranteedCoins.map(_.deltas.toMap),
-            unprovenTx.toJs.guaranteedCoins.map(_.deltas.toMap),
+            unprovenTx.guaranteedCoins.map(_.deltas.toMap),
           )
         }
     }
@@ -95,13 +124,17 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   test("submitting proved tx to prove should return the same transaction") {
     forAllF { (provenTxIO: IO[Transaction]) =>
       provenTxIO.flatMap { provenTx =>
-        val promise =
-          jsWallet().map(
-            _.proveTransaction(
-              ApiProvingRecipe.NothingToProve(provenTx.toJs, NOTHING_TO_PROVE),
+        jsWallet
+          .use(wallet =>
+            IO.fromPromise(
+              IO(
+                wallet.proveTransaction(
+                  ApiProvingRecipe.NothingToProve(provenTx, NOTHING_TO_PROVE),
+                ),
+              ),
             ),
           )
-        IO.fromPromise(promise).assertEquals(provenTx.toJs)
+          .assertEquals(provenTx)
       }
     }
   }
@@ -109,14 +142,16 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   test("submitting a generic tx for balance should return recipe for balanced transaction") {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
       txWithContextIO.flatMap { case TransactionWithContext(transaction, _, coins) =>
-        val promise =
-          jsWallet().map(_.balanceTransaction(transaction.toJs, coins.map(_.toJs).toList.toJSArray))
-        IO.fromPromise(promise).map { apiRecipe =>
-          assertEquals(
-            ProvingRecipeTransformer.toRecipe(apiRecipe),
-            Right(domain.NothingToProve(transaction)),
+        jsWallet
+          .use(wallet =>
+            IO.fromPromise(IO(wallet.balanceTransaction(transaction, coins.toList.toJSArray))),
           )
-        }
+          .map { apiRecipe =>
+            assertEquals(
+              ProvingRecipeTransformer.toRecipe(apiRecipe),
+              Right(domain.NothingToProve(transaction)),
+            )
+          }
       }
     }
   }

@@ -1,12 +1,39 @@
 package io.iohk.midnight.wallet.core
 
+import cats.Eq
 import cats.syntax.all.*
 import scala.annotation.tailrec
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.zswap
 
-object TransactionBalancer {
+class TransactionBalancer[
+    TokenType,
+    UnprovenTransaction,
+    UnprovenOffer,
+    UnprovenInput,
+    UnprovenOutput,
+    LocalState,
+    Transaction,
+    Offer,
+    QualifiedCoinInfo,
+    CoinPubKey,
+    EncPubKey,
+    CoinInfo,
+](using
+    zswap.Transaction.HasImbalances[Transaction, TokenType],
+    zswap.Transaction.Transaction[Transaction, Offer],
+    zswap.LocalState.HasCoins[LocalState, QualifiedCoinInfo, CoinInfo, UnprovenInput],
+    zswap.LocalState.HasKeys[LocalState, CoinPubKey, EncPubKey, ?],
+    zswap.QualifiedCoinInfo[QualifiedCoinInfo, TokenType, ?],
+    Eq[TokenType],
+)(using
+    ci: zswap.CoinInfo[CoinInfo, TokenType],
+    tt: zswap.TokenType[TokenType, ?],
+    ut: zswap.UnprovenTransaction.HasCoins[UnprovenTransaction, UnprovenOffer],
+    uo: zswap.UnprovenOffer[UnprovenOffer, UnprovenInput, UnprovenOutput, TokenType],
+    uOut: zswap.UnprovenOutput[UnprovenOutput, CoinInfo, CoinPubKey, EncPubKey],
+) {
   private val Zero = BigInt(0)
-  private val nativeTokenType = TokenType.Native
+  private val nativeTokenType = tt.native
 
   enum BalanceTransactionResult {
     case BalancedTransactionAndState(unprovenTx: UnprovenTransaction, state: LocalState)
@@ -54,12 +81,12 @@ object TransactionBalancer {
           fallibleOfferContainer.offer match
             case Some(fallibleOffer) =>
               BalanceTransactionResult.BalancedTransactionAndState(
-                UnprovenTransaction(guaranteedOffer, fallibleOffer),
+                ut.create(guaranteedOffer, fallibleOffer),
                 finalState,
               )
             case None =>
               BalanceTransactionResult.BalancedTransactionAndState(
-                UnprovenTransaction(guaranteedOffer),
+                ut.create(guaranteedOffer),
                 finalState,
               )
         case None => BalanceTransactionResult.ReadyTransactionAndState(tx, state)
@@ -153,7 +180,7 @@ object TransactionBalancer {
     coinsToUse match {
       case coin :: restOfCoins =>
         val fee =
-          if (tokenType === nativeTokenType) TokenType.InputFeeOverhead
+          if (tokenType === nativeTokenType) tt.inputFeeOverhead
           else BigInt(0)
         val unbalancedValue = tokenValue + fee - coin.value
         if (unbalancedValue > Zero) {
@@ -167,7 +194,7 @@ object TransactionBalancer {
           )
         } else {
           if (tokenType === nativeTokenType) {
-            val change = unbalancedValue + TokenType.OutputFeeOverhead
+            val change = unbalancedValue + tt.outputFeeOverhead
             if (change >= Zero) {
               // The change amount is smaller than output fee, so we need to add another input
               // in order to create a larger change output to avoid generating dust
@@ -210,10 +237,10 @@ object TransactionBalancer {
       tokenType: TokenType,
       change: BigInt,
   ): (UnprovenOffer, LocalState) = {
-    val changeCoin = CoinInfo(tokenType, -change)
-    val output = UnprovenOutput(changeCoin, state.coinPublicKey, state.encryptionPublicKey)
+    val changeCoin = ci.create(tokenType, -change)
+    val output = uOut.create(changeCoin, state.coinPublicKey, state.encryptionPublicKey)
     val offerWithChange =
-      UnprovenOffer.fromOutput(output, changeCoin.tokenType, changeCoin.value)
+      uo.fromOutput(output, changeCoin.tokenType, changeCoin.value)
     val stateWithChange = state.watchFor(changeCoin)
     (offerWithChange, stateWithChange)
   }
@@ -225,16 +252,16 @@ object TransactionBalancer {
     val coinSpent = state.spend(coinToSpend)
     val newState = coinSpent._1
     val input = coinSpent._2
-    val offer = UnprovenOffer.fromInput(input, coinToSpend.tokenType, coinToSpend.value)
+    val offer = uo.fromInput(input, coinToSpend.tokenType, coinToSpend.value)
     (offer, newState)
   }
 
   private def calculateFee(offer: OfferContainer): BigInt = {
-    val inputsFee = TokenType.InputFeeOverhead * BigInt(offer.inputsLength)
-    val outputsFee = TokenType.OutputFeeOverhead * BigInt(offer.outputsLength)
+    val inputsFee = tt.inputFeeOverhead * BigInt(offer.inputsLength)
+    val outputsFee = tt.outputFeeOverhead * BigInt(offer.outputsLength)
 
     // this needs to be revised post public devnet launch
-    val overheadFee = TokenType.InputFeeOverhead + (2 * TokenType.OutputFeeOverhead)
+    val overheadFee = tt.inputFeeOverhead + (2 * tt.outputFeeOverhead)
 
     inputsFee + outputsFee + overheadFee
   }

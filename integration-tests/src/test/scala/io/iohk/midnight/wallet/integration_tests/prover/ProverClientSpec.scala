@@ -7,7 +7,9 @@ import io.iohk.midnight.testcontainers.buildMod.Wait
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.integration_tests.TestContainers
 import io.iohk.midnight.wallet.prover.ProverClient
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.js.interop.util.BigIntOps.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.zswap
 import munit.{AnyFixture, CatsEffectSuite}
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.scalajs.js
@@ -16,24 +18,24 @@ import sttp.model.Uri
 
 trait ProverClientSetup {
   def serverUri(port: Int): Uri = uri"http://localhost:$port"
-  val dustToken: TokenType = TokenType.Native
-  val coinAmount: BigInt = BigInt(1_000_000)
-  val coin: CoinInfo = CoinInfo(dustToken, coinAmount)
-  val spendCoinAmount: BigInt = BigInt(10_000)
-  val spendCoin: CoinInfo = CoinInfo(dustToken, spendCoinAmount)
-  def randomRecipient(): (CoinPublicKey, EncryptionPublicKey) = {
+  val dustToken: TokenType = nativeToken()
+  val coinAmount: js.BigInt = js.BigInt(1_000_000)
+  val coin: CoinInfo = createCoinInfo(dustToken, coinAmount)
+  val spendCoinAmount: js.BigInt = js.BigInt(10_000)
+  val spendCoin: CoinInfo = createCoinInfo(dustToken, spendCoinAmount)
+  def randomRecipient(): (CoinPublicKey, EncPublicKey) = {
     val state = LocalState()
     (state.coinPublicKey, state.encryptionPublicKey)
   }
   val (cpk, epk) = randomRecipient()
-  val output: UnprovenOutput = UnprovenOutput(spendCoin, cpk, epk)
+  val output: UnprovenOutput = UnprovenOutput.`new`(spendCoin, cpk, epk)
   val unprovenOffer: UnprovenOffer = UnprovenOffer.fromOutput(output, dustToken, spendCoinAmount)
 }
 
 class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   override def munitIOTimeout: Duration = 2.minutes
 
-  given NetworkId = NetworkId.Undeployed
+  given zswap.NetworkId = zswap.NetworkId.Undeployed
   given ProtocolVersion = ProtocolVersion.V1
   private val proverServerPort = 6300
 
@@ -49,7 +51,9 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
 
   override def munitFixtures: Seq[AnyFixture[?]] = List(provingServiceFixture)
 
-  private def withProvingClient(body: ProverClient[IO] => IO[Unit]): IO[Unit] = {
+  private def withProvingClient(
+      body: ProverClient[IO, UnprovenTransaction, Transaction] => IO[Unit],
+  ): IO[Unit] = {
     val port = provingServiceFixture().getMappedPort(proverServerPort).toInt
     ProverClient(serverUri(port)).use(body(_))
   }
@@ -62,7 +66,7 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
         val imbalances = transaction.imbalances(true)
         assert(imbalances.size === 1)
         assert(imbalances.get(dustToken).contains(-spendCoinAmount))
-        assert(transaction.fees =!= BigInt(0))
+        assert(transaction.fees(LedgerParameters.dummyParameters()).toScalaBigInt =!= BigInt(0))
       }
     }
   }

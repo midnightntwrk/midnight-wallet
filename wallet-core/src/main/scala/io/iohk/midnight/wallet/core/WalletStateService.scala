@@ -1,79 +1,55 @@
 package io.iohk.midnight.wallet.core
 
 import fs2.Stream
-import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
+import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.ProgressUpdate
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.zswap
 
-trait WalletStateService[F[_], TWallet] {
-  def keys(implicit
-      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
-  ): F[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)]
+trait WalletStateService[
+    F[_],
+    CoinPublicKey,
+    EncPubKey,
+    EncSecretKey,
+    TokenType,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    Transaction,
+] {
+  type TState = WalletStateService.State[
+    CoinPublicKey,
+    EncPubKey,
+    EncSecretKey,
+    TokenType,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    Transaction,
+  ]
 
-  def state(using
-      walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
-      walletBalances: WalletBalances[TWallet],
-      walletCoins: WalletCoins[TWallet],
-      walletTxHistory: WalletTxHistory[TWallet, Transaction],
-  ): Stream[F, State]
-
-  def serializeState(using
-      stateSerializer: WalletStateSerialize[TWallet, SerializedWalletState],
-  ): F[SerializedWalletState]
+  def keys: F[(CoinPublicKey, EncPubKey, EncSecretKey)]
+  def state: Stream[F, TState]
+  def serializeState: F[SerializedWalletState]
+  def calculateCost(tx: Transaction): BigInt
 }
 
 object WalletStateService {
-  class Live[F[_], TWallet](walletQueryStateService: WalletQueryStateService[F, TWallet])
-      extends WalletStateService[F, TWallet] {
+  case class SerializedWalletState(serializedState: String)
 
-    override def keys(using
-        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
-    ): F[(CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey)] =
-      walletQueryStateService.queryOnce { wallet =>
-        (
-          walletKeys.coinPublicKey(wallet),
-          walletKeys.encryptionPublicKey(wallet),
-          walletKeys.viewingKey(wallet),
-        )
-      }
-
-    override def state(using
-        walletKeys: WalletKeys[TWallet, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey],
-        walletBalances: WalletBalances[TWallet],
-        walletCoins: WalletCoins[TWallet],
-        walletTxHistory: WalletTxHistory[TWallet, Transaction],
-    ): Stream[F, State] =
-      walletQueryStateService.queryStream { wallet =>
-        State(
-          coinPublicKey = walletKeys.coinPublicKey(wallet),
-          encryptionPublicKey = walletKeys.encryptionPublicKey(wallet),
-          viewingKey = walletKeys.viewingKey(wallet),
-          balances = walletBalances.balance(wallet),
-          coins = walletCoins.coins(wallet),
-          nullifiers = walletCoins.nullifiers(wallet),
-          availableCoins = walletCoins.availableCoins(wallet),
-          pendingCoins = walletCoins.pendingCoins(wallet),
-          transactionHistory = walletTxHistory.transactionHistory(wallet),
-          syncProgress = walletTxHistory.progress(wallet),
-        )
-      }
-
-    override def serializeState(using
-        stateSerializer: WalletStateSerialize[TWallet, SerializedWalletState],
-    ) =
-      walletQueryStateService.queryOnce { wallet => stateSerializer.serialize(wallet) }
-  }
-
-  // TODO improve returning type or add estimated fee to recipe
-  def calculateCost(tx: Transaction): BigInt = {
-    tx.imbalances(true, tx.fees).getOrElse(TokenType.Native, BigInt(0))
-  }
-
-  final case class State(
-      coinPublicKey: CoinPublicKey,
-      encryptionPublicKey: EncryptionPublicKey,
-      viewingKey: EncryptionSecretKey,
+  final case class State[
+      CoinPubKey,
+      EncPubKey,
+      EncSecretKey,
+      TokenType,
+      QualifiedCoinInfo,
+      CoinInfo,
+      Nullifier,
+      Transaction,
+  ](
+      coinPublicKey: CoinPubKey,
+      encryptionPublicKey: EncPubKey,
+      viewingKey: EncSecretKey,
       balances: Map[TokenType, BigInt],
       coins: Seq[QualifiedCoinInfo],
       nullifiers: Seq[Nullifier],
@@ -81,9 +57,85 @@ object WalletStateService {
       pendingCoins: Seq[CoinInfo],
       transactionHistory: Seq[Transaction],
       syncProgress: ProgressUpdate,
-  ) {
-    lazy val address: Address = Address(coinPublicKey, encryptionPublicKey)
+  )(using zswap.CoinPublicKey[CoinPubKey], zswap.EncryptionPublicKey[EncPubKey]) {
+    lazy val address: zswap.Address[CoinPubKey, EncPubKey] =
+      zswap.Address(coinPublicKey, encryptionPublicKey)
   }
 
-  case class SerializedWalletState(serializedState: String)
+  def calculateCost[
+      Transaction,
+      TokenType,
+  ](tx: Transaction)(using
+      zswap.Transaction.HasImbalances[Transaction, TokenType],
+      zswap.Transaction.Transaction[Transaction, ?],
+  )(using tt: zswap.TokenType[TokenType, ?]): BigInt =
+    tx.imbalances(true, tx.fees).getOrElse(tt.native, BigInt(0))
+}
+
+class WalletStateServiceFactory[
+    F[_],
+    TWallet,
+    CoinPublicKey,
+    EncPubKey,
+    EncSecretKey,
+    TokenType,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    Transaction,
+](using
+    WalletKeys[TWallet, CoinPublicKey, EncPubKey, EncSecretKey],
+    WalletBalances[TWallet, TokenType],
+    WalletCoins[TWallet, QualifiedCoinInfo, CoinInfo, Nullifier],
+    WalletTxHistory[TWallet, Transaction],
+    WalletStateSerialize[TWallet, WalletStateService.SerializedWalletState],
+    zswap.Transaction.HasImbalances[Transaction, TokenType],
+    zswap.Transaction.Transaction[Transaction, ?],
+    zswap.CoinPublicKey[CoinPublicKey],
+    zswap.EncryptionPublicKey[EncPubKey],
+)(using
+    tt: zswap.TokenType[TokenType, ?],
+) {
+  private type Service = WalletStateService[
+    F,
+    CoinPublicKey,
+    EncPubKey,
+    EncSecretKey,
+    TokenType,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    Transaction,
+  ]
+
+  def create(walletQueryStateService: WalletQueryStateService[F, TWallet]): Service =
+    new Service {
+      override def keys: F[(CoinPublicKey, EncPubKey, EncSecretKey)] =
+        walletQueryStateService.queryOnce { wallet =>
+          (wallet.coinPublicKey, wallet.encryptionPublicKey, wallet.viewingKey)
+        }
+
+      override def state: Stream[F, TState] =
+        walletQueryStateService.queryStream { wallet =>
+          WalletStateService.State(
+            coinPublicKey = wallet.coinPublicKey,
+            encryptionPublicKey = wallet.encryptionPublicKey,
+            viewingKey = wallet.viewingKey,
+            balances = wallet.balance,
+            coins = wallet.coins,
+            nullifiers = wallet.nullifiers,
+            availableCoins = wallet.availableCoins,
+            pendingCoins = wallet.pendingCoins,
+            transactionHistory = wallet.transactionHistory,
+            syncProgress = wallet.progress,
+          )
+        }
+
+      override def serializeState: F[SerializedWalletState] =
+        walletQueryStateService.queryOnce { _.serialize }
+
+      // TODO improve returning type or add estimated fee to recipe
+      override def calculateCost(tx: Transaction): BigInt =
+        tx.imbalances(true, tx.fees).getOrElse(tt.native, BigInt(0))
+    }
 }

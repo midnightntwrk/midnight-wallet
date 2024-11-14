@@ -5,19 +5,38 @@ import cats.effect.IO
 import cats.syntax.eq.*
 import io.iohk.midnight.wallet.core.{Generators, TransactionBalancer}
 import io.iohk.midnight.wallet.core.Generators.{TransactionWithContext, txWithContextArbitrary}
-import io.iohk.midnight.wallet.core.TransactionBalancer.{
-  BalanceTransactionResult,
-  NotSufficientFunds,
-  balanceTransaction,
-}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.js.interop.util.BigIntOps.*
+import io.iohk.midnight.js.interop.util.MapOps.*
+import io.iohk.midnight.js.interop.util.SetOps.*
+import io.iohk.midnight.wallet.zswap.given
 import munit.TestOptions
 import org.scalacheck.Arbitrary
 import org.scalacheck.effect.PropF.forAllF
 
 @SuppressWarnings(Array("org.wartremover.warts.Equals"))
 class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
+
+  private val costModel = TransactionCostModel.dummyTransactionCostModel()
+  private val inputFeeOverhead = costModel.inputFeeOverhead
+  private val outputFeeOverhead = costModel.outputFeeOverhead
+
+  private val transactionBalancer =
+    new TransactionBalancer[
+      TokenType,
+      UnprovenTransaction,
+      UnprovenOffer,
+      UnprovenInput,
+      UnprovenOutput,
+      LocalState,
+      Transaction,
+      Offer,
+      QualifiedCoinInfo,
+      CoinPublicKey,
+      EncPublicKey,
+      CoinInfo,
+    ]
 
   override def munitFlakyOK = true
 
@@ -29,10 +48,10 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
         txWithContextIO.map { txWithContext =>
           // generating reasonable amount of native coins for fees
           val nativeTokenAmount =
-            (TokenType.Native, TokenType.InputFeeOverhead * TokenType.OutputFeeOverhead)
+            (nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt)
           // generating reasonable amount of coins
           val imbalances = nativeTokenAmount :: txWithContext.coins.map(coin =>
-            (coin.tokenType, coin.value * coin.value),
+            (coin.`type`, (coin.value * coin.value).toScalaBigInt),
           )
           val coins = Generators.generateCoinsFor(imbalances)
           val stateWithCoins = Generators.generateStateWithCoins(coins)
@@ -44,19 +63,25 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
 
   test("balance transaction and output change") {
     forAllF { (data: IO[(LocalState, Transaction, NonEmptyList[CoinInfo])]) =>
-      data.map { case (stateWithCoins, imbalancedTx, coins) =>
-        TransactionBalancer
+      data.map { case (stateWithCoins, imbalancedTx, _) =>
+        transactionBalancer
           .balanceTransaction(stateWithCoins, imbalancedTx) match {
           case Left(error) => fail(error.getMessage, error)
-          case Right(BalanceTransactionResult.BalancedTransactionAndState(balancedTx, newState)) =>
-            val balancedTransaction = imbalancedTx.eraseProofs.merge(balancedTx.eraseProofs)
+          case Right(
+                transactionBalancer.BalanceTransactionResult
+                  .BalancedTransactionAndState(balancedTx, newState),
+              ) =>
+            val balancedTransaction = imbalancedTx.eraseProofs().merge(balancedTx.eraseProofs())
             assert(
               balancedTransaction
-                .imbalances(true, balancedTransaction.fees)
-                .forall(_._2 >= BigInt(0)),
+                .imbalances(true, balancedTransaction.fees(LedgerParameters.dummyParameters()))
+                .toList
+                .forall(_._2.toScalaBigInt >= BigInt(0)),
             )
-            assert(balancedTransaction.imbalances(false).forall(_._2 >= BigInt(0)))
-            assert(newState.pendingOutputsSize > 0)
+            assert(
+              balancedTransaction.imbalances(false).toList.forall(_._2.toScalaBigInt >= BigInt(0)),
+            )
+            assert(newState.pendingOutputs.size > 0)
           case Right(_) => fail("No-op path: transaction was already balanced")
         }
       }
@@ -67,18 +92,21 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
   test(new TestOptions("no transaction changes when tx has positive imbalances").flaky) {
     forAllF { (data: IO[(LocalState, Transaction, NonEmptyList[CoinInfo])]) =>
       data.flatMap { case (stateWithCoins, imbalancedTx, _) =>
-        TransactionBalancer
+        transactionBalancer
           .balanceTransaction(stateWithCoins, imbalancedTx) match
-          case Right(BalanceTransactionResult.BalancedTransactionAndState(unprovenBalancedTx, _)) =>
+          case Right(
+                transactionBalancer.BalanceTransactionResult
+                  .BalancedTransactionAndState(unprovenBalancedTx, _),
+              ) =>
             provingService.proveTransaction(unprovenBalancedTx).map { balancedTx =>
-              TransactionBalancer.balanceTransaction(stateWithCoins, balancedTx) match
+              transactionBalancer.balanceTransaction(stateWithCoins, balancedTx) match
                 case Right(
-                      BalanceTransactionResult
-                        .ReadyTransactionAndState(doubleBalancedOffer, newState),
+                      transactionBalancer.BalanceTransactionResult
+                        .ReadyTransactionAndState(doubleBalancedOffer, _),
                     ) =>
                   assertEquals(balancedTx, doubleBalancedOffer)
-                case Left(error)  => fail("Transaction must be balanced properly", error.getCause)
-                case Right(value) => fail("Transaction shouldn't be balanced again")
+                case Left(error) => fail("Transaction must be balanced properly", error.getCause)
+                case Right(_)    => fail("Transaction shouldn't be balanced again")
             }
           case _ => IO(fail("First transaction must be balanced properly"))
       }
@@ -88,14 +116,14 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
   test("fails when not enough funds to balance transaction cost") {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
       txWithContextIO.map { txWithContext =>
-        val imbalances = txWithContext.coins.map(coin => (coin.tokenType, coin.value))
-        val possibleTokenTypes = txWithContext.coins.map(_.tokenType).prepend(TokenType.Native)
+        val imbalances = txWithContext.coins.map(coin => (coin.`type`, coin.value.toScalaBigInt))
+        val possibleTokenTypes = txWithContext.coins.map(_.`type`).prepend(nativeToken())
         // generating not enough coins
         val stateWithCoins = Generators.generateStateWithFunds(imbalances)
 
-        TransactionBalancer
+        transactionBalancer
           .balanceTransaction(stateWithCoins, txWithContext.transaction) match {
-          case Left(NotSufficientFunds(tokenType)) =>
+          case Left(transactionBalancer.NotSufficientFunds(tokenType)) =>
             assert(possibleTokenTypes.exists(_ === tokenType))
           case _ =>
             fail("Balancing transaction process should fail because of not sufficient funds")
@@ -109,14 +137,14 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
       txWithContextIO.map { txWithContext =>
         val stateWithCoins = txWithContext.state
         val stateCoins = stateWithCoins.coins
-        val stateWithSpentCoins = stateCoins.foldLeft(stateWithCoins) { (accState, coin) =>
+        val stateWithSpentCoins = stateCoins.toList.foldLeft(stateWithCoins) { (accState, coin) =>
           accState.spend(coin)._1
         }
-        val possibleTokenTypes = txWithContext.coins.map(_.tokenType).prepend(TokenType.Native)
+        val possibleTokenTypes = txWithContext.coins.map(_.`type`).prepend(nativeToken())
 
-        TransactionBalancer
+        transactionBalancer
           .balanceTransaction(stateWithSpentCoins, txWithContext.transaction) match {
-          case Left(NotSufficientFunds(tokenType)) =>
+          case Left(transactionBalancer.NotSufficientFunds(tokenType)) =>
             assert(possibleTokenTypes.exists(_ === tokenType))
           case _ =>
             fail("Balancing transaction process should fail because of not sufficient funds")

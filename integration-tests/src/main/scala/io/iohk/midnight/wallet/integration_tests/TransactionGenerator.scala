@@ -5,18 +5,23 @@ import cats.effect.{IO, IOApp, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
-import io.iohk.midnight.wallet.core.Wallet.Snapshot
-import io.iohk.midnight.wallet.core.{Wallet, domain}
+import io.iohk.midnight.wallet.core
+import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.engine.WalletBuilder
-import io.iohk.midnight.wallet.engine.WalletBuilder.WalletDependencies
 import io.iohk.midnight.wallet.engine.config.Config
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.js.interop.util.BigIntOps.*
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
+import io.iohk.midnight.wallet.core.Config.InitialState
+import io.iohk.midnight.wallet.core.combinator.VersionCombinator
 import scala.concurrent.duration.DurationInt
 import sttp.client3.UriContext
+import scalajs.js
 
 object TransactionGenerator extends IOApp.Simple {
 
-  given NetworkId = NetworkId.Undeployed
+  given networkId: zswap.NetworkId = zswap.NetworkId.Undeployed
 
   override def runtimeConfig: IORuntimeConfig =
     super.runtimeConfig.copy(cpuStarvationCheckInterval = 5.seconds)
@@ -24,18 +29,21 @@ object TransactionGenerator extends IOApp.Simple {
   val indexerRPCUri = uri"http://localhost:8088/api/graphql"
   val indexerWSUri = uri"ws://localhost:8088/api/graphql/ws"
   val proverServerUri = uri"http://localhost:6300"
-  val substrateNodeUri = uri"http://localhost:9933"
+  val substrateNodeUri = uri"http://localhost:9944"
+
+  type Address = zswap.Address[v1.CoinPublicKey, v1.EncPublicKey]
+  type TokenTransfer = domain.TokenTransfer[v1.TokenType]
+  type Snapshot = core.Snapshot[v1.LocalState, v1.Transaction]
 
   def randomRecipient(): Address = {
-    val localState = LocalState()
-    Address(localState.coinPublicKey, localState.encryptionPublicKey)
+    val localState = v1.LocalState()
+    import zswap.given
+    new Address(localState.coinPublicKey, localState.encryptionPublicKey)
   }
 
-  def makeRunningWalletResource(
-      initialState: Snapshot,
-  ): Resource[IO, WalletDependencies[IO]] =
-    WalletBuilder
-      .build[IO](
+  def makeRunningWalletResource(initialState: InitialState): Resource[IO, VersionCombinator[IO]] =
+    new WalletBuilder[IO, v1.LocalState, v1.Transaction]
+      .build(
         Config(
           indexerRPCUri,
           indexerWSUri,
@@ -46,43 +54,52 @@ object TransactionGenerator extends IOApp.Simple {
           discardTxHistory = true,
         ),
       )
-      .evalTap(_.versionCombinator.sync)
+      .flatTap(_.sync.background)
 
   def withRunningWallet(
-      initialWalletState: Snapshot,
-  )(body: WalletDependencies[IO] => IO[Unit]): IO[Unit] =
-    makeRunningWalletResource(initialWalletState)
-      .use(body(_))
+      initialWalletState: InitialState,
+  )(body: VersionCombinator[IO] => IO[Unit]): IO[Unit] =
+    makeRunningWalletResource(initialWalletState).use(body(_))
 
-  def prepareOutputs(coins: List[CoinInfo], recipient: Address): List[domain.TokenTransfer] =
+  def prepareOutputs(coins: List[v1.CoinInfo], recipient: Address): List[TokenTransfer] =
     coins.map { coin =>
-      domain.TokenTransfer(coin.value, coin.tokenType, domain.Address(recipient.asString))
+      new TokenTransfer(
+        coin.value.toScalaBigInt,
+        coin.`type`,
+        domain.Address(recipient.asString),
+      )
     }
 
-  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
-  val initialState: Snapshot =
-    Snapshot.fromSeed("0000000000000000000000000000000000000000000000000000000000000042").toTry.get
+  val initialState: InitialState =
+    InitialState.Seed("0000000000000000000000000000000000000000000000000000000000000042", networkId)
 
   override val run: IO[Unit] =
-    withRunningWallet(initialState) { case WalletDependencies(v, submissionService, txService) =>
+    withRunningWallet(initialState) { v =>
       val initialSync =
         v.state
+          .evalTap(s => IO.println(s.syncProgress))
           .find { s =>
             s.syncProgress.synced.isDefined && s.syncProgress.synced === s.syncProgress.total
           }
-          .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+          .map(_.balances.getOrElse(v1.nativeToken(), BigInt(0)))
           .compile
           .lastOrError
 
       val prepareTx =
-        txService.prepareTransferRecipe(
-          prepareOutputs(List(CoinInfo(TokenType.Native, BigInt(100_000))), randomRecipient()),
-        )
+        v.transactionService(ProtocolVersion.V1)
+          .flatMap(
+            _.prepareTransferRecipe(
+              prepareOutputs(
+                List(v1.createCoinInfo(v1.nativeToken(), js.BigInt(10_000))),
+                randomRecipient(),
+              ),
+            ),
+          )
 
       val waitConfirmation =
         v.state
           .find(s => s.coins.size === s.availableCoins.size)
-          .map(_.balances.getOrElse(TokenType.Native, BigInt(0)))
+          .map(_.balances.getOrElse(v1.nativeToken(), BigInt(0)))
           .compile
           .lastOrError
 
@@ -94,14 +111,18 @@ object TransactionGenerator extends IOApp.Simple {
 
       val sendAndWait = for {
         _ <- IO.println("Preparing txs...")
-        numberOfTxs <- v.state.head.map(_.availableCoins.size).compile.lastOrError
+        numberOfTxs <- v.state.head.map(_ => 1).compile.lastOrError
         txsToProve <- prepareTx.replicateA(numberOfTxs)
         _ <- IO.println(
-          s"Proving txs: [${txsToProve.map(_.transaction.identifiers.head).mkString(", ")}]",
+          s"Proving txs: [${txsToProve.map(_.transaction.identifiers().head).mkString(", ")}]",
         )
-        txs <- txsToProve.parTraverse(txService.proveTransaction)
-        _ <- IO.println(s"Submitting txs: [${txs.map(_.identifiers.head).mkString(", ")}]")
-        _ <- txs.parTraverse(submissionService.submitTransaction)
+        txs <- txsToProve.parTraverse(tx =>
+          v.transactionService(ProtocolVersion.V1).flatMap(_.proveTransaction(tx)),
+        )
+        _ <- IO.println(s"Submitting txs: [${txs.map(_.identifiers().head).mkString(", ")}]")
+        _ <- txs.parTraverse(tx =>
+          v.submissionService(ProtocolVersion.V1).flatMap(_.submitTransaction(tx)),
+        )
         _ <- IO.println("Txs sent. Waiting for confirmation...")
         balance <- waitConfirmation
         _ <- IO.println(s"Confirmed. Balance left: $balance")

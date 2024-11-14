@@ -3,13 +3,17 @@ package io.iohk.midnight.wallet.core
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.zswap.{Address as LedgerAddress, Transaction as LedgerTransaction, *}
+import io.iohk.midnight.js.interop.util.BigIntOps.*
+import io.iohk.midnight.midnightNtwrkZswap.mod.{Transaction as LedgerTransaction, *}
 import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.domain.{Address, ProgressUpdate, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.ProvingService
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.given
 import org.scalacheck.cats.implicits.*
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.annotation.tailrec
+import scala.scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
 object Generators {
@@ -28,12 +32,12 @@ object Generators {
   private def noShrink[T]: Shrink[T] = Shrink.withLazyList(_ => LazyList.empty)
 
   given tokenTypeArbitrary: Arbitrary[TokenType] =
-    Arbitrary { Gen.const(TokenType.Native) }
+    Arbitrary { Gen.const(nativeToken()) }
 
   given coinInfoArbitrary: Arbitrary[CoinInfo] =
     Arbitrary {
       tokenTypeArbitrary.arbitrary.flatMap { tokenType =>
-        Gen.posNum[Int].map(BigInt(_)).map(CoinInfo(tokenType, _))
+        Gen.posNum[Int].map(js.BigInt(_)).map(createCoinInfo(tokenType, _))
       }
     }
 
@@ -42,10 +46,10 @@ object Generators {
 
   private lazy val addressGen: Gen[Address] =
     localStateGen
-      .map(state => LedgerAddress(state.coinPublicKey, state.encryptionPublicKey).asString)
+      .map(state => zswap.Address(state.coinPublicKey, state.encryptionPublicKey).asString)
       .map(Address.apply)
 
-  given tokenTransferArbitrary: Arbitrary[TokenTransfer] = {
+  given tokenTransferArbitrary: Arbitrary[TokenTransfer[TokenType]] = {
     Arbitrary {
       for {
         amount <- Gen.posNum[BigInt]
@@ -56,8 +60,8 @@ object Generators {
   }
 
   given tokenTransfersArbitrary(using
-      tokenTransferArb: Arbitrary[TokenTransfer],
-  ): Arbitrary[NonEmptyList[TokenTransfer]] = {
+      tokenTransferArb: Arbitrary[TokenTransfer[TokenType]],
+  ): Arbitrary[NonEmptyList[TokenTransfer[TokenType]]] = {
     Arbitrary {
       for {
         head <- tokenTransferArb.arbitrary
@@ -102,8 +106,8 @@ object Generators {
     @tailrec
     def loop(amount: BigInt, acc: List[CoinInfo]): List[CoinInfo] = {
       val newAmount = amount - part
-      if (newAmount > BigInt(0)) loop(newAmount, CoinInfo(coinType, part) :: acc)
-      else CoinInfo(coinType, amount) :: acc
+      if (newAmount > BigInt(0)) loop(newAmount, createCoinInfo(coinType, part.toJsBigInt) :: acc)
+      else createCoinInfo(coinType, amount.toJsBigInt) :: acc
     }
 
     NonEmptyList.fromListUnsafe(loop(amount, List.empty))
@@ -111,7 +115,7 @@ object Generators {
 
   // REMEMBER it is using external service, until we get a way to mock proofs
   given txWithContextArbitrary(using
-      provingService: ProvingService[IO],
+      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
   ): Arbitrary[IO[TransactionWithContext]] = {
     Arbitrary {
       unprovenOfferWithContextArbitrary.arbitrary.map {
@@ -141,13 +145,13 @@ object Generators {
   }
 
   private def buildOfferForCoin(coin: CoinInfo, state: LocalState): (UnprovenOffer, LocalState) = {
-    val output = UnprovenOutput(coin, state.coinPublicKey, state.encryptionPublicKey)
-    val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value)
+    val output = UnprovenOutput.`new`(coin, state.coinPublicKey, state.encryptionPublicKey)
+    val offer = UnprovenOffer.fromOutput(output, coin.`type`, coin.value)
     (offer, state.watchFor(coin))
   }
 
   def generateStateWithCoins(coins: NonEmptyList[CoinInfo]): LocalState = {
-    val (tx, state) = buildOfferForCoins(coins).leftMap(UnprovenTransaction(_).eraseProofs)
+    val (tx, state) = buildOfferForCoins(coins).leftMap(UnprovenTransaction(_).eraseProofs())
     tx.guaranteedCoins.fold(state)(state.applyProofErased)
   }
 
@@ -173,20 +177,23 @@ object Generators {
 
   given ledgerTransactionShrink: Shrink[IO[LedgerTransaction]] = noShrink
 
+  private val ledgerSerialization =
+    new LedgerSerialization[LocalState, LedgerTransaction]
+
   given transactionArbitrary(using
-      provingService: ProvingService[IO],
+      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
       txWithContextArb: Arbitrary[IO[TransactionWithContext]],
   ): Arbitrary[IO[Transaction]] =
     Arbitrary {
-      given NetworkId = NetworkId.Undeployed
+      given zswap.NetworkId = zswap.NetworkId.Undeployed
       txWithContextArb.arbitrary
-        .map(_.map(txWithContext => LedgerSerialization.toTransaction(txWithContext.transaction)))
+        .map(_.map(txWithContext => ledgerSerialization.toTransaction(txWithContext.transaction)))
     }
 
   given transactionShrink: Shrink[IO[Transaction]] = noShrink
 
   def ledgerTransactionsList(using
-      provingService: ProvingService[IO],
+      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
       txArb: Arbitrary[IO[LedgerTransaction]],
   ): IO[Seq[LedgerTransaction]] =
     Gen
@@ -196,7 +203,7 @@ object Generators {
       .get
 
   given transactionsArbitrary(using
-      provingService: ProvingService[IO],
+      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
       txArbitrary: Arbitrary[IO[Transaction]],
   ): Arbitrary[IO[List[Transaction]]] = {
     Arbitrary {
@@ -204,13 +211,22 @@ object Generators {
     }
   }
 
-  val WalletStateGen: Gen[WalletStateService.State] =
+  val WalletStateGen: Gen[WalletStateService.State[
+    CoinPublicKey,
+    EncPublicKey,
+    EncryptionSecretKey,
+    TokenType,
+    QualifiedCoinInfo,
+    CoinInfo,
+    Nullifier,
+    LedgerTransaction,
+  ]] =
     (localStateGen, Gen.posNum[BigInt]).mapN { (localState, balance) =>
       WalletStateService.State(
         localState.coinPublicKey,
         localState.encryptionPublicKey,
-        localState.encryptionSecretKey,
-        Map(TokenType.Native -> balance),
+        localState.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey(),
+        Map(nativeToken() -> balance),
         Seq.empty,
         Seq.empty,
         Seq.empty,

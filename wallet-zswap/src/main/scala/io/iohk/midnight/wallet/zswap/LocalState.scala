@@ -5,67 +5,104 @@ import cats.syntax.eq.*
 import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.js.interop.util.SetOps.*
-import io.iohk.midnight.midnightNtwrkZswap.mod
-import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
-
-opaque type LocalState = mod.LocalState
+import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 
 object LocalState {
-  def deserialize(
-      bytes: Array[Byte],
-  )(using version: ProtocolVersion, networkId: NetworkId): LocalState =
-    version match {
-      case ProtocolVersion.V1 =>
-        mod.LocalState.deserialize(bytes.toUInt8Array, networkId.toJs)
+  trait HasCoins[T, QualifiedCoinInfo, CoinInfo, UnprovenInput] {
+    extension (t: T) {
+      def coins: List[QualifiedCoinInfo]
+      def availableCoins: List[QualifiedCoinInfo]
+      def pendingOutputs: List[CoinInfo]
+      def pendingOutputsSize: Int
+      def watchFor(coin: CoinInfo): T
+      def spend(coin: QualifiedCoinInfo): (T, UnprovenInput)
     }
-
-  def fromSeed(seed: Array[Byte], version: ProtocolVersion): LocalState =
-    version match {
-      case ProtocolVersion.V1 =>
-        mod.LocalState.fromSeed(seed.toUInt8Array)
+  }
+  trait HasKeys[T, CoinPublicKey, EncryptionPublicKey, EncryptionSecretKey] {
+    extension (t: T) {
+      def coinPublicKey: CoinPublicKey
+      def encryptionSecretKey: EncryptionSecretKey
+      def encryptionPublicKey: EncryptionPublicKey
     }
-
-  def apply(): LocalState =
-    new mod.LocalState()
-
-  extension (localState: LocalState) {
-    def serialize(using networkId: NetworkId): Array[Byte] =
-      localState.serialize(networkId.toJs).toByteArray
-
-    def coins: List[QualifiedCoinInfo] =
-      localState.coins.toList.map(QualifiedCoinInfo.fromJs)
-    def availableCoins: List[QualifiedCoinInfo] = {
-      val pending = localState.pendingSpends.valuesList.map(QualifiedCoinInfo.fromJs)
-      localState.coins.toList
-        .filterNot(coin => pending.exists(_.nonce === coin.nonce))
-        .map(QualifiedCoinInfo.fromJs)
+  }
+  trait EvolveState[T, Offer, ProofErasedOffer, MerkleTreeCollapsedUpdate] {
+    extension (t: T) {
+      def apply(offer: Offer): T
+      def applyProofErased(offer: ProofErasedOffer): T
+      def applyFailed(offer: Offer): T
+      def applyFailedProofErased(offer: ProofErasedOffer): T
+      def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): T
     }
-    def pendingOutputs: List[CoinInfo] =
-      localState.pendingOutputs.valuesList.map(CoinInfo.fromJs)
-    def coinPublicKey: CoinPublicKey =
-      localState.coinPublicKey
-    def encryptionSecretKey: EncryptionSecretKey =
-      EncryptionSecretKey.fromJs(
-        localState.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey(),
-      )
-    def encryptionPublicKey: EncryptionPublicKey =
-      localState.encryptionPublicKey
-    def watchFor(coin: CoinInfo): LocalState =
-      localState.watchFor(coin.toJs)
-    def spend(coin: QualifiedCoinInfo): (LocalState, UnprovenInput) =
-      localState.spend(coin.toJs).map(UnprovenInput.fromJs)
-    @SuppressWarnings(Array("org.wartremover.warts.Overloading"))
-    def apply(offer: Offer): LocalState =
-      localState.apply(offer.toJs)
-    def applyProofErased(offer: ProofErasedOffer): LocalState =
-      localState.applyProofErased(offer.toJs)
-    def applyFailed(offer: Offer): LocalState =
-      localState.applyFailed(offer.toJs)
-    def applyFailedProofErased(offer: ProofErasedOffer): LocalState =
-      localState.applyFailedProofErased(offer.toJs)
-    def pendingOutputsSize: Int =
-      localState.pendingOutputs.valuesList.size
-    def applyCollapsedUpdate(update: MerkleTreeCollapsedUpdate): LocalState =
-      localState.applyCollapsedUpdate(update.toJs)
+  }
+  trait IsSerializable[T] {
+    def deserialize(bytes: Array[Byte])(using NetworkId): T
+    def fromSeed(seed: Array[Byte]): T
+    def create(): T
+
+    extension (t: T) {
+      def serialize(using NetworkId): Array[Byte]
+    }
+  }
+
+  given HasCoins[v1.LocalState, v1.QualifiedCoinInfo, v1.CoinInfo, v1.UnprovenInput] with {
+    extension (localState: v1.LocalState) {
+      override def coins: List[v1.QualifiedCoinInfo] =
+        localState.coins.toList
+      override def availableCoins: List[v1.QualifiedCoinInfo] = {
+        val pending = localState.pendingSpends.valuesList
+        localState.coins.toList
+          .filterNot(coin => pending.exists(_.nonce === coin.nonce))
+      }
+      override def pendingOutputs: List[v1.CoinInfo] =
+        localState.pendingOutputs.valuesList
+      override def pendingOutputsSize: Int =
+        localState.pendingOutputs.valuesList.size
+      override def watchFor(coin: v1.CoinInfo): v1.LocalState =
+        localState.watchFor(coin)
+      override def spend(coin: v1.QualifiedCoinInfo): (v1.LocalState, v1.UnprovenInput) =
+        localState.spend(coin)
+    }
+  }
+
+  given HasKeys[v1.LocalState, v1.CoinPublicKey, v1.EncPublicKey, v1.EncryptionSecretKey] with {
+    extension (localState: v1.LocalState) {
+      override def coinPublicKey: v1.CoinPublicKey =
+        localState.coinPublicKey
+
+      override def encryptionSecretKey: v1.EncryptionSecretKey =
+        localState.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey()
+
+      override def encryptionPublicKey: v1.EncPublicKey =
+        localState.encryptionPublicKey
+    }
+  }
+
+  given EvolveState[v1.LocalState, v1.Offer, v1.ProofErasedOffer, v1.MerkleTreeCollapsedUpdate]
+  with {
+    extension (localState: v1.LocalState) {
+      override def apply(offer: v1.Offer): v1.LocalState =
+        localState.apply(offer)
+      override def applyProofErased(offer: v1.ProofErasedOffer): v1.LocalState =
+        localState.applyProofErased(offer)
+      override def applyFailed(offer: v1.Offer): v1.LocalState =
+        localState.applyFailed(offer)
+      override def applyFailedProofErased(offer: v1.ProofErasedOffer): v1.LocalState =
+        localState.applyFailedProofErased(offer)
+      override def applyCollapsedUpdate(update: v1.MerkleTreeCollapsedUpdate): v1.LocalState =
+        localState.applyCollapsedUpdate(update)
+    }
+  }
+
+  given IsSerializable[v1.LocalState] with {
+    override def deserialize(bytes: Array[Byte])(using networkId: NetworkId): v1.LocalState =
+      v1.LocalState.deserialize(bytes.toUInt8Array, networkId.toJs)
+    override def fromSeed(seed: Array[Byte]): v1.LocalState =
+      v1.LocalState.fromSeed(seed.toUInt8Array)
+    override def create(): v1.LocalState =
+      new v1.LocalState()
+    extension (localState: v1.LocalState) {
+      override def serialize(using networkId: NetworkId): Array[Byte] =
+        localState.serialize(networkId.toJs).toByteArray
+    }
   }
 }

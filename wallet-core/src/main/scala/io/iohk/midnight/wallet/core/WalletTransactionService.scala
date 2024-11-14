@@ -6,34 +6,61 @@ import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
 import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.tracing.WalletTxServiceTracer
-import io.iohk.midnight.wallet.zswap.{CoinInfo, Transaction, UnprovenTransaction}
+import io.iohk.midnight.wallet.zswap
 
-trait WalletTransactionService[F[_]] {
-  def prepareTransferRecipe(outputs: List[TokenTransfer]): F[TransactionToProve]
-  def proveTransaction(provingRecipe: ProvingRecipe): F[Transaction]
-  def balanceTransaction(tx: Transaction, newCoins: Seq[CoinInfo]): F[BalanceTransactionRecipe]
+trait WalletTransactionService[F[_], UnprovenTransaction, Transaction, CoinInfo, TokenType] {
+  def prepareTransferRecipe(
+      outputs: List[TokenTransfer[TokenType]],
+  ): F[TransactionToProve[UnprovenTransaction]]
+
+  def proveTransaction(
+      provingRecipe: ProvingRecipe[UnprovenTransaction, Transaction],
+  ): F[Transaction]
+
+  def balanceTransaction(
+      tx: Transaction,
+      newCoins: Seq[CoinInfo],
+  ): F[BalanceTransactionRecipe[UnprovenTransaction, Transaction]]
 }
 
-object WalletTransactionService {
-  class Live[F[_]: Sync, TWallet](
+class WalletTransactionServiceFactory[
+    F[_]: Sync,
+    TWallet,
+    UnprovenTransaction,
+    Transaction,
+    CoinInfo,
+    TokenType,
+](using
+    WalletTxBalancing[
+      TWallet,
+      Transaction,
+      UnprovenTransaction,
+      CoinInfo,
+      TokenType,
+    ],
+    zswap.Transaction.Transaction[Transaction, ?],
+    zswap.UnprovenTransaction.IsSerializable[UnprovenTransaction],
+) {
+  private type Service =
+    WalletTransactionService[F, UnprovenTransaction, Transaction, CoinInfo, TokenType]
+
+  def create(
       walletStateContainer: WalletStateContainer[F, TWallet],
-      provingService: ProvingService[F],
-  )(implicit
-      tracer: WalletTxServiceTracer[F],
-      walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, CoinInfo],
-  ) extends WalletTransactionService[F] {
-    override def prepareTransferRecipe(outputs: List[TokenTransfer]): F[TransactionToProve] = {
+      provingService: ProvingService[F, UnprovenTransaction, Transaction],
+  )(using tracer: WalletTxServiceTracer[F]): Service = new Service {
+    override def prepareTransferRecipe(
+        outputs: List[TokenTransfer[TokenType]],
+    ): F[TransactionToProve[UnprovenTransaction]] =
       walletStateContainer
-        .modifyStateEither { wallet =>
-          walletTxBalancing.prepareTransferRecipe(wallet, outputs)
-        }
+        .modifyStateEither(_.prepareTransferRecipe(outputs))
         .flatMap {
           case Left(error)   => error.toThrowable.raiseError
           case Right(recipe) => recipe.pure
         }
-    }
 
-    override def proveTransaction(provingRecipe: ProvingRecipe): F[Transaction] = {
+    override def proveTransaction(
+        provingRecipe: ProvingRecipe[UnprovenTransaction, Transaction],
+    ): F[Transaction] = {
       val provenTx = provingRecipe match {
         case TransactionToProve(transaction) =>
           provingService.proveTransaction(transaction)
@@ -49,9 +76,7 @@ object WalletTransactionService {
         provingRecipe.unprovenTransaction match {
           case Some(tx) =>
             walletStateContainer
-              .updateStateEither { wallet =>
-                walletTxBalancing.applyFailedUnprovenTransaction(wallet, tx)
-              }
+              .updateStateEither(_.applyFailedUnprovenTransaction(tx))
               .flatMap { _ =>
                 val id = tx.identifiers.headOption.map(TransactionIdentifier.apply)
                 tracer.unprovenTransactionReverted(id, error)
@@ -65,11 +90,9 @@ object WalletTransactionService {
     override def balanceTransaction(
         tx: Transaction,
         newCoins: Seq[CoinInfo],
-    ): F[BalanceTransactionRecipe] = {
+    ): F[BalanceTransactionRecipe[UnprovenTransaction, Transaction]] = {
       walletStateContainer
-        .modifyStateEither { wallet =>
-          walletTxBalancing.balanceTransaction(wallet, (tx, newCoins))
-        }
+        .modifyStateEither(_.balanceTransaction((tx, newCoins)))
         .flatMap {
           case Left(error) =>
             error.toThrowable.raiseError

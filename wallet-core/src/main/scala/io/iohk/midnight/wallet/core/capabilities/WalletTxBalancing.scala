@@ -9,24 +9,22 @@ import io.iohk.midnight.wallet.core.domain.{
 
 trait WalletTxBalancing[
     TWallet,
-    TTransaction,
-    TUnprovenTransaction,
-    TCoin,
+    Transaction,
+    UnprovenTransaction,
+    Coin,
+    TokenType,
 ] {
-  def balanceTransaction(
-      wallet: TWallet,
-      transactionWithCoins: (TTransaction, Seq[TCoin]),
-  ): Either[WalletError, (TWallet, BalanceTransactionRecipe)]
+  extension (wallet: TWallet) {
+    def balanceTransaction(
+        transactionWithCoins: (Transaction, Seq[Coin]),
+    ): Either[WalletError, (TWallet, BalanceTransactionRecipe[UnprovenTransaction, Transaction])]
 
-  def prepareTransferRecipe(
-      wallet: TWallet,
-      outputs: List[TokenTransfer],
-  ): Either[WalletError, (TWallet, TransactionToProve)]
+    def prepareTransferRecipe(
+        outputs: List[TokenTransfer[TokenType]],
+    ): Either[WalletError, (TWallet, TransactionToProve[UnprovenTransaction])]
 
-  def applyFailedTransaction(wallet: TWallet, tx: TTransaction): Either[WalletError, TWallet]
+    def applyFailedTransaction(tx: Transaction): Either[WalletError, TWallet]
 
-  def applyFailedUnprovenTransaction(
-      wallet: TWallet,
-      tx: TUnprovenTransaction,
-  ): Either[WalletError, TWallet]
+    def applyFailedUnprovenTransaction(tx: UnprovenTransaction): Either[WalletError, TWallet]
+  }
 }

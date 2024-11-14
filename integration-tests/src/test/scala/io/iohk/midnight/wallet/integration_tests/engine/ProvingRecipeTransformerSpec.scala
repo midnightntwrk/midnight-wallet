@@ -21,7 +21,7 @@ import io.iohk.midnight.wallet.core.Generators.{
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.engine.js.ProvingRecipeTransformer
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
-import io.iohk.midnight.wallet.zswap.{Transaction, UnprovenTransaction}
+import io.iohk.midnight.midnightNtwrkZswap.mod.{UnprovenTransaction, Transaction}
 import org.scalacheck.Prop.forAll
 import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js
@@ -60,8 +60,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
 
   test("should transform API TransactionToProve to domain TransactionToProve") {
     forAll { (unprovenTx: UnprovenTransaction) =>
-      val apiProvingRecipe =
-        ApiProvingRecipe.TransactionToProve(unprovenTx.toJs, TRANSACTION_TO_PROVE)
+      val apiProvingRecipe = ApiProvingRecipe.TransactionToProve(unprovenTx, TRANSACTION_TO_PROVE)
       assertEquals(
         ProvingRecipeTransformer.toRecipe(apiProvingRecipe),
         Right(domain.TransactionToProve(unprovenTx)),
@@ -73,7 +72,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
     forAllF { (txIO: IO[Transaction], unprovenTx: UnprovenTransaction) =>
       txIO.map { tx =>
         val apiProvingRecipe = ApiProvingRecipe
-          .BalanceTransactionToProve(tx.toJs, unprovenTx.toJs, BALANCE_TRANSACTION_TO_PROVE)
+          .BalanceTransactionToProve(tx, unprovenTx, BALANCE_TRANSACTION_TO_PROVE)
         assertEquals(
           ProvingRecipeTransformer.toRecipe(apiProvingRecipe),
           Right(domain.BalanceTransactionToProve(unprovenTx, tx)),
@@ -85,7 +84,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
   test("should transform API NothingToProve to domain NothingToProve") {
     forAllF { (txIO: IO[Transaction]) =>
       txIO.map { tx =>
-        val apiProvingRecipe = ApiProvingRecipe.NothingToProve(tx.toJs, NOTHING_TO_PROVE)
+        val apiProvingRecipe = ApiProvingRecipe.NothingToProve(tx, NOTHING_TO_PROVE)
         assertEquals(
           ProvingRecipeTransformer.toRecipe(apiProvingRecipe),
           Right(domain.NothingToProve(tx)),
@@ -98,7 +97,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
     forAll { (unprovenTx: UnprovenTransaction) =>
       val provingRecipe = domain.TransactionToProve(unprovenTx)
       val apiProvingRecipe =
-        ApiProvingRecipe.TransactionToProve(unprovenTx.toJs, TRANSACTION_TO_PROVE)
+        ApiProvingRecipe.TransactionToProve(unprovenTx, TRANSACTION_TO_PROVE)
       compareRecipes(
         ProvingRecipeTransformer.toApiTransactionToProve(provingRecipe),
         apiProvingRecipe,
@@ -111,7 +110,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
       txIO.map { tx =>
         val provingRecipe = domain.BalanceTransactionToProve(unprovenTx, tx)
         val apiProvingRecipe = ApiProvingRecipe
-          .BalanceTransactionToProve(tx.toJs, unprovenTx.toJs, BALANCE_TRANSACTION_TO_PROVE)
+          .BalanceTransactionToProve(tx, unprovenTx, BALANCE_TRANSACTION_TO_PROVE)
         compareRecipes(
           ProvingRecipeTransformer.toApiBalanceTransactionRecipe(provingRecipe),
           apiProvingRecipe,
@@ -123,8 +122,8 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
   test("should transform domain NothingToProve to API NothingToProve") {
     forAllF { (txIO: IO[Transaction]) =>
       txIO.map { tx =>
-        val provingRecipe = domain.NothingToProve(tx)
-        val apiProvingRecipe = ApiProvingRecipe.NothingToProve(tx.toJs, NOTHING_TO_PROVE)
+        val provingRecipe = domain.NothingToProve[UnprovenTransaction, Transaction](tx)
+        val apiProvingRecipe = ApiProvingRecipe.NothingToProve(tx, NOTHING_TO_PROVE)
         compareRecipes(
           ProvingRecipeTransformer.toApiBalanceTransactionRecipe(provingRecipe),
           apiProvingRecipe,

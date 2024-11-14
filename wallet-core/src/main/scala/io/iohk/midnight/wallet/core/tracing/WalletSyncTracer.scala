@@ -13,14 +13,14 @@ import io.iohk.midnight.wallet.core.tracing.WalletSyncEvent.*
 class WalletSyncTracer[F[_]](
     val tracer: Tracer[F, WalletSyncEvent],
 ) {
-  def handlingUpdate(indexerUpdate: IndexerUpdate): F[Unit] = tracer(
+  def handlingUpdate(indexerUpdate: IndexerUpdate[?, ?]): F[Unit] = tracer(
     SyncHandlingUpdate(indexerUpdate),
   )
-  def applyUpdateSuccess(indexerUpdate: IndexerUpdate): F[Unit] = tracer(
+  def applyUpdateSuccess(indexerUpdate: IndexerUpdate[?, ?]): F[Unit] = tracer(
     ApplyUpdateSuccess(indexerUpdate),
   )
   // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-  def applyUpdateError(indexerUpdate: IndexerUpdate, error: WalletError): F[Unit] = tracer(
+  def applyUpdateError(indexerUpdate: IndexerUpdate[?, ?], error: WalletError): F[Unit] = tracer(
     ApplyUpdateError(indexerUpdate, error),
   )
   // $COVERAGE-ON$

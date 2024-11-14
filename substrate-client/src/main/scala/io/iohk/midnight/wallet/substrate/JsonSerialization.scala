@@ -1,21 +1,21 @@
 package io.iohk.midnight.wallet.substrate
 
-import io.circe.{Decoder, Encoder, HCursor, Json}
-import io.iohk.midnight.buffer.mod.Buffer
-import io.circe.DecodingFailure
+import io.circe.*
 import io.circe.DecodingFailure.Reason.{CustomReason, MissingField}
+import io.iohk.midnight.buffer.mod.Buffer
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.NetworkId
 
-object JsonSerialization {
-
-  given Encoder[SubmitTransactionRequest] = (req: SubmitTransactionRequest) => {
-    Json.obj(
-      "id" -> Json.fromInt(1),
-      "jsonrpc" -> Json.fromString("2.0"),
-      "method" -> Json.fromString("author_submitExtrinsic"),
-      "params" -> Json.arr(
-        Json.fromString(Serializer.toSubstrateTransaction(req.transaction)(using req.networkId)),
-      ),
-    )
+class JsonSerialization[Transaction: zswap.Transaction.IsSerializable] {
+  given Encoder[SubmitTransactionRequest[Transaction]] = {
+    case SubmitTransactionRequest(tx, networkId) =>
+      given NetworkId = networkId
+      Json.obj(
+        "id" -> Json.fromInt(1),
+        "jsonrpc" -> Json.fromString("2.0"),
+        "method" -> Json.fromString("author_submitExtrinsic"),
+        "params" -> Json.arr(Json.fromString(Serializer.toSubstrateTransaction(tx))),
+      )
   }
 
   given Decoder[RpcError] = (c: HCursor) => {

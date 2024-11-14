@@ -2,107 +2,72 @@ package io.iohk.midnight.wallet.engine
 
 import cats.effect.syntax.resource.*
 import cats.effect.{Async, Resource}
+import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
-import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
-import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.core.capabilities.*
+import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
+import io.iohk.midnight.wallet.core.combinator.VersionCombinator.{
+  ProvingServiceFactory,
+  SubmissionServiceFactory,
+  SyncServiceFactory,
+}
+import io.iohk.midnight.wallet.core.{Config as CoreConfig, *}
 import io.iohk.midnight.wallet.core.combinator.{CombinationMigrations, VersionCombinator}
 import io.iohk.midnight.wallet.core.services.*
-import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
-import io.iohk.midnight.wallet.engine.combinator.V1Combination
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.js.{ProvingServiceFactory, TxSubmissionServiceFactory}
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.zswap
-import io.iohk.midnight.wallet.zswap.NetworkId
 
-object WalletBuilder {
-  def build[F[_]: Async](config: Config): Resource[F, WalletDependencies[F]] = {
-    given ProtocolVersion = config.initialState.protocolVersion
-    given NetworkId = config.initialState.networkId
-    buildWallet[F](config)
-  }
-
-  private def buildWallet[F[_]: Async](
-      config: Config,
-  )(using ProtocolVersion, NetworkId): Resource[F, WalletDependencies[F]] = {
-    import Wallet.given
-    given WalletTxHistory[Wallet, zswap.Transaction] =
-      if (config.discardTxHistory) Wallet.walletDiscardTxHistory else Wallet.walletTxHistory
-    implicit val rootTracer: Tracer[F, StructuredLog] =
+class WalletBuilder[F[_]: Async, LocalState, Transaction] {
+  def build(config: Config): Resource[F, VersionCombinator[F]] = {
+    given rootTracer: Tracer[F, StructuredLog] =
       ConsoleTracer.contextAware[F, StringLogContext](config.minLogLevel)
     val builderTracer = WalletBuilderTracer.from(rootTracer)
 
     for {
       _ <- builderTracer.buildRequested(config).toResource
-      walletStateContainer <- WalletStateContainer.Live(walletCreation.create(config.initialState))
-      walletQueryStateService <- Resource.pure(
-        new WalletQueryStateService.Live(walletStateContainer),
+      combinator <- VersionCombinator(
+        CoreConfig(config.initialState, config.discardTxHistory),
+        submissionServiceFactory(config),
+        provingServiceFactory(config),
+        syncServiceFactory(config),
+        CombinationMigrations.default[F],
       )
-      walletStateService <- Resource.pure(
-        new WalletStateService.Live(walletQueryStateService),
-      )
-      submitTxService <- TxSubmissionServiceFactory(config.substrateNodeUri)
-      provingService <- ProvingServiceFactory(config.provingServerUri)
-      walletTxSubmissionService <- buildWalletTxSubmissionService(
-        submitTxService,
-        walletStateContainer,
-      )
-      walletTransactionService <- buildWalletTransactionService(
-        walletStateContainer,
-        provingService,
-      )
-      v1Combination <- V1Combination(
-        config.initialState,
-        IndexerClient(config.indexerWsUri),
-        walletStateContainer,
-        walletStateService,
-      )
-      combinator <- VersionCombinator(v1Combination, CombinationMigrations.default[F])
-    } yield {
-      WalletDependencies(
-        combinator,
-        walletTxSubmissionService,
-        walletTransactionService,
-      )
+    } yield combinator
+  }
+
+  private def submissionServiceFactory(config: Config): SubmissionServiceFactory[F] =
+    new SubmissionServiceFactory[F] {
+      override def apply[TX: zswap.Transaction.IsSerializable](using
+          zswap.NetworkId,
+      ): Resource[F, TxSubmissionService[F, TX]] =
+        TxSubmissionServiceFactory[F, TX](config.substrateNodeUri)
     }
-  }
 
-  private def buildWalletTxSubmissionService[F[_]: Async, TWallet](
-      submitTxService: TxSubmissionService[F],
-      walletStateContainer: WalletStateContainer[F, TWallet],
-  )(implicit
-      rootTracer: Tracer[F, StructuredLog],
-      walletTxBalancing: WalletTxBalancing[TWallet, zswap.Transaction, zswap.UnprovenTransaction, ?],
-  ): Resource[F, WalletTxSubmissionService[F]] = {
-    implicit val walletTxSubmissionTracer: WalletTxSubmissionTracer[F] =
-      WalletTxSubmissionTracer.from(rootTracer)
-    Resource.pure(
-      new WalletTxSubmissionService.Live[F, TWallet](submitTxService, walletStateContainer),
-    )
-  }
+  private def provingServiceFactory(config: Config): ProvingServiceFactory[F] =
+    new ProvingServiceFactory[F] {
+      override def apply[
+          UTX: zswap.UnprovenTransaction.IsSerializable,
+          TX: zswap.Transaction.IsSerializable,
+      ](using ProtocolVersion, zswap.NetworkId): Resource[F, ProvingService[F, UTX, TX]] =
+        ProvingServiceFactory[F, UTX, TX](config.provingServerUri)
+    }
 
-  private def buildWalletTransactionService[F[_]: Async, TWallet](
-      walletStateContainer: WalletStateContainer[F, TWallet],
-      provingService: ProvingService[F],
-  )(implicit
-      rootTracer: Tracer[F, StructuredLog],
-      walletTxBalancing: WalletTxBalancing[
-        TWallet,
-        zswap.Transaction,
-        zswap.UnprovenTransaction,
-        zswap.CoinInfo,
-      ],
-  ): Resource[F, WalletTransactionService[F]] = {
-    given WalletTxServiceTracer[F] = WalletTxServiceTracer.from(rootTracer)
-    Resource.pure(new WalletTransactionService.Live(walletStateContainer, provingService))
-  }
-
-  final case class WalletDependencies[F[_]](
-      versionCombinator: VersionCombinator[F],
-      submissionService: WalletTxSubmissionService[F],
-      txService: WalletTransactionService[F],
-  )
+  private def syncServiceFactory(
+      config: Config,
+  )(using Tracer[F, StructuredLog]): SyncServiceFactory[F] =
+    new SyncServiceFactory[F] {
+      override def apply[ESK](esk: ESK, index: Option[BigInt])(using
+          s: zswap.EncryptionSecretKey[ESK, ?],
+          n: zswap.NetworkId,
+      ): Resource[F, SyncService[F]] =
+        IndexerClient[F](config.indexerWsUri).map { indexerClient =>
+          new SyncService[F] {
+            override def sync(offset: Option[Transaction.Offset]): Stream[F, IndexerEvent] =
+              indexerClient.viewingUpdates(s.serialize(esk), index)
+          }
+        }
+    }
 }

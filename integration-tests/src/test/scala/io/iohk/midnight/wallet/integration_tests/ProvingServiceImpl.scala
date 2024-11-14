@@ -7,6 +7,7 @@ import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.prover.ProverClient
 import io.iohk.midnight.wallet.zswap.NetworkId
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import sttp.client3.UriContext
 
 object ProvingServiceImpl {
@@ -19,10 +20,12 @@ object ProvingServiceImpl {
       .withExposedPorts(provingServicePort)
       .withWaitStrategy(Wait.forListeningPorts())
 
-  def instance(dockerImage: String): Resource[IO, ProvingService[IO]] =
+  def instance(
+      dockerImage: String,
+  ): Resource[IO, ProvingService[IO, UnprovenTransaction, Transaction]] =
     TestContainers.resource(dockerImage)(testProverServerContainerConfig).flatMap { container =>
       val port = container.getMappedPort(provingServicePort).toInt
-      ProverClient[IO](uri"http://localhost:$port")
+      ProverClient[IO, UnprovenTransaction, Transaction](uri"http://localhost:$port")
         .map(client => client.proveTransaction)
     }
 }

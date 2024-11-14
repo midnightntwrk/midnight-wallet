@@ -4,17 +4,21 @@ import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import scala.util.Try
 
-opaque type EncryptionSecretKey = mod.EncryptionSecretKey
+trait EncryptionSecretKey[T, Transaction] {
+  extension (t: T) {
+    def serialize(using networkId: NetworkId): String
+    def test(tx: Transaction): Try[Boolean]
+  }
+}
 
-object EncryptionSecretKey {
-  def fromJs(key: mod.EncryptionSecretKey): EncryptionSecretKey = key
-  extension (key: EncryptionSecretKey) {
+given v1ESK: EncryptionSecretKey[mod.EncryptionSecretKey, mod.Transaction] with {
+  extension (key: mod.EncryptionSecretKey) {
     def serialize(using networkId: NetworkId): String =
       HexUtil.encodeHex(
         key.yesIKnowTheSecurityImplicationsOfThis_serialize(networkId.toJs).toByteArray,
       )
-    def test(tx: Transaction): Try[Boolean] = Try {
-      tx.toJs.guaranteedCoins.exists(key.test) || tx.toJs.fallibleCoins.exists(key.test)
+    def test(tx: mod.Transaction): Try[Boolean] = Try {
+      tx.guaranteedCoins.exists(key.test) || tx.fallibleCoins.exists(key.test)
     }
   }
 }

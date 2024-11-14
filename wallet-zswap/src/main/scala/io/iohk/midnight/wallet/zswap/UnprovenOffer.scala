@@ -6,49 +6,91 @@ import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import scala.scalajs.js
 
-opaque type UnprovenOffer = mod.UnprovenOffer
-object UnprovenOffer {
-  def fromJs(offer: mod.UnprovenOffer): UnprovenOffer = offer
+trait UnprovenOffer[T, UnprovenInput, UnprovenOutput, TokenType] {
+  def fromInput(input: UnprovenInput, tokenType: TokenType, value: BigInt): T
+  def fromOutput(output: UnprovenOutput, tokenType: TokenType, value: BigInt): T
 
-  def fromInput(input: UnprovenInput, tokenType: TokenType, value: BigInt): UnprovenOffer =
+  extension (t: T) {
+    def serialize(using networkId: NetworkId): Array[Byte]
+    def merge(other: T): T
+    def inputs: Array[UnprovenInput]
+    def outputs: Array[UnprovenOutput]
+    def deltas: Map[TokenType, BigInt]
+  }
+}
+
+given UnprovenOffer[
+  mod.UnprovenOffer,
+  mod.UnprovenInput,
+  mod.UnprovenOutput,
+  mod.TokenType,
+] with {
+  override def fromInput(
+      input: mod.UnprovenInput,
+      tokenType: mod.TokenType,
+      value: BigInt,
+  ): mod.UnprovenOffer =
     mod.UnprovenOffer.fromInput(input, tokenType, value.toJsBigInt)
 
-  def fromOutput(output: UnprovenOutput, tokenType: TokenType, value: BigInt): UnprovenOffer =
+  override def fromOutput(
+      output: mod.UnprovenOutput,
+      tokenType: mod.TokenType,
+      value: BigInt,
+  ): mod.UnprovenOffer =
     mod.UnprovenOffer.fromOutput(output, tokenType, value.toJsBigInt)
 
-  extension (unprovenOffer: UnprovenOffer) {
-    private[zswap] def toJs: mod.UnprovenOffer = unprovenOffer
-
-    def serialize(using networkId: NetworkId): Array[Byte] =
+  extension (unprovenOffer: mod.UnprovenOffer) {
+    override def serialize(using networkId: NetworkId): Array[Byte] =
       unprovenOffer.serialize(networkId.toJs).toByteArray
-    def merge(other: UnprovenOffer): UnprovenOffer = unprovenOffer.merge(other)
-    def inputs: Array[UnprovenInput] = unprovenOffer.inputs.toArray
-    def outputs: Array[UnprovenOutput] = unprovenOffer.outputs.toArray
-    def deltas: Map[TokenType, BigInt] =
+
+    override def merge(other: mod.UnprovenOffer): mod.UnprovenOffer =
+      unprovenOffer.merge(other)
+
+    override def inputs: Array[mod.UnprovenInput] =
+      unprovenOffer.inputs.toArray
+
+    override def outputs: Array[mod.UnprovenOutput] =
+      unprovenOffer.outputs.toArray
+
+    override def deltas: Map[mod.TokenType, BigInt] =
       unprovenOffer.deltas.toMap.map((token, delta) => (token, delta.toScalaBigInt))
   }
 }
 
-opaque type UnprovenInput = mod.UnprovenInput
-object UnprovenInput {
-  private[zswap] def fromJs(unprovenInput: mod.UnprovenInput): UnprovenInput = unprovenInput
-
-  extension (unprovenInput: UnprovenInput) {
-    private[zswap] def toJs: mod.UnprovenInput = unprovenInput
-    def nullifier: Nullifier = Nullifier.fromJs(unprovenInput.nullifier)
+trait UnprovenInput[T, Nullifier] {
+  extension (unprovenInput: T) {
+    def nullifier: Nullifier
+  }
+}
+given UnprovenInput[mod.UnprovenInput, mod.Nullifier] with {
+  extension (unprovenInput: mod.UnprovenInput) {
+    override def nullifier: mod.Nullifier = unprovenInput.nullifier
   }
 }
 
-opaque type UnprovenOutput = mod.UnprovenOutput
+trait UnprovenOutput[T, CoinInfo, CoinPublicKey, EncryptionPublicKey] {
+  def create(coin: CoinInfo, publicKey: CoinPublicKey): T
 
-@SuppressWarnings(Array("org.wartremover.warts.Overloading"))
-object UnprovenOutput {
-  def apply(coin: CoinInfo, publicKey: CoinPublicKey): UnprovenOutput =
-    mod.UnprovenOutput.`new`(coin.toJs, publicKey)
-  def apply(
+  def create(
       coin: CoinInfo,
       coinPubKey: CoinPublicKey,
       encPubKey: EncryptionPublicKey,
-  ): UnprovenOutput =
-    mod.UnprovenOutput.`new`(coin.toJs, coinPubKey, encPubKey)
+  ): T
+}
+
+given UnprovenOutput[
+  mod.UnprovenOutput,
+  mod.CoinInfo,
+  mod.CoinPublicKey,
+  mod.EncPublicKey,
+] with {
+  override def create(coin: mod.CoinInfo, publicKey: mod.CoinPublicKey): mod.UnprovenOutput =
+    mod.UnprovenOutput.`new`(coin, publicKey)
+
+  override def create(
+      coin: mod.CoinInfo,
+      coinPubKey: mod.CoinPublicKey,
+      encPubKey: mod.EncPublicKey,
+  ): mod.UnprovenOutput =
+    mod.UnprovenOutput.`new`(coin, coinPubKey, encPubKey)
 }

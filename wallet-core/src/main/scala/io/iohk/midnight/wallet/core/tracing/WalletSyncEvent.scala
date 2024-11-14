@@ -14,19 +14,19 @@ sealed trait WalletSyncEvent
 
 object WalletSyncEvent {
 
-  final case class SyncHandlingUpdate(update: IndexerUpdate) extends WalletSyncEvent
+  final case class SyncHandlingUpdate(update: IndexerUpdate[?, ?]) extends WalletSyncEvent
 
   object SyncHandlingUpdate {
     val id: Event.Id[SyncHandlingUpdate] = Event.Id("wallet_sync_handling_update")
   }
 
-  final case class ApplyUpdateSuccess(update: IndexerUpdate) extends WalletSyncEvent
+  final case class ApplyUpdateSuccess(update: IndexerUpdate[?, ?]) extends WalletSyncEvent
 
   object ApplyUpdateSuccess {
     val id: Event.Id[ApplyUpdateSuccess] = Event.Id("wallet_apply_update_success")
   }
 
-  final case class ApplyUpdateError(update: IndexerUpdate, error: WalletError)
+  final case class ApplyUpdateError(update: IndexerUpdate[?, ?], error: WalletError)
       extends WalletSyncEvent
 
   object ApplyUpdateError {
@@ -34,13 +34,10 @@ object WalletSyncEvent {
   }
 
   object DefaultInstances {
-    def showIndexerUpdate(update: IndexerUpdate): String =
+    def showIndexerUpdate(update: IndexerUpdate[?, ?]): String =
       update match {
-        case ViewingUpdate(protocolVersion, offset, updates) =>
-          s"Viewing update v$protocolVersion: @${offset.show} ${updates
-              .collect { case Right(tx) => tx }
-              .map(_.tx.hash)
-              .mkString("[", ",", "]")}"
+        case ViewingUpdate(protocolVersion, offset, _) =>
+          s"Viewing update v$protocolVersion: @${offset.show}"
         case ProgressUpdate(synced, total) => s"Progress: $synced/$total"
         case ConnectionLost                => "Connection lost"
       }

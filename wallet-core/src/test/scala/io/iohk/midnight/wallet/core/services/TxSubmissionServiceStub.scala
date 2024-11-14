@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.core.services
 
 import cats.effect.IO
 import cats.syntax.eq.*
-import io.iohk.midnight.wallet.zswap.Transaction
+import io.iohk.midnight.midnightNtwrkZswap.mod.Transaction
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
 
 @SuppressWarnings(
@@ -10,17 +10,17 @@ import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResul
 )
 class TxSubmissionServiceStub(
     var submittedTransactions: Set[Transaction] = Set.empty,
-) extends TxSubmissionService[IO] {
+) extends TxSubmissionService[IO, Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] = IO {
     submittedTransactions += transaction
     SubmissionResult.Accepted
   }
 
   def wasTxSubmitted(tx: Transaction): Boolean =
-    submittedTransactions.exists(_.hash === tx.hash)
+    submittedTransactions.exists(_.transactionHash() === tx.transactionHash())
 }
 
-class FailingTxSubmissionServiceStub() extends TxSubmissionService[IO] {
+class FailingTxSubmissionServiceStub() extends TxSubmissionService[IO, Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] =
     IO.raiseError(FailingTxSubmissionServiceStub.TxSubmissionServiceError)
 }
@@ -29,7 +29,7 @@ object FailingTxSubmissionServiceStub {
   val TxSubmissionServiceError: Throwable = new Throwable("FailingTxSubmissionServiceStub")
 }
 
-class RejectedTxSubmissionServiceStub() extends TxSubmissionService[IO] {
+class RejectedTxSubmissionServiceStub() extends TxSubmissionService[IO, Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] =
     IO.pure(SubmissionResult.Rejected(RejectedTxSubmissionServiceStub.errorMsg))
 }
