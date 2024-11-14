@@ -28,9 +28,7 @@ jobs:
         with:
           node-version-file: '.tool-versions'
           cache: 'yarn'
-          cache-dependency-path: |
-            yarn.lock
-            **/yarn.lock
+          cache-dependency-path: yarn.lock
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@v3
@@ -39,19 +37,11 @@ jobs:
           username: ${{ secrets.GH_USERNAME }}
           password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
-      - name: Check format and run tests
+      - name: Build and check
         run: |
-          sbt clean verify
           yarn install
-          sbt integrationTests/test
-          sbt coverageAggregate
-
-      - name: Test and build typescript packages
-        run: |
-          sbt dist
-          cd typescript
-          yarn install --no-immutable
-          yarn lint
+          sbt clean
+          yarn dlx turbo verify
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v1

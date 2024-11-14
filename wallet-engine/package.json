@@ -18,6 +18,11 @@
         "type": "git",
         "url": "https://github.com/midnight-ntwrk/artifacts.git"
     },
+    "scripts": {
+        "typecheck": "",
+        "test": "",
+        "dist": ""
+    },
     "dependencies": {
         "@midnight-ntwrk/wallet-api": "^3.5.0",
         "@midnight-ntwrk/zswap": "^3.0.2",

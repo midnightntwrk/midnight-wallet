@@ -29,3 +29,18 @@ metals.sbt
 
 archive_info.txt
 libmidnight_zswap_c_bindings_v*.*
+
+
+# Build
+*.tsbuildinfo
+*.local
+coverage
+.turbo
+packages/*/*.tgz
+
+# reports
+reports
+allure-results
+
+# user files
+**/.sync_cache

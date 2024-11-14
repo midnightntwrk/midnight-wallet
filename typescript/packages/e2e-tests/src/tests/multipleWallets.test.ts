@@ -1,13 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { closeWallet, waitForSync } from './utils';
+import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
+import { firstValueFrom } from 'rxjs';
 import { logger } from './logger';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
+import { closeWallet, waitForSync } from './utils';
 
 /**
  * Syncing tests
@@ -25,6 +25,7 @@ describe('Syncing', () => {
     '0000000000000000000000000000000000000000000000000000000000000040',
   ];
 
+  // eslint-disable-next-line @typescript-eslint/array-type
   const wallets: Array<Wallet & Resource> = [];
   let fixture: TestContainersFixture;
 

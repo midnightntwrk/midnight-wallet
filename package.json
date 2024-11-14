@@ -1,6 +1,24 @@
 {
   "packageManager": "yarn@4.3.1",
+  "name": "@midnight-ntwrk/wallet-sdk-monorepo",
+  "workspaces": [
+    "typescript/packages/*",
+    "packages/*",
+    "wallet-engine",
+    "wallet-core",
+    "substrate-client",
+    "pubsub-indexer-client",
+    "prover-client",
+    "js-interop",
+    "integration-tests",
+    "wallet-zswap"
+  ],
   "dependencies": {
-    "extensionless": "^1.9.9"
+    "extensionless": "^1.9.9",
+    "turbo": "^2.2.3"
+  },
+  "scripts": {
+    "sbt:verify": "sbt verify",
+    "sbt:dist": "sbt dist"
   }
 }

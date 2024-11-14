@@ -9,8 +9,8 @@ used by dapp developers and [Midnight.js](https://github.com/input-output-hk/mid
 
 ## Modules structure
 
-This is an [sbt](https://www.scala-sbt.org) project, meaning that the modules and 
-dependencies are configured in the [`build.sbt`](build.sbt) file. The modules are:
+This project is a yarn workspaces combined with Turborepo, with Scala pieces managed by [sbt](https://www.scala-sbt.org), meaning that their modules and 
+dependencies are configured in the [`build.sbt`](build.sbt) file. In many of them `package.json` files can be found and they are registered as workspaces in yarn, so yarn can resolve the dependencies, and [ScalablyTyped](https://scalablytyped.org) can provide Scala type definitions for them. The modules are:
 
 - `wallet-core` - Implementation of the main business logic. This exposes interfaces of services that are
   required to be instantiated, and that can be independently developed and reused
@@ -37,10 +37,6 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. The modules ar
   platforms and enables Scala clients work with idiomatic Scala.
 - `integration-tests` - All tests that require an external service to work
 
-`wallet-engine` uses [yarn](https://classic.yarnpkg.com) under the hood to fetch
-npm dependencies via [ScalablyTyped](https://scalablytyped.org), so you will find `package.json`,
-`yarn.lock`, and `.npmrc` configuration files inside those submodules.
-
 ## Development setup
 
 ### Tools
@@ -51,6 +47,8 @@ You can use [asdf](https://asdf-vm.com) and just run `asdf install` to get the c
 
 Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell definition.
 
+Additionally, it is worth installing turborepo as a global npm package (`npm install -g turbo`), for easier access for turbo command.
+
 Finally, [direnv](https://direnv.net) is optional but strongly recommended.
 
 ### Internal private registry and credentials
@@ -60,7 +58,8 @@ Follow all authentication steps from the [Authentication setup document](https:/
 ## Build
 
 ```shell
-sbt dist
+yarn
+turbo dist
 ```
 
 The generated JavaScript code is written to `wallet-engine/dist`.
@@ -70,15 +69,28 @@ The generated JavaScript code is written to `wallet-engine/dist`.
 ### Unit tests
 
 ```shell
-sbt test
+turbo test
 ```
 
 ### Integration tests
 
 ```shell
-yarn install
 sbt integrationTests/test
 ```
+
+### CI verification
+
+To run the same checks as CI does, run
+
+```shell
+turbo verify
+```
+
+It runs across all workspaces and sbt modules:
+- necessary builds and typechecking
+- lints
+- unit tests
+- integration tests
 
 ## Generate test coverage report
 

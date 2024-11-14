@@ -1,0 +1,57 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_AUTH_TOKEN", "MIDNIGHT_GH_USER", "MIDNIGHT_GH_TOKEN"],
+  "tasks": {
+    "lint": {
+      "inputs": [
+        "**/src/**.*.ts",
+        ".eslintrc.cjs",
+        ".prettierrc.json"
+      ],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist"]
+    },
+    "test": {
+      "inputs": ["**/src/**.*.ts"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "//#sbt:verify"]
+    },
+    "test-e2e": {
+      "cache": false,
+      "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
+    },
+    "dist": {
+      "dependsOn": ["//#sbt:dist"]
+    },
+    "verify": {
+      "dependsOn": ["//#sbt:verify", "lint", "test"]
+    },
+    "//#sbt:dist": {
+      "inputs": [
+        "build.sbt",
+        "**/package.json",
+        "**/src/**/*.scala",
+        "project/**/*.scala",
+        "project/build.properties",
+        "project/*.sbt"
+      ],
+      "outputs": [
+        "wallet-engine/dist/**"
+      ],
+      "outputLogs": "new-only"
+    },
+    "//#sbt:verify": {
+      "inputs": [
+        "build.sbt",
+        "**/package.json",
+        "**/src/**/*.scala",
+        "project/**/*.scala",
+        "project/build.properties",
+        "project/*.sbt"
+      ],
+      "outputs": [
+        "**/target/test-reports/**"
+      ]
+    }
+  }
+}

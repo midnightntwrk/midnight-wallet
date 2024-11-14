@@ -65,7 +65,7 @@ lazy val commonSettings = Seq(
 
 lazy val commonScalablyTypedSettings = Seq(
   externalNpm := {
-    Process("yarn", baseDirectory.value).!!
+    // This disables running npm/yarn by ScalablyTyped, all under assumption it was already run earlier (turborepo is the main tool here)
     baseDirectory.value
   },
   stOutputPackage := "io.iohk.midnight",
@@ -315,5 +315,7 @@ addCommandAlias(
     "proverClient/test",
     "walletCore/test",
     "walletEngine/test",
+    "integrationTests/test",
+    "coverageAggregate",
   ).mkString(";", " ;", ""),
 )

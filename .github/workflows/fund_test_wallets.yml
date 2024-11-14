@@ -36,7 +36,7 @@ jobs:
               with:
                 node-version-file: '.tool-versions'
                 cache: 'yarn'
-                cache-dependency-path: 'typescript/yarn.lock'
+                cache-dependency-path: yarn.lock
 
             - name: Log in to GitHub Container registry
               uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -54,9 +54,8 @@ jobs:
                 SEED_STABLE: ${{ secrets.SEED_STABLE }}
                 ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
               run: |
-                cd typescript
                 yarn install --immutable
-                yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+                yarn dlx turbo test-e2e -- typescript/packages/e2e-tests/src/tests/fundTestWallets.test.ts
             
             - name: Run funding script for testnet envs
               if: env.NETWORK == 'testnet'
@@ -67,6 +66,5 @@ jobs:
                 SEED_STABLE: ${{ secrets.SEED_STABLE }}
                 ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
               run: |
-                cd typescript
                 yarn install --immutable
-                yarn test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+                yarn dlx turbo test-e2e -- typescript/packages/e2e-tests/src/tests/fundTestWallets.test.ts

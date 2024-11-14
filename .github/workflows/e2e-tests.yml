@@ -116,7 +116,7 @@ jobs:
             LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,conclusion,headBranch | jq -r '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
             mkdir -p ${{ env.SYNC_CACHE }}
-    
+
       - uses: actions/download-artifact@v4
         continue-on-error: true
         with:
@@ -127,7 +127,7 @@ jobs:
 
       - name: Debug
         run: ls -a -R ./typescript/packages/e2e-tests
-        
+
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
@@ -138,7 +138,7 @@ jobs:
         with:
           node-version-file: '.tool-versions'
           cache: 'yarn'
-          cache-dependency-path: '**/yarn.lock'
+          cache-dependency-path: yarn.lock
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -150,14 +150,12 @@ jobs:
       - name: Build wallet and install dependencies
         if: ${{ inputs.deployment == 'local' }}
         run: |
-          sbt dist
-          cd typescript
           yarn install --immutable
+          yarn dlx turbo dist
 
       - name: Install dependencies
         if: ${{ inputs.deployment != 'local' }}
         run: |
-          cd typescript
           yarn install --immutable
 
       - name: Run e2e tests
@@ -171,8 +169,7 @@ jobs:
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
         run: |
-          cd typescript
-          yarn test-e2e -- ${{ inputs.modifier }}
+          yarn dlx turbo test-e2e -- ${{ inputs.modifier }}
 
       - name: Upload sync cache
         uses: actions/upload-artifact@v4

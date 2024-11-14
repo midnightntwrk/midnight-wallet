@@ -26,11 +26,11 @@ jobs:
         with:
           node-version-file: '.tool-versions'
           cache: 'yarn'
-          cache-dependency-path: '**/yarn.lock'
+          cache-dependency-path: 'yarn.lock'
 
       - name: Build Wallet
         run: |
-          sbt dist
+          yarn dlx turbo dist
 
       - name: Publish Wallet
         run: |
