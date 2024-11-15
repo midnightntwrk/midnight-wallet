@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.integration_tests
 
-import cats.effect.{Async, Deferred, IO, Resource}
+import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.bloc.Bloc
@@ -9,23 +9,23 @@ import io.iohk.midnight.midnightNtwrkZswapV1.mod as zswapV1
 import io.iohk.midnight.midnightNtwrkZswapV2.mod as zswapV2
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
+import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
+import io.iohk.midnight.wallet.core.combinator.*
+import io.iohk.midnight.wallet.core.domain.ProgressUpdate
 import io.iohk.midnight.wallet.core.{
   Generators,
   WalletTransactionService,
   WalletTxSubmissionService,
 }
-import io.iohk.midnight.wallet.core.WalletStateService.{SerializedWalletState, State}
-import io.iohk.midnight.wallet.core.combinator.*
-import io.iohk.midnight.wallet.core.domain.ProgressUpdate
 import io.iohk.midnight.wallet.zswap.given
 import munit.CatsEffectSuite
 
 class VersionCombinatorSpec extends CatsEffectSuite {
   test("Handle a different version") {
     val combinatorResource = for {
-      v1 <- DummyV1Combination[IO](Offset.Zero)
+      v1 <- DummyV1Combination(Offset.Zero)
       deferred <- Deferred[IO, Unit].toResource
-    } yield new VersionCombinator[IO](v1, DummyCombinationMigrations[IO], deferred)
+    } yield new VersionCombinator(v1, new DummyCombinationMigrations, deferred)
 
     combinatorResource.use { combinator =>
       for {
@@ -62,10 +62,10 @@ class VersionCombinatorSpec extends CatsEffectSuite {
 
   test("Stop successfully") {
     val combinatorResource = for {
-      combination <- NeverEndingCombination[IO]
-      bloc <- Bloc[IO, VersionCombination[IO]](combination)
+      combination <- NeverEndingCombination()
+      bloc <- Bloc[VersionCombination](combination)
       deferred <- Deferred[IO, Unit].toResource
-    } yield (deferred, new VersionCombinator[IO](bloc, CombinationMigrations.default, deferred))
+    } yield (deferred, new VersionCombinator(bloc, CombinationMigrations.default, deferred))
 
     combinatorResource.use { (deferred, combinator) =>
       for {
@@ -77,15 +77,15 @@ class VersionCombinatorSpec extends CatsEffectSuite {
   }
 }
 
-class NeverEndingCombination[F[_]: Async](localState: Bloc[F, Int]) extends VersionCombination[F] {
-  override def sync: F[Unit] =
+class NeverEndingCombination(localState: Bloc[Int]) extends VersionCombination {
+  override def sync: IO[Unit] =
     Stream
-      .constant[F, Int](1)
+      .constant[IO, Int](1)
       .evalTap(localState.set)
       .compile
       .drain
 
-  override def state: Stream[F, State[
+  override def state: Stream[IO, State[
     CoinPublicKey,
     EncPublicKey,
     EncryptionSecretKey,
@@ -97,29 +97,28 @@ class NeverEndingCombination[F[_]: Async](localState: Bloc[F, Int]) extends Vers
   ]] =
     UnsupportedOperationException("Test").raiseError
 
-  override def serializeState: F[SerializedWalletState] =
+  override def serializeState: IO[SerializedWalletState] =
     UnsupportedOperationException("Test").raiseError
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTransactionService[F, UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
     UnsupportedOperationException("Test").raiseError
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTxSubmissionService[F, Transaction]] =
+  ): IO[WalletTxSubmissionService[Transaction]] =
     UnsupportedOperationException("Test").raiseError
 }
 
 object NeverEndingCombination {
-  def apply[F[_]: Async]: Resource[F, NeverEndingCombination[F]] =
-    Bloc[F, Int](1).map(new NeverEndingCombination[F](_))
+  def apply(): Resource[IO, NeverEndingCombination] =
+    Bloc[Int](1).map(new NeverEndingCombination(_))
 }
 
-class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
-    extends VersionCombination[F] {
+class DummyV1Combination(val localState: Bloc[Offset]) extends VersionCombination {
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-  override def state: Stream[F, State[
+  override def state: Stream[IO, State[
     CoinPublicKey,
     EncPublicKey,
     EncryptionSecretKey,
@@ -138,12 +137,12 @@ class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
         )
       }
 
-  override def serializeState: F[SerializedWalletState] =
+  override def serializeState: IO[SerializedWalletState] =
     SerializedWalletState("DummyV1").pure
 
-  override def sync: F[Unit] =
+  override def sync: IO[Unit] =
     Stream
-      .range[F, BigInt](1, 11)
+      .range[IO, BigInt](1, 11)
       .map(Offset(_))
       .evalMap(localState.set)
       .compile
@@ -151,8 +150,7 @@ class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTransactionService[
-    F,
+  ): IO[WalletTransactionService[
     UnprovenTransaction,
     Transaction,
     CoinInfo,
@@ -161,8 +159,7 @@ class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTxSubmissionService[
-    F,
+  ): IO[WalletTxSubmissionService[
     Transaction,
   ]] = Exception("Test stub").raiseError
 }
@@ -170,16 +167,15 @@ class DummyV1Combination[F[_]: Async](val localState: Bloc[F, Offset])
 object DummyV1Combination {
   val zswapState: zswapV1.LocalState = zswapV1.LocalState()
 
-  def apply[F[_]: Async](initialOffset: Offset): Resource[F, Bloc[F, VersionCombination[F]]] =
-    Bloc[F, Offset](initialOffset)
-      .map(new DummyV1Combination[F](_))
-      .flatMap(Bloc[F, VersionCombination[F]](_))
+  def apply(initialOffset: Offset): Resource[IO, Bloc[VersionCombination]] =
+    Bloc[Offset](initialOffset)
+      .map(new DummyV1Combination(_))
+      .flatMap(Bloc[VersionCombination](_))
 }
 
-class DummyV2Combination[F[_]: Async](val localState: Bloc[F, Offset])
-    extends VersionCombination[F] {
+class DummyV2Combination(val localState: Bloc[Offset]) extends VersionCombination {
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
-  override def state: Stream[F, State[
+  override def state: Stream[IO, State[
     CoinPublicKey,
     EncPublicKey,
     EncryptionSecretKey,
@@ -197,12 +193,12 @@ class DummyV2Combination[F[_]: Async](val localState: Bloc[F, Offset])
         )
       }
 
-  override def serializeState: F[SerializedWalletState] =
+  override def serializeState: IO[SerializedWalletState] =
     SerializedWalletState("DummyV2").pure
 
-  override def sync: F[Unit] =
+  override def sync: IO[Unit] =
     Stream
-      .iterate[F, BigInt](11)(_ + 1)
+      .iterate[IO, BigInt](11)(_ + 1)
       .map(Offset(_))
       .evalMap(localState.set)
       .compile
@@ -210,8 +206,7 @@ class DummyV2Combination[F[_]: Async](val localState: Bloc[F, Offset])
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTransactionService[
-    F,
+  ): IO[WalletTransactionService[
     UnprovenTransaction,
     Transaction,
     CoinInfo,
@@ -220,8 +215,7 @@ class DummyV2Combination[F[_]: Async](val localState: Bloc[F, Offset])
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTxSubmissionService[
-    F,
+  ): IO[WalletTxSubmissionService[
     Transaction,
   ]] = Exception("Test stub").raiseError
 }
@@ -230,13 +224,13 @@ object DummyV2Combination {
   val zswapState: zswapV2.LocalState = zswapV2.LocalState()
 }
 
-class DummyCombinationMigrations[F[_]: Async] extends CombinationMigrations[F] {
-  override def migrate(versionCombination: VersionCombination[F]): F[VersionCombination[F]] =
+class DummyCombinationMigrations extends CombinationMigrations {
+  override def migrate(versionCombination: VersionCombination): IO[VersionCombination] =
     versionCombination match {
-      case v1: DummyV1Combination[F] =>
+      case v1: DummyV1Combination =>
         for {
           currentState <- v1.localState.subscribe.head.compile.lastOrError
           bloc <- Bloc(currentState).allocated._1F
-        } yield new DummyV2Combination[F](bloc)
+        } yield new DummyV2Combination(bloc)
     }
 }

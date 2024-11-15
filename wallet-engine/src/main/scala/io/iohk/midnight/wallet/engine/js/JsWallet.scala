@@ -42,7 +42,7 @@ import scala.scalajs.js.annotation.*
 @SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
 @JSExportTopLevel("Wallet")
 class JsWallet(
-    versionCombinator: VersionCombinator[IO],
+    versionCombinator: VersionCombinator,
     finalizer: IO[Unit],
     stopSyncing: Deferred[IO, Unit],
 ) extends api.Wallet {
@@ -230,7 +230,7 @@ object JsWallet {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig, jsWalletTracer)
       allocatedVersionCombinator <-
-        new WalletBuilder[IO, mod.LocalState, mod.Transaction]
+        new WalletBuilder[mod.LocalState, mod.Transaction]
           .build(config)
           .allocated
       (versionCombinator, finalizer) = allocatedVersionCombinator
@@ -242,10 +242,10 @@ object JsWallet {
     )
   }
 
-  private def buildJsWalletTracer(minLogLevel: LogLevel): JsWalletTracer[IO] =
-    JsWalletTracer.from[IO](ConsoleTracer.contextAware(minLogLevel))
+  private def buildJsWalletTracer(minLogLevel: LogLevel): JsWalletTracer =
+    JsWalletTracer.from(ConsoleTracer.contextAware(minLogLevel))
 
-  private def parseConfig(rawConfig: RawConfig, jsWalletTracer: JsWalletTracer[IO]): IO[Config] =
+  private def parseConfig(rawConfig: RawConfig, jsWalletTracer: JsWalletTracer): IO[Config] =
     IO
       .fromEither(Config.parse(rawConfig))
       .attemptTap {
@@ -254,7 +254,7 @@ object JsWallet {
       }
 
   def apply(
-      versionCombinator: VersionCombinator[IO],
+      versionCombinator: VersionCombinator,
       finalizer: IO[Unit],
       deferred: Deferred[IO, Unit],
   ): JsWallet =

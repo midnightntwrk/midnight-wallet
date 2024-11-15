@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.engine.tracing
 
+import cats.effect.IO
 import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
@@ -9,14 +10,14 @@ import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletEvent.*
 
-class JsWalletTracer[F[_]](val tracer: Tracer[F, JsWalletEvent]) {
+class JsWalletTracer(val tracer: Tracer[IO, JsWalletEvent]) {
 
-  def jsWalletBuildRequested(rawConfig: RawConfig): F[Unit] =
+  def jsWalletBuildRequested(rawConfig: RawConfig): IO[Unit] =
     tracer(JsWalletBuildRequested(rawConfig))
 
-  def configConstructed(config: Config): F[Unit] = tracer(ConfigConstructed(config))
+  def configConstructed(config: Config): IO[Unit] = tracer(ConfigConstructed(config))
 
-  def invalidConfig(t: Throwable): F[Unit] = tracer(InvalidConfig(t.getMessage()))
+  def invalidConfig(t: Throwable): IO[Unit] = tracer(InvalidConfig(t.getMessage()))
 
 }
 
@@ -59,11 +60,11 @@ object JsWalletTracer {
       context = _.stringLogContext,
     )
 
-  def from[F[_]: Sync](
-      structuredTracer: Tracer[F, StructuredLog],
-  ): JsWalletTracer[F] = {
-    val jsWalletTracer: Tracer[F, JsWalletEvent] =
-      structuredTracer >=> (evt => Sync[F].delay(evt.asContextAwareLog))
-    new JsWalletTracer[F](jsWalletTracer)
+  def from(
+      structuredTracer: Tracer[IO, StructuredLog],
+  ): JsWalletTracer = {
+    val jsWalletTracer: Tracer[IO, JsWalletEvent] =
+      structuredTracer >=> (evt => Sync[IO].delay(evt.asContextAwareLog))
+    new JsWalletTracer(jsWalletTracer)
   }
 }

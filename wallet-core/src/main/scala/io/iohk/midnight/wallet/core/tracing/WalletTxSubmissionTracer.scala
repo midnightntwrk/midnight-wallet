@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.core.tracing
 
+import cats.effect.IO
 import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
@@ -9,30 +10,30 @@ import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import io.iohk.midnight.wallet.core.domain.TransactionIdentifier
 import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionEvent.*
 
-class WalletTxSubmissionTracer[F[_]](val tracer: Tracer[F, WalletTxSubmissionEvent]) {
+class WalletTxSubmissionTracer(val tracer: Tracer[IO, WalletTxSubmissionEvent]) {
 
-  def submitTxStart(txId: TransactionIdentifier): F[Unit] =
+  def submitTxStart(txId: TransactionIdentifier): IO[Unit] =
     tracer(TransactionSubmissionStart(txId))
 
-  def txValidationSuccess(txId: TransactionIdentifier): F[Unit] =
+  def txValidationSuccess(txId: TransactionIdentifier): IO[Unit] =
     tracer(TxValidationSuccess(txId))
 
-  def txValidationError(txId: TransactionIdentifier, error: Throwable): F[Unit] =
+  def txValidationError(txId: TransactionIdentifier, error: Throwable): IO[Unit] =
     tracer(TxValidationError(txId, error))
 
   def submitTxSuccess(
       submittedTxId: TransactionIdentifier,
-  ): F[Unit] =
+  ): IO[Unit] =
     tracer(
       TransactionSubmissionSuccess(
         submittedTxId,
       ),
     )
 
-  def submitTxError(txId: TransactionIdentifier, error: Throwable): F[Unit] =
+  def submitTxError(txId: TransactionIdentifier, error: Throwable): IO[Unit] =
     tracer(TransactionSubmissionError(txId, error))
 
-  def revertError(txId: TransactionIdentifier, error: Throwable): F[Unit] =
+  def revertError(txId: TransactionIdentifier, error: Throwable): IO[Unit] =
     tracer(RevertTransactionError(txId, error))
 }
 
@@ -106,12 +107,12 @@ object WalletTxSubmissionTracer {
       context = _.stringLogContext,
     )
 
-  def from[F[_]: Sync](
-      structuredTracer: Tracer[F, StructuredLog],
-  ): WalletTxSubmissionTracer[F] = {
-    val eventTracer: Tracer[F, WalletTxSubmissionEvent] =
-      structuredTracer >=> (e => Sync[F].delay(e.asContextAwareLog))
-    new WalletTxSubmissionTracer[F](eventTracer)
+  def from(
+      structuredTracer: Tracer[IO, StructuredLog],
+  ): WalletTxSubmissionTracer = {
+    val eventTracer: Tracer[IO, WalletTxSubmissionEvent] =
+      structuredTracer >=> (e => Sync[IO].delay(e.asContextAwareLog))
+    new WalletTxSubmissionTracer(eventTracer)
   }
 
 }

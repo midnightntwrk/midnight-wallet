@@ -1,5 +1,7 @@
 package io.iohk.midnight.wallet.core.services
 
-trait ProvingService[F[_], UnprovenTransaction, Transaction] {
-  def proveTransaction(tx: UnprovenTransaction): F[Transaction]
+import cats.effect.IO
+
+trait ProvingService[UnprovenTransaction, Transaction] {
+  def proveTransaction(tx: UnprovenTransaction): IO[Transaction]
 }

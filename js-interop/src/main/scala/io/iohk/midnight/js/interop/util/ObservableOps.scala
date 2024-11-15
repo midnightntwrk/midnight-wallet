@@ -18,18 +18,18 @@ object ObservableOps {
       })
   }
 
-  private def fromStream[F[_]: Async, T](
-      stream: Stream[F, T],
+  private def fromStream[T](
+      stream: Stream[IO, T],
       subscriber: Subscriber[T],
-  ): Subscription[F] =
-    new SubscribableStream[F, T](stream)
-      .subscribe(new StreamObserver[F, T] {
-        override def next(value: T): F[Unit] =
-          Async[F].delay(subscriber.next(value))
-        override def error(error: Throwable): F[Unit] =
-          Async[F].delay(subscriber.error(error.getMessage))
-        override def complete(): F[Unit] =
-          Async[F].delay(subscriber.complete())
+  ): Subscription =
+    new SubscribableStream[T](stream)
+      .subscribe(new StreamObserver[T] {
+        override def next(value: T): IO[Unit] =
+          Async[IO].delay(subscriber.next(value))
+        override def error(error: Throwable): IO[Unit] =
+          Async[IO].delay(subscriber.error(error.getMessage))
+        override def complete(): IO[Unit] =
+          Async[IO].delay(subscriber.complete())
       })
 
   implicit class FromIO[T](io: IO[T])(implicit ioRuntime: IORuntime) {

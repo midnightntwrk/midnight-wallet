@@ -10,7 +10,7 @@ import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResul
 )
 class TxSubmissionServiceStub(
     var submittedTransactions: Set[Transaction] = Set.empty,
-) extends TxSubmissionService[IO, Transaction] {
+) extends TxSubmissionService[Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] = IO {
     submittedTransactions += transaction
     SubmissionResult.Accepted
@@ -20,7 +20,7 @@ class TxSubmissionServiceStub(
     submittedTransactions.exists(_.transactionHash() === tx.transactionHash())
 }
 
-class FailingTxSubmissionServiceStub() extends TxSubmissionService[IO, Transaction] {
+class FailingTxSubmissionServiceStub() extends TxSubmissionService[Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] =
     IO.raiseError(FailingTxSubmissionServiceStub.TxSubmissionServiceError)
 }
@@ -29,7 +29,7 @@ object FailingTxSubmissionServiceStub {
   val TxSubmissionServiceError: Throwable = new Throwable("FailingTxSubmissionServiceStub")
 }
 
-class RejectedTxSubmissionServiceStub() extends TxSubmissionService[IO, Transaction] {
+class RejectedTxSubmissionServiceStub() extends TxSubmissionService[Transaction] {
   override def submitTransaction(transaction: Transaction): IO[SubmissionResult] =
     IO.pure(SubmissionResult.Rejected(RejectedTxSubmissionServiceStub.errorMsg))
 }

@@ -22,10 +22,10 @@ object ProvingServiceImpl {
 
   def instance(
       dockerImage: String,
-  ): Resource[IO, ProvingService[IO, UnprovenTransaction, Transaction]] =
+  ): Resource[IO, ProvingService[UnprovenTransaction, Transaction]] =
     TestContainers.resource(dockerImage)(testProverServerContainerConfig).flatMap { container =>
       val port = container.getMappedPort(provingServicePort).toInt
-      ProverClient[IO, UnprovenTransaction, Transaction](uri"http://localhost:$port")
+      ProverClient[UnprovenTransaction, Transaction](uri"http://localhost:$port")
         .map(client => client.proveTransaction)
     }
 }

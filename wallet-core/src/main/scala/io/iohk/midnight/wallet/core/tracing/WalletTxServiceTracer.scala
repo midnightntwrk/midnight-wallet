@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core.tracing
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
 import io.iohk.midnight.tracer.logging.*
@@ -9,8 +9,8 @@ import io.iohk.midnight.tracer.logging.AsStringLogContextSyntax.*
 import io.iohk.midnight.wallet.core.domain.TransactionIdentifier
 import io.iohk.midnight.wallet.core.tracing.WalletTxServiceEvent.*
 
-class WalletTxServiceTracer[F[_]](val tracer: Tracer[F, WalletTxServiceEvent]) {
-  def unprovenTransactionReverted(txId: Option[TransactionIdentifier], error: Throwable): F[Unit] =
+class WalletTxServiceTracer(val tracer: Tracer[IO, WalletTxServiceEvent]) {
+  def unprovenTransactionReverted(txId: Option[TransactionIdentifier], error: Throwable): IO[Unit] =
     tracer(UnprovenTransactionReverted(txId, error))
 }
 
@@ -33,9 +33,9 @@ object WalletTxServiceTracer {
       context = _.stringLogContext,
     )
 
-  def from[F[_]: Sync](structuredTracer: Tracer[F, StructuredLog]): WalletTxServiceTracer[F] = {
-    val eventTracer: Tracer[F, WalletTxServiceEvent] =
-      structuredTracer >=> (e => Sync[F].delay(e.asContextAwareLog))
-    new WalletTxServiceTracer[F](eventTracer)
+  def from(structuredTracer: Tracer[IO, StructuredLog]): WalletTxServiceTracer = {
+    val eventTracer: Tracer[IO, WalletTxServiceEvent] =
+      structuredTracer >=> (e => Sync[IO].delay(e.asContextAwareLog))
+    new WalletTxServiceTracer(eventTracer)
   }
 }

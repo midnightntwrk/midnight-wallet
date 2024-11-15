@@ -14,9 +14,9 @@ import io.iohk.midnight.wallet.core.{
 }
 
 class VersionCombinationStub(
-    txService: WalletTransactionService[IO, UnprovenTransaction, Transaction, CoinInfo, TokenType],
-    submissionService: WalletTxSubmissionService[IO, Transaction],
-) extends VersionCombination[IO] {
+    txService: WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType],
+    submissionService: WalletTxSubmissionService[Transaction],
+) extends VersionCombination {
   override def sync: IO[Unit] = IO.unit
 
   override def state: Stream[
@@ -38,18 +38,18 @@ class VersionCombinationStub(
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTransactionService[IO, UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
     IO.pure(txService)
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTxSubmissionService[IO, Transaction]] =
+  ): IO[WalletTxSubmissionService[Transaction]] =
     IO.pure(submissionService)
 }
 
 object VersionCombinationStub {
   def apply(
-      provingService: ProvingService[IO, UnprovenTransaction, Transaction],
+      provingService: ProvingService[UnprovenTransaction, Transaction],
       transferRecipe: TransactionToProve[UnprovenTransaction],
   ): VersionCombinationStub =
     new VersionCombinationStub(
@@ -59,9 +59,9 @@ object VersionCombinationStub {
 }
 
 class WalletTransactionServiceWithProvingStub(
-    provingService: ProvingService[IO, UnprovenTransaction, Transaction],
+    provingService: ProvingService[UnprovenTransaction, Transaction],
     transferRecipe: TransactionToProve[UnprovenTransaction],
-) extends WalletTransactionService[IO, UnprovenTransaction, Transaction, CoinInfo, TokenType] {
+) extends WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType] {
   override def prepareTransferRecipe(
       outputs: List[TokenTransfer[TokenType]],
   ): IO[TransactionToProve[UnprovenTransaction]] =
@@ -89,7 +89,7 @@ class WalletTransactionServiceWithProvingStub(
     IO.pure(NothingToProve(tx))
 }
 
-object WalletTxSubmissionServiceStub extends WalletTxSubmissionService[IO, Transaction] {
+object WalletTxSubmissionServiceStub extends WalletTxSubmissionService[Transaction] {
   override def submitTransaction(transaction: Transaction): IO[TransactionIdentifier] =
     transaction
       .identifiers()

@@ -64,12 +64,12 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
   def buildWalletTransactionService(
       initialState: LocalState = LocalState(),
-      prover: ProvingService[IO, UnprovenTransaction, Transaction] = provingService,
+      prover: ProvingService[UnprovenTransaction, Transaction] = provingService,
   ): Resource[
     IO,
     (
-        WalletTransactionService[IO, UnprovenTransaction, Transaction, CoinInfo, TokenType],
-        WalletStateContainer[IO, Wallet],
+        WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType],
+        WalletStateContainer[Wallet],
     ),
   ] = {
     val snapshot =
@@ -80,12 +80,11 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
         ProtocolVersion.V1,
         zswap.NetworkId.Undeployed,
       )
-    Bloc[IO, Wallet](walletCreation.create(snapshot)).map { bloc =>
-      given WalletTxServiceTracer[IO] = WalletTxServiceTracer.from(Tracer.noOpTracer)
+    Bloc[Wallet](walletCreation.create(snapshot)).map { bloc =>
+      given WalletTxServiceTracer = WalletTxServiceTracer.from(Tracer.noOpTracer)
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val walletTxService =
         new WalletTransactionServiceFactory[
-          IO,
           Wallet,
           UnprovenTransaction,
           Transaction,
@@ -247,7 +246,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   test("Reverts applied transaction when proving fails") {
     buildWalletTransactionService(
       generateStateWithFunds(NonEmptyList.one((nativeToken(), 1_000_000))),
-      new FailingProvingService[IO],
+      new FailingProvingService,
     ).use { (walletTransactionService, walletStateContainer) =>
       val randomState = LocalState()
       val randomRecipient = domain.Address(

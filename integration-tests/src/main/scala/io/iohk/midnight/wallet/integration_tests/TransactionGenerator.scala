@@ -3,21 +3,20 @@ package io.iohk.midnight.wallet.integration_tests
 import cats.effect.unsafe.IORuntimeConfig
 import cats.effect.{IO, IOApp, Resource}
 import cats.syntax.all.*
-import io.iohk.midnight.tracer.logging.LogLevel
-import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
-import io.iohk.midnight.wallet.core
-import io.iohk.midnight.wallet.core.domain
-import io.iohk.midnight.wallet.engine.WalletBuilder
-import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.js.interop.util.BigIntOps.*
-import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
+import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.Config.InitialState
 import io.iohk.midnight.wallet.core.combinator.VersionCombinator
-import scala.concurrent.duration.DurationInt
+import io.iohk.midnight.wallet.core.domain
+import io.iohk.midnight.wallet.engine.WalletBuilder
+import io.iohk.midnight.wallet.engine.config.Config
+import io.iohk.midnight.wallet.{core, zswap}
 import sttp.client3.UriContext
-import scalajs.js
+
+import scala.concurrent.duration.DurationInt
+import scala.scalajs.js
 
 object TransactionGenerator extends IOApp.Simple {
 
@@ -41,8 +40,8 @@ object TransactionGenerator extends IOApp.Simple {
     new Address(localState.coinPublicKey, localState.encryptionPublicKey)
   }
 
-  def makeRunningWalletResource(initialState: InitialState): Resource[IO, VersionCombinator[IO]] =
-    new WalletBuilder[IO, v1.LocalState, v1.Transaction]
+  def makeRunningWalletResource(initialState: InitialState): Resource[IO, VersionCombinator] =
+    new WalletBuilder[v1.LocalState, v1.Transaction]
       .build(
         Config(
           indexerRPCUri,
@@ -58,7 +57,7 @@ object TransactionGenerator extends IOApp.Simple {
 
   def withRunningWallet(
       initialWalletState: InitialState,
-  )(body: VersionCombinator[IO] => IO[Unit]): IO[Unit] =
+  )(body: VersionCombinator => IO[Unit]): IO[Unit] =
     makeRunningWalletResource(initialWalletState).use(body(_))
 
   def prepareOutputs(coins: List[v1.CoinInfo], recipient: Address): List[TokenTransfer] =

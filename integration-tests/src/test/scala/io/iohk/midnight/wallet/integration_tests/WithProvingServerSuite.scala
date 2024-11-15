@@ -1,11 +1,11 @@
 package io.iohk.midnight.wallet.integration_tests
 
-import cats.effect.IO
+import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
-import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Test
+
 import scala.concurrent.duration.DurationInt
 
 trait WithProvingServerSuite
@@ -27,6 +27,6 @@ trait WithProvingServerSuite
 
   override def munitFixtures = List(provingServiceFixture)
 
-  given provingService: ProvingService[IO, UnprovenTransaction, Transaction] =
+  given provingService: ProvingService[UnprovenTransaction, Transaction] =
     provingServiceFixture()
 }

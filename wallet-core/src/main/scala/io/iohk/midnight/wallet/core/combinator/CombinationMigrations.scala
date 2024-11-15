@@ -1,18 +1,20 @@
 package io.iohk.midnight.wallet.core.combinator
 
-import cats.MonadThrow
+import cats.effect.IO
 import cats.syntax.all.*
 
-trait CombinationMigrations[F[_]] {
-  def migrate(versionCombination: VersionCombination[F]): F[VersionCombination[F]]
+trait CombinationMigrations {
+  def migrate(versionCombination: VersionCombination): IO[VersionCombination]
 }
 
 object CombinationMigrations {
-  def default[F[_]: MonadThrow]: CombinationMigrations[F] =
-    new CombinationMigrations[F] {
-      override def migrate(versionCombination: VersionCombination[F]): F[VersionCombination[F]] = {
+  def default: CombinationMigrations =
+    new CombinationMigrations {
+      override def migrate(
+          versionCombination: VersionCombination,
+      ): IO[VersionCombination] = {
         versionCombination match
-          case _: V1Combination[F] =>
+          case _: V1Combination =>
             Exception("No hard fork planned").raiseError
       }
     }

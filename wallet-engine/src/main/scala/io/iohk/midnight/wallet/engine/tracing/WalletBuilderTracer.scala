@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.engine.tracing
 
+import cats.effect.IO
 import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
@@ -9,11 +10,11 @@ import io.iohk.midnight.tracer.logging.*
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.engine.tracing.WalletBuilderEvent.*
 
-class WalletBuilderTracer[F[_]](val tracer: Tracer[F, WalletBuilderEvent]) {
+class WalletBuilderTracer(val tracer: Tracer[IO, WalletBuilderEvent]) {
 
-  def buildRequested(config: Config): F[Unit] = tracer(BuildRequested(config))
-  val walletBuildSuccess: F[Unit] = tracer(WalletBuildSuccess)
-  def walletBuildError(reason: String): F[Unit] = tracer(WalletBuildError(reason))
+  def buildRequested(config: Config): IO[Unit] = tracer(BuildRequested(config))
+  val walletBuildSuccess: IO[Unit] = tracer(WalletBuildSuccess)
+  def walletBuildError(reason: String): IO[Unit] = tracer(WalletBuildError(reason))
 
 }
 
@@ -56,12 +57,12 @@ object WalletBuilderTracer {
       context = _.stringLogContext,
     )
 
-  def from[F[_]: Sync](
-      structuredTracer: Tracer[F, StructuredLog],
-  ): WalletBuilderTracer[F] = {
-    val walletBuilderTracer: Tracer[F, WalletBuilderEvent] =
-      structuredTracer >=> (evt => Sync[F].delay(evt.asContextAwareLog))
-    new WalletBuilderTracer[F](walletBuilderTracer)
+  def from(
+      structuredTracer: Tracer[IO, StructuredLog],
+  ): WalletBuilderTracer = {
+    val walletBuilderTracer: Tracer[IO, WalletBuilderEvent] =
+      structuredTracer >=> (evt => Sync[IO].delay(evt.asContextAwareLog))
+    new WalletBuilderTracer(walletBuilderTracer)
   }
 
 }

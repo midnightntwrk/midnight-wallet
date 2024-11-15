@@ -20,9 +20,9 @@ class StreamObservableSpec extends CatsEffectSuite with StreamObservableFixtures
     (for {
       acc <- Ref.of[IO, Seq[Int]](Seq.empty[Int])
       isFinished <- Ref.of[IO, Boolean](false)
-      observable = new SubscribableStream[IO, Int](stream)
+      observable = new SubscribableStream[Int](stream)
       Subscription(startConsuming, _) = {
-        observable.subscribe(new StreamObserver[IO, Int] {
+        observable.subscribe(new StreamObserver[Int] {
           override def next(value: Int): IO[Unit] = acc.update(_ :+ value)
           override def error(error: Throwable): IO[Unit] = IO.unit
           override def complete(): IO[Unit] = isFinished.set(true)
@@ -37,9 +37,9 @@ class StreamObservableSpec extends CatsEffectSuite with StreamObservableFixtures
   test("Run stream and cancel it before stream finished") {
     (for {
       isFinished <- Ref.of[IO, Boolean](false)
-      observable = new SubscribableStream[IO, Int](infiniteStream)
+      observable = new SubscribableStream[Int](infiniteStream)
       Subscription(startConsuming, cancellation) = {
-        observable.subscribe(new StreamObserver[IO, Int] {
+        observable.subscribe(new StreamObserver[Int] {
           override def next(value: Int): IO[Unit] = IO.unit
           override def error(error: Throwable): IO[Unit] = IO.unit
           override def complete(): IO[Unit] = isFinished.set(true)
@@ -55,9 +55,9 @@ class StreamObservableSpec extends CatsEffectSuite with StreamObservableFixtures
     (for {
       errorRef <- Ref.of[IO, Option[Throwable]](None)
       isFinished <- Ref.of[IO, Boolean](false)
-      observable = new SubscribableStream[IO, Int](errorStream)
+      observable = new SubscribableStream[Int](errorStream)
       Subscription(startConsuming, _) = {
-        observable.subscribe(new StreamObserver[IO, Int] {
+        observable.subscribe(new StreamObserver[Int] {
           override def next(value: Int): IO[Unit] = IO.unit
           override def error(error: Throwable): IO[Unit] = errorRef.set(Some(error))
           override def complete(): IO[Unit] = isFinished.set(true)

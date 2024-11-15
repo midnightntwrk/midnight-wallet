@@ -1,15 +1,16 @@
 package io.iohk.midnight.wallet.prover
 
-import cats.effect.{Async, Resource}
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.zswap
-import scala.concurrent.duration.DurationInt
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
 import sttp.model.Uri
 
-class ProverClient[F[_]: Async, UnprovenTransaction, Transaction](
+import scala.concurrent.duration.DurationInt
+
+class ProverClient[UnprovenTransaction, Transaction](
     serverUri: Uri,
-    backend: SttpBackend[F, Any],
+    backend: SttpBackend[IO, Any],
 )(using
     txSerializable: zswap.Transaction.IsSerializable[Transaction],
 )(using
@@ -25,7 +26,7 @@ class ProverClient[F[_]: Async, UnprovenTransaction, Transaction](
   // Padding for missing data for `/prove-tx` payload.
   private val paddingForMissingPayloadData = Array[Byte](0, 0, 0, 0, 0)
 
-  def proveTransaction(tx: UnprovenTransaction): F[Transaction] = {
+  def proveTransaction(tx: UnprovenTransaction): IO[Transaction] = {
     val serializedTx = tx.serialize
     val body = serializedTx ++ paddingForMissingPayloadData
 
@@ -43,13 +44,12 @@ class ProverClient[F[_]: Async, UnprovenTransaction, Transaction](
 
 object ProverClient {
   def apply[
-      F[_]: Async,
       UnprovenTransaction: zswap.UnprovenTransaction.IsSerializable,
       Transaction: zswap.Transaction.IsSerializable,
   ](serverUri: Uri)(using
       zswap.NetworkId,
-  ): Resource[F, ProverClient[F, UnprovenTransaction, Transaction]] =
+  ): Resource[IO, ProverClient[UnprovenTransaction, Transaction]] =
     SttpBackendFactory.build.map(
-      new ProverClient[F, UnprovenTransaction, Transaction](serverUri, _),
+      new ProverClient[UnprovenTransaction, Transaction](serverUri, _),
     )
 }

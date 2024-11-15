@@ -1,31 +1,29 @@
 package io.iohk.midnight.wallet.core.combinator
 
 import cats.ApplicativeThrow
-import cats.effect.{Async, Deferred, Resource}
-import cats.effect.syntax.all.*
+import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import fs2.{Pipe, Stream}
-import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
-import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
-import io.iohk.midnight.wallet.core.capabilities.{WalletTxBalancing, WalletTxHistory}
-import io.iohk.midnight.wallet.core.domain.*
-import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSubmissionService}
-import io.iohk.midnight.wallet.core.*
-import io.iohk.midnight.wallet.zswap
-import io.iohk.midnight.wallet.zswap.{HexUtil, given}
-import scala.util.{Failure, Success, Try}
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
+import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
+import io.iohk.midnight.wallet.core.*
+import io.iohk.midnight.wallet.core.capabilities.{WalletTxBalancing, WalletTxHistory}
+import io.iohk.midnight.wallet.core.combinator.V1Combination.walletInstances.given
+import io.iohk.midnight.wallet.core.domain.*
+import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
-import V1Combination.walletInstances.given
+import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.{HexUtil, given}
 
-final class V1Combination[F[_]: Async](
+import scala.util.{Failure, Success, Try}
+
+final class V1Combination(
     initialState: Wallet[v1.LocalState, v1.Transaction],
-    syncService: SyncService[F],
-    stateContainer: WalletStateContainer[F, Wallet[v1.LocalState, v1.Transaction]],
+    syncService: SyncService,
+    stateContainer: WalletStateContainer[Wallet[v1.LocalState, v1.Transaction]],
     val stateService: WalletStateService[
-      F,
       v1.CoinPublicKey,
       v1.EncPublicKey,
       v1.EncryptionSecretKey,
@@ -36,20 +34,19 @@ final class V1Combination[F[_]: Async](
       v1.Transaction,
     ],
     txService: WalletTransactionService[
-      F,
       v1.UnprovenTransaction,
       v1.Transaction,
       v1.CoinInfo,
       v1.TokenType,
     ],
-    submissionService: WalletTxSubmissionService[F, v1.Transaction],
-    deferred: Deferred[F, Unit],
+    submissionService: WalletTxSubmissionService[v1.Transaction],
+    deferred: Deferred[IO, Unit],
 )(using
     WalletTxHistory[Wallet[v1.LocalState, v1.Transaction], v1.Transaction],
     zswap.NetworkId,
-) extends VersionCombination[F] {
+) extends VersionCombination {
 
-  override def sync: F[Unit] =
+  override def sync: IO[Unit] =
     syncService
       .sync(initialState.offset)
       .interruptWhen(deferred.get.attempt)
@@ -60,16 +57,16 @@ final class V1Combination[F[_]: Async](
       .drain
 
   private def deserializeIndexerEvent
-      : Pipe[F, IndexerEvent, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] =
-    _.evalMap[F, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] {
+      : Pipe[IO, IndexerEvent, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] =
+    _.evalMap[IO, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] {
       case IndexerEvent.RawViewingUpdate(offset, rawUpdates) =>
-        ApplicativeThrow[F].fromTry(
+        ApplicativeThrow[IO].fromTry(
           deserializeViewingUpdate(rawUpdates, Transaction.Offset(offset)),
         )
       case IndexerEvent.RawProgressUpdate(synced, total) =>
-        ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total)).pure[F]
+        ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total)).pure[IO]
       case IndexerEvent.ConnectionLost =>
-        ConnectionLost.pure
+        ConnectionLost.pure[IO]
     }
 
   private def deserializeViewingUpdate(
@@ -105,7 +102,7 @@ final class V1Combination[F[_]: Async](
 
   private def updateState(
       update: IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction],
-  ): F[Unit] =
+  ): IO[Unit] =
     stateContainer.updateStateEither(_.apply(update)).rethrow.void
 
   private def isSupported(event: IndexerEvent): Boolean =
@@ -115,28 +112,27 @@ final class V1Combination[F[_]: Async](
         updates.forall(_.protocolVersion === initialState.protocolVersion)
     }
 
-  override def state: Stream[F, stateService.TState] =
+  override def state: Stream[IO, stateService.TState] =
     stateService.state
 
-  override def serializeState: F[WalletStateService.SerializedWalletState] =
+  override def serializeState: IO[WalletStateService.SerializedWalletState] =
     stateService.serializeState
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTransactionService[
-    F,
+  ): IO[WalletTransactionService[
     v1.UnprovenTransaction,
     v1.Transaction,
     v1.CoinInfo,
     v1.TokenType,
   ]] =
-    if (initialState.protocolVersion === protocolVersion) txService.pure[F]
+    if (initialState.protocolVersion === protocolVersion) txService.pure[IO]
     else Exception(s"No transaction service available for protocol $protocolVersion").raiseError
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTxSubmissionService[F, v1.Transaction]] =
-    if (initialState.protocolVersion === protocolVersion) submissionService.pure[F]
+  ): IO[WalletTxSubmissionService[v1.Transaction]] =
+    if (initialState.protocolVersion === protocolVersion) submissionService.pure[IO]
     else Exception(s"No submission service available for protocol $protocolVersion").raiseError
 }
 
@@ -145,8 +141,8 @@ object V1Combination {
 
   type WalletBalancing =
     WalletTxBalancing[TWallet, v1.Transaction, v1.UnprovenTransaction, v1.CoinInfo, v1.TokenType]
-  type WalletTxService[F[_]] =
-    WalletTransactionService[F, v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType]
+  type WalletTxService =
+    WalletTransactionService[v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType]
 
   given snapshotInstances: SnapshotInstances[v1.LocalState, v1.Transaction] =
     new SnapshotInstances
@@ -173,17 +169,20 @@ object V1Combination {
 
   import walletInstances.given
 
-  def apply[F[_]: Async](
+  def apply(
       config: Config,
-      submissionServiceFactory: Resource[F, TxSubmissionService[F, v1.Transaction]],
-      provingServiceFactory: Resource[F, ProvingService[F, v1.UnprovenTransaction, v1.Transaction]],
-      syncServiceFactory: (v1.EncryptionSecretKey, Option[BigInt]) => Resource[F, SyncService[F]],
-  )(using Tracer[F, StructuredLog], zswap.NetworkId): Resource[F, V1Combination[F]] =
+      submissionServiceFactory: Resource[IO, TxSubmissionService[v1.Transaction]],
+      provingServiceFactory: Resource[
+        IO,
+        ProvingService[v1.UnprovenTransaction, v1.Transaction],
+      ],
+      syncServiceFactory: (v1.EncryptionSecretKey, Option[BigInt]) => Resource[IO, SyncService],
+  )(using Tracer[IO, StructuredLog], zswap.NetworkId): Resource[IO, V1Combination] =
     given WalletTxHistory[TWallet, v1.Transaction] =
       if config.discardTxHistory then walletInstances.walletDiscardTxHistory
       else walletInstances.walletTxHistory
     for {
-      initialWallet <- parseInitialState(config.initialState).liftTo[F].toResource
+      initialWallet <- parseInitialState(config.initialState).liftTo[IO].toResource
       syncService <- syncServiceFactory(
         initialWallet.state.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey(),
         initialWallet.offset.map(_.value),
@@ -194,7 +193,6 @@ object V1Combination {
       )
       walletStateService <- Resource.pure(
         new WalletStateServiceFactory[
-          F,
           TWallet,
           v1.CoinPublicKey,
           v1.EncPublicKey,
@@ -216,8 +214,8 @@ object V1Combination {
         walletStateContainer,
         provingService,
       )
-      deferred <- Resource.make(Deferred[F, Unit])(_.complete(()).void)
-    } yield new V1Combination[F](
+      deferred <- Resource.make(Deferred[IO, Unit])(_.complete(()).void)
+    } yield new V1Combination(
       initialWallet,
       syncService,
       walletStateContainer,
@@ -227,28 +225,28 @@ object V1Combination {
       deferred,
     )
 
-  private def buildWalletTxSubmissionService[F[_]: Async](
-      submitTxService: TxSubmissionService[F, v1.Transaction],
-      walletStateContainer: WalletStateContainer[F, TWallet],
+  private def buildWalletTxSubmissionService(
+      submitTxService: TxSubmissionService[v1.Transaction],
+      walletStateContainer: WalletStateContainer[TWallet],
   )(using
-      rootTracer: Tracer[F, StructuredLog],
+      rootTracer: Tracer[IO, StructuredLog],
       walletTxBalancing: WalletBalancing,
-  ): Resource[F, WalletTxSubmissionService[F, v1.Transaction]] = {
-    given WalletTxSubmissionTracer[F] = WalletTxSubmissionTracer.from(rootTracer)
+  ): Resource[IO, WalletTxSubmissionService[v1.Transaction]] = {
+    given WalletTxSubmissionTracer = WalletTxSubmissionTracer.from(rootTracer)
     Resource.pure(
-      new WalletTxSubmissionServiceFactory[F, TWallet, v1.Transaction]
+      new WalletTxSubmissionServiceFactory[TWallet, v1.Transaction]
         .create(submitTxService, walletStateContainer),
     )
   }
 
-  private def buildWalletTransactionService[F[_]: Async](
-      walletStateContainer: WalletStateContainer[F, TWallet],
-      provingService: ProvingService[F, v1.UnprovenTransaction, v1.Transaction],
+  private def buildWalletTransactionService(
+      walletStateContainer: WalletStateContainer[TWallet],
+      provingService: ProvingService[v1.UnprovenTransaction, v1.Transaction],
   )(using
-      rootTracer: Tracer[F, StructuredLog],
+      rootTracer: Tracer[IO, StructuredLog],
       walletTxBalancing: WalletBalancing,
-  ): Resource[F, WalletTxService[F]] = {
-    given WalletTxServiceTracer[F] = WalletTxServiceTracer.from(rootTracer)
+  ): Resource[IO, WalletTxService] = {
+    given WalletTxServiceTracer = WalletTxServiceTracer.from(rootTracer)
     Resource.pure(
       new WalletTransactionServiceFactory().create(walletStateContainer, provingService),
     )

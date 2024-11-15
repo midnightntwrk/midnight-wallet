@@ -7,8 +7,8 @@ import io.iohk.midnight.bloc.Bloc.TopicAlreadyClosed
 import munit.CatsEffectSuite
 
 class BlocSpec extends CatsEffectSuite {
-  def withBloc(theTest: Bloc[IO, Int] => IO[Unit]): IO[Unit] =
-    Bloc[IO, Int](0).use(theTest)
+  def withBloc(theTest: Bloc[Int] => IO[Unit]): IO[Unit] =
+    Bloc[Int](0).use(theTest)
 
   test("Initialize to the correct value") {
     withBloc(_.subscribe.head.compile.lastOrError.assertEquals(0))
@@ -178,7 +178,7 @@ class BlocSpec extends CatsEffectSuite {
   test("Closing resources more than once throws error") {
     val closeTwice =
       for {
-        blocWithReleaseOp <- Bloc[IO, Int](0).allocated
+        blocWithReleaseOp <- Bloc[Int](0).allocated
         (_, close) = blocWithReleaseOp
         _ <- close
         _ <- close

@@ -18,7 +18,7 @@ class VersionCombinationStub(
     encPubKey: EncPublicKey,
     balance: BigInt,
     start: Deferred[IO, Boolean],
-) extends VersionCombination[IO] {
+) extends VersionCombination {
   override def sync: IO[Unit] = start.complete(true).void
 
   override def state: Stream[
@@ -53,12 +53,12 @@ class VersionCombinationStub(
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTransactionService[IO, UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
     IO.raiseError(Exception("Test stub"))
 
   override def submissionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTxSubmissionService[IO, Transaction]] = IO.raiseError(Exception("Test stub"))
+  ): IO[WalletTxSubmissionService[Transaction]] = IO.raiseError(Exception("Test stub"))
 }
 
 object VersionCombinationStub {

@@ -115,7 +115,7 @@ object Generators {
 
   // REMEMBER it is using external service, until we get a way to mock proofs
   given txWithContextArbitrary(using
-      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
+      provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
   ): Arbitrary[IO[TransactionWithContext]] = {
     Arbitrary {
       unprovenOfferWithContextArbitrary.arbitrary.map {
@@ -181,7 +181,7 @@ object Generators {
     new LedgerSerialization[LocalState, LedgerTransaction]
 
   given transactionArbitrary(using
-      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
+      provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
       txWithContextArb: Arbitrary[IO[TransactionWithContext]],
   ): Arbitrary[IO[Transaction]] =
     Arbitrary {
@@ -193,7 +193,7 @@ object Generators {
   given transactionShrink: Shrink[IO[Transaction]] = noShrink
 
   def ledgerTransactionsList(using
-      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
+      provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
       txArb: Arbitrary[IO[LedgerTransaction]],
   ): IO[Seq[LedgerTransaction]] =
     Gen
@@ -203,7 +203,7 @@ object Generators {
       .get
 
   given transactionsArbitrary(using
-      provingService: ProvingService[IO, UnprovenTransaction, LedgerTransaction],
+      provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
       txArbitrary: Arbitrary[IO[Transaction]],
   ): Arbitrary[IO[List[Transaction]]] = {
     Arbitrary {

@@ -34,7 +34,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   val noOpTracer: Tracer[IO, StructuredLog] = Tracer.noOpTracer[IO]
 
-  given walletTxSubmissionTracer: WalletTxSubmissionTracer[IO] = {
+  given walletTxSubmissionTracer: WalletTxSubmissionTracer = {
     WalletTxSubmissionTracer.from(noOpTracer)
   }
   given networkId: zswap.NetworkId = zswap.NetworkId.Undeployed
@@ -68,12 +68,12 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   type Wallet = CoreWallet[LocalState, Transaction]
 
   private val txSubmissionServiceFactory =
-    new WalletTxSubmissionServiceFactory[IO, Wallet, Transaction]
+    new WalletTxSubmissionServiceFactory[Wallet, Transaction]
 
   def buildWalletTxSubmissionService(
       initialState: LocalState = LocalState(),
-      txSubmissionService: TxSubmissionService[IO, Transaction] = txSubmissionService,
-  ): IO[(WalletTxSubmissionService[IO, Transaction], WalletStateContainer[IO, Wallet])] = {
+      txSubmissionService: TxSubmissionService[Transaction] = txSubmissionService,
+  ): IO[(WalletTxSubmissionService[Transaction], WalletStateContainer[Wallet])] = {
     val snapshot = Snapshot[LocalState, Transaction](
       initialState,
       Seq.empty,
@@ -81,7 +81,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       ProtocolVersion.V1,
       networkId,
     )
-    Bloc[IO, Wallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>
+    Bloc[Wallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val service =
         txSubmissionServiceFactory
@@ -155,7 +155,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   }
 
   test("Recovers funds when submission is rejected") {
-    given WalletTxServiceTracer[IO] = WalletTxServiceTracer.from(Tracer.noOpTracer)
+    given WalletTxServiceTracer = WalletTxServiceTracer.from(Tracer.noOpTracer)
     val randomRecipient = {
       val randomLocalState = LocalState()
       domain.Address(
@@ -176,7 +176,6 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
       fiber <- stateContainer.subscribe.take(3).compile.toList.start
       _ <- IO.sleep(1.second)
       txService = new WalletTransactionServiceFactory[
-        IO,
         Wallet,
         UnprovenTransaction,
         Transaction,

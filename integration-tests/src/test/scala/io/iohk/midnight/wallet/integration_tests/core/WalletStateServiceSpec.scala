@@ -60,7 +60,6 @@ class WalletStateServiceSpec
   def buildWalletStateService(
       initialState: LocalState = LocalState(),
   ): Resource[IO, WalletStateService[
-    IO,
     CoinPublicKey,
     EncPublicKey,
     EncryptionSecretKey,
@@ -77,9 +76,8 @@ class WalletStateServiceSpec
       ProtocolVersion.V1,
       networkId,
     )
-    Bloc[IO, Wallet](walletCreation.create(snapshot)).map { bloc =>
+    Bloc[Wallet](walletCreation.create(snapshot)).map { bloc =>
       new WalletStateServiceFactory[
-        IO,
         Wallet,
         CoinPublicKey,
         EncPublicKey,

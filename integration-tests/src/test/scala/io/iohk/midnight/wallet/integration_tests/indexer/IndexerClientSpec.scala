@@ -9,7 +9,7 @@ import munit.CatsEffectSuite
 import sttp.client3.UriContext
 
 class IndexerClientSpec extends CatsEffectSuite {
-  private def withIndexerClient(body: IndexerClient[IO] => IO[Unit]): IO[Unit] = {
+  private def withIndexerClient(body: IndexerClient => IO[Unit]): IO[Unit] = {
     given Tracer[IO, StructuredLog] = Tracer.noOpTracer
     IndexerClient(uri"ws://localhost:8088/api/v1/graphql/ws").use(body(_))
   }

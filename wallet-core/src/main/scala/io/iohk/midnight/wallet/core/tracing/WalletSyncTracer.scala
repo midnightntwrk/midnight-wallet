@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.core.tracing
 
+import cats.effect.IO
 import cats.effect.kernel.Sync
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.TracerSyntax.*
@@ -10,17 +11,17 @@ import io.iohk.midnight.wallet.core.WalletError
 import io.iohk.midnight.wallet.core.domain.IndexerUpdate
 import io.iohk.midnight.wallet.core.tracing.WalletSyncEvent.*
 
-class WalletSyncTracer[F[_]](
-    val tracer: Tracer[F, WalletSyncEvent],
+class WalletSyncTracer(
+    val tracer: Tracer[IO, WalletSyncEvent],
 ) {
-  def handlingUpdate(indexerUpdate: IndexerUpdate[?, ?]): F[Unit] = tracer(
+  def handlingUpdate(indexerUpdate: IndexerUpdate[?, ?]): IO[Unit] = tracer(
     SyncHandlingUpdate(indexerUpdate),
   )
-  def applyUpdateSuccess(indexerUpdate: IndexerUpdate[?, ?]): F[Unit] = tracer(
+  def applyUpdateSuccess(indexerUpdate: IndexerUpdate[?, ?]): IO[Unit] = tracer(
     ApplyUpdateSuccess(indexerUpdate),
   )
   // $COVERAGE-OFF$ TODO: [PM-5832] Improve code coverage
-  def applyUpdateError(indexerUpdate: IndexerUpdate[?, ?], error: WalletError): F[Unit] = tracer(
+  def applyUpdateError(indexerUpdate: IndexerUpdate[?, ?], error: WalletError): IO[Unit] = tracer(
     ApplyUpdateError(indexerUpdate, error),
   )
   // $COVERAGE-ON$
@@ -69,6 +70,6 @@ object WalletSyncTracer {
     )
   // $COVERAGE-ON$
 
-  def from[F[_]: Sync](structuredTracer: Tracer[F, StructuredLog]): WalletSyncTracer[F] =
-    new WalletSyncTracer[F](structuredTracer >=> (e => Sync[F].delay(e.asContextAwareLog)))
+  def from(structuredTracer: Tracer[IO, StructuredLog]): WalletSyncTracer =
+    new WalletSyncTracer(structuredTracer >=> (e => Sync[IO].delay(e.asContextAwareLog)))
 }

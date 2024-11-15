@@ -55,7 +55,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       val walletResource = for {
         combination <- VersionCombinationStub("", "", balance).toResource
         deferred <- Deferred[IO, Unit].toResource
-        bloc <- Bloc[IO, VersionCombination[IO]](combination)
+        bloc <- Bloc[VersionCombination](combination)
         combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
       } yield new JsWallet(combinator, IO.unit, Deferred.unsafe[IO, Unit])
 
@@ -74,7 +74,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     val walletResource = for {
       combination <- VersionCombinationStub(coinPubKey, encPubKey, BigInt(1)).toResource
       deferred <- Deferred[IO, Unit].toResource
-      bloc <- Bloc[IO, VersionCombination[IO]](combination)
+      bloc <- Bloc[VersionCombination](combination)
       combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
     } yield new JsWallet(combinator, IO.unit, Deferred.unsafe[IO, Unit])
 
@@ -90,8 +90,8 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       ref <- Ref.of[IO, Boolean](false).toResource
       deferred <- Deferred[IO, Unit].toResource
       combination <- VersionCombinationStub().toResource
-      bloc <- Bloc[IO, VersionCombination[IO]](combination)
-      combinator = new VersionCombinator(bloc, CombinationMigrations.default[IO], deferred)
+      bloc <- Bloc[VersionCombination](combination)
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
     } yield (ref, new JsWallet(combinator, ref.set(true), deferred))
 
     walletResource.use { (ref, wallet) =>
@@ -104,7 +104,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       isStarted <- Deferred[IO, Boolean].toResource
       deferred <- Deferred[IO, Unit].toResource
       combination = new VersionCombinationStub("", "", BigInt(1), isStarted)
-      bloc <- Bloc[IO, VersionCombination[IO]](combination)
+      bloc <- Bloc[VersionCombination](combination)
       combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
     } yield (isStarted, new JsWallet(combinator, IO.unit, deferred))
 

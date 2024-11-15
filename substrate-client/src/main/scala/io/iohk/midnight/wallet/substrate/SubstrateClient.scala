@@ -1,23 +1,23 @@
 package io.iohk.midnight.wallet.substrate
 
-import cats.effect.{Async, Resource}
+import cats.effect.{IO, Resource}
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.zswap
-import sttp.client3.impl.cats.FetchCatsBackend
-import sttp.client3.{ResponseAs, SttpBackend, emptyRequest}
-import sttp.model.Uri
 import sttp.client3.circe.*
+import sttp.client3.impl.cats.FetchCatsBackend
+import sttp.client3.{SttpBackend, emptyRequest}
+import sttp.model.Uri
 
-class SubstrateClient[F[_]: Async, Transaction: zswap.Transaction.IsSerializable](
+class SubstrateClient[Transaction: zswap.Transaction.IsSerializable](
     substrateUri: Uri,
-    backend: SttpBackend[F, Any],
+    backend: SttpBackend[IO, Any],
 ) {
   private val serialization = JsonSerialization[Transaction]
   import serialization.given
 
   def submitTransaction(
       req: SubmitTransactionRequest[Transaction],
-  ): F[SubmitTransactionResponse] = {
+  ): IO[SubmitTransactionResponse] = {
     val request = emptyRequest
       .body(req)
       .post(substrateUri)
@@ -31,10 +31,10 @@ class SubstrateClient[F[_]: Async, Transaction: zswap.Transaction.IsSerializable
 }
 
 object SubstrateClient {
-  def apply[F[_]: Async, Transaction: zswap.Transaction.IsSerializable](
+  def apply[Transaction: zswap.Transaction.IsSerializable](
       serverUri: Uri,
-  ): Resource[F, SubstrateClient[F, Transaction]] = {
-    val backend = FetchCatsBackend()
-    Resource.make(backend.pure)(_.close()).map(new SubstrateClient(serverUri, _))
+  ): Resource[IO, SubstrateClient[Transaction]] = {
+    val backend = FetchCatsBackend[IO]()
+    Resource.make(backend.pure[IO])(_.close()).map(new SubstrateClient(serverUri, _))
   }
 }

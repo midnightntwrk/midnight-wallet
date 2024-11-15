@@ -1,12 +1,11 @@
 package io.iohk.midnight.wallet.integration_tests.core
 
-import cats.ApplicativeThrow
+import cats.effect.IO
 import cats.syntax.applicativeError.*
-import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.core.services.ProvingService
 
-class FailingProvingService[F[_]: ApplicativeThrow]
-    extends ProvingService[F, UnprovenTransaction, Transaction] {
-  override def proveTransaction(tx: UnprovenTransaction): F[Transaction] =
+class FailingProvingService extends ProvingService[UnprovenTransaction, Transaction] {
+  override def proveTransaction(tx: UnprovenTransaction): IO[Transaction] =
     Exception("Failing stub").raiseError
 }

@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
 import io.iohk.midnight.wallet.core.domain.TransactionIdentifier
@@ -9,12 +9,11 @@ import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResul
 import io.iohk.midnight.wallet.core.tracing.WalletTxSubmissionTracer
 import io.iohk.midnight.wallet.zswap
 
-trait WalletTxSubmissionService[F[_], Transaction] {
-  def submitTransaction(transaction: Transaction): F[TransactionIdentifier]
+trait WalletTxSubmissionService[Transaction] {
+  def submitTransaction(transaction: Transaction): IO[TransactionIdentifier]
 }
 
 class WalletTxSubmissionServiceFactory[
-    F[_]: Sync,
     TWallet,
     Transaction,
 ](using
@@ -22,15 +21,15 @@ class WalletTxSubmissionServiceFactory[
     zswap.Transaction.Transaction[Transaction, ?],
     zswap.Transaction.CanEraseProofs[Transaction, ?],
 ) {
-  private type Service = WalletTxSubmissionService[F, Transaction]
+  private type Service = WalletTxSubmissionService[Transaction]
 
   def create(
-      submitTxService: TxSubmissionService[F, Transaction],
-      walletStateContainer: WalletStateContainer[F, TWallet],
+      submitTxService: TxSubmissionService[Transaction],
+      walletStateContainer: WalletStateContainer[TWallet],
   )(using
-      tracer: WalletTxSubmissionTracer[F],
+      tracer: WalletTxSubmissionTracer,
   ): Service = new Service {
-    override def submitTransaction(toSubmitLedgerTx: Transaction): F[TransactionIdentifier] =
+    override def submitTransaction(toSubmitLedgerTx: Transaction): IO[TransactionIdentifier] =
       for {
         txId <- getIdentifier(toSubmitLedgerTx)
         _ <- tracer.submitTxStart(txId)
@@ -39,20 +38,20 @@ class WalletTxSubmissionServiceFactory[
         result <- adaptResponse(toSubmitLedgerTx, txId, response)
       } yield result
 
-    private def getIdentifier(tx: Transaction): F[TransactionIdentifier] = {
+    private def getIdentifier(tx: Transaction): IO[TransactionIdentifier] = {
       tx.identifiers.headOption
-        .fold(NoTransactionIdentifiers.raiseError[F, TransactionIdentifier])(
+        .fold(NoTransactionIdentifiers.raiseError[IO, TransactionIdentifier])(
           TransactionIdentifier(_).pure,
         )
     }
 
-    private def validateTx(ledgerTx: Transaction, txId: TransactionIdentifier): F[Unit] = {
+    private def validateTx(ledgerTx: Transaction, txId: TransactionIdentifier): IO[Unit] = {
       Either
         .catchNonFatal(
           ledgerTx.wellFormedNoProofs(enforceBalancing = false),
         ) // no proof check, as it is not working without public parameters in the system
         .leftMap(TransactionNotWellFormed.apply)
-        .liftTo[F]
+        .liftTo[IO]
         .attemptTap {
           case Left(error) => tracer.txValidationError(txId, error)
           case Right(_)    => tracer.txValidationSuccess(txId)
@@ -63,8 +62,8 @@ class WalletTxSubmissionServiceFactory[
         tx: Transaction,
         txId: TransactionIdentifier,
         submissionResult: Either[Throwable, SubmissionResult],
-    ): F[TransactionIdentifier] = {
-      val result = submissionResult match {
+    ): IO[TransactionIdentifier] = {
+      val result: IO[TransactionIdentifier] = submissionResult match {
         case Right(SubmissionResult.Accepted)         => txId.pure
         case Right(SubmissionResult.Rejected(reason)) => TransactionRejected(reason).raiseError
         case Left(error) => TransactionSubmissionFailed(error).raiseError
@@ -75,11 +74,11 @@ class WalletTxSubmissionServiceFactory[
       }
     }
 
-    private def revertTx(tx: Transaction, txId: TransactionIdentifier): F[Unit] =
+    private def revertTx(tx: Transaction, txId: TransactionIdentifier): IO[Unit] =
       walletStateContainer
         .updateStateEither(_.applyFailedTransaction(tx))
         .flatMap {
-          case Right(_)    => Sync[F].unit
+          case Right(_)    => Sync[IO].unit
           case Left(error) => tracer.revertError(txId, error.toThrowable)
         }
   }

@@ -14,7 +14,7 @@ class SubstrateClientSpec extends CatsEffectSuite {
 
   private val serverUri: Uri = uri"http://localhost:9933"
 
-  private def withSubstrateClient(body: SubstrateClient[IO, Transaction] => IO[Unit]): IO[Unit] =
+  private def withSubstrateClient(body: SubstrateClient[Transaction] => IO[Unit]): IO[Unit] =
     SubstrateClient(serverUri).use(body(_))
 
   test("Substrate client must submit transaction to the node and return ExtrinsicsHash".ignore) {

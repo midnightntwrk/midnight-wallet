@@ -1,6 +1,6 @@
 package io.iohk.midnight.wallet.core
 
-import cats.effect.Sync
+import cats.effect.{IO, Sync}
 import cats.syntax.all.*
 import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
 import io.iohk.midnight.wallet.core.domain.*
@@ -8,23 +8,22 @@ import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.tracing.WalletTxServiceTracer
 import io.iohk.midnight.wallet.zswap
 
-trait WalletTransactionService[F[_], UnprovenTransaction, Transaction, CoinInfo, TokenType] {
+trait WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType] {
   def prepareTransferRecipe(
       outputs: List[TokenTransfer[TokenType]],
-  ): F[TransactionToProve[UnprovenTransaction]]
+  ): IO[TransactionToProve[UnprovenTransaction]]
 
   def proveTransaction(
       provingRecipe: ProvingRecipe[UnprovenTransaction, Transaction],
-  ): F[Transaction]
+  ): IO[Transaction]
 
   def balanceTransaction(
       tx: Transaction,
       newCoins: Seq[CoinInfo],
-  ): F[BalanceTransactionRecipe[UnprovenTransaction, Transaction]]
+  ): IO[BalanceTransactionRecipe[UnprovenTransaction, Transaction]]
 }
 
 class WalletTransactionServiceFactory[
-    F[_]: Sync,
     TWallet,
     UnprovenTransaction,
     Transaction,
@@ -42,15 +41,15 @@ class WalletTransactionServiceFactory[
     zswap.UnprovenTransaction.IsSerializable[UnprovenTransaction],
 ) {
   private type Service =
-    WalletTransactionService[F, UnprovenTransaction, Transaction, CoinInfo, TokenType]
+    WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]
 
   def create(
-      walletStateContainer: WalletStateContainer[F, TWallet],
-      provingService: ProvingService[F, UnprovenTransaction, Transaction],
-  )(using tracer: WalletTxServiceTracer[F]): Service = new Service {
+      walletStateContainer: WalletStateContainer[TWallet],
+      provingService: ProvingService[UnprovenTransaction, Transaction],
+  )(using tracer: WalletTxServiceTracer): Service = new Service {
     override def prepareTransferRecipe(
         outputs: List[TokenTransfer[TokenType]],
-    ): F[TransactionToProve[UnprovenTransaction]] =
+    ): IO[TransactionToProve[UnprovenTransaction]] =
       walletStateContainer
         .modifyStateEither(_.prepareTransferRecipe(outputs))
         .flatMap {
@@ -60,8 +59,8 @@ class WalletTransactionServiceFactory[
 
     override def proveTransaction(
         provingRecipe: ProvingRecipe[UnprovenTransaction, Transaction],
-    ): F[Transaction] = {
-      val provenTx = provingRecipe match {
+    ): IO[Transaction] = {
+      val provenTx: IO[Transaction] = provingRecipe match {
         case TransactionToProve(transaction) =>
           provingService.proveTransaction(transaction)
         case BalanceTransactionToProve(toProve, toBalance) =>
@@ -82,7 +81,7 @@ class WalletTransactionServiceFactory[
                 tracer.unprovenTransactionReverted(id, error)
               }
           case None =>
-            Sync[F].unit
+            Sync[IO].unit
         }
       }
     }
@@ -90,7 +89,7 @@ class WalletTransactionServiceFactory[
     override def balanceTransaction(
         tx: Transaction,
         newCoins: Seq[CoinInfo],
-    ): F[BalanceTransactionRecipe[UnprovenTransaction, Transaction]] = {
+    ): IO[BalanceTransactionRecipe[UnprovenTransaction, Transaction]] = {
       walletStateContainer
         .modifyStateEither(_.balanceTransaction((tx, newCoins)))
         .flatMap {

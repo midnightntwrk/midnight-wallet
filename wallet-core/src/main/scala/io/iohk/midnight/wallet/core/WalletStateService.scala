@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.core
 
+import cats.effect.IO
 import fs2.Stream
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.*
@@ -7,7 +8,6 @@ import io.iohk.midnight.wallet.core.domain.ProgressUpdate
 import io.iohk.midnight.wallet.zswap
 
 trait WalletStateService[
-    F[_],
     CoinPublicKey,
     EncPubKey,
     EncSecretKey,
@@ -28,9 +28,9 @@ trait WalletStateService[
     Transaction,
   ]
 
-  def keys: F[(CoinPublicKey, EncPubKey, EncSecretKey)]
-  def state: Stream[F, TState]
-  def serializeState: F[SerializedWalletState]
+  def keys: IO[(CoinPublicKey, EncPubKey, EncSecretKey)]
+  def state: Stream[IO, TState]
+  def serializeState: IO[SerializedWalletState]
   def calculateCost(tx: Transaction): BigInt
 }
 
@@ -73,7 +73,6 @@ object WalletStateService {
 }
 
 class WalletStateServiceFactory[
-    F[_],
     TWallet,
     CoinPublicKey,
     EncPubKey,
@@ -97,7 +96,6 @@ class WalletStateServiceFactory[
     tt: zswap.TokenType[TokenType, ?],
 ) {
   private type Service = WalletStateService[
-    F,
     CoinPublicKey,
     EncPubKey,
     EncSecretKey,
@@ -108,14 +106,14 @@ class WalletStateServiceFactory[
     Transaction,
   ]
 
-  def create(walletQueryStateService: WalletQueryStateService[F, TWallet]): Service =
+  def create(walletQueryStateService: WalletQueryStateService[TWallet]): Service =
     new Service {
-      override def keys: F[(CoinPublicKey, EncPubKey, EncSecretKey)] =
+      override def keys: IO[(CoinPublicKey, EncPubKey, EncSecretKey)] =
         walletQueryStateService.queryOnce { wallet =>
           (wallet.coinPublicKey, wallet.encryptionPublicKey, wallet.viewingKey)
         }
 
-      override def state: Stream[F, TState] =
+      override def state: Stream[IO, TState] =
         walletQueryStateService.queryStream { wallet =>
           WalletStateService.State(
             coinPublicKey = wallet.coinPublicKey,
@@ -131,7 +129,7 @@ class WalletStateServiceFactory[
           )
         }
 
-      override def serializeState: F[SerializedWalletState] =
+      override def serializeState: IO[SerializedWalletState] =
         walletQueryStateService.queryOnce { _.serialize }
 
       // TODO improve returning type or add estimated fee to recipe

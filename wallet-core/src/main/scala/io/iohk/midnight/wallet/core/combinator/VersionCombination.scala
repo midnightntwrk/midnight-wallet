@@ -1,5 +1,6 @@
 package io.iohk.midnight.wallet.core.combinator
 
+import cats.effect.IO
 import fs2.Stream
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.{
@@ -10,11 +11,11 @@ import io.iohk.midnight.wallet.core.{
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 
-trait VersionCombination[F[_]] {
-  def sync: F[Unit]
+trait VersionCombination {
+  def sync: IO[Unit]
 
   def state: Stream[
-    F,
+    IO,
     WalletStateService.State[
       v1.CoinPublicKey,
       v1.EncPublicKey,
@@ -27,15 +28,15 @@ trait VersionCombination[F[_]] {
     ],
   ]
 
-  def serializeState: F[SerializedWalletState]
+  def serializeState: IO[SerializedWalletState]
 
   def transactionService(
       protocolVersion: ProtocolVersion,
-  ): F[
-    WalletTransactionService[F, v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType],
+  ): IO[
+    WalletTransactionService[v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType],
   ]
 
   def submissionService(
       protocolVersion: ProtocolVersion,
-  ): F[WalletTxSubmissionService[F, v1.Transaction]]
+  ): IO[WalletTxSubmissionService[v1.Transaction]]
 }

@@ -66,7 +66,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
 
   def jsWallet: Resource[IO, JsWallet] =
     for {
-      bloc <- Bloc[IO, VersionCombination[IO]](
+      bloc <- Bloc[VersionCombination](
         VersionCombinationStub(provingService, transferRecipe),
       )
       deferred <- Deferred[IO, Unit].toResource

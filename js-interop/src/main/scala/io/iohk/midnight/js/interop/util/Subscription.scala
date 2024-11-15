@@ -1,3 +1,5 @@
 package io.iohk.midnight.js.interop.util
 
-private final case class Subscription[F[_]](start: F[Unit], cancel: F[Unit])
+import cats.effect.IO
+
+private final case class Subscription(start: IO[Unit], cancel: IO[Unit])
