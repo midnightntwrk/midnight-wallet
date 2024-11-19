@@ -18,10 +18,9 @@ on:
           type: choice
           description: Midnight deployment to use
           required: true
-          default: 'halo2-qa'
+          default: 'qanet'
           options:
-            - halo2-qa
-            - hardfork-qa
+            - qanet
             - devnet
             - testnet
 

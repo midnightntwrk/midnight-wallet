@@ -25,11 +25,10 @@ on:
         type: choice
         description: Midnight deployment to use
         required: true
-        default: 'halo2-qa'
+        default: 'qanet'
         options:
           - local
-          - halo2-qa
-          - hardfork-qa
+          - qanet
           - testnet
       seed:
         type: string
@@ -64,9 +63,9 @@ on:
         default: 'devnet'
       deployment:
         type: string
-        description: Midnight deployment to use (halo2-qa/hardfork-qa/testnet/local)
+        description: Midnight deployment to use (qanet/testnet/local)
         required: true
-        default: 'halo2-qa'
+        default: 'qanet'
       seed:
         type: string
         description: Seed of a funded wallet
@@ -156,7 +155,8 @@ jobs:
       - name: Install dependencies
         if: ${{ inputs.deployment != 'local' }}
         run: |
-          yarn install --immutable
+          yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
+          yarn install
 
       - name: Run e2e tests
         env:

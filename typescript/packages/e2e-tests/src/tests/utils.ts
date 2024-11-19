@@ -264,4 +264,4 @@ export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).
 
 export type MidnightNetwork = 'undeployed' | 'devnet' | 'testnet';
 
-export type MidnightDeployment = 'halo2-qa' | 'hardfork-qa' | 'testnet' | 'local';
+export type MidnightDeployment = 'qanet' | 'testnet' | 'local';
