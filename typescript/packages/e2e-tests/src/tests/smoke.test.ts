@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import {
@@ -23,7 +23,7 @@ import { logger } from './logger';
  * @group undeployed
  */
 
-describe('Token transfer', () => {
+describe('Smoke tests', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000042';
@@ -66,10 +66,10 @@ describe('Token transfer', () => {
   afterEach(async () => {
     await closeWallet(walletFunded);
     await closeWallet(wallet2);
-  });
+  }, 20_000);
 
   test(
-    'Is working for valid transfer @healthcheck',
+    'Valid tDUST transfer is working @healthcheck',
     async () => {
       allure.tag('smoke');
       allure.tag('heanthcheck');
@@ -193,15 +193,7 @@ describe('Wallet building', () => {
   let fixture: TestContainersFixture;
 
   afterEach(async () => {
-    try {
-      await walletFunded.close();
-    } catch (e: unknown) {
-      if (typeof e === 'string') {
-        logger.warn(e);
-      } else if (e instanceof Error) {
-        logger.warn(e.message);
-      }
-    }
+    await closeWallet(walletFunded);
   });
 
   test(
