@@ -6,7 +6,9 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.std.Map as JsMap
+
 import scala.scalajs.js
+import scala.scalajs.js.annotation.JSExportTopLevel
 
 object Transaction {
 
@@ -44,6 +46,7 @@ object Transaction {
   }
 
   @SuppressWarnings(Array("org.wartremover.warts.ToString"))
+  @JSExportTopLevel("V1Transaction")
   given Transaction[mod.Transaction, mod.Offer] with {
     private val dummyLedgerParameters =
       mod.LedgerParameters.dummyParameters()

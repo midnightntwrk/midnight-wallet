@@ -1,9 +1,10 @@
 package io.iohk.midnight.wallet.core.combinator
 
 import cats.ApplicativeThrow
+import cats.effect.unsafe.implicits.global
 import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
-import fs2.{Pipe, Stream}
+import fs2.Stream
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
@@ -17,6 +18,8 @@ import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubm
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.{HexUtil, given}
 
+import scala.scalajs.js
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import scala.util.{Failure, Success, Try}
 
 final class V1Combination(
@@ -51,54 +54,10 @@ final class V1Combination(
       .sync(initialState.offset)
       .interruptWhen(deferred.get.attempt)
       .takeWhile(isSupported)
-      .through(deserializeIndexerEvent)
+      .evalMap(V1Combination.deserializeIndexerEvent)
       .evalMap(updateState)
       .compile
       .drain
-
-  private def deserializeIndexerEvent
-      : Pipe[IO, IndexerEvent, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] =
-    _.evalMap[IO, IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] {
-      case IndexerEvent.RawViewingUpdate(offset, rawUpdates) =>
-        ApplicativeThrow[IO].fromTry(
-          deserializeViewingUpdate(rawUpdates, Transaction.Offset(offset)),
-        )
-      case IndexerEvent.RawProgressUpdate(synced, total) =>
-        ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total)).pure[IO]
-      case IndexerEvent.ConnectionLost =>
-        ConnectionLost.pure[IO]
-    }
-
-  private def deserializeViewingUpdate(
-      rawUpdates: Seq[IndexerEvent.SingleUpdate],
-      offset: Transaction.Offset,
-  )(using
-      c: zswap.MerkleTreeCollapsedUpdate[v1.MerkleTreeCollapsedUpdate, ?],
-      t: zswap.Transaction.IsSerializable[v1.Transaction],
-  ): Try[ViewingUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] =
-    rawUpdates
-      .traverse {
-        case IndexerEvent.SingleUpdate.MerkleTreeCollapsedUpdate(version, mt) =>
-          for {
-            decoded <- HexUtil.decodeHex(mt)
-            mtcu <- c.deserialize(decoded)
-          } yield (version, mtcu.asLeft)
-        case IndexerEvent.SingleUpdate.RawTransaction(version, _, raw, applyStage) =>
-          for {
-            decoded <- HexUtil.decodeHex(raw)
-            tx <- Try(t.deserialize(decoded))
-            applyStage <- Try(ApplyStage.valueOf(applyStage))
-          } yield (version, AppliedTransaction(tx, applyStage).asRight)
-      }
-      .flatMap { updates =>
-        val updatesByVersion = updates.groupMap(_._1)(_._2).toSeq.toNeSeq
-        updatesByVersion match {
-          case None => Failure(Exception("Invalid empty viewing update"))
-          case Some(neSeq) =>
-            if (neSeq.size > 1) Failure(Exception(s"Invalid update versions: ${updates._1F}"))
-            else Success(ViewingUpdate(neSeq.head._1, offset, neSeq.head._2))
-        }
-      }
 
   private def updateState(
       update: IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction],
@@ -136,6 +95,7 @@ final class V1Combination(
     else Exception(s"No submission service available for protocol $protocolVersion").raiseError
 }
 
+@JSExportTopLevel("V1Combination")
 object V1Combination {
   type TWallet = Wallet[v1.LocalState, v1.Transaction]
 
@@ -264,4 +224,59 @@ object V1Combination {
         snapshotInstances.parse(serialized)
     )
     .map(walletInstances.walletCreation.create)
+
+  @JSExport def mapIndexerEvent(
+      event: IndexerEvent,
+      n: zswap.NetworkId,
+  ): js.Promise[IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] = {
+    given zswap.NetworkId = n
+    deserializeIndexerEvent(event).unsafeToPromise()
+  }
+
+  def deserializeIndexerEvent(
+      event: IndexerEvent,
+  )(using n: zswap.NetworkId): IO[IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] = {
+    event match {
+      case IndexerEvent.RawViewingUpdate(offset, rawUpdates) =>
+        ApplicativeThrow[IO].fromTry(
+          deserializeViewingUpdate(rawUpdates, Transaction.Offset(offset)),
+        )
+      case IndexerEvent.RawProgressUpdate(synced, total) =>
+        ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total)).pure[IO]
+      case IndexerEvent.ConnectionLost =>
+        ConnectionLost.pure[IO]
+    }
+  }
+
+  private def deserializeViewingUpdate(
+      rawUpdates: Seq[IndexerEvent.SingleUpdate],
+      offset: Transaction.Offset,
+  )(using
+      c: zswap.MerkleTreeCollapsedUpdate[v1.MerkleTreeCollapsedUpdate, ?],
+      t: zswap.Transaction.IsSerializable[v1.Transaction],
+      n: zswap.NetworkId,
+  ): Try[ViewingUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] =
+    rawUpdates
+      .traverse {
+        case IndexerEvent.SingleUpdate.MerkleTreeCollapsedUpdate(version, mt) =>
+          for {
+            decoded <- HexUtil.decodeHex(mt)
+            mtcu <- c.deserialize(decoded)
+          } yield (version, mtcu.asLeft)
+        case IndexerEvent.SingleUpdate.RawTransaction(version, _, raw, applyStage) =>
+          for {
+            decoded <- HexUtil.decodeHex(raw)
+            tx <- Try(t.deserialize(decoded))
+            applyStage <- Try(ApplyStage.valueOf(applyStage))
+          } yield (version, AppliedTransaction(tx, applyStage).asRight)
+      }
+      .flatMap { updates =>
+        val updatesByVersion = updates.groupMap(_._1)(_._2).toSeq.toNeSeq
+        updatesByVersion match {
+          case None => Failure(Exception("Invalid empty viewing update"))
+          case Some(neSeq) =>
+            if (neSeq.size > 1) Failure(Exception(s"Invalid update versions: ${updates._1F}"))
+            else Success(ViewingUpdate(neSeq.head._1, offset, neSeq.head._2))
+        }
+      }
 }

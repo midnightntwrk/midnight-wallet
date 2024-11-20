@@ -1,5 +1,6 @@
-import { NetworkId, Transaction } from '@midnight-ntwrk/zswap';
+import * as zswap from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import { Observable } from 'rxjs';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
 
@@ -26,7 +27,7 @@ export declare class WalletBuilder {
     indexerWsUri: string,
     proverServerUri: string,
     substrateNodeUri: string,
-    networkId: NetworkId,
+    networkId: zswap.NetworkId,
     minLogLevel?: LogLevel,
     discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
@@ -48,7 +49,7 @@ export declare class WalletBuilder {
     proverServerUri: string,
     substrateNodeUri: string,
     seed: string,
-    networkId: NetworkId,
+    networkId: zswap.NetworkId,
     minLogLevel?: LogLevel,
     discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
@@ -73,7 +74,80 @@ export declare class WalletBuilder {
     discardTxHistory?: boolean,
   ): Promise<Wallet & Resource>;
 
-  static calculateCost(tx: Transaction): bigint;
+  static calculateCost(tx: zswap.Transaction): bigint;
 
-  static generateInitialState(networkId: NetworkId): string;
+  static generateInitialState(networkId: zswap.NetworkId): string;
+}
+
+/* infra and helpers */
+
+export declare class NetworkId {
+  static fromJs(id: zswap.NetworkId): NetworkId
+}
+export declare class TracerCarrier {
+  static createLoggingTracer(logLevel: LogLevel): TracerCarrier
+}
+
+export interface Allocated<T> {
+  value: T
+  deallocate: () => Promise<void>
+}
+export declare class JsResource<T> {
+  allocate(): Promise<Allocated<T>>;
+}
+
+export declare class ScalaEither<A, B> {}
+export declare class JsEither {
+  static fold<A, B, R>(either: ScalaEither<A, B>, onLeft: (a: A) => R, onRight: (b: B) => R): R;
+}
+
+export declare class IndexerClient {
+  static create(url: string, tracer: TracerCarrier): JsResource<IndexerClient>;
+}
+
+/* Zswap typeclasses */
+export declare interface Transaction<Tx> {
+}
+export declare const V1Transaction: Transaction<zswap.Transaction>
+
+export declare interface EvolveState<State> {
+}
+export declare const V1EvolveState: EvolveState<zswap.LocalState>
+
+export declare interface EncryptionSecretKey<ESK> {}
+export declare const V1EncryptionSecretKey: EncryptionSecretKey<zswap.EncryptionSecretKey>;
+
+/* blockchain / domain types */
+export declare class IndexerUpdateEvent {}
+export declare class IndexerUpdate {}
+export declare class Progress {
+  readonly isComplete: boolean;
+}
+
+/* Wallet and capabilities */
+export declare class CoreWallet<State> {
+  static emptyV1(localState: zswap.LocalState, networkId: NetworkId): CoreWallet<zswap.LocalState>
+
+  readonly state: State;
+  readonly isConnected: boolean;
+  readonly progress: Progress;
+}
+export declare class DefaultTxHistoryCapability {}
+
+export declare class DefaultSyncCapability<S> {
+  constructor(txHistoryCapability: DefaultTxHistoryCapability, tx: Transaction<zswap.Transaction>, evolveState: EvolveState<S>);
+
+  applyUpdate<S>(wallet: CoreWallet<S>, update: IndexerUpdate): ScalaEither<Error, CoreWallet<S>>
+}
+
+export declare class V1Combination {
+  static mapIndexerEvent(event: IndexerUpdateEvent, networkId: NetworkId): Promise<IndexerUpdate>
+}
+
+/* services */
+
+export declare class DefaultSyncService {
+  static create<ESK>(client: IndexerClient, esk: ESK, index: BigInt|undefined, eskInstance: EncryptionSecretKey<ESK>, networkId: NetworkId): DefaultSyncService
+
+  sync$(): Observable<IndexerUpdateEvent>
 }

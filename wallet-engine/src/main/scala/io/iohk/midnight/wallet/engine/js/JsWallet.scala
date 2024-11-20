@@ -3,6 +3,7 @@ package io.iohk.midnight.wallet.engine.js
 import cats.effect.{Deferred, IO}
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import io.iohk.midnight.js.interop.TracerCarrier
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
@@ -31,6 +32,7 @@ import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
 import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.zswap.*
 import org.scalablytyped.runtime.StringDictionary
+
 import scala.scalajs.js
 import scala.scalajs.js.JSConverters.*
 import scala.scalajs.js.Promise
@@ -225,7 +227,11 @@ object JsWallet {
       )
 
     for {
-      minLogLevel <- IO.fromEither(Config.parseLogLevel(rawConfig.minLogLevel))
+      minLogLevel <- IO.fromEither(
+        TracerCarrier
+          .parseLogLevel(rawConfig.minLogLevel)
+          .leftMap(Config.ParseError.InvalidLogLevel.apply),
+      )
       jsWalletTracer = buildJsWalletTracer(minLogLevel)
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig, jsWalletTracer)

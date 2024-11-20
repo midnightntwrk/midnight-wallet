@@ -1,0 +1,17 @@
+{
+  "name": "@midnight-ntwrk/wallet-integration-tests",
+  "type": "module",
+  "scripts": {
+    "test": "tsc && node ./dist/tests.js"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/wallet": "workspace:*",
+    "@midnight-ntwrk/zswap": "^3.0.0",
+    "@types/node": "^20.14.8",
+    "rxjs": "^7.5.5",
+    "testcontainers": "^10.14.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

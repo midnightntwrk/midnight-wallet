@@ -1,10 +1,9 @@
 package io.iohk.midnight.wallet.engine
 
 import cats.effect.{IO, Resource}
-import fs2.Stream
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.*
-import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.Config as CoreConfig
 import io.iohk.midnight.wallet.core.combinator.VersionCombinator.{
   ProvingServiceFactory,
@@ -63,10 +62,7 @@ class WalletBuilder[LocalState, Transaction] {
           n: zswap.NetworkId,
       ): Resource[IO, SyncService] =
         IndexerClient(config.indexerWsUri).map { indexerClient =>
-          new SyncService {
-            override def sync(offset: Option[Transaction.Offset]): Stream[IO, IndexerEvent] =
-              indexerClient.viewingUpdates(s.serialize(esk), index)
-          }
+          new DefaultSyncService[ESK](indexerClient, esk, index)
         }
     }
 }

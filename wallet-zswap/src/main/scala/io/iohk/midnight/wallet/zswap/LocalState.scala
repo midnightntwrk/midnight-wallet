@@ -7,6 +7,8 @@ import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.js.interop.util.SetOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
 
+import scala.scalajs.js.annotation.JSExportTopLevel
+
 object LocalState {
   trait HasCoins[T, QualifiedCoinInfo, CoinInfo, UnprovenInput] {
     extension (t: T) {
@@ -77,6 +79,7 @@ object LocalState {
     }
   }
 
+  @JSExportTopLevel("V1EvolveState")
   given EvolveState[v1.LocalState, v1.Offer, v1.ProofErasedOffer, v1.MerkleTreeCollapsedUpdate]
   with {
     extension (localState: v1.LocalState) {

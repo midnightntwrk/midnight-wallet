@@ -1,7 +1,8 @@
 package io.iohk.midnight.wallet.zswap
 
-import cats.syntax.eq.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
+
+import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import scala.util.Try
 
 enum NetworkId(val name: String, val toJs: mod.NetworkId) {
@@ -11,9 +12,10 @@ enum NetworkId(val name: String, val toJs: mod.NetworkId) {
   case MainNet extends NetworkId("MainNet", mod.NetworkId.MainNet)
 }
 
+@JSExportTopLevel("NetworkId")
 object NetworkId {
   def fromString(str: String): Try[NetworkId] = Try(valueOf(str))
-  def fromJs(js: mod.NetworkId): NetworkId =
+  @JSExport def fromJs(js: mod.NetworkId): NetworkId =
     js match {
       case mod.NetworkId.Undeployed => NetworkId.Undeployed
       case mod.NetworkId.DevNet     => NetworkId.DevNet

@@ -1,10 +1,13 @@
 package io.iohk.midnight.wallet.core
 
+import cats.implicits.catsSyntaxEq
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 
+import scala.scalajs.js.annotation.{JSExport, JSExportAll}
+
 package object domain {
-  final case class Address(address: String) extends AnyVal
+  @JSExportAll final case class Address(address: String) extends AnyVal
 
   sealed trait ProvingRecipe[+UnprovenTransaction, +Transaction] {
     def unprovenTransaction: Option[UnprovenTransaction]
@@ -41,24 +44,29 @@ package object domain {
 
   final case class AppliedTransaction[Transaction](tx: Transaction, applyStage: ApplyStage)
 
-  sealed trait IndexerUpdate[+MerkleTreeCollapsedUpdate, +Transaction]
+  @JSExportAll sealed trait IndexerUpdate[+MerkleTreeCollapsedUpdate, +Transaction]
 
-  final case class ViewingUpdate[MerkleTreeCollapsedUpdate, Transaction](
+  @JSExportAll final case class ViewingUpdate[MerkleTreeCollapsedUpdate, Transaction](
       protocolVersion: ProtocolVersion,
       offset: Offset,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction[Transaction]]],
   ) extends IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]
 
-  final case class ProgressUpdate(synced: Option[Offset], total: Option[Offset])
-      extends IndexerUpdate[Nothing, Nothing]
-  object ProgressUpdate {
-    def apply(synced: Offset, total: Offset): ProgressUpdate =
+  @JSExportAll final case class ProgressUpdate(synced: Option[Offset], total: Option[Offset])
+      extends IndexerUpdate[Nothing, Nothing] {
+    lazy val isComplete: Boolean = (synced, total) match
+      case (Some(s), Some(t)) => s === t
+      case _                  => false
+  }
+
+  @JSExportAll object ProgressUpdate {
+    @JSExport("apply") def apply(synced: Offset, total: Offset): ProgressUpdate =
       new ProgressUpdate(Some(synced), Some(total))
     def empty: ProgressUpdate =
       new ProgressUpdate(None, None)
   }
 
-  case object ConnectionLost extends IndexerUpdate[Nothing, Nothing]
+  @JSExportAll case object ConnectionLost extends IndexerUpdate[Nothing, Nothing]
 
   final case class Seed(seed: Array[Byte]) extends AnyVal
 }

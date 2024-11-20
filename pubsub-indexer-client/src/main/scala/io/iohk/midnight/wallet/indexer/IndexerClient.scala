@@ -8,6 +8,7 @@ import caliban.client.ws.{GraphQLWSRequest, GraphQLWSResponse}
 import cats.effect.*
 import cats.syntax.all.*
 import fs2.Stream
+import io.iohk.midnight.js.interop.{JsResource, TracerCarrier}
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.IndexerEvent
@@ -18,12 +19,16 @@ import io.iohk.midnight.wallet.indexer.IndexerClient.*
 import io.iohk.midnight.wallet.indexer.IndexerSchema.*
 import io.iohk.midnight.wallet.indexer.tracing.IndexerClientTracer
 import io.laminext.websocket.WebSocket
+import sttp.model.Uri
+
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
+import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 import scala.util.Try
-import sttp.model.Uri
 
+@JSExportTopLevel("IndexerClientInstance")
+@JSExportAll
 class IndexerClient(
     indexerUri: Uri,
     stopSignal: Deferred[IO, Unit],
@@ -149,7 +154,7 @@ class IndexerClient(
       Sync[IO].delay(ws.sendOne(request))
     }
 }
-
+@JSExportTopLevel("IndexerClient")
 object IndexerClient {
   private type GraphQLWebSocket = WebSocket[GraphQLWSResponse, GraphQLWSRequest]
 
@@ -160,9 +165,22 @@ object IndexerClient {
     Resource.make(Deferred[IO, Unit].map(new IndexerClient(indexerWsUri, _)))(_.stop)
   }
 
+  @JSExport def create(
+      indexerWsUri: String,
+      rootTracer: TracerCarrier[StructuredLog],
+  ): JsResource[IndexerClient] = {
+    given Tracer[IO, StructuredLog] = rootTracer.tracer
+    val parsedUri = Uri.parse(indexerWsUri).leftMap(InvalidUri.apply)
+    val resource: Resource[IO, IndexerClient] =
+      Resource.eval(parsedUri.liftTo[IO]).flatMap(IndexerClient.apply)
+    JsResource.fromCats(resource)
+  }
+
   private val FetchErrorName = "FetchError"
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.Equals"))
   private def isConnectionError(err: js.JavaScriptException): Boolean =
     Try(FetchErrorName.equals(err.exception.asInstanceOf[js.Dynamic].name)).getOrElse(false)
+
+  final case class InvalidUri(msg: String) extends Throwable(msg)
 }

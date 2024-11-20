@@ -1044,6 +1044,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
+  dependencies:
+    "@midnight-ntwrk/wallet": "workspace:*"
+    "@midnight-ntwrk/zswap": "npm:^3.0.0"
+    "@types/node": "npm:^20.14.8"
+    rxjs: "npm:^7.5.5"
+    testcontainers: "npm:^10.14.0"
+    typescript: "npm:^5.6.3"
+  languageName: unknown
+  linkType: soft
+
 "@midnight-ntwrk/wallet-sdk-monorepo@workspace:.":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
@@ -1119,7 +1132,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/zswap@npm:^3.0.1, @midnight-ntwrk/zswap@npm:^3.0.2, @midnight-ntwrk/zswap@npm:^3.0.4":
+"@midnight-ntwrk/zswap@npm:^3.0.0, @midnight-ntwrk/zswap@npm:^3.0.1, @midnight-ntwrk/zswap@npm:^3.0.2, @midnight-ntwrk/zswap@npm:^3.0.4":
   version: 3.0.4
   resolution: "@midnight-ntwrk/zswap@npm:3.0.4::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.4%2F77b7b6f33c227968c048740a228a36aea7833f17"
   checksum: 10c0/981ac6aa026c67afea62c227c1f4a27378eb2c036d9a9b453e69f259c836fb4b2a13f4b07ef2e5431a927c384d8a06a82618702e917834ef54c0c4054b72d00e
@@ -1218,6 +1231,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-prover-client@workspace:prover-client"
   dependencies:
+    "@midnight-ntwrk/zswap": "npm:^3.0.2"
     node-fetch: "npm:3.3.2"
     typescript: "npm:^4.8.3"
   languageName: unknown
@@ -2022,6 +2036,15 @@ __metadata:
   dependencies:
     undici-types: "npm:~5.26.4"
   checksum: 10c0/a54009cd222f5751c903e5f4889a0f12e3d3755a1f87ce919455eeaf00a9ba0c9215c4a92bc3d8df585a894fa3e4cf218e5afccced355688624133e1a4b88235
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^20.14.8":
+  version: 20.17.6
+  resolution: "@types/node@npm:20.17.6"
+  dependencies:
+    undici-types: "npm:~6.19.2"
+  checksum: 10c0/5918c7ff8368bbe6d06d5e739c8ae41a9db41628f28760c60cda797be7d233406f07c4d0e6fdd960a0a342ec4173c2217eb6624e06bece21c1f1dd1b92805c15
   languageName: node
   linkType: hard
 
@@ -7881,7 +7904,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rxjs@npm:^7.4.0, rxjs@npm:^7.5":
+"rxjs@npm:^7.4.0, rxjs@npm:^7.5, rxjs@npm:^7.5.5":
   version: 7.8.1
   resolution: "rxjs@npm:7.8.1"
   dependencies:
@@ -8538,7 +8561,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"testcontainers@npm:^10.2.1":
+"testcontainers@npm:^10.14.0, testcontainers@npm:^10.2.1":
   version: 10.14.0
   resolution: "testcontainers@npm:10.14.0"
   dependencies:
@@ -8974,7 +8997,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"undici-types@npm:~6.19.8":
+"undici-types@npm:~6.19.2, undici-types@npm:~6.19.8":
   version: 6.19.8
   resolution: "undici-types@npm:6.19.8"
   checksum: 10c0/078afa5990fba110f6824823ace86073b4638f1d5112ee26e790155f481f2a868cc3e0615505b6f4282bdf74a3d8caad715fd809e870c2bb0704e3ea6082f344

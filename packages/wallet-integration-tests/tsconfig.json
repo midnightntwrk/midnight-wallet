@@ -1,0 +1,13 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "ESNext",
+    "outDir": "dist"
+  },
+  "ts-node": {
+    "esm": true
+  },
+  "files": ["src/tests.ts"]
+}

@@ -3,6 +3,10 @@ package io.iohk.midnight.wallet.engine.config
 import cats.Show
 import io.iohk.midnight.wallet.core.Config.InitialState
 
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+
+@JSExportAll
+@JSExportTopLevel("RawConfig")
 final case class RawConfig(
     indexerUri: String,
     indexerWsUri: String,

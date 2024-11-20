@@ -3,13 +3,24 @@ package io.iohk.midnight.wallet.core
 import cats.Show
 import cats.kernel.Eq
 import cats.syntax.all.*
+import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
+import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion.V1
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.capabilities.*
 import io.iohk.midnight.wallet.core.domain.*
+import io.iohk.midnight.wallet.core.instances.{
+  DefaultSyncCapability,
+  DefaultTxHistoryCapability,
+  DiscardTxHistoryCapability,
+}
 import io.iohk.midnight.wallet.zswap
 
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+
+@JSExportTopLevel("CoreWalletInstance")
+@JSExportAll
 final case class Wallet[LocalState, Transaction](
     state: LocalState,
     txHistory: Vector[Transaction],
@@ -18,7 +29,58 @@ final case class Wallet[LocalState, Transaction](
     protocolVersion: ProtocolVersion,
     networkId: zswap.NetworkId,
     isConnected: Boolean,
-)
+) {
+  def applyTransaction[
+      Offer,
+      ProofErasedOffer,
+      MerkleTreeCollapsedUpdate,
+      TX: zswap.Transaction.Transaction[*, Offer],
+  ](
+      transaction: AppliedTransaction[TX],
+  )(using
+      evolveState: zswap.LocalState.EvolveState[
+        LocalState,
+        Offer,
+        ProofErasedOffer,
+        MerkleTreeCollapsedUpdate,
+      ],
+  ): Wallet[LocalState, Transaction] = {
+    val tx = transaction.tx
+    val newState = transaction.applyStage match {
+      case ApplyStage.FailEntirely =>
+        val guaranteed = tx.guaranteedCoins.fold(state)(state.applyFailed)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
+      case ApplyStage.FailFallible =>
+        val guaranteed = tx.guaranteedCoins.fold(state)(state.apply)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
+      case ApplyStage.SucceedEntirely =>
+        val guaranteed = transaction.tx.guaranteedCoins.fold(state)(state.apply)
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
+    }
+
+    this.copy(state = newState)
+  }
+}
+
+@JSExportTopLevel("CoreWallet")
+@JSExportAll
+object Wallet {
+  def emptyV1(
+      localState: mod.LocalState,
+      networkId: zswap.NetworkId,
+  ): Wallet[mod.LocalState, mod.Offer] = {
+
+    new Wallet(
+      localState,
+      Vector.empty,
+      None,
+      ProgressUpdate.empty,
+      V1,
+      networkId,
+      false,
+    )
+  }
+}
 
 class WalletInstances[
     LocalState,
@@ -190,9 +252,7 @@ class WalletInstances[
           tx: Transaction,
       ): Either[WalletError, TWallet] =
         wallet
-          .copy(state =
-            applyTransaction(wallet.state, AppliedTransaction(tx, ApplyStage.FailEntirely)),
-          )
+          .applyTransaction(AppliedTransaction(tx, ApplyStage.FailEntirely))
           .asRight
 
       override def applyFailedUnprovenTransaction(
@@ -209,87 +269,10 @@ class WalletInstances[
     }
   }
 
-  given walletSync(using
-      walletTxHistory: WalletTxHistory[TWallet, Transaction],
-  ): WalletSync[TWallet, IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]] with
-    extension (wallet: TWallet) {
-      override def apply(
-          update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
-      ): Either[WalletError, TWallet] =
-        update match {
-          case ViewingUpdate(protocolVersion, offset, updates) =>
-            val newState =
-              updates.foldLeft(wallet.state) {
-                case (state, Left(mt)) => state.applyCollapsedUpdate(mt)
-                case (state, Right(AppliedTransaction(tx, stage))) =>
-                  applyTransaction(state, AppliedTransaction[Transaction](tx, stage))
-              }
-            val newTxs = updates.collect { case Right(tx) => tx }
-            wallet
-              .copy(
-                state = newState,
-                txHistory =
-                  walletTxHistory.updateTxHistory(wallet.txHistory, newTxs.map(_.tx)).toVector,
-                offset = Some(offset),
-                protocolVersion = protocolVersion,
-                isConnected = true,
-                progress = wallet.progress.copy(synced = Some(offset.decrement)),
-              )
-              .asRight
+  val walletTxHistory: WalletTxHistory[TWallet, Transaction] = new DefaultTxHistoryCapability()
 
-          case update: ProgressUpdate =>
-            wallet
-              .copy(
-                progress = wallet.progress.copy(total = update.total),
-                isConnected = true,
-              )
-              .asRight
-
-          case ConnectionLost =>
-            val progressUpdated = wallet.progress.copy(wallet.progress.synced, total = None)
-            wallet.copy(isConnected = false, progress = progressUpdated).asRight
-        }
-    }
-
-  private def applyTransaction[TX: zswap.Transaction.Transaction[*, Offer]](
-      state: LocalState,
-      transaction: AppliedTransaction[TX],
-  ): LocalState = {
-    val tx = transaction.tx
-    transaction.applyStage match {
-      case ApplyStage.FailEntirely =>
-        val guaranteed = tx.guaranteedCoins.fold(state)(state.applyFailed)
-        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
-      case ApplyStage.FailFallible =>
-        val guaranteed = tx.guaranteedCoins.fold(state)(state.apply)
-        tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
-      case ApplyStage.SucceedEntirely =>
-        val guaranteed = transaction.tx.guaranteedCoins.fold(state)(state.apply)
-        tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
-    }
-  }
-
-  val walletTxHistory = new WalletTxHistory[TWallet, Transaction] {
-    override def updateTxHistory(
-        currentTxs: Seq[Transaction],
-        newTxs: Seq[Transaction],
-    ): Seq[Transaction] = currentTxs ++ newTxs
-    extension (wallet: TWallet) {
-      override def transactionHistory: Seq[Transaction] = wallet.txHistory
-      override def progress: ProgressUpdate = wallet.progress
-    }
-  }
-
-  val walletDiscardTxHistory = new WalletTxHistory[TWallet, Transaction] {
-    override def updateTxHistory(
-        currentTxs: Seq[Transaction],
-        newTxs: Seq[Transaction],
-    ): Seq[Transaction] = Seq.empty
-    extension (wallet: TWallet) {
-      override def transactionHistory: Seq[Transaction] = wallet.txHistory
-      override def progress: ProgressUpdate = wallet.progress
-    }
-  }
+  val walletDiscardTxHistory: WalletTxHistory[TWallet, Transaction] =
+    new DiscardTxHistoryCapability()
 
   given serializeState: WalletStateSerialize[TWallet, SerializedWalletState] =
     import snapshotInstances.given
@@ -303,4 +286,9 @@ class WalletInstances[
           wallet.networkId,
         ).serialize,
       )
+
+  given walletSync(using
+      txHistory: WalletTxHistory[TWallet, Transaction],
+  ): WalletSync[TWallet, IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]] =
+    new DefaultSyncCapability
 }

@@ -125,6 +125,7 @@ lazy val walletCore = project
       "io.circe" %%% "circe-core" % circeVersion,
       "io.circe" %%% "circe-parser" % circeVersion,
       "io.circe" %%% "circe-generic" % circeVersion,
+      "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion, // sttp, etc. is not needed on its own, but it defines or pulls some of JVM classes needed to link TracerCarrier in JS
     ),
     commonScalablyTypedSettings,
     scalaJSLinkerConfig ~= { _.withSourceMap(false).withModuleKind(ModuleKind.ESModule) },
@@ -172,7 +173,16 @@ lazy val jsInterop = project
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "cats-effect" % catsEffectVersion,
+      "org.typelevel" %%% "cats-core" % catsVersion,
       "co.fs2" %%% "fs2-core" % fs2Version,
+      "io.iohk.midnight" %%% "tracing-core" % midnightTracingVersion,
+      "io.iohk.midnight" %%% "tracing-log" % midnightTracingVersion,
+      "org.typelevel" %%% "log4cats-core" % log4CatsVersion,
+      "io.circe" %%% "circe-core" % circeVersion,
+      "io.circe" %%% "circe-parser" % circeVersion,
+      "io.circe" %%% "circe-generic" % circeVersion,
+      "com.softwaremill.sttp.client3" %%% "cats" % sttpClientVersion,
+      "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion, // sttp, etc. is not needed on its own, but it defines or pulls some of JVM classes needed to link TracerCarrier in JS
     ),
   )
 
@@ -195,6 +205,7 @@ lazy val walletZswap =
         "org.typelevel" %%% "munit-cats-effect-3" % "1.0.7",
         "org.scalacheck" %%% "scalacheck" % "1.17.)",
         "org.typelevel" %%% "scalacheck-effect-munit" % "1.0.3",
+        "com.softwaremill.sttp.client3" %%% "circe" % sttpClientVersion, // sttp, etc. is not needed on its own, but it defines or pulls some of JVM classes needed to link TracerCarrier in JS
       ).map(_ % Test),
       Test / testOptions += Tests.Argument(TestFrameworks.MUnit, "-b"),
     )
