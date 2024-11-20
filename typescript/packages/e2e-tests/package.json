@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "pretest-e2e": "rimraf ./allure-results",
-    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node' DEBUG='testcontainers:containers' jest --group=${NETWORK} --detectOpenHandles",
+    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' DEBUG='testcontainers:containers' jest --group=${NETWORK} --detectOpenHandles",
     "lint": "eslint",
     "allure-generate": "allure generate ./allure-results --clean -o ./reports/allure-report",
     "allure-history": "shx mkdir -p reports/allure-results/history && shx cp reports/allure-report/history/* reports/allure-results/history",
@@ -19,7 +19,7 @@
     "@midnight-ntwrk/midnight-js-network-id": "0.2.5",
     "@midnight-ntwrk/wallet": "3.7.2",
     "@midnight-ntwrk/wallet-api": "3.5.0",
-    "@midnight-ntwrk/wallet_built": "link:../../../wallet-engine",
+    "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@workspace:*",
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.2",
     "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.6.3",
     "@midnight-ntwrk/zswap": "^3.0.4",

@@ -4,7 +4,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
-import * as KeyManagement from '../../../../node_modules/@cardano-sdk/key-management/dist/cjs';
+import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { MidnightNetwork, closeWallet, compareStates, waitForSync } from './utils';
 import { NetworkId } from '@midnight-ntwrk/zswap';

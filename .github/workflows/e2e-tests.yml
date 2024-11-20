@@ -147,16 +147,9 @@ jobs:
           password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
       - name: Build wallet and install dependencies
-        if: ${{ inputs.deployment == 'local' }}
         run: |
-          yarn install --immutable
-          yarn dlx turbo dist
-
-      - name: Install dependencies
-        if: ${{ inputs.deployment != 'local' }}
-        run: |
-          yarn workspace @midnight/wallet-e2e-tests remove @midnight-ntwrk/wallet_built
           yarn install
+          yarn turbo dist
 
       - name: Run e2e tests
         env:
@@ -169,7 +162,7 @@ jobs:
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
         run: |
-          yarn dlx turbo test-e2e -- ${{ inputs.modifier }}
+          yarn turbo test-e2e -- ${{ inputs.modifier }}
 
       - name: Upload sync cache
         uses: actions/upload-artifact@v4
