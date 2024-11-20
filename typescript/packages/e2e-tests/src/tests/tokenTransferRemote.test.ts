@@ -378,7 +378,8 @@ describe('Token transfer', () => {
       const syncedState = await waitForSync(sender);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      // the max amount that we support: Rust u64 max. The entire Midnight supply is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
+      // the max amount that we support: Rust u64 max. The entire Midnight supply
+      // is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
       const invalidAmount = 18446744073709551616n;
       const initialState2 = await firstValueFrom(receiver.state());
 

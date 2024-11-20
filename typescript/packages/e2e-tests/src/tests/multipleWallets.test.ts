@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
@@ -25,7 +22,6 @@ describe('Syncing', () => {
     '0000000000000000000000000000000000000000000000000000000000000040',
   ];
 
-  // eslint-disable-next-line @typescript-eslint/array-type
   const wallets: Array<Wallet & Resource> = [];
   let fixture: TestContainersFixture;
 

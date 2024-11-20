@@ -4,27 +4,46 @@
   "tasks": {
     "lint": {
       "inputs": [
-        "**/src/**.*.ts",
-        ".eslintrc.cjs",
-        ".prettierrc.json"
+        "**/src/**/*.ts",
+        "eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": ["dist"]
     },
     "test": {
-      "inputs": ["**/src/**.*.ts"],
+      "inputs": [
+        "**/test/**/*.ts",
+        "**/src/**/*.ts",
+        "tsconfig*.json"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "//#sbt:verify"]
+      "dependsOn": ["dist"]
+    },
+    "typecheck": {
+      "inputs": [
+        "**/test/**/*.ts",
+        "**/src/**/*.ts",
+        "tsconfig*.json"
+      ],
+      "outputLogs": "new-only",
+      "dependsOn": ["dist"]
     },
     "test-e2e": {
       "cache": false,
       "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
     },
     "dist": {
-      "dependsOn": ["//#sbt:dist"]
+      "inputs": [
+        "**/src/**/*.ts",
+        "tsconfig*.json"
+      ],
+      "outputs": [
+        "dist/**"
+      ],
+      "dependsOn": ["^dist", "//#sbt:dist"]
     },
     "verify": {
-      "dependsOn": ["//#sbt:verify", "lint", "test"]
+      "dependsOn": ["//#sbt:verify", "typecheck", "lint", "test"]
     },
     "//#sbt:dist": {
       "inputs": [

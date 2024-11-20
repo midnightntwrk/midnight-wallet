@@ -104,7 +104,7 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(sender.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(initialState.balances);
-      Object.entries(initialState.balances).forEach(([key, value]) => {
+      Object.entries(initialState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
@@ -185,7 +185,7 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(sender.state());
       const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      Object.entries(initialState.balances).forEach(([key, value]) => {
+      Object.entries(initialState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
@@ -240,7 +240,7 @@ describe('Token transfer', () => {
       allure.story('Transaction not proved');
       const syncedState = await waitForSync(sender);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      Object.entries(syncedState.balances).forEach(([key, value]) => {
+      Object.entries(syncedState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {

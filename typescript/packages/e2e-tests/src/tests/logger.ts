@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/naming-convention */
 import pinoPretty from 'pino-pretty';
 import pino, { Logger } from 'pino';
 import fs, { createWriteStream } from 'node:fs';
@@ -18,7 +17,7 @@ export const createLogger = (): pino.Logger => {
     colorize: true,
     sync: true,
   });
-  const level = 'info' as const;
+  const level = 'info';
   return pino(
     {
       level,

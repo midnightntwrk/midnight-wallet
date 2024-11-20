@@ -1,8 +1,7 @@
-/* eslint-disable @typescript-eslint/no-non-null-assertion */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/strict-boolean-expressions */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
@@ -241,16 +240,16 @@ export const waitForTxInHistory = async (txId: string, wallet: Wallet) => {
 };
 
 export const walletStateTrimmed = (state: WalletState) => {
-  const { transactionHistory, coins, availableCoins, ...rest } = state;
+  const { transactionHistory, coins, availableCoins, ...rest } = state; // eslint-disable-line @typescript-eslint/no-unused-vars
   return rest;
 };
 
 export function normalizeWalletState(state: WalletState) {
   const normalized = state.transactionHistory.map((txHistoryEntry: TransactionHistoryEntry) => {
-    const { transaction, ...otherProps } = txHistoryEntry;
+    const { transaction, ...otherProps } = txHistoryEntry; // eslint-disable-line @typescript-eslint/no-unused-vars
     return otherProps;
   });
-  const { transactionHistory, syncProgress, ...otherProps } = state;
+  const { transactionHistory, syncProgress, ...otherProps } = state; // eslint-disable-line @typescript-eslint/no-unused-vars
   return { ...otherProps, normalized };
 }
 
@@ -260,7 +259,7 @@ export function compareStates(state1: WalletState, state2: WalletState) {
   expect(normalized2).toStrictEqual(normalized1);
 }
 
-export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length;
+export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export type MidnightNetwork = 'undeployed' | 'devnet' | 'testnet';
 

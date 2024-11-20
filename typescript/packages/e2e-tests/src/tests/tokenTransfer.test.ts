@@ -373,7 +373,8 @@ describe('Token transfer', () => {
       const syncedState = await waitForSync(walletFunded);
       const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      // the max amount that we support: Rust u128 max. The entire Midnight supply is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
+      // the max amount that we support: Rust u128 max. The entire Midnight supply
+      // is 24 billion tDUST, 1 tDUST = 10^6 specks, which is lesser
       const invalidAmount = 340_282_366_920_938_463_463_374_607_431_768_211_456n;
       const initialState2 = await firstValueFrom(wallet2.state());
 
@@ -476,7 +477,7 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(initialState.balances);
-      Object.entries(initialState.balances).forEach(([key, value]) => {
+      Object.entries(initialState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
@@ -560,7 +561,7 @@ describe('Token transfer', () => {
       const initialState = await firstValueFrom(walletFunded.state());
       const syncedState = await waitForSync(walletFunded);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      Object.entries(initialState.balances).forEach(([key, value]) => {
+      Object.entries(initialState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
@@ -616,7 +617,7 @@ describe('Token transfer', () => {
       allure.story('Transaction not proved');
       const syncedState = await waitForSync(walletFunded);
       const initialDustBalance = syncedState?.balances[nativeToken()] ?? 0n;
-      Object.entries(syncedState.balances).forEach(([key, value]) => {
+      Object.entries(syncedState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {

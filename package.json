@@ -14,10 +14,31 @@
     "wallet-zswap"
   ],
   "dependencies": {
+    "@eslint/js": "^9.14.0",
+    "@rollup/plugin-commonjs": "^28.0.1",
+    "@rollup/plugin-node-resolve": "^15.3.0",
+    "@rollup/plugin-typescript": "^12.1.1",
+    "@tsconfig/node20": "^20.1.4",
+    "@types/jest": "^29.5.14",
+    "eslint": "^9.14.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.2.1",
     "extensionless": "^1.9.9",
-    "turbo": "^2.2.3"
+    "jest": "^29.7.0",
+    "prettier": "^3.3.3",
+    "rollup": "^4.26.0",
+    "ts-jest": "^29.2.5",
+    "tslib": "^2.8.1",
+    "turbo": "^2.2.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.14.0"
   },
   "scripts": {
+    "verify": "turbo run verify",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "dist": "turbo run dist",
     "sbt:verify": "sbt verify",
     "sbt:dist": "sbt dist"
   }

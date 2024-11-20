@@ -43,7 +43,7 @@ jobs:
         run: |
           yarn install
           sbt clean
-          yarn dlx turbo verify
+          yarn verify
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v1

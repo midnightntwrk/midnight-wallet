@@ -1,8 +1,4 @@
-/* eslint-disable @typescript-eslint/restrict-template-expressions */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { exit } from 'process';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
@@ -55,12 +51,14 @@ export function useTestContainersFixture() {
     logger.info('Test environment torn down');
   }, 60_000);
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return () => fixture!;
 }
 
 export class TestContainersFixture {
-  constructor(public readonly composeEnvironment: StartedDockerComposeEnvironment, private readonly uid: string) {}
+  constructor(
+    public readonly composeEnvironment: StartedDockerComposeEnvironment,
+    private readonly uid: string,
+  ) {}
 
   public async down() {
     await this.composeEnvironment.down();
