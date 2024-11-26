@@ -22,17 +22,17 @@ import { exit } from 'node:process';
  */
 
 describe('Token transfer', () => {
-  if (process.env.SEED === undefined) {
+  if (process.env['SEED'] === undefined) {
     logger.info('SEED env var not set');
     exit(1);
   }
-  if (process.env.SEED_STABLE === undefined) {
+  if (process.env['SEED_STABLE'] === undefined) {
     logger.info('SEED_STABLE env var not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
-  const seedFunded = process.env.SEED;
-  const seedStable = process.env.SEED_STABLE;
+  const seedFunded = process.env['SEED'];
+  const seedStable = process.env['SEED_STABLE'];
   const timeout = 3_600_000;
   const outputValue = 100_000_000n;
   const nativeTokenValue = 25n;
@@ -78,11 +78,11 @@ describe('Token transfer', () => {
   test(
     'Is working for distribution to the test wallets',
     async () => {
-      if (process.env.ADDRESSES === undefined) {
+      if (process.env['ADDRESSES'] === undefined) {
         logger.info('ADDRESSES env var not set');
         exit(1);
       }
-      const addresses = process.env.ADDRESSES.split(',');
+      const addresses = process.env['ADDRESSES'].split(',');
 
       await waitForSync(walletFunded);
 

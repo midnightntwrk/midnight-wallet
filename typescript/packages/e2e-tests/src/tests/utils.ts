@@ -32,7 +32,8 @@ export const waitForSyncProgress = async (wallet: Wallet) =>
 
 export const isAnotherChain = async (wallet: Wallet, offset: number) => {
   const state = await waitForSyncProgress(wallet);
-  return state.syncProgress!.total < offset;
+  // allow for situations when there's no new index in the network between runs
+  return state.syncProgress!.total < offset - 1;
 };
 
 export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
@@ -51,7 +52,7 @@ export const provideWallet = async (
   fixture: TestContainersFixture,
 ): Promise<Wallet & Resource> => {
   let wallet: Wallet & Resource;
-  const directoryPath = process.env.SYNC_CACHE;
+  const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
     exit(1);
@@ -85,11 +86,12 @@ export const provideWallet = async (
         );
       } else {
         const newState = await waitForSync(wallet);
-        if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset) {
+        // allow for situations when there's no new index in the network between runs
+        if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset - 1) {
           logger.info('Wallet was able to sync from restored state');
         } else {
-          logger.info(stateObject.offset);
-          logger.info(newState.syncProgress?.total);
+          logger.info(`Offset: ${stateObject.offset}`);
+          logger.info(`SyncProgress.total: ${newState.syncProgress?.total}`);
           logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
           wallet = await WalletBuilder.buildFromSeed(
             fixture.getIndexerUri(),
@@ -135,7 +137,7 @@ export const provideWallet = async (
 };
 
 export const saveState = async (wallet: Wallet, filename: string) => {
-  const directoryPath = process.env.SYNC_CACHE;
+  const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
     exit(1);

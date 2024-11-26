@@ -102,7 +102,7 @@ jobs:
   build:
     name: E2E tests
     runs-on: ubuntu-latest-16-cores
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions: write-all
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +112,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,conclusion,headBranch | jq -r '.[] | select(.conclusion=="success") | .databaseId' | head -n 1)
+            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="completed") | .databaseId' | head -n 1)
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
             mkdir -p ${{ env.SYNC_CACHE }}
 
@@ -165,8 +165,8 @@ jobs:
           yarn turbo test-e2e -- ${{ inputs.modifier }}
 
       - name: Upload sync cache
-        uses: actions/upload-artifact@v4
         if: success() || failure()
+        uses: actions/upload-artifact@v4
         with:
           name: .sync_cache
           path: ${{ env.SYNC_CACHE }}

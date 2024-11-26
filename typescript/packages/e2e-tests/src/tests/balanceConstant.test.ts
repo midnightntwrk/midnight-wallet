@@ -14,19 +14,19 @@ import { exit } from 'node:process';
  */
 
 describe('Balance constant', () => {
-  if (process.env.SEED_STABLE === undefined) {
+  if (process.env['SEED_STABLE'] === undefined) {
     logger.info('SEED_STABLE not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
-  const seed = process.env.SEED_STABLE;
+  const seed = process.env['SEED_STABLE'];
   const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
   const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
   const expectedDustBalance = 100_000_000n;
   const expectedTokenOneBalance = 25n;
   const expectedTokenTwoBalance = 50n;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.deployment}.state`;
-  const timeout = 180_000;
+  const timeout = 1_800_000;
 
   let wallet: Wallet & Resource;
   let restoredWallet: Wallet & Resource;

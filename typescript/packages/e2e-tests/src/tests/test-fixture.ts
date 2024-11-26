@@ -9,10 +9,10 @@ export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
 
   beforeEach(async () => {
-    logger.info(`Spinning up ${process.env.NETWORK} test environment...`);
+    logger.info(`Spinning up ${process.env['NETWORK']} test environment...`);
     const uid = Math.floor(Math.random() * 1000).toString();
     let composeEnvironment: StartedDockerComposeEnvironment;
-    switch (process.env.NETWORK as MidnightNetwork) {
+    switch (process.env['NETWORK'] as MidnightNetwork) {
       case 'undeployed': {
         composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
@@ -37,7 +37,7 @@ export function useTestContainersFixture() {
         break;
       }
       default: {
-        logger.warn(`Unrecognized network: ${process.env.NETWORK}`);
+        logger.warn(`Unrecognized network: ${process.env['NETWORK']}`);
         exit(1);
       }
     }
@@ -67,8 +67,8 @@ export class TestContainersFixture {
   public static readonly PROOF_SERVER_PORT = 6300;
   public static readonly NODE_PORT_RPC = 9944;
   public static readonly INDEXER_PORT = 8088;
-  static readonly network = process.env.NETWORK as MidnightNetwork;
-  static readonly deployment = process.env.DEPLOYMENT as MidnightDeployment;
+  static readonly network = process.env['NETWORK'] as MidnightNetwork;
+  static readonly deployment = process.env['DEPLOYMENT'] as MidnightDeployment;
 
   public getProofServerContainer(): StartedGenericContainer {
     return this.composeEnvironment.getContainer(`proof-server_${this.uid}`);

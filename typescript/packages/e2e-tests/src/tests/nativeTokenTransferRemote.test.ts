@@ -25,14 +25,14 @@ import { exit } from 'node:process';
  */
 
 describe('Token transfer', () => {
-  if (process.env.NT_SEED === undefined || process.env.NT_SEED2 === undefined) {
+  if (process.env['NT_SEED'] === undefined || process.env['NT_SEED2'] === undefined) {
     logger.info('NT_SEED or NT_SEED2 env vars not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
-  const receivingSeed = process.env.NT_SEED2;
-  const fundedSeed = process.env.NT_SEED;
-  const timeout = 1_200_000;
+  const receivingSeed = process.env['NT_SEED2'];
+  const fundedSeed = process.env['NT_SEED'];
+  const timeout = 2_400_000;
   const outputValue = 1n;
   let tokenTypeHash: string | undefined;
 

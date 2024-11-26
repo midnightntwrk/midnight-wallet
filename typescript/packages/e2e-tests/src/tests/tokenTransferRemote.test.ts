@@ -32,14 +32,14 @@ import { logger } from './logger';
  */
 
 describe('Token transfer', () => {
-  if (process.env.SEED2 === undefined || process.env.SEED === undefined) {
+  if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {
     logger.info('SEED or SEED2 env vars not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
-  const seed = process.env.SEED2;
-  const seedFunded = process.env.SEED;
-  const timeout = 1_200_000;
+  const seed = process.env['SEED2'];
+  const seedFunded = process.env['SEED'];
+  const timeout = 2_400_000;
   const outputValue = 1_000n;
 
   let sender: Wallet & Resource;

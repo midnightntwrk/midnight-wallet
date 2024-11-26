@@ -86,7 +86,7 @@ describe('Midnight wallet', () => {
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const timeout = (process.env.NETWORK as MidnightNetwork) === 'devnet' ? 240_000 : 120_000;
+  const timeout = (process.env['NETWORK'] as MidnightNetwork) === 'devnet' ? 240_000 : 120_000;
 
   let wallet: Wallet & Resource;
 
