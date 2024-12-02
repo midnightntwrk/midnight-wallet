@@ -4,6 +4,8 @@ import scala.scalajs.js
 import scala.scalajs.js.annotation.*
 
 /** Contains global initialization code that should always be run.
+  *
+  * TODO: Remove when node.js 18.x is not supported anymore (under a new major version)
   */
 @JSExportTopLevel("InitNodeFetch")
 object Init {
@@ -17,9 +19,13 @@ object Init {
     * See https://nodejs.org/api/globals.html#globals_global for the set fields and
     * https://sttp.softwaremill.com/en/latest/backends/javascript/fetch.html#esmodule for a
     * description of the approach.
+    * https://github.com/node-fetch/node-fetch?tab=readme-ov-file#providing-global-access
     */
   val g = scalajs.js.Dynamic.global.globalThis
-  g.fetch = nodeFetch.default
-  g.Headers = nodeFetch.Headers
-  g.Request = nodeFetch.Request
+
+  if (js.isUndefined(g.fetch)) {
+    g.fetch = nodeFetch.default
+    g.Headers = nodeFetch.Headers
+    g.Request = nodeFetch.Request
+  }
 }
