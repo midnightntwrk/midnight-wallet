@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Wallet
         run: |
-          yarn dlx turbo dist
+          yarn dist
 
       - name: Publish Wallet
         run: |
