@@ -1033,7 +1033,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet-api@npm:3.5.0, @midnight-ntwrk/wallet-api@npm:^3.4.2, @midnight-ntwrk/wallet-api@npm:^3.5.0":
+"@midnight-ntwrk/wallet-api@npm:3.5.0, @midnight-ntwrk/wallet-api@npm:^3.5.0":
   version: 3.5.0
   resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
   dependencies:
@@ -1097,22 +1097,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet@npm:3.7.2, @midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.2":
-  version: 3.7.2
-  resolution: "@midnight-ntwrk/wallet@npm:3.7.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.2%2F14584b29f976bb2e669de35bc993f711ceb3e6f2"
-  dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
-    isomorphic-ws: "npm:^5.0.0"
-    node-fetch: "npm:3.3.2"
-    rxjs: "npm:^7.5"
-    scale-ts: "npm:^1.1.0"
-    ws: "npm:^8.8.1"
-  checksum: 10c0/fdad21e9b152d77574c0d4029ad8adc7d09e147a65a725720620fa93e4a92d8f26f4d40a2137480af0eb67e9ee371ab38aa96f68e9053b863e17766eddd9ea4a
-  languageName: node
-  linkType: hard
-
-"@midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine, @midnight-ntwrk/wallet_built@npm:@midnight-ntwrk/wallet@workspace:*":
+"@midnight-ntwrk/wallet@npm:3.7.3, @midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine, @midnight-ntwrk/wallet_built@npm:@midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.3":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet@workspace:wallet-engine"
   dependencies:
@@ -1132,18 +1117,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.6.3":
-  version: 3.6.3
-  resolution: "@midnight-ntwrk/wallet@npm:3.6.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.6.3%2F32d17f8623608fac4442ad3a0030f56774a90842"
+"@midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.2":
+  version: 3.7.2
+  resolution: "@midnight-ntwrk/wallet@npm:3.7.2::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.2%2F14584b29f976bb2e669de35bc993f711ceb3e6f2"
   dependencies:
-    "@midnight-ntwrk/wallet-api": "npm:^3.4.2"
+    "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
     "@midnight-ntwrk/zswap": "npm:^3.0.2"
     isomorphic-ws: "npm:^5.0.0"
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
     scale-ts: "npm:^1.1.0"
     ws: "npm:^8.8.1"
-  checksum: 10c0/f492ced0e43e741d8695d4d5a7fe57f20d27ce7449b7bd661d327e47ac650d64b3ba118f74f7aac3cf9e65834dd21db1c5cc4f12ac6fc77b353295db188a68ff
+  checksum: 10c0/fdad21e9b152d77574c0d4029ad8adc7d09e147a65a725720620fa93e4a92d8f26f4d40a2137480af0eb67e9ee371ab38aa96f68e9053b863e17766eddd9ea4a
   languageName: node
   linkType: hard
 
@@ -1176,11 +1161,11 @@ __metadata:
   dependencies:
     "@cardano-sdk/key-management": "npm:0.24.8"
     "@midnight-ntwrk/midnight-js-network-id": "npm:0.2.5"
-    "@midnight-ntwrk/wallet": "npm:3.7.2"
+    "@midnight-ntwrk/wallet": "npm:3.7.3"
     "@midnight-ntwrk/wallet-api": "npm:3.5.0"
     "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@workspace:*"
-    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.2"
-    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.6.3"
+    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.3"
+    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.2"
     "@midnight-ntwrk/zswap": "npm:^3.0.4"
     "@types/jest": "npm:^29.2.0"
     "@types/node": "npm:^18.11.3"
