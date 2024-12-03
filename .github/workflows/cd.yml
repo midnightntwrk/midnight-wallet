@@ -28,6 +28,10 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
 
+      - name: Install dependencies
+        run: |
+          yarn
+
       - name: Build Wallet
         run: |
           yarn dlx turbo dist
