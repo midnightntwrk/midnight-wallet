@@ -1,14 +1,14 @@
-name: E2E tests - local - nodejs
+name: E2E tests - local - bun
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: '45 8 * * *'
+    - cron: '45 9 * * *'
 
 env:
   MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  BUN_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: 'undeployed'
@@ -20,9 +20,6 @@ jobs:
     runs-on: ubuntu-latest-16-cores
     timeout-minutes: 60
     permissions: write-all
-    strategy:
-      matrix:
-        version: [18, 20, 22]
     steps:
       - uses: actions/checkout@v4
 
@@ -32,11 +29,11 @@ jobs:
           java-version-file: '.tool-versions'
           cache: 'sbt'
 
-      - uses: actions/setup-node@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ matrix.version }}
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
+          bun-version: latest
+          registry-url: "https://npm.pkg.github.com/"
+          scope: "@midnight-ntwrk"
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
@@ -47,12 +44,12 @@ jobs:
 
       - name: Build wallet and install dependencies
         run: |
-          yarn install
-          yarn turbo dist
+          bun install
+          bun turbo dist
 
       - name: Run e2e tests
         run: |
-          yarn turbo test-e2e
+          bun turbo test-e2e
 
       - name: Create allure properties
         if: success() || failure()
@@ -61,7 +58,7 @@ jobs:
           echo "
           env=${{ env.NETWORK }}
           deployment=${{ env.DEPLOYMENT }}
-          runtime=nodejs-${{ matrix.version }}
+          runtime=bun-latest
           platform=Linux
           " > environment.properties
 
@@ -85,7 +82,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: success() || failure()
         with:
-          name: test-reports-nodejs-${{ matrix.version }}
+          name: test-reports
           path: |
             ./typescript/packages/e2e-tests/reports/allure-report
           retention-days: 30
@@ -94,7 +91,7 @@ jobs:
         uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
-          name: Wallet TS packages Jest Tests Report - nodejs-${{ matrix.version }}
+          name: Wallet TS packages Jest Tests Report
           reporter: jest-junit
           path: |
             ./typescript/packages/e2e-tests/reports/report.xml
