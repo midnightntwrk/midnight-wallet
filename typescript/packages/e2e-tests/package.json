@@ -7,7 +7,7 @@
   "type": "module",
   "scripts": {
     "pretest-e2e": "rimraf ./allure-results",
-    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' jest --group=${NETWORK} --detectOpenHandles",
+    "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' jest --group=${NETWORK} --force-exit",
     "lint": "eslint",
     "allure-generate": "allure generate ./allure-results --clean -o ./reports/allure-report",
     "allure-history": "shx mkdir -p reports/allure-results/history && shx cp reports/allure-report/history/* reports/allure-results/history",
