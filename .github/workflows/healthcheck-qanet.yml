@@ -2,8 +2,8 @@ name: Healthcheck - qanet
 
 on:
   workflow_dispatch:
-  # schedule:
-  #   - cron: '0 * * * *'
+  schedule:
+    - cron: '0 */2 * * *'
 
 jobs:
   test:
