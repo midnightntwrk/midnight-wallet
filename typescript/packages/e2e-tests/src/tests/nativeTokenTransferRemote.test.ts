@@ -32,7 +32,8 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const receivingSeed = process.env['NT_SEED2'];
   const fundedSeed = process.env['NT_SEED'];
-  const timeout = 2_400_000;
+  const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
+  const timeout = 600_000;
   const outputValue = 1n;
   let tokenTypeHash: string | undefined;
 
@@ -81,7 +82,7 @@ describe('Token transfer', () => {
     // wait before starting another wallet to evade issues with syncing
     await new Promise((resolve) => setTimeout(resolve, 5_000));
     receiver.start();
-  }, timeout);
+  }, syncTimeout);
 
   afterEach(async () => {
     await saveState(wallet, filenameWallet);
