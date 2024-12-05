@@ -9,6 +9,7 @@ env:
   MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
   BUN_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: 'undeployed'
@@ -29,6 +30,12 @@ jobs:
           java-version-file: '.tool-versions'
           cache: 'sbt'
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.tool-versions'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -44,7 +51,10 @@ jobs:
 
       - name: Build wallet and install dependencies
         run: |
-          bun install
+          yarn
+          rm yarn.lock
+          ./update_package_manager.sh
+          bun install --yarn
           bun turbo dist
 
       - name: Run e2e tests
@@ -76,7 +86,7 @@ jobs:
         if: success() || failure()
         working-directory: ./typescript/packages/e2e-tests
         run: |
-          yarn allure-generate
+          bun allure-generate
 
       - name: Publish artifacts (test reports)
         uses: actions/upload-artifact@v4
