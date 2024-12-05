@@ -26,7 +26,7 @@ describe('Balance constant', () => {
   const expectedTokenOneBalance = 25n;
   const expectedTokenTwoBalance = 50n;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.deployment}.state`;
-  const timeout = 1_800_000;
+  const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
 
   let wallet: Wallet & Resource;
   let restoredWallet: Wallet & Resource;
@@ -57,17 +57,17 @@ describe('Balance constant', () => {
     );
 
     restoredWallet = await provideWallet(filename, seed, networkId, fixture);
-  }, timeout);
+  }, syncTimeout);
 
   afterEach(async () => {
     await closeWallet(wallet);
-  }, timeout);
+  }, syncTimeout);
 
   afterAll(async () => {
     await saveState(restoredWallet, filename);
     await closeWallet(restoredWallet);
     await closeWallet(wallet);
-  }, timeout);
+  }, syncTimeout);
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',
@@ -88,7 +88,7 @@ describe('Balance constant', () => {
       expect(syncedState.coins.length).toBe(3);
       expect(syncedState.transactionHistory.length).toBe(2);
     },
-    timeout,
+    syncTimeout,
   );
 
   test(
@@ -110,6 +110,6 @@ describe('Balance constant', () => {
       expect(syncedState.coins.length).toBe(3);
       expect(syncedState.transactionHistory.length).toBe(2);
     },
-    timeout,
+    syncTimeout,
   );
 });

@@ -164,7 +164,7 @@ describe('Token transfer', () => {
       expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
       logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
     },
-    timeout,
+    syncTimeout,
   );
 
   test(

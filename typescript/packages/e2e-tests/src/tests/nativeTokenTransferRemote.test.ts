@@ -173,7 +173,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]} tDUST`);
       logger.info(`Wallet 2: ${finalState2.balances[tokenTypeHash]} ${tokenTypeHash}`);
     },
-    timeout,
+    syncTimeout,
   );
 
   test(
