@@ -112,7 +112,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
         run: |
-            LATEST_RUN_ID=$(gh run list --workflow="Healthcheck - ${{ inputs.deployment }}" --json databaseId,status,headBranch | jq -r '.[] | select(.status=="completed") | .databaseId' | head -n 1)
+            LATEST_RUN_ID=$(./.github/scripts/find_run_id.sh ${{ github.repository }} "Healthcheck - ${{ inputs.deployment }}" ".sync_cache")
             echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
             mkdir -p ${{ env.SYNC_CACHE }}
 
