@@ -61,6 +61,7 @@ describe('Balance constant', () => {
 
   afterEach(async () => {
     await closeWallet(wallet);
+    await closeWallet(restoredWallet);
   }, syncTimeout);
 
   afterAll(async () => {
