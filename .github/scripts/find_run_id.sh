@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # Usage: ./script.sh <owner/repo> <workflow_name> <artifact_name>
-
-REPO="input-output-hk/midnight-wallet"
-WORKFLOW_NAME="Healthcheck - qanet"
-ARTIFACT_NAME=".sync_cache"
+REPO="$1"
+WORKFLOW_NAME="$2"
+ARTIFACT_NAME="$3"
 
 # Check if all arguments are provided
 if [[ -z "$REPO" || -z "$WORKFLOW_NAME" || -z "$ARTIFACT_NAME" ]]; then
