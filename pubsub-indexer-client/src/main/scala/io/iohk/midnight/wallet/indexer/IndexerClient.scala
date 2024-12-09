@@ -21,6 +21,7 @@ import io.iohk.midnight.wallet.indexer.tracing.IndexerClientTracer
 import io.laminext.websocket.WebSocket
 import sttp.model.Uri
 
+import java.util.UUID
 import scala.concurrent.TimeoutException
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
@@ -43,10 +44,13 @@ class IndexerClient(
   private def viewingUpdatesWithRetry(
       viewingKey: String,
       indexRef: Ref[IO, Option[BigInt]],
-  ): Stream[IO, IndexerEvent] =
+  ): Stream[IO, IndexerEvent] = {
+    @SuppressWarnings(Array("org.wartremover.warts.ToString"))
+    val requestId = UUID.randomUUID().toString
+
     Stream.resource(webSocketResource(indexerUri)).flatMap { ws =>
       Stream
-        .bracket(connect(viewingKey, ws))(disconnect(_, ws))
+        .bracket(connect(viewingKey, requestId, ws))(disconnect(_, requestId, ws))
         .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _)))
         .flatMap(GraphQLSubscriber.subscribe(ws, _))
         .evalTap {
@@ -55,6 +59,7 @@ class IndexerClient(
         }
         .handleErrorWith(retryOnConnectionError(viewingKey, indexRef))
     }
+  }
 
   private def webSocketResource(indexerUri: Uri): Resource[IO, GraphQLWebSocket] =
     Resource.make(connectWebSocket(indexerUri))(ws => Sync[IO].delay(ws.disconnectNow()))
@@ -119,38 +124,42 @@ class IndexerClient(
 
   private def connect(
       viewingKey: String,
+      requestId: String,
       ws: WebSocket[GraphQLWSResponse, GraphQLWSRequest],
   ): IO[SessionId] =
     Async[IO].defer {
       val selection = Mutation.connect(viewingKey)
-      val request = GraphQLWSRequest("start", None, selection.toGraphQL().some)
-      Sync[IO].delay(ws.sendOne(request)) >> waitForSessionId(ws)
+      val request = GraphQLWSRequest("start", Some(requestId), selection.toGraphQL().some)
+      Sync[IO].delay(ws.sendOne(request)) >> waitForSessionId(ws, requestId)
     }
 
-  private def waitForSessionId(ws: WebSocket[GraphQLWSResponse, GraphQLWSRequest]): IO[String] =
+  private def waitForSessionId(
+      ws: WebSocket[GraphQLWSResponse, GraphQLWSRequest],
+      requestId: String,
+  ): IO[String] =
     ws.received.toStream
-      .collectFirst(matchSessionId)
+      .collectFirst(matchSessionId(requestId))
       .timeout(5.seconds)
       .compile
       .lastOrError
 
-  private val matchSessionId: PartialFunction[GraphQLWSResponse, String] = {
+  private def matchSessionId(requestId: String): PartialFunction[GraphQLWSResponse, String] = {
     case GraphQLWSResponse(
           _,
-          _,
+          reqIdOpt,
           Some(
             __ObjectValue(
               List(("data", __ObjectValue(List(("connect", __StringValue(sessionId)))))),
             ),
           ),
-        ) =>
+        ) if reqIdOpt.contains(requestId) =>
       sessionId
   }
 
-  private def disconnect(sessionId: SessionId, ws: GraphQLWebSocket): IO[Unit] =
+  private def disconnect(sessionId: SessionId, requestId: String, ws: GraphQLWebSocket): IO[Unit] =
     Async[IO].defer {
       val selection = Mutation.disconnect(sessionId)
-      val request = GraphQLWSRequest("start", None, selection.toGraphQL().some)
+      val request = GraphQLWSRequest("start", Some(requestId), selection.toGraphQL().some)
       Sync[IO].delay(ws.sendOne(request))
     }
 }
