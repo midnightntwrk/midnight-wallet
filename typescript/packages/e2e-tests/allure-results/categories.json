@@ -1,0 +1,12 @@
+[
+    {
+      "name": "Infrastructure problems",
+      "messageRegex": ".*java.lang.Exception: There was an error proving the transaction: Exception when sending request:.*",
+      "matchedStatuses": ["broken"]
+    },
+    {
+      "name": "Wasm issues",
+      "messageRegex": ".*unreachable.*",
+      "matchedStatuses": ["broken"]
+    }
+]

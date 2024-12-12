@@ -42,7 +42,8 @@ packages/*/*.tgz
 
 # reports
 reports
-allure-results
+**/allure-results/*
+!**/allure-results/categories.json
 
 # user files
 **/.sync_cache
