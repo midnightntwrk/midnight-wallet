@@ -6,6 +6,7 @@ env:
   NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
 
 on:
+  workflow_dispatch:
   push:
     tags: ['v*']
 
