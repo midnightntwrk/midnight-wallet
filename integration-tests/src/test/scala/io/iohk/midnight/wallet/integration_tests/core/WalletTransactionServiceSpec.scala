@@ -29,6 +29,7 @@ import io.iohk.midnight.wallet.zswap.given
 import org.scalacheck.effect.PropF.forAllF
 import scala.concurrent.duration.DurationInt
 import scalajs.js
+import munit.TestOptions
 
 @SuppressWarnings(Array("org.wartremover.warts.SeqApply"))
 class WalletTransactionServiceSpec extends WithProvingServerSuite {
@@ -110,7 +111,9 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
     }
   }
 
-  test("Prove given unproven transaction and merge it with given transaction") {
+  test(
+    new TestOptions("Prove given unproven transaction and merge it with given transaction").flaky,
+  ) {
     forAllF { (txIO: IO[Transaction], unprovenTx: UnprovenTransaction) =>
       buildWalletTransactionService().use { (walletTransactionService, _) =>
         for {

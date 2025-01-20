@@ -10,6 +10,8 @@ enum ProtocolVersion(val version: Int) {
 object ProtocolVersion {
   given Eq[ProtocolVersion] = Eq.fromUniversalEquals
 
-  def fromInt(value: Int): Either[Exception, ProtocolVersion] =
-    values.find(_.version === value).toRight(Exception(s"Invalid protocol version $value"))
+  def fromInt(value: Int): Either[Exception, ProtocolVersion] = {
+    if (value >= 1) Right(ProtocolVersion.V1)
+    else Left(new Exception(s"Unknown protocol version: $value"))
+  }
 }
