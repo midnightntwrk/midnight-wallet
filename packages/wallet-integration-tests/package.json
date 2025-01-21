@@ -6,7 +6,7 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet": "workspace:*",
-    "@midnight-ntwrk/zswap": "^3.0.0",
+    "@midnight-ntwrk/zswap": "^3.0.6",
     "@types/node": "^20.14.8",
     "rxjs": "^7.5.5",
     "testcontainers": "^10.14.0"

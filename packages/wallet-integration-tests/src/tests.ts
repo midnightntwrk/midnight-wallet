@@ -12,7 +12,7 @@ const environment = await new DockerComposeEnvironment(composePath, 'docker-comp
 
 const networkId = w.NetworkId.fromJs(zswap.NetworkId.Undeployed);
 
-const localState = zswap.LocalState.fromSeed(Buffer.from('0000000000000000000000000000000000000000000000000000000000000042', 'hex'));
+const localState = zswap.LocalState.fromSeed(Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'));
 const wallet = w.CoreWallet.emptyV1(localState, networkId);
 const syncCapability = new w.DefaultSyncCapability(new w.DefaultTxHistoryCapability(), w.V1Transaction, w.V1EvolveState);
 

@@ -1049,7 +1049,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
   dependencies:
     "@midnight-ntwrk/wallet": "workspace:*"
-    "@midnight-ntwrk/zswap": "npm:^3.0.0"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     "@types/node": "npm:^20.14.8"
     rxjs: "npm:^7.5.5"
     testcontainers: "npm:^10.14.0"
@@ -1088,7 +1088,7 @@ __metadata:
   dependencies:
     "@midnight-ntwrk/wallet": "workspace:*"
     "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     isomorphic-ws: "npm:^5.0.0"
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
@@ -1102,7 +1102,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet@workspace:wallet-engine"
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     fp-ts: "npm:^2.12.2"
     io-ts: "npm:^2.2.18"
     io-ts-types: "npm:^0.5.17"
@@ -1117,10 +1117,10 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/zswap@npm:^3.0.0, @midnight-ntwrk/zswap@npm:^3.0.1, @midnight-ntwrk/zswap@npm:^3.0.2, @midnight-ntwrk/zswap@npm:^3.0.4":
-  version: 3.0.4
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.4::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.4%2F77b7b6f33c227968c048740a228a36aea7833f17"
-  checksum: 10c0/981ac6aa026c67afea62c227c1f4a27378eb2c036d9a9b453e69f259c836fb4b2a13f4b07ef2e5431a927c384d8a06a82618702e917834ef54c0c4054b72d00e
+"@midnight-ntwrk/zswap@npm:^3.0.2, @midnight-ntwrk/zswap@npm:^3.0.6":
+  version: 3.0.6
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.6::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.6%2Feeb594d52b8abf93e6b5510a9cb1c3c6eca521b8"
+  checksum: 10c0/bc10f8d739596fc0a6e00179be81c50153315e144801b2e39f95140082277ad8b066a50193832951f1e4f03fbaf86efdfd550b4cb59f59b213f98657c31d9850
   languageName: node
   linkType: hard
 
@@ -1135,7 +1135,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-core@workspace:wallet-core"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.1"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     typescript: "npm:^4.8.3"
   languageName: unknown
   linkType: soft
@@ -1151,7 +1151,7 @@ __metadata:
     "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@*"
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4"
     "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.4"
-    "@midnight-ntwrk/zswap": "npm:^3.0.4"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     "@types/jest": "npm:^29.2.0"
     "@types/node": "npm:^18.11.3"
     "@types/ws": "npm:^8.5.4"
@@ -1183,7 +1183,7 @@ __metadata:
   resolution: "@midnight/wallet-integration-tests@workspace:integration-tests"
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11"
     "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11"
     extensionless: "npm:^1.9.9"
@@ -1216,7 +1216,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-prover-client@workspace:prover-client"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.2"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     node-fetch: "npm:3.3.2"
     typescript: "npm:^4.8.3"
   languageName: unknown
@@ -1236,7 +1236,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-substrate-client@workspace:substrate-client"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.1"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     buffer: "npm:^6.0.3"
     scale-ts: "npm:^1.1.0"
     typescript: "npm:^4.8.3"
@@ -1247,7 +1247,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-zswap@workspace:wallet-zswap"
   dependencies:
-    "@midnight-ntwrk/zswap": "npm:^3.0.1"
+    "@midnight-ntwrk/zswap": "npm:^3.0.6"
     typescript: "npm:^4.8.3"
   languageName: unknown
   linkType: soft

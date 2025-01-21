@@ -70,7 +70,7 @@ object TransactionGenerator extends IOApp.Simple {
     }
 
   val initialState: InitialState =
-    InitialState.Seed("0000000000000000000000000000000000000000000000000000000000000042", networkId)
+    InitialState.Seed("0000000000000000000000000000000000000000000000000000000000000002", networkId)
 
   override val run: IO[Unit] =
     withRunningWallet(initialState) { v =>

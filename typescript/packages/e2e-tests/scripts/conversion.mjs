@@ -33,7 +33,6 @@ const mnemonics = [
   const seed = KeyManagement.util.mnemonicWordsToEntropy(mnemonics)
   console.log(seed);
 
-  const seed2 = '0000000000000000000000000000000000000000000000000000000000000042';
+  const seed2 = '0000000000000000000000000000000000000000000000000000000000000002';
   const mnemonics2 = KeyManagement.util.entropyToMnemonicWords(seed2);
   console.log(mnemonics2);
-

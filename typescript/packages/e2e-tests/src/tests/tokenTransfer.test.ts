@@ -30,7 +30,7 @@ import { logger } from './logger';
 describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000042';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
   const timeout = 420_000;
   const outputValue = 3_000_000n;
 
