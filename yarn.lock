@@ -1097,7 +1097,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet@npm:3.7.4, @midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine, @midnight-ntwrk/wallet_built@npm:@midnight-ntwrk/wallet@*, @midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.4, @midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.4":
+"@midnight-ntwrk/wallet@npm:3.7.5-rc.1, @midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine, @midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.5-rc.1, @midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.5-rc.1":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet@workspace:wallet-engine"
   dependencies:
@@ -1116,6 +1116,21 @@ __metadata:
     ws: "npm:^8.8.1"
   languageName: unknown
   linkType: soft
+
+"@midnight-ntwrk/wallet_built@npm:@midnight-ntwrk/wallet@*":
+  version: 3.7.3
+  resolution: "@midnight-ntwrk/wallet@npm:3.7.3::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.3%2F54ea4e2485cd5e5c30a47fc9fe48d07775875945"
+  dependencies:
+    "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
+    "@midnight-ntwrk/zswap": "npm:^3.0.2"
+    isomorphic-ws: "npm:^5.0.0"
+    node-fetch: "npm:3.3.2"
+    rxjs: "npm:^7.5"
+    scale-ts: "npm:^1.1.0"
+    ws: "npm:^8.8.1"
+  checksum: 10c0/2655c8220eeec27e4028ebd75cdc003fba2d7e4b3081a6f2b41373ef371fde9423b024df3bb4af8be9842560ca23586f973e6032c6694f67bbd26a4b4216d826
+  languageName: node
+  linkType: hard
 
 "@midnight-ntwrk/zswap@npm:^3.0.2, @midnight-ntwrk/zswap@npm:^3.0.6":
   version: 3.0.6
@@ -1146,11 +1161,11 @@ __metadata:
   dependencies:
     "@cardano-sdk/key-management": "npm:0.24.8"
     "@midnight-ntwrk/midnight-js-network-id": "npm:0.2.5"
-    "@midnight-ntwrk/wallet": "npm:3.7.4"
+    "@midnight-ntwrk/wallet": "npm:3.7.5-rc.1"
     "@midnight-ntwrk/wallet-api": "npm:3.5.0"
     "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@*"
-    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4"
-    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.4"
+    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.5-rc.1"
+    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.5-rc.1"
     "@midnight-ntwrk/zswap": "npm:^3.0.6"
     "@types/jest": "npm:^29.2.0"
     "@types/node": "npm:^18.11.3"
