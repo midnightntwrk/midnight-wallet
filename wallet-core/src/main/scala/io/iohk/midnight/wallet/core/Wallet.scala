@@ -216,8 +216,7 @@ class WalletInstances[
                 WalletError.NotSufficientFunds(error)
               }
           case None =>
-            Left(WalletError.NoTokenTransfers),
-        )
+            Left(WalletError.NoTokenTransfers))
       }
 
       override def balanceTransaction(

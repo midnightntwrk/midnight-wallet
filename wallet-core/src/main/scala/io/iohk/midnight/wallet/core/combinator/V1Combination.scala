@@ -223,7 +223,7 @@ object V1Combination {
       case Config.InitialState.SerializedSnapshot(serialized) =>
         snapshotInstances.parse(serialized)
     )
-    .map(walletInstances.walletCreation.create)
+      .map(walletInstances.walletCreation.create)
 
   @JSExport def mapIndexerEvent(
       event: IndexerEvent,
