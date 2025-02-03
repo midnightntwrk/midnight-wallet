@@ -20,8 +20,6 @@
     "@midnight-ntwrk/wallet": "3.7.5",
     "@midnight-ntwrk/wallet-api": "3.5.0",
     "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@*",
-    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.5",
-    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.5",
     "@midnight-ntwrk/zswap": "^3.0.6",
     "@types/jest": "^29.2.0",
     "@types/node": "^18.11.3",

@@ -1097,7 +1097,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet@npm:3.7.5, @midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine, @midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.5, @midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.5":
+"@midnight-ntwrk/wallet@npm:3.7.5, @midnight-ntwrk/wallet@workspace:*, @midnight-ntwrk/wallet@workspace:wallet-engine":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet@workspace:wallet-engine"
   dependencies:
@@ -1164,8 +1164,6 @@ __metadata:
     "@midnight-ntwrk/wallet": "npm:3.7.5"
     "@midnight-ntwrk/wallet-api": "npm:3.5.0"
     "@midnight-ntwrk/wallet_built": "npm:@midnight-ntwrk/wallet@*"
-    "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.5"
-    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.5"
     "@midnight-ntwrk/zswap": "npm:^3.0.6"
     "@types/jest": "npm:^29.2.0"
     "@types/node": "npm:^18.11.3"
