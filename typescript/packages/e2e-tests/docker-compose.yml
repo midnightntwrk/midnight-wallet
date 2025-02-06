@@ -13,7 +13,7 @@ services:
       retries: 3
       start_period: 10s
   indexer:
-    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.3.0-rc.1"
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.3.0"
     ports:
       - "8088:8088"
     command: ['-Dlogback.configurationFile=logback-json-file.xml']
@@ -33,7 +33,7 @@ services:
       node:
         condition: service_started
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.8.0-rc4"
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.8.0"
     platform: linux/amd64
     ports:
      - "9944:9944"
