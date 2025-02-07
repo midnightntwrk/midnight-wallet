@@ -288,6 +288,7 @@ lazy val integrationTests = project
       "io-ts-types",
       "newtype-ts",
       "monocle-ts",
+      "node",
     ),
     libraryDependencies ++= Seq(
       "org.typelevel" %%% "munit-cats-effect" % munitCatsEffectVersion,

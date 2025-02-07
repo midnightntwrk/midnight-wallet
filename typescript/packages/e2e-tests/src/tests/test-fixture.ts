@@ -54,10 +54,36 @@ export function useTestContainersFixture() {
   return () => fixture!;
 }
 
+export function useHardForkFixture() {
+  let fixture: TestContainersFixture | undefined;
+
+  beforeAll(async () => {
+    logger.info(`Spinning up ${process.env.NETWORK} hard fork test environment...`);
+    const composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-hfs.yml')
+      .withWaitStrategy(`proof-server`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
+      .withWaitStrategy(`proof-server-dummy`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
+      .withWaitStrategy(`node`, Wait.forListeningPorts())
+      .withWaitStrategy(`indexer`, Wait.forLogMessage("Block with hash: '[a-fA-F0-9]+' and height '0'  was indexed"))
+      .up();
+
+    logger.info('Test environment started');
+    fixture = new TestContainersFixture(composeEnvironment);
+  }, 120_000);
+
+  afterAll(async () => {
+    logger.info('Tearing down hard fork test environment...');
+    await fixture?.down();
+    logger.info('HF test environment torn down');
+  }, 60_000);
+
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  return () => fixture!;
+}
+
 export class TestContainersFixture {
   constructor(
     public readonly composeEnvironment: StartedDockerComposeEnvironment,
-    private readonly uid: string,
+    private readonly uid?: string,
   ) {}
 
   public async down() {

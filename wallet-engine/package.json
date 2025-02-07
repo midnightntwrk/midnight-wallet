@@ -24,7 +24,7 @@
         "dist": ""
     },
     "dependencies": {
-        "@midnight-ntwrk/wallet-api": "^3.5.0",
+        "@midnight-ntwrk/wallet-api": "3.5.0",
         "@midnight-ntwrk/zswap": "^3.0.6",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",

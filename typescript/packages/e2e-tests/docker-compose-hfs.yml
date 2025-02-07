@@ -1,0 +1,60 @@
+services:
+  proof-server-dummy:
+    image: "ghcr.io/midnight-ntwrk/proof-server:3.0.0-hard-fork-test"
+    command: ["midnight-proof-server -v --network undeployed"]
+    ports:
+      - "6301:6300"
+    environment:
+      RUST_BACKTRACE: "full"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300/version" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  proof-server:
+    image: "ghcr.io/midnight-ntwrk/proof-server:3.0.2"
+    command: ["midnight-proof-server -v --network undeployed"]
+    ports:
+      - "6300:6300"
+    environment:
+      RUST_BACKTRACE: "full"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:6300/version" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+  indexer:
+    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.1.0-hardfork-rc.10"
+    ports:
+      - "8088:8088"
+    command: ['-Dlogback.configurationFile=logback-json-file.xml']
+    environment:
+      LOG_LEVEL: 'TRACE'
+      LEDGER_NETWORK_ID: 'Undeployed'
+      SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
+      OTEL_JAVAAGENT_ENABLED: 'false'
+    healthcheck:
+      test: ['CMD', 'sh', '-c', "grep -q 'Successfully applied .* migrations to schema' /tmp/app_logs/server.log"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - '/tmp/app_logs:/tmp/app_logs'
+    depends_on:
+      node:
+        condition: service_started
+  node:
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.6.3-69581601"
+    platform: linux/amd64
+    ports:
+     - "9944:9944"
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9944/health" ]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    environment:
+      CFG_PRESET: "dev"
