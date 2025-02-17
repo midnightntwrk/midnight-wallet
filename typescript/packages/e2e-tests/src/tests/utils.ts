@@ -33,7 +33,7 @@ export const waitForSyncProgress = async (wallet: Wallet) =>
 export const isAnotherChain = async (wallet: Wallet, offset: number) => {
   const state = await waitForSyncProgress(wallet);
   // allow for situations when there's no new index in the network between runs
-  return state.syncProgress!.total < offset - 1;
+  return state.syncProgress!.total <= offset - 1;
 };
 
 export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
@@ -156,7 +156,7 @@ export const saveState = async (wallet: Wallet, filename: string) => {
     writer.on('error', function (err) {
       logger.error(err);
     });
-    writer.end();
+    await new Promise((resolve) => writer.end(resolve));
   } catch (e) {
     if (typeof e === 'string') {
       logger.warn(e);

@@ -8,7 +8,7 @@ import { logger } from './logger';
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     logger.info(`Spinning up ${process.env['NETWORK']} test environment...`);
     const uid = Math.floor(Math.random() * 1000).toString();
     let composeEnvironment: StartedDockerComposeEnvironment;
@@ -45,7 +45,7 @@ export function useTestContainersFixture() {
     fixture = new TestContainersFixture(composeEnvironment, uid);
   }, 120_000);
 
-  afterEach(async () => {
+  afterAll(async () => {
     logger.info('Tearing down test environment...');
     await fixture?.down();
     logger.info('Test environment torn down');
@@ -120,7 +120,7 @@ export class TestContainersFixture {
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
       case 'testnet': {
-        return 'https://indexer.testnet.midnight.network';
+        return 'https://indexer.testnet-02.midnight.network';
       }
       case 'qanet': {
         return 'https://indexer.qanet.dev.midnight.network';
@@ -135,7 +135,7 @@ export class TestContainersFixture {
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
       case 'testnet': {
-        return 'wss://indexer.testnet.midnight.network';
+        return 'wss://indexer.testnet-02.midnight.network';
       }
       case 'qanet': {
         return 'wss://indexer.qanet.dev.midnight.network';
@@ -150,7 +150,7 @@ export class TestContainersFixture {
   public getNodeUri(): string {
     switch (TestContainersFixture.deployment) {
       case 'testnet': {
-        return 'https://rpc.testnet.midnight.network';
+        return 'https://rpc.testnet-02.midnight.network';
       }
       case 'qanet': {
         return 'https://rpc.qanet.dev.midnight.network';

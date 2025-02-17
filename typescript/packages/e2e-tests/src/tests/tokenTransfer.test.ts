@@ -481,8 +481,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance} tDUST`);
@@ -565,8 +564,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
@@ -621,8 +619,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);

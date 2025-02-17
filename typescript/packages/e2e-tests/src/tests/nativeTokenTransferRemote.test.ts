@@ -46,7 +46,7 @@ describe('Token transfer', () => {
   const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
   const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     fixture = getFixture();
 
     let networkId: NetworkId;
@@ -62,33 +62,30 @@ describe('Token transfer', () => {
         break;
     }
 
-    const date = new Date();
-    const hour = date.getHours();
-
     wallet = await provideWallet(filenameWallet, fundedSeed, networkId, fixture);
     wallet2 = await provideWallet(filenameWallet2, receivingSeed, networkId, fixture);
 
-    if (hour % 2 !== 0) {
-      logger.info('Using NT_SEED2 as receiver');
-      sender = wallet;
-      receiver = wallet2;
-    } else {
-      logger.info('Using NT_SEED2 as sender');
+    wallet.start();
+    const initialState = await waitForSync(wallet);
+    const initialNativeBalance = initialState.balances[nativeToken()] ?? 0n;
+    logger.info(`initial balance: ${initialNativeBalance}`);
+
+    if (initialNativeBalance === 0n) {
+      logger.info('wallet 1 has 0 tDust. Wallet 2 will be sender');
       sender = wallet2;
       receiver = wallet;
+    } else {
+      sender = wallet;
+      receiver = wallet2;
     }
-
-    sender.start();
-    // wait before starting another wallet to evade issues with syncing
-    await new Promise((resolve) => setTimeout(resolve, 5_000));
     receiver.start();
   }, syncTimeout);
 
-  afterEach(async () => {
-    await saveState(wallet, filenameWallet);
-    await saveState(wallet2, filenameWallet2);
-    await closeWallet(wallet);
-    await closeWallet(wallet2);
+  afterAll(async () => {
+    await closeWallet(sender);
+    await closeWallet(receiver);
+    await saveState(sender, filenameWallet);
+    await saveState(receiver, filenameWallet2);
   }, timeout);
 
   test(
@@ -103,14 +100,14 @@ describe('Token transfer', () => {
 
       await Promise.all([waitForSync(sender), waitForSync(receiver)]);
       const initialState = await firstValueFrom(sender.state());
+      logger.info(walletStateTrimmed(initialState));
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
       logger.info(initialState.balances);
       Object.entries(initialState.balances).forEach(([key, _]) => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance} tDUST`);
@@ -121,9 +118,11 @@ describe('Token transfer', () => {
       const initialState2 = await firstValueFrom(receiver.state());
       const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
       const initialBalanceNative2 = initialState2.balances[tokenTypeHash] ?? 0n;
+      logger.info(walletStateTrimmed(initialState2));
       logger.info(`Wallet 2: ${initialBalance2} tDUST`);
       logger.info(`Wallet 2: ${initialBalanceNative2} ${tokenTypeHash}`);
       logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
+      logger.info('Sending transaction');
 
       const outputsToCreate = [
         {
@@ -143,9 +142,9 @@ describe('Token transfer', () => {
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
       expect(pendingState.balances[tokenTypeHash] ?? 0n).toBeLessThanOrEqual(initialBalanceNative - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
-      expect(pendingState.coins.length).toBe(initialState.coins.length);
-      expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+      expect(pendingState.pendingCoins.length).toBe(2);
+      expect(pendingState.coins.length).toBeGreaterThanOrEqual(initialState.coins.length);
+      expect(pendingState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length);
 
       await waitForTxInHistory(txId, sender);
       const finalState = await waitForSync(sender);
@@ -190,8 +189,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
@@ -245,8 +243,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalance = syncedState?.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);

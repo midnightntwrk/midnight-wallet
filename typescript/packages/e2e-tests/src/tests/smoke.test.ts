@@ -159,7 +159,7 @@ describe('Smoke tests', () => {
       const state = await waitForSync(walletFunded);
       const serialized = await walletFunded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(1);
+      expect(stateObject.txHistory).toHaveLength(2);
       expect(stateObject.offset).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();

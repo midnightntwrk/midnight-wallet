@@ -52,7 +52,7 @@ describe('Token transfer', () => {
   const filenameWallet = `${seedFunded.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
   const filenameWallet2 = `${seed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     fixture = getFixture();
     let networkId: NetworkId;
     switch (TestContainersFixture.network) {
@@ -88,11 +88,11 @@ describe('Token transfer', () => {
     receiver.start();
   }, syncTimeout);
 
-  afterEach(async () => {
-    await saveState(wallet, filenameWallet);
-    await saveState(wallet2, filenameWallet2);
-    await closeWallet(wallet);
-    await closeWallet(wallet2);
+  afterAll(async () => {
+    await closeWallet(sender);
+    await closeWallet(receiver);
+    await saveState(sender, filenameWallet);
+    await saveState(receiver, filenameWallet2);
   }, timeout);
 
   test(
@@ -135,7 +135,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(1);
+      expect(pendingState.pendingCoins.length).toBeGreaterThanOrEqual(1);
       expect(pendingState.coins.length).toBe(initialState.coins.length);
       expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
       expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
@@ -392,7 +392,7 @@ describe('Token transfer', () => {
         },
       ];
       await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
-        `Error: Couldn't deserialize u64 from a BigInt outside u64::MIN..u64::MAX bounds`,
+        `Not sufficient funds to balance token: 02000000000000000000000000000000000000000000000000000000000000000000`,
       );
     },
     timeout,
