@@ -41,7 +41,7 @@ describe('Token transfer', () => {
   const seedFunded = process.env['SEED'];
   const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
   const timeout = 600_000;
-  const outputValue = 1_000n;
+  const outputValue = 10_000n;
 
   let sender: Wallet & Resource;
   let receiver: Wallet & Resource;

@@ -36,6 +36,7 @@ describe('Token transfer', () => {
   const timeout = 600_000;
   const outputValue = 1n;
   let tokenTypeHash: string | undefined;
+  const expectedTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
 
   let sender: Wallet & Resource;
   let receiver: Wallet & Resource;
@@ -67,18 +68,20 @@ describe('Token transfer', () => {
 
     wallet.start();
     const initialState = await waitForSync(wallet);
-    const initialNativeBalance = initialState.balances[nativeToken()] ?? 0n;
+    const initialNativeBalance = initialState.balances[expectedTokenHash] ?? 0n;
     logger.info(`initial balance: ${initialNativeBalance}`);
 
     if (initialNativeBalance === 0n) {
-      logger.info('wallet 1 has 0 tDust. Wallet 2 will be sender');
+      logger.info('wallet 1 has 0 native token. Wallet 2 will be sender');
       sender = wallet2;
       receiver = wallet;
+      sender.start();
     } else {
+      logger.info('native token in wallet 1. Wallet 1 will be sender');
       sender = wallet;
       receiver = wallet2;
+      receiver.start();
     }
-    receiver.start();
   }, syncTimeout);
 
   afterAll(async () => {
