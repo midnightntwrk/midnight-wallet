@@ -1,11 +1,11 @@
 name: E2E tests
 
 env:
-  MIDNIGHT_GH_USER: ${{ github.actor }} # For sbt to download dependencies from Midnight org
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
+  SEED_STABLE: ${{ secrets.SEED_STABLE }}
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
   SYNC_CACHE: ${{ github.workspace }}/typescript/packages/e2e-tests/.sync_cache
 
@@ -101,7 +101,7 @@ on:
 jobs:
   build:
     name: E2E tests
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest-8-core-x64
     timeout-minutes: 120
     permissions: write-all
     steps:
@@ -140,13 +140,14 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
           registry: 'https://ghcr.io'
-          username: ${{ secrets.GH_USERNAME }}
-          password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Build wallet and install dependencies
         run: |
@@ -159,7 +160,7 @@ jobs:
           DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ inputs.seed }}
           SEED2: ${{ inputs.seed2 }}
-          SEED_STABLE: ${{ secrets.SEED_STABLE }}
+          SEED_STABLE: ${{ env.SEED_STABLE }}
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
@@ -192,8 +193,8 @@ jobs:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./typescript/packages/e2e-tests/allure-results
           project-id: headless-wallet-${{ inputs.deployment }}
-          security-user: ${{ secrets.ALLURE_ADMIN_USER }}
-          security-pass: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
+          security-user: ${{ env.ALLURE_ADMIN_USER }}
+          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
       - name: Generate allure report
         if: success() || failure()

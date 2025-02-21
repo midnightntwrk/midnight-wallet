@@ -1,9 +1,8 @@
 name: CD
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }} # For sbt to download dependencies from Midnight org
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
 
 on:
   workflow_dispatch:
@@ -13,7 +12,7 @@ on:
 jobs:
   publish:
     name: Build & Publish
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@v4
 
@@ -28,6 +27,7 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - uses: sbt/setup-sbt@v1
 

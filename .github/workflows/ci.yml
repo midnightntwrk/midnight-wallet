@@ -1,9 +1,10 @@
 name: CI
 
 env:
-  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }} # For sbt to download dependencies from Midnight org
-  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }} # For sbt to download dependencies from Midnight org
-  NODE_AUTH_TOKEN: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
+  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: undeployed
   DEPLOYMENT: local
 
@@ -16,7 +17,7 @@ on:
 jobs:
   build:
     name: Lint & Test
-    runs-on: ubuntu-latest-16-cores
+    runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@v4
 
@@ -33,13 +34,14 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@v3
         with:
           registry: 'https://ghcr.io'
-          username: ${{ secrets.GH_USERNAME }}
-          password: ${{ secrets.MIDNIGHTBOT_PACKAGES_WRITE }}
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Build and check
         run: |
@@ -65,7 +67,7 @@ jobs:
             **/target/test-reports/TEST-*.xml
             !examples/node_modules/@midnight-ntwrk/wallet/target/test-reports/TEST-*.xml
 
-      # scoverage disabled 
+      # scoverage disabled
       # - name: Upload Scala coverage report
       #   uses: actions/upload-artifact@v4
       #   if: success() || failure()
@@ -76,7 +78,7 @@ jobs:
       - name: Run smoke e2e tests
         run: |
           yarn dlx turbo test-e2e -- smoke.test.ts
-  
+
       - name: Create allure properties
         if: success() || failure()
         working-directory: ./typescript/packages/e2e-tests/allure-results
@@ -87,7 +89,7 @@ jobs:
           deployment=${{ env.DEPLOYMENT }}
           platform=Linux
           " > environment.properties
-  
+
       - name: Send Results to Allure Server
         uses: robkatona/send-allure-results@v1.0.5
         if: ${{ always() }}
@@ -95,9 +97,9 @@ jobs:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./typescript/packages/e2e-tests/allure-results
           project-id: headless-wallet-${{ env.DEPLOYMENT }}
-          security-user: ${{ secrets.ALLURE_ADMIN_USER }}
-          security-pass: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
-  
+          security-user: ${{ env.ALLURE_ADMIN_USER }}
+          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+
       - name: Publish Jest E2E Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
