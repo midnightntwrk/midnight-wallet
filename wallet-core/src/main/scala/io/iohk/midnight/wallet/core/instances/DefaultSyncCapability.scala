@@ -56,14 +56,24 @@ class DefaultSyncCapability[
             offset = Some(offset),
             protocolVersion = protocolVersion,
             isConnected = true,
-            progress = wallet.progress.copy(synced = Some(offset.decrement)),
+            progress = {
+              val newSynced = offset.decrement
+
+              val newTotal = wallet.progress.total match {
+                case Some(total) if newSynced.value > total.value => Some(newSynced)
+                case Some(total)                                  => Some(total)
+                case None                                         => None
+              }
+
+              wallet.progress.copy(synced = Some(newSynced), total = newTotal)
+            },
           )
           .asRight
 
       case update: ProgressUpdate =>
         wallet
           .copy(
-            progress = wallet.progress.copy(total = update.total),
+            progress = wallet.progress.copy(synced = update.synced, total = update.total),
             isConnected = true,
           )
           .asRight
