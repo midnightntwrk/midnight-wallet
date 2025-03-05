@@ -1,18 +1,13 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 // allows submitting transactions using ledger v3 = v1 (only post-rollback, not post-HF1)
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_post_hf';
+import { Resource, WalletBuilder as WalletBuilderPostHF } from '@midnight-ntwrk/wallet_post_hf';
 import { WalletBuilder as WalletBuilderPreHF } from '@midnight-ntwrk/wallet_pre_hf';
-import { TestContainersFixture, useHardForkFixture } from './test-fixture';
-import { NetworkId, TokenType, nativeToken, LedgerParameters } from '@midnight-ntwrk/zswap_v2';
-import {
-  NetworkId as NetworkIdPreHf,
-  TokenType as TokenTypePreHf,
-  nativeToken as nativeTokenPreHf,
-  LedgerParameters as LedgerParametersPreHf,
-} from '@midnight-ntwrk/zswap_v1';
+import { useHardForkFixture } from './test-fixture';
+import { NetworkId, TokenType, nativeToken } from '@midnight-ntwrk/zswap_v2';
+import { NetworkId as NetworkIdPreHf, nativeToken as nativeTokenPreHf } from '@midnight-ntwrk/zswap_v1';
 import {
   closeWallet,
   normalizeWalletState,
@@ -34,7 +29,8 @@ import { GenericContainer } from 'testcontainers/build/generic-container/generic
  */
 
 describe('Hard fork', () => {
-  const getFixture = useHardForkFixture();
+  // Spin up HF environment.
+  const _ = useHardForkFixture();
 
   let seed: string = '0000000000000000000000000000000000000000000000000000000000000042';
   const seedSender: string = '0000000000000000000000000000000000000000000000000000000000000043';
@@ -357,7 +353,7 @@ describe('Hard fork', () => {
         allure.feature('Hard Forks');
         allure.story('Sync from scratch pre-HF');
 
-        wallet = await WalletBuilder.buildFromSeed(
+        wallet = await WalletBuilderPostHF.buildFromSeed(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6301',
@@ -373,6 +369,8 @@ describe('Hard fork', () => {
         expect(state.syncProgress?.synced).toBeGreaterThan(0);
         expect(state.balances).toEqual(expectedBalance);
         expect(normalizeWalletState(state).normalized).toEqual(expectedTxHistory);
+
+        await closeWallet(wallet);
       },
       timeout,
     );
@@ -469,7 +467,7 @@ describe('Hard fork', () => {
 
         await preHFWallet.close();
 
-        wallet = await WalletBuilder.restore(
+        wallet = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6301',
@@ -509,7 +507,7 @@ describe('Hard fork', () => {
         writeFileSync('res/undeployedSentPostHf.state', serializedPostNew, {
           flag: 'w',
         });
-        const walletPost = await WalletBuilder.restore(
+        const walletPost = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6301',
@@ -532,6 +530,9 @@ describe('Hard fork', () => {
         const stateObject = JSON.parse(serializedPost);
         expect(stateObject.txHistory).toHaveLength(1);
         expect(stateObject.protocolVersion).toEqual(2);
+
+        await closeWallet(wallet);
+        await closeWallet(walletPost);
       },
       timeout,
     );
@@ -602,7 +603,7 @@ describe('Hard fork', () => {
         //   flag: 'w',
         // });
 
-        const restoredWallet = await WalletBuilder.restore(
+        const restoredWallet = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6300',
@@ -620,7 +621,8 @@ describe('Hard fork', () => {
         // });
         expect(newState.balances).toEqual(expectedBalance);
         expect(normalizeWalletState(newState).normalized).toEqual(expectedTxHistory);
-        await restoredWallet.close();
+
+        await closeWallet(restoredWallet);
       },
       timeout,
     );
@@ -648,9 +650,9 @@ describe('Hard fork', () => {
         const preHFSerializedState = await preHFWallet.serializeState();
         console.log('pre hf serialized state', preHFSerializedState.slice(0, 100));
 
-        await preHFWallet.close();
+        await closeWallet(preHFWallet);
 
-        wallet = await WalletBuilder.restore(
+        wallet = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6300',
@@ -684,13 +686,13 @@ describe('Hard fork', () => {
         logger.info('Transaction id: ' + txId);
 
         await waitForTxInHistory(txId, wallet);
-        const postState = await waitForIndex(wallet, 30);
+        const postState = await waitForIndex(wallet, 33);
         const serializedPostNew = await wallet.serializeState();
         logger.info(serializedPostNew);
         writeFileSync('res/undeployedSentPostHf.state', serializedPostNew, {
           flag: 'w',
         });
-        const walletPost = await WalletBuilder.restore(
+        const walletPost = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',
           'http://localhost:6300',
@@ -706,13 +708,16 @@ describe('Hard fork', () => {
         logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
         logger.info(`Wallet 1 tDUST: ${finalState.balances[nativeToken()]}`);
         logger.info(`Wallet 1 native token 1: ${finalState.balances[nativeTokenHash]}`);
-        expect(finalState.transactionHistory.length).toBe(1);
+        expect(finalState.transactionHistory.length).toBe(3);
         expect(finalState.availableCoins.length).toBeGreaterThan(state.availableCoins.length);
         const serializedPost = await wallet.serializeState();
-        logger.info(serializedPost);
+        logger.info(serializedPost.slice(0, 100));
         const stateObject = JSON.parse(serializedPost);
-        expect(stateObject.txHistory).toHaveLength(1);
-        expect(stateObject.protocolVersion).toEqual(2);
+        expect(stateObject.txHistory).toHaveLength(3);
+        expect(stateObject.protocolVersion).toEqual(1);
+
+        await closeWallet(wallet);
+        await closeWallet(walletPost);
       },
       timeout,
     );
@@ -725,14 +730,14 @@ async function waitForProtocolAtIndexer(expectedValue: number, timeout: number =
   return await new Promise((resolve, reject) => {
     const interval = setInterval(async () => {
       const value = await queryIndexerForProtocolVersion();
-      // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+
       logger.info(`Protocol Version: ${value}`);
       if (value === expectedValue) {
         clearInterval(interval);
         resolve(value);
       } else if (Date.now() - startTime > timeout) {
         clearInterval(interval);
-        // eslint-disable-next-line @typescript-eslint/restrict-template-expressions
+
         reject(new Error(`Timeout: Expected ${expectedValue} but got ${value}`));
       }
     }, 5000);

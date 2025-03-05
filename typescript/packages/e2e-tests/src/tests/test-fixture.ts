@@ -76,7 +76,6 @@ export function useHardForkFixture() {
     logger.info('HF test environment torn down');
   }, 60_000);
 
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   return () => fixture!;
 }
 

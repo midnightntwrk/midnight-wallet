@@ -272,6 +272,9 @@ lazy val integrationTests = project
   .enablePlugins(ScalaJSPlugin, ScalablyTypedConverterExternalNpmPlugin)
   .settings(commonSettings, commonScalablyTypedSettings)
   .settings(
+    // Disable parallel tests execution so there won't be many proof server docker containers running.
+    // This probably fixes an issue with flaky tests that are using proof server.
+    Test / parallelExecution := false,
     scalaJSLinkerConfig ~= { _.withModuleKind(ModuleKind.ESModule) },
     // This is a workaround just to run these integration tests,
     // because ScalablyTyped generates directory imports for testcontainers,

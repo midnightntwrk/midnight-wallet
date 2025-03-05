@@ -43,9 +43,13 @@ jobs:
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
       - name: Build and check
         run: |
-          yarn install
+          yarn install --immutable
           sbt clean
           yarn verify
 

@@ -37,11 +37,11 @@ export const isAnotherChain = async (wallet: Wallet, offset: number) => {
 };
 
 export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
-  const chunks: Buffer[] = [];
+  const chunks: string[] = [];
   return await new Promise((resolve, reject) => {
-    stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
+    stream.on('data', (chunk) => chunks.push(chunk as string));
     stream.on('error', (err) => reject(err));
-    stream.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    stream.on('end', () => resolve(chunks.join('')));
   });
 };
 
