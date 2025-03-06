@@ -5,6 +5,7 @@ import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Test
+import sttp.client3.UriContext
 
 import scala.concurrent.duration.DurationInt
 
@@ -16,17 +17,27 @@ trait WithProvingServerSuite
   override def scalaCheckTestParameters: Test.Parameters =
     super.scalaCheckTestParameters.withMinSuccessfulTests(1)
 
-  private val provingServiceFixture = ResourceSuiteLocalFixture(
-    "provingService",
+  private val localProvingServiceFixture = ResourceSuiteLocalFixture(
+    "localProvingService",
     ProvingServiceImpl.instance(
       "ghcr.io/midnight-ntwrk/proof-server:3.0.6",
     ),
   )
 
+  private val remoteProvingServiceFixture = ResourceSuiteLocalFixture(
+    "remoteProvingService",
+    ProvingServiceImpl.remoteInstance(
+      uri"https://proof-server-01.proof-pub.stg.midnight.tools",
+    ),
+  )
+
   override def munitIOTimeout = 10.minutes
 
-  override def munitFixtures = List(provingServiceFixture)
+  override def munitFixtures = List(localProvingServiceFixture)
 
   given provingService: ProvingService[UnprovenTransaction, Transaction] =
-    provingServiceFixture()
+    localProvingServiceFixture()
+
+  lazy val remoteProvingService: ProvingService[UnprovenTransaction, Transaction] =
+    remoteProvingServiceFixture()
 }

@@ -1,10 +1,12 @@
 package io.iohk.midnight.wallet.prover
 
 import cats.effect.{IO, Resource}
-import cats.syntax.all.*
 import io.iohk.midnight.wallet.zswap
 import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
 import sttp.model.Uri
+import io.iohk.midnight.wallet.prover.tracing.ProverClientTracer
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.StructuredLog
 
 import scala.concurrent.duration.DurationInt
 
@@ -16,7 +18,7 @@ class ProverClient[UnprovenTransaction, Transaction](
 )(using
     zswap.UnprovenTransaction.IsSerializable[UnprovenTransaction],
     zswap.NetworkId,
-) {
+)(using tracer: ProverClientTracer) {
   private val readTimeout = 20.minutes // TODO: Make this configurable
 
   private val asTransaction: ResponseAs[Transaction, Any] =
@@ -27,18 +29,35 @@ class ProverClient[UnprovenTransaction, Transaction](
   private val paddingForMissingPayloadData = Array[Byte](0, 0, 0, 0, 0)
 
   def proveTransaction(tx: UnprovenTransaction): IO[Transaction] = {
-    val serializedTx = tx.serialize
-    val body = serializedTx ++ paddingForMissingPayloadData
+    def sendRequest(tries: Int): IO[Transaction] = {
+      val serializedTx = tx.serialize
+      val body = serializedTx ++ paddingForMissingPayloadData
 
-    val request = emptyRequest
-      .body(body)
-      .post(uri"$serverUri/prove-tx")
-      .response(asTransaction)
-      .readTimeout(readTimeout)
+      val request = emptyRequest
+        .body(body)
+        .post(uri"$serverUri/prove-tx")
+        .response(asTransaction)
+        .readTimeout(readTimeout)
 
-    backend.send(request).map(_.body).adaptError { case error =>
-      Exception(s"There was an error proving the transaction: ${error.getMessage}", error)
+      backend
+        .send(request)
+        .map(_.body)
+        .handleErrorWith { error =>
+          val errorMessage =
+            s"Error: ${error.getMessage}. Cause: ${Option(error.getCause).map(_.getMessage).getOrElse("Unknown cause")}"
+
+          val randomDelay = (5 + scala.util.Random.nextInt(5)).seconds
+          if (tries > 0) {
+            IO.delay(
+              tracer.provingFailed(
+                s"Got an error: \"$errorMessage\". Retrying in $randomDelay. Tries remaining: ${tries - 1}",
+              ),
+            ) *> IO.sleep(randomDelay) *> sendRequest(tries - 1)
+          } else IO.raiseError(new Exception("Failed to prove transaction", error))
+        }
     }
+
+    sendRequest(3)
   }
 }
 
@@ -48,8 +67,12 @@ object ProverClient {
       Transaction: zswap.Transaction.IsSerializable,
   ](serverUri: Uri)(using
       zswap.NetworkId,
-  ): Resource[IO, ProverClient[UnprovenTransaction, Transaction]] =
+  )(using
+      rootTracer: Tracer[IO, StructuredLog],
+  ): Resource[IO, ProverClient[UnprovenTransaction, Transaction]] = {
+    given ProverClientTracer = ProverClientTracer.from(rootTracer)
     SttpBackendFactory.build.map(
       new ProverClient[UnprovenTransaction, Transaction](serverUri, _),
     )
+  }
 }

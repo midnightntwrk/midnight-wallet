@@ -10,6 +10,8 @@ import io.iohk.midnight.wallet.prover.ProverClient
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.tracer.Tracer
+import io.iohk.midnight.tracer.logging.StructuredLog
 import munit.{AnyFixture, CatsEffectSuite}
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.scalajs.js
@@ -35,8 +37,12 @@ trait ProverClientSetup {
 class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   override def munitIOTimeout: Duration = 2.minutes
 
-  given zswap.NetworkId = zswap.NetworkId.Undeployed
   given ProtocolVersion = ProtocolVersion.V1
+
+  given Tracer[IO, StructuredLog] = new Tracer[IO, StructuredLog] {
+    def apply(log: => StructuredLog): IO[Unit] = IO.println(log.message)
+  }
+
   private val proverServerPort = 6300
 
   private val provingServiceFixture = ResourceSuiteLocalFixture(
@@ -54,6 +60,15 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   private def withProvingClient(
       body: ProverClient[UnprovenTransaction, Transaction] => IO[Unit],
   ): IO[Unit] = {
+    given zswap.NetworkId = zswap.NetworkId.Undeployed
+    val port = provingServiceFixture().getMappedPort(proverServerPort).toInt
+    ProverClient(serverUri(port)).use(body(_))
+  }
+
+  private def withFailingProvingClient(
+      body: ProverClient[UnprovenTransaction, Transaction] => IO[Unit],
+  ): IO[Unit] = {
+    given zswap.NetworkId = zswap.NetworkId.TestNet
     val port = provingServiceFixture().getMappedPort(proverServerPort).toInt
     ProverClient(serverUri(port)).use(body(_))
   }
@@ -67,6 +82,16 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
         assert(imbalances.size === 1)
         assert(imbalances.get(dustToken).contains(-spendCoinAmount))
         assert(transaction.fees(LedgerParameters.dummyParameters()).toScalaBigInt =!= BigInt(0))
+      }
+    }
+  }
+
+  test("Prover should fail to prove invalid transaction") {
+    val unprovenTransaction = UnprovenTransaction(unprovenOffer)
+
+    withFailingProvingClient { proverClient =>
+      proverClient.proveTransaction(unprovenTransaction).attempt.map { result =>
+        assert(result.isLeft)
       }
     }
   }

@@ -44,7 +44,9 @@ class WalletBuilder[LocalState, Transaction] {
         TxSubmissionServiceFactory[TX](config.substrateNodeUri)
     }
 
-  private def provingServiceFactory(config: Config): ProvingServiceFactory =
+  private def provingServiceFactory(
+      config: Config,
+  )(using Tracer[IO, StructuredLog]): ProvingServiceFactory =
     new ProvingServiceFactory {
       override def apply[
           UTX: zswap.UnprovenTransaction.IsSerializable,
