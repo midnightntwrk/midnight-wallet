@@ -29,10 +29,10 @@ import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import scalajs.js
 
-private type Wallet = CoreWallet[LocalState, Transaction]
+private type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 private type IndexerUpdate = CoreIndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]
 
-@SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
+@SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.TryPartial"))
 abstract class WalletSpec
     extends WalletKeysSpec[Wallet, CoinPublicKey, EncPublicKey, EncryptionSecretKey]
     with WalletBalancesSpec[Wallet, TokenType]
@@ -42,10 +42,12 @@ abstract class WalletSpec
 
   private val zero = js.BigInt(0)
 
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] =
+    new SnapshotInstances
   private val walletInstances =
     new WalletInstances[
-      LocalState,
+      LocalStateNoKeys,
+      SecretKeys,
       Transaction,
       TokenType,
       Offer,
@@ -56,6 +58,7 @@ abstract class WalletSpec
       CoinPublicKey,
       EncryptionSecretKey,
       EncPublicKey,
+      CoinSecretKey,
       UnprovenInput,
       ProofErasedOffer,
       MerkleTreeCollapsedUpdate,
@@ -70,7 +73,12 @@ abstract class WalletSpec
   override val walletKeys: WalletKeys[Wallet, CoinPublicKey, EncPublicKey, EncryptionSecretKey] =
     walletInstances.walletKeys
   private val defaultState = snapshots.create
-  override val walletWithKeys: Wallet = walletInstances.walletCreation.create(defaultState)
+  val seed = zswap.HexUtil
+    .decodeHex(
+      zswap.HexUtil.randomHex(),
+    )
+    .get
+  override val walletWithKeys: Wallet = walletInstances.walletCreation.create(seed, defaultState)
   override val expectedCoinPubKey: CoinPublicKey = defaultState.state.coinPublicKey
   override val compareCoinPubKeys: (CoinPublicKey, CoinPublicKey) => Boolean = {
     given Eq[CoinPublicKey] = Eq.fromUniversalEquals
@@ -84,7 +92,7 @@ abstract class WalletSpec
   }
 
   override val expectedViewingKey: EncryptionSecretKey =
-    defaultState.state.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey()
+    walletWithKeys.secretKeys.encryptionSecretKey
   override val compareViewingKeys: (EncryptionSecretKey, EncryptionSecretKey) => Boolean = {
     given Eq[EncryptionSecretKey] = Eq.fromUniversalEquals
     (key1, key2) => key1 === key2
@@ -92,16 +100,26 @@ abstract class WalletSpec
 
   override val walletBalances: WalletBalances[Wallet, TokenType] = walletInstances.walletBalances
   override val expectedBalance: BigInt = BigInt(100)
-  override val walletWithBalances: Wallet =
+  override val walletWithBalances: Wallet = {
+    val seedHex = zswap.HexUtil.randomHex();
+    val seed = zswap.HexUtil.decodeHex(seedHex).get
+    val state: (LocalStateNoKeys, SecretKeys) =
+      Generators.generateStateWithFunds(
+        NonEmptyList.one((nativeToken(), expectedBalance)),
+        Some(seedHex),
+      )
+
     walletInstances.walletCreation.create(
-      Snapshot[LocalState, Transaction](
-        Generators.generateStateWithFunds(NonEmptyList.one((nativeToken(), expectedBalance))),
+      seed,
+      Snapshot[LocalStateNoKeys, Transaction](
+        state._1,
         Seq.empty,
         None,
         ProtocolVersion.V1,
         networkId,
       ),
     )
+  }
 
   override val walletTxBalancing
       : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo, TokenType] =
@@ -114,11 +132,18 @@ abstract class WalletSpec
     Generators.generateCoinsFor(NonEmptyList.one((nativeToken(), BigInt(100)))).toList.toVector
   override val walletWithFundsForBalancing: IO[Wallet] =
     imbalanceValue.map { value =>
+      val seedHex = zswap.HexUtil.randomHex()
+      val seed = zswap.HexUtil.decodeHex(seedHex).get
+      val state: (LocalStateNoKeys, SecretKeys) =
+        Generators.generateStateWithFunds(
+          NonEmptyList.one((nativeToken(), expectedBalance)),
+          Some(seedHex),
+        )
+
       walletInstances.walletCreation.create(
-        Snapshot[LocalState, Transaction](
-          Generators.generateStateWithFunds(
-            NonEmptyList.one((nativeToken(), (value * value).toScalaBigInt)),
-          ),
+        seed,
+        Snapshot[LocalStateNoKeys, Transaction](
+          state._1,
           Seq.empty,
           None,
           ProtocolVersion.V1,
@@ -128,7 +153,10 @@ abstract class WalletSpec
     }
 
   override val walletWithoutFundsForBalancing: Wallet =
-    walletInstances.walletCreation.create(defaultState)
+    walletInstances.walletCreation.create(
+      zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
+      defaultState,
+    )
 
   override val walletSync: WalletSync[Wallet, IndexerUpdate] = walletInstances.walletSync
   private val txWithContext: IO[(Generators.TransactionWithContext, ZswapChainState)] =
@@ -139,6 +167,7 @@ abstract class WalletSpec
   override val walletForUpdates: IO[Wallet] =
     txWithContext.map((tx, _) =>
       walletInstances.walletCreation.create(
+        zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
         Snapshot(tx.state, Seq(tx.transaction), None, ProtocolVersion.V1, networkId),
       ),
     )

@@ -23,12 +23,13 @@ import scala.concurrent.duration.DurationInt
 
 class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
 
-  type Wallet = core.Wallet[LocalState, Transaction]
+  type Wallet = core.Wallet[LocalStateNoKeys, SecretKeys, Transaction]
 
-  private given core.SnapshotInstances[LocalState, Transaction] = new core.SnapshotInstances
+  private given core.SnapshotInstances[LocalStateNoKeys, Transaction] = new core.SnapshotInstances
 
   private val walletInstances: core.WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -39,6 +40,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -122,6 +124,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
           "http://indexer",
           "http://prover",
           "http://node",
+          "0000000000000000000000000000000000000000000000000000000000000001",
           generated,
           "warn",
           discardTxHistory = false,

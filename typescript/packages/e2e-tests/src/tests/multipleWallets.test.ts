@@ -1,4 +1,4 @@
-import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet';
+import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet_built';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { firstValueFrom } from 'rxjs';
@@ -37,7 +37,7 @@ describe('Syncing', () => {
 
       async function buildWallet(seed: string, index: number) {
         console.log(`Item at index ${index}: ${seed}`);
-        wallets[index] = await WalletBuilder.buildFromSeed(
+        wallets[index] = await WalletBuilder.build(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
           fixture.getProverUri(),

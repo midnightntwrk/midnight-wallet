@@ -1,3 +1,6 @@
 {
   "jest.jestCommandLine": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
+  "files.watcherExclude": {
+    "**/target": true
+  },
 }

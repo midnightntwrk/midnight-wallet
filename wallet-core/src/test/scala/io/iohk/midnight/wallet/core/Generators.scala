@@ -19,15 +19,28 @@ import scala.scalajs.js
 object Generators {
   final case class TransactionWithContext(
       transaction: LedgerTransaction,
-      state: LocalState,
+      state: LocalStateNoKeys,
+      secretKeys: SecretKeys,
       coins: NonEmptyList[CoinInfo],
   )
 
   final case class OfferWithContext(
       offer: UnprovenOffer,
-      state: LocalState,
+      state: LocalStateNoKeys,
+      secretKeys: SecretKeys,
       coinOutputs: NonEmptyList[CoinInfo],
   )
+
+  @SuppressWarnings(Array("org.wartremover.warts.TryPartial", "org.wartremover.warts.Throw"))
+  def keyGenerator(seed: Option[String] = None): SecretKeys = {
+    val seedHex = seed.getOrElse(zswap.HexUtil.randomHex())
+
+    val decodedSeed = zswap.HexUtil
+      .decodeHex(seedHex)
+      .get
+
+    summon[zswap.SecretKeys.CanInit[SecretKeys]].fromSeed(decodedSeed)
+  }
 
   private def noShrink[T]: Shrink[T] = Shrink.withLazyList(_ => LazyList.empty)
 
@@ -41,12 +54,20 @@ object Generators {
       }
     }
 
-  private val localStateGen: Gen[LocalState] =
-    Gen.lzy(LocalState().pure[Gen])
+  private val localStateNoKeysGen: Gen[LocalStateNoKeys] =
+    Gen.lzy(LocalStateNoKeys().pure[Gen])
+
+  private val secretKeysGen: Gen[SecretKeys] =
+    Gen.lzy(
+      keyGenerator()
+        .pure[Gen],
+    )
 
   private lazy val addressGen: Gen[Address] =
-    localStateGen
-      .map(state => zswap.Address(state.coinPublicKey, state.encryptionPublicKey).asString)
+    secretKeysGen
+      .map(secretKeys =>
+        zswap.Address(secretKeys.coinPublicKey, secretKeys.encryptionPublicKey).asString,
+      )
       .map(Address.apply)
 
   given tokenTransferArbitrary: Arbitrary[TokenTransfer[TokenType]] = {
@@ -79,7 +100,12 @@ object Generators {
             Gen.listOfN(amount, coinInfoArbitrary.arbitrary).map(NonEmptyList.fromListUnsafe),
           )
         unprovenTxAndState = buildOfferForCoins(coins)
-      } yield OfferWithContext(unprovenTxAndState._1, unprovenTxAndState._2, coins)
+      } yield OfferWithContext(
+        unprovenTxAndState._1,
+        unprovenTxAndState._2,
+        unprovenTxAndState._3,
+        coins,
+      )
     }
   }
 
@@ -119,10 +145,10 @@ object Generators {
   ): Arbitrary[IO[TransactionWithContext]] = {
     Arbitrary {
       unprovenOfferWithContextArbitrary.arbitrary.map {
-        case OfferWithContext(offer, state, coins) =>
+        case OfferWithContext(offer, state, secretKeys, coins) =>
           provingService
             .proveTransaction(UnprovenTransaction(offer))
-            .map(tx => TransactionWithContext(tx, state, coins))
+            .map(tx => TransactionWithContext(tx, state, secretKeys, coins))
             .memoize
             .flatten
       }
@@ -133,38 +159,56 @@ object Generators {
 
   private def buildOfferForCoins(
       coins: NonEmptyList[CoinInfo],
-      localState: Option[LocalState] = None,
-  ): (UnprovenOffer, LocalState) = {
-    val state = localState.getOrElse(LocalState())
-    val baseOfferAndState = buildOfferForCoin(coins.head, state)
+      ls: Option[LocalStateNoKeys] = None,
+      seed: Option[String] = None,
+  ): (UnprovenOffer, LocalStateNoKeys, SecretKeys) = {
+    val state = ls.getOrElse(LocalStateNoKeys())
+    val secretKeys = keyGenerator(seed)
+    val baseOfferAndState = buildOfferForCoin(coins.head, state, secretKeys)
     coins.tail
-      .foldLeft(baseOfferAndState) { case ((accOffer, accState), coin) =>
-        val (offerForCoin, newState) = buildOfferForCoin(coin, accState)
-        (accOffer.merge(offerForCoin), newState)
+      .foldLeft(baseOfferAndState: (UnprovenOffer, LocalStateNoKeys, SecretKeys)) {
+        case ((accOffer, accState, _), coin) =>
+          val (offerForCoin, newState, rSk) = buildOfferForCoin(coin, accState, secretKeys)
+          (accOffer.merge(offerForCoin), newState, rSk)
       }
   }
 
-  private def buildOfferForCoin(coin: CoinInfo, state: LocalState): (UnprovenOffer, LocalState) = {
-    val output = UnprovenOutput.`new`(coin, state.coinPublicKey, state.encryptionPublicKey)
+  private def buildOfferForCoin(
+      coin: CoinInfo,
+      state: LocalStateNoKeys,
+      secretKeys: SecretKeys,
+  ): (UnprovenOffer, LocalStateNoKeys, SecretKeys) = {
+    val output =
+      UnprovenOutput.`new`(coin, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
     val offer = UnprovenOffer.fromOutput(output, coin.`type`, coin.value)
-    (offer, state.watchFor(coin))
+    (offer, state.watchFor(secretKeys.coinPublicKey, coin), secretKeys)
   }
 
-  def generateStateWithCoins(coins: NonEmptyList[CoinInfo]): LocalState = {
-    val (tx, state) = buildOfferForCoins(coins).leftMap(UnprovenTransaction(_).eraseProofs())
-    tx.guaranteedCoins.fold(state)(state.applyProofErased)
+  def generateStateWithCoins(
+      coins: NonEmptyList[CoinInfo],
+      seed: Option[String] = None,
+  ): (LocalStateNoKeys, SecretKeys) = {
+    val (unprovenOffer, state, secretKeys) = buildOfferForCoins(coins, None, seed)
+    val proofsErasedTx = UnprovenTransaction(unprovenOffer).eraseProofs()
+
+    (state.applyProofErased(secretKeys, proofsErasedTx.guaranteedCoins.get), secretKeys)
   }
 
-  def generateStateWithFunds(balanceData: NonEmptyList[(TokenType, BigInt)]): LocalState =
-    generateStateWithCoins(generateCoinsFor(balanceData))
+  def generateStateWithFunds(
+      balanceData: NonEmptyList[(TokenType, BigInt)],
+      seed: Option[String] = None,
+  ): (LocalStateNoKeys, SecretKeys) =
+    generateStateWithCoins(generateCoinsFor(balanceData), seed)
 
   def generateTransactionWithFundsFor(
       balanceData: NonEmptyList[(TokenType, BigInt)],
-      state: LocalState,
-  ): (UnprovenTransaction, LocalState) = {
-    buildOfferForCoins(generateCoinsFor(balanceData), Some(state)).leftMap(
-      UnprovenTransaction(_),
-    )
+      state: LocalStateNoKeys,
+      seed: String,
+  ): (UnprovenTransaction, LocalStateNoKeys, SecretKeys) = {
+    val (unprovenOffer, newState, secretKeys) =
+      buildOfferForCoins(generateCoinsFor(balanceData), Some(state), Some(seed))
+
+    (UnprovenTransaction(unprovenOffer), newState, secretKeys)
   }
 
   given ledgerTransactionArbitrary(using
@@ -178,7 +222,7 @@ object Generators {
   given ledgerTransactionShrink: Shrink[IO[LedgerTransaction]] = noShrink
 
   private val ledgerSerialization =
-    new LedgerSerialization[LocalState, LedgerTransaction]
+    new LedgerSerialization[LocalStateNoKeys, LedgerTransaction]
 
   given transactionArbitrary(using
       provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
@@ -221,18 +265,19 @@ object Generators {
     Nullifier,
     LedgerTransaction,
   ]] =
-    (localStateGen, Gen.posNum[BigInt]).mapN { (localState, balance) =>
-      WalletStateService.State(
-        localState.coinPublicKey,
-        localState.encryptionPublicKey,
-        localState.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey(),
-        Map(nativeToken() -> balance),
-        Seq.empty,
-        Seq.empty,
-        Seq.empty,
-        Seq.empty,
-        Seq.empty,
-        ProgressUpdate.empty,
-      )
+    (localStateNoKeysGen, secretKeysGen, Gen.posNum[BigInt]).mapN {
+      (localState, secretKeys, balance) =>
+        WalletStateService.State(
+          secretKeys.coinPublicKey,
+          secretKeys.encryptionPublicKey,
+          secretKeys.encryptionSecretKey,
+          Map(nativeToken() -> balance),
+          Seq.empty,
+          Seq.empty,
+          Seq.empty,
+          Seq.empty,
+          Seq.empty,
+          ProgressUpdate.empty,
+        )
     }
 }

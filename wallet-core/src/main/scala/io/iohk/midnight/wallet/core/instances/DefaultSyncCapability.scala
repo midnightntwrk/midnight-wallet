@@ -13,33 +13,39 @@ import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 @JSExportAll
 class DefaultSyncCapability[
     MerkleTreeCollapsedUpdate,
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     Offer,
     ProofErasedOffer,
 ](using
-    walletTxHistory: WalletTxHistory[Wallet[LocalState, Transaction], Transaction],
+    walletTxHistory: WalletTxHistory[
+      Wallet[LocalStateNoKeys, SecretKeys, Transaction],
+      Transaction,
+    ],
     transaction: zswap.Transaction.Transaction[Transaction, Offer],
-    evolveState: zswap.LocalState.EvolveState[
-      LocalState,
+    evolveState: zswap.LocalStateNoKeys.EvolveState[
+      LocalStateNoKeys,
+      SecretKeys,
       Offer,
       ProofErasedOffer,
       MerkleTreeCollapsedUpdate,
     ],
 ) extends WalletSync[
-      Wallet[LocalState, Transaction],
+      Wallet[LocalStateNoKeys, SecretKeys, Transaction],
       IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
     ] {
-  extension (wallet: Wallet[LocalState, Transaction])
+  extension (wallet: Wallet[LocalStateNoKeys, SecretKeys, Transaction])
     @JSExport("apply")
     override def apply(
         update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
-    ): Either[WalletError, Wallet[LocalState, Transaction]] = applyUpdate(wallet, update)
+    ): Either[WalletError, Wallet[LocalStateNoKeys, SecretKeys, Transaction]] =
+      applyUpdate(wallet, update)
 
   def applyUpdate(
-      wallet: Wallet[LocalState, Transaction],
+      wallet: Wallet[LocalStateNoKeys, SecretKeys, Transaction],
       update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
-  ): Either[WalletError, Wallet[LocalState, Transaction]] = {
+  ): Either[WalletError, Wallet[LocalStateNoKeys, SecretKeys, Transaction]] = {
     update match {
       case ViewingUpdate(protocolVersion, offset, updates) =>
         val newWallet =

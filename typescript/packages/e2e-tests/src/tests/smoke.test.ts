@@ -37,7 +37,7 @@ describe('Smoke tests', () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
 
-      walletFunded = await WalletBuilder.buildFromSeed(
+      walletFunded = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -47,7 +47,7 @@ describe('Smoke tests', () => {
         'info',
       );
 
-      wallet2 = await WalletBuilder.buildFromSeed(
+      wallet2 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -170,6 +170,7 @@ describe('Smoke tests', () => {
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
         fixture.getNodeUri(),
+        seedFunded,
         serialized,
         'info',
       );
@@ -208,7 +209,7 @@ describe('Wallet building', () => {
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
 
-        walletFunded = await WalletBuilder.buildFromSeed(
+        walletFunded = await WalletBuilder.build(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
           fixture.getProverUri(),
@@ -241,7 +242,7 @@ describe('Wallet building', () => {
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
 
-        walletFunded = await WalletBuilder.buildFromSeed(
+        walletFunded = await WalletBuilder.build(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
           fixture.getProverUri(),
@@ -276,7 +277,7 @@ describe('Wallet building', () => {
       await allure.step('Start a wallet', async function () {
         fixture = getFixture();
 
-        walletFunded = await WalletBuilder.buildFromSeed(
+        walletFunded = await WalletBuilder.build(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
           fixture.getProverUri(),

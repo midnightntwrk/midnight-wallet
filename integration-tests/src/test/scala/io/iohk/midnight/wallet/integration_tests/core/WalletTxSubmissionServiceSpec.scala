@@ -8,6 +8,7 @@ import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.{
+  Generators,
   Snapshot,
   SnapshotInstances,
   WalletInstances,
@@ -26,10 +27,11 @@ import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.given
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.concurrent.duration.DurationInt
 import scalajs.js
 
-@SuppressWarnings(Array("org.wartremover.warts.IterableOps"))
+@SuppressWarnings(Array("org.wartremover.warts.IterableOps", "org.wartremover.warts.TryPartial"))
 class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   val noOpTracer: Tracer[IO, StructuredLog] = Tracer.noOpTracer[IO]
@@ -42,9 +44,10 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   private val txSubmissionService = new TxSubmissionServiceStub()
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
 
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -55,6 +58,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -65,23 +69,26 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalState, Transaction]
+  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   private val txSubmissionServiceFactory =
     new WalletTxSubmissionServiceFactory[Wallet, Transaction]
 
   def buildWalletTxSubmissionService(
-      initialState: LocalState = LocalState(),
+      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      seed: Option[String] = None,
       txSubmissionService: TxSubmissionService[Transaction] = txSubmissionService,
   ): IO[(WalletTxSubmissionService[Transaction], WalletStateContainer[Wallet])] = {
-    val snapshot = Snapshot[LocalState, Transaction](
+    val hexSeed = seed.getOrElse(zswap.HexUtil.randomHex())
+    val byteSeed = zswap.HexUtil.decodeHex(hexSeed).get
+    val snapshot = Snapshot[LocalStateNoKeys, Transaction](
       initialState,
       Seq.empty,
       None,
       ProtocolVersion.V1,
       networkId,
     )
-    Bloc[Wallet](walletCreation.create(snapshot)).allocated.map(_._1).map { bloc =>
+    Bloc[Wallet](walletCreation.create(byteSeed, snapshot)).allocated.map(_._1).map { bloc =>
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val service =
         txSubmissionServiceFactory
@@ -94,7 +101,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     forAllF { (txWithCtxIO: IO[TransactionWithContext]) =>
       for {
         txWithCtx <- txWithCtxIO
-        TransactionWithContext(tx, _, _) = txWithCtx
+        TransactionWithContext(tx, _, _, _) = txWithCtx
         service <- buildWalletTxSubmissionService().map(_._1)
         txId <- service.submitTransaction(tx)
       } yield assertEquals(txId.txId, tx.identifiers().head)
@@ -105,7 +112,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     forAllF { (txWithCtxIO: IO[TransactionWithContext]) =>
       for {
         txWithCtx <- txWithCtxIO
-        TransactionWithContext(tx, _, _) = txWithCtx
+        TransactionWithContext(tx, _, _, _) = txWithCtx
         service <- buildWalletTxSubmissionService().map(_._1)
         _ <- service.submitTransaction(tx)
       } yield assert(txSubmissionService.wasTxSubmitted(tx))
@@ -114,9 +121,10 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   // Fix me: This can be brought back once we have a proper wellFormed function again
   test("Fails when received transaction is not well formed".ignore) {
-    val state = LocalState()
+    val secretKeys = Generators.keyGenerator()
     forAllF(coinInfoArbitrary.arbitrary, Gen.posNum[Int]) { (coin, amount) =>
-      val output = UnprovenOutput.`new`(coin, state.coinPublicKey, state.encryptionPublicKey)
+      val output =
+        UnprovenOutput.`new`(coin, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
       // offer with output, but with not the same amount of coins in deltas
       val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value - js.BigInt(amount))
 
@@ -137,7 +145,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     forAllF { (txWithCtxIO: IO[TransactionWithContext]) =>
       for {
         txWithCtx <- txWithCtxIO
-        TransactionWithContext(tx, _, _) = txWithCtx
+        TransactionWithContext(tx, _, _, _) = txWithCtx
         service <- buildWalletTxSubmissionService(txSubmissionService = failingTxSubmissionService)
           .map(_._1)
         result <- service.submitTransaction(tx).attempt
@@ -157,19 +165,27 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   test("Recovers funds when submission is rejected") {
     given WalletTxServiceTracer = WalletTxServiceTracer.from(Tracer.noOpTracer)
     val randomRecipient = {
-      val randomLocalState = LocalState()
+      val randomSecretKeys = Generators.keyGenerator()
       domain.Address(
         zswap
           .Address[CoinPublicKey, EncPublicKey](
-            randomLocalState.coinPublicKey,
-            randomLocalState.encryptionPublicKey,
+            randomSecretKeys.coinPublicKey,
+            randomSecretKeys.encryptionPublicKey,
           )
           .asString,
       )
     }
     for {
+      seed <- IO(zswap.HexUtil.randomHex())
+      initialStateWithKeys <- IO {
+        generateStateWithFunds(
+          NonEmptyList.one((nativeToken(), 1_000_000)),
+          Some(seed),
+        )
+      }
       tuple <- buildWalletTxSubmissionService(
-        initialState = generateStateWithFunds(NonEmptyList.one((nativeToken(), 1_000_000))),
+        initialState = initialStateWithKeys._1,
+        seed = Some(seed),
         txSubmissionService = new RejectedTxSubmissionServiceStub(),
       )
       (service, stateContainer) = tuple
@@ -201,7 +217,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     forAllF { (txWithCtxIO: IO[TransactionWithContext]) =>
       for {
         txWithCtx <- txWithCtxIO
-        TransactionWithContext(tx, _, _) = txWithCtx
+        TransactionWithContext(tx, _, _, _) = txWithCtx
         service <- buildWalletTxSubmissionService(txSubmissionService =
           new RejectedTxSubmissionServiceStub(),
         ).map(_._1)

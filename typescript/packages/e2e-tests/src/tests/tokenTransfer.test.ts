@@ -1,5 +1,5 @@
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import {
   LedgerParameters,
@@ -45,7 +45,7 @@ describe('Token transfer', () => {
       fixture = getFixture();
       const networkId = NetworkId.Undeployed;
 
-      walletFunded = await WalletBuilder.buildFromSeed(
+      walletFunded = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -55,7 +55,7 @@ describe('Token transfer', () => {
         'info',
       );
 
-      wallet2 = await WalletBuilder.buildFromSeed(
+      wallet2 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),

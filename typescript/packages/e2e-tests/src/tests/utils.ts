@@ -6,7 +6,7 @@ import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { TestContainersFixture } from './test-fixture';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { existsSync } from 'node:fs';
@@ -68,6 +68,7 @@ export const provideWallet = async (
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
         fixture.getNodeUri(),
+        seed,
         serialized,
         'info',
       );
@@ -75,7 +76,7 @@ export const provideWallet = async (
       const stateObject = JSON.parse(serialized);
       if (await isAnotherChain(wallet, stateObject.offset)) {
         logger.warn('The chain was reset, building wallet from scratch');
-        wallet = await WalletBuilder.buildFromSeed(
+        wallet = await WalletBuilder.build(
           fixture.getIndexerUri(),
           fixture.getIndexerWsUri(),
           fixture.getProverUri(),
@@ -93,7 +94,7 @@ export const provideWallet = async (
           logger.info(`Offset: ${stateObject.offset}`);
           logger.info(`SyncProgress.total: ${newState.syncProgress?.total}`);
           logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
-          wallet = await WalletBuilder.buildFromSeed(
+          wallet = await WalletBuilder.build(
             fixture.getIndexerUri(),
             fixture.getIndexerWsUri(),
             fixture.getProverUri(),
@@ -111,7 +112,7 @@ export const provideWallet = async (
         logger.error(error.message);
       }
       logger.warn('Wallet was not able to restore using the stored state, building wallet from scratch');
-      wallet = await WalletBuilder.buildFromSeed(
+      wallet = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -123,7 +124,7 @@ export const provideWallet = async (
     }
   } else {
     logger.info(`${directoryPath}/${filename} not present, building a wallet from scratch`);
-    wallet = await WalletBuilder.buildFromSeed(
+    wallet = await WalletBuilder.build(
       fixture.getIndexerUri(),
       fixture.getIndexerWsUri(),
       fixture.getProverUri(),

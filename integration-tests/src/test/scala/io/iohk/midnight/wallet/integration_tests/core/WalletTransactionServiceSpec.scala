@@ -30,12 +30,13 @@ import org.scalacheck.effect.PropF.forAllF
 import scala.concurrent.duration.DurationInt
 import scalajs.js
 
-@SuppressWarnings(Array("org.wartremover.warts.SeqApply"))
+@SuppressWarnings(Array("org.wartremover.warts.SeqApply", "org.wartremover.warts.TryPartial"))
 class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -46,6 +47,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -56,14 +58,15 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalState, Transaction]
+  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   private val costModel = TransactionCostModel.dummyTransactionCostModel()
   private val inputFeeOverhead = costModel.inputFeeOverhead
   private val outputFeeOverhead = costModel.outputFeeOverhead
 
   def buildWalletTransactionService(
-      initialState: LocalState = LocalState(),
+      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      secretKeys: SecretKeys = Generators.keyGenerator(),
       prover: ProvingService[UnprovenTransaction, Transaction] = provingService,
   ): Resource[
     IO,
@@ -73,14 +76,19 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
     ),
   ] = {
     val snapshot =
-      Snapshot[LocalState, Transaction](
+      Snapshot[LocalStateNoKeys, Transaction](
         initialState,
         Seq.empty,
         None,
         ProtocolVersion.V1,
         zswap.NetworkId.Undeployed,
       )
-    Bloc[Wallet](walletCreation.create(snapshot)).map { bloc =>
+    Bloc[Wallet](
+      walletCreation.create(
+        zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
+        snapshot,
+      ),
+    ).map { bloc =>
       given WalletTxServiceTracer = WalletTxServiceTracer.from(Tracer.noOpTracer)
       val walletStateContainer = new WalletStateContainer.Live(bloc)
       val walletTxService =
@@ -148,13 +156,14 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
           .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
           .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
       )
-      buildWalletTransactionService(initialState).use { (walletTransactionService, _) =>
-        walletTransactionService.prepareTransferRecipe(transfers.toList).map {
-          case domain.TransactionToProve(toProve) =>
-            assert(toProve.guaranteedCoins.exists(_.outputs.length >= transfers.size))
-            assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
-            assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
-        }
+      buildWalletTransactionService(initialState._1, initialState._2).use {
+        (walletTransactionService, _) =>
+          walletTransactionService.prepareTransferRecipe(transfers.toList).map {
+            case domain.TransactionToProve(toProve) =>
+              assert(toProve.guaranteedCoins.exists(_.outputs.length >= transfers.size))
+              assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+              assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
+          }
       }
     }
   }
@@ -168,16 +177,17 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
           .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
           .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
       )
-      buildWalletTransactionService(initialState).use { (walletTransactionService, _) =>
-        walletTransactionService.prepareTransferRecipe(invalidTransfer :: transfers.toList).map {
-          case domain.TransactionToProve(toProve) =>
-            assert(toProve.guaranteedCoins.exists(_.outputs.sizeIs >= transfers.size))
-            assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
-            assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
-            assert(
-              toProve.guaranteedCoins.exists(_.deltas.get(invalidTransfer.tokenType).isEmpty),
-            )
-        }
+      buildWalletTransactionService(initialState._1, initialState._2).use {
+        (walletTransactionService, _) =>
+          walletTransactionService.prepareTransferRecipe(invalidTransfer :: transfers.toList).map {
+            case domain.TransactionToProve(toProve) =>
+              assert(toProve.guaranteedCoins.exists(_.outputs.sizeIs >= transfers.size))
+              assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+              assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
+              assert(
+                toProve.guaranteedCoins.exists(_.deltas.get(invalidTransfer.tokenType).isEmpty),
+              )
+          }
       }
     }
   }
@@ -204,58 +214,66 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
   test("Prepare recipe for balancing given transaction") {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
-      txWithContextIO.flatMap { case TransactionWithContext(transaction, _, coins) =>
-        val initialState = Generators.generateStateWithFunds(
-          coins
-            .map(coin => (coin.tokenType, (coin.value * coin.value + coin.value).toScalaBigInt))
-            .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
-        )
+      txWithContextIO.flatMap {
+        case TransactionWithContext(transaction, state, secretKeys, coins) =>
+          val initialState = Generators.generateStateWithFunds(
+            coins
+              .map(coin => (coin.tokenType, (coin.value * coin.value + coin.value).toScalaBigInt))
+              .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
+          )
 
-        buildWalletTransactionService(initialState).use { (walletTransactionService, _) =>
-          walletTransactionService.balanceTransaction(transaction, coins.toList).map {
-            case domain.BalanceTransactionToProve(toProve, toBalance) =>
-              assertEquals(toBalance, transaction)
-              val balancedTransaction = transaction.eraseProofs().merge(toProve.eraseProofs())
-              assert(
-                balancedTransaction
-                  .imbalances(true, balancedTransaction.fees(LedgerParameters.dummyParameters()))
-                  .toList
-                  .forall(_._2 >= js.BigInt(0)),
-              )
-              assert(balancedTransaction.imbalances(false).toList.forall(_._2 >= js.BigInt(0)))
-            case domain.NothingToProve(_) =>
-              fail("balanceTransaction must produce transaction to prove")
+          buildWalletTransactionService(initialState._1, initialState._2).use {
+            (walletTransactionService, _) =>
+              walletTransactionService.balanceTransaction(transaction, coins.toList).map {
+                case domain.BalanceTransactionToProve(toProve, toBalance) =>
+                  assertEquals(toBalance, transaction)
+                  val balancedTransaction = transaction.eraseProofs().merge(toProve.eraseProofs())
+                  assert(
+                    balancedTransaction
+                      .imbalances(
+                        true,
+                        balancedTransaction.fees(LedgerParameters.dummyParameters()),
+                      )
+                      .toList
+                      .forall(_._2 >= js.BigInt(0)),
+                  )
+                  assert(balancedTransaction.imbalances(false).toList.forall(_._2 >= js.BigInt(0)))
+                case domain.NothingToProve(_) =>
+                  fail("balanceTransaction must produce transaction to prove")
+              }
           }
-        }
       }
     }
   }
 
   test("Fails when not enough funds for balancing given transaction") {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
-      txWithContextIO.flatMap { case TransactionWithContext(transaction, _, coins) =>
-        buildWalletTransactionService().use { (walletTransactionService, _) =>
-          walletTransactionService.balanceTransaction(transaction, coins.toList).attempt.map {
-            case Left(error) =>
-              assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
-            case Right(_) => fail("balanceTransaction without funds must fail")
+      txWithContextIO.flatMap {
+        case TransactionWithContext(transaction, state, secretKeys, coins) =>
+          buildWalletTransactionService().use { (walletTransactionService, _) =>
+            walletTransactionService.balanceTransaction(transaction, coins.toList).attempt.map {
+              case Left(error) =>
+                assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
+              case Right(_) => fail("balanceTransaction without funds must fail")
+            }
           }
-        }
       }
     }
   }
 
   test("Reverts applied transaction when proving fails") {
+    val initialState = generateStateWithFunds(NonEmptyList.one((nativeToken(), 1_000_000)))
     buildWalletTransactionService(
-      generateStateWithFunds(NonEmptyList.one((nativeToken(), 1_000_000))),
+      initialState._1,
+      initialState._2,
       new FailingProvingService,
     ).use { (walletTransactionService, walletStateContainer) =>
-      val randomState = LocalState()
+      val randomSecretKeys = Generators.keyGenerator()
       val randomRecipient = domain.Address(
         zswap
           .Address[CoinPublicKey, EncPublicKey](
-            randomState.coinPublicKey,
-            randomState.encryptionPublicKey,
+            randomSecretKeys.coinPublicKey,
+            randomSecretKeys.encryptionPublicKey,
           )
           .asString,
       )

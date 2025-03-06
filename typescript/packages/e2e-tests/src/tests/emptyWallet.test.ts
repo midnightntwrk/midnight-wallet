@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { MidnightNetwork, closeWallet, compareStates, waitForSync } from './utils';
@@ -68,7 +68,7 @@ describe('Midnight wallet', () => {
     }
 
     await expect(
-      WalletBuilder.buildFromSeed(
+      WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -104,7 +104,7 @@ describe('Fresh wallet with empty state', () => {
           break;
       }
 
-      wallet = await WalletBuilder.buildFromSeed(
+      wallet = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -143,6 +143,7 @@ describe('Fresh wallet with empty state', () => {
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
         fixture.getNodeUri(),
+        seed,
         serialized,
         'info',
       );

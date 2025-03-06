@@ -1,4 +1,4 @@
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { closeWallet, provideWallet, saveState, waitForSync } from './utils';
@@ -46,7 +46,7 @@ describe('Balance constant', () => {
         break;
     }
 
-    wallet = await WalletBuilder.buildFromSeed(
+    wallet = await WalletBuilder.build(
       fixture.getIndexerUri(),
       fixture.getIndexerWsUri(),
       fixture.getProverUri(),

@@ -6,6 +6,7 @@ import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
+import io.iohk.midnight.midnightNtwrkZswap.mod.LocalStateNoKeys
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
@@ -23,9 +24,11 @@ import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import scala.util.{Failure, Success, Try}
 
 final class V1Combination(
-    initialState: Wallet[v1.LocalState, v1.Transaction],
+    initialState: Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction],
     syncService: SyncService,
-    stateContainer: WalletStateContainer[Wallet[v1.LocalState, v1.Transaction]],
+    stateContainer: WalletStateContainer[
+      Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction],
+    ],
     val stateService: WalletStateService[
       v1.CoinPublicKey,
       v1.EncPublicKey,
@@ -45,7 +48,7 @@ final class V1Combination(
     submissionService: WalletTxSubmissionService[v1.Transaction],
     deferred: Deferred[IO, Unit],
 )(using
-    WalletTxHistory[Wallet[v1.LocalState, v1.Transaction], v1.Transaction],
+    WalletTxHistory[Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction], v1.Transaction],
     zswap.NetworkId,
 ) extends VersionCombination {
 
@@ -97,18 +100,19 @@ final class V1Combination(
 
 @JSExportTopLevel("V1Combination")
 object V1Combination {
-  type TWallet = Wallet[v1.LocalState, v1.Transaction]
+  type TWallet = Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction]
 
   type WalletBalancing =
     WalletTxBalancing[TWallet, v1.Transaction, v1.UnprovenTransaction, v1.CoinInfo, v1.TokenType]
   type WalletTxService =
     WalletTransactionService[v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType]
 
-  given snapshotInstances: SnapshotInstances[v1.LocalState, v1.Transaction] =
+  given snapshotInstances: SnapshotInstances[v1.LocalStateNoKeys, v1.Transaction] =
     new SnapshotInstances
 
   val walletInstances: WalletInstances[
-    v1.LocalState,
+    v1.LocalStateNoKeys,
+    v1.SecretKeys,
     v1.Transaction,
     v1.TokenType,
     v1.Offer,
@@ -119,6 +123,7 @@ object V1Combination {
     v1.CoinPublicKey,
     v1.EncryptionSecretKey,
     v1.EncPublicKey,
+    v1.CoinSecretKey,
     v1.UnprovenInput,
     v1.ProofErasedOffer,
     v1.MerkleTreeCollapsedUpdate,
@@ -142,9 +147,9 @@ object V1Combination {
       if config.discardTxHistory then walletInstances.walletDiscardTxHistory
       else walletInstances.walletTxHistory
     for {
-      initialWallet <- parseInitialState(config.initialState).liftTo[IO].toResource
+      initialWallet <- parseInitialState(config.initialState, config.seed).liftTo[IO].toResource
       syncService <- syncServiceFactory(
-        initialWallet.state.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey(),
+        initialWallet.secretKeys.encryptionSecretKey,
         initialWallet.offset.map(_.value),
       )
       walletStateContainer <- WalletStateContainer.Live(initialWallet)
@@ -212,18 +217,19 @@ object V1Combination {
     )
   }
 
-  def parseInitialState(initialState: Config.InitialState): Either[Throwable, TWallet] =
+  def parseInitialState(
+      initialState: Config.InitialState,
+      seed: Array[Byte],
+  ): Either[Throwable, TWallet] = {
     (initialState match
       case Config.InitialState.CreateNew(networkId) =>
         given zswap.NetworkId = networkId
+
         snapshotInstances.create.asRight
-      case Config.InitialState.Seed(seed, networkId) =>
-        given zswap.NetworkId = networkId
-        snapshotInstances.fromSeed(seed)
       case Config.InitialState.SerializedSnapshot(serialized) =>
         snapshotInstances.parse(serialized)
-    )
-      .map(walletInstances.walletCreation.create)
+    ).map(walletInstances.walletCreation.create(seed, _))
+  }
 
   @JSExport def mapIndexerEvent(
       event: IndexerEvent,

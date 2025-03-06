@@ -29,7 +29,8 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
       UnprovenOffer,
       UnprovenInput,
       UnprovenOutput,
-      LocalState,
+      LocalStateNoKeys,
+      SecretKeys,
       Transaction,
       Offer,
       QualifiedCoinInfo,
@@ -42,7 +43,7 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
 
   given transactionDataArbitrary(using
       txWithContextArbitrary: Arbitrary[IO[TransactionWithContext]],
-  ): Arbitrary[IO[(LocalState, Transaction, NonEmptyList[CoinInfo])]] = {
+  ): Arbitrary[IO[(LocalStateNoKeys, SecretKeys, Transaction, NonEmptyList[CoinInfo])]] = {
     Arbitrary {
       txWithContextArbitrary.arbitrary.map { txWithContextIO =>
         txWithContextIO.map { txWithContext =>
@@ -54,18 +55,18 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
             (coin.`type`, (coin.value * coin.value).toScalaBigInt),
           )
           val coins = Generators.generateCoinsFor(imbalances)
-          val stateWithCoins = Generators.generateStateWithCoins(coins)
-          (stateWithCoins, txWithContext.transaction, coins)
+          val (stateWithCoins, secretKeys) = Generators.generateStateWithCoins(coins)
+          (stateWithCoins, secretKeys, txWithContext.transaction, coins)
         }
       }
     }
   }
 
   test("balance transaction and output change") {
-    forAllF { (data: IO[(LocalState, Transaction, NonEmptyList[CoinInfo])]) =>
-      data.map { case (stateWithCoins, imbalancedTx, _) =>
+    forAllF { (data: IO[(LocalStateNoKeys, SecretKeys, Transaction, NonEmptyList[CoinInfo])]) =>
+      data.map { case (stateWithCoins, secretKeys, imbalancedTx, _) =>
         transactionBalancer
-          .balanceTransaction(stateWithCoins, imbalancedTx) match {
+          .balanceTransaction(stateWithCoins, secretKeys, imbalancedTx) match {
           case Left(error) => fail(error.getMessage, error)
           case Right(
                 transactionBalancer.BalanceTransactionResult
@@ -90,16 +91,16 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
 
   // Proving transactions with inputs takes significant time - test often fails
   test(new TestOptions("no transaction changes when tx has positive imbalances").flaky) {
-    forAllF { (data: IO[(LocalState, Transaction, NonEmptyList[CoinInfo])]) =>
-      data.flatMap { case (stateWithCoins, imbalancedTx, _) =>
+    forAllF { (data: IO[(LocalStateNoKeys, SecretKeys, Transaction, NonEmptyList[CoinInfo])]) =>
+      data.flatMap { case (stateWithCoins, secretKeys, imbalancedTx, _) =>
         transactionBalancer
-          .balanceTransaction(stateWithCoins, imbalancedTx) match
+          .balanceTransaction(stateWithCoins, secretKeys, imbalancedTx) match
           case Right(
                 transactionBalancer.BalanceTransactionResult
                   .BalancedTransactionAndState(unprovenBalancedTx, _),
               ) =>
             provingService.proveTransaction(unprovenBalancedTx).map { balancedTx =>
-              transactionBalancer.balanceTransaction(stateWithCoins, balancedTx) match
+              transactionBalancer.balanceTransaction(stateWithCoins, secretKeys, balancedTx) match
                 case Right(
                       transactionBalancer.BalanceTransactionResult
                         .ReadyTransactionAndState(doubleBalancedOffer, _),
@@ -119,10 +120,10 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
         val imbalances = txWithContext.coins.map(coin => (coin.`type`, coin.value.toScalaBigInt))
         val possibleTokenTypes = txWithContext.coins.map(_.`type`).prepend(nativeToken())
         // generating not enough coins
-        val stateWithCoins = Generators.generateStateWithFunds(imbalances)
+        val (stateWithCoins, secretKeys) = Generators.generateStateWithFunds(imbalances)
 
         transactionBalancer
-          .balanceTransaction(stateWithCoins, txWithContext.transaction) match {
+          .balanceTransaction(stateWithCoins, secretKeys, txWithContext.transaction) match {
           case Left(transactionBalancer.NotSufficientFunds(tokenType)) =>
             assert(possibleTokenTypes.exists(_ === tokenType))
           case _ =>
@@ -138,12 +139,16 @@ class TransactionBalancerTransactionSpec extends WithProvingServerSuite {
         val stateWithCoins = txWithContext.state
         val stateCoins = stateWithCoins.coins
         val stateWithSpentCoins = stateCoins.toList.foldLeft(stateWithCoins) { (accState, coin) =>
-          accState.spend(coin)._1
+          accState.spend(txWithContext.secretKeys, coin)._1
         }
         val possibleTokenTypes = txWithContext.coins.map(_.`type`).prepend(nativeToken())
 
         transactionBalancer
-          .balanceTransaction(stateWithSpentCoins, txWithContext.transaction) match {
+          .balanceTransaction(
+            stateWithSpentCoins,
+            txWithContext.secretKeys,
+            txWithContext.transaction,
+          ) match {
           case Left(transactionBalancer.NotSufficientFunds(tokenType)) =>
             assert(possibleTokenTypes.exists(_ === tokenType))
           case _ =>

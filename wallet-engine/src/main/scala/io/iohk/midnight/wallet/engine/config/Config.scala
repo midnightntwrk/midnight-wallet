@@ -5,10 +5,15 @@ import cats.syntax.all.*
 import io.iohk.midnight.js.interop.TracerCarrier
 import io.iohk.midnight.tracer.logging.LogLevel
 import io.iohk.midnight.wallet.core.Config.InitialState
-import io.iohk.midnight.wallet.engine.config.Config.ParseError.{InvalidLogLevel, InvalidUri}
+import io.iohk.midnight.wallet.engine.config.Config.ParseError.{
+  InvalidLogLevel,
+  InvalidSeed,
+  InvalidUri,
+}
 import sttp.model.Uri
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import io.iohk.midnight.wallet.zswap.HexUtil
 
 @JSExportAll
 @JSExportTopLevel("Config")
@@ -18,6 +23,7 @@ final case class Config(
     provingServerUri: Uri,
     substrateNodeUri: Uri,
     minLogLevel: LogLevel,
+    seed: Array[Byte],
     initialState: InitialState,
     discardTxHistory: Boolean,
 )
@@ -31,6 +37,10 @@ object Config {
       Uri.parse(rawConfig.provingServerUri).leftMap(InvalidUri.apply),
       Uri.parse(rawConfig.substrateNodeUri).leftMap(InvalidUri.apply),
       TracerCarrier.parseLogLevel(rawConfig.minLogLevel).leftMap(InvalidLogLevel.apply),
+      HexUtil
+        .decodeHex(rawConfig.seed)
+        .toEither
+        .leftMap(error => InvalidSeed.apply(error.getMessage)),
       rawConfig.initialState.asRight,
       rawConfig.discardTxHistory.getOrElse(false).asRight,
     )
@@ -42,5 +52,6 @@ object Config {
   object ParseError {
     final case class InvalidLogLevel(msg: String) extends ParseError(msg)
     final case class InvalidUri(msg: String) extends ParseError(msg)
+    final case class InvalidSeed(msg: String) extends ParseError(msg)
   }
 }

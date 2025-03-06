@@ -151,6 +151,7 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
+      seed: String,
       networkId: mod.NetworkId,
       minLogLevel: js.UndefOr[String],
       discardTxHistory: js.UndefOr[Boolean],
@@ -160,8 +161,9 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      minLogLevel.toOption,
+      seed,
       InitialState.CreateNew(NetworkId.fromJs(networkId)),
+      minLogLevel.toOption,
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -181,8 +183,9 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
+      seed,
+      InitialState.CreateNew(NetworkId.fromJs(networkId)),
       minLogLevel.toOption,
-      InitialState.Seed(seed, NetworkId.fromJs(networkId)),
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -192,6 +195,7 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
+      seed: String,
       serializedState: String,
       minLogLevel: js.UndefOr[String],
       discardTxHistory: js.UndefOr[Boolean],
@@ -201,8 +205,9 @@ object JsWallet {
       indexerWsUri,
       proverServerUri,
       substrateNodeUri,
-      minLogLevel.toOption,
+      seed,
       InitialState.SerializedSnapshot(serializedState),
+      minLogLevel.toOption,
       discardTxHistory.toOption,
     ).unsafeToPromise()
 
@@ -211,8 +216,9 @@ object JsWallet {
       indexerWsUri: String,
       proverServerUri: String,
       substrateNodeUri: String,
-      minLogLevel: Option[String],
+      seed: String,
       initialState: InitialState,
+      minLogLevel: Option[String],
       discardTxHistory: Option[Boolean],
   ): IO[api.Wallet] = {
     val rawConfig =
@@ -221,9 +227,10 @@ object JsWallet {
         indexerWsUri,
         proverServerUri,
         substrateNodeUri,
-        minLogLevel,
+        seed,
         initialState,
         discardTxHistory,
+        minLogLevel,
       )
 
     for {
@@ -236,7 +243,7 @@ object JsWallet {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig, jsWalletTracer)
       allocatedVersionCombinator <-
-        new WalletBuilder[mod.LocalState, mod.Transaction]
+        new WalletBuilder[mod.LocalStateNoKeys, mod.Transaction]
           .build(config)
           .allocated
       (versionCombinator, finalizer) = allocatedVersionCombinator
@@ -275,7 +282,7 @@ object JsWallet {
   @JSExport
   def generateInitialState(networkId: mod.NetworkId): String = {
     given NetworkId = NetworkId.fromJs(networkId)
-    val snapshots = new SnapshotInstances[mod.LocalState, mod.Transaction]
+    val snapshots = new SnapshotInstances[mod.LocalStateNoKeys, mod.Transaction]
     import snapshots.given
     snapshots.create.serialize
   }

@@ -21,8 +21,9 @@ import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("CoreWalletInstance")
 @JSExportAll
-final case class Wallet[LocalState, Transaction](
-    state: LocalState,
+final case class Wallet[LocalStateNoKeys, SecretKeys, Transaction](
+    state: LocalStateNoKeys,
+    secretKeys: SecretKeys,
     txHistory: Vector[Transaction],
     offset: Option[data.Transaction.Offset],
     progress: ProgressUpdate,
@@ -38,24 +39,25 @@ final case class Wallet[LocalState, Transaction](
   ](
       transaction: AppliedTransaction[TX],
   )(using
-      evolveState: zswap.LocalState.EvolveState[
-        LocalState,
+      evolveState: zswap.LocalStateNoKeys.EvolveState[
+        LocalStateNoKeys,
+        SecretKeys,
         Offer,
         ProofErasedOffer,
         MerkleTreeCollapsedUpdate,
       ],
-  ): Wallet[LocalState, Transaction] = {
+  ): Wallet[LocalStateNoKeys, SecretKeys, Transaction] = {
     val tx = transaction.tx
     val newState = transaction.applyStage match {
       case ApplyStage.FailEntirely =>
         val guaranteed = tx.guaranteedCoins.fold(state)(state.applyFailed)
         tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.FailFallible =>
-        val guaranteed = tx.guaranteedCoins.fold(state)(state.apply)
+        val guaranteed = tx.guaranteedCoins.fold(state)(state.apply(secretKeys, _))
         tx.fallibleCoins.fold(guaranteed)(guaranteed.applyFailed)
       case ApplyStage.SucceedEntirely =>
-        val guaranteed = transaction.tx.guaranteedCoins.fold(state)(state.apply)
-        tx.fallibleCoins.fold(guaranteed)(guaranteed.apply)
+        val guaranteed = transaction.tx.guaranteedCoins.fold(state)(state.apply(secretKeys, _))
+        tx.fallibleCoins.fold(guaranteed)(guaranteed.apply(secretKeys, _))
     }
 
     this.copy(state = newState)
@@ -66,12 +68,13 @@ final case class Wallet[LocalState, Transaction](
 @JSExportAll
 object Wallet {
   def emptyV1(
-      localState: mod.LocalState,
+      localState: mod.LocalStateNoKeys,
+      secretKeys: mod.SecretKeys,
       networkId: zswap.NetworkId,
-  ): Wallet[mod.LocalState, mod.Offer] = {
-
+  ): Wallet[mod.LocalStateNoKeys, mod.SecretKeys, mod.Offer] = {
     new Wallet(
       localState,
+      secretKeys,
       Vector.empty,
       None,
       ProgressUpdate.empty,
@@ -83,7 +86,8 @@ object Wallet {
 }
 
 class WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -94,6 +98,7 @@ class WalletInstances[
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -101,9 +106,25 @@ class WalletInstances[
     UnprovenOffer,
     UnprovenOutput,
 ](using
-    zswap.LocalState.HasCoins[LocalState, QualifiedCoinInfo, CoinInfo, UnprovenInput],
-    zswap.LocalState.HasKeys[LocalState, CoinPublicKey, EncPublicKey, EncryptionSecretKey],
-    zswap.LocalState.EvolveState[LocalState, Offer, ProofErasedOffer, MerkleTreeCollapsedUpdate],
+    zswap.LocalStateNoKeys.HasCoins[
+      LocalStateNoKeys,
+      SecretKeys,
+      QualifiedCoinInfo,
+      CoinInfo,
+      UnprovenInput,
+    ],
+    zswap.LocalStateNoKeys.EvolveState[
+      LocalStateNoKeys,
+      SecretKeys,
+      Offer,
+      ProofErasedOffer,
+      MerkleTreeCollapsedUpdate,
+    ],
+    zswap.SecretKeys.CanInit[SecretKeys],
+    zswap.SecretKeys.HasCoinPublicKey[SecretKeys, CoinPublicKey],
+    zswap.SecretKeys.HasEncryptionPublicKey[SecretKeys, EncPublicKey],
+    zswap.SecretKeys.HasCoinSecretKey[SecretKeys, CoinSecretKey],
+    zswap.SecretKeys.HasEncryptionSecretKey[SecretKeys, EncryptionSecretKey],
     zswap.Transaction.HasImbalances[Transaction, TokenType],
     zswap.Transaction.Transaction[Transaction, Offer],
     zswap.QualifiedCoinInfo[QualifiedCoinInfo, TokenType, ?],
@@ -116,20 +137,22 @@ class WalletInstances[
     Eq[TokenType],
     Show[TokenType],
 )(using
-    snapshotInstances: SnapshotInstances[LocalState, Transaction],
+    snapshotInstances: SnapshotInstances[LocalStateNoKeys, Transaction],
+    sks: zswap.SecretKeys.CanInit[SecretKeys],
     uo: zswap.UnprovenOffer[UnprovenOffer, UnprovenInput, UnprovenOutput, TokenType],
     uOut: zswap.UnprovenOutput[UnprovenOutput, CoinInfo, CoinPublicKey, EncPublicKey],
     ut: zswap.UnprovenTransaction.HasCoins[UnprovenTransaction, UnprovenOffer],
     ci: zswap.CoinInfo[CoinInfo, TokenType],
 ) {
-  type TWallet = Wallet[LocalState, Transaction]
+  type TWallet = Wallet[LocalStateNoKeys, SecretKeys, Transaction]
   private val transactionBalancer = TransactionBalancer[
     TokenType,
     UnprovenTransaction,
     UnprovenOffer,
     UnprovenInput,
     UnprovenOutput,
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     Offer,
     QualifiedCoinInfo,
@@ -138,10 +161,11 @@ class WalletInstances[
     CoinInfo,
   ]
 
-  given walletCreation: WalletCreation[TWallet, Snapshot[LocalState, Transaction]] =
-    (snapshot: Snapshot[LocalState, Transaction]) =>
+  given walletCreation: WalletCreation[TWallet, Snapshot[LocalStateNoKeys, Transaction]] =
+    (seed: Array[Byte], snapshot: Snapshot[LocalStateNoKeys, Transaction]) => {
       new TWallet(
         snapshot.state,
+        sks.fromSeed(seed),
         snapshot.txHistory.toVector,
         snapshot.offset,
         ProgressUpdate(snapshot.offset.map(_.decrement), none),
@@ -149,6 +173,7 @@ class WalletInstances[
         snapshot.networkId,
         isConnected = false,
       )
+    }
 
   given walletBalances: WalletBalances[TWallet, TokenType] with {
     extension (wallet: TWallet) {
@@ -160,11 +185,11 @@ class WalletInstances[
   given walletKeys: WalletKeys[TWallet, CoinPublicKey, EncPublicKey, EncryptionSecretKey] with {
     extension (wallet: TWallet) {
       override def coinPublicKey: CoinPublicKey =
-        wallet.state.coinPublicKey
+        wallet.secretKeys.coinPublicKey
       override def encryptionPublicKey: EncPublicKey =
-        wallet.state.encryptionPublicKey
+        wallet.secretKeys.encryptionPublicKey
       override def viewingKey: EncryptionSecretKey =
-        wallet.state.encryptionSecretKey
+        wallet.secretKeys.encryptionSecretKey
     }
   }
 
@@ -173,7 +198,7 @@ class WalletInstances[
       override def coins: Seq[QualifiedCoinInfo] =
         wallet.state.coins
       override def nullifiers: Seq[Nullifier] =
-        wallet.state.coins.map(wallet.state.spend(_)._2.nullifier)
+        wallet.state.coins.map(wallet.state.spend(wallet.secretKeys, _)._2.nullifier)
       override def availableCoins: Seq[QualifiedCoinInfo] =
         wallet.state.availableCoins
       override def pendingCoins: Seq[CoinInfo] =
@@ -205,7 +230,7 @@ class WalletInstances[
         offers.flatMap(_.reduceLeftOption(_.merge(_)) match
           case Some(offerToBalance) =>
             transactionBalancer
-              .balanceOffer(wallet.state, offerToBalance)
+              .balanceOffer(wallet.state, wallet.secretKeys, offerToBalance)
               .map { case (balancedOffer, newState) =>
                 (
                   wallet.copy(state = newState),
@@ -227,19 +252,19 @@ class WalletInstances[
       ] = {
         val (transactionToBalance, coins) = transactionWithCoins
         transactionBalancer
-          .balanceTransaction(wallet.state, transactionToBalance)
+          .balanceTransaction(wallet.state, wallet.secretKeys, transactionToBalance)
           .map {
             case transactionBalancer.BalanceTransactionResult.BalancedTransactionAndState(
                   unprovenTx,
                   state,
                 ) =>
-              val updatedState = coins.foldLeft(state)(_.watchFor(_))
+              val updatedState = coins.foldLeft(state)(_.watchFor(wallet.secretKeys, _))
               (
                 wallet.copy(state = updatedState),
                 BalanceTransactionToProve(unprovenTx, transactionToBalance),
               )
             case transactionBalancer.BalanceTransactionResult.ReadyTransactionAndState(tx, state) =>
-              val updatedState = coins.foldLeft(state)(_.watchFor(_))
+              val updatedState = coins.foldLeft(state)(_.watchFor(wallet.secretKeys, _))
               (wallet.copy(state = updatedState), NothingToProve(tx))
           }
           .leftMap { case transactionBalancer.NotSufficientFunds(error) =>

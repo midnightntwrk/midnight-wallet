@@ -27,14 +27,16 @@ import org.scalacheck.effect.PropF
 import org.scalacheck.effect.PropF.forAllF
 import scalajs.js
 
+@SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
 class WalletStateServiceSpec
     extends ScalaCheckEffectSuite
     with BetterOutputSuite
     with WithProvingServerSuite {
 
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -45,6 +47,7 @@ class WalletStateServiceSpec
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -55,10 +58,11 @@ class WalletStateServiceSpec
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalState, Transaction]
+  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   def buildWalletStateService(
-      initialState: LocalState = LocalState(),
+      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      seed: Array[Byte] = zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
   ): Resource[IO, WalletStateService[
     CoinPublicKey,
     EncPublicKey,
@@ -69,14 +73,14 @@ class WalletStateServiceSpec
     Nullifier,
     Transaction,
   ]] = {
-    val snapshot = Snapshot[LocalState, Transaction](
+    val snapshot = Snapshot[LocalStateNoKeys, Transaction](
       initialState,
       Seq.empty,
       None,
       ProtocolVersion.V1,
       networkId,
     )
-    Bloc[Wallet](walletCreation.create(snapshot)).map { bloc =>
+    Bloc[Wallet](walletCreation.create(seed, snapshot)).map { bloc =>
       new WalletStateServiceFactory[
         Wallet,
         CoinPublicKey,
@@ -114,8 +118,8 @@ class WalletStateServiceSpec
       for {
         txWithContext <- txWithContextIO
         initialState =
-          txWithContext.transaction.guaranteedCoins.fold(txWithContext.state)(
-            txWithContext.state.apply,
+          txWithContext.transaction.guaranteedCoins.fold(txWithContext.state)((coin) =>
+            txWithContext.state.apply(txWithContext.secretKeys, coin),
           )
         expected =
           txWithContext.transaction.guaranteedCoins.flatMap(
@@ -135,8 +139,10 @@ class WalletStateServiceSpec
   test("Not sum transaction outputs to another wallet") {
     forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txWithCtxIO =>
       txWithCtxIO.flatMap { tx =>
-        val anotherState = tx.guaranteedCoins.fold(LocalState())(LocalState.apply().apply)
-        buildWalletStateService(initialState = anotherState).use(
+        val anotherSecretKeys = Generators.keyGenerator()
+        val anotherState = LocalStateNoKeys()
+        val updatedState = anotherState.apply(anotherSecretKeys, tx.guaranteedCoins.get)
+        buildWalletStateService(updatedState).use(
           _.state.head.compile.lastOrError
             .map(_.balances.get(nativeToken()))
             .map(assertEquals(_, None)),
@@ -146,14 +152,16 @@ class WalletStateServiceSpec
   }
 
   test("Return the public and viewing keys") {
-    val initialState = LocalState()
+    val seedHex = zswap.HexUtil.randomHex()
+    val seed = zswap.HexUtil.decodeHex(seedHex).get
+    val secretKeys = Generators.keyGenerator(Some(seedHex))
     val expected =
       (
-        initialState.coinPublicKey,
-        initialState.encryptionPublicKey,
-        initialState.yesIKnowTheSecurityImplicationsOfThis_encryptionSecretKey().serialize,
+        secretKeys.coinPublicKey,
+        secretKeys.encryptionPublicKey,
+        secretKeys.encryptionSecretKey.serialize,
       )
-    buildWalletStateService(initialState).use(
+    buildWalletStateService(LocalStateNoKeys(), seed).use(
       _.keys.map((cpk, epk, vk) => (cpk, epk, vk.serialize)).assertEquals(expected),
     )
   }

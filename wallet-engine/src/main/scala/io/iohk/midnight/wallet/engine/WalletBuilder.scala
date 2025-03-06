@@ -18,7 +18,7 @@ import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.zswap
 
-class WalletBuilder[LocalState, Transaction] {
+class WalletBuilder[LocalStateNoKeys, Transaction] {
   def build(config: Config): Resource[IO, VersionCombinator] = {
     given rootTracer: Tracer[IO, StructuredLog] =
       ConsoleTracer.contextAware[IO, StringLogContext](config.minLogLevel)
@@ -27,7 +27,7 @@ class WalletBuilder[LocalState, Transaction] {
     for {
       _ <- builderTracer.buildRequested(config).toResource
       combinator <- VersionCombinator(
-        CoreConfig(config.initialState, config.discardTxHistory),
+        CoreConfig(config.initialState, config.seed, config.discardTxHistory),
         submissionServiceFactory(config),
         provingServiceFactory(config),
         syncServiceFactory(config),

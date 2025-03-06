@@ -34,9 +34,10 @@ import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js.JSConverters.*
 
 class JsWalletTransactionsSpec extends WithProvingServerSuite {
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -47,6 +48,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -55,7 +57,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     UnprovenOutput,
   ] = new WalletInstances
 
-  type Wallet = CoreWallet[LocalState, Transaction]
+  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
   private val transferRecipe =
@@ -141,17 +143,18 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
 
   test("submitting a generic tx for balance should return recipe for balanced transaction") {
     forAllF { (txWithContextIO: IO[TransactionWithContext]) =>
-      txWithContextIO.flatMap { case TransactionWithContext(transaction, _, coins) =>
-        jsWallet
-          .use(wallet =>
-            IO.fromPromise(IO(wallet.balanceTransaction(transaction, coins.toList.toJSArray))),
-          )
-          .map { apiRecipe =>
-            assertEquals(
-              ProvingRecipeTransformer.toRecipe(apiRecipe),
-              Right(domain.NothingToProve(transaction)),
+      txWithContextIO.flatMap {
+        case TransactionWithContext(transaction, state, secretKeys, coins) =>
+          jsWallet
+            .use(wallet =>
+              IO.fromPromise(IO(wallet.balanceTransaction(transaction, coins.toList.toJSArray))),
             )
-          }
+            .map { apiRecipe =>
+              assertEquals(
+                ProvingRecipeTransformer.toRecipe(apiRecipe),
+                Right(domain.NothingToProve(transaction)),
+              )
+            }
       }
     }
   }

@@ -19,11 +19,12 @@ import io.iohk.midnight.wallet.zswap.given
 import munit.CatsEffectSuite
 import org.scalacheck.effect.PropF.forAllF
 
+@SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
 class WalletTxHistorySpec extends WithProvingServerSuite {
-
-  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalState,
+    LocalStateNoKeys,
+    SecretKeys,
     Transaction,
     TokenType,
     Offer,
@@ -34,6 +35,7 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
     CoinPublicKey,
     EncryptionSecretKey,
     EncPublicKey,
+    CoinSecretKey,
     UnprovenInput,
     ProofErasedOffer,
     MerkleTreeCollapsedUpdate,
@@ -43,10 +45,11 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
   ] = new WalletInstances
 
   import wallets.given
-  type Wallet = CoreWallet[LocalState, Transaction]
+  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   private def walletForUpdates(txWithContext: TransactionWithContext): Wallet =
     walletCreation.create(
+      zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
       Snapshot(
         txWithContext.state,
         Seq.empty,

@@ -27,9 +27,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(minLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.CreateNew(networkId),
           discardTxHistory = Some(true),
+          Some(minLogLevel),
         ),
       )
 
@@ -48,9 +49,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           invalidIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(minLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.CreateNew(networkId),
           discardTxHistory = Some(true),
+          Some(minLogLevel),
         ),
       )
 
@@ -69,9 +71,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           invalidProverServerUri,
           fakeSubstrateNodeUri,
-          Some(minLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.CreateNew(networkId),
           discardTxHistory = Some(true),
+          Some(minLogLevel),
         ),
       )
 
@@ -90,9 +93,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           invalidSubstrateNodeUri,
-          Some(minLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.CreateNew(networkId),
           discardTxHistory = Some(true),
+          Some(minLogLevel),
         ),
       )
 
@@ -111,9 +115,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(invalidMinLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.CreateNew(networkId),
           discardTxHistory = Some(true),
+          Some(invalidMinLogLevel),
         ),
       )
 
@@ -131,9 +136,10 @@ class WalletBuilderSpec extends CatsEffectSuite with BetterOutputSuite {
           fakeIndexerWSUri,
           fakeProverServerUri,
           fakeSubstrateNodeUri,
-          Some(minLogLevel),
+          "0000000000000000000000000000000000000000000000000000000000000001",
           InitialState.SerializedSnapshot(initialState),
           discardTxHistory = Some(true),
+          Some(minLogLevel),
         ),
       )
     assert(config.isRight)

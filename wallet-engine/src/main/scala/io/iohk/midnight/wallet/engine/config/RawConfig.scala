@@ -12,9 +12,10 @@ final case class RawConfig(
     indexerWsUri: String,
     provingServerUri: String,
     substrateNodeUri: String,
-    minLogLevel: Option[String],
+    seed: String,
     initialState: InitialState,
     discardTxHistory: Option[Boolean],
+    minLogLevel: Option[String],
 )
 
 object RawConfig {

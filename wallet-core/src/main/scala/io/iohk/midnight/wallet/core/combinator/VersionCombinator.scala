@@ -110,8 +110,6 @@ object VersionCombinator {
     (config match {
       case Config.InitialState.CreateNew(networkId) =>
         (ProtocolVersion.V1, networkId).asRight
-      case Config.InitialState.Seed(_, networkId) =>
-        (ProtocolVersion.V1, networkId).asRight
       case Config.InitialState.SerializedSnapshot(serialized) =>
         V1Combination.snapshotInstances.parse(serialized).map(s => (s.protocolVersion, s.networkId))
     }).liftTo[IO]

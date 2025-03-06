@@ -1,4 +1,4 @@
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
 import { useTestContainersFixture } from './test-fixture';
 import { NetworkId, nativeToken } from '@midnight-ntwrk/zswap';
 import { closeWallet, isArrayUnique, waitForSync } from './utils';
@@ -21,7 +21,7 @@ describe('Funded wallet', () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
 
-      wallet = await WalletBuilder.buildFromSeed(
+      wallet = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),

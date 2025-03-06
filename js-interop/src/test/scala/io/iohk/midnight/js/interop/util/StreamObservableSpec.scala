@@ -10,7 +10,9 @@ trait StreamObservableFixtures {
   val error = new RuntimeException("error")
   val stream: Stream[IO, Int] = Stream.emits(events)
   val infiniteStream: Stream[IO, Int] = Stream.emit(0).repeat
-  val errorStream: Stream[IO, Int] =
+
+  // Change from val to lazy val to defer evaluation:
+  lazy val errorStream: Stream[IO, Int] =
     Stream.emits(events) ++ Stream.raiseError[IO](error) ++ Stream.emits(events)
 }
 

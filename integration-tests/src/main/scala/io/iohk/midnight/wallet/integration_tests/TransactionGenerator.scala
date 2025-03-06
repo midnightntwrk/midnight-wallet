@@ -14,7 +14,6 @@ import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.config.Config
 import io.iohk.midnight.wallet.{core, zswap}
 import sttp.client3.UriContext
-
 import scala.concurrent.duration.DurationInt
 import scala.scalajs.js
 
@@ -32,16 +31,19 @@ object TransactionGenerator extends IOApp.Simple {
 
   type Address = zswap.Address[v1.CoinPublicKey, v1.EncPublicKey]
   type TokenTransfer = domain.TokenTransfer[v1.TokenType]
-  type Snapshot = core.Snapshot[v1.LocalState, v1.Transaction]
+  type Snapshot = core.Snapshot[v1.LocalStateNoKeys, v1.Transaction]
 
   def randomRecipient(): Address = {
-    val localState = v1.LocalState()
+    val secretKeys = KeyGenerator.randomSecretKeys()
     import zswap.given
-    new Address(localState.coinPublicKey, localState.encryptionPublicKey)
+    new Address(secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
   }
 
-  def makeRunningWalletResource(initialState: InitialState): Resource[IO, VersionCombinator] =
-    new WalletBuilder[v1.LocalState, v1.Transaction]
+  def makeRunningWalletResource(
+      initialState: InitialState,
+      seed: Array[Byte],
+  ): Resource[IO, VersionCombinator] =
+    new WalletBuilder[v1.LocalStateNoKeys, v1.Transaction]
       .build(
         Config(
           indexerRPCUri,
@@ -49,6 +51,7 @@ object TransactionGenerator extends IOApp.Simple {
           proverServerUri,
           substrateNodeUri,
           LogLevel.Info,
+          seed,
           initialState,
           discardTxHistory = true,
         ),
@@ -57,8 +60,9 @@ object TransactionGenerator extends IOApp.Simple {
 
   def withRunningWallet(
       initialWalletState: InitialState,
+      seed: Array[Byte],
   )(body: VersionCombinator => IO[Unit]): IO[Unit] =
-    makeRunningWalletResource(initialWalletState).use(body(_))
+    makeRunningWalletResource(initialWalletState, seed).use(body(_))
 
   def prepareOutputs(coins: List[v1.CoinInfo], recipient: Address): List[TokenTransfer] =
     coins.map { coin =>
@@ -70,10 +74,14 @@ object TransactionGenerator extends IOApp.Simple {
     }
 
   val initialState: InitialState =
-    InitialState.Seed("0000000000000000000000000000000000000000000000000000000000000002", networkId)
+    InitialState.CreateNew(networkId)
+
+  @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
+  val seed: Array[Byte] =
+    zswap.HexUtil.decodeHex("0000000000000000000000000000000000000000000000000000000000000002").get
 
   override val run: IO[Unit] =
-    withRunningWallet(initialState) { v =>
+    withRunningWallet(initialState, seed) { v =>
       val initialSync =
         v.state
           .evalTap(s => IO.println(s.syncProgress))

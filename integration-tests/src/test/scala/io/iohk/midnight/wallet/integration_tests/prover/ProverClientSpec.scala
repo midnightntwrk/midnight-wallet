@@ -9,10 +9,12 @@ import io.iohk.midnight.wallet.integration_tests.TestContainers
 import io.iohk.midnight.wallet.prover.ProverClient
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.core.Generators
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import munit.{AnyFixture, CatsEffectSuite}
+
 import scala.concurrent.duration.{Duration, DurationInt}
 import scala.scalajs.js
 import sttp.client3.UriContext
@@ -26,8 +28,9 @@ trait ProverClientSetup {
   val spendCoinAmount: js.BigInt = js.BigInt(10_000)
   val spendCoin: CoinInfo = createCoinInfo(dustToken, spendCoinAmount)
   def randomRecipient(): (CoinPublicKey, EncPublicKey) = {
-    val state = LocalState()
-    (state.coinPublicKey, state.encryptionPublicKey)
+    val secretKeys = Generators.keyGenerator()
+
+    (secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
   }
   val (cpk, epk) = randomRecipient()
   val output: UnprovenOutput = UnprovenOutput.`new`(spendCoin, cpk, epk)
