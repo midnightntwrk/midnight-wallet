@@ -5,6 +5,7 @@
   "main": "dist/index.cjs",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
+  "private": true,
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
@@ -14,8 +15,9 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-api": "3.5.0",
+    "@midnight-ntwrk/wallet-api": "^4.0.0",
     "@midnight-ntwrk/zswap": "^3.0.6",
+    "@scure/base": "^1.1.9",
     "isomorphic-ws": "^5.0.0",
     "node-fetch": "3.3.2",
     "rxjs": "^7.5",

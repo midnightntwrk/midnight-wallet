@@ -16,12 +16,19 @@ object UnprovenTransaction {
     def create(guaranteedOffer: UnprovenOffer): T
     extension (t: T) {
       def guaranteedCoins: Option[UnprovenOffer]
+      def fallibleCoins: Option[UnprovenOffer]
     }
   }
 
   trait CanEraseProofs[T, ProofErasedTransaction] {
     extension (t: T) {
       def eraseProofs: ProofErasedTransaction
+    }
+  }
+
+  trait CanMerge[T] {
+    extension (t: T) {
+      def merge(other: T): T
     }
   }
 
@@ -48,6 +55,8 @@ object UnprovenTransaction {
     extension (unprovenTx: mod.UnprovenTransaction) {
       override def guaranteedCoins: Option[mod.UnprovenOffer] =
         unprovenTx.guaranteedCoins.toOption
+
+      override def fallibleCoins: Option[mod.UnprovenOffer] = unprovenTx.fallibleCoins.toOption
     }
   }
 
@@ -55,6 +64,13 @@ object UnprovenTransaction {
     extension (unprovenTx: mod.UnprovenTransaction) {
       override def eraseProofs: mod.ProofErasedTransaction =
         unprovenTx.eraseProofs()
+    }
+  }
+
+  given CanMerge[mod.UnprovenTransaction] with {
+    extension (unprovenTx: mod.UnprovenTransaction) {
+      override def merge(other: mod.UnprovenTransaction): mod.UnprovenTransaction =
+        unprovenTx.merge(other)
     }
   }
 }

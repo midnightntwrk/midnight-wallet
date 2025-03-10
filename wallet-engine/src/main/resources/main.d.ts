@@ -108,7 +108,7 @@ export declare class JsEither {
 }
 
 export declare class IndexerClient {
-  static create(url: string, tracer: TracerCarrier): JsResource<IndexerClient>;
+  static create(wsUrl: string, url: string, tracer: TracerCarrier): JsResource<IndexerClient>;
 }
 
 /* Zswap typeclasses */

@@ -1,8 +1,12 @@
 {
     "name": "@midnight/wallet-core",
-    "author": "IOHK",
+    "author": "IOG",
     "license": "Apache-2.0",
     "type": "module",
+    "dependencies": {
+        "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+        "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*"
+    },
     "devDependencies": {
         "@midnight-ntwrk/zswap": "^3.0.6",
         "typescript": "^4.8.3"

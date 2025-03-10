@@ -12,10 +12,12 @@ import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.NetworkId
 
 class VersionCombinator(
     currentCombination: Bloc[VersionCombination],
     combinationMigrations: CombinationMigrations,
+    val networkId: NetworkId,
     deferred: Deferred[IO, Unit],
 ) {
   def sync: IO[Unit] =
@@ -48,7 +50,14 @@ class VersionCombinator(
   def transactionService(
       protocolVersion: ProtocolVersion,
   ): IO[
-    WalletTransactionService[v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType],
+    WalletTransactionService[
+      v1.UnprovenTransaction,
+      v1.Transaction,
+      v1.CoinInfo,
+      v1.TokenType,
+      v1.CoinPublicKey,
+      v1.EncPublicKey,
+    ],
   ] =
     currentCombination.subscribe.head.compile.lastOrError
       .flatMap(_.transactionService(protocolVersion))
@@ -102,7 +111,7 @@ object VersionCombinator {
       )
       bloc <- Bloc[VersionCombination](initialCombination)
       deferred <- Resource.make(Deferred[IO, Unit])(_.complete(()).void)
-    } yield new VersionCombinator(bloc, combinationMigrations, deferred)
+    } yield new VersionCombinator(bloc, combinationMigrations, networkId, deferred)
 
   private def parseParams(
       config: Config.InitialState,

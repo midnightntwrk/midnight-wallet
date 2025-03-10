@@ -1,6 +1,7 @@
 {
   "name": "@midnight-ntwrk/wallet-integration-tests",
   "type": "module",
+  "private": true,
   "scripts": {
     "test": "tsc && node ./dist/tests.js"
   },

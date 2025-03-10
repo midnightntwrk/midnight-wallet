@@ -1,0 +1,38 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk-hd",
+  "version": "1.0.0-rc.1",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "author": "IOHK",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@scure/base": "^1.1.9",
+    "@scure/bip32": "^1.6.2",
+    "@scure/bip39": "^1.5.4"
+  },
+  "devDependencies": {
+    "@ethereumjs/wallet": "^3.0.0-alpha.1",
+    "fast-check": "^3.23.2"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint",
+    "dist": "rollup -c ./rollup.config.mjs"
+  }
+}

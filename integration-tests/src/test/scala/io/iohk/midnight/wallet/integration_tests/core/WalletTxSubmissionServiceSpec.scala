@@ -72,7 +72,15 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
 
   private val txSubmissionServiceFactory =
-    new WalletTxSubmissionServiceFactory[Wallet, Transaction]
+    new WalletTxSubmissionServiceFactory[
+      Wallet,
+      UnprovenTransaction,
+      Transaction,
+      CoinInfo,
+      TokenType,
+      CoinPublicKey,
+      EncPublicKey,
+    ]
 
   def buildWalletTxSubmissionService(
       initialState: LocalStateNoKeys = LocalStateNoKeys(),
@@ -164,17 +172,9 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   test("Recovers funds when submission is rejected") {
     given WalletTxServiceTracer = WalletTxServiceTracer.from(Tracer.noOpTracer)
-    val randomRecipient = {
-      val randomSecretKeys = Generators.keyGenerator()
-      domain.Address(
-        zswap
-          .Address[CoinPublicKey, EncPublicKey](
-            randomSecretKeys.coinPublicKey,
-            randomSecretKeys.encryptionPublicKey,
-          )
-          .asString,
-      )
-    }
+    val randomSecretKeys = Generators.keyGenerator()
+    val randomRecipient =
+      domain.Address(randomSecretKeys.coinPublicKey, randomSecretKeys.encryptionPublicKey)
     for {
       seed <- IO(zswap.HexUtil.randomHex())
       initialStateWithKeys <- IO {
@@ -197,6 +197,8 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
         Transaction,
         CoinInfo,
         TokenType,
+        CoinPublicKey,
+        EncPublicKey,
       ].create(stateContainer, provingService)
       unProvenTx <- txService.prepareTransferRecipe(
         List(domain.TokenTransfer(50000, nativeToken(), randomRecipient)),

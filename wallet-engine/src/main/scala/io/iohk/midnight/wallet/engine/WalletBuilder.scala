@@ -63,7 +63,7 @@ class WalletBuilder[LocalStateNoKeys, Transaction] {
           s: zswap.EncryptionSecretKey[ESK, ?],
           n: zswap.NetworkId,
       ): Resource[IO, SyncService] =
-        IndexerClient(config.indexerWsUri).map { indexerClient =>
+        IndexerClient(config.indexerWsUri, config.indexerUri).map { indexerClient =>
           new DefaultSyncService[ESK](indexerClient, esk, index)
         }
     }

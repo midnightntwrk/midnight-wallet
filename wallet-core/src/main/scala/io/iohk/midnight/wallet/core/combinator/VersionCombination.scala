@@ -33,7 +33,14 @@ trait VersionCombination {
   def transactionService(
       protocolVersion: ProtocolVersion,
   ): IO[
-    WalletTransactionService[v1.UnprovenTransaction, v1.Transaction, v1.CoinInfo, v1.TokenType],
+    WalletTransactionService[
+      v1.UnprovenTransaction,
+      v1.Transaction,
+      v1.CoinInfo,
+      v1.TokenType,
+      v1.CoinPublicKey,
+      v1.EncPublicKey,
+    ],
   ]
 
   def submissionService(

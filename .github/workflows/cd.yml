@@ -27,19 +27,27 @@ jobs:
           node-version-file: '.tool-versions'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
+          # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@midnight-ntwrk"
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
       - uses: sbt/setup-sbt@v1
 
       - name: Install dependencies
         run: |
-          yarn
+          yarn install --immutable
 
-      - name: Build Wallet
-        run: |
-          yarn dist
+      - name: Build
+        run:  yarn dist
 
-      - name: Publish Wallet
+      - name: Publish release
         run: |
-          cd wallet-engine
-          yarn npm publish
+          yarn workspace @midnight-ntwrk/wallet npm publish || echo "Publishing @midnight-ntwrk/wallet failed" ;
+          yarn workspace @midnight-ntwrk/wallet-sdk-hd npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-hd failed" ;
+          yarn workspace @midnight-ntwrk/wallet-sdk-capabilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-capabilities failed" ;
+          yarn workspace @midnight-ntwrk/wallet-sdk-address-format npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-address-format failed"

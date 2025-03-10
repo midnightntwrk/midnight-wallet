@@ -37,7 +37,7 @@ object SecretKeys {
     override def fromSeed(seed: Array[Byte]): v1.SecretKeys =
       v1.SecretKeys.fromSeed(seed.toUInt8Array)
     override def fromSeedRng(seed: Array[Byte]): v1.SecretKeys =
-      v1.SecretKeys.fromSeed(seed.toUInt8Array)
+      v1.SecretKeys.fromSeedRng(seed.toUInt8Array)
   }
 
   given HasCoinPublicKey[v1.SecretKeys, v1.CoinPublicKey] with {

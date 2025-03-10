@@ -32,6 +32,17 @@
       "cache": false,
       "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
     },
+    "dist:prebuild": {
+      "inputs": [
+        "packages/capabilities/src/**/*.ts",
+        "packages/capabilities/tsconfig*.json",
+        "packages/address-format/src/**/*.ts",
+        "packages/address-format/tsconfig*.json"
+      ],
+      "outputs": [
+        "dist/**"
+      ]
+    },
     "dist": {
       "inputs": [
         "**/src/**/*.ts",
@@ -40,7 +51,7 @@
       "outputs": [
         "dist/**"
       ],
-      "dependsOn": ["^dist", "//#sbt:dist"]
+      "dependsOn": ["dist:prebuild", "^dist", "//#sbt:dist"]
     },
     "verify": {
       "dependsOn": ["//#sbt:verify", "typecheck", "lint", "test"]
@@ -70,7 +81,8 @@
       ],
       "outputs": [
         "**/target/test-reports/**"
-      ]
+      ],
+      "dependsOn": ["//#sbt:dist"]
     }
   }
 }

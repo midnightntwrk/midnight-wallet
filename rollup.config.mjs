@@ -28,9 +28,10 @@ const DEFAULT_OPTIONS = {
 
 /**
  * @param {string} folderPath
- * @param {Options} options 
+ * @param {Options} options
  */
 const common = (folderPath, options) => ({
+  cache: false,
   plugins: [
     resolve(),
     commonjs(),

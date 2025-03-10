@@ -112,7 +112,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
         val apiProvingRecipe = ApiProvingRecipe
           .BalanceTransactionToProve(tx, unprovenTx, BALANCE_TRANSACTION_TO_PROVE)
         compareRecipes(
-          ProvingRecipeTransformer.toApiBalanceTransactionRecipe(provingRecipe),
+          ProvingRecipeTransformer.toApiBalanceTransactionToProve(provingRecipe),
           apiProvingRecipe,
         )
       }
@@ -125,7 +125,7 @@ class ProvingRecipeTransformerSpec extends WithProvingServerSuite {
         val provingRecipe = domain.NothingToProve[UnprovenTransaction, Transaction](tx)
         val apiProvingRecipe = ApiProvingRecipe.NothingToProve(tx, NOTHING_TO_PROVE)
         compareRecipes(
-          ProvingRecipeTransformer.toApiBalanceTransactionRecipe(provingRecipe),
+          ProvingRecipeTransformer.toApiNothingToProve(provingRecipe),
           apiProvingRecipe,
         )
       }

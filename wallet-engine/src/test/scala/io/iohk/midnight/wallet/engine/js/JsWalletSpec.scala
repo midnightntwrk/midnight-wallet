@@ -19,6 +19,7 @@ import io.iohk.midnight.wallet.zswap.{Transaction, given}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.concurrent.duration.DurationInt
 
 class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
@@ -53,12 +54,15 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
   given networkId: zswap.NetworkId = zswap.NetworkId.Undeployed
 
   test("balance should return wallet balance") {
+    val coinPubKey = "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67"
+    val encPubKey = "test-encPubKey"
+
     forAllF(Gen.posNum[BigInt]) { (balance: BigInt) =>
       val walletResource = for {
-        combination <- VersionCombinationStub("", "", balance).toResource
+        combination <- VersionCombinationStub(coinPubKey, encPubKey, balance).toResource
         deferred <- Deferred[IO, Unit].toResource
         bloc <- Bloc[VersionCombination](combination)
-        combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+        combinator = new VersionCombinator(bloc, CombinationMigrations.default, networkId, deferred)
       } yield new JsWallet(combinator, IO.unit, Deferred.unsafe[IO, Unit])
 
       walletResource.use { wallet =>
@@ -71,19 +75,24 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
   }
 
   test("publicKey should return wallet coin public key") {
-    val coinPubKey = "test-coinPubKey"
+    val coinPubKey = "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67"
     val encPubKey = "test-encPubKey"
     val walletResource = for {
       combination <- VersionCombinationStub(coinPubKey, encPubKey, BigInt(1)).toResource
       deferred <- Deferred[IO, Unit].toResource
       bloc <- Bloc[VersionCombination](combination)
-      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, networkId, deferred)
     } yield new JsWallet(combinator, IO.unit, Deferred.unsafe[IO, Unit])
 
     walletResource.use { wallet =>
       IO.fromPromise(IO(firstValueFrom(wallet.state())))
         .map(state => (state.coinPublicKey, state.encryptionPublicKey))
-        .assertEquals((coinPubKey, encPubKey))
+        .assertEquals(
+          (
+            "mn_shield-cpk_undeployed1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdanslfec58",
+            "mn_shield-epk_undeployed1jsq66e",
+          ),
+        )
     }
   }
 
@@ -93,7 +102,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       deferred <- Deferred[IO, Unit].toResource
       combination <- VersionCombinationStub().toResource
       bloc <- Bloc[VersionCombination](combination)
-      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, networkId, deferred)
     } yield (ref, new JsWallet(combinator, ref.set(true), deferred))
 
     walletResource.use { (ref, wallet) =>
@@ -107,7 +116,7 @@ class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with Bette
       deferred <- Deferred[IO, Unit].toResource
       combination = new VersionCombinationStub("", "", BigInt(1), isStarted)
       bloc <- Bloc[VersionCombination](combination)
-      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, networkId, deferred)
     } yield (isStarted, new JsWallet(combinator, IO.unit, deferred))
 
     walletResource.use { (isStarted, wallet) =>

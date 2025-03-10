@@ -47,11 +47,11 @@ jobs:
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
-      - name: Build and check
-        run: |
-          yarn install --immutable
-          sbt clean
-          yarn verify
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Verify
+        run: yarn verify
 
       - name: Publish Test Report
         uses: dorny/test-reporter@v1

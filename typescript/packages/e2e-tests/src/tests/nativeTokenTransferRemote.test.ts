@@ -1,7 +1,14 @@
 import { firstValueFrom } from 'rxjs';
 import { Resource } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { nativeToken, NetworkId, UnprovenOffer, UnprovenOutput, UnprovenTransaction } from '@midnight-ntwrk/zswap';
+import {
+  createCoinInfo,
+  nativeToken,
+  NetworkId,
+  UnprovenOffer,
+  UnprovenOutput,
+  UnprovenTransaction,
+} from '@midnight-ntwrk/zswap';
 import {
   closeWallet,
   provideWallet,
@@ -12,7 +19,6 @@ import {
   waitForTxInHistory,
   walletStateTrimmed,
 } from './utils';
-import { randomBytes } from 'node:crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
@@ -204,12 +210,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialDustBalance2} tDUST`);
       logger.info(`Wallet 1 balance is: ${initialBalance2} ${tokenTypeHash}`);
 
-      const coin = {
-        type: tokenTypeHash,
-        value: outputValue,
-        nonce: randomBytes(32).toString('hex'),
-      };
-      const output = UnprovenOutput.new(coin, initialState.coinPublicKey, initialState.encryptionPublicKey);
+      const coin = createCoinInfo(tokenTypeHash, outputValue);
+      const output = UnprovenOutput.new(coin, initialState.coinPublicKeyLegacy, initialState.encryptionPublicKeyLegacy);
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
       const provenTx = await sender.proveTransaction({

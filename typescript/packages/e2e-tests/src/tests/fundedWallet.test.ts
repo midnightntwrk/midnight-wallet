@@ -1,4 +1,4 @@
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { useTestContainersFixture } from './test-fixture';
 import { NetworkId, nativeToken } from '@midnight-ntwrk/zswap';
 import { closeWallet, isArrayUnique, waitForSync } from './utils';

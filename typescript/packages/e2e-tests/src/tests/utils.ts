@@ -6,7 +6,7 @@ import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture } from './test-fixture';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { existsSync } from 'node:fs';
@@ -260,6 +260,17 @@ export function compareStates(state1: WalletState, state2: WalletState) {
   const normalized1 = normalizeWalletState(state1);
   const normalized2 = normalizeWalletState(state2);
   expect(normalized2).toStrictEqual(normalized1);
+}
+
+// Validate wallet transaction history after wallet has received token
+export function validateWalletTxHistory(finalWalletState: WalletState, initialWalletState: WalletState) {
+  expect(finalWalletState.availableCoins.length).toBe(initialWalletState.availableCoins.length + 1);
+  expect(finalWalletState.pendingCoins.length).toBe(0);
+  expect(finalWalletState.coins.length).toBeGreaterThanOrEqual(initialWalletState.coins.length + 1);
+  expect(finalWalletState.nullifiers.length).toBeGreaterThanOrEqual(initialWalletState.nullifiers.length + 1);
+  expect(finalWalletState.transactionHistory.length).toBeGreaterThanOrEqual(
+    initialWalletState.transactionHistory.length + 1,
+  );
 }
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any

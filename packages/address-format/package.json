@@ -1,0 +1,39 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk-address-format",
+  "version": "1.0.0-rc.1",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "author": "IOHK",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@scure/base": "^1.1.9"
+  },
+  "devDependencies": {
+    "@midnight-ntwrk/zswap": "^3.0.6",
+    "@types/node": "22.10.5"
+  },
+  "peerDependencies": {
+    "@midnight-ntwrk/zswap": "^3.0.6"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint",
+    "dist:prebuild": "rollup -c ./rollup.config.mjs"
+  }
+}

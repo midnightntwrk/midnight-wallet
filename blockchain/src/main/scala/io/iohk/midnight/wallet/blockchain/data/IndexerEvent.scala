@@ -5,9 +5,12 @@ sealed trait IndexerEvent
 object IndexerEvent {
   case object ConnectionLost extends IndexerEvent
 
-  sealed trait RawIndexerUpdate extends IndexerEvent
+  sealed trait RawIndexerUpdate extends IndexerEvent {
+    def legacyIndexer: Boolean
+  }
 
-  final case class RawProgressUpdate(synced: BigInt, total: BigInt) extends RawIndexerUpdate
+  final case class RawProgressUpdate(synced: BigInt, total: BigInt, legacyIndexer: Boolean)
+      extends RawIndexerUpdate
 
   sealed trait SingleUpdate {
     def protocolVersion: ProtocolVersion
@@ -24,6 +27,9 @@ object IndexerEvent {
         extends SingleUpdate
   }
 
-  final case class RawViewingUpdate(index: BigInt, updates: Seq[SingleUpdate])
-      extends RawIndexerUpdate
+  final case class RawViewingUpdate(
+      index: BigInt,
+      updates: Seq[SingleUpdate],
+      legacyIndexer: Boolean,
+  ) extends RawIndexerUpdate
 }

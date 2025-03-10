@@ -13,6 +13,7 @@ node_modules
 # sbt
 target
 dist
+wallet-engine/release
 
 # Others
 .DS_Store

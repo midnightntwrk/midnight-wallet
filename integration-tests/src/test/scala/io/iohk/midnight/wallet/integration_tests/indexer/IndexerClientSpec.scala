@@ -11,7 +11,10 @@ import sttp.client3.UriContext
 class IndexerClientSpec extends CatsEffectSuite {
   private def withIndexerClient(body: IndexerClient => IO[Unit]): IO[Unit] = {
     given Tracer[IO, StructuredLog] = Tracer.noOpTracer
-    IndexerClient(uri"ws://localhost:8088/api/v1/graphql/ws").use(body(_))
+    IndexerClient(
+      uri"ws://localhost:8088/api/v1/graphql/ws",
+      uri"http://localhost:8088/api/v1/graphql",
+    ).use(body(_))
   }
 
   // PubSub new version doesn't come with fake data source,

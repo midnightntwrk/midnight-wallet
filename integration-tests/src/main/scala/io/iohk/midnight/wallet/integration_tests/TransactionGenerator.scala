@@ -29,13 +29,12 @@ object TransactionGenerator extends IOApp.Simple {
   val proverServerUri = uri"http://localhost:6300"
   val substrateNodeUri = uri"http://localhost:9944"
 
-  type Address = zswap.Address[v1.CoinPublicKey, v1.EncPublicKey]
-  type TokenTransfer = domain.TokenTransfer[v1.TokenType]
+  type Address = domain.Address[v1.CoinPublicKey, v1.EncPublicKey]
+  type TokenTransfer = domain.TokenTransfer[v1.TokenType, v1.CoinPublicKey, v1.EncPublicKey]
   type Snapshot = core.Snapshot[v1.LocalStateNoKeys, v1.Transaction]
 
   def randomRecipient(): Address = {
     val secretKeys = KeyGenerator.randomSecretKeys()
-    import zswap.given
     new Address(secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
   }
 
@@ -65,13 +64,7 @@ object TransactionGenerator extends IOApp.Simple {
     makeRunningWalletResource(initialWalletState, seed).use(body(_))
 
   def prepareOutputs(coins: List[v1.CoinInfo], recipient: Address): List[TokenTransfer] =
-    coins.map { coin =>
-      new TokenTransfer(
-        coin.value.toScalaBigInt,
-        coin.`type`,
-        domain.Address(recipient.asString),
-      )
-    }
+    coins.map { coin => new TokenTransfer(coin.value.toScalaBigInt, coin.`type`, recipient) }
 
   val initialState: InitialState =
     InitialState.CreateNew(networkId)

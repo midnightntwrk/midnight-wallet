@@ -10,6 +10,7 @@ trait Offer[T, TokenType] {
   extension (t: T) {
     def deltas: Map[TokenType, BigInt]
     def outputsSize: Int
+    def inputsSize: Int
   }
 }
 
@@ -21,5 +22,6 @@ given Offer[v1.Offer, v1.TokenType] with {
     def deltas: Map[v1.TokenType, BigInt] =
       offer.deltas.toMap.map((tt, a) => (tt, a.toScalaBigInt))
     def outputsSize: Int = offer.outputs.size
+    def inputsSize: Int = offer.inputs.size
   }
 }

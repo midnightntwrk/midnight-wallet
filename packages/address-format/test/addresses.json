@@ -1,0 +1,1122 @@
+[
+  {
+    "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f670300063c7753854aea18aa11f04d77b3c7eaa0918e4aa98d5eaf0704d8f4c2fc272899efbb8a71275f2a1aedd29f879021e0962b4730f9b47e1a",
+      "bech32m": "mn_shield-addr1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansxqqx83m48p22agv25y0sf4mm83l25zgcuj4f34027pcymr6v9lp89zv7lwu2wyn472s6ahfflpusy8sfv268xrumgls6lh0llz"
+    },
+    "shieldedESK": {
+      "hex": "03003844311d8e3580e84bffb35e439848aa547de8a48e01b4f1c9d64596d886dae93887008530fd140e87c1b7df30bf6b5eb1a20082a63cf98a1a",
+      "bech32m": "mn_shield-esk1qvqrs3p3rk8rtq8gf0lmxhjrnpy254raazjguqd578yav3vkmzrd46fcsuqg2v8azs8g0sdhmuct7667kx3qpq4x8nuc5xse56kk6"
+    },
+    "shieldedCPK": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67",
+      "bech32m": "mn_shield-cpk1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdans20del8"
+    }
+  },
+  {
+    "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f670300063c7753854aea18aa11f04d77b3c7eaa0918e4aa98d5eaf0704d8f4c2fc272899efbb8a71275f2a1aedd29f879021e0962b4730f9b47e1a",
+      "bech32m": "mn_shield-addr_my-private-net1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansxqqx83m48p22agv25y0sf4mm83l25zgcuj4f34027pcymr6v9lp89zv7lwu2wyn472s6ahfflpusy8sfv268xrumgls6dfm7kv"
+    },
+    "shieldedESK": {
+      "hex": "03003844311d8e3580e84bffb35e439848aa547de8a48e01b4f1c9d64596d886dae93887008530fd140e87c1b7df30bf6b5eb1a20082a63cf98a1a",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrs3p3rk8rtq8gf0lmxhjrnpy254raazjguqd578yav3vkmzrd46fcsuqg2v8azs8g0sdhmuct7667kx3qpq4x8nuc5xsy7fzk6"
+    },
+    "shieldedCPK": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67",
+      "bech32m": "mn_shield-cpk_my-private-net1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansj6mrqy"
+    }
+  },
+  {
+    "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f670300063c7753854aea18aa11f04d77b3c7eaa0918e4aa98d5eaf0704d8f4c2fc272899efbb8a71275f2a1aedd29f879021e0962b4730f9b47e1a",
+      "bech32m": "mn_shield-addr_dev1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansxqqx83m48p22agv25y0sf4mm83l25zgcuj4f34027pcymr6v9lp89zv7lwu2wyn472s6ahfflpusy8sfv268xrumgls6dldmjp"
+    },
+    "shieldedESK": {
+      "hex": "03003844311d8e3580e84bffb35e439848aa547de8a48e01b4f1c9d64596d886dae93887008530fd140e87c1b7df30bf6b5eb1a20082a63cf98a1a",
+      "bech32m": "mn_shield-esk_dev1qvqrs3p3rk8rtq8gf0lmxhjrnpy254raazjguqd578yav3vkmzrd46fcsuqg2v8azs8g0sdhmuct7667kx3qpq4x8nuc5xss3ppf8"
+    },
+    "shieldedCPK": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67",
+      "bech32m": "mn_shield-cpk_dev1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdanshcnmmw"
+    }
+  },
+  {
+    "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f670300063c7753854aea18aa11f04d77b3c7eaa0918e4aa98d5eaf0704d8f4c2fc272899efbb8a71275f2a1aedd29f879021e0962b4730f9b47e1a",
+      "bech32m": "mn_shield-addr_test1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansxqqx83m48p22agv25y0sf4mm83l25zgcuj4f34027pcymr6v9lp89zv7lwu2wyn472s6ahfflpusy8sfv268xrumgls62hqz4u"
+    },
+    "shieldedESK": {
+      "hex": "03003844311d8e3580e84bffb35e439848aa547de8a48e01b4f1c9d64596d886dae93887008530fd140e87c1b7df30bf6b5eb1a20082a63cf98a1a",
+      "bech32m": "mn_shield-esk_test1qvqrs3p3rk8rtq8gf0lmxhjrnpy254raazjguqd578yav3vkmzrd46fcsuqg2v8azs8g0sdhmuct7667kx3qpq4x8nuc5xs0tfua8"
+    },
+    "shieldedCPK": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67",
+      "bech32m": "mn_shield-cpk_test1qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdanscta72e"
+    }
+  },
+  {
+    "seed": "0000000000000000000000000000000000000000000000000000000000000000",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f670300063c7753854aea18aa11f04d77b3c7eaa0918e4aa98d5eaf0704d8f4c2fc272899efbb8a71275f2a1aedd29f879021e0962b4730f9b47e1a",
+      "bech32m": "mn_shield-addr_my-private-net-51qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdansxqqx83m48p22agv25y0sf4mm83l25zgcuj4f34027pcymr6v9lp89zv7lwu2wyn472s6ahfflpusy8sfv268xrumgls62ktzmz"
+    },
+    "shieldedESK": {
+      "hex": "03003844311d8e3580e84bffb35e439848aa547de8a48e01b4f1c9d64596d886dae93887008530fd140e87c1b7df30bf6b5eb1a20082a63cf98a1a",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrs3p3rk8rtq8gf0lmxhjrnpy254raazjguqd578yav3vkmzrd46fcsuqg2v8azs8g0sdhmuct7667kx3qpq4x8nuc5xssva0e5"
+    },
+    "shieldedCPK": {
+      "hex": "064e092a80b33bee23404c46cfc48fec75a2356a9b01178dd6a62c29f5896f67",
+      "bech32m": "mn_shield-cpk_my-private-net-51qe8qj25qkva7ug6qf3rvl3y0a366ydt2nvq30rwk5ckznavfdans45shlk"
+    }
+  },
+  {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e0300c26d501c90c3c717a43d21b66facfb6e30b32ab13a86aba90447c60164bebdc73d597d8939db382bca7a00bf9636a1a3d1158d9e2bbcb109",
+      "bech32m": "mn_shield-addr13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqxqxzd4gpeyxrcut6g0fpkeh6e7mwxzej4vf6s646jpz8ccqkf04acu74jlvf88dns2720gqtl93k5x3az9vdnc4mevgfz4qnge"
+    },
+    "shieldedESK": {
+      "hex": "03003873018cd24ef35e9acca82f0b4b98d1b76f7784be9f2e07496aacc9f0679de9e3c77f89dfc816f18e374ca33646c6b55dc5adf71975ebf80c",
+      "bech32m": "mn_shield-esk1qvqrsucp3nfyau67ntx2stctfwvdrdm0w7zta8ewqayk4txf7pnem60rcalcnh7gzmccud6v5vmyd344thz6macewh4lsrqpgrqmr"
+    },
+    "shieldedCPK": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e",
+      "bech32m": "mn_shield-cpk13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylq08tn8t"
+    }
+  },
+  {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e0300c26d501c90c3c717a43d21b66facfb6e30b32ab13a86aba90447c60164bebdc73d597d8939db382bca7a00bf9636a1a3d1158d9e2bbcb109",
+      "bech32m": "mn_shield-addr_my-private-net13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqxqxzd4gpeyxrcut6g0fpkeh6e7mwxzej4vf6s646jpz8ccqkf04acu74jlvf88dns2720gqtl93k5x3az9vdnc4mevgfst5jph"
+    },
+    "shieldedESK": {
+      "hex": "03003873018cd24ef35e9acca82f0b4b98d1b76f7784be9f2e07496aacc9f0679de9e3c77f89dfc816f18e374ca33646c6b55dc5adf71975ebf80c",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrsucp3nfyau67ntx2stctfwvdrdm0w7zta8ewqayk4txf7pnem60rcalcnh7gzmccud6v5vmyd344thz6macewh4lsrquzs5mr"
+    },
+    "shieldedCPK": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e",
+      "bech32m": "mn_shield-cpk_my-private-net13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqhjafcg"
+    }
+  },
+  {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e0300c26d501c90c3c717a43d21b66facfb6e30b32ab13a86aba90447c60164bebdc73d597d8939db382bca7a00bf9636a1a3d1158d9e2bbcb109",
+      "bech32m": "mn_shield-addr_dev13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqxqxzd4gpeyxrcut6g0fpkeh6e7mwxzej4vf6s646jpz8ccqkf04acu74jlvf88dns2720gqtl93k5x3az9vdnc4mevgfsazh96"
+    },
+    "shieldedESK": {
+      "hex": "03003873018cd24ef35e9acca82f0b4b98d1b76f7784be9f2e07496aacc9f0679de9e3c77f89dfc816f18e374ca33646c6b55dc5adf71975ebf80c",
+      "bech32m": "mn_shield-esk_dev1qvqrsucp3nfyau67ntx2stctfwvdrdm0w7zta8ewqayk4txf7pnem60rcalcnh7gzmccud6v5vmyd344thz6macewh4lsrqgdchy7"
+    },
+    "shieldedCPK": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e",
+      "bech32m": "mn_shield-cpk_dev13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqjs43rz"
+    }
+  },
+  {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e0300c26d501c90c3c717a43d21b66facfb6e30b32ab13a86aba90447c60164bebdc73d597d8939db382bca7a00bf9636a1a3d1158d9e2bbcb109",
+      "bech32m": "mn_shield-addr_test13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqxqxzd4gpeyxrcut6g0fpkeh6e7mwxzej4vf6s646jpz8ccqkf04acu74jlvf88dns2720gqtl93k5x3az9vdnc4mevgfh40wz8"
+    },
+    "shieldedESK": {
+      "hex": "03003873018cd24ef35e9acca82f0b4b98d1b76f7784be9f2e07496aacc9f0679de9e3c77f89dfc816f18e374ca33646c6b55dc5adf71975ebf80c",
+      "bech32m": "mn_shield-esk_test1qvqrsucp3nfyau67ntx2stctfwvdrdm0w7zta8ewqayk4txf7pnem60rcalcnh7gzmccud6v5vmyd344thz6macewh4lsrqhhs2s7"
+    },
+    "shieldedCPK": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e",
+      "bech32m": "mn_shield-cpk_test13adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqarm5j4"
+    }
+  },
+  {
+    "seed": "0101010101010101010101010101010101010101010101010101010101010101",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e0300c26d501c90c3c717a43d21b66facfb6e30b32ab13a86aba90447c60164bebdc73d597d8939db382bca7a00bf9636a1a3d1158d9e2bbcb109",
+      "bech32m": "mn_shield-addr_my-private-net-513adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqxqxzd4gpeyxrcut6g0fpkeh6e7mwxzej4vf6s646jpz8ccqkf04acu74jlvf88dns2720gqtl93k5x3az9vdnc4mevgfh5ywve"
+    },
+    "shieldedESK": {
+      "hex": "03003873018cd24ef35e9acca82f0b4b98d1b76f7784be9f2e07496aacc9f0679de9e3c77f89dfc816f18e374ca33646c6b55dc5adf71975ebf80c",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrsucp3nfyau67ntx2stctfwvdrdm0w7zta8ewqayk4txf7pnem60rcalcnh7gzmccud6v5vmyd344thz6macewh4lsrqgsye5d"
+    },
+    "shieldedCPK": {
+      "hex": "8f5b7ca223168e1d96820511305228b21b8d41223df2ac188c636533f085793e",
+      "bech32m": "mn_shield-cpk_my-private-net-513adheg3rz68pm95zq5gnq53gkgdc6sfz8he2cxyvvdjn8uy90ylqsuka86"
+    }
+  },
+  {
+    "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da0300609aed57bc74b93bbb2a460b71c44b80ec805dd21a62125e9d842c8794357e8964809bd1e277b040988799884ab806735c5ad04e5defb68e",
+      "bech32m": "mn_shield-addr1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxqrqntk400r5hyamk2jxpdcugjuqajq9m5s6vgf9a8vy9jregdt739jgpx73ufmmqsycs7vcsj4cqee4ckksfew7ld5wckrj38"
+    },
+    "shieldedESK": {
+      "hex": "030038b1921e53b8ad42cbd8bbc3250e28c6bf8935279b47ca3274f5d59c37d3b1a21fd8651b2d857ad398fd46be68f3fc9eb50eb40ee03a982705",
+      "bech32m": "mn_shield-esk1qvqr3vvjrefm3t2ze0vthse9pc5vd0ufx5nek372xf60t4vuxlfmrgslmpj3ktv90tfe3l2xhe508ly7k58tgrhq82vzwpgcm00x9"
+    },
+    "shieldedCPK": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da",
+      "bech32m": "mn_shield-cpk1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndq5lh0va"
+    }
+  },
+  {
+    "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da0300609aed57bc74b93bbb2a460b71c44b80ec805dd21a62125e9d842c8794357e8964809bd1e277b040988799884ab806735c5ad04e5defb68e",
+      "bech32m": "mn_shield-addr_my-private-net1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxqrqntk400r5hyamk2jxpdcugjuqajq9m5s6vgf9a8vy9jregdt739jgpx73ufmmqsycs7vcsj4cqee4ckksfew7ld5w2ghncf"
+    },
+    "shieldedESK": {
+      "hex": "030038b1921e53b8ad42cbd8bbc3250e28c6bf8935279b47ca3274f5d59c37d3b1a21fd8651b2d857ad398fd46be68f3fc9eb50eb40ee03a982705",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3vvjrefm3t2ze0vthse9pc5vd0ufx5nek372xf60t4vuxlfmrgslmpj3ktv90tfe3l2xhe508ly7k58tgrhq82vzwpg93umx9"
+    },
+    "shieldedCPK": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da",
+      "bech32m": "mn_shield-cpk_my-private-net1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqv2p4n7"
+    }
+  },
+  {
+    "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da0300609aed57bc74b93bbb2a460b71c44b80ec805dd21a62125e9d842c8794357e8964809bd1e277b040988799884ab806735c5ad04e5defb68e",
+      "bech32m": "mn_shield-addr_dev1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxqrqntk400r5hyamk2jxpdcugjuqajq9m5s6vgf9a8vy9jregdt739jgpx73ufmmqsycs7vcsj4cqee4ckksfew7ld5w27pkuy"
+    },
+    "shieldedESK": {
+      "hex": "030038b1921e53b8ad42cbd8bbc3250e28c6bf8935279b47ca3274f5d59c37d3b1a21fd8651b2d857ad398fd46be68f3fc9eb50eb40ee03a982705",
+      "bech32m": "mn_shield-esk_dev1qvqr3vvjrefm3t2ze0vthse9pc5vd0ufx5nek372xf60t4vuxlfmrgslmpj3ktv90tfe3l2xhe508ly7k58tgrhq82vzwpg375cec"
+    },
+    "shieldedCPK": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da",
+      "bech32m": "mn_shield-cpk_dev1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqfgfdg5"
+    }
+  },
+  {
+    "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da0300609aed57bc74b93bbb2a460b71c44b80ec805dd21a62125e9d842c8794357e8964809bd1e277b040988799884ab806735c5ad04e5defb68e",
+      "bech32m": "mn_shield-addr_test1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxqrqntk400r5hyamk2jxpdcugjuqajq9m5s6vgf9a8vy9jregdt739jgpx73ufmmqsycs7vcsj4cqee4ckksfew7ld5wdkv0me"
+    },
+    "shieldedESK": {
+      "hex": "030038b1921e53b8ad42cbd8bbc3250e28c6bf8935279b47ca3274f5d59c37d3b1a21fd8651b2d857ad398fd46be68f3fc9eb50eb40ee03a982705",
+      "bech32m": "mn_shield-esk_test1qvqr3vvjrefm3t2ze0vthse9pc5vd0ufx5nek372xf60t4vuxlfmrgslmpj3ktv90tfe3l2xhe508ly7k58tgrhq82vzwpgwyu9dc"
+    },
+    "shieldedCPK": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da",
+      "bech32m": "mn_shield-cpk_test1ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxm8ger"
+    }
+  },
+  {
+    "seed": "0202020202020202020202020202020202020202020202020202020202020202",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da0300609aed57bc74b93bbb2a460b71c44b80ec805dd21a62125e9d842c8794357e8964809bd1e277b040988799884ab806735c5ad04e5defb68e",
+      "bech32m": "mn_shield-addr_my-private-net-51ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqxqrqntk400r5hyamk2jxpdcugjuqajq9m5s6vgf9a8vy9jregdt739jgpx73ufmmqsycs7vcsj4cqee4ckksfew7ld5wdh8048"
+    },
+    "shieldedESK": {
+      "hex": "030038b1921e53b8ad42cbd8bbc3250e28c6bf8935279b47ca3274f5d59c37d3b1a21fd8651b2d857ad398fd46be68f3fc9eb50eb40ee03a982705",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3vvjrefm3t2ze0vthse9pc5vd0ufx5nek372xf60t4vuxlfmrgslmpj3ktv90tfe3l2xhe508ly7k58tgrhq82vzwpg3rgkft"
+    },
+    "shieldedCPK": {
+      "hex": "e0ca5ed644b4364d281e6b19a2559026842f259738404ca52f6a8353d26944da",
+      "bech32m": "mn_shield-cpk_my-private-net-51ur99a4jyksmy62q7dvv6y4vsy6zz7fvh8pqyeff0d2p485nfgndqty2pvv"
+    }
+  },
+  {
+    "seed": "0404040404040404040404040404040404040404040404040404040404040404",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead503001d46331955141d3a1a4d945559c97887fcd90d27c0c841dc389b19d3c96e6341b22bc51315ebabef92ffb042a4f23bce2060f58248c81b85",
+      "bech32m": "mn_shield-addr1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sxqqagce3j4g5r5ap5nv524vuj7y8lnvs6f7qepqacwymr8fujmnrgxezh3gnzh46hmujl7cy9f8j808zqc84sfyvsxu95k8ja9"
+    },
+    "shieldedESK": {
+      "hex": "030038e6e4972e4b097c048570ce2056efaea8c176dd6f08c6c40d815adb8b2c1cb4ab6057c25c6e8f9bca639f027dbdddbfd1cb026e615af20d0d",
+      "bech32m": "mn_shield-esk1qvqr3ehyjuhykztuqjzhpn3q2mh6a2xpwmwk7zxxcsxczkkm3vkped9tvptuyhrw37du5culqf7mmhdl689symnptteq6rgktxymu"
+    },
+    "shieldedCPK": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead5",
+      "bech32m": "mn_shield-cpk1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2spllmuc"
+    }
+  },
+  {
+    "seed": "0404040404040404040404040404040404040404040404040404040404040404",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead503001d46331955141d3a1a4d945559c97887fcd90d27c0c841dc389b19d3c96e6341b22bc51315ebabef92ffb042a4f23bce2060f58248c81b85",
+      "bech32m": "mn_shield-addr_my-private-net1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sxqqagce3j4g5r5ap5nv524vuj7y8lnvs6f7qepqacwymr8fujmnrgxezh3gnzh46hmujl7cy9f8j808zqc84sfyvsxu9xgnn5t"
+    },
+    "shieldedESK": {
+      "hex": "030038e6e4972e4b097c048570ce2056efaea8c176dd6f08c6c40d815adb8b2c1cb4ab6057c25c6e8f9bca639f027dbdddbfd1cb026e615af20d0d",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3ehyjuhykztuqjzhpn3q2mh6a2xpwmwk7zxxcsxczkkm3vkped9tvptuyhrw37du5culqf7mmhdl689symnptteq6rgtp4smu"
+    },
+    "shieldedCPK": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead5",
+      "bech32m": "mn_shield-cpk_my-private-net1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2se2fprm"
+    }
+  },
+  {
+    "seed": "0404040404040404040404040404040404040404040404040404040404040404",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead503001d46331955141d3a1a4d945559c97887fcd90d27c0c841dc389b19d3c96e6341b22bc51315ebabef92ffb042a4f23bce2060f58248c81b85",
+      "bech32m": "mn_shield-addr_dev1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sxqqagce3j4g5r5ap5nv524vuj7y8lnvs6f7qepqacwymr8fujmnrgxezh3gnzh46hmujl7cy9f8j808zqc84sfyvsxu9x79ksx"
+    },
+    "shieldedESK": {
+      "hex": "030038e6e4972e4b097c048570ce2056efaea8c176dd6f08c6c40d815adb8b2c1cb4ab6057c25c6e8f9bca639f027dbdddbfd1cb026e615af20d0d",
+      "bech32m": "mn_shield-esk_dev1qvqr3ehyjuhykztuqjzhpn3q2mh6a2xpwmwk7zxxcsxczkkm3vkped9tvptuyhrw37du5culqf7mmhdl689symnptteq6rglwanyp"
+    },
+    "shieldedCPK": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead5",
+      "bech32m": "mn_shield-cpk_dev1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sugpec3"
+    }
+  },
+  {
+    "seed": "0404040404040404040404040404040404040404040404040404040404040404",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead503001d46331955141d3a1a4d945559c97887fcd90d27c0c841dc389b19d3c96e6341b22bc51315ebabef92ffb042a4f23bce2060f58248c81b85",
+      "bech32m": "mn_shield-addr_test1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sxqqagce3j4g5r5ap5nv524vuj7y8lnvs6f7qepqacwymr8fujmnrgxezh3gnzh46hmujl7cy9f8j808zqc84sfyvsxu9pkg0hm"
+    },
+    "shieldedESK": {
+      "hex": "030038e6e4972e4b097c048570ce2056efaea8c176dd6f08c6c40d815adb8b2c1cb4ab6057c25c6e8f9bca639f027dbdddbfd1cb026e615af20d0d",
+      "bech32m": "mn_shield-esk_test1qvqr3ehyjuhykztuqjzhpn3q2mh6a2xpwmwk7zxxcsxczkkm3vkped9tvptuyhrw37du5culqf7mmhdl689symnptteq6rgq54wsp"
+    },
+    "shieldedCPK": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead5",
+      "bech32m": "mn_shield-cpk_test1pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2snm0ufx"
+    }
+  },
+  {
+    "seed": "0404040404040404040404040404040404040404040404040404040404040404",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead503001d46331955141d3a1a4d945559c97887fcd90d27c0c841dc389b19d3c96e6341b22bc51315ebabef92ffb042a4f23bce2060f58248c81b85",
+      "bech32m": "mn_shield-addr_my-private-net-51pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2sxqqagce3j4g5r5ap5nv524vuj7y8lnvs6f7qepqacwymr8fujmnrgxezh3gnzh46hmujl7cy9f8j808zqc84sfyvsxu9phr0e9"
+    },
+    "shieldedESK": {
+      "hex": "030038e6e4972e4b097c048570ce2056efaea8c176dd6f08c6c40d815adb8b2c1cb4ab6057c25c6e8f9bca639f027dbdddbfd1cb026e615af20d0d",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3ehyjuhykztuqjzhpn3q2mh6a2xpwmwk7zxxcsxczkkm3vkped9tvptuyhrw37du5culqf7mmhdl689symnptteq6rglnpa5j"
+    },
+    "shieldedCPK": {
+      "hex": "092492904b90b823633b80a5d1bde9ba8af392157674fbef166d60d18859ead5",
+      "bech32m": "mn_shield-cpk_my-private-net-51pyjf9yztjzuzxcemszjar00fh2908ys4we60hmckd4sdrzzeat2s7yz4uf"
+    }
+  },
+  {
+    "seed": "0808080808080808080808080808080808080808080808080808080808080808",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba5303008ff9c8e470860f0d95fe9110c395eb2da48ab64518b6ad2b6b35e03bdee835591d437bb54968f404d5ae03edd7e6aeecbb5592849d358194",
+      "bech32m": "mn_shield-addr1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxqy0l8ywguyxpuxetl53zrpet6ed5j9tv3gck6kjk6e4uqaaa6p4tyw5x7a4f950gpx44cp7m4lx4mktk4vjsjwntqv55hdqa5"
+    },
+    "shieldedESK": {
+      "hex": "03003809afbe2cc0387a7bd8883fee3f6ba6d227262e77595d0050a09d4fd92a3e5a62bf41a63a2fd0edcf6e17c25c9d94fe1b0943ec999bd7591e",
+      "bech32m": "mn_shield-esk1qvqrszd0hckvqwr600vgs0lw8a46d538ych8wk2aqpg2p820my4ruknzhaq6vw306rku7mshcfwfm987rvy58myen0t4j8se5d4t8"
+    },
+    "shieldedCPK": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba53",
+      "bech32m": "mn_shield-cpk1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffs5xtgzh"
+    }
+  },
+  {
+    "seed": "0808080808080808080808080808080808080808080808080808080808080808",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba5303008ff9c8e470860f0d95fe9110c395eb2da48ab64518b6ad2b6b35e03bdee835591d437bb54968f404d5ae03edd7e6aeecbb5592849d358194",
+      "bech32m": "mn_shield-addr_my-private-net1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxqy0l8ywguyxpuxetl53zrpet6ed5j9tv3gck6kjk6e4uqaaa6p4tyw5x7a4f950gpx44cp7m4lx4mktk4vjsjwntqv5xfep56"
+    },
+    "shieldedESK": {
+      "hex": "03003809afbe2cc0387a7bd8883fee3f6ba6d227262e77595d0050a09d4fd92a3e5a62bf41a63a2fd0edcf6e17c25c9d94fe1b0943ec999bd7591e",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrszd0hckvqwr600vgs0lw8a46d538ych8wk2aqpg2p820my4ruknzhaq6vw306rku7mshcfwfm987rvy58myen0t4j8sy77pt8"
+    },
+    "shieldedCPK": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba53",
+      "bech32m": "mn_shield-cpk_my-private-net1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsvnaja5"
+    }
+  },
+  {
+    "seed": "0808080808080808080808080808080808080808080808080808080808080808",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba5303008ff9c8e470860f0d95fe9110c395eb2da48ab64518b6ad2b6b35e03bdee835591d437bb54968f404d5ae03edd7e6aeecbb5592849d358194",
+      "bech32m": "mn_shield-addr_dev1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxqy0l8ywguyxpuxetl53zrpet6ed5j9tv3gck6kjk6e4uqaaa6p4tyw5x7a4f950gpx44cp7m4lx4mktk4vjsjwntqv5xl0ysh"
+    },
+    "shieldedESK": {
+      "hex": "03003809afbe2cc0387a7bd8883fee3f6ba6d227262e77595d0050a09d4fd92a3e5a62bf41a63a2fd0edcf6e17c25c9d94fe1b0943ec999bd7591e",
+      "bech32m": "mn_shield-esk_dev1qvqrszd0hckvqwr600vgs0lw8a46d538ych8wk2aqpg2p820my4ruknzhaq6vw306rku7mshcfwfm987rvy58myen0t4j8ss3kz56"
+    },
+    "shieldedCPK": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba53",
+      "bech32m": "mn_shield-cpk_dev1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsf342x7"
+    }
+  },
+  {
+    "seed": "0808080808080808080808080808080808080808080808080808080808080808",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba5303008ff9c8e470860f0d95fe9110c395eb2da48ab64518b6ad2b6b35e03bdee835591d437bb54968f404d5ae03edd7e6aeecbb5592849d358194",
+      "bech32m": "mn_shield-addr_test1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxqy0l8ywguyxpuxetl53zrpet6ed5j9tv3gck6kjk6e4uqaaa6p4tyw5x7a4f950gpx44cp7m4lx4mktk4vjsjwntqv5phzah2"
+    },
+    "shieldedESK": {
+      "hex": "03003809afbe2cc0387a7bd8883fee3f6ba6d227262e77595d0050a09d4fd92a3e5a62bf41a63a2fd0edcf6e17c25c9d94fe1b0943ec999bd7591e",
+      "bech32m": "mn_shield-esk_test1qvqrszd0hckvqwr600vgs0lw8a46d538ych8wk2aqpg2p820my4ruknzhaq6vw306rku7mshcfwfm987rvy58myen0t4j8s0t7lq6"
+    },
+    "shieldedCPK": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba53",
+      "bech32m": "mn_shield-cpk_test1au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxzm0hf"
+    }
+  },
+  {
+    "seed": "0808080808080808080808080808080808080808080808080808080808080808",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba5303008ff9c8e470860f0d95fe9110c395eb2da48ab64518b6ad2b6b35e03bdee835591d437bb54968f404d5ae03edd7e6aeecbb5592849d358194",
+      "bech32m": "mn_shield-addr_my-private-net-51au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffsxqy0l8ywguyxpuxetl53zrpet6ed5j9tv3gck6kjk6e4uqaaa6p4tyw5x7a4f950gpx44cp7m4lx4mktk4vjsjwntqv5pkfae5"
+    },
+    "shieldedESK": {
+      "hex": "03003809afbe2cc0387a7bd8883fee3f6ba6d227262e77595d0050a09d4fd92a3e5a62bf41a63a2fd0edcf6e17c25c9d94fe1b0943ec999bd7591e",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrszd0hckvqwr600vgs0lw8a46d538ych8wk2aqpg2p820my4ruknzhaq6vw306rku7mshcfwfm987rvy58myen0t4j8ssv2vyf"
+    },
+    "shieldedCPK": {
+      "hex": "ef0ec893b33d6d2400de1291ea7250f7583e901b35acbb51c31545cfeefbba53",
+      "bech32m": "mn_shield-cpk_my-private-net-51au8v3yan84kjgqx7z2g75ujs7avrayqmxkktk5wrz4zulmhmhffstakxzx"
+    }
+  },
+  {
+    "seed": "1010101010101010101010101010101010101010101010101010101010101010",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f03005e68fd9c4a3969dc298e254945471e89000318faa638893f96e82206cfe4242b939de9d50283e3201889398d8c21af98f500efd3b84aeb84",
+      "bech32m": "mn_shield-addr1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sxqz7dr7ecj3ed8wznr39f9z5w85fqqp3374x8zynl9hgygrvlepy9wfem6w4q2p7xgqc3yucmrpp47v02q806wuy46uyc9lqg8"
+    },
+    "shieldedESK": {
+      "hex": "030038ee9ee901c990a5eafe545711a7f96c944cfd8c4e32a04d329d291eb1728aa8e299a5a9e20fc5380661cc3cdd2c263a7b92e29255a4ce6205",
+      "bech32m": "mn_shield-esk1qvqr3m57ayquny99atl9g4c35luke9zvlkxyuv4qf5ef62g7k9eg428znxj6ncs0c5uqvcwv8nwjcf360wfw9yj45n8xypgc68t0v"
+    },
+    "shieldedCPK": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f",
+      "bech32m": "mn_shield-cpk1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0s4kaucu"
+    }
+  },
+  {
+    "seed": "1010101010101010101010101010101010101010101010101010101010101010",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f03005e68fd9c4a3969dc298e254945471e89000318faa638893f96e82206cfe4242b939de9d50283e3201889398d8c21af98f500efd3b84aeb84",
+      "bech32m": "mn_shield-addr_my-private-net1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sxqz7dr7ecj3ed8wznr39f9z5w85fqqp3374x8zynl9hgygrvlepy9wfem6w4q2p7xgqc3yucmrpp47v02q806wuy46uy2mtppf"
+    },
+    "shieldedESK": {
+      "hex": "030038ee9ee901c990a5eafe545711a7f96c944cfd8c4e32a04d329d291eb1728aa8e299a5a9e20fc5380661cc3cdd2c263a7b92e29255a4ce6205",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3m57ayquny99atl9g4c35luke9zvlkxyuv4qf5ef62g7k9eg428znxj6ncs0c5uqvcwv8nwjcf360wfw9yj45n8xypg9s5l0v"
+    },
+    "shieldedCPK": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f",
+      "bech32m": "mn_shield-cpk_my-private-net1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sdrtx8l"
+    }
+  },
+  {
+    "seed": "1010101010101010101010101010101010101010101010101010101010101010",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f03005e68fd9c4a3969dc298e254945471e89000318faa638893f96e82206cfe4242b939de9d50283e3201889398d8c21af98f500efd3b84aeb84",
+      "bech32m": "mn_shield-addr_dev1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sxqz7dr7ecj3ed8wznr39f9z5w85fqqp3374x8zynl9hgygrvlepy9wfem6w4q2p7xgqc3yucmrpp47v02q806wuy46uy2day9y"
+    },
+    "shieldedESK": {
+      "hex": "030038ee9ee901c990a5eafe545711a7f96c944cfd8c4e32a04d329d291eb1728aa8e299a5a9e20fc5380661cc3cdd2c263a7b92e29255a4ce6205",
+      "bech32m": "mn_shield-esk_dev1qvqr3m57ayquny99atl9g4c35luke9zvlkxyuv4qf5ef62g7k9eg428znxj6ncs0c5uqvcwv8nwjcf360wfw9yj45n8xypg3luus3"
+    },
+    "shieldedCPK": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f",
+      "bech32m": "mn_shield-cpk_dev1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sgpr7u4"
+    }
+  },
+  {
+    "seed": "1010101010101010101010101010101010101010101010101010101010101010",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f03005e68fd9c4a3969dc298e254945471e89000318faa638893f96e82206cfe4242b939de9d50283e3201889398d8c21af98f500efd3b84aeb84",
+      "bech32m": "mn_shield-addr_test1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sxqz7dr7ecj3ed8wznr39f9z5w85fqqp3374x8zynl9hgygrvlepy9wfem6w4q2p7xgqc3yucmrpp47v02q806wuy46uyd9saze"
+    },
+    "shieldedESK": {
+      "hex": "030038ee9ee901c990a5eafe545711a7f96c944cfd8c4e32a04d329d291eb1728aa8e299a5a9e20fc5380661cc3cdd2c263a7b92e29255a4ce6205",
+      "bech32m": "mn_shield-esk_test1qvqr3m57ayquny99atl9g4c35luke9zvlkxyuv4qf5ef62g7k9eg428znxj6ncs0c5uqvcwv8nwjcf360wfw9yj45n8xypgw95py3"
+    },
+    "shieldedCPK": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f",
+      "bech32m": "mn_shield-cpk_test1m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0s8jdmdz"
+    }
+  },
+  {
+    "seed": "1010101010101010101010101010101010101010101010101010101010101010",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f03005e68fd9c4a3969dc298e254945471e89000318faa638893f96e82206cfe4242b939de9d50283e3201889398d8c21af98f500efd3b84aeb84",
+      "bech32m": "mn_shield-addr_my-private-net-51m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0sxqz7dr7ecj3ed8wznr39f9z5w85fqqp3374x8zynl9hgygrvlepy9wfem6w4q2p7xgqc3yucmrpp47v02q806wuy46uydymav8"
+    },
+    "shieldedESK": {
+      "hex": "030038ee9ee901c990a5eafe545711a7f96c944cfd8c4e32a04d329d291eb1728aa8e299a5a9e20fc5380661cc3cdd2c263a7b92e29255a4ce6205",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3m57ayquny99atl9g4c35luke9zvlkxyuv4qf5ef62g7k9eg428znxj6ncs0c5uqvcwv8nwjcf360wfw9yj45n8xypg3zqjqz"
+    },
+    "shieldedCPK": {
+      "hex": "dc4cded54d701a3b121f6ec09d58224c9ee4ffce4915e40e6073e9a593dbfb1f",
+      "bech32m": "mn_shield-cpk_my-private-net-51m3xda42dwqdrkysldmqf6kpzfj0wfl7wfy27grnqw056ty7mlv0s2dqjcd"
+    }
+  },
+  {
+    "seed": "2020202020202020202020202020202020202020202020202020202020202020",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba03007cf6cfcc07561f7204e12b68252643bf952cfa2fa74221abfbf46ea9730f0da5bfbd26117fee7de84ed25c488bb2695d27ee12d771951098",
+      "bech32m": "mn_shield-addr1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqxqru7m8ucp6kraeqfcftdqjjvsalj5k05ta8ggs6h7l5d65hxrcd5klm6fs30lh8m6zw6fwy3zajd9wj0msj6ace2yyc9j6lrx"
+    },
+    "shieldedESK": {
+      "hex": "0300388006e79285e700c83d24bfa44b1a322e0870d75e9a5bbf942dbc56bdf369784a633e54338d0b8687178c3581fc848973f9a53f9f80719319",
+      "bech32m": "mn_shield-esk1qvqr3qqxu7fgtecqeq7jf0ayfvdrytsgwrt4axjmh72zm0zkhhekj7z2vvl9gvudpwrgw9uvxkqlepyfw0u620ulspcexxg98pw4f"
+    },
+    "shieldedCPK": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba",
+      "bech32m": "mn_shield-cpk1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqjghuc7"
+    }
+  },
+  {
+    "seed": "2020202020202020202020202020202020202020202020202020202020202020",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba03007cf6cfcc07561f7204e12b68252643bf952cfa2fa74221abfbf46ea9730f0da5bfbd26117fee7de84ed25c488bb2695d27ee12d771951098",
+      "bech32m": "mn_shield-addr_my-private-net1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqxqru7m8ucp6kraeqfcftdqjjvsalj5k05ta8ggs6h7l5d65hxrcd5klm6fs30lh8m6zw6fwy3zajd9wj0msj6ace2yychvw72g"
+    },
+    "shieldedESK": {
+      "hex": "0300388006e79285e700c83d24bfa44b1a322e0870d75e9a5bbf942dbc56bdf369784a633e54338d0b8687178c3581fc848973f9a53f9f80719319",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3qqxu7fgtecqeq7jf0ayfvdrytsgwrt4axjmh72zm0zkhhekj7z2vvl9gvudpwrgw9uvxkqlepyfw0u620ulspcexxgcdj64f"
+    },
+    "shieldedCPK": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba",
+      "bech32m": "mn_shield-cpk_my-private-net1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aq2apx8a"
+    }
+  },
+  {
+    "seed": "2020202020202020202020202020202020202020202020202020202020202020",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba03007cf6cfcc07561f7204e12b68252643bf952cfa2fa74221abfbf46ea9730f0da5bfbd26117fee7de84ed25c488bb2695d27ee12d771951098",
+      "bech32m": "mn_shield-addr_dev1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqxqru7m8ucp6kraeqfcftdqjjvsalj5k05ta8ggs6h7l5d65hxrcd5klm6fs30lh8m6zw6fwy3zajd9wj0msj6ace2yych6cmw9"
+    },
+    "shieldedESK": {
+      "hex": "0300388006e79285e700c83d24bfa44b1a322e0870d75e9a5bbf942dbc56bdf369784a633e54338d0b8687178c3581fc848973f9a53f9f80719319",
+      "bech32m": "mn_shield-esk_dev1qvqr3qqxu7fgtecqeq7jf0ayfvdrytsgwrt4axjmh72zm0zkhhekj7z2vvl9gvudpwrgw9uvxkqlepyfw0u620ulspcexxgvz6e25"
+    },
+    "shieldedCPK": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba",
+      "bech32m": "mn_shield-cpk_dev1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aq0lf7uh"
+    }
+  },
+  {
+    "seed": "2020202020202020202020202020202020202020202020202020202020202020",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba03007cf6cfcc07561f7204e12b68252643bf952cfa2fa74221abfbf46ea9730f0da5bfbd26117fee7de84ed25c488bb2695d27ee12d771951098",
+      "bech32m": "mn_shield-addr_test1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqxqru7m8ucp6kraeqfcftdqjjvsalj5k05ta8ggs6h7l5d65hxrcd5klm6fs30lh8m6zw6fwy3zajd9wj0msj6ace2yycsj4zfc"
+    },
+    "shieldedESK": {
+      "hex": "0300388006e79285e700c83d24bfa44b1a322e0870d75e9a5bbf942dbc56bdf369784a633e54338d0b8687178c3581fc848973f9a53f9f80719319",
+      "bech32m": "mn_shield-esk_test1qvqr3qqxu7fgtecqeq7jf0ayfvdrytsgwrt4axjmh72zm0zkhhekj7z2vvl9gvudpwrgw9uvxkqlepyfw0u620ulspcexxgncjy75"
+    },
+    "shieldedCPK": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba",
+      "bech32m": "mn_shield-cpk_test1z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqqv8mdq"
+    }
+  },
+  {
+    "seed": "2020202020202020202020202020202020202020202020202020202020202020",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba03007cf6cfcc07561f7204e12b68252643bf952cfa2fa74221abfbf46ea9730f0da5bfbd26117fee7de84ed25c488bb2695d27ee12d771951098",
+      "bech32m": "mn_shield-addr_my-private-net-51z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqxqru7m8ucp6kraeqfcftdqjjvsalj5k05ta8ggs6h7l5d65hxrcd5klm6fs30lh8m6zw6fwy3zajd9wj0msj6ace2yycsn7z8x"
+    },
+    "shieldedESK": {
+      "hex": "0300388006e79285e700c83d24bfa44b1a322e0870d75e9a5bbf942dbc56bdf369784a633e54338d0b8687178c3581fc848973f9a53f9f80719319",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3qqxu7fgtecqeq7jf0ayfvdrytsgwrt4axjmh72zm0zkhhekj7z2vvl9gvudpwrgw9uvxkqlepyfw0u620ulspcexxgvlxh68"
+    },
+    "shieldedCPK": {
+      "hex": "11d519b374e26d0bc42dfe1892f01899ae11b2d9455c0c453d373e48df9bceba",
+      "bech32m": "mn_shield-cpk_my-private-net-51z823nvm5ufksh3pdlcvf9uqcnxhprvkeg4wqc3faxuly3hume6aqdn2jc0"
+    }
+  },
+  {
+    "seed": "4040404040404040404040404040404040404040404040404040404040404040",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa4203003f28b539c8293d0982fa1532caf7081068a6ce3b639103fee711a7128b118b0a354a19a736f2540d2a7ff02a3b182c7dad3edb481232541b",
+      "bech32m": "mn_shield-addr1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqxqpl9z6nnjpf85yc97s4xt90wzqsdznvuwmrjyplaec35ufgkyvtpg655xd8xme9grf20lcz5wcc937660kmfqfry4qmeaxpuc"
+    },
+    "shieldedESK": {
+      "hex": "030038b50d6f5a55643e11ec0a81e8414aab7d7c25d16fe45d7f96f2089f0e4dbc3ea9349ad0d11195e60ae93e15722c17e01f9b55bc0209cb9a01",
+      "bech32m": "mn_shield-esk1qvqr3dgddad92ep7z8kq4q0gg992kltuyhgkleza07t0yzylpexmc04fxjddp5g3jhnq46f7z4ezc9lqr7d4t0qzp89e5qgv4xnxv"
+    },
+    "shieldedCPK": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa42",
+      "bech32m": "mn_shield-cpk1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqujsguk"
+    }
+  },
+  {
+    "seed": "4040404040404040404040404040404040404040404040404040404040404040",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa4203003f28b539c8293d0982fa1532caf7081068a6ce3b639103fee711a7128b118b0a354a19a736f2540d2a7ff02a3b182c7dad3edb481232541b",
+      "bech32m": "mn_shield-addr_my-private-net1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqxqpl9z6nnjpf85yc97s4xt90wzqsdznvuwmrjyplaec35ufgkyvtpg655xd8xme9grf20lcz5wcc937660kmfqfry4qmtrjq4k"
+    },
+    "shieldedESK": {
+      "hex": "030038b50d6f5a55643e11ec0a81e8414aab7d7c25d16fe45d7f96f2089f0e4dbc3ea9349ad0d11195e60ae93e15722c17e01f9b55bc0209cb9a01",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3dgddad92ep7z8kq4q0gg992kltuyhgkleza07t0yzylpexmc04fxjddp5g3jhnq46f7z4ezc9lqr7d4t0qzp89e5qg3l48xv"
+    },
+    "shieldedCPK": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa42",
+      "bech32m": "mn_shield-cpk_my-private-net1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqy8xjr4"
+    }
+  },
+  {
+    "seed": "4040404040404040404040404040404040404040404040404040404040404040",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa4203003f28b539c8293d0982fa1532caf7081068a6ce3b639103fee711a7128b118b0a354a19a736f2540d2a7ff02a3b182c7dad3edb481232541b",
+      "bech32m": "mn_shield-addr_dev1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqxqpl9z6nnjpf85yc97s4xt90wzqsdznvuwmrjyplaec35ufgkyvtpg655xd8xme9grf20lcz5wcc937660kmfqfry4qmt4y93m"
+    },
+    "shieldedESK": {
+      "hex": "030038b50d6f5a55643e11ec0a81e8414aab7d7c25d16fe45d7f96f2089f0e4dbc3ea9349ad0d11195e60ae93e15722c17e01f9b55bc0209cb9a01",
+      "bech32m": "mn_shield-esk_dev1qvqr3dgddad92ep7z8kq4q0gg992kltuyhgkleza07t0yzylpexmc04fxjddp5g3jhnq46f7z4ezc9lqr7d4t0qzp89e5qg9saye3"
+    },
+    "shieldedCPK": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa42",
+      "bech32m": "mn_shield-cpk_dev1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqp9w2cl"
+    }
+  },
+  {
+    "seed": "4040404040404040404040404040404040404040404040404040404040404040",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa4203003f28b539c8293d0982fa1532caf7081068a6ce3b639103fee711a7128b118b0a354a19a736f2540d2a7ff02a3b182c7dad3edb481232541b",
+      "bech32m": "mn_shield-addr_test1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqxqpl9z6nnjpf85yc97s4xt90wzqsdznvuwmrjyplaec35ufgkyvtpg655xd8xme9grf20lcz5wcc937660kmfqfry4qmvafukx"
+    },
+    "shieldedESK": {
+      "hex": "030038b50d6f5a55643e11ec0a81e8414aab7d7c25d16fe45d7f96f2089f0e4dbc3ea9349ad0d11195e60ae93e15722c17e01f9b55bc0209cb9a01",
+      "bech32m": "mn_shield-esk_test1qvqr3dgddad92ep7z8kq4q0gg992kltuyhgkleza07t0yzylpexmc04fxjddp5g3jhnq46f7z4ezc9lqr7d4t0qzp89e5qg624ed3"
+    },
+    "shieldedCPK": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa42",
+      "bech32m": "mn_shield-cpk_test1kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqwkq0fg"
+    }
+  },
+  {
+    "seed": "4040404040404040404040404040404040404040404040404040404040404040",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa4203003f28b539c8293d0982fa1532caf7081068a6ce3b639103fee711a7128b118b0a354a19a736f2540d2a7ff02a3b182c7dad3edb481232541b",
+      "bech32m": "mn_shield-addr_my-private-net-51kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqxqpl9z6nnjpf85yc97s4xt90wzqsdznvuwmrjyplaec35ufgkyvtpg655xd8xme9grf20lcz5wcc937660kmfqfry4qmvuzucc"
+    },
+    "shieldedESK": {
+      "hex": "030038b50d6f5a55643e11ec0a81e8414aab7d7c25d16fe45d7f96f2089f0e4dbc3ea9349ad0d11195e60ae93e15722c17e01f9b55bc0209cb9a01",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3dgddad92ep7z8kq4q0gg992kltuyhgkleza07t0yzylpexmc04fxjddp5g3jhnq46f7z4ezc9lqr7d4t0qzp89e5qg9dp2fz"
+    },
+    "shieldedCPK": {
+      "hex": "b018b0b0ad79ca5c84214ac6bb9a67b4f742953e081ab2424e199a556c3eaa42",
+      "bech32m": "mn_shield-cpk_my-private-net-51kqvtpv9d0899epppftrthxn8knm599f7pqdtysjwrxd92mp74fpqrfdxu8"
+    }
+  },
+  {
+    "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d03002fb3bb6966d62507536cb0be5c5e106eebaffbd1a2d0205c1c3e5d1eaed19ead1702fb4207dc15b85fc61b012ee873f4dc465c3faa4ec38f",
+      "bech32m": "mn_shield-addr19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sxqp0kwakjekky5r4xm9shew9uyrwawhlh5dz6qs9c8p7t502a5v745ts976zqlwptwzlccdszthgw06dc3ju874yasu03j29ps"
+    },
+    "shieldedESK": {
+      "hex": "030038b95515e121a4777afb82adb85dd17e0819bdd49157eb3adcd19a95f3c24729ed15896fb4a482e3d65fa637d3ef2e5c9f0551bb346d6e2115",
+      "bech32m": "mn_shield-esk1qvqr3w24zhsjrfrh0tac9tdcthghuzqehh2fz4lt8twdrx5470pyw20dzkykld9yst3avhaxxlf77tjunuz4rwe5d4hzz9g2up8cg"
+    },
+    "shieldedCPK": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d",
+      "bech32m": "mn_shield-cpk19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7scw6pn3"
+    }
+  },
+  {
+    "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d03002fb3bb6966d62507536cb0be5c5e106eebaffbd1a2d0205c1c3e5d1eaed19ead1702fb4207dc15b85fc61b012ee873f4dc465c3faa4ec38f",
+      "bech32m": "mn_shield-addr_my-private-net19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sxqp0kwakjekky5r4xm9shew9uyrwawhlh5dz6qs9c8p7t502a5v745ts976zqlwptwzlccdszthgw06dc3ju874yasu0rv7yg7"
+    },
+    "shieldedESK": {
+      "hex": "030038b95515e121a4777afb82adb85dd17e0819bdd49157eb3adcd19a95f3c24729ed15896fb4a482e3d65fa637d3ef2e5c9f0551bb346d6e2115",
+      "bech32m": "mn_shield-esk_my-private-net1qvqr3w24zhsjrfrh0tac9tdcthghuzqehh2fz4lt8twdrx5470pyw20dzkykld9yst3avhaxxlf77tjunuz4rwe5d4hzz9ghkjncg"
+    },
+    "shieldedCPK": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d",
+      "bech32m": "mn_shield-cpk_my-private-net19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sqmvmvj"
+    }
+  },
+  {
+    "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d03002fb3bb6966d62507536cb0be5c5e106eebaffbd1a2d0205c1c3e5d1eaed19ead1702fb4207dc15b85fc61b012ee873f4dc465c3faa4ec38f",
+      "bech32m": "mn_shield-addr_dev19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sxqp0kwakjekky5r4xm9shew9uyrwawhlh5dz6qs9c8p7t502a5v745ts976zqlwptwzlccdszthgw06dc3ju874yasu0r6gpvn"
+    },
+    "shieldedESK": {
+      "hex": "030038b95515e121a4777afb82adb85dd17e0819bdd49157eb3adcd19a95f3c24729ed15896fb4a482e3d65fa637d3ef2e5c9f0551bb346d6e2115",
+      "bech32m": "mn_shield-esk_dev1qvqr3w24zhsjrfrh0tac9tdcthghuzqehh2fz4lt8twdrx5470pyw20dzkykld9yst3avhaxxlf77tjunuz4rwe5d4hzz9gre6s84"
+    },
+    "shieldedCPK": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d",
+      "bech32m": "mn_shield-cpk_dev19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7s9eyrhc"
+    }
+  },
+  {
+    "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d03002fb3bb6966d62507536cb0be5c5e106eebaffbd1a2d0205c1c3e5d1eaed19ead1702fb4207dc15b85fc61b012ee873f4dc465c3faa4ec38f",
+      "bech32m": "mn_shield-addr_test19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sxqp0kwakjekky5r4xm9shew9uyrwawhlh5dz6qs9c8p7t502a5v745ts976zqlwptwzlccdszthgw06dc3ju874yasu0yj9ctw"
+    },
+    "shieldedESK": {
+      "hex": "030038b95515e121a4777afb82adb85dd17e0819bdd49157eb3adcd19a95f3c24729ed15896fb4a482e3d65fa637d3ef2e5c9f0551bb346d6e2115",
+      "bech32m": "mn_shield-esk_test1qvqr3w24zhsjrfrh0tac9tdcthghuzqehh2fz4lt8twdrx5470pyw20dzkykld9yst3avhaxxlf77tjunuz4rwe5d4hzz9gurjdn4"
+    },
+    "shieldedCPK": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d",
+      "bech32m": "mn_shield-cpk_test19pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7s222xx0"
+    }
+  },
+  {
+    "seed": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d03002fb3bb6966d62507536cb0be5c5e106eebaffbd1a2d0205c1c3e5d1eaed19ead1702fb4207dc15b85fc61b012ee873f4dc465c3faa4ec38f",
+      "bech32m": "mn_shield-addr_my-private-net-519pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7sxqp0kwakjekky5r4xm9shew9uyrwawhlh5dz6qs9c8p7t502a5v745ts976zqlwptwzlccdszthgw06dc3ju874yasu0ynwc9s"
+    },
+    "shieldedESK": {
+      "hex": "030038b95515e121a4777afb82adb85dd17e0819bdd49157eb3adcd19a95f3c24729ed15896fb4a482e3d65fa637d3ef2e5c9f0551bb346d6e2115",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqr3w24zhsjrfrh0tac9tdcthghuzqehh2fz4lt8twdrx5470pyw20dzkykld9yst3avhaxxlf77tjunuz4rwe5d4hzz9gryx7hx"
+    },
+    "shieldedCPK": {
+      "hex": "28574eaddbd020b46e53807474d8b7510ee6cf239607f2fc052a1a22b213003d",
+      "bech32m": "mn_shield-cpk_my-private-net-519pt5atwm6qstgmjnsp68fk9h2y8wdnerjcrl9lq99gdz9vsnqq7s8480nq"
+    }
+  },
+  {
+    "seed": "b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d0300f31a67e9a2b8112d4d6e1422a8b1430d4f30369b0a53ebdfe44308bf3b9fccbedf3504a3c1aad5bb0b174b3bad0fc655c4a9e1d84da9539d",
+      "bech32m": "mn_shield-addr1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sxq8nrfn7ng4czyk56ms5y25tzscdfucrdxc2204alezrpzlnh87vhm0n2p9rcx4dtwctza9nhtg0ce2uf20pmpx6j5uaa9xh4c"
+    },
+    "shieldedESK": {
+      "hex": "0300382c3d55773fb48cceb9f3d1aaa6a3be3cbf6f7c11faca944357e1d8335bad2ca45cf88cb85989c53a22593ec9314dfef28e9f5704c3fc8323",
+      "bech32m": "mn_shield-esk1qvqrstpa24mnldyve6ul85d2563mu09lda7pr7k2j3p40cwcxdd66t9ytnugewze38zn5gje8mynzn07728f74cyc07gxgceyu4ma"
+    },
+    "shieldedCPK": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d",
+      "bech32m": "mn_shield-cpk1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97s6t4yl0"
+    }
+  },
+  {
+    "seed": "b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d0300f31a67e9a2b8112d4d6e1422a8b1430d4f30369b0a53ebdfe44308bf3b9fccbedf3504a3c1aad5bb0b174b3bad0fc655c4a9e1d84da9539d",
+      "bech32m": "mn_shield-addr_my-private-net1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sxq8nrfn7ng4czyk56ms5y25tzscdfucrdxc2204alezrpzlnh87vhm0n2p9rcx4dtwctza9nhtg0ce2uf20pmpx6j5ua0mjkuk"
+    },
+    "shieldedESK": {
+      "hex": "0300382c3d55773fb48cceb9f3d1aaa6a3be3cbf6f7c11faca944357e1d8335bad2ca45cf88cb85989c53a22593ec9314dfef28e9f5704c3fc8323",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrstpa24mnldyve6ul85d2563mu09lda7pr7k2j3p40cwcxdd66t9ytnugewze38zn5gje8mynzn07728f74cyc07gxgcyw0pma"
+    },
+    "shieldedCPK": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d",
+      "bech32m": "mn_shield-cpk_my-private-net1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sz7r7qv"
+    }
+  },
+  {
+    "seed": "b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d0300f31a67e9a2b8112d4d6e1422a8b1430d4f30369b0a53ebdfe44308bf3b9fccbedf3504a3c1aad5bb0b174b3bad0fc655c4a9e1d84da9539d",
+      "bech32m": "mn_shield-addr_dev1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sxq8nrfn7ng4czyk56ms5y25tzscdfucrdxc2204alezrpzlnh87vhm0n2p9rcx4dtwctza9nhtg0ce2uf20pmpx6j5ua0dyncm"
+    },
+    "shieldedESK": {
+      "hex": "0300382c3d55773fb48cceb9f3d1aaa6a3be3cbf6f7c11faca944357e1d8335bad2ca45cf88cb85989c53a22593ec9314dfef28e9f5704c3fc8323",
+      "bech32m": "mn_shield-esk_dev1qvqrstpa24mnldyve6ul85d2563mu09lda7pr7k2j3p40cwcxdd66t9ytnugewze38zn5gje8mynzn07728f74cyc07gxgcsp8zyq"
+    },
+    "shieldedCPK": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d",
+      "bech32m": "mn_shield-cpk_dev1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97s8utxmx"
+    }
+  },
+  {
+    "seed": "b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d0300f31a67e9a2b8112d4d6e1422a8b1430d4f30369b0a53ebdfe44308bf3b9fccbedf3504a3c1aad5bb0b174b3bad0fc655c4a9e1d84da9539d",
+      "bech32m": "mn_shield-addr_test1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sxq8nrfn7ng4czyk56ms5y25tzscdfucrdxc2204alezrpzlnh87vhm0n2p9rcx4dtwctza9nhtg0ce2uf20pmpx6j5uag9f2lx"
+    },
+    "shieldedESK": {
+      "hex": "0300382c3d55773fb48cceb9f3d1aaa6a3be3cbf6f7c11faca944357e1d8335bad2ca45cf88cb85989c53a22593ec9314dfef28e9f5704c3fc8323",
+      "bech32m": "mn_shield-esk_test1qvqrstpa24mnldyve6ul85d2563mu09lda7pr7k2j3p40cwcxdd66t9ytnugewze38zn5gje8mynzn07728f74cyc07gxgc0m0lsq"
+    },
+    "shieldedCPK": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d",
+      "bech32m": "mn_shield-cpk_test1quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sg09r23"
+    }
+  },
+  {
+    "seed": "b49408db310c043ab736fb57a98e15c8cedbed4c38450df3755ac9726ee14d0c",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d0300f31a67e9a2b8112d4d6e1422a8b1430d4f30369b0a53ebdfe44308bf3b9fccbedf3504a3c1aad5bb0b174b3bad0fc655c4a9e1d84da9539d",
+      "bech32m": "mn_shield-addr_my-private-net-51quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97sxq8nrfn7ng4czyk56ms5y25tzscdfucrdxc2204alezrpzlnh87vhm0n2p9rcx4dtwctza9nhtg0ce2uf20pmpx6j5uagyz23c"
+    },
+    "shieldedESK": {
+      "hex": "0300382c3d55773fb48cceb9f3d1aaa6a3be3cbf6f7c11faca944357e1d8335bad2ca45cf88cb85989c53a22593ec9314dfef28e9f5704c3fc8323",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrstpa24mnldyve6ul85d2563mu09lda7pr7k2j3p40cwcxdd66t9ytnugewze38zn5gje8mynzn07728f74cyc07gxgcsumv5n"
+    },
+    "shieldedCPK": {
+      "hex": "0731484ed8b9321e68619d2133d31b9c936558449b9698ffa15956703c1f717d",
+      "bech32m": "mn_shield-cpk_my-private-net-51quc5snkchyepu6rpn5sn85cmnjfk2kzynwtf3lapt9t8q0qlw97s9sg2l7"
+    }
+  },
+  {
+    "seed": "06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c903008de089f307ebffcda61ec2d5b1b1a7f33cc488bf460f6142259b22801347e4474033388b8c47c7bdceea1ab5de5842e1ca6db96f15ab9a16",
+      "bech32m": "mn_shield-addr1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysxqyduzylxpltllx6v8kz6kcmrfln8nzg306xpas5yfvmy2qpx3lygaqrxwyt33ru00wwagdtthjcgtsu5mdedu26hxskrkdk0u"
+    },
+    "shieldedESK": {
+      "hex": "03003876344263f848c56b6af24d46230b9afe11953d2e95eb320bbe5bdbc050a63cc89c10df6a4554585e60cecb67a20fe3ad14c04778cb435720",
+      "bech32m": "mn_shield-esk1qvqrsa35gf3lsjx9dd40yn2xyv9e4ls3j57ja90txg9muk7mcpg2v0xgnsgd76j923v9ucxwedn6yrlr452vq3mcedp4wgqd2avnt"
+    },
+    "shieldedCPK": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c9",
+      "bech32m": "mn_shield-cpk1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztys705mez"
+    }
+  },
+  {
+    "seed": "06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c903008de089f307ebffcda61ec2d5b1b1a7f33cc488bf460f6142259b22801347e4474033388b8c47c7bdceea1ab5de5842e1ca6db96f15ab9a16",
+      "bech32m": "mn_shield-addr_my-private-net1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysxqyduzylxpltllx6v8kz6kcmrfln8nzg306xpas5yfvmy2qpx3lygaqrxwyt33ru00wwagdtthjcgtsu5mdedu26hxsk3gehxj"
+    },
+    "shieldedESK": {
+      "hex": "03003876344263f848c56b6af24d46230b9afe11953d2e95eb320bbe5bdbc050a63cc89c10df6a4554585e60cecb67a20fe3ad14c04778cb435720",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrsa35gf3lsjx9dd40yn2xyv9e4ls3j57ja90txg9muk7mcpg2v0xgnsgd76j923v9ucxwedn6yrlr452vq3mcedp4wgqsqwcnt"
+    },
+    "shieldedCPK": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c9",
+      "bech32m": "mn_shield-cpk_my-private-net1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysx6zpxp"
+    }
+  },
+  {
+    "seed": "06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c903008de089f307ebffcda61ec2d5b1b1a7f33cc488bf460f6142259b22801347e4474033388b8c47c7bdceea1ab5de5842e1ca6db96f15ab9a16",
+      "bech32m": "mn_shield-addr_dev1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysxqyduzylxpltllx6v8kz6kcmrfln8nzg306xpas5yfvmy2qpx3lygaqrxwyt33ru00wwagdtthjcgtsu5mdedu26hxsk370jzl"
+    },
+    "shieldedESK": {
+      "hex": "03003876344263f848c56b6af24d46230b9afe11953d2e95eb320bbe5bdbc050a63cc89c10df6a4554585e60cecb67a20fe3ad14c04778cb435720",
+      "bech32m": "mn_shield-esk_dev1qvqrsa35gf3lsjx9dd40yn2xyv9e4ls3j57ja90txg9muk7mcpg2v0xgnsgd76j923v9ucxwedn6yrlr452vq3mcedp4wgqy0xmvk"
+    },
+    "shieldedCPK": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c9",
+      "bech32m": "mn_shield-cpk_dev1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysrc2eat"
+    }
+  },
+  {
+    "seed": "06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c903008de089f307ebffcda61ec2d5b1b1a7f33cc488bf460f6142259b22801347e4474033388b8c47c7bdceea1ab5de5842e1ca6db96f15ab9a16",
+      "bech32m": "mn_shield-addr_test1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysxqyduzylxpltllx6v8kz6kcmrfln8nzg306xpas5yfvmy2qpx3lygaqrxwyt33ru00wwagdtthjcgtsu5mdedu26hxskkkzt9z"
+    },
+    "shieldedESK": {
+      "hex": "03003876344263f848c56b6af24d46230b9afe11953d2e95eb320bbe5bdbc050a63cc89c10df6a4554585e60cecb67a20fe3ad14c04778cb435720",
+      "bech32m": "mn_shield-esk_test1qvqrsa35gf3lsjx9dd40yn2xyv9e4ls3j57ja90txg9muk7mcpg2v0xgnsgd76j923v9ucxwedn6yrlr452vq3mcedp4wgqm4wxck"
+    },
+    "shieldedCPK": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c9",
+      "bech32m": "mn_shield-cpk_test1axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysvtyuvu"
+    }
+  },
+  {
+    "seed": "06004625b6cb2ccead21b15fee2a940c404365702b697b4721bfeecfc6b1b15e",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c903008de089f307ebffcda61ec2d5b1b1a7f33cc488bf460f6142259b22801347e4474033388b8c47c7bdceea1ab5de5842e1ca6db96f15ab9a16",
+      "bech32m": "mn_shield-addr_my-private-net-51axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysxqyduzylxpltllx6v8kz6kcmrfln8nzg306xpas5yfvmy2qpx3lygaqrxwyt33ru00wwagdtthjcgtsu5mdedu26hxskkhfttu"
+    },
+    "shieldedESK": {
+      "hex": "03003876344263f848c56b6af24d46230b9afe11953d2e95eb320bbe5bdbc050a63cc89c10df6a4554585e60cecb67a20fe3ad14c04778cb435720",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrsa35gf3lsjx9dd40yn2xyv9e4ls3j57ja90txg9muk7mcpg2v0xgnsgd76j923v9ucxwedn6yrlr452vq3mcedp4wgqyj64u9"
+    },
+    "shieldedCPK": {
+      "hex": "e98ce5b18b700d393162f0985768c5c68e089e1bc2d18762105f25b6597012c9",
+      "bech32m": "mn_shield-cpk_my-private-net-51axxwtvvtwqxnjvtz7zv9w6x9c68q38smctgcwcsstujmvktsztysp5f4en"
+    }
+  },
+  {
+    "seed": "215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f70300382fd14c4e335d0863da7cbed708580c534314c96e25a3db7c5369525b3a548a921b955f8009403126a4b9b548dfd06176ecab5ef5dba08b",
+      "bech32m": "mn_shield-addr1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msxqpc9lg5cn3nt5yx8knuhmtsskqv2dp3fjtwyk3aklznd9f9kwj532fph92lsqy5qvfx5jum2jxl6pshdm9ttm6ahgytymwxy6"
+    },
+    "shieldedESK": {
+      "hex": "030038469ecdfb00523fa7db400237e38b51791dd58ed17598e64df62e62f0fa923c472912b1da9763edd68d865cecab0dbda329a9bccc33f79008",
+      "bech32m": "mn_shield-esk1qvqrs357ehasq53l5ld5qq3huw94z7ga6k8dzavcuexlvtnz7rafy0z89yftrk5hv0kadrvxtnk2krda5v56n0xvx0meqzq3qh5sf"
+    },
+    "shieldedCPK": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f7",
+      "bech32m": "mn_shield-cpk1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msqmux4p"
+    }
+  },
+  {
+    "seed": "215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f70300382fd14c4e335d0863da7cbed708580c534314c96e25a3db7c5369525b3a548a921b955f8009403126a4b9b548dfd06176ecab5ef5dba08b",
+      "bech32m": "mn_shield-addr_my-private-net1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msxqpc9lg5cn3nt5yx8knuhmtsskqv2dp3fjtwyk3aklznd9f9kwj532fph92lsqy5qvfx5jum2jxl6pshdm9ttm6ahgytk968d5"
+    },
+    "shieldedESK": {
+      "hex": "030038469ecdfb00523fa7db400237e38b51791dd58ed17598e64df62e62f0fa923c472912b1da9763edd68d865cecab0dbda329a9bccc33f79008",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrs357ehasq53l5ld5qq3huw94z7ga6k8dzavcuexlvtnz7rafy0z89yftrk5hv0kadrvxtnk2krda5v56n0xvx0meqzqv2yqsf"
+    },
+    "shieldedCPK": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f7",
+      "bech32m": "mn_shield-cpk_my-private-net1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0mscw2u2z"
+    }
+  },
+  {
+    "seed": "215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f70300382fd14c4e335d0863da7cbed708580c534314c96e25a3db7c5369525b3a548a921b955f8009403126a4b9b548dfd06176ecab5ef5dba08b",
+      "bech32m": "mn_shield-addr_dev1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msxqpc9lg5cn3nt5yx8knuhmtsskqv2dp3fjtwyk3aklznd9f9kwj532fph92lsqy5qvfx5jum2jxl6pshdm9ttm6ahgytknvzfe"
+    },
+    "shieldedESK": {
+      "hex": "030038469ecdfb00523fa7db400237e38b51791dd58ed17598e64df62e62f0fa923c472912b1da9763edd68d865cecab0dbda329a9bccc33f79008",
+      "bech32m": "mn_shield-esk_dev1qvqrs357ehasq53l5ld5qq3huw94z7ga6k8dzavcuexlvtnz7rafy0z89yftrk5hv0kadrvxtnk2krda5v56n0xvx0meqzqc9vr05"
+    },
+    "shieldedCPK": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f7",
+      "bech32m": "mn_shield-cpk_dev1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msavzy3g"
+    }
+  },
+  {
+    "seed": "215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f70300382fd14c4e335d0863da7cbed708580c534314c96e25a3db7c5369525b3a548a921b955f8009403126a4b9b548dfd06176ecab5ef5dba08b",
+      "bech32m": "mn_shield-addr_test1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msxqpc9lg5cn3nt5yx8knuhmtsskqv2dp3fjtwyk3aklznd9f9kwj532fph92lsqy5qvfx5jum2jxl6pshdm9ttm6ahgyt3mpmwy"
+    },
+    "shieldedESK": {
+      "hex": "030038469ecdfb00523fa7db400237e38b51791dd58ed17598e64df62e62f0fa923c472912b1da9763edd68d865cecab0dbda329a9bccc33f79008",
+      "bech32m": "mn_shield-esk_test1qvqrs357ehasq53l5ld5qq3huw94z7ga6k8dzavcuexlvtnz7rafy0z89yftrk5hv0kadrvxtnk2krda5v56n0xvx0meqzq8ly7m5"
+    },
+    "shieldedCPK": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f7",
+      "bech32m": "mn_shield-cpk_test1wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msjlvpql"
+    }
+  },
+  {
+    "seed": "215ca8a6923ec73f241c92ef702ccfc277aa5856bc94f59afa7e82ec94547850",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f70300382fd14c4e335d0863da7cbed708580c534314c96e25a3db7c5369525b3a548a921b955f8009403126a4b9b548dfd06176ecab5ef5dba08b",
+      "bech32m": "mn_shield-addr_my-private-net-51wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0msxqpc9lg5cn3nt5yx8knuhmtsskqv2dp3fjtwyk3aklznd9f9kwj532fph92lsqy5qvfx5jum2jxl6pshdm9ttm6ahgyt362mq6"
+    },
+    "shieldedESK": {
+      "hex": "030038469ecdfb00523fa7db400237e38b51791dd58ed17598e64df62e62f0fa923c472912b1da9763edd68d865cecab0dbda329a9bccc33f79008",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrs357ehasq53l5ld5qq3huw94z7ga6k8dzavcuexlvtnz7rafy0z89yftrk5hv0kadrvxtnk2krda5v56n0xvx0meqzqccsdl8"
+    },
+    "shieldedCPK": {
+      "hex": "762d1b3bb135953041aaa23bd7bd90fa9abfdbd3c76c3904765613e05d5f23f7",
+      "bech32m": "mn_shield-cpk_my-private-net-51wck3kwa3xk2nqsd25gaa00vsl2dtlk7ncakrjprk2cf7qh2ly0mslqpg4s"
+    }
+  },
+  {
+    "seed": "cfe40bcac30e818d3d4d35d79846b2df2f45c1bde9b7c2d8070095729d769af3",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d03003607142f52ab31ab3723c84bd58e9a5d722071f72bb49f8271355397f39eecac44ae5f47ee56b192b9f4a93d1830989dc17db576d59ff991",
+      "bech32m": "mn_shield-addr1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsxqpkqu2z754txx4nwg7gf02caxjawgs8raetkj0cyuf42wtl88hv43z2uh68aettry4e7j5n6xpsnzwuzld4wm2el7v30l26sm"
+    },
+    "shieldedESK": {
+      "hex": "030036ef143b4c282f35ef0c22a9583e6dca45dba4850b95b63430d5e6343e9daed8a19e2484c6af8eceaa325adfd561120cf2127d564b0d12",
+      "bech32m": "mn_shield-esk1qvqrdmc58dxzste4auxz922c8eku53wm5jzsh9dkxscdte3586w6ak9pncjgf3403m825vj6ml2kzysv7gf864jtp5fqzp6mzz"
+    },
+    "shieldedCPK": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d",
+      "bech32m": "mn_shield-cpk1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsgxm8qy"
+    }
+  },
+  {
+    "seed": "cfe40bcac30e818d3d4d35d79846b2df2f45c1bde9b7c2d8070095729d769af3",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d03003607142f52ab31ab3723c84bd58e9a5d722071f72bb49f8271355397f39eecac44ae5f47ee56b192b9f4a93d1830989dc17db576d59ff991",
+      "bech32m": "mn_shield-addr_my-private-net1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsxqpkqu2z754txx4nwg7gf02caxjawgs8raetkj0cyuf42wtl88hv43z2uh68aettry4e7j5n6xpsnzwuzld4wm2el7v3ap7me4"
+    },
+    "shieldedESK": {
+      "hex": "030036ef143b4c282f35ef0c22a9583e6dca45dba4850b95b63430d5e6343e9daed8a19e2484c6af8eceaa325adfd561120cf2127d564b0d12",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrdmc58dxzste4auxz922c8eku53wm5jzsh9dkxscdte3586w6ak9pncjgf3403m825vj6ml2kzysv7gf864jtp5fq799g64"
+    },
+    "shieldedCPK": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d",
+      "bech32m": "mn_shield-cpk_my-private-net1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwssndal8"
+    }
+  },
+  {
+    "seed": "cfe40bcac30e818d3d4d35d79846b2df2f45c1bde9b7c2d8070095729d769af3",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d03003607142f52ab31ab3723c84bd58e9a5d722071f72bb49f8271355397f39eecac44ae5f47ee56b192b9f4a93d1830989dc17db576d59ff991",
+      "bech32m": "mn_shield-addr_dev1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsxqpkqu2z754txx4nwg7gf02caxjawgs8raetkj0cyuf42wtl88hv43z2uh68aettry4e7j5n6xpsnzwuzld4wm2el7v3ahg7ac"
+    },
+    "shieldedESK": {
+      "hex": "030036ef143b4c282f35ef0c22a9583e6dca45dba4850b95b63430d5e6343e9daed8a19e2484c6af8eceaa325adfd561120cf2127d564b0d12",
+      "bech32m": "mn_shield-esk_dev1qvqrdmc58dxzste4auxz922c8eku53wm5jzsh9dkxscdte3586w6ak9pncjgf3403m825vj6ml2kzysv7gf864jtp5fqj9mnh9"
+    },
+    "shieldedCPK": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d",
+      "bech32m": "mn_shield-cpk_dev1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qws4399yd"
+    }
+  },
+  {
+    "seed": "cfe40bcac30e818d3d4d35d79846b2df2f45c1bde9b7c2d8070095729d769af3",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d03003607142f52ab31ab3723c84bd58e9a5d722071f72bb49f8271355397f39eecac44ae5f47ee56b192b9f4a93d1830989dc17db576d59ff991",
+      "bech32m": "mn_shield-addr_test1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsxqpkqu2z754txx4nwg7gf02caxjawgs8raetkj0cyuf42wtl88hv43z2uh68aettry4e7j5n6xpsnzwuzld4wm2el7v36l9869"
+    },
+    "shieldedESK": {
+      "hex": "030036ef143b4c282f35ef0c22a9583e6dca45dba4850b95b63430d5e6343e9daed8a19e2484c6af8eceaa325adfd561120cf2127d564b0d12",
+      "bech32m": "mn_shield-esk_test1qvqrdmc58dxzste4auxz922c8eku53wm5jzsh9dkxscdte3586w6ak9pncjgf3403m825vj6ml2kzysv7gf864jtp5fqvw9ujg"
+    },
+    "shieldedCPK": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d",
+      "bech32m": "mn_shield-cpk_test1s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qws6ztq46"
+    }
+  },
+  {
+    "seed": "cfe40bcac30e818d3d4d35d79846b2df2f45c1bde9b7c2d8070095729d769af3",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d03003607142f52ab31ab3723c84bd58e9a5d722071f72bb49f8271355397f39eecac44ae5f47ee56b192b9f4a93d1830989dc17db576d59ff991",
+      "bech32m": "mn_shield-addr_my-private-net-51s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwsxqpkqu2z754txx4nwg7gf02caxjawgs8raetkj0cyuf42wtl88hv43z2uh68aettry4e7j5n6xpsnzwuzld4wm2el7v367w85m"
+    },
+    "shieldedESK": {
+      "hex": "030036ef143b4c282f35ef0c22a9583e6dca45dba4850b95b63430d5e6343e9daed8a19e2484c6af8eceaa325adfd561120cf2127d564b0d12",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrdmc58dxzste4auxz922c8eku53wm5jzsh9dkxscdte3586w6ak9pncjgf3403m825vj6ml2kzysv7gf864jtp5fq579uea"
+    },
+    "shieldedCPK": {
+      "hex": "8281789c8b6651761d5f3c58ffb0eb6541745bc016906731976604519b1a781d",
+      "bech32m": "mn_shield-cpk_my-private-net-51s2qh38ytveghv82l83v0lv8tv4qhgk7qz6gxwvvhvcz9rxc60qwshaxfq4"
+    }
+  },
+  {
+    "seed": "97b43b7a3747b7f70491fe089c56fe1f6d01e602b7a3ec09cda89d7de324b7e9",
+    "networkId": null,
+    "shieldedAddress": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c790300067163802a1811f3440d2721550addffcf4ebea5031da7ff2c2febbe8c987be6fa663d9f684f42a23a3b91e956615cac11ab32f68410d021",
+      "bech32m": "mn_shield-addr16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usxqqxw93cq2scz8e5grf8y92s4h0lea8tafgrrknl7tp0awlgexrmumaxv0vldp859g368wg7j4nptjkpr2ej76zpp5ppwxy4up"
+    },
+    "shieldedESK": {
+      "hex": "0300377752a8e179c029feef6432d5a45cd9942fcb04ac9c8beee26f58a78a846b2e67aa135e6479b1e83ea4ca8ab0fc48d470543dcc3a1138b4",
+      "bech32m": "mn_shield-esk1qvqrwa6j4rshnspflmhkgvk453wdn9p0evz2e8ytam3x7k9832zxktn84gf4uerek85rafx232c0cjx5wp2rmnp6zyutg8cp0x6"
+    },
+    "shieldedCPK": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c79",
+      "bech32m": "mn_shield-cpk16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83ush08fq2"
+    }
+  },
+  {
+    "seed": "97b43b7a3747b7f70491fe089c56fe1f6d01e602b7a3ec09cda89d7de324b7e9",
+    "networkId": "my-private-net",
+    "shieldedAddress": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c790300067163802a1811f3440d2721550addffcf4ebea5031da7ff2c2febbe8c987be6fa663d9f684f42a23a3b91e956615cac11ab32f68410d021",
+      "bech32m": "mn_shield-addr_my-private-net16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usxqqxw93cq2scz8e5grf8y92s4h0lea8tafgrrknl7tp0awlgexrmumaxv0vldp859g368wg7j4nptjkpr2ej76zpp5ppucs540"
+    },
+    "shieldedESK": {
+      "hex": "0300377752a8e179c029feef6432d5a45cd9942fcb04ac9c8beee26f58a78a846b2e67aa135e6479b1e83ea4ca8ab0fc48d470543dcc3a1138b4",
+      "bech32m": "mn_shield-esk_my-private-net1qvqrwa6j4rshnspflmhkgvk453wdn9p0evz2e8ytam3x7k9832zxktn84gf4uerek85rafx232c0cjx5wp2rmnp6zyutg8cu94w"
+    },
+    "shieldedCPK": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c79",
+      "bech32m": "mn_shield-cpk_my-private-net16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83us063nlf"
+    }
+  },
+  {
+    "seed": "97b43b7a3747b7f70491fe089c56fe1f6d01e602b7a3ec09cda89d7de324b7e9",
+    "networkId": "dev",
+    "shieldedAddress": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c790300067163802a1811f3440d2721550addffcf4ebea5031da7ff2c2febbe8c987be6fa663d9f684f42a23a3b91e956615cac11ab32f68410d021",
+      "bech32m": "mn_shield-addr_dev16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usxqqxw93cq2scz8e5grf8y92s4h0lea8tafgrrknl7tp0awlgexrmumaxv0vldp859g368wg7j4nptjkpr2ej76zpp5ppuwx33z"
+    },
+    "shieldedESK": {
+      "hex": "0300377752a8e179c029feef6432d5a45cd9942fcb04ac9c8beee26f58a78a846b2e67aa135e6479b1e83ea4ca8ab0fc48d470543dcc3a1138b4",
+      "bech32m": "mn_shield-esk_dev1qvqrwa6j4rshnspflmhkgvk453wdn9p0evz2e8ytam3x7k9832zxktn84gf4uerek85rafx232c0cjx5wp2rmnp6zyutgkcpz5f"
+    },
+    "shieldedCPK": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c79",
+      "bech32m": "mn_shield-cpk_dev16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83us2cetyr"
+    }
+  },
+  {
+    "seed": "97b43b7a3747b7f70491fe089c56fe1f6d01e602b7a3ec09cda89d7de324b7e9",
+    "networkId": "test",
+    "shieldedAddress": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c790300067163802a1811f3440d2721550addffcf4ebea5031da7ff2c2febbe8c987be6fa663d9f684f42a23a3b91e956615cac11ab32f68410d021",
+      "bech32m": "mn_shield-addr_test16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usxqqxw93cq2scz8e5grf8y92s4h0lea8tafgrrknl7tp0awlgexrmumaxv0vldp859g368wg7j4nptjkpr2ej76zpp5ppmxtgkl"
+    },
+    "shieldedESK": {
+      "hex": "0300377752a8e179c029feef6432d5a45cd9942fcb04ac9c8beee26f58a78a846b2e67aa135e6479b1e83ea4ca8ab0fc48d470543dcc3a1138b4",
+      "bech32m": "mn_shield-esk_test1qvqrwa6j4rshnspflmhkgvk453wdn9p0evz2e8ytam3x7k9832zxktn84gf4uerek85rafx232c0cjx5wp2rmnp6zyutg2upkws"
+    },
+    "shieldedCPK": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c79",
+      "bech32m": "mn_shield-cpk_test16twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83us9thw45"
+    }
+  },
+  {
+    "seed": "97b43b7a3747b7f70491fe089c56fe1f6d01e602b7a3ec09cda89d7de324b7e9",
+    "networkId": "my-private-net-5",
+    "shieldedAddress": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c790300067163802a1811f3440d2721550addffcf4ebea5031da7ff2c2febbe8c987be6fa663d9f684f42a23a3b91e956615cac11ab32f68410d021",
+      "bech32m": "mn_shield-addr_my-private-net-516twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usxqqxw93cq2scz8e5grf8y92s4h0lea8tafgrrknl7tp0awlgexrmumaxv0vldp859g368wg7j4nptjkpr2ej76zpp5ppm8qgcp"
+    },
+    "shieldedESK": {
+      "hex": "0300377752a8e179c029feef6432d5a45cd9942fcb04ac9c8beee26f58a78a846b2e67aa135e6479b1e83ea4ca8ab0fc48d470543dcc3a1138b4",
+      "bech32m": "mn_shield-esk_my-private-net-51qvqrwa6j4rshnspflmhkgvk453wdn9p0evz2e8ytam3x7k9832zxktn84gf4uerek85rafx232c0cjx5wp2rmnp6zyutg3fdfs7"
+    },
+    "shieldedCPK": {
+      "hex": "d2dc8d175c0ef7d1f7e5b7f32bd9da5fcd4c60fa1b651f1d312986269c2d3c79",
+      "bech32m": "mn_shield-cpk_my-private-net-516twg696upmmaral9klejhkw6tlx5cc86rdj378f39xrzd8pd83usg568qm"
+    }
+  }
+]

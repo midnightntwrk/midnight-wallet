@@ -57,9 +57,10 @@ object WalletStateService {
       pendingCoins: Seq[CoinInfo],
       transactionHistory: Seq[Transaction],
       syncProgress: ProgressUpdate,
-  )(using zswap.CoinPublicKey[CoinPubKey], zswap.EncryptionPublicKey[EncPubKey]) {
-    lazy val address: zswap.Address[CoinPubKey, EncPubKey] =
-      zswap.Address(coinPublicKey, encryptionPublicKey)
+  ) {
+
+    lazy val address: domain.Address[CoinPubKey, EncPubKey] =
+      domain.Address(coinPublicKey, encryptionPublicKey)
   }
 
   def calculateCost[
@@ -90,8 +91,6 @@ class WalletStateServiceFactory[
     WalletStateSerialize[TWallet, WalletStateService.SerializedWalletState],
     zswap.Transaction.HasImbalances[Transaction, TokenType],
     zswap.Transaction.Transaction[Transaction, ?],
-    zswap.CoinPublicKey[CoinPublicKey],
-    zswap.EncryptionPublicKey[EncPubKey],
 )(using
     tt: zswap.TokenType[TokenType, ?],
 ) {
@@ -125,7 +124,7 @@ class WalletStateServiceFactory[
             availableCoins = wallet.availableCoins,
             pendingCoins = wallet.pendingCoins,
             transactionHistory = wallet.transactionHistory,
-            syncProgress = wallet.progress,
+            syncProgress = wallet.progress.copy(legacyIndexer = None),
           )
         }
 

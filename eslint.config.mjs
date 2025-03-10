@@ -31,7 +31,7 @@ export default tsLint.config(
       'no-trailing-spaces': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'warn',
       '@typescript-eslint/no-unused-vars': [
-        'warn', 
+        'warn',
         // Ensure that discards (i.e., _, __) don't trigger this rule.
         {
           'argsIgnorePattern': '^_',

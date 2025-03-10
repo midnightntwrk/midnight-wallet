@@ -36,10 +36,11 @@ object WalletSyncEvent {
   object DefaultInstances {
     def showIndexerUpdate(update: IndexerUpdate[?, ?]): String =
       update match {
-        case ViewingUpdate(protocolVersion, offset, _) =>
-          s"Viewing update v$protocolVersion: @${offset.show}"
-        case ProgressUpdate(synced, total) => s"Progress: $synced/$total"
-        case ConnectionLost                => "Connection lost"
+        case ViewingUpdate(protocolVersion, offset, _, legacyIndexer) =>
+          s"Viewing update v$protocolVersion: @${offset.show} (legacy: ${legacyIndexer})"
+        case ProgressUpdate(synced, total, legacyIndexer) =>
+          s"Progress: $synced/$total (legacy: $legacyIndexer)"
+        case ConnectionLost => "Connection lost"
       }
 
     implicit val syncHandlingTransactionContext: AsStringLogContext[SyncHandlingUpdate] =

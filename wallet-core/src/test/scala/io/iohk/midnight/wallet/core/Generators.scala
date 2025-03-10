@@ -9,7 +9,6 @@ import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.domain.{Address, ProgressUpdate, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.zswap
-import io.iohk.midnight.wallet.zswap.given
 import org.scalacheck.cats.implicits.*
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.annotation.tailrec
@@ -63,14 +62,11 @@ object Generators {
         .pure[Gen],
     )
 
-  private lazy val addressGen: Gen[Address] =
+  private lazy val addressGen: Gen[Address[CoinPublicKey, EncPublicKey]] =
     secretKeysGen
-      .map(secretKeys =>
-        zswap.Address(secretKeys.coinPublicKey, secretKeys.encryptionPublicKey).asString,
-      )
-      .map(Address.apply)
+      .map(secretKeys => domain.Address(secretKeys.coinPublicKey, secretKeys.encryptionPublicKey))
 
-  given tokenTransferArbitrary: Arbitrary[TokenTransfer[TokenType]] = {
+  given tokenTransferArbitrary: Arbitrary[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]] = {
     Arbitrary {
       for {
         amount <- Gen.posNum[BigInt]
@@ -81,8 +77,8 @@ object Generators {
   }
 
   given tokenTransfersArbitrary(using
-      tokenTransferArb: Arbitrary[TokenTransfer[TokenType]],
-  ): Arbitrary[NonEmptyList[TokenTransfer[TokenType]]] = {
+      tokenTransferArb: Arbitrary[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]],
+  ): Arbitrary[NonEmptyList[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]]] = {
     Arbitrary {
       for {
         head <- tokenTransferArb.arbitrary

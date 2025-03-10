@@ -68,6 +68,7 @@ class WalletTxHistorySpec extends WithProvingServerSuite {
       Seq(
         Right(AppliedTransaction(txWithContext.transaction, ApplyStage.SucceedEntirely)),
       ),
+      true,
     )
 
   test("Keep tx history") {

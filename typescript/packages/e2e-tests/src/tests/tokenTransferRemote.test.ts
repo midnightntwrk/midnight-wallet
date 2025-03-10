@@ -2,6 +2,7 @@ import { firstValueFrom } from 'rxjs';
 import { Resource } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import {
+  createCoinInfo,
   LedgerParameters,
   nativeToken,
   NetworkId,
@@ -19,7 +20,6 @@ import {
   waitForTxInHistory,
   walletStateTrimmed,
 } from './utils';
-import * as crypto2 from 'crypto';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
 import { logger } from './logger';
@@ -248,12 +248,8 @@ describe('Token transfer', () => {
       //     receiverAddress: initialState2.address,
       //   },
       // ];
-      const coin = {
-        type: nativeToken(),
-        value: outputValue,
-        nonce: crypto2.randomBytes(32).toString('hex'),
-      };
-      const output = UnprovenOutput.new(coin, initialState.coinPublicKey, initialState.encryptionPublicKey);
+      const coin = createCoinInfo(nativeToken(), balance);
+      const output = UnprovenOutput.new(coin, initialState.coinPublicKeyLegacy, initialState.encryptionPublicKeyLegacy);
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
       const provenTx = await sender.proveTransaction({

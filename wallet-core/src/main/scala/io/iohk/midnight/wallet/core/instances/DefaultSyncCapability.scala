@@ -1,6 +1,7 @@
 package io.iohk.midnight.wallet.core.instances
 
 import cats.syntax.all.*
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core.capabilities.{WalletSync, WalletTxHistory}
 import io.iohk.midnight.wallet.core.domain.*
 import io.iohk.midnight.wallet.core.{Wallet, WalletError}
@@ -47,7 +48,7 @@ class DefaultSyncCapability[
       update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
   ): Either[WalletError, Wallet[LocalStateNoKeys, SecretKeys, Transaction]] = {
     update match {
-      case ViewingUpdate(protocolVersion, offset, updates) =>
+      case ViewingUpdate(protocolVersion, offset, updates, legacyIndexer) =>
         val newWallet =
           updates.foldLeft(wallet) {
             case (wallet, Left(mt)) => wallet.copy(state = wallet.state.applyCollapsedUpdate(mt))
@@ -65,11 +66,14 @@ class DefaultSyncCapability[
             progress = {
               val newSynced = offset.decrement
 
-              val newTotal = wallet.progress.total match {
-                case Some(total) if newSynced.value > total.value => Some(newSynced)
-                case Some(total)                                  => Some(total)
-                case None                                         => None
-              }
+              val newTotal =
+                if legacyIndexer then wallet.progress.total
+                else
+                  wallet.progress.total match {
+                    case Some(total) if newSynced.value > total.value => Some(newSynced)
+                    case Some(total)                                  => Some(total)
+                    case None                                         => None
+                  }
 
               wallet.progress.copy(synced = Some(newSynced), total = newTotal)
             },
@@ -79,7 +83,17 @@ class DefaultSyncCapability[
       case update: ProgressUpdate =>
         wallet
           .copy(
-            progress = wallet.progress.copy(synced = update.synced, total = update.total),
+            progress = {
+              update.legacyIndexer match {
+                case Some(true) => {
+                  wallet.progress.copy(total = update.total)
+                }
+                case Some(false) => {
+                  wallet.progress.copy(synced = update.synced, total = update.total)
+                }
+                case None => wallet.progress
+              }
+            },
             isConnected = true,
           )
           .asRight

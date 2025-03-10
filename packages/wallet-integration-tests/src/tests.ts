@@ -24,7 +24,11 @@ const syncCapability = new w.DefaultSyncCapability(
 );
 
 const tracer = w.TracerCarrier.createLoggingTracer('debug');
-const allocatedClient = await w.IndexerClient.create('ws://localhost:8088', tracer).allocate();
+const allocatedClient = await w.IndexerClient.create(
+  'ws://localhost:8088/api/v1/graphql/ws',
+  'http://localhost:8088/api/v1/graphql',
+  tracer,
+).allocate();
 const syncService = w.DefaultSyncService.create(
   allocatedClient.value,
   wallet.secretKeys.encryptionSecretKey,

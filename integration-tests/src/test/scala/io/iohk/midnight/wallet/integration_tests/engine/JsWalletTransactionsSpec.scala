@@ -6,6 +6,7 @@ import cats.syntax.all.*
 import io.iohk.midnight.bloc.Bloc
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
+import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.ShieldedAddress
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
@@ -29,8 +30,10 @@ import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.given
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.engine.parser.AddressParser
 import io.iohk.midnight.wallet.engine.js.{JsWallet, ProvingRecipeTransformer}
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.scalajs.js.JSConverters.*
 
 class JsWalletTransactionsSpec extends WithProvingServerSuite {
@@ -64,7 +67,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     domain.TransactionToProve(unprovenTransactionArbitrary.arbitrary.sample.get)
 
   given WalletTxHistory[Wallet, Transaction] = wallets.walletDiscardTxHistory
-  given zswap.NetworkId = zswap.NetworkId.Undeployed
+  given networkId: zswap.NetworkId = zswap.NetworkId.Undeployed
 
   def jsWallet: Resource[IO, JsWallet] =
     for {
@@ -72,7 +75,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
         VersionCombinationStub(provingService, transferRecipe),
       )
       deferred <- Deferred[IO, Unit].toResource
-      combinator = new VersionCombinator(bloc, CombinationMigrations.default, deferred)
+      combinator = new VersionCombinator(bloc, CombinationMigrations.default, networkId, deferred)
     } yield new JsWallet(combinator, IO.unit, deferred)
 
   test("submitting a generic tx successfully should return the tx identifier") {
@@ -89,18 +92,21 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
   }
 
   test("submitting transfer tokens should return recipe for transaction") {
-    forAllF { (tokenTransfers: NonEmptyList[TokenTransfer[TokenType]]) =>
-      val apiTokenTransfers = tokenTransfers
-        .map { case TokenTransfer(amount, tokenType, receiverAddress) =>
-          ApiTokenTransfer(amount.toJsBigInt, receiverAddress.address, tokenType)
-        }
-        .toList
-        .toJSArray
-      jsWallet
-        .use(wallet => IO.fromPromise(IO(wallet.transferTransaction(apiTokenTransfers))))
-        .map { apiRecipe =>
-          assertEquals(ProvingRecipeTransformer.toRecipe(apiRecipe), Right(transferRecipe))
-        }
+    forAllF {
+      (tokenTransfers: NonEmptyList[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]]) =>
+        val apiTokenTransfers = tokenTransfers
+          .map { case TokenTransfer(amount, tokenType, receiverAddress) =>
+            val transferAddress =
+              AddressParser.encodeAsBech32OrThrow[ShieldedAddress](receiverAddress)
+            ApiTokenTransfer(amount.toJsBigInt, transferAddress, tokenType)
+          }
+          .toList
+          .toJSArray
+        jsWallet
+          .use(wallet => IO.fromPromise(IO(wallet.transferTransaction(apiTokenTransfers))))
+          .map { apiRecipe =>
+            assertEquals(ProvingRecipeTransformer.toRecipe(apiRecipe), Right(transferRecipe))
+          }
     }
   }
 

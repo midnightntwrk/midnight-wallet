@@ -2,7 +2,7 @@ package io.iohk.midnight.wallet.core
 
 import cats.effect.{IO, Sync}
 import cats.syntax.all.*
-import io.iohk.midnight.wallet.core.capabilities.WalletTxBalancing
+import io.iohk.midnight.wallet.core.capabilities.WalletTxTransfer
 import io.iohk.midnight.wallet.core.domain.TransactionIdentifier
 import io.iohk.midnight.wallet.core.services.TxSubmissionService
 import io.iohk.midnight.wallet.core.services.TxSubmissionService.SubmissionResult
@@ -15,9 +15,21 @@ trait WalletTxSubmissionService[Transaction] {
 
 class WalletTxSubmissionServiceFactory[
     TWallet,
+    UnprovenTransaction,
     Transaction,
+    CoinInfo,
+    TokenType,
+    CoinPublicKey,
+    EncryptionPublicKey,
 ](using
-    WalletTxBalancing[TWallet, Transaction, ?, ?, ?],
+    WalletTxTransfer[
+      TWallet,
+      Transaction,
+      UnprovenTransaction,
+      TokenType,
+      CoinPublicKey,
+      EncryptionPublicKey,
+    ],
     zswap.Transaction.Transaction[Transaction, ?],
     zswap.Transaction.CanEraseProofs[Transaction, ?],
 ) {
@@ -28,6 +40,14 @@ class WalletTxSubmissionServiceFactory[
       walletStateContainer: WalletStateContainer[TWallet],
   )(using
       tracer: WalletTxSubmissionTracer,
+      walletTxTransfer: WalletTxTransfer[
+        TWallet,
+        Transaction,
+        UnprovenTransaction,
+        TokenType,
+        CoinPublicKey,
+        EncryptionPublicKey,
+      ],
   ): Service = new Service {
     override def submitTransaction(toSubmitLedgerTx: Transaction): IO[TransactionIdentifier] =
       for {
@@ -76,7 +96,7 @@ class WalletTxSubmissionServiceFactory[
 
     private def revertTx(tx: Transaction, txId: TransactionIdentifier): IO[Unit] =
       walletStateContainer
-        .updateStateEither(_.applyFailedTransaction(tx))
+        .updateStateEither(wallet => walletTxTransfer.applyFailedTransaction(wallet, tx))
         .flatMap {
           case Right(_)    => Sync[IO].unit
           case Left(error) => tracer.revertError(txId, error.toThrowable)

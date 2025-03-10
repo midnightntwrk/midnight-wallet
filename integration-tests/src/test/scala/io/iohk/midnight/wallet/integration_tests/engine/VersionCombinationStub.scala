@@ -14,7 +14,14 @@ import io.iohk.midnight.wallet.core.{
 }
 
 class VersionCombinationStub(
-    txService: WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType],
+    txService: WalletTransactionService[
+      UnprovenTransaction,
+      Transaction,
+      CoinInfo,
+      TokenType,
+      CoinPublicKey,
+      EncPublicKey,
+    ],
     submissionService: WalletTxSubmissionService[Transaction],
 ) extends VersionCombination {
   override def sync: IO[Unit] = IO.unit
@@ -38,7 +45,14 @@ class VersionCombinationStub(
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[
+    UnprovenTransaction,
+    Transaction,
+    CoinInfo,
+    TokenType,
+    CoinPublicKey,
+    EncPublicKey,
+  ]] =
     IO.pure(txService)
 
   override def submissionService(
@@ -61,9 +75,16 @@ object VersionCombinationStub {
 class WalletTransactionServiceWithProvingStub(
     provingService: ProvingService[UnprovenTransaction, Transaction],
     transferRecipe: TransactionToProve[UnprovenTransaction],
-) extends WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType] {
+) extends WalletTransactionService[
+      UnprovenTransaction,
+      Transaction,
+      CoinInfo,
+      TokenType,
+      CoinPublicKey,
+      EncPublicKey,
+    ] {
   override def prepareTransferRecipe(
-      outputs: List[TokenTransfer[TokenType]],
+      outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]],
   ): IO[TransactionToProve[UnprovenTransaction]] =
     IO.pure(transferRecipe)
 
@@ -85,7 +106,10 @@ class WalletTransactionServiceWithProvingStub(
   override def balanceTransaction(
       tx: Transaction,
       newCoins: Seq[CoinInfo],
-  ): IO[BalanceTransactionRecipe[UnprovenTransaction, Transaction]] =
+  ): IO[
+    BalanceTransactionToProve[UnprovenTransaction, Transaction] |
+      TransactionToProve[UnprovenTransaction] | NothingToProve[UnprovenTransaction, Transaction],
+  ] =
     IO.pure(NothingToProve(tx))
 }
 

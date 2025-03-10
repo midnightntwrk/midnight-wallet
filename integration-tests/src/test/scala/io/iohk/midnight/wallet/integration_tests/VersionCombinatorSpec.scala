@@ -17,7 +17,7 @@ import io.iohk.midnight.wallet.core.{
   WalletTransactionService,
   WalletTxSubmissionService,
 }
-import io.iohk.midnight.wallet.zswap.given
+import io.iohk.midnight.wallet.zswap.NetworkId.Undeployed
 import munit.CatsEffectSuite
 
 class VersionCombinatorSpec extends CatsEffectSuite {
@@ -25,7 +25,7 @@ class VersionCombinatorSpec extends CatsEffectSuite {
     val combinatorResource = for {
       v1 <- DummyV1Combination(Offset.Zero)
       deferred <- Deferred[IO, Unit].toResource
-    } yield new VersionCombinator(v1, new DummyCombinationMigrations, deferred)
+    } yield new VersionCombinator(v1, new DummyCombinationMigrations, Undeployed, deferred)
 
     combinatorResource.use { combinator =>
       for {
@@ -44,8 +44,8 @@ class VersionCombinatorSpec extends CatsEffectSuite {
         assertEquals(finalState, SerializedWalletState("DummyV2"))
         assertEquals(
           states.map(_.syncProgress).toList,
-          List.tabulate(10)(n => ProgressUpdate(Offset(1), Offset(n))) ++
-            List.tabulate(10)(n => ProgressUpdate(Offset(2), Offset(n + 10))),
+          List.tabulate(10)(n => ProgressUpdate(Offset(1), Offset(n), Some(true))) ++
+            List.tabulate(10)(n => ProgressUpdate(Offset(2), Offset(n + 10), Some(true))),
           states.map(_.syncProgress).toList,
         )
         assertEquals(
@@ -65,7 +65,10 @@ class VersionCombinatorSpec extends CatsEffectSuite {
       combination <- NeverEndingCombination()
       bloc <- Bloc[VersionCombination](combination)
       deferred <- Deferred[IO, Unit].toResource
-    } yield (deferred, new VersionCombinator(bloc, CombinationMigrations.default, deferred))
+    } yield (
+      deferred,
+      new VersionCombinator(bloc, CombinationMigrations.default, Undeployed, deferred),
+    )
 
     combinatorResource.use { (deferred, combinator) =>
       for {
@@ -102,7 +105,14 @@ class NeverEndingCombination(localState: Bloc[Int]) extends VersionCombination {
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[
+    UnprovenTransaction,
+    Transaction,
+    CoinInfo,
+    TokenType,
+    CoinPublicKey,
+    EncPublicKey,
+  ]] =
     UnsupportedOperationException("Test").raiseError
 
   override def submissionService(
@@ -133,7 +143,7 @@ class DummyV1Combination(val localState: Bloc[Offset]) extends VersionCombinatio
       .map { offset =>
         Generators.WalletStateGen.sample.get.copy(
           encryptionPublicKey = DummyV1Combination.zswapState.encryptionPublicKey,
-          syncProgress = ProgressUpdate(Offset(1), offset),
+          syncProgress = ProgressUpdate(Offset(1), offset, Some(true)),
         )
       }
 
@@ -155,6 +165,8 @@ class DummyV1Combination(val localState: Bloc[Offset]) extends VersionCombinatio
     Transaction,
     CoinInfo,
     TokenType,
+    CoinPublicKey,
+    EncPublicKey,
   ]] = Exception("Test stub").raiseError
 
   override def submissionService(
@@ -189,7 +201,7 @@ class DummyV2Combination(val localState: Bloc[Offset]) extends VersionCombinatio
       .map { offset =>
         Generators.WalletStateGen.sample.get.copy(
           encryptionPublicKey = DummyV2Combination.zswapState.encryptionPublicKey,
-          syncProgress = ProgressUpdate(Offset(2), offset),
+          syncProgress = ProgressUpdate(Offset(2), offset, Some(true)),
         )
       }
 
@@ -211,6 +223,8 @@ class DummyV2Combination(val localState: Bloc[Offset]) extends VersionCombinatio
     Transaction,
     CoinInfo,
     TokenType,
+    CoinPublicKey,
+    EncPublicKey,
   ]] = Exception("Test stub").raiseError
 
   override def submissionService(

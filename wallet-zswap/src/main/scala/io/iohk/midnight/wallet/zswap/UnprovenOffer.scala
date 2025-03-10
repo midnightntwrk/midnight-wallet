@@ -7,6 +7,7 @@ import io.iohk.midnight.midnightNtwrkZswap.mod
 import scala.scalajs.js
 
 trait UnprovenOffer[T, UnprovenInput, UnprovenOutput, TokenType] {
+  def apply(): T
   def fromInput(input: UnprovenInput, tokenType: TokenType, value: BigInt): T
   def fromOutput(output: UnprovenOutput, tokenType: TokenType, value: BigInt): T
 
@@ -25,6 +26,8 @@ given UnprovenOffer[
   mod.UnprovenOutput,
   mod.TokenType,
 ] with {
+  override def apply(): mod.UnprovenOffer = new mod.UnprovenOffer()
+
   override def fromInput(
       input: mod.UnprovenInput,
       tokenType: mod.TokenType,

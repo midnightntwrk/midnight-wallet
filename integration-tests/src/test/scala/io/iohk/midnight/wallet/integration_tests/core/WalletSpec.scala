@@ -36,7 +36,15 @@ private type IndexerUpdate = CoreIndexerUpdate[MerkleTreeCollapsedUpdate, Transa
 abstract class WalletSpec
     extends WalletKeysSpec[Wallet, CoinPublicKey, EncPublicKey, EncryptionSecretKey]
     with WalletBalancesSpec[Wallet, TokenType]
-    with WalletTxBalancingSpec[Wallet, Transaction, UnprovenTransaction, CoinInfo, TokenType]
+    with WalletTxBalancingSpec[
+      Wallet,
+      Transaction,
+      UnprovenTransaction,
+      CoinInfo,
+      TokenType,
+      CoinPublicKey,
+      EncPublicKey,
+    ]
     with WalletSyncSpec[Wallet, IndexerUpdate]
     with WithProvingServerSuite {
 
@@ -122,7 +130,7 @@ abstract class WalletSpec
   }
 
   override val walletTxBalancing
-      : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo, TokenType] =
+      : WalletTxBalancing[Wallet, Transaction, UnprovenTransaction, CoinInfo] =
     walletInstances.walletTxBalancing
   override val transactionToBalance: IO[Transaction] =
     Generators.ledgerTransactionArbitrary.arbitrary.sample.get
@@ -180,6 +188,7 @@ abstract class WalletSpec
           Left(MerkleTreeCollapsedUpdate(chainState, js.BigInt(0), js.BigInt(1))),
           Right(AppliedTransaction(txCtx.transaction, ApplyStage.SucceedEntirely)),
         ),
+        true,
       )
     }
   override val isUpdateApplied: Wallet => Boolean = wallet =>

@@ -6,6 +6,11 @@ import cats.syntax.all.*
 import io.iohk.midnight.js.interop.TracerCarrier
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
+import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.{
+  ShieldedAddress,
+  ShieldedCoinPublicKey,
+  ShieldedEncryptionPublicKey,
+}
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   ApplyStage,
   BalanceTransactionToProve,
@@ -25,11 +30,13 @@ import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.Config.InitialState
+import io.iohk.midnight.wallet.core.WalletError.InvalidAddress
 import io.iohk.midnight.wallet.core.combinator.VersionCombinator
-import io.iohk.midnight.wallet.core.domain.{Address, ProvingRecipe, TokenTransfer}
+import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
 import io.iohk.midnight.wallet.engine.WalletBuilder
+import io.iohk.midnight.wallet.engine.parser.AddressParser
 import io.iohk.midnight.wallet.zswap.*
 import org.scalablytyped.runtime.StringDictionary
 
@@ -41,13 +48,13 @@ import scala.scalajs.js.annotation.*
 /** This class delegates calls to the Scala Wallet and transforms any Scala-specific type into its
   * corresponding Javascript one
   */
-@SuppressWarnings(Array("org.wartremover.warts.TripleQuestionMark"))
 @JSExportTopLevel("Wallet")
 class JsWallet(
     versionCombinator: VersionCombinator,
     finalizer: IO[Unit],
     stopSyncing: Deferred[IO, Unit],
-) extends api.Wallet {
+)(using networkId: NetworkId)
+    extends api.Wallet {
 
   import Transaction.{given, *}
 
@@ -67,7 +74,17 @@ class JsWallet(
     versionCombinator
       .transactionService(ProtocolVersion.V1)
       .flatMap(_.balanceTransaction(tx, newCoins.toSeq))
-      .map(ProvingRecipeTransformer.toApiBalanceTransactionRecipe)
+      .flatMap[BalanceTransactionToProve | NothingToProve] {
+        case recipe: domain.BalanceTransactionToProve[mod.UnprovenTransaction, mod.Transaction] =>
+          IO.pure(ProvingRecipeTransformer.toApiBalanceTransactionToProve(recipe))
+        case recipe: domain.NothingToProve[mod.UnprovenTransaction, mod.Transaction] =>
+          IO.pure(ProvingRecipeTransformer.toApiNothingToProve(recipe))
+        case _: domain.TransactionToProve[mod.UnprovenTransaction] =>
+          IO.raiseError(new Error("Unexpected recipe type"))
+      }
+      .handleErrorWith { error =>
+        IO.raiseError(new Error(error))
+      }
       .unsafeToPromise()
 
   override def proveTransaction(recipe: ApiProvingRecipe): Promise[mod.Transaction] = {
@@ -81,7 +98,7 @@ class JsWallet(
           .unsafeToPromise()
   }
 
-  override def state(): Observable_[WalletState] =
+  override def state(): Observable_[WalletState] = {
     versionCombinator.state
       .map { localState =>
         val mappedWalletState = WalletState(
@@ -90,9 +107,14 @@ class JsWallet(
           balances = StringDictionary(localState.balances.map(_.map(_.toJsBigInt)).toSeq*),
           coins = localState.coins.toJSArray,
           nullifiers = localState.nullifiers.toJSArray,
-          coinPublicKey = localState.coinPublicKey,
-          encryptionPublicKey = localState.encryptionPublicKey,
-          address = localState.address.asString,
+          coinPublicKey =
+            AddressParser.encodeAsBech32OrThrow[ShieldedCoinPublicKey](localState.address),
+          coinPublicKeyLegacy = localState.coinPublicKey,
+          encryptionPublicKey =
+            AddressParser.encodeAsBech32OrThrow[ShieldedEncryptionPublicKey](localState.address),
+          encryptionPublicKeyLegacy = localState.encryptionPublicKey,
+          address = AddressParser.encodeAsBech32OrThrow[ShieldedAddress](localState.address),
+          addressLegacy = AddressParser.encodeAsHex(localState.address),
           transactionHistory = localState.transactionHistory.map { tx =>
             TransactionHistoryEntry(
               ApplyStage.SucceedEntirely,
@@ -111,25 +133,35 @@ class JsWallet(
         }
       }
       .unsafeToObservable()
+  }
 
   override def transferTransaction(
       outputs: js.Array[ApiTokenTransfer],
-  ): Promise[TransactionToProve] =
-    versionCombinator
-      .transactionService(ProtocolVersion.V1)
-      .flatMap(
-        _.prepareTransferRecipe(
-          outputs.toList.map((tt: ApiTokenTransfer) =>
-            TokenTransfer(
-              amount = tt.amount.toScalaBigInt,
-              tokenType = tt.`type`,
-              receiverAddress = Address(tt.receiverAddress),
-            ),
-          ),
-        ),
+  ): Promise[TransactionToProve] = {
+    (parseApiTokenTransfers(outputs) match {
+      case Left(invalidAddresses) =>
+        IO.raiseError(Exception(invalidAddresses.map(_.toString).mkString))
+      case Right(validTransfers) =>
+        versionCombinator
+          .transactionService(ProtocolVersion.V1)
+          .flatMap(_.prepareTransferRecipe(validTransfers))
+          .map(ProvingRecipeTransformer.toApiTransactionToProve)
+    }).unsafeToPromise()
+  }
+
+  private def parseApiTokenTransfers(outputs: js.Array[ApiTokenTransfer]) = {
+    val (invalidAddresses, validTransfers) = outputs.toList
+      .map(tt =>
+        AddressParser
+          .decode[domain.Address[mod.CoinPublicKey, mod.EncPublicKey]](tt.receiverAddress)
+          .left
+          .map(InvalidAddress.apply)
+          .map { address => TokenTransfer(tt.amount.toScalaBigInt, tt.`type`, address) },
       )
-      .map(ProvingRecipeTransformer.toApiTransactionToProve)
-      .unsafeToPromise()
+      .partitionMap(identity)
+
+    Either.cond(invalidAddresses.isEmpty, validTransfers, invalidAddresses)
+  }
 
   def serializeState(): Promise[String] =
     versionCombinator.serializeState.map(_.serializedState).unsafeToPromise()
@@ -248,11 +280,10 @@ object JsWallet {
           .allocated
       (versionCombinator, finalizer) = allocatedVersionCombinator
       deferred <- Deferred[IO, Unit]
-    } yield JsWallet(
-      versionCombinator,
-      finalizer,
-      deferred,
-    )
+    } yield {
+      given NetworkId = versionCombinator.networkId
+      JsWallet(versionCombinator, finalizer, deferred)
+    }
   }
 
   private def buildJsWalletTracer(minLogLevel: LogLevel): JsWalletTracer =
@@ -265,13 +296,6 @@ object JsWallet {
         case Right(config) => jsWalletTracer.configConstructed(config)
         case Left(t)       => jsWalletTracer.invalidConfig(t)
       }
-
-  def apply(
-      versionCombinator: VersionCombinator,
-      finalizer: IO[Unit],
-      deferred: Deferred[IO, Unit],
-  ): JsWallet =
-    new JsWallet(versionCombinator, finalizer, deferred)
 
   @JSExport
   def calculateCost(tx: mod.Transaction): js.BigInt = {

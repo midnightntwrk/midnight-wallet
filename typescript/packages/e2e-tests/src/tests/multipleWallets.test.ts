@@ -1,4 +1,4 @@
-import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet_built';
+import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { firstValueFrom } from 'rxjs';

@@ -16,7 +16,6 @@ import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.core.domain.ProvingRecipe
 import io.iohk.midnight.midnightNtwrkZswap.mod.{Transaction, UnprovenTransaction}
 import scala.scalajs.js
-import scala.scalajs.js.|
 
 object ProvingRecipeTransformer {
 
@@ -41,17 +40,19 @@ object ProvingRecipeTransformer {
     }
   }
 
-  def toApiBalanceTransactionRecipe(
-      recipe: domain.BalanceTransactionRecipe[UnprovenTransaction, Transaction],
-  ): BalanceTransactionToProve | NothingToProve = {
-    recipe match
-      case domain.BalanceTransactionToProve(toProve, toBalance) =>
-        |.from(
-          BalanceTransactionToProve(toBalance, toProve, BALANCE_TRANSACTION_TO_PROVE),
-        )
-      case domain.NothingToProve(transaction) =>
-        |.from(NothingToProve(transaction, NOTHING_TO_PROVE))
-  }
+  def toApiBalanceTransactionToProve(
+      recipe: domain.BalanceTransactionToProve[UnprovenTransaction, Transaction],
+  ): BalanceTransactionToProve =
+    BalanceTransactionToProve(
+      recipe.toBalance,
+      recipe.toProve,
+      BALANCE_TRANSACTION_TO_PROVE,
+    )
+
+  def toApiNothingToProve(
+      recipe: domain.NothingToProve[UnprovenTransaction, Transaction],
+  ): NothingToProve =
+    NothingToProve(recipe.transaction, NOTHING_TO_PROVE)
 
   def toApiTransactionToProve(
       recipe: domain.TransactionToProve[UnprovenTransaction],

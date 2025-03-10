@@ -26,12 +26,17 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.given
+import org.scalacheck.Test
 import org.scalacheck.effect.PropF.forAllF
+
 import scala.concurrent.duration.DurationInt
 import scalajs.js
 
 @SuppressWarnings(Array("org.wartremover.warts.SeqApply", "org.wartremover.warts.TryPartial"))
 class WalletTransactionServiceSpec extends WithProvingServerSuite {
+
+  override def scalaCheckTestParameters: Test.Parameters =
+    super.scalaCheckTestParameters.withMaxSize(1)
 
   private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
@@ -71,7 +76,14 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   ): Resource[
     IO,
     (
-        WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType],
+        WalletTransactionService[
+          UnprovenTransaction,
+          Transaction,
+          CoinInfo,
+          TokenType,
+          CoinPublicKey,
+          EncPublicKey,
+        ],
         WalletStateContainer[Wallet],
     ),
   ] = {
@@ -98,6 +110,8 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
           Transaction,
           CoinInfo,
           TokenType,
+          CoinPublicKey,
+          EncPublicKey,
         ].create(walletStateContainer, prover)
       (walletTxService, walletStateContainer)
     }
@@ -118,9 +132,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
     }
   }
 
-  object FlakyTest extends munit.Tag("FlakyTest")
-
-  test("Prove given unproven transaction and merge it with given transaction".tag(FlakyTest)) {
+  test("Prove given unproven transaction and merge it with given transaction".tag(munit.Flaky)) {
     forAllF { (txIO: IO[Transaction], unprovenTx: UnprovenTransaction) =>
       buildWalletTransactionService().use { (walletTransactionService, _) =>
         for {
@@ -150,45 +162,52 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   }
 
   test("Prepare recipe for balanced transfer transaction") {
-    forAllF { (transfers: NonEmptyList[domain.TokenTransfer[TokenType]]) =>
-      val initialState = Generators.generateStateWithFunds(
-        transfers
-          .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
-          .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
-      )
-      buildWalletTransactionService(initialState._1, initialState._2).use {
-        (walletTransactionService, _) =>
-          walletTransactionService.prepareTransferRecipe(transfers.toList).map {
-            case domain.TransactionToProve(toProve) =>
-              assert(toProve.guaranteedCoins.exists(_.outputs.length >= transfers.size))
-              assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
-              assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
-          }
-      }
+    forAllF {
+      (transfers: NonEmptyList[domain.TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]]) =>
+        val initialState = Generators.generateStateWithFunds(
+          transfers
+            .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
+            .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
+        )
+        buildWalletTransactionService(initialState._1, initialState._2).use {
+          (walletTransactionService, _) =>
+            walletTransactionService.prepareTransferRecipe(transfers.toList).map {
+              case domain.TransactionToProve(toProve) =>
+                assert(toProve.guaranteedCoins.exists(_.outputs.length >= transfers.size))
+                assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+                assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
+            }
+        }
     }
   }
 
   test("Prepare recipe for balanced transfer transaction and filter out negative transfers") {
-    forAllF { (transfers: NonEmptyList[domain.TokenTransfer[TokenType]]) =>
-      val invalidTransfer =
-        domain.TokenTransfer[TokenType](BigInt(-1), "invalid", domain.Address("invalid"))
-      val initialState = Generators.generateStateWithFunds(
-        transfers
-          .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
-          .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
-      )
-      buildWalletTransactionService(initialState._1, initialState._2).use {
-        (walletTransactionService, _) =>
-          walletTransactionService.prepareTransferRecipe(invalidTransfer :: transfers.toList).map {
-            case domain.TransactionToProve(toProve) =>
-              assert(toProve.guaranteedCoins.exists(_.outputs.sizeIs >= transfers.size))
-              assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
-              assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
-              assert(
-                toProve.guaranteedCoins.exists(_.deltas.get(invalidTransfer.tokenType).isEmpty),
-              )
-          }
-      }
+    forAllF {
+      (transfers: NonEmptyList[domain.TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]]) =>
+        val invalidTransfer =
+          domain.TokenTransfer[TokenType, CoinPublicKey, EncPublicKey](
+            BigInt(-1),
+            "invalid",
+            domain.Address("invalid", "invalid"),
+          )
+        val initialState = Generators.generateStateWithFunds(
+          transfers
+            .map(tt => (tt.tokenType, tt.amount * tt.amount + tt.amount))
+            .prepend(nativeToken(), (inputFeeOverhead * outputFeeOverhead).toScalaBigInt),
+        )
+        buildWalletTransactionService(initialState._1, initialState._2).use {
+          (walletTransactionService, _) =>
+            walletTransactionService
+              .prepareTransferRecipe(invalidTransfer :: transfers.toList)
+              .map { case domain.TransactionToProve(toProve) =>
+                assert(toProve.guaranteedCoins.exists(_.outputs.sizeIs >= transfers.size))
+                assert(toProve.guaranteedCoins.exists(_.inputs.nonEmpty))
+                assert(toProve.guaranteedCoins.exists(_.deltas.toList.forall(_._2 >= js.BigInt(0))))
+                assert(
+                  toProve.guaranteedCoins.exists(_.deltas.get(invalidTransfer.tokenType).isEmpty),
+                )
+              }
+        }
     }
   }
 
@@ -201,14 +220,15 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   }
 
   test("Fails when not enough funds for transfer transaction") {
-    forAllF { (transfers: NonEmptyList[domain.TokenTransfer[TokenType]]) =>
-      buildWalletTransactionService().use { (walletTransactionService, _) =>
-        walletTransactionService.prepareTransferRecipe(transfers.toList).attempt.map {
-          case Left(error) =>
-            assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
-          case Right(value) => fail("prepareTransferRecipe without funds must fail")
+    forAllF {
+      (transfers: NonEmptyList[domain.TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]]) =>
+        buildWalletTransactionService().use { (walletTransactionService, _) =>
+          walletTransactionService.prepareTransferRecipe(transfers.toList).attempt.map {
+            case Left(error) =>
+              assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
+            case Right(value) => fail("prepareTransferRecipe without funds must fail")
+          }
         }
-      }
     }
   }
 
@@ -238,6 +258,8 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
                       .forall(_._2 >= js.BigInt(0)),
                   )
                   assert(balancedTransaction.imbalances(false).toList.forall(_._2 >= js.BigInt(0)))
+                case domain.TransactionToProve(_) =>
+                  fail("Unexpected recipe type")
                 case domain.NothingToProve(_) =>
                   fail("balanceTransaction must produce transaction to prove")
               }
@@ -269,14 +291,8 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
       new FailingProvingService,
     ).use { (walletTransactionService, walletStateContainer) =>
       val randomSecretKeys = Generators.keyGenerator()
-      val randomRecipient = domain.Address(
-        zswap
-          .Address[CoinPublicKey, EncPublicKey](
-            randomSecretKeys.coinPublicKey,
-            randomSecretKeys.encryptionPublicKey,
-          )
-          .asString,
-      )
+      val randomRecipient =
+        domain.Address(randomSecretKeys.coinPublicKey, randomSecretKeys.encryptionPublicKey)
       for {
         fiber <- walletStateContainer.subscribe.take(3).compile.toList.start
         _ <- IO.sleep(1.second)

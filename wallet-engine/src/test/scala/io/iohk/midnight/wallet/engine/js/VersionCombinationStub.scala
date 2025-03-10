@@ -12,7 +12,6 @@ import io.iohk.midnight.wallet.core.{
 }
 import io.iohk.midnight.wallet.core.combinator.VersionCombination
 import io.iohk.midnight.wallet.core.domain.ProgressUpdate
-import io.iohk.midnight.wallet.zswap.given
 
 class VersionCombinationStub(
     coinPubKey: CoinPublicKey,
@@ -58,7 +57,14 @@ class VersionCombinationStub(
 
   override def transactionService(
       protocolVersion: ProtocolVersion,
-  ): IO[WalletTransactionService[UnprovenTransaction, Transaction, CoinInfo, TokenType]] =
+  ): IO[WalletTransactionService[
+    UnprovenTransaction,
+    Transaction,
+    CoinInfo,
+    TokenType,
+    CoinPublicKey,
+    EncPublicKey,
+  ]] =
     IO.raiseError(Exception("Test stub"))
 
   override def submissionService(

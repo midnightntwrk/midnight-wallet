@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet_built';
+import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { MidnightNetwork, closeWallet, compareStates, waitForSync } from './utils';
@@ -162,7 +162,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.coinPublicKey).toMatch(/^[0-9a-f]{64}$/);
+    expect(state.coinPublicKeyLegacy).toMatch(/^[0-9a-f]{64}$/);
   });
 
   test('Wallet state returns encryptionPublicKey hex string', async () => {
@@ -171,7 +171,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.encryptionPublicKey).toMatch(/^[0-9a-f]{116}$/);
+    expect(state.encryptionPublicKeyLegacy).toMatch(/^[0-9a-f]{116}$/);
   });
 
   test('Wallet state returns address as the concatenation of coinPublicKey and encryptionPublicKey', async () => {
@@ -180,8 +180,8 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.address).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{116}$/);
-    expect(state.address).toBe(state.coinPublicKey + '|' + state.encryptionPublicKey);
+    expect(state.addressLegacy).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{116}$/);
+    expect(state.addressLegacy).toBe(state.coinPublicKeyLegacy + '|' + state.encryptionPublicKeyLegacy);
   });
 
   test(

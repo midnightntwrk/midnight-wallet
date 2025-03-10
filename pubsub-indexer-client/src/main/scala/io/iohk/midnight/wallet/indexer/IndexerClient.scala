@@ -31,6 +31,7 @@ import scala.util.Try
 @JSExportTopLevel("IndexerClientInstance")
 @JSExportAll
 class IndexerClient(
+    indexerWsUri: Uri,
     indexerUri: Uri,
     stopSignal: Deferred[IO, Unit],
 )(using tracer: IndexerClientTracer) {
@@ -38,26 +39,30 @@ class IndexerClient(
   def viewingUpdates(viewingKey: String, initialIndex: Option[BigInt]): Stream[IO, IndexerEvent] =
     Stream
       .eval(Ref[IO].of(initialIndex))
-      .flatMap(viewingUpdatesWithRetry(viewingKey, _))
+      .flatMap(indexRef =>
+        Stream
+          .eval(LegacyIndexerCheck.check(indexerUri))
+          .flatMap(viewingUpdatesWithRetry(viewingKey, indexRef, _)),
+      )
       .interruptWhen(stopSignal.get.attempt)
 
   private def viewingUpdatesWithRetry(
       viewingKey: String,
       indexRef: Ref[IO, Option[BigInt]],
+      legacyIndexer: Boolean,
   ): Stream[IO, IndexerEvent] = {
     @SuppressWarnings(Array("org.wartremover.warts.ToString"))
     val requestId = UUID.randomUUID().toString
-
-    Stream.resource(webSocketResource(indexerUri)).flatMap { ws =>
+    Stream.resource(webSocketResource(indexerWsUri)).flatMap { ws =>
       Stream
         .bracket(connect(viewingKey, requestId, ws))(disconnect(_, requestId, ws))
-        .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _)))
+        .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _, legacyIndexer)))
         .flatMap(GraphQLSubscriber.subscribe(ws, _))
         .evalTap {
-          case RawViewingUpdate(index, _) => indexRef.set(index.some)
-          case _                          => Async[IO].unit
+          case RawViewingUpdate(index, _, legacyIndexer) => indexRef.set(index.some)
+          case _                                         => Async[IO].unit
         }
-        .handleErrorWith(retryOnConnectionError(viewingKey, indexRef))
+        .handleErrorWith(retryOnConnectionError(viewingKey, indexRef, legacyIndexer))
     }
   }
 
@@ -65,12 +70,8 @@ class IndexerClient(
     Resource.make(connectWebSocket(indexerUri))(ws => Sync[IO].delay(ws.disconnectNow()))
 
   private def connectWebSocket(indexerUri: Uri): IO[GraphQLWebSocket] = {
-    val host = indexerUri.host.getOrElse("")
-    val scheme = indexerUri.scheme.fold("")(scheme => s"$scheme://")
-    val port = indexerUri.port.fold("")(port => s":$port")
-    val wsUri = s"$scheme$host$port/api/v1/graphql/ws"
     Sync[IO]
-      .delay(WebSocket.url(wsUri, "graphql-ws").graphql.build(managed = false))
+      .delay(WebSocket.url(indexerUri.toString, "graphql-ws").graphql.build(managed = false))
       .flatTap(ws => Sync[IO].delay(ws.reconnectNow()))
       .flatTap(ws => Sync[IO].delay(ws.init()))
   }
@@ -78,22 +79,23 @@ class IndexerClient(
   private def retryOnConnectionError(
       viewingKey: String,
       index: Ref[IO, Option[BigInt]],
+      legacyIndexer: Boolean,
   ): Function[Throwable, Stream[IO, IndexerEvent]] = {
     case err: js.JavaScriptException if isConnectionError(err) =>
       Stream
         .eval(tracer.connectionLost(err)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer).delayBy(5.seconds)
     case WebSocketClosed =>
       Stream
         .eval(tracer.connectionLost(WebSocketClosed)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer).delayBy(5.seconds)
     case _: TimeoutException =>
       Stream
         .eval(tracer.connectTimeout) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index)
+        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer)
     case err =>
       Stream.raiseError(err)
   }
@@ -101,6 +103,7 @@ class IndexerClient(
   private def buildQuery(
       sessionId: SessionId,
       index: Option[BigInt],
+      legacyIndexer: Boolean,
   ): SelectionBuilder[RootSubscription, RawIndexerUpdate] =
     Subscription.wallet(
       sessionId,
@@ -115,8 +118,10 @@ class IndexerClient(
               Transaction.protocolVersion ~ Transaction.hash ~ Transaction.raw ~ Transaction.applyStage,
             )
             .map(SingleUpdate.RawTransaction.apply.tupled),
-        )).map(RawViewingUpdate.apply),
-      onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map(RawProgressUpdate.apply),
+        )).map((index, updates) => RawViewingUpdate(index, updates, legacyIndexer)),
+      onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map((synced, total) =>
+        RawProgressUpdate(synced, total, legacyIndexer),
+      ),
     )
 
   private def stop: IO[Unit] =
@@ -169,19 +174,25 @@ object IndexerClient {
 
   def apply(
       indexerWsUri: Uri,
+      indexerUri: Uri,
   )(using rootTracer: Tracer[IO, StructuredLog]): Resource[IO, IndexerClient] = {
     given IndexerClientTracer = IndexerClientTracer.from(rootTracer)
-    Resource.make(Deferred[IO, Unit].map(new IndexerClient(indexerWsUri, _)))(_.stop)
+    Resource.make(Deferred[IO, Unit].map(new IndexerClient(indexerWsUri, indexerUri, _)))(_.stop)
   }
 
   @JSExport def create(
       indexerWsUri: String,
+      indexerUri: String,
       rootTracer: TracerCarrier[StructuredLog],
   ): JsResource[IndexerClient] = {
     given Tracer[IO, StructuredLog] = rootTracer.tracer
-    val parsedUri = Uri.parse(indexerWsUri).leftMap(InvalidUri.apply)
-    val resource: Resource[IO, IndexerClient] =
-      Resource.eval(parsedUri.liftTo[IO]).flatMap(IndexerClient.apply)
+    val parsedWsUri = Uri.parse(indexerWsUri).leftMap(InvalidUri.apply)
+    val parsedUri = Uri.parse(indexerUri).leftMap(InvalidUri.apply)
+    val resource: Resource[IO, IndexerClient] = for {
+      ws <- Resource.eval(parsedWsUri.liftTo[IO])
+      uri <- Resource.eval(parsedUri.liftTo[IO])
+      client <- IndexerClient.apply(ws, uri)
+    } yield client
     JsResource.fromCats(resource)
   }
 
