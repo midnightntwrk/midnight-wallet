@@ -51,10 +51,11 @@ describe('Syncing', () => {
       await processSeeds(seeds);
 
       for (const wallet of wallets) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
         wallet.start();
       }
     });
-  });
+  }, timeout);
 
   afterEach(async () => {
     for (const wallet of wallets) {
@@ -76,11 +77,12 @@ describe('Syncing', () => {
 
       await Promise.all(promises);
 
-      wallets.forEach(async (wallet, index) => {
+      for (const wallet of wallets) {
+        const index = wallets.indexOf(wallet);
         const syncedState = await firstValueFrom(wallet.state());
         logger.info(`Wallet ${index}: ${syncedState.balances[nativeToken() ?? 0n]}`);
         expect(syncedState.syncProgress?.synced).toBeGreaterThan(0);
-      });
+      }
     },
     timeout,
   );

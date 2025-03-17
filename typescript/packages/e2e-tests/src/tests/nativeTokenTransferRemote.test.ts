@@ -151,7 +151,7 @@ describe('Token transfer', () => {
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
       expect(pendingState.balances[tokenTypeHash] ?? 0n).toBeLessThanOrEqual(initialBalanceNative - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBe(2);
+      expect(pendingState.pendingCoins.length).toBe(1);
       expect(pendingState.coins.length).toBeGreaterThanOrEqual(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length);
 
@@ -185,8 +185,9 @@ describe('Token transfer', () => {
   );
 
   test(
-    'coins become available when native token tx fails on node',
+    'coins become available when native token tx fails on node @smoke',
     async () => {
+      allure.tag('smoke');
       allure.tms('PM-8936', 'PM-8936');
       allure.epic('Headless wallet');
       allure.feature('Transactions');

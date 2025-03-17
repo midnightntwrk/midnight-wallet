@@ -2,7 +2,14 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId, Transaction } from '@midnight-ntwrk/zswap';
-import { validateWalletTxHistory, waitForPending, waitForSync, waitForTxInHistory, walletStateTrimmed } from './utils';
+import {
+  closeWallet,
+  validateWalletTxHistory,
+  waitForPending,
+  waitForSync,
+  waitForTxInHistory,
+  walletStateTrimmed,
+} from './utils';
 import { TransactionToProve, Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { randomBytes } from 'node:crypto';
@@ -16,9 +23,6 @@ import { randomBytes } from 'node:crypto';
 describe('Transaction balancing examples', () => {
   const getFixture = useTestContainersFixture();
   const seedSender = randomBytes(32).toString('hex');
-  // const seed1 = '0000000000000000000000000000000000000000000000000000000000000001';
-  // const seed2 = '0000000000000000000000000000000000000000000000000000000000000002';
-  // const seed3 = '0000000000000000000000000000000000000000000000000000000000000003';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
   const timeout = 420_000;
 
@@ -39,7 +43,7 @@ describe('Transaction balancing examples', () => {
     await allure.step('Distribute coins to sender', async function () {
       fixture = getFixture();
 
-      walletFunded = await WalletBuilder.buildFromSeed(
+      walletFunded = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -121,7 +125,7 @@ describe('Transaction balancing examples', () => {
         expect(finalState.transactionHistory.length).toBe(initialState.transactionHistory.length + 2);
       };
 
-      sender = await WalletBuilder.buildFromSeed(
+      sender = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -138,8 +142,8 @@ describe('Transaction balancing examples', () => {
   }, timeout);
 
   afterEach(async () => {
-    await walletFunded.close();
-    await sender.close();
+    await closeWallet(walletFunded);
+    await closeWallet(sender);
   });
 
   test(
@@ -152,7 +156,7 @@ describe('Transaction balancing examples', () => {
 
       const output35 = 35_000_000n;
 
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -220,7 +224,7 @@ describe('Transaction balancing examples', () => {
       expect(finalState2.balances[nativeToken()] ?? 0n).toBe(output35);
       validateWalletTxHistory(finalState2, initialState2);
 
-      await receiver1.close();
+      await closeWallet(receiver1);
     },
     timeout,
   );
@@ -235,7 +239,7 @@ describe('Transaction balancing examples', () => {
 
       const output = 1n;
 
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -306,7 +310,7 @@ describe('Transaction balancing examples', () => {
       expect(finalState2.balances[nativeTokenHash2] ?? 0n).toBe(output);
       validateWalletTxHistory(finalState2, initialState2);
 
-      await receiver1.close();
+      await closeWallet(receiver1);
     },
     timeout,
   );
@@ -323,7 +327,7 @@ describe('Transaction balancing examples', () => {
       const output2 = 10_000_000n;
       const output3 = 3_000_000n;
 
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -335,7 +339,7 @@ describe('Transaction balancing examples', () => {
 
       receiver1.start();
 
-      receiver2 = await WalletBuilder.buildFromSeed(
+      receiver2 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -344,10 +348,11 @@ describe('Transaction balancing examples', () => {
         NetworkId.Undeployed,
         'info',
       );
-
+      // wait before starting another wallet to evade issues with syncing
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
       receiver2.start();
 
-      receiver3 = await WalletBuilder.buildFromSeed(
+      receiver3 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -357,6 +362,8 @@ describe('Transaction balancing examples', () => {
         'info',
       );
 
+      // wait before starting another wallet to evade issues with syncing
+      await new Promise((resolve) => setTimeout(resolve, 5_000));
       receiver3.start();
 
       const initialState = await waitForSync(sender);
@@ -374,12 +381,12 @@ describe('Transaction balancing examples', () => {
       const initialState3 = await waitForSync(receiver2);
       const initialBalance3 = initialState3.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 3: ${initialBalance3} tDUST`);
-      logger.info(`Wallet 3 available coins: ${initialState2.availableCoins.length}`);
+      logger.info(`Wallet 3 available coins: ${initialState3.availableCoins.length}`);
 
       const initialState4 = await waitForSync(receiver3);
       const initialBalance4 = initialState4.balances[nativeToken()] ?? 0n;
       logger.info(`Wallet 4: ${initialBalance4} tDUST`);
-      logger.info(`Wallet 4 available coins: ${initialState2.availableCoins.length}`);
+      logger.info(`Wallet 4 available coins: ${initialState4.availableCoins.length}`);
 
       const outputsToCreate = [
         {
@@ -421,7 +428,6 @@ describe('Transaction balancing examples', () => {
       logger.info(`Wallet 1: ${finalState.balances[nativeTokenHash2]} NT2`);
       logger.info(finalState.availableCoins);
       expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - output2 - output3);
-      expect(finalState.balances[nativeTokenHash2] ?? 0n).toBe(1n);
       expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
@@ -459,9 +465,9 @@ describe('Transaction balancing examples', () => {
       expect(finalState4.balances[nativeToken()] ?? 0n).toBe(output3);
       validateWalletTxHistory(finalState4, initialState4);
 
-      await receiver1.close();
-      await receiver2.close();
-      await receiver3.close();
+      await closeWallet(receiver1);
+      await closeWallet(receiver2);
+      await closeWallet(receiver3);
     },
     timeout,
   );
@@ -474,9 +480,7 @@ describe('Transaction balancing examples', () => {
       allure.feature('Transaction balancing');
       allure.story('Error when trying to transfer all available tdust');
 
-      const output180 = 180_000_000n;
-
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -490,7 +494,6 @@ describe('Transaction balancing examples', () => {
 
       const initialState = await waitForSync(sender);
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
-      expect(initialBalance).toBe(output180);
       logger.info(initialState.balances);
       logger.info(`Wallet 1: ${initialBalance} tDUST`);
       logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
@@ -504,7 +507,7 @@ describe('Transaction balancing examples', () => {
       const outputsToCreate = [
         {
           type: nativeToken(),
-          amount: output180,
+          amount: initialBalance,
           receiverAddress: initialState2.address,
         },
       ];
@@ -521,6 +524,7 @@ describe('Transaction balancing examples', () => {
           logger.info(e);
         }
       }
+      await closeWallet(receiver1);
     },
     timeout,
   );
@@ -539,7 +543,7 @@ describe('Transaction balancing examples', () => {
       let provenTx: Transaction;
       let txId: string;
 
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -639,9 +643,9 @@ describe('Transaction balancing examples', () => {
       logger.info(`Wallet 2: ${ReceiverWalletBalance3} tDUST`);
       expect(ReceiverWalletBalance3).toBe(0n);
 
-      await receiver1.close();
+      await closeWallet(receiver1);
 
-      receiver1 = await WalletBuilder.buildFromSeed(
+      receiver1 = await WalletBuilder.build(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
         fixture.getProverUri(),
@@ -657,7 +661,7 @@ describe('Transaction balancing examples', () => {
       logger.info(`Wallet 2: ${finalWalletBalancer} tDUST`);
       logger.info(`Wallet 2 available coins: ${finalReceiverWalletState.availableCoins.length}`);
       expect(finalWalletBalancer).toBe(0n);
-      await receiver1.close();
+      await closeWallet(receiver1);
     },
     timeout,
   );

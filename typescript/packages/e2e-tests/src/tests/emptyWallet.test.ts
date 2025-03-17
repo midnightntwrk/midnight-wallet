@@ -261,4 +261,46 @@ describe('Fresh wallet with empty state', () => {
     },
     timeout,
   );
+
+  test(
+    'Midnight wallet returns bech32m address',
+    async () => {
+      allure.tms('PM-14135', 'PM-8927');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state - Bech32m');
+      allure.story('Wallet returns Bech32m address');
+      const state = await waitForSync(wallet);
+      expect(state.address).toMatch(/^mn_shield-addr_[a-z0-9]{151,161}$/);
+      expect(state.address).toContain(TestContainersFixture.network);
+    },
+    timeout,
+  );
+
+  test(
+    'Midnight wallet returns coin public bech32m key',
+    async () => {
+      allure.tms('PM-15112', 'PM-15112');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state - Bech32m');
+      allure.story('Wallet returns Bech32m coin public key');
+      const state = await waitForSync(wallet);
+      expect(state.coinPublicKey).toMatch(/^mn_shield-cpk_[a-z0-9]{59,69}$/);
+      expect(state.coinPublicKey).toContain(TestContainersFixture.network);
+    },
+    timeout,
+  );
+
+  test(
+    'Midnight wallet returns encryption public bech32m key',
+    async () => {
+      allure.tms('PM-15106', 'PM-15106');
+      allure.epic('Headless wallet');
+      allure.feature('Wallet state - Bech32m');
+      allure.story('Wallet returns Bech32m encryption public key');
+      const state = await waitForSync(wallet);
+      expect(state.encryptionPublicKey).toMatch(/^mn_shield-epk_[a-z0-9]{100,110}$/);
+      expect(state.encryptionPublicKey).toContain(TestContainersFixture.network);
+    },
+    timeout,
+  );
 });

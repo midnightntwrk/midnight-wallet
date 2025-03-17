@@ -100,10 +100,10 @@ describe('Token transfer', () => {
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');
-      allure.tms('PM-8916', 'PM-8916');
+      allure.tms('PM-8933', 'PM-8933');
       allure.epic('Headless wallet');
       allure.feature('Transactions');
-      allure.story('Valid transfer transaction');
+      allure.story('Valid transfer transaction using bech32m address');
 
       await Promise.all([waitForSync(sender), waitForSync(receiver)]);
       const initialState = await firstValueFrom(sender.state());
@@ -219,6 +219,77 @@ describe('Token transfer', () => {
       expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
     },
     timeout,
+  );
+
+  test(
+    'Able to transfer using legacy address',
+    async () => {
+      allure.tag('smoke');
+      allure.tms('PM-8916', 'PM-8916');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Valid transfer transaction');
+
+      await Promise.all([waitForSync(sender), waitForSync(receiver)]);
+      const initialState = await firstValueFrom(sender.state());
+      const initialBalance = initialState.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 1: ${initialBalance}`);
+      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
+
+      const initialState2 = await firstValueFrom(receiver.state());
+      const initialBalance2 = initialState2.balances[nativeToken()] ?? 0n;
+      logger.info(`Wallet 2: ${initialBalance2}`);
+      logger.info(`Wallet 2 available coins: ${initialState2.availableCoins.length}`);
+
+      const outputsToCreate = [
+        {
+          type: nativeToken(),
+          amount: outputValue,
+          receiverAddress: initialState2.addressLegacy,
+        },
+      ];
+
+      const txToProve = await sender.transferTransaction(outputsToCreate);
+      const provenTx = await sender.proveTransaction(txToProve);
+      const txId = await sender.submitTransaction(provenTx);
+      console.time('txProcessing');
+      logger.info('Transaction id: ' + txId);
+
+      const pendingState = await waitForPending(sender);
+      logger.info(walletStateTrimmed(pendingState));
+      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
+      expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+      expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
+      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(1);
+      expect(pendingState.coins.length).toBe(initialState.coins.length);
+      expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
+      expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+
+      await waitForTxInHistory(txId, sender);
+      const finalState = await waitForSync(sender);
+      logger.info(walletStateTrimmed(finalState));
+      logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
+      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+      expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.coins.length).toBeLessThanOrEqual(initialState.coins.length);
+      expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
+      expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+      logger.info(`Wallet 1: ${finalState.balances[nativeToken()]}`);
+
+      await waitForTxInHistory(txId, receiver);
+      const finalState2 = await waitForSync(receiver);
+      logger.info(walletStateTrimmed(finalState2));
+      logger.info(`Wallet 2 available coins: ${finalState2.availableCoins.length}`);
+      expect(finalState2.balances[nativeToken()] ?? 0n).toBe(initialBalance2 + outputValue);
+      expect(finalState2.availableCoins.length).toBe(initialState2.availableCoins.length + 1);
+      expect(finalState2.pendingCoins.length).toBe(0);
+      expect(finalState2.coins.length).toBeGreaterThanOrEqual(initialState2.coins.length + 1);
+      expect(finalState2.nullifiers.length).toBeGreaterThanOrEqual(initialState2.nullifiers.length + 1);
+      expect(finalState2.transactionHistory.length).toBeGreaterThanOrEqual(initialState2.transactionHistory.length + 1);
+      logger.info(`Wallet 2: ${finalState2.balances[nativeToken()]}`);
+    },
+    syncTimeout,
   );
 
   // TO-DO: check why pending is not used
@@ -464,4 +535,53 @@ describe('Token transfer', () => {
     },
     timeout,
   );
+
+  test('error message when sending token to bech32m address from different networkId', async () => {
+    allure.tms('PM-14147', 'PM-14147');
+    allure.epic('Headless wallet');
+    allure.feature('Wallet state - Bech32m');
+    allure.story('Tx to addresss from different networkId');
+    const bech32mAddress =
+      'mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043';
+
+    const syncedState = await waitForSync(sender);
+    const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+    logger.info(`Wallet 1 balance is: ${initialBalance}`);
+
+    const outputsToCreate = [
+      {
+        type: nativeToken(),
+        amount: 0n,
+        receiverAddress: bech32mAddress,
+      },
+    ];
+
+    await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+      "InvalidAddressError: Can't decode an address. Bech32m parse exception: Error: Expected test address, got undeployed one.",
+    );
+  });
+
+  test('error message when sending token to bech32m address from different chain', async () => {
+    allure.tms('PM-14148', 'PM-14148');
+    allure.epic('Headless wallet');
+    allure.feature('Wallet state - Bech32m');
+    allure.story('Tx to addresss from different chain');
+    const bech32mAddress = 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297';
+
+    const syncedState = await waitForSync(sender);
+    const initialBalance = syncedState?.balances[nativeToken()] ?? 0n;
+    logger.info(`Wallet 1 balance is: ${initialBalance}`);
+
+    const outputsToCreate = [
+      {
+        type: nativeToken(),
+        amount: 0n,
+        receiverAddress: bech32mAddress,
+      },
+    ];
+
+    await expect(sender.transferTransaction(outputsToCreate)).rejects.toThrow(
+      "InvalidAddressError: Can't decode an address. Bech32m parse exception: Error: Expected prefix mn. Hex parse exception: Invalid HEX address format",
+    );
+  });
 });

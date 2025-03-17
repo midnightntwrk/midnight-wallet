@@ -501,7 +501,7 @@ describe('Hard fork', () => {
         logger.info('Transaction id: ' + txId);
 
         await waitForTxInHistory(txId, wallet);
-        const postState = await waitForIndex(wallet, 30);
+        await waitForIndex(wallet, 30);
         const serializedPostNew = await wallet.serializeState();
         logger.info(serializedPostNew);
         writeFileSync('res/undeployedSentPostHf.state', serializedPostNew, {
@@ -686,7 +686,7 @@ describe('Hard fork', () => {
         logger.info('Transaction id: ' + txId);
 
         await waitForTxInHistory(txId, wallet);
-        const postState = await waitForIndex(wallet, 33);
+        await waitForIndex(wallet, 33);
         const serializedPostNew = await wallet.serializeState();
         logger.info(serializedPostNew);
         writeFileSync('res/undeployedSentPostHf.state', serializedPostNew, {
