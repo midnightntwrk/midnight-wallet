@@ -650,8 +650,6 @@ describe('Hard fork', () => {
         const preHFSerializedState = await preHFWallet.serializeState();
         console.log('pre hf serialized state', preHFSerializedState.slice(0, 100));
 
-        await closeWallet(preHFWallet);
-
         wallet = await WalletBuilderPostHF.restore(
           'http://localhost:8088',
           'ws://localhost:8088',

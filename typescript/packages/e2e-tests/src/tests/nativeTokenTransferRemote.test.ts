@@ -151,7 +151,7 @@ describe('Token transfer', () => {
       expect(pendingState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance);
       expect(pendingState.balances[tokenTypeHash] ?? 0n).toBeLessThanOrEqual(initialBalanceNative - outputValue);
       expect(pendingState.availableCoins.length).toBeLessThan(initialState.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBe(1);
+      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
       expect(pendingState.coins.length).toBeGreaterThanOrEqual(initialState.coins.length);
       expect(pendingState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length);
 

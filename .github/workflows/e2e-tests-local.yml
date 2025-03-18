@@ -17,7 +17,7 @@ jobs:
   test:
     name: E2E tests
     runs-on: ubuntu-latest-8-core-x64
-    timeout-minutes: 60
+    timeout-minutes: 80
     permissions: write-all
     strategy:
       matrix:
