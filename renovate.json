@@ -3,7 +3,11 @@
   "nix": {
     "enabled": true
   },
-  "extends": ["config:best-practices", "schedule:weekly", ":disableRateLimiting"],
+  "extends": [
+    "config:best-practices",
+    "schedule:weekly",
+    ":disableRateLimiting"
+  ],
   "dependencyDashboard": true,
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
@@ -21,10 +25,7 @@
     },
     {
       "groupName": "Midnight libraries and docker images",
-      "matchPackageNames": [
-        "@midnight-ntwrk/**",
-        "ghcr.io/midnight-ntwrk/**"
-      ]
+      "matchPackageNames": ["@midnight-ntwrk/**", "ghcr.io/midnight-ntwrk/**"]
     },
     {
       "groupName": "devDependencies (non-major)",
@@ -33,13 +34,13 @@
     },
     {
       "matchDatasources": ["sbt-package"],
-      "matchPackagePrefixes": ["io.iohk"],
-      "enabled": false
+      "enabled": false,
+      "matchPackageNames": ["io.iohk{/,}**"]
     },
     {
       "matchDatasources": ["sbt-package"],
-      "matchPackagePrefixes": ["com.github.ghostdogpr"],
-      "enabled": false
+      "enabled": false,
+      "matchPackageNames": ["com.github.ghostdogpr{/,}**"]
     }
   ]
 }
