@@ -1,6 +1,6 @@
 {
     "name": "@midnight-ntwrk/wallet",
-    "version": "4.0.0-rc.1",
+    "version": "4.0.0",
     "main": "./dist/main.js",
     "types": "./dist/main.d.ts",
     "module": "./dist/main.js",
@@ -25,8 +25,8 @@
     },
     "dependencies": {
         "@midnight-ntwrk/wallet-api": "^4.0.0",
-        "@midnight-ntwrk/wallet-sdk-address-format": "^1.0.0-rc.1",
-        "@midnight-ntwrk/wallet-sdk-capabilities": "^1.0.0-rc.1",
+        "@midnight-ntwrk/wallet-sdk-address-format": "^1.0.0",
+        "@midnight-ntwrk/wallet-sdk-capabilities": "^1.0.0",
         "@midnight-ntwrk/zswap": "^3.0.6",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",

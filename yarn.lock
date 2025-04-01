@@ -1156,7 +1156,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-address-format@npm:^1.0.0-rc.1, @midnight-ntwrk/wallet-sdk-address-format@workspace:*, @midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format":
+"@midnight-ntwrk/wallet-sdk-address-format@npm:^1.0.0, @midnight-ntwrk/wallet-sdk-address-format@workspace:*, @midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format"
   dependencies:
@@ -1168,7 +1168,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-capabilities@npm:^1.0.0-rc.1, @midnight-ntwrk/wallet-sdk-capabilities@workspace:*, @midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
+"@midnight-ntwrk/wallet-sdk-capabilities@npm:^1.0.0, @midnight-ntwrk/wallet-sdk-capabilities@workspace:*, @midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
@@ -1239,8 +1239,8 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet@workspace:wallet-engine"
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^4.0.0"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^1.0.0-rc.1"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^1.0.0-rc.1"
+    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^1.0.0"
+    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^1.0.0"
     "@midnight-ntwrk/zswap": "npm:^3.0.6"
     fp-ts: "npm:^2.12.2"
     io-ts: "npm:^2.2.18"
