@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.engine.parser
+package io.iohk.midnight.wallet.core.parser
 
 import cats.syntax.eq.*
 import io.iohk.midnight.midnightNtwrkZswap.mod

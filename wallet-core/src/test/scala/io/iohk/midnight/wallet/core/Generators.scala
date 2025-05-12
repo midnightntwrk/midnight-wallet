@@ -9,6 +9,7 @@ import io.iohk.midnight.wallet.blockchain.data.*
 import io.iohk.midnight.wallet.core.domain.{Address, ProgressUpdate, TokenTransfer}
 import io.iohk.midnight.wallet.core.services.ProvingService
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
 import org.scalacheck.cats.implicits.*
 import org.scalacheck.{Arbitrary, Gen, Shrink}
 import scala.annotation.tailrec
@@ -18,14 +19,14 @@ import scala.scalajs.js
 object Generators {
   final case class TransactionWithContext(
       transaction: LedgerTransaction,
-      state: LocalStateNoKeys,
+      state: LocalState,
       secretKeys: SecretKeys,
       coins: NonEmptyList[CoinInfo],
   )
 
   final case class OfferWithContext(
       offer: UnprovenOffer,
-      state: LocalStateNoKeys,
+      state: LocalState,
       secretKeys: SecretKeys,
       coinOutputs: NonEmptyList[CoinInfo],
   )
@@ -53,8 +54,8 @@ object Generators {
       }
     }
 
-  private val localStateNoKeysGen: Gen[LocalStateNoKeys] =
-    Gen.lzy(LocalStateNoKeys().pure[Gen])
+  private val LocalStateGen: Gen[LocalState] =
+    Gen.lzy(LocalState().pure[Gen])
 
   private val secretKeysGen: Gen[SecretKeys] =
     Gen.lzy(
@@ -155,14 +156,14 @@ object Generators {
 
   private def buildOfferForCoins(
       coins: NonEmptyList[CoinInfo],
-      ls: Option[LocalStateNoKeys] = None,
+      ls: Option[LocalState] = None,
       seed: Option[String] = None,
-  ): (UnprovenOffer, LocalStateNoKeys, SecretKeys) = {
-    val state = ls.getOrElse(LocalStateNoKeys())
+  ): (UnprovenOffer, LocalState, SecretKeys) = {
+    val state = ls.getOrElse(LocalState())
     val secretKeys = keyGenerator(seed)
     val baseOfferAndState = buildOfferForCoin(coins.head, state, secretKeys)
     coins.tail
-      .foldLeft(baseOfferAndState: (UnprovenOffer, LocalStateNoKeys, SecretKeys)) {
+      .foldLeft(baseOfferAndState: (UnprovenOffer, LocalState, SecretKeys)) {
         case ((accOffer, accState, _), coin) =>
           val (offerForCoin, newState, rSk) = buildOfferForCoin(coin, accState, secretKeys)
           (accOffer.merge(offerForCoin), newState, rSk)
@@ -171,11 +172,16 @@ object Generators {
 
   private def buildOfferForCoin(
       coin: CoinInfo,
-      state: LocalStateNoKeys,
+      state: LocalState,
       secretKeys: SecretKeys,
-  ): (UnprovenOffer, LocalStateNoKeys, SecretKeys) = {
+  ): (UnprovenOffer, LocalState, SecretKeys) = {
     val output =
-      UnprovenOutput.`new`(coin, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
+      UnprovenOutput.`new`(
+        coin,
+        Segment.Guaranteed.value,
+        secretKeys.coinPublicKey,
+        secretKeys.encryptionPublicKey,
+      )
     val offer = UnprovenOffer.fromOutput(output, coin.`type`, coin.value)
     (offer, state.watchFor(secretKeys.coinPublicKey, coin), secretKeys)
   }
@@ -183,7 +189,7 @@ object Generators {
   def generateStateWithCoins(
       coins: NonEmptyList[CoinInfo],
       seed: Option[String] = None,
-  ): (LocalStateNoKeys, SecretKeys) = {
+  ): (LocalState, SecretKeys) = {
     val (unprovenOffer, state, secretKeys) = buildOfferForCoins(coins, None, seed)
     val proofsErasedTx = UnprovenTransaction(unprovenOffer).eraseProofs()
 
@@ -193,14 +199,14 @@ object Generators {
   def generateStateWithFunds(
       balanceData: NonEmptyList[(TokenType, BigInt)],
       seed: Option[String] = None,
-  ): (LocalStateNoKeys, SecretKeys) =
+  ): (LocalState, SecretKeys) =
     generateStateWithCoins(generateCoinsFor(balanceData), seed)
 
   def generateTransactionWithFundsFor(
       balanceData: NonEmptyList[(TokenType, BigInt)],
-      state: LocalStateNoKeys,
+      state: LocalState,
       seed: String,
-  ): (UnprovenTransaction, LocalStateNoKeys, SecretKeys) = {
+  ): (UnprovenTransaction, LocalState, SecretKeys) = {
     val (unprovenOffer, newState, secretKeys) =
       buildOfferForCoins(generateCoinsFor(balanceData), Some(state), Some(seed))
 
@@ -218,7 +224,7 @@ object Generators {
   given ledgerTransactionShrink: Shrink[IO[LedgerTransaction]] = noShrink
 
   private val ledgerSerialization =
-    new LedgerSerialization[LocalStateNoKeys, LedgerTransaction]
+    new LedgerSerialization[LocalState, LedgerTransaction]
 
   given transactionArbitrary(using
       provingService: ProvingService[UnprovenTransaction, LedgerTransaction],
@@ -261,19 +267,18 @@ object Generators {
     Nullifier,
     LedgerTransaction,
   ]] =
-    (localStateNoKeysGen, secretKeysGen, Gen.posNum[BigInt]).mapN {
-      (localState, secretKeys, balance) =>
-        WalletStateService.State(
-          secretKeys.coinPublicKey,
-          secretKeys.encryptionPublicKey,
-          secretKeys.encryptionSecretKey,
-          Map(nativeToken() -> balance),
-          Seq.empty,
-          Seq.empty,
-          Seq.empty,
-          Seq.empty,
-          Seq.empty,
-          ProgressUpdate.empty,
-        )
+    (LocalStateGen, secretKeysGen, Gen.posNum[BigInt]).mapN { (localState, secretKeys, balance) =>
+      WalletStateService.State(
+        secretKeys.coinPublicKey,
+        secretKeys.encryptionPublicKey,
+        secretKeys.encryptionSecretKey,
+        Map(nativeToken() -> balance),
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+        Seq.empty,
+        ProgressUpdate.empty,
+      )
     }
 }

@@ -7,19 +7,16 @@ import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, Transaction}
 import io.iohk.midnight.wallet.core.services.SyncService
 import io.iohk.midnight.wallet.indexer.IndexerClient
-import io.iohk.midnight.wallet.zswap
 
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 import scala.scalajs.js
 
 @JSExportTopLevel("DefaultSyncServiceInstance")
 @JSExportAll
-class DefaultSyncService[ESK](indexerClient: IndexerClient, esk: ESK, index: Option[BigInt])(using
-    s: zswap.EncryptionSecretKey[ESK, ?],
-    n: zswap.NetworkId,
-) extends SyncService {
+class DefaultSyncService(indexerClient: IndexerClient, bech32mESK: String, index: Option[BigInt])
+    extends SyncService {
   override def sync(offset: Option[Transaction.Offset]): Stream[IO, IndexerEvent] = {
-    indexerClient.viewingUpdates(esk.serialize, index)
+    indexerClient.viewingUpdates(bech32mESK, index)
   }
 
   def sync$(offset: js.UndefOr[Transaction.Offset]): Observable_[IndexerEvent] =
@@ -28,18 +25,14 @@ class DefaultSyncService[ESK](indexerClient: IndexerClient, esk: ESK, index: Opt
 @JSExportAll
 @JSExportTopLevel("DefaultSyncService")
 object DefaultSyncService {
-  def create[ESK](
+  def create(
       indexerClient: IndexerClient,
-      esk: ESK,
+      bech32mESK: String,
       index: js.UndefOr[js.BigInt],
-      s: zswap.EncryptionSecretKey[ESK, ?],
-      n: zswap.NetworkId,
-  ): DefaultSyncService[ESK] = {
-    given zswap.EncryptionSecretKey[ESK, ?] = s
-    given zswap.NetworkId = n
-    new DefaultSyncService[ESK](
+  ): DefaultSyncService = {
+    new DefaultSyncService(
       indexerClient,
-      esk,
+      bech32mESK,
       index.toOption.map(v => BigInt(v.toString(10))),
     )
   }

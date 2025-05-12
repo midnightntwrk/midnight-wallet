@@ -13,6 +13,7 @@ import {
   closeWallet,
   provideWallet,
   saveState,
+  Segments,
   waitForFinalizedBalance,
   waitForPending,
   waitForSync,
@@ -212,7 +213,12 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance2} ${tokenTypeHash}`);
 
       const coin = createCoinInfo(tokenTypeHash, outputValue);
-      const output = UnprovenOutput.new(coin, initialState.coinPublicKeyLegacy, initialState.encryptionPublicKeyLegacy);
+      const output = UnprovenOutput.new(
+        coin,
+        Segments.guaranteed,
+        initialState.coinPublicKeyLegacy,
+        initialState.encryptionPublicKeyLegacy,
+      );
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
       const provenTx = await sender.proveTransaction({

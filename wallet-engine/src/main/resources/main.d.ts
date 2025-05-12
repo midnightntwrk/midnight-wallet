@@ -65,7 +65,7 @@ export declare class WalletBuilder {
    * @param proverServerUri Prover server URI
    * @param substrateNodeUri Node URI
    * @param seed A BIP32 compatible mnemonic seed phrase hex encoded
-   * @param serializedState Serialized (JSON) state containing LocalStateNoKeys, Transaction History and Block Height
+   * @param serializedState Serialized (JSON) state containing LocalState, Transaction History and Block Height
    * @param minLogLevel Only statements with this level and above will be logged
    * @param discardTxHistory If transaction history should be discarded or kept in memory - undefined will default to false
    */
@@ -108,7 +108,7 @@ export declare class JsEither {
 }
 
 export declare class IndexerClient {
-  static create(wsUrl: string, url: string, tracer: TracerCarrier): JsResource<IndexerClient>;
+  static create(wsUrl: string, tracer: TracerCarrier): JsResource<IndexerClient>;
 }
 
 /* Zswap typeclasses */
@@ -116,7 +116,7 @@ export declare interface Transaction<Tx> {}
 export declare const V1Transaction: Transaction<zswap.Transaction>;
 
 export declare interface EvolveState<State, SecretKeys> {}
-export declare const V1EvolveState: EvolveState<zswap.LocalStateNoKeys, zswap.SecretKeys>;
+export declare const V1EvolveState: EvolveState<zswap.LocalState, zswap.SecretKeys>;
 
 export declare interface EncryptionSecretKey<ESK> {}
 export declare const V1EncryptionSecretKey: EncryptionSecretKey<zswap.EncryptionSecretKey>;
@@ -131,10 +131,10 @@ export declare class Progress {
 /* Wallet and capabilities */
 export declare class CoreWallet<State, SecretKeys> {
   static emptyV1(
-    localState: zswap.LocalStateNoKeys,
+    localState: zswap.LocalState,
     secretKeys: zswap.SecretKeys,
     networkId: NetworkId,
-  ): CoreWallet<zswap.LocalStateNoKeys, zswap.SecretKeys>;
+  ): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
   readonly state: State;
   readonly secretKeys: SecretKeys;
@@ -160,13 +160,7 @@ export declare class V1Combination {
 /* services */
 
 export declare class DefaultSyncService {
-  static create<ESK>(
-    client: IndexerClient,
-    esk: ESK,
-    index: bigint | undefined,
-    eskInstance: EncryptionSecretKey<ESK>,
-    networkId: NetworkId,
-  ): DefaultSyncService;
+  static create(client: IndexerClient, bech32mESK: string, index: bigint | undefined): DefaultSyncService;
 
   sync$(): Observable<IndexerUpdateEvent>;
 }

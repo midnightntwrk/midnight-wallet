@@ -14,14 +14,20 @@ import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import * as fs from 'node:fs';
 
+// place this somewhere better?
+export const Segments = {
+  guaranteed: 0,
+  fallible: 1,
+};
+
 export const waitForSyncProgress = async (wallet: Wallet) =>
   await firstValueFrom(
     wallet.state().pipe(
       throttleTime(5_000),
       tap((state) => {
-        const scanned = state.syncProgress?.synced ?? 0n;
-        const total = state.syncProgress?.total.toString() ?? 'unknown number';
-        logger.info(`Wallet scanned ${scanned} indices out of ${total}`);
+        const applyGap = state.syncProgress?.lag.applyGap ?? 0n;
+        const sourceGap = state.syncProgress?.lag.sourceGap ?? 0n;
+        logger.info(`Wallet behind by ${applyGap} indices, source behind by ${sourceGap} indices`);
       }),
       filter((state) => {
         // Let's allow progress only if syncProgress is defined
@@ -33,7 +39,7 @@ export const waitForSyncProgress = async (wallet: Wallet) =>
 export const isAnotherChain = async (wallet: Wallet, offset: number) => {
   const state = await waitForSyncProgress(wallet);
   // allow for situations when there's no new index in the network between runs
-  return state.syncProgress!.total <= offset - 1;
+  return state.syncProgress!.lag.applyGap <= offset - 1;
 };
 
 export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
@@ -63,6 +69,7 @@ export const provideWallet = async (
       const serializedStream = fs.createReadStream(`${directoryPath}/${filename}`, 'utf-8');
       const serialized = await streamToString(serializedStream);
       serializedStream.on('finish', () => serializedStream.close());
+
       wallet = await WalletBuilder.restore(
         fixture.getIndexerUri(),
         fixture.getIndexerWsUri(),
@@ -88,12 +95,13 @@ export const provideWallet = async (
       } else {
         const newState = await waitForSync(wallet);
         // allow for situations when there's no new index in the network between runs
-        if ((newState.syncProgress?.total ?? 0n) >= stateObject.offset - 1) {
+        if ((newState.syncProgress?.lag.applyGap ?? 0n) >= stateObject.offset - 1) {
           logger.info('Wallet was able to sync from restored state');
         } else {
           logger.info(`Offset: ${stateObject.offset}`);
-          logger.info(`SyncProgress.total: ${newState.syncProgress?.total}`);
+          logger.info(`SyncProgress Apply Gap: ${newState.syncProgress?.lag.applyGap}`);
           logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
+
           wallet = await WalletBuilder.build(
             fixture.getIndexerUri(),
             fixture.getIndexerWsUri(),
@@ -184,17 +192,17 @@ export const waitForSync = (wallet: Wallet) =>
     wallet.state().pipe(
       throttleTime(5_000),
       tap((state) => {
-        const scanned = state.syncProgress?.synced ?? 0n;
-        const total = state.syncProgress?.total.toString() ?? 'unknown number';
+        const applyGap = state.syncProgress?.lag.applyGap ?? 0n;
+        const sourceGap = state.syncProgress?.lag.sourceGap ?? 0n;
         const txs = state.transactionHistory.length;
-        logger.info(`Wallet scanned ${scanned} indices out of ${total}, transactions=${txs}`);
+        logger.info(`Wallet behind by ${applyGap} indices, source behind by ${sourceGap}, transactions=${txs}`);
       }),
-      filter((state) => {
-        // Let's allow progress only if wallet is synced fully
-        const synced = state.syncProgress?.synced ?? 0n;
-        const total = state.syncProgress?.total ?? 50n;
-        return state.syncProgress !== undefined && total === synced;
-      }),
+      filter(
+        (state) =>
+          state.syncProgress !== undefined &&
+          state?.syncProgress?.lag?.applyGap === 0n &&
+          state?.syncProgress?.lag?.sourceGap <= 100n,
+      ),
     ),
   );
 
@@ -271,6 +279,20 @@ export function validateWalletTxHistory(finalWalletState: WalletState, initialWa
   expect(finalWalletState.transactionHistory.length).toBeGreaterThanOrEqual(
     initialWalletState.transactionHistory.length + 1,
   );
+}
+
+export function validateNetworkInAddress(address: string) {
+  switch (TestContainersFixture.network) {
+    case 'testnet':
+      expect(address).toContain('test');
+      break;
+    case 'devnet':
+      expect(address).toContain('dev');
+      break;
+    case 'undeployed':
+      expect(address).toContain('undeployed');
+      break;
+  }
 }
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any

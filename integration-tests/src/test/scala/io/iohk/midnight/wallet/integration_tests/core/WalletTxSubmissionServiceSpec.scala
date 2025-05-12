@@ -24,6 +24,7 @@ import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubm
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
 import io.iohk.midnight.wallet.zswap.given
 import org.scalacheck.Gen
 import org.scalacheck.effect.PropF.forAllF
@@ -44,9 +45,9 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   private val txSubmissionService = new TxSubmissionServiceStub()
   private val failingTxSubmissionService = new FailingTxSubmissionServiceStub()
 
-  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,
@@ -69,7 +70,7 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type Wallet = CoreWallet[LocalState, SecretKeys, Transaction]
 
   private val txSubmissionServiceFactory =
     new WalletTxSubmissionServiceFactory[
@@ -83,13 +84,13 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
     ]
 
   def buildWalletTxSubmissionService(
-      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      initialState: LocalState = LocalState(),
       seed: Option[String] = None,
       txSubmissionService: TxSubmissionService[Transaction] = txSubmissionService,
   ): IO[(WalletTxSubmissionService[Transaction], WalletStateContainer[Wallet])] = {
     val hexSeed = seed.getOrElse(zswap.HexUtil.randomHex())
     val byteSeed = zswap.HexUtil.decodeHex(hexSeed).get
-    val snapshot = Snapshot[LocalStateNoKeys, Transaction](
+    val snapshot = Snapshot[LocalState, Transaction](
       initialState,
       Seq.empty,
       None,
@@ -131,8 +132,12 @@ class WalletTxSubmissionServiceSpec extends WithProvingServerSuite {
   test("Fails when received transaction is not well formed".ignore) {
     val secretKeys = Generators.keyGenerator()
     forAllF(coinInfoArbitrary.arbitrary, Gen.posNum[Int]) { (coin, amount) =>
-      val output =
-        UnprovenOutput.`new`(coin, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
+      val output = UnprovenOutput.`new`(
+        coin,
+        Segment.Guaranteed.value,
+        secretKeys.coinPublicKey,
+        secretKeys.encryptionPublicKey,
+      )
       // offer with output, but with not the same amount of coins in deltas
       val offer = UnprovenOffer.fromOutput(output, coin.tokenType, coin.value - js.BigInt(amount))
 

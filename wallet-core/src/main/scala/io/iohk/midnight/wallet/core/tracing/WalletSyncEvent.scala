@@ -36,10 +36,15 @@ object WalletSyncEvent {
   object DefaultInstances {
     def showIndexerUpdate(update: IndexerUpdate[?, ?]): String =
       update match {
-        case ViewingUpdate(protocolVersion, offset, _, legacyIndexer) =>
-          s"Viewing update v$protocolVersion: @${offset.show} (legacy: ${legacyIndexer})"
-        case ProgressUpdate(synced, total, legacyIndexer) =>
-          s"Progress: $synced/$total (legacy: $legacyIndexer)"
+        case ViewingUpdate(protocolVersion, offset, _) =>
+          s"Viewing update v$protocolVersion: @${offset.show}"
+        case ProgressUpdate(
+              appliedIndex,
+              highestRelevantWalletIndex,
+              highestIndex,
+              highestRelevantIndex,
+            ) =>
+          s"Wallet/Indexer tip: ${appliedIndex.map(_.show)}/${highestRelevantWalletIndex.map(_.show)}; Node/Indexer tip:${highestIndex.map(_.show)}/${highestRelevantIndex.map(_.show)}"
         case ConnectionLost => "Connection lost"
       }
 

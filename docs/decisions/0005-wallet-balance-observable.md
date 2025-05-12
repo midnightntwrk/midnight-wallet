@@ -11,10 +11,10 @@ We need to:
 In particular this will be used to expose total balance API.
 
 For `1` we already have the `SyncClient` which gives us a stream of blocks, and we can drain and update the local state.
-For `2`, keeping local state in a `cats.effect.Ref` would be enough, because it's enough that the 
+For `2`, keeping local state in a `cats.effect.Ref` would be enough, because it's enough that the
 user takes a snapshot of the local state at certain moment and builds a transaction based on that state.
 
-For `3` it's a bit more tricky. Because just a `Ref` doesn't allow us to push events when the state 
+For `3` it's a bit more tricky. Because just a `Ref` doesn't allow us to push events when the state
 is updated. The ideal candidate would be an actual implementation of the reactive _Subject_ pattern.
 So the question is what would be the best approach to solve `3`.
 
@@ -37,14 +37,14 @@ So the question is what would be the best approach to solve `3`.
 
 ## Decision Outcome
 
-Chosen option **5**: "Keep a simple `Ref` and fake the `Observable` API by polling this `Ref` in some time intervals", 
+Chosen option **5**: "Keep a simple `Ref` and fake the `Observable` API by polling this `Ref` in some time intervals",
 because it's the second-most easy to implement and the time limitation is the key decision driver here.
 Option **6** would be viable, but it's very little extra effort required to bring an `Observable` API,
 and it already sets up the API for the future.
 
 ### Positive Consequences
 
-* Very simple implementation, which is not only easy to implement but easy to debug in case of issues. 
+* Very simple implementation, which is not only easy to implement but easy to debug in case of issues.
 * Doesn't require adding extra third-party dependencies.
 
 ### Negative Consequences
@@ -71,7 +71,7 @@ See the documentation [here](https://fs2.io/#/concurrency-primitives?id=topic).
 
 * Good, because we are already using fs2
 * Good, because fs2 is stable and interacts nicely with cats and cats-effect
-* Bad, because `Topic` is meant to be pull-based meaning that the producer (the one that updates 
+* Bad, because `Topic` is meant to be pull-based meaning that the producer (the one that updates
 local state with transactions) would be blocked if consumers can't keep up
 * Bad, because it would require a big amount of workarounds to make it push-based
 
@@ -86,7 +86,7 @@ See the documentation [here](https://typelevel.org/cats-effect/docs/getting-star
 
 ### Reuse Mocked Node's `bloc` module
 
-Implementation can be found [here](https://github.com/input-output-hk/midnight-mocked-node/tree/main/packages/bloc).
+Implementation can be found [here](https://github.com/midnightntwrk/midnight-mocked-node/tree/main/packages/bloc).
 
 * Good, because it reuses existing code
 * Good, because we get new features "for free" when they're implemented for the Mocked Node

@@ -11,8 +11,7 @@ import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.WalletStateService.SerializedWalletState
 import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSubmissionService}
-import io.iohk.midnight.wallet.zswap
-import io.iohk.midnight.wallet.zswap.NetworkId
+import io.iohk.midnight.wallet.zswap.{NetworkId, Transaction, UnprovenTransaction}
 
 class VersionCombinator(
     currentCombination: Bloc[VersionCombination],
@@ -74,21 +73,19 @@ class VersionCombinator(
 
 object VersionCombinator {
   trait SubmissionServiceFactory {
-    def apply[TX: zswap.Transaction.IsSerializable](using
-        zswap.NetworkId,
+    def apply[TX: Transaction.IsSerializable](using
+        NetworkId,
     ): Resource[IO, TxSubmissionService[TX]]
   }
   trait ProvingServiceFactory {
-    def apply[UTX: zswap.UnprovenTransaction.IsSerializable, TX: zswap.Transaction.IsSerializable](
-        using
+    def apply[UTX: UnprovenTransaction.IsSerializable, TX: Transaction.IsSerializable](using
         ProtocolVersion,
-        zswap.NetworkId,
+        NetworkId,
     ): Resource[IO, ProvingService[UTX, TX]]
   }
   trait SyncServiceFactory {
-    def apply[ESK](esk: ESK, offset: Option[BigInt])(using
-        zswap.EncryptionSecretKey[ESK, ?],
-        zswap.NetworkId,
+    def apply(bech32mESK: String, offset: Option[BigInt])(using
+        NetworkId,
     ): Resource[IO, SyncService]
   }
 
@@ -101,7 +98,7 @@ object VersionCombinator {
   )(using Tracer[IO, StructuredLog]): Resource[IO, VersionCombinator] =
     for {
       (protocolVersion, networkId) <- parseParams(config.initialState).toResource
-      given zswap.NetworkId = networkId
+      given NetworkId = networkId
       initialCombination <- buildInitialCombination(
         protocolVersion,
         config,
@@ -115,7 +112,7 @@ object VersionCombinator {
 
   private def parseParams(
       config: Config.InitialState,
-  ): IO[(ProtocolVersion, zswap.NetworkId)] =
+  ): IO[(ProtocolVersion, NetworkId)] =
     (config match {
       case Config.InitialState.CreateNew(networkId) =>
         (ProtocolVersion.V1, networkId).asRight
@@ -129,16 +126,15 @@ object VersionCombinator {
       submissionServiceFactory: SubmissionServiceFactory,
       provingServiceFactory: ProvingServiceFactory,
       syncServiceFactory: SyncServiceFactory,
-  )(using zswap.NetworkId, Tracer[IO, StructuredLog]): Resource[IO, VersionCombination] =
+  )(using NetworkId, Tracer[IO, StructuredLog]): Resource[IO, VersionCombination] =
     protocolVersion match {
       case ProtocolVersion.V1 =>
-        import zswap.given
         given ProtocolVersion = ProtocolVersion.V1
         V1Combination(
           config,
           submissionServiceFactory[v1.Transaction],
           provingServiceFactory[v1.UnprovenTransaction, v1.Transaction],
-          syncServiceFactory[v1.EncryptionSecretKey],
+          (bech32mESK, offset) => syncServiceFactory.apply(bech32mESK, offset),
         )
     }
 }

@@ -4,7 +4,9 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "target": "ESNext",
-    "outDir": "dist"
+    "outDir": "dist",
+    "resolveJsonModule": true,
+    "skipLibCheck": true
   },
   "ts-node": {
     "esm": true

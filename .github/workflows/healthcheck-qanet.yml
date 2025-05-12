@@ -12,9 +12,9 @@ jobs:
     with:
       network: devnet
       deployment: qanet
-      seed: be257378cf350c731c3009500894b7303761c7a7a3e760b56a5538ec8034f35c
-      seed2: be59e8b637ced06ce3b53ecab46bea845953f236cf4b10447b24a69b6cc28e17
-      nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
-      nt_seed2: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
+      seed: c4696553a5989098f72c22dbddb233f6fe19243c8a90ff8d6177bd2ab79b498a
+      seed2: 491cab0b23239a233faae62b36fdb92cd4df3036757fd0f5f0b9eccf8b2a533c
+      nt_seed: f331ffb6856d10eaae9a3610bfffd785d23d035518694364195ffb0dc0f3a66e
+      nt_seed2: 8a80a5a8315c5add29d9065a37dfb74a20b594ef6cdd52bbb1b1a6e5e0c70bdf
       modifier: '-t @healthcheck'
     secrets: inherit

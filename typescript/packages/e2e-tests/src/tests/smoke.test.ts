@@ -25,7 +25,7 @@ import { logger } from './logger';
 describe('Smoke tests', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
   const timeout = 240_000;
   const outputValue = 1_000n;
 
@@ -177,7 +177,7 @@ describe('Smoke tests', () => {
       restoredWallet.start();
       const newState = await waitForSync(restoredWallet);
       compareStates(newState, state);
-      expect(newState.syncProgress?.total).toBeGreaterThanOrEqual(state.syncProgress?.total ?? 0n);
+      expect(newState.syncProgress?.synced).toBe(true);
       await restoredWallet.close();
     },
     timeout,
@@ -186,7 +186,7 @@ describe('Smoke tests', () => {
 
 describe('Wallet building', () => {
   const getFixture = useTestContainersFixture();
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
   const timeout = 60_000;
 
   let walletFunded: Wallet & Resource;

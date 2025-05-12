@@ -38,9 +38,9 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
   override def scalaCheckTestParameters: Test.Parameters =
     super.scalaCheckTestParameters.withMaxSize(1)
 
-  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,
@@ -63,14 +63,14 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type Wallet = CoreWallet[LocalState, SecretKeys, Transaction]
 
   private val costModel = TransactionCostModel.dummyTransactionCostModel()
   private val inputFeeOverhead = costModel.inputFeeOverhead
   private val outputFeeOverhead = costModel.outputFeeOverhead
 
   def buildWalletTransactionService(
-      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      initialState: LocalState = LocalState(),
       secretKeys: SecretKeys = Generators.keyGenerator(),
       prover: ProvingService[UnprovenTransaction, Transaction] = provingService,
   ): Resource[
@@ -88,7 +88,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
     ),
   ] = {
     val snapshot =
-      Snapshot[LocalStateNoKeys, Transaction](
+      Snapshot[LocalState, Transaction](
         initialState,
         Seq.empty,
         None,

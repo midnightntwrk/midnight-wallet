@@ -3,19 +3,24 @@ import * as zswap from '@midnight-ntwrk/zswap';
 import * as process from 'process';
 import * as rxjs from 'rxjs';
 import * as assert from 'node:assert/strict';
-import { DockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, Wait } from 'testcontainers';
 import * as path from 'node:path';
+import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const currentFile = new URL(import.meta.url).pathname;
 const composePath = path.resolve(currentFile, '../../../../typescript/packages/e2e-tests');
-const environment = await new DockerComposeEnvironment(composePath, 'docker-compose.yml').up();
+const environment = await new DockerComposeEnvironment(composePath, 'docker-compose.yml')
+  .withWaitStrategy('proof-server-1', Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
+  .withWaitStrategy('node-1', Wait.forListeningPorts())
+  .withWaitStrategy('indexer-1', Wait.forLogMessage(/block indexed/))
+  .up();
 
 const networkId = w.NetworkId.fromJs(zswap.NetworkId.Undeployed);
 const secretKeys = zswap.SecretKeys.fromSeed(
-  Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'),
+  Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
 );
 
-const localState = new zswap.LocalStateNoKeys();
+const localState = new zswap.LocalState();
 const wallet = w.CoreWallet.emptyV1(localState, secretKeys, networkId);
 const syncCapability = new w.DefaultSyncCapability(
   new w.DefaultTxHistoryCapability(),
@@ -24,18 +29,13 @@ const syncCapability = new w.DefaultSyncCapability(
 );
 
 const tracer = w.TracerCarrier.createLoggingTracer('debug');
-const allocatedClient = await w.IndexerClient.create(
-  'ws://localhost:8088/api/v1/graphql/ws',
-  'http://localhost:8088/api/v1/graphql',
-  tracer,
-).allocate();
-const syncService = w.DefaultSyncService.create(
-  allocatedClient.value,
-  wallet.secretKeys.encryptionSecretKey,
-  void 0,
-  w.V1EncryptionSecretKey,
-  networkId,
-);
+const allocatedClient = await w.IndexerClient.create('ws://localhost:8088/api/v1/graphql/ws', tracer).allocate();
+
+const bech32mESK = ShieldedEncryptionSecretKey.codec
+  .encode(zswap.NetworkId.Undeployed, new ShieldedEncryptionSecretKey(wallet.secretKeys.encryptionSecretKey))
+  .asString();
+
+const syncService = w.DefaultSyncService.create(allocatedClient.value, bech32mESK, void 0);
 
 const syncedWallet = await rxjs.lastValueFrom(
   syncService.sync$().pipe(

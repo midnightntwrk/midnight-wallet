@@ -53,28 +53,40 @@ package object domain {
       protocolVersion: ProtocolVersion,
       offset: Offset,
       updates: Seq[Either[MerkleTreeCollapsedUpdate, AppliedTransaction[Transaction]]],
-      legacyIndexer: Boolean,
   ) extends IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]
 
   @JSExportAll final case class ProgressUpdate(
-      synced: Option[Offset],
-      total: Option[Offset],
-      legacyIndexer: Option[Boolean],
+      appliedIndex: Option[Offset],
+      highestRelevantWalletIndex: Option[Offset],
+      highestIndex: Option[Offset],
+      highestRelevantIndex: Option[Offset],
   ) extends IndexerUpdate[Nothing, Nothing] {
-    lazy val isComplete: Boolean = (synced, total) match
-      case (Some(s), Some(t)) => (s.value > 0 && t.value > 0 && s === t)
-      case _                  => false
+    lazy val isComplete: Boolean =
+      (appliedIndex, highestRelevantWalletIndex, highestIndex, highestRelevantIndex) match
+        case (_, Some(hrw), Some(hi), Some(hri)) => {
+          val ai = appliedIndex.getOrElse(Offset.Zero)
+          val applyGap = (hrw.value - ai.value).abs
+          val sourceGap = (hi.value - hri.value).abs
+          applyGap === BigInt(0) && sourceGap <= BigInt(50)
+        }
+        case _ => false
   }
 
   @JSExportAll object ProgressUpdate {
     @JSExport("apply") def apply(
-        synced: Offset,
-        total: Offset,
-        legacyIndexer: Option[Boolean],
+        appliedIndex: Offset,
+        highestRelevantWalletIndex: Offset,
+        highestIndex: Offset,
+        highestRelevantIndex: Offset,
     ): ProgressUpdate =
-      new ProgressUpdate(Some(synced), Some(total), legacyIndexer)
+      new ProgressUpdate(
+        Some(appliedIndex),
+        Some(highestRelevantWalletIndex),
+        Some(highestIndex),
+        Some(highestRelevantIndex),
+      )
     def empty: ProgressUpdate =
-      new ProgressUpdate(None, None, None)
+      new ProgressUpdate(None, None, None, None)
   }
 
   @JSExportAll case object ConnectionLost extends IndexerUpdate[Nothing, Nothing]

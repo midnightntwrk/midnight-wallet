@@ -2,7 +2,14 @@ package io.iohk.midnight.wallet.prover
 
 import cats.effect.{IO, Resource}
 import io.iohk.midnight.wallet.zswap
-import sttp.client3.{ResponseAs, SttpBackend, UriContext, asByteArray, emptyRequest}
+import sttp.client3.{
+  ResponseAs,
+  SttpBackend,
+  SttpClientException,
+  UriContext,
+  asByteArray,
+  emptyRequest,
+}
 import sttp.model.Uri
 import io.iohk.midnight.wallet.prover.tracing.ProverClientTracer
 import io.iohk.midnight.tracer.Tracer
@@ -24,9 +31,9 @@ class ProverClient[UnprovenTransaction, Transaction](
   private val asTransaction: ResponseAs[Transaction, Any] =
     asByteArray.getRight.map(bytes => txSerializable.deserialize(bytes))
 
-  // https://github.com/input-output-hk/midnight-ledger-prototype/blob/9e69c01f3bf02284fcdc0e92674e3f43d8ed895a/proof-server/src/lib.rs#L90
+  // https://github.com/midnightntwrk/midnight-ledger/blob/9e69c01f3bf02284fcdc0e92674e3f43d8ed895a/proof-server/src/lib.rs#L90
   // Padding for missing data for `/prove-tx` payload.
-  private val paddingForMissingPayloadData = Array[Byte](0, 0, 0, 0, 0)
+  private val paddingForMissingPayloadData = Array[Byte](0, 0, 0, 0)
 
   def proveTransaction(tx: UnprovenTransaction): IO[Transaction] = {
     def sendRequest(tries: Int): IO[Transaction] = {
@@ -53,11 +60,23 @@ class ProverClient[UnprovenTransaction, Transaction](
                 s"Got an error: \"$errorMessage\". Retrying in $randomDelay. Tries remaining: ${tries - 1}",
               ),
             ) *> IO.sleep(randomDelay) *> sendRequest(tries - 1)
-          } else IO.raiseError(new Exception("Failed to prove transaction", error))
+          } else IO.raiseError(adjustExceptionMessage(error))
         }
     }
 
     sendRequest(3)
+  }
+
+  private def adjustExceptionMessage(error: Throwable): Exception = {
+    val message = error match {
+      case e: sttp.client3.SttpClientException.ReadException
+          if Option(e.cause.getMessage)
+            .exists(_.contains("Unsupported version")) =>
+        "Failed to prove transaction due to incorrect proof server version"
+      case _ => "Failed to prove transaction"
+    }
+
+    new Exception(message, error)
   }
 }
 

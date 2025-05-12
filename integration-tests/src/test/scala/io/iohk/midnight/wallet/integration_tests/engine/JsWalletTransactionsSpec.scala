@@ -30,16 +30,16 @@ import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.given
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
-import io.iohk.midnight.wallet.engine.parser.AddressParser
+import io.iohk.midnight.wallet.core.parser.AddressParser
 import io.iohk.midnight.wallet.engine.js.{JsWallet, ProvingRecipeTransformer}
 import org.scalacheck.effect.PropF.forAllF
 
 import scala.scalajs.js.JSConverters.*
 
 class JsWalletTransactionsSpec extends WithProvingServerSuite {
-  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,
@@ -60,7 +60,7 @@ class JsWalletTransactionsSpec extends WithProvingServerSuite {
     UnprovenOutput,
   ] = new WalletInstances
 
-  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type Wallet = CoreWallet[LocalState, SecretKeys, Transaction]
 
   @SuppressWarnings(Array("org.wartremover.warts.OptionPartial"))
   private val transferRecipe =

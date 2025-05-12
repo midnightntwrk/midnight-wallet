@@ -1,9 +1,8 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "author": "IOHK",
   "license": "Apache-2.0",
@@ -19,16 +18,15 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs",
+      "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
   "peerDependencies": {
-    "@midnight-ntwrk/zswap": "^3.0.6"
+    "@midnight-ntwrk/zswap": "4.0.0"
   },
   "devDependencies": {
-    "@midnight-ntwrk/zswap": "^3.0.6"
+    "@midnight-ntwrk/zswap": "4.0.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",

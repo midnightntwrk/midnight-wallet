@@ -1,9 +1,9 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-hd",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "type": "module",
-  "main": "./dist/index.cjs",
-  "module": "./dist/index.mjs",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "author": "IOHK",
   "license": "Apache-2.0",
@@ -19,8 +19,7 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs",
+      "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },

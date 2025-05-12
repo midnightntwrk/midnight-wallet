@@ -44,8 +44,22 @@ class VersionCombinatorSpec extends CatsEffectSuite {
         assertEquals(finalState, SerializedWalletState("DummyV2"))
         assertEquals(
           states.map(_.syncProgress).toList,
-          List.tabulate(10)(n => ProgressUpdate(Offset(1), Offset(n), Some(true))) ++
-            List.tabulate(10)(n => ProgressUpdate(Offset(2), Offset(n + 10), Some(true))),
+          List.tabulate(10)(n =>
+            ProgressUpdate(
+              Some(Offset(1)),
+              Some(Offset(n)),
+              Some(Offset(n)),
+              Some(Offset(n)),
+            ),
+          ) ++
+            List.tabulate(10)(n =>
+              ProgressUpdate(
+                Some(Offset(2)),
+                Some(Offset(n + 10)),
+                Some(Offset(n + 10)),
+                Some(Offset(n + 10)),
+              ),
+            ),
           states.map(_.syncProgress).toList,
         )
         assertEquals(
@@ -143,7 +157,12 @@ class DummyV1Combination(val localState: Bloc[Offset]) extends VersionCombinatio
       .map { offset =>
         Generators.WalletStateGen.sample.get.copy(
           encryptionPublicKey = DummyV1Combination.zswapState.encryptionPublicKey,
-          syncProgress = ProgressUpdate(Offset(1), offset, Some(true)),
+          syncProgress = ProgressUpdate(
+            Some(Offset(1)),
+            Some(offset),
+            Some(offset),
+            Some(offset),
+          ),
         )
       }
 
@@ -201,7 +220,12 @@ class DummyV2Combination(val localState: Bloc[Offset]) extends VersionCombinatio
       .map { offset =>
         Generators.WalletStateGen.sample.get.copy(
           encryptionPublicKey = DummyV2Combination.zswapState.encryptionPublicKey,
-          syncProgress = ProgressUpdate(Offset(2), offset, Some(true)),
+          syncProgress = ProgressUpdate(
+            Some(Offset(2)),
+            Some(offset),
+            Some(offset),
+            Some(offset),
+          ),
         )
       }
 

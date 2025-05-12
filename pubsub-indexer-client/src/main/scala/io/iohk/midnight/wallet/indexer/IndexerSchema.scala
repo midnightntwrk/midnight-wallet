@@ -68,10 +68,17 @@ object IndexerSchema {
 
   type ProgressUpdate
   object ProgressUpdate {
-    def synced: SelectionBuilder[ProgressUpdate, BigInt] =
-      SelectionBuilder.Field("synced", Scalar())
-    def total: SelectionBuilder[ProgressUpdate, BigInt] =
-      SelectionBuilder.Field("total", Scalar())
+    // The highest end index of all currently known transactions.
+    def highestIndex: SelectionBuilder[ProgressUpdate, BigInt] =
+      SelectionBuilder.Field("highestIndex", Scalar())
+    // The highest end index of all currently known relevant transactions.
+    // Less or equal `highest_index`.
+    def highestRelevantIndex: SelectionBuilder[ProgressUpdate, BigInt] =
+      SelectionBuilder.Field("highestRelevantIndex", Scalar())
+    // The highest end index of all currently known relevant transactions for a particular wallet.
+    // Less or equal `highest_relevant_index`.
+    def highestRelevantWalletIndex: SelectionBuilder[ProgressUpdate, BigInt] =
+      SelectionBuilder.Field("highestRelevantWalletIndex", Scalar())
   }
 
   type Mutation = Operations.RootMutation

@@ -1,15 +1,15 @@
 # Midnight Wallet
 
-This is an implementation of the [Wallet API](https://github.com/input-output-hk/midnight-wallet-api),
-used by dapp developers and [Midnight.js](https://github.com/input-output-hk/midnight-js) to:
+This is an implementation of the [Wallet API](https://github.com/midnightntwrk/midnight-wallet-api),
+used by dapp developers and [Midnight.js](https://github.com/midnightntwrk/midnight-js) to:
 
 - Build transactions
-- Submit transactions to a [node](https://github.com/input-output-hk/midnight-substrate-prototype)
-- Sync state with an [indexer](https://github.com/input-output-hk/midnight-pubsub-indexer)
+- Submit transactions to a [node](https://github.com/midnightntwrk/midnight-substrate-prototype)
+- Sync state with an [indexer](https://github.com/midnightntwrk/midnight-indexer)
 
 ## Modules structure
 
-This project is a yarn workspaces combined with Turborepo, with Scala pieces managed by [sbt](https://www.scala-sbt.org), meaning that their modules and 
+This project is a yarn workspaces combined with Turborepo, with Scala pieces managed by [sbt](https://www.scala-sbt.org), meaning that their modules and
 dependencies are configured in the [`build.sbt`](build.sbt) file. In many of them `package.json` files can be found and they are registered as workspaces in yarn, so yarn can resolve the dependencies, and [ScalablyTyped](https://scalablytyped.org) can provide Scala type definitions for them. The modules are:
 
 - `wallet-core` - Implementation of the main business logic. This exposes interfaces of services that are
@@ -31,9 +31,9 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. In many of the
 
 - `bloc` - Basic Scala implementation of the BLoC (Business Logic Component) pattern
 
-- `wallet-zswap` - A module that exposes ZSwap functionalities that is compatible 
-  with Scala JS and JVM. This is achieved by using a WASM ledger package on JS 
-  and JNR interfaces on JVM. The module hides the complexity of different 
+- `wallet-zswap` - A module that exposes ZSwap functionalities that is compatible
+  with Scala JS and JVM. This is achieved by using a WASM ledger package on JS
+  and JNR interfaces on JVM. The module hides the complexity of different
   platforms and enables Scala clients work with idiomatic Scala.
 - `integration-tests` - All tests that require an external service to work
 
@@ -43,7 +43,7 @@ dependencies are configured in the [`build.sbt`](build.sbt) file. In many of the
 
 The tools with the corresponding versions used to build the code are listed in the [.tool-versions](.tool-versions) file.
 
-You can use [asdf](https://asdf-vm.com) and just run `asdf install` to get the correct versions. 
+You can use [asdf](https://asdf-vm.com) and just run `asdf install` to get the correct versions.
 
 Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell definition.
 
@@ -104,13 +104,13 @@ An HTML report is written to each module's `target/scala-3.4/scoverage-report/in
 
 All new features must branch off the default branch `main`.
 
-It's recommended to enable automatic scalafmt formatting in your text editor upon save, in order to 
+It's recommended to enable automatic scalafmt formatting in your text editor upon save, in order to
 avoid CI errors due to incorrect format.
 
-To execute the same verifications that are enabled on the CI, there's an sbt task `verify` which 
+To execute the same verifications that are enabled on the CI, there's an sbt task `verify` which
 does the following:
 
-- Compile the code with strict scala compiler flags through the use of 
+- Compile the code with strict scala compiler flags through the use of
 [sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
 - Check the code with [wartremover](https://www.wartremover.org/)
 - Run the unit and integration tests
@@ -126,6 +126,6 @@ for how to branch and tag releases.
 
 In order to release a new version of the wallet-engine, the version in `wallet-engine/package.json` should be bumped.
 
-After that, use the [Releases](https://github.com/input-output-hk/midnight-wallet/releases/new) feature 
+After that, use the [Releases](https://github.com/midnightntwrk/midnight-wallet/releases/new) feature
 from GitHub to create a tag with a name following the pattern `vX.Y.Z`.
 A GitHub action will automatically build and publish the new version.

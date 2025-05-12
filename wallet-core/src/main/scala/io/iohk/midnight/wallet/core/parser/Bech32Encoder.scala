@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.engine.parser
+package io.iohk.midnight.wallet.core.parser
 
 import io.iohk.midnight.buffer.mod.Buffer
 import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.{
@@ -6,6 +6,7 @@ import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.{
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
+  ShieldedEncryptionSecretKey,
 }
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.wallet.core.domain
@@ -19,6 +20,10 @@ trait Bech32Encoder[T] {
       netId: NetworkId,
       address: domain.Address[mod.CoinPublicKey, mod.EncPublicKey],
   ): Try[MidnightBech32m]
+}
+
+trait Bech32SecretKeyEncoder[T] {
+  def encode(netId: NetworkId, secretKey: mod.EncryptionSecretKey): Try[MidnightBech32m]
 }
 
 object Bech32Encoder {
@@ -53,6 +58,21 @@ object Bech32Encoder {
       val cpk = new ShieldedCoinPublicKey(Buffer.from(address.coinPublicKey, "hex"))
       val epk = new ShieldedEncryptionPublicKey(Buffer.from(address.encryptionPublicKey, "hex"))
       ShieldedAddress.codec.encode(netId.toJs, new ShieldedAddress(cpk, epk))
+    }
+  }
+}
+
+object Bech32SecretKeyEncoder {
+  def apply[A](using e: Bech32SecretKeyEncoder[A]): Bech32SecretKeyEncoder[A] = e
+
+  given Bech32SecretKeyEncoder[ShieldedEncryptionSecretKey] with {
+    override def encode(
+        netId: NetworkId,
+        secretKey: mod.EncryptionSecretKey,
+    ): Try[MidnightBech32m] = Try {
+      val shESK = new ShieldedEncryptionSecretKey(secretKey)
+
+      ShieldedEncryptionSecretKey.codec.encode(netId.toJs, shESK)
     }
   }
 }

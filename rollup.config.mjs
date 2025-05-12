@@ -1,6 +1,5 @@
 import resolve from "@rollup/plugin-node-resolve";
 import typescript from "@rollup/plugin-typescript";
-import commonjs from "@rollup/plugin-commonjs";
 import { join } from "node:path";
 
 /**
@@ -34,7 +33,6 @@ const common = (folderPath, options) => ({
   cache: false,
   plugins: [
     resolve(),
-    commonjs(),
     typescript({
       tsconfig: join(folderPath, options.tsconfig),
       composite: true,
@@ -70,11 +68,6 @@ export default function(folderPath, packageJson, options) {
       {
         file: conditionalExport["import"],
         format: "esm",
-        sourcemap: true
-      },
-      {
-        file: conditionalExport["require"],
-        format: "cjs",
         sourcemap: true
       }
     ],

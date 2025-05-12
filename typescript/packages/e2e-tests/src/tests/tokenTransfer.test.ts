@@ -12,6 +12,7 @@ import {
 } from '@midnight-ntwrk/zswap';
 import {
   closeWallet,
+  Segments,
   waitForFinalizedBalance,
   waitForPending,
   waitForSync,
@@ -30,7 +31,7 @@ import { logger } from './logger';
 describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
   const timeout = 420_000;
   const outputValue = 3_000_000n;
 
@@ -234,7 +235,12 @@ describe('Token transfer', () => {
       //   },
       // ];
       const coin = createCoinInfo(nativeToken(), outputValue);
-      const output = UnprovenOutput.new(coin, initialState.coinPublicKeyLegacy, initialState.encryptionPublicKeyLegacy);
+      const output = UnprovenOutput.new(
+        coin,
+        Segments.guaranteed,
+        initialState.coinPublicKeyLegacy,
+        initialState.encryptionPublicKeyLegacy,
+      );
       const offer = UnprovenOffer.fromOutput(output, nativeToken(), outputValue);
       const unprovenTx = new UnprovenTransaction(offer);
       const provenTx = await walletFunded.proveTransaction({
@@ -727,7 +733,12 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance2} ${tokenTypeHash}`);
 
       const coin = createCoinInfo(tokenTypeHash, outputValueNativeToken);
-      const output = UnprovenOutput.new(coin, initialState.coinPublicKeyLegacy, initialState.encryptionPublicKeyLegacy);
+      const output = UnprovenOutput.new(
+        coin,
+        Segments.guaranteed,
+        initialState.coinPublicKeyLegacy,
+        initialState.encryptionPublicKeyLegacy,
+      );
       const offer = UnprovenOffer.fromOutput(output, tokenTypeHash, outputValueNativeToken);
       const unprovenTx = new UnprovenTransaction(offer);
       const provenTx = await walletFunded.proveTransaction({

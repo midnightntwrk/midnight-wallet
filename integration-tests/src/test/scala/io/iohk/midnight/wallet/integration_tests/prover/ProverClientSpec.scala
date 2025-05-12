@@ -11,6 +11,7 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import io.iohk.midnight.wallet.core.Generators
 import io.iohk.midnight.wallet.zswap
+import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import munit.{AnyFixture, CatsEffectSuite}
@@ -33,7 +34,7 @@ trait ProverClientSetup {
     (secretKeys.coinPublicKey, secretKeys.encryptionPublicKey)
   }
   val (cpk, epk) = randomRecipient()
-  val output: UnprovenOutput = UnprovenOutput.`new`(spendCoin, cpk, epk)
+  val output: UnprovenOutput = UnprovenOutput.`new`(spendCoin, Segment.Guaranteed.value, cpk, epk)
   val unprovenOffer: UnprovenOffer = UnprovenOffer.fromOutput(output, dustToken, spendCoinAmount)
 }
 
@@ -51,7 +52,7 @@ class ProverClientSpec extends CatsEffectSuite with ProverClientSetup {
   private val provingServiceFixture = ResourceSuiteLocalFixture(
     "provingService",
     TestContainers.resource(
-      "ghcr.io/midnight-ntwrk/proof-server:3.0.7",
+      "ghcr.io/midnight-ntwrk/proof-server:4.0.0-beta.1",
     )(
       _.withExposedPorts(proverServerPort)
         .withWaitStrategy(Wait.forListeningPorts()),

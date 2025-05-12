@@ -18,7 +18,7 @@ import io.iohk.midnight.wallet.engine.tracing.WalletBuilderTracer
 import io.iohk.midnight.wallet.indexer.IndexerClient
 import io.iohk.midnight.wallet.zswap
 
-class WalletBuilder[LocalStateNoKeys, Transaction] {
+class WalletBuilder[LocalState, Transaction] {
   def build(config: Config): Resource[IO, VersionCombinator] = {
     given rootTracer: Tracer[IO, StructuredLog] =
       ConsoleTracer.contextAware[IO, StringLogContext](config.minLogLevel)
@@ -59,12 +59,11 @@ class WalletBuilder[LocalStateNoKeys, Transaction] {
       config: Config,
   )(using Tracer[IO, StructuredLog]): SyncServiceFactory =
     new SyncServiceFactory {
-      override def apply[ESK](esk: ESK, index: Option[BigInt])(using
-          s: zswap.EncryptionSecretKey[ESK, ?],
-          n: zswap.NetworkId,
+      override def apply(esk: String, index: Option[BigInt])(using
+          zswap.NetworkId,
       ): Resource[IO, SyncService] =
-        IndexerClient(config.indexerWsUri, config.indexerUri).map { indexerClient =>
-          new DefaultSyncService[ESK](indexerClient, esk, index)
+        IndexerClient(config.indexerWsUri).map { indexerClient =>
+          new DefaultSyncService(indexerClient, esk, index)
         }
     }
 }

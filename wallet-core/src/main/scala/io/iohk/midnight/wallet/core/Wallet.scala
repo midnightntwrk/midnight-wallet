@@ -15,13 +15,14 @@ import io.iohk.midnight.wallet.core.instances.{
   DefaultTxHistoryCapability,
   DiscardTxHistoryCapability,
 }
+import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
 import io.iohk.midnight.wallet.zswap
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("CoreWalletInstance")
 @JSExportAll
-final case class Wallet[LocalStateNoKeys, SecretKeys, Transaction](
-    state: LocalStateNoKeys,
+final case class Wallet[LocalState, SecretKeys, Transaction](
+    state: LocalState,
     secretKeys: SecretKeys,
     txHistory: Vector[Transaction],
     offset: Option[data.Transaction.Offset],
@@ -38,14 +39,14 @@ final case class Wallet[LocalStateNoKeys, SecretKeys, Transaction](
   ](
       transaction: AppliedTransaction[TX],
   )(using
-      evolveState: zswap.LocalStateNoKeys.EvolveState[
-        LocalStateNoKeys,
+      evolveState: zswap.LocalState.EvolveState[
+        LocalState,
         SecretKeys,
         Offer,
         ProofErasedOffer,
         MerkleTreeCollapsedUpdate,
       ],
-  ): Wallet[LocalStateNoKeys, SecretKeys, Transaction] = {
+  ): Wallet[LocalState, SecretKeys, Transaction] = {
     val tx = transaction.tx
     val newState = transaction.applyStage match {
       case ApplyStage.FailEntirely =>
@@ -67,10 +68,10 @@ final case class Wallet[LocalStateNoKeys, SecretKeys, Transaction](
 @JSExportAll
 object Wallet {
   def emptyV1(
-      localState: mod.LocalStateNoKeys,
+      localState: mod.LocalState,
       secretKeys: mod.SecretKeys,
       networkId: zswap.NetworkId,
-  ): Wallet[mod.LocalStateNoKeys, mod.SecretKeys, mod.Offer] = {
+  ): Wallet[mod.LocalState, mod.SecretKeys, mod.Offer] = {
     new Wallet(
       localState,
       secretKeys,
@@ -85,7 +86,7 @@ object Wallet {
 }
 
 class WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,
@@ -105,15 +106,15 @@ class WalletInstances[
     UnprovenOffer,
     UnprovenOutput,
 ](using
-    zswap.LocalStateNoKeys.HasCoins[
-      LocalStateNoKeys,
+    zswap.LocalState.HasCoins[
+      LocalState,
       SecretKeys,
       QualifiedCoinInfo,
       CoinInfo,
       UnprovenInput,
     ],
-    zswap.LocalStateNoKeys.EvolveState[
-      LocalStateNoKeys,
+    zswap.LocalState.EvolveState[
+      LocalState,
       SecretKeys,
       Offer,
       ProofErasedOffer,
@@ -136,16 +137,16 @@ class WalletInstances[
     Eq[TokenType],
     Show[TokenType],
 )(using
-    snapshotInstances: SnapshotInstances[LocalStateNoKeys, Transaction],
+    snapshotInstances: SnapshotInstances[LocalState, Transaction],
     secretKeys: zswap.SecretKeys.CanInit[SecretKeys],
     unprovenOffer: zswap.UnprovenOffer[UnprovenOffer, UnprovenInput, UnprovenOutput, TokenType],
     unprovenOutput: zswap.UnprovenOutput[UnprovenOutput, CoinInfo, CoinPublicKey, EncPublicKey],
     unprovenTx: zswap.UnprovenTransaction.HasCoins[UnprovenTransaction, UnprovenOffer],
     coinInfo: zswap.CoinInfo[CoinInfo, TokenType],
 ) {
-  type TWallet = Wallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type TWallet = Wallet[LocalState, SecretKeys, Transaction]
   private val transactionBalancer = TransactionBalancer[
-    LocalStateNoKeys,
+    LocalState,
     TokenType,
     UnprovenTransaction,
     UnprovenOffer,
@@ -157,14 +158,14 @@ class WalletInstances[
     CoinInfo,
   ]
 
-  given walletCreation: WalletCreation[TWallet, Snapshot[LocalStateNoKeys, Transaction]] =
-    (seed: Array[Byte], snapshot: Snapshot[LocalStateNoKeys, Transaction]) => {
+  given walletCreation: WalletCreation[TWallet, Snapshot[LocalState, Transaction]] =
+    (seed: Array[Byte], snapshot: Snapshot[LocalState, Transaction]) => {
       new TWallet(
         snapshot.state,
         secretKeys.fromSeed(seed),
         snapshot.txHistory.toVector,
         snapshot.offset,
-        ProgressUpdate(snapshot.offset.map(_.decrement), none, none),
+        ProgressUpdate(snapshot.offset.map(_.decrement), None, None, None),
         snapshot.protocolVersion,
         snapshot.networkId,
         isConnected = false,
@@ -194,7 +195,9 @@ class WalletInstances[
       override def coins: Seq[QualifiedCoinInfo] =
         wallet.state.coins
       override def nullifiers: Seq[Nullifier] =
-        wallet.state.coins.map(wallet.state.spend(wallet.secretKeys, _)._2.nullifier)
+        wallet.state.coins.map(
+          wallet.state.spend(Segment.Guaranteed, wallet.secretKeys, _)._2.nullifier,
+        )
       override def availableCoins: Seq[QualifiedCoinInfo] =
         wallet.state.availableCoins
       override def pendingCoins: Seq[CoinInfo] =
@@ -215,16 +218,17 @@ class WalletInstances[
           Either.catchNonFatal {
             // Process recipe parts (inputs + outputs) and return updated state and offer
             def processRecipe(
-                startingState: LocalStateNoKeys,
+                segment: Segment,
+                startingState: LocalState,
                 secretKeys: SecretKeys,
                 inputs: List[QualifiedCoinInfo],
                 outputs: List[CoinInfo],
-            ): (LocalStateNoKeys, UnprovenOffer) = {
+            ): (LocalState, UnprovenOffer) = {
               val startingOffer = unprovenOffer()
               // Process inputs
               val (stateAfterInputs, offerAfterInputs) =
                 inputs.foldLeft((startingState, startingOffer)) { case ((state, offer), coin) =>
-                  val (newState, unprovenInput) = state.spend(secretKeys, coin)
+                  val (newState, unprovenInput) = state.spend(segment, secretKeys, coin)
                   val newOffer =
                     offer.merge(unprovenOffer.fromInput(unprovenInput, coin.tokenType, coin.value))
                   (newState, newOffer)
@@ -235,6 +239,7 @@ class WalletInstances[
                 case ((state, offer), coin) =>
                   val unprovenOutputValue =
                     unprovenOutput.create(
+                      segment,
                       coin,
                       secretKeys.coinPublicKey,
                       secretKeys.encryptionPublicKey,
@@ -249,6 +254,7 @@ class WalletInstances[
 
             // Process guaranteed part first
             val (stateAfterGuaranteed, guaranteedOffer) = processRecipe(
+              Segment.Guaranteed,
               wallet.state,
               wallet.secretKeys,
               guaranteedInputs,
@@ -261,6 +267,7 @@ class WalletInstances[
             } else {
               // Only process fallible part when both inputs and outputs exist
               val (updatedState, fallibleOffer) = processRecipe(
+                Segment.Fallible,
                 stateAfterGuaranteed,
                 wallet.secretKeys,
                 fallibleInputs,
@@ -300,6 +307,7 @@ class WalletInstances[
       ): Either[WalletError, UnprovenTransaction] = {
         val offers = outputs.filter(_.amount > BigInt(0)).traverse { tt =>
           val output = unprovenOutput.create(
+            Segment.Guaranteed,
             coinInfo.create(tt.tokenType, tt.amount),
             tt.receiverAddress.coinPublicKey,
             tt.receiverAddress.encryptionPublicKey,

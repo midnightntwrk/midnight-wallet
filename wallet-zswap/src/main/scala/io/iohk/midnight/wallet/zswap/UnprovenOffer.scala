@@ -4,6 +4,8 @@ import io.iohk.midnight.js.interop.util.ArrayOps.*
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.midnightNtwrkZswap.mod
+import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
+
 import scala.scalajs.js
 
 trait UnprovenOffer[T, UnprovenInput, UnprovenOutput, TokenType] {
@@ -72,13 +74,19 @@ given UnprovenInput[mod.UnprovenInput, mod.Nullifier] with {
 }
 
 trait UnprovenOutput[T, CoinInfo, CoinPublicKey, EncryptionPublicKey] {
-  def create(coin: CoinInfo, publicKey: CoinPublicKey): T
-
   def create(
+      segment: Segment,
       coin: CoinInfo,
-      coinPubKey: CoinPublicKey,
+      publicKey: CoinPublicKey,
       encPubKey: EncryptionPublicKey,
   ): T
+}
+
+object UnprovenOutput {
+  enum Segment(val value: Int) {
+    case Guaranteed extends Segment(0)
+    case Fallible extends Segment(1)
+  }
 }
 
 given UnprovenOutput[
@@ -87,13 +95,11 @@ given UnprovenOutput[
   mod.CoinPublicKey,
   mod.EncPublicKey,
 ] with {
-  override def create(coin: mod.CoinInfo, publicKey: mod.CoinPublicKey): mod.UnprovenOutput =
-    mod.UnprovenOutput.`new`(coin, publicKey)
-
   override def create(
+      segment: Segment,
       coin: mod.CoinInfo,
       coinPubKey: mod.CoinPublicKey,
       encPubKey: mod.EncPublicKey,
   ): mod.UnprovenOutput =
-    mod.UnprovenOutput.`new`(coin, coinPubKey, encPubKey)
+    mod.UnprovenOutput.`new`(coin, segment.value, coinPubKey, encPubKey)
 }

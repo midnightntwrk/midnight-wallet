@@ -33,9 +33,9 @@ class WalletStateServiceSpec
     with BetterOutputSuite
     with WithProvingServerSuite {
 
-  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] = new SnapshotInstances
+  private given snapshots: SnapshotInstances[LocalState, Transaction] = new SnapshotInstances
   private val wallets: WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,
@@ -58,10 +58,10 @@ class WalletStateServiceSpec
 
   import wallets.given
 
-  type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type Wallet = CoreWallet[LocalState, SecretKeys, Transaction]
 
   def buildWalletStateService(
-      initialState: LocalStateNoKeys = LocalStateNoKeys(),
+      initialState: LocalState = LocalState(),
       seed: Array[Byte] = zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get,
   ): Resource[IO, WalletStateService[
     CoinPublicKey,
@@ -73,7 +73,7 @@ class WalletStateServiceSpec
     Nullifier,
     Transaction,
   ]] = {
-    val snapshot = Snapshot[LocalStateNoKeys, Transaction](
+    val snapshot = Snapshot[LocalState, Transaction](
       initialState,
       Seq.empty,
       None,
@@ -140,7 +140,7 @@ class WalletStateServiceSpec
     forAllF(Generators.ledgerTransactionArbitrary.arbitrary) { txWithCtxIO =>
       txWithCtxIO.flatMap { tx =>
         val anotherSecretKeys = Generators.keyGenerator()
-        val anotherState = LocalStateNoKeys()
+        val anotherState = LocalState()
         val updatedState = anotherState.apply(anotherSecretKeys, tx.guaranteedCoins.get)
         buildWalletStateService(updatedState).use(
           _.state.head.compile.lastOrError
@@ -161,7 +161,7 @@ class WalletStateServiceSpec
         secretKeys.encryptionPublicKey,
         secretKeys.encryptionSecretKey.serialize,
       )
-    buildWalletStateService(LocalStateNoKeys(), seed).use(
+    buildWalletStateService(LocalState(), seed).use(
       _.keys.map((cpk, epk, vk) => (cpk, epk, vk.serialize)).assertEquals(expected),
     )
   }

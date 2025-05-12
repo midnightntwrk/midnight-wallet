@@ -16,7 +16,7 @@ describe('Syncing', () => {
   const getFixture = useTestContainersFixture();
   const timeout = 240_000;
   const seeds = [
-    '0000000000000000000000000000000000000000000000000000000000000002',
+    '0000000000000000000000000000000000000000000000000000000000000001',
     'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82',
     '0000000000000000000000000000000000000000000000000000000000000001',
     '0000000000000000000000000000000000000000000000000000000000000000',
@@ -81,7 +81,7 @@ describe('Syncing', () => {
         const index = wallets.indexOf(wallet);
         const syncedState = await firstValueFrom(wallet.state());
         logger.info(`Wallet ${index}: ${syncedState.balances[nativeToken() ?? 0n]}`);
-        expect(syncedState.syncProgress?.synced).toBeGreaterThan(0);
+        expect(syncedState.syncProgress?.synced).toBeTruthy();
       }
     },
     timeout,

@@ -29,7 +29,7 @@ import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
 import scalajs.js
 
-private type Wallet = CoreWallet[LocalStateNoKeys, SecretKeys, Transaction]
+private type Wallet = CoreWallet[LocalState, SecretKeys, Transaction]
 private type IndexerUpdate = CoreIndexerUpdate[MerkleTreeCollapsedUpdate, Transaction]
 
 @SuppressWarnings(Array("org.wartremover.warts.OptionPartial", "org.wartremover.warts.TryPartial"))
@@ -50,11 +50,11 @@ abstract class WalletSpec
 
   private val zero = js.BigInt(0)
 
-  private given snapshots: SnapshotInstances[LocalStateNoKeys, Transaction] =
+  private given snapshots: SnapshotInstances[LocalState, Transaction] =
     new SnapshotInstances
   private val walletInstances =
     new WalletInstances[
-      LocalStateNoKeys,
+      LocalState,
       SecretKeys,
       Transaction,
       TokenType,
@@ -81,23 +81,8 @@ abstract class WalletSpec
   override val walletKeys: WalletKeys[Wallet, CoinPublicKey, EncPublicKey, EncryptionSecretKey] =
     walletInstances.walletKeys
   private val defaultState = snapshots.create
-  val seed = zswap.HexUtil
-    .decodeHex(
-      zswap.HexUtil.randomHex(),
-    )
-    .get
+  val seed = zswap.HexUtil.decodeHex(zswap.HexUtil.randomHex()).get
   override val walletWithKeys: Wallet = walletInstances.walletCreation.create(seed, defaultState)
-  override val expectedCoinPubKey: CoinPublicKey = defaultState.state.coinPublicKey
-  override val compareCoinPubKeys: (CoinPublicKey, CoinPublicKey) => Boolean = {
-    given Eq[CoinPublicKey] = Eq.fromUniversalEquals
-    (key1, key2) => key1 === key2
-  }
-
-  override val expectedEncPubKey: EncPublicKey = defaultState.state.encryptionPublicKey
-  override val compareEncPubKeys: (EncPublicKey, EncPublicKey) => Boolean = {
-    given Eq[EncPublicKey] = Eq.fromUniversalEquals
-    (key1, key2) => key1 === key2
-  }
 
   override val expectedViewingKey: EncryptionSecretKey =
     walletWithKeys.secretKeys.encryptionSecretKey
@@ -111,7 +96,7 @@ abstract class WalletSpec
   override val walletWithBalances: Wallet = {
     val seedHex = zswap.HexUtil.randomHex();
     val seed = zswap.HexUtil.decodeHex(seedHex).get
-    val state: (LocalStateNoKeys, SecretKeys) =
+    val state: (LocalState, SecretKeys) =
       Generators.generateStateWithFunds(
         NonEmptyList.one((nativeToken(), expectedBalance)),
         Some(seedHex),
@@ -119,7 +104,7 @@ abstract class WalletSpec
 
     walletInstances.walletCreation.create(
       seed,
-      Snapshot[LocalStateNoKeys, Transaction](
+      Snapshot[LocalState, Transaction](
         state._1,
         Seq.empty,
         None,
@@ -142,7 +127,7 @@ abstract class WalletSpec
     imbalanceValue.map { value =>
       val seedHex = zswap.HexUtil.randomHex()
       val seed = zswap.HexUtil.decodeHex(seedHex).get
-      val state: (LocalStateNoKeys, SecretKeys) =
+      val state: (LocalState, SecretKeys) =
         Generators.generateStateWithFunds(
           NonEmptyList.one((nativeToken(), expectedBalance)),
           Some(seedHex),
@@ -150,7 +135,7 @@ abstract class WalletSpec
 
       walletInstances.walletCreation.create(
         seed,
-        Snapshot[LocalStateNoKeys, Transaction](
+        Snapshot[LocalState, Transaction](
           state._1,
           Seq.empty,
           None,
@@ -188,7 +173,6 @@ abstract class WalletSpec
           Left(MerkleTreeCollapsedUpdate(chainState, js.BigInt(0), js.BigInt(1))),
           Right(AppliedTransaction(txCtx.transaction, ApplyStage.SucceedEntirely)),
         ),
-        true,
       )
     }
   override val isUpdateApplied: Wallet => Boolean = wallet =>

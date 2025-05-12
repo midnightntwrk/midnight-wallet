@@ -124,7 +124,7 @@ class WalletStateServiceFactory[
             availableCoins = wallet.availableCoins,
             pendingCoins = wallet.pendingCoins,
             transactionHistory = wallet.transactionHistory,
-            syncProgress = wallet.progress.copy(legacyIndexer = None),
+            syncProgress = wallet.progress,
           )
         }
 

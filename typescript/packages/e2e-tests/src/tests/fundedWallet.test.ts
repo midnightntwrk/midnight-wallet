@@ -12,7 +12,7 @@ import { Wallet } from '@midnight-ntwrk/wallet-api';
 
 describe('Funded wallet', () => {
   const getFixture = useTestContainersFixture();
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
   const timeout = 120_000;
 
   let wallet: Wallet & Resource;

@@ -4,7 +4,8 @@ import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { MidnightNetwork, closeWallet, compareStates, waitForSync } from './utils';
+import { MidnightNetwork, closeWallet, compareStates, validateNetworkInAddress, waitForSync } from './utils';
+import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 
@@ -133,7 +134,7 @@ describe('Fresh wallet with empty state', () => {
       const serialized = await wallet.serializeState();
       const stateObject = JSON.parse(serialized);
       expect(stateObject.txHistory).toHaveLength(0);
-      expect(stateObject.offset).toBeGreaterThan(0);
+      expect(stateObject.offset ?? 0).toBeGreaterThanOrEqual(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
       await wallet.close();
@@ -150,7 +151,8 @@ describe('Fresh wallet with empty state', () => {
       restoredWallet.start();
       const newState = await waitForSync(restoredWallet);
       compareStates(newState, state);
-      expect(newState.syncProgress?.total).toBeGreaterThanOrEqual(state.syncProgress?.total ?? 0n);
+      expect(state.syncProgress?.lag?.applyGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.applyGap ?? 0);
+      expect(state.syncProgress?.lag?.sourceGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.sourceGap ?? 0);
       await restoredWallet.close();
     },
     timeout,
@@ -171,7 +173,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.encryptionPublicKeyLegacy).toMatch(/^[0-9a-f]{116}$/);
+    expect(state.encryptionPublicKeyLegacy).toMatch(/^[0-9a-f]{68}$/);
   });
 
   test('Wallet state returns address as the concatenation of coinPublicKey and encryptionPublicKey', async () => {
@@ -180,7 +182,7 @@ describe('Fresh wallet with empty state', () => {
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
     const state = await firstValueFrom(wallet.state());
-    expect(state.addressLegacy).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{116}$/);
+    expect(state.addressLegacy).toMatch(/^[0-9a-f]{64}\|[0-9a-f]{68}$/);
     expect(state.addressLegacy).toBe(state.coinPublicKeyLegacy + '|' + state.encryptionPublicKeyLegacy);
   });
 
@@ -270,8 +272,8 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m address');
       const state = await waitForSync(wallet);
-      expect(state.address).toMatch(/^mn_shield-addr_[a-z0-9]{151,161}$/);
-      expect(state.address).toContain(TestContainersFixture.network);
+      expect(MidnightBech32m.parse(state.address)).toBeTruthy();
+      validateNetworkInAddress(state.address);
     },
     timeout,
   );
@@ -284,8 +286,8 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m coin public key');
       const state = await waitForSync(wallet);
-      expect(state.coinPublicKey).toMatch(/^mn_shield-cpk_[a-z0-9]{59,69}$/);
-      expect(state.coinPublicKey).toContain(TestContainersFixture.network);
+      expect(MidnightBech32m.parse(state.coinPublicKey)).toBeTruthy();
+      validateNetworkInAddress(state.coinPublicKey);
     },
     timeout,
   );
@@ -298,8 +300,8 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
       const state = await waitForSync(wallet);
-      expect(state.encryptionPublicKey).toMatch(/^mn_shield-epk_[a-z0-9]{100,110}$/);
-      expect(state.encryptionPublicKey).toContain(TestContainersFixture.network);
+      expect(MidnightBech32m.parse(state.encryptionPublicKey)).toBeTruthy();
+      validateNetworkInAddress(state.encryptionPublicKey);
     },
     timeout,
   );

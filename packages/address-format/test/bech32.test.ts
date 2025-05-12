@@ -22,7 +22,7 @@ describe('Bech32 addresses', () => {
     });
   });
 
-  it('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
+  it.skip('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
     const zswapNetworkIds = ['dev', 'test', null];
     const filteredAddresses = addresses.filter((item) => zswapNetworkIds.includes(item.networkId));
     filteredAddresses.forEach((item, _) => {

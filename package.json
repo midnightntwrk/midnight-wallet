@@ -1,6 +1,7 @@
 {
   "packageManager": "yarn@4.3.1",
   "name": "@midnight-ntwrk/wallet-sdk-monorepo",
+  "type": "module",
   "workspaces": [
     "typescript/packages/*",
     "packages/*",
@@ -15,7 +16,6 @@
   ],
   "devDependencies": {
     "@eslint/js": "^9.21.0",
-    "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-typescript": "^12.1.2",
     "@tsconfig/node20": "^20.1.4",

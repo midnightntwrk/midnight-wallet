@@ -17,7 +17,7 @@ export function useTestContainersFixture() {
         composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
-          .withWaitStrategy(`indexer_${uid}`, Wait.forLogMessage('Publishing to blocks'))
+          .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())
           .withEnvironment({ TESTCONTAINERS_UID: uid })
           .up();
         break;
@@ -122,7 +122,7 @@ export class TestContainersFixture {
         return 'https://indexer.testnet-02.midnight.network/api/v1/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.dev.midnight.network/api/v1/graphql';
+        return 'https://indexer-rs.qanet.dev.midnight.network/api/v1/graphql';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -137,7 +137,7 @@ export class TestContainersFixture {
         return 'wss://indexer.testnet-02.midnight.network/api/v1/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer.qanet.dev.midnight.network/api/v1/graphql/ws';
+        return 'wss://indexer-rs.qanet.dev.midnight.network/api/v1/graphql/ws';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();

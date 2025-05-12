@@ -32,37 +32,31 @@ import scala.util.Try
 @JSExportAll
 class IndexerClient(
     indexerWsUri: Uri,
-    indexerUri: Uri,
     stopSignal: Deferred[IO, Unit],
 )(using tracer: IndexerClientTracer) {
 
   def viewingUpdates(viewingKey: String, initialIndex: Option[BigInt]): Stream[IO, IndexerEvent] =
     Stream
       .eval(Ref[IO].of(initialIndex))
-      .flatMap(indexRef =>
-        Stream
-          .eval(LegacyIndexerCheck.check(indexerUri))
-          .flatMap(viewingUpdatesWithRetry(viewingKey, indexRef, _)),
-      )
+      .flatMap(viewingUpdatesWithRetry(viewingKey, _))
       .interruptWhen(stopSignal.get.attempt)
 
   private def viewingUpdatesWithRetry(
       viewingKey: String,
       indexRef: Ref[IO, Option[BigInt]],
-      legacyIndexer: Boolean,
   ): Stream[IO, IndexerEvent] = {
     @SuppressWarnings(Array("org.wartremover.warts.ToString"))
     val requestId = UUID.randomUUID().toString
     Stream.resource(webSocketResource(indexerWsUri)).flatMap { ws =>
       Stream
         .bracket(connect(viewingKey, requestId, ws))(disconnect(_, requestId, ws))
-        .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _, legacyIndexer)))
+        .evalMap(sessionId => indexRef.get.map(buildQuery(sessionId, _)))
         .flatMap(GraphQLSubscriber.subscribe(ws, _))
         .evalTap {
-          case RawViewingUpdate(index, _, legacyIndexer) => indexRef.set(index.some)
-          case _                                         => Async[IO].unit
+          case RawViewingUpdate(index, _) => indexRef.set(index.some)
+          case _                          => Async[IO].unit
         }
-        .handleErrorWith(retryOnConnectionError(viewingKey, indexRef, legacyIndexer))
+        .handleErrorWith(retryOnConnectionError(viewingKey, indexRef))
     }
   }
 
@@ -79,23 +73,22 @@ class IndexerClient(
   private def retryOnConnectionError(
       viewingKey: String,
       index: Ref[IO, Option[BigInt]],
-      legacyIndexer: Boolean,
   ): Function[Throwable, Stream[IO, IndexerEvent]] = {
     case err: js.JavaScriptException if isConnectionError(err) =>
       Stream
         .eval(tracer.connectionLost(err)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
     case WebSocketClosed =>
       Stream
         .eval(tracer.connectionLost(WebSocketClosed)) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer).delayBy(5.seconds)
+        viewingUpdatesWithRetry(viewingKey, index).delayBy(5.seconds)
     case _: TimeoutException =>
       Stream
         .eval(tracer.connectTimeout) >>
         Stream.emit(ConnectionLost) ++
-        viewingUpdatesWithRetry(viewingKey, index, legacyIndexer)
+        viewingUpdatesWithRetry(viewingKey, index)
     case err =>
       Stream.raiseError(err)
   }
@@ -103,7 +96,6 @@ class IndexerClient(
   private def buildQuery(
       sessionId: SessionId,
       index: Option[BigInt],
-      legacyIndexer: Boolean,
   ): SelectionBuilder[RootSubscription, RawIndexerUpdate] =
     Subscription.wallet(
       sessionId,
@@ -118,10 +110,10 @@ class IndexerClient(
               Transaction.protocolVersion ~ Transaction.hash ~ Transaction.raw ~ Transaction.applyStage,
             )
             .map(SingleUpdate.RawTransaction.apply.tupled),
-        )).map((index, updates) => RawViewingUpdate(index, updates, legacyIndexer)),
-      onProgressUpdate = (ProgressUpdate.synced ~ ProgressUpdate.total).map((synced, total) =>
-        RawProgressUpdate(synced, total, legacyIndexer),
-      ),
+        )).map((index, updates) => RawViewingUpdate(index, updates)),
+      onProgressUpdate =
+        (ProgressUpdate.highestIndex ~ ProgressUpdate.highestRelevantIndex ~ ProgressUpdate.highestRelevantWalletIndex)
+          .map(RawProgressUpdate.apply.tupled),
     )
 
   private def stop: IO[Unit] =
@@ -174,24 +166,20 @@ object IndexerClient {
 
   def apply(
       indexerWsUri: Uri,
-      indexerUri: Uri,
   )(using rootTracer: Tracer[IO, StructuredLog]): Resource[IO, IndexerClient] = {
     given IndexerClientTracer = IndexerClientTracer.from(rootTracer)
-    Resource.make(Deferred[IO, Unit].map(new IndexerClient(indexerWsUri, indexerUri, _)))(_.stop)
+    Resource.make(Deferred[IO, Unit].map(new IndexerClient(indexerWsUri, _)))(_.stop)
   }
 
   @JSExport def create(
       indexerWsUri: String,
-      indexerUri: String,
       rootTracer: TracerCarrier[StructuredLog],
   ): JsResource[IndexerClient] = {
     given Tracer[IO, StructuredLog] = rootTracer.tracer
     val parsedWsUri = Uri.parse(indexerWsUri).leftMap(InvalidUri.apply)
-    val parsedUri = Uri.parse(indexerUri).leftMap(InvalidUri.apply)
     val resource: Resource[IO, IndexerClient] = for {
       ws <- Resource.eval(parsedWsUri.liftTo[IO])
-      uri <- Resource.eval(parsedUri.liftTo[IO])
-      client <- IndexerClient.apply(ws, uri)
+      client <- IndexerClient.apply(ws)
     } yield client
     JsResource.fromCats(resource)
   }

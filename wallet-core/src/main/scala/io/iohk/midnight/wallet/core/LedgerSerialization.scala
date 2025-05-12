@@ -4,7 +4,7 @@ import cats.syntax.all.*
 import io.iohk.midnight.wallet.blockchain.data
 import io.iohk.midnight.wallet.zswap
 
-class LedgerSerialization[LocalStateNoKeys, Transaction](using
+class LedgerSerialization[LocalState, Transaction](using
     zswap.Transaction.IsSerializable[Transaction],
     zswap.Transaction.Transaction[Transaction, ?],
 ) {

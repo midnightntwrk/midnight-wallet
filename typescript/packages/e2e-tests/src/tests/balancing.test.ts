@@ -23,7 +23,7 @@ import { randomBytes } from 'node:crypto';
 describe('Transaction balancing examples', () => {
   const getFixture = useTestContainersFixture();
   const seedSender = randomBytes(32).toString('hex');
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000002';
+  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
   const timeout = 420_000;
 
   let walletFunded: Wallet & Resource;
@@ -208,7 +208,7 @@ describe('Transaction balancing examples', () => {
       logger.info(`Wallet 1 available coins: ${finalState.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.balances[nativeToken()]} tDUST`);
       logger.info(finalState.availableCoins);
-      expect(finalState.balances[nativeToken()] ?? 0n).toBe(144920956n);
+      expect(finalState.balances[nativeToken()] ?? 0n).toBe(144840380n);
       expect(finalState.availableCoins.length).toBeLessThanOrEqual(initialState.availableCoins.length - 1); // Lowest available coin used up in transfer
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.coins.length).toBe(initialState.coins.length - 1);
@@ -538,7 +538,7 @@ describe('Transaction balancing examples', () => {
       allure.story('tDUST transfer that uses all available tokens');
 
       const output1 = 1_000_000n;
-      const walletFees = 79044n;
+      const walletFees = 159620n;
       let txToProve: TransactionToProve;
       let provenTx: Transaction;
       let txId: string;

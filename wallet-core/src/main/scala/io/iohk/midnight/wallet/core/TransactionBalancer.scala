@@ -14,7 +14,7 @@ import io.iohk.midnight.midnightNtwrkWalletSdkCapabilities.mod.{
 }
 
 class TransactionBalancer[
-    LocalStateNoKeys,
+    LocalState,
     TokenType,
     UnprovenTransaction,
     UnprovenOffer,
@@ -39,8 +39,8 @@ class TransactionBalancer[
     unprovenOffer: zswap.UnprovenOffer[UnprovenOffer, UnprovenInput, UnprovenOutput, TokenType],
 ) {
   enum BalanceTransactionResult {
-    case BalancedTransactionAndState(unprovenTx: UnprovenTransaction, state: LocalStateNoKeys)
-    case ReadyTransactionAndState(tx: Transaction, state: LocalStateNoKeys)
+    case BalancedTransactionAndState(unprovenTx: UnprovenTransaction, state: LocalState)
+    case ReadyTransactionAndState(tx: Transaction, state: LocalState)
   }
 
   def balanceTx(
@@ -55,7 +55,7 @@ class TransactionBalancer[
       outputFeeOverhead = tokenType.outputFeeOverhead.toJsBigInt,
     )
 
-    val (jsGuaranteedImbalances, jsFallibleImbalances) = toJsImbalances(transaction, BigInt(1000))
+    val (jsGuaranteedImbalances, jsFallibleImbalances) = toJsImbalances(transaction, BigInt(100000))
 
     val guaranteedImbalancesRecipe = Either
       .catchNonFatal(

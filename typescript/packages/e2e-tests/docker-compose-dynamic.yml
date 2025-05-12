@@ -1,6 +1,6 @@
 services:
   proof-server:
-    image: "ghcr.io/midnight-ntwrk/proof-server:3.0.7"
+    image: "ghcr.io/midnight-ntwrk/proof-server:4.0.0"
     container_name: proof-server_$TESTCONTAINERS_UID
     command: ["midnight-proof-server -v --network undeployed"]
     ports:
@@ -14,29 +14,28 @@ services:
       retries: 3
       start_period: 10s
   indexer:
-    image: "ghcr.io/midnight-ntwrk/midnight-pubsub-indexer:2.3.0"
+    image: "ghcr.io/midnight-ntwrk/indexer-standalone:2.1.0"
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - "8088"
-    command: ['-Dlogback.configurationFile=logback-json-file.xml']
     environment:
       LOG_LEVEL: 'TRACE'
-      LEDGER_NETWORK_ID: 'Undeployed'
-      SUBSTRATE_NODE_WS_URL: 'ws://node:9944'
+      APP__INFRA__NODE__URL: "ws://node:9944"
       OTEL_JAVAAGENT_ENABLED: 'false'
+      APP__APPLICATION__NETWORK_ID: 'Undeployed'
+      APP__INFRA__SECRET: '822D8FFFEB8EC5CB2B52305C5F70197035089EB76505CD489BE18F4ADF8181D4D3'
+      RUST_LOG: "indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,info"
     healthcheck:
-      test: ['CMD', 'sh', '-c', "grep -q 'Successfully applied .* migrations to schema' /tmp/app_logs/server.log"]
-      interval: 3s
+      test: ["CMD-SHELL", "cat /var/run/indexer-standalone/running"]
+      interval: 30s
       timeout: 5s
-      retries: 30
-    volumes:
-      - '/tmp/app_logs:/tmp/app_logs'
+      retries: 3
+      start_period: 10s
     depends_on:
       node:
         condition: service_started
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.8.0"
-    platform: linux/amd64
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.12.0"
     container_name: node_$TESTCONTAINERS_UID
     ports:
      - "9944"
@@ -48,3 +47,4 @@ services:
       start_period: 5s
     environment:
       CFG_PRESET: "dev"
+      SIDECHAIN_BLOCK_BENEFICIARY: "04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e"

@@ -24,12 +24,12 @@ import scala.concurrent.duration.DurationInt
 
 class JsWalletSpec extends CatsEffectSuite with ScalaCheckEffectSuite with BetterOutputSuite {
 
-  type Wallet = core.Wallet[LocalStateNoKeys, SecretKeys, Transaction]
+  type Wallet = core.Wallet[LocalState, SecretKeys, Transaction]
 
-  private given core.SnapshotInstances[LocalStateNoKeys, Transaction] = new core.SnapshotInstances
+  private given core.SnapshotInstances[LocalState, Transaction] = new core.SnapshotInstances
 
   private val walletInstances: core.WalletInstances[
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     TokenType,

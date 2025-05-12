@@ -1,7 +1,6 @@
-package io.iohk.midnight.wallet.engine.parser
+package io.iohk.midnight.wallet.core.parser
 
 import io.iohk.midnight.midnightNtwrkZswap.mod
-import io.iohk.midnight.wallet
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.NetworkId

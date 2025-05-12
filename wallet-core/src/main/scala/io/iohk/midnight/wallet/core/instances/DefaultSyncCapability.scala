@@ -14,69 +14,66 @@ import scala.scalajs.js.annotation.{JSExport, JSExportAll, JSExportTopLevel}
 @JSExportAll
 class DefaultSyncCapability[
     MerkleTreeCollapsedUpdate,
-    LocalStateNoKeys,
+    LocalState,
     SecretKeys,
     Transaction,
     Offer,
     ProofErasedOffer,
 ](using
     walletTxHistory: WalletTxHistory[
-      Wallet[LocalStateNoKeys, SecretKeys, Transaction],
+      Wallet[LocalState, SecretKeys, Transaction],
       Transaction,
     ],
     transaction: zswap.Transaction.Transaction[Transaction, Offer],
-    evolveState: zswap.LocalStateNoKeys.EvolveState[
-      LocalStateNoKeys,
+    evolveState: zswap.LocalState.EvolveState[
+      LocalState,
       SecretKeys,
       Offer,
       ProofErasedOffer,
       MerkleTreeCollapsedUpdate,
     ],
 ) extends WalletSync[
-      Wallet[LocalStateNoKeys, SecretKeys, Transaction],
+      Wallet[LocalState, SecretKeys, Transaction],
       IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
     ] {
-  extension (wallet: Wallet[LocalStateNoKeys, SecretKeys, Transaction])
+  extension (wallet: Wallet[LocalState, SecretKeys, Transaction])
     @JSExport("apply")
     override def apply(
         update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
-    ): Either[WalletError, Wallet[LocalStateNoKeys, SecretKeys, Transaction]] =
+    ): Either[WalletError, Wallet[LocalState, SecretKeys, Transaction]] =
       applyUpdate(wallet, update)
 
   def applyUpdate(
-      wallet: Wallet[LocalStateNoKeys, SecretKeys, Transaction],
+      wallet: Wallet[LocalState, SecretKeys, Transaction],
       update: IndexerUpdate[MerkleTreeCollapsedUpdate, Transaction],
-  ): Either[WalletError, Wallet[LocalStateNoKeys, SecretKeys, Transaction]] = {
+  ): Either[WalletError, Wallet[LocalState, SecretKeys, Transaction]] = {
     update match {
-      case ViewingUpdate(protocolVersion, offset, updates, legacyIndexer) =>
+      case ViewingUpdate(protocolVersion, offset, updates) =>
         val newWallet =
           updates.foldLeft(wallet) {
             case (wallet, Left(mt)) => wallet.copy(state = wallet.state.applyCollapsedUpdate(mt))
             case (wallet, Right(AppliedTransaction(tx, stage))) =>
-              wallet.applyTransaction(AppliedTransaction[Transaction](tx, stage))
+              val updatedWallet =
+                wallet.applyTransaction(AppliedTransaction[Transaction](tx, stage))
+
+              val appliedIndex = stage match {
+                case ApplyStage.FailEntirely => offset
+                case _                       => offset.decrement
+              }
+
+              updatedWallet.copy(
+                progress = {
+                  wallet.progress.copy(appliedIndex = Some(appliedIndex))
+                },
+                offset = Some(offset),
+                protocolVersion = protocolVersion,
+                isConnected = true,
+              )
           }
         val newTxs = updates.collect { case Right(tx) => tx }
         newWallet
           .copy(
-            txHistory =
-              walletTxHistory.updateTxHistory(wallet.txHistory, newTxs.map(_.tx)).toVector,
-            offset = Some(offset),
-            protocolVersion = protocolVersion,
-            isConnected = true,
-            progress = {
-              val newSynced = offset.decrement
-
-              val newTotal =
-                if legacyIndexer then wallet.progress.total
-                else
-                  wallet.progress.total match {
-                    case Some(total) if newSynced.value > total.value => Some(newSynced)
-                    case Some(total)                                  => Some(total)
-                    case None                                         => None
-                  }
-
-              wallet.progress.copy(synced = Some(newSynced), total = newTotal)
-            },
+            txHistory = walletTxHistory.updateTxHistory(wallet.txHistory, newTxs.map(_.tx)).toVector,
           )
           .asRight
 
@@ -84,22 +81,18 @@ class DefaultSyncCapability[
         wallet
           .copy(
             progress = {
-              update.legacyIndexer match {
-                case Some(true) => {
-                  wallet.progress.copy(total = update.total)
-                }
-                case Some(false) => {
-                  wallet.progress.copy(synced = update.synced, total = update.total)
-                }
-                case None => wallet.progress
-              }
+              wallet.progress.copy(
+                highestRelevantWalletIndex = update.highestRelevantWalletIndex,
+                highestIndex = update.highestIndex,
+                highestRelevantIndex = update.highestRelevantIndex,
+              )
             },
             isConnected = true,
           )
           .asRight
 
       case ConnectionLost =>
-        val progressUpdated = wallet.progress.copy(synced = wallet.progress.synced, total = None)
+        val progressUpdated = wallet.progress.copy(appliedIndex = None)
         wallet.copy(isConnected = false, progress = progressUpdated).asRight
     }
   }

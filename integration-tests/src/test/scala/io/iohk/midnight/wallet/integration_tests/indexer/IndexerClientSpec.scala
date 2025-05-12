@@ -13,7 +13,6 @@ class IndexerClientSpec extends CatsEffectSuite {
     given Tracer[IO, StructuredLog] = Tracer.noOpTracer
     IndexerClient(
       uri"ws://localhost:8088/api/v1/graphql/ws",
-      uri"http://localhost:8088/api/v1/graphql",
     ).use(body(_))
   }
 

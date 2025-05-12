@@ -6,7 +6,7 @@ import cats.effect.{Deferred, IO, Resource}
 import cats.syntax.all.*
 import fs2.Stream
 import io.iohk.midnight.midnightNtwrkZswap.mod as v1
-import io.iohk.midnight.midnightNtwrkZswap.mod.LocalStateNoKeys
+import io.iohk.midnight.midnightNtwrkZswap.mod.LocalState
 import io.iohk.midnight.tracer.Tracer
 import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
@@ -18,16 +18,17 @@ import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSub
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.{HexUtil, NetworkId, given}
+import io.iohk.midnight.wallet.core.parser.EncryptionSecretKeyParser
 
 import scala.scalajs.js
 import scala.scalajs.js.annotation.{JSExport, JSExportTopLevel}
 import scala.util.{Failure, Success, Try}
 
 final class V1Combination(
-    initialState: Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction],
+    initialState: Wallet[v1.LocalState, v1.SecretKeys, v1.Transaction],
     syncService: SyncService,
     stateContainer: WalletStateContainer[
-      Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction],
+      Wallet[v1.LocalState, v1.SecretKeys, v1.Transaction],
     ],
     val stateService: WalletStateService[
       v1.CoinPublicKey,
@@ -50,7 +51,7 @@ final class V1Combination(
     submissionService: WalletTxSubmissionService[v1.Transaction],
     deferred: Deferred[IO, Unit],
 )(using
-    WalletTxHistory[Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction], v1.Transaction],
+    WalletTxHistory[Wallet[v1.LocalState, v1.SecretKeys, v1.Transaction], v1.Transaction],
     zswap.NetworkId,
 ) extends VersionCombination {
 
@@ -72,7 +73,7 @@ final class V1Combination(
   private def isSupported(event: IndexerEvent): Boolean =
     event match {
       case _: IndexerEvent.RawProgressUpdate | IndexerEvent.ConnectionLost => true
-      case IndexerEvent.RawViewingUpdate(_, updates, _) =>
+      case IndexerEvent.RawViewingUpdate(_, updates) =>
         updates.forall(_.protocolVersion === initialState.protocolVersion)
     }
 
@@ -104,7 +105,7 @@ final class V1Combination(
 
 @JSExportTopLevel("V1Combination")
 object V1Combination {
-  type TWallet = Wallet[v1.LocalStateNoKeys, v1.SecretKeys, v1.Transaction]
+  type TWallet = Wallet[v1.LocalState, v1.SecretKeys, v1.Transaction]
 
   type WalletBalancing =
     WalletTxBalancing[TWallet, v1.Transaction, v1.UnprovenTransaction, v1.CoinInfo]
@@ -118,11 +119,11 @@ object V1Combination {
       v1.EncPublicKey,
     ]
 
-  given snapshotInstances: SnapshotInstances[v1.LocalStateNoKeys, v1.Transaction] =
+  given snapshotInstances: SnapshotInstances[v1.LocalState, v1.Transaction] =
     new SnapshotInstances
 
   val walletInstances: WalletInstances[
-    v1.LocalStateNoKeys,
+    v1.LocalState,
     v1.SecretKeys,
     v1.Transaction,
     v1.TokenType,
@@ -152,7 +153,7 @@ object V1Combination {
         IO,
         ProvingService[v1.UnprovenTransaction, v1.Transaction],
       ],
-      syncServiceFactory: (v1.EncryptionSecretKey, Option[BigInt]) => Resource[IO, SyncService],
+      syncServiceFactory: (String, Option[BigInt]) => Resource[IO, SyncService],
   )(using Tracer[IO, StructuredLog], zswap.NetworkId): Resource[IO, V1Combination] =
     given WalletTxHistory[TWallet, v1.Transaction] =
       if config.discardTxHistory then walletInstances.walletDiscardTxHistory
@@ -160,7 +161,9 @@ object V1Combination {
     for {
       initialWallet <- parseInitialState(config.initialState, config.seed).liftTo[IO].toResource
       syncService <- syncServiceFactory(
-        initialWallet.secretKeys.encryptionSecretKey,
+        EncryptionSecretKeyParser.encodeAsBech32OrThrow(
+          initialWallet.secretKeys.encryptionSecretKey,
+        ),
         initialWallet.offset.map(_.value),
       )
       walletStateContainer <- WalletStateContainer.Live(initialWallet)
@@ -261,13 +264,21 @@ object V1Combination {
       event: IndexerEvent,
   )(using n: zswap.NetworkId): IO[IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction]] = {
     event match {
-      case IndexerEvent.RawViewingUpdate(offset, rawUpdates, legacyIndexer) =>
+      case IndexerEvent.RawViewingUpdate(offset, rawUpdates) =>
         ApplicativeThrow[IO].fromTry(
-          deserializeViewingUpdate(rawUpdates, Transaction.Offset(offset), legacyIndexer),
+          deserializeViewingUpdate(rawUpdates, Transaction.Offset(offset)),
         )
-      case IndexerEvent.RawProgressUpdate(synced, total, legacyIndexer) =>
-        ProgressUpdate(Transaction.Offset(synced), Transaction.Offset(total), Some(legacyIndexer))
-          .pure[IO]
+      case IndexerEvent.RawProgressUpdate(
+            highestIndex,
+            highestRelevantIndex,
+            highestRelevantWalletIndex,
+          ) =>
+        ProgressUpdate(
+          None,
+          Some(Transaction.Offset(highestRelevantWalletIndex)),
+          Some(Transaction.Offset(highestIndex)),
+          Some(Transaction.Offset(highestRelevantIndex)),
+        ).pure[IO]
       case IndexerEvent.ConnectionLost =>
         ConnectionLost.pure[IO]
     }
@@ -276,7 +287,6 @@ object V1Combination {
   private def deserializeViewingUpdate(
       rawUpdates: Seq[IndexerEvent.SingleUpdate],
       offset: Transaction.Offset,
-      legacyIndexer: Boolean,
   )(using
       c: zswap.MerkleTreeCollapsedUpdate[v1.MerkleTreeCollapsedUpdate, ?],
       t: zswap.Transaction.IsSerializable[v1.Transaction],
@@ -302,7 +312,7 @@ object V1Combination {
           case None => Failure(Exception("Invalid empty viewing update"))
           case Some(neSeq) =>
             if (neSeq.size > 1) Failure(Exception(s"Invalid update versions: ${updates._1F}"))
-            else Success(ViewingUpdate(neSeq.head._1, offset, neSeq.head._2, legacyIndexer))
+            else Success(ViewingUpdate(neSeq.head._1, offset, neSeq.head._2))
         }
       }
 }

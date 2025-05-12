@@ -20,6 +20,7 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   TransactionIdentifier,
   TransactionToProve,
   WalletState,
+  SyncLag,
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
 }
@@ -28,6 +29,7 @@ import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
 import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
+import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.Config.InitialState
 import io.iohk.midnight.wallet.core.WalletError.InvalidAddress
@@ -36,7 +38,7 @@ import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
 import io.iohk.midnight.wallet.engine.WalletBuilder
-import io.iohk.midnight.wallet.engine.parser.AddressParser
+import io.iohk.midnight.wallet.core.parser.AddressParser
 import io.iohk.midnight.wallet.zswap.*
 import org.scalablytyped.runtime.StringDictionary
 
@@ -125,11 +127,26 @@ class JsWallet(
             )
           }.toJSArray,
         )
-        val maybeProgress = (localState.syncProgress.synced, localState.syncProgress.total).tupled
-        maybeProgress.fold(mappedWalletState.setSyncProgressUndefined) { (synced, total) =>
-          mappedWalletState.setSyncProgress(
-            SyncProgress(synced.value.toJsBigInt, total.value.toJsBigInt),
-          )
+        val maybeProgress = (
+          localState.syncProgress.appliedIndex,
+          localState.syncProgress.highestRelevantWalletIndex,
+          localState.syncProgress.highestIndex,
+          localState.syncProgress.highestRelevantIndex,
+        )
+        (maybeProgress._2, maybeProgress._3, maybeProgress._4) match {
+          case (
+                Some(highestRelevantWalletIndex),
+                Some(highestIndex),
+                Some(highestRelevantIndex),
+              ) => {
+            val appliedIndex = maybeProgress._1.getOrElse(Offset.Zero)
+            val applyLag = (highestRelevantWalletIndex.value - appliedIndex.value).abs
+            val sourceLag = (highestIndex.value - highestRelevantIndex.value).abs
+            val lag = SyncLag(applyLag.toJsBigInt, sourceLag.toJsBigInt)
+            val isSynced = applyLag === BigInt(0) && sourceLag <= BigInt(50)
+            mappedWalletState.setSyncProgress(SyncProgress(lag, isSynced))
+          }
+          case _ => mappedWalletState.setSyncProgressUndefined
         }
       }
       .unsafeToObservable()
@@ -275,7 +292,7 @@ object JsWallet {
       _ <- jsWalletTracer.jsWalletBuildRequested(rawConfig)
       config <- parseConfig(rawConfig, jsWalletTracer)
       allocatedVersionCombinator <-
-        new WalletBuilder[mod.LocalStateNoKeys, mod.Transaction]
+        new WalletBuilder[mod.LocalState, mod.Transaction]
           .build(config)
           .allocated
       (versionCombinator, finalizer) = allocatedVersionCombinator
@@ -306,7 +323,7 @@ object JsWallet {
   @JSExport
   def generateInitialState(networkId: mod.NetworkId): String = {
     given NetworkId = NetworkId.fromJs(networkId)
-    val snapshots = new SnapshotInstances[mod.LocalStateNoKeys, mod.Transaction]
+    val snapshots = new SnapshotInstances[mod.LocalState, mod.Transaction]
     import snapshots.given
     snapshots.create.serialize
   }

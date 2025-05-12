@@ -75,9 +75,9 @@ where:
 
 - `wallet` - key and state from the genesis file
 - `port` - the port the instance listens to
-- `genesis-file-path` - the path to genesis file (should be in the [midnight example apps repo](https://github.com/input-output-hk/midnight-example-applications))
+- `genesis-file-path` - the path to genesis file (should be in the [midnight example apps repo](https://github.com/midnightntwrk/midnight-example-applications))
 - `confirm-all` - flag to automatically confirm all requests, useful in this context because turborepo can't forward stdin (only relevant when `--cli=true`)
-- `cli` - This allows you to choose between using cli and dapp connector (in [Lace Browser Extension](https://github.com/input-output-hk/lace-private/tree/midnight)) to sign transactions. Default value is `false`.
+- `cli` - This allows you to choose between using cli and dapp connector (in [Lace Browser Extension](https://github.com/midnightntwrk/lace-private/tree/midnight)) to sign transactions. Default value is `false`.
 
 Additional details regarding configuration or commands available can be learned by running
 

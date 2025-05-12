@@ -31,7 +31,7 @@ object TransactionGenerator extends IOApp.Simple {
 
   type Address = domain.Address[v1.CoinPublicKey, v1.EncPublicKey]
   type TokenTransfer = domain.TokenTransfer[v1.TokenType, v1.CoinPublicKey, v1.EncPublicKey]
-  type Snapshot = core.Snapshot[v1.LocalStateNoKeys, v1.Transaction]
+  type Snapshot = core.Snapshot[v1.LocalState, v1.Transaction]
 
   def randomRecipient(): Address = {
     val secretKeys = KeyGenerator.randomSecretKeys()
@@ -42,7 +42,7 @@ object TransactionGenerator extends IOApp.Simple {
       initialState: InitialState,
       seed: Array[Byte],
   ): Resource[IO, VersionCombinator] =
-    new WalletBuilder[v1.LocalStateNoKeys, v1.Transaction]
+    new WalletBuilder[v1.LocalState, v1.Transaction]
       .build(
         Config(
           indexerRPCUri,
@@ -71,7 +71,7 @@ object TransactionGenerator extends IOApp.Simple {
 
   @SuppressWarnings(Array("org.wartremover.warts.TryPartial"))
   val seed: Array[Byte] =
-    zswap.HexUtil.decodeHex("0000000000000000000000000000000000000000000000000000000000000002").get
+    zswap.HexUtil.decodeHex("0000000000000000000000000000000000000000000000000000000000000001").get
 
   override val run: IO[Unit] =
     withRunningWallet(initialState, seed) { v =>
@@ -79,7 +79,7 @@ object TransactionGenerator extends IOApp.Simple {
         v.state
           .evalTap(s => IO.println(s.syncProgress))
           .find { s =>
-            s.syncProgress.synced.isDefined && s.syncProgress.synced === s.syncProgress.total
+            s.syncProgress.appliedIndex.isDefined && s.syncProgress.highestRelevantWalletIndex.isDefined && s.syncProgress.highestIndex.isDefined && s.syncProgress.highestRelevantIndex.isDefined
           }
           .map(_.balances.getOrElse(v1.nativeToken(), BigInt(0)))
           .compile
