@@ -1,15 +1,7 @@
 {
-  "compilerOptions": {
-    "strict": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "target": "ESNext",
-    "outDir": "dist",
-    "resolveJsonModule": true,
-    "skipLibCheck": true
-  },
-  "ts-node": {
-    "esm": true
-  },
-  "files": ["src/tests.ts"]
+  "extends": "../../tsconfig.base.json",
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.test.json" }
+  ]
 }

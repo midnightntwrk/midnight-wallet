@@ -3,11 +3,12 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "tsc && node ./dist/tests.js"
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
   },
   "dependencies": {
     "@midnight-ntwrk/wallet": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-ts": "workspace:*",
     "@midnight-ntwrk/zswap": "4.0.0",
     "@types/node": "^22.11.0",
     "rxjs": "^7.5.5",

@@ -40,6 +40,7 @@ coverage
 .turbo
 packages/*/*.tgz
 .rollup.cache
+packages/src/**/*.d.ts*
 
 # reports
 reports

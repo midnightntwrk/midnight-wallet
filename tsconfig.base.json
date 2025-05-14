@@ -2,7 +2,7 @@
   "extends": "@tsconfig/node20/tsconfig.json",
   "compilerOptions": {
     "baseUrl": "./",
-    "module": "Preserve",
+    "module": "ESNext",
     "strict": true,
     "declaration": true,
     "declarationMap": true,

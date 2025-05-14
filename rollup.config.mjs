@@ -1,6 +1,6 @@
-import resolve from "@rollup/plugin-node-resolve";
-import typescript from "@rollup/plugin-typescript";
-import { join } from "node:path";
+import resolve from '@rollup/plugin-node-resolve';
+import typescript from '@rollup/plugin-typescript';
+import { join, dirname } from 'node:path';
 
 /**
  * @typedef PackageJson
@@ -18,8 +18,8 @@ import { join } from "node:path";
  */
 /** @type {Options} */
 const DEFAULT_OPTIONS = {
-  sourceRootFolder: "src",
-  tsconfig: "tsconfig.build.json",
+  sourceRootFolder: 'src',
+  tsconfig: 'tsconfig.build.json',
   external: [
     /node_modules/
   ]
@@ -29,13 +29,17 @@ const DEFAULT_OPTIONS = {
  * @param {string} folderPath
  * @param {Options} options
  */
-const common = (folderPath, options) => ({
+const common = (folderPath, options, rootDir, declarationDir) => ({
   cache: false,
   plugins: [
     resolve(),
     typescript({
       tsconfig: join(folderPath, options.tsconfig),
       composite: true,
+      sourceRoot: rootDir,
+      rootDir,
+      declarationDir,
+      tsBuildInfoFile: 'rollup.tsbuildinfo', // Use separate Build Info file for rollup to keep incremental builds working.
     })
   ],
   external: options.external,
@@ -55,22 +59,29 @@ const common = (folderPath, options) => ({
 export default function(folderPath, packageJson, options) {
   options = {
     ...DEFAULT_OPTIONS,
-    ...options
+    ...options ?? [],
+    external: [
+      ...DEFAULT_OPTIONS.external,
+      ...options?.external ?? []
+    ]
   };
   const sourceExports = new Map(
     Object.keys(packageJson.exports)
       .map(key => ([ join(options.sourceRootFolder, key), packageJson.exports[key] ]))
   );
 
-  return [...sourceExports.entries()].map(([ sourceRoot, conditionalExport ]) => ({
-    input: join(folderPath, sourceRoot, "index.ts"),
-    output: [
-      {
-        file: conditionalExport["import"],
-        format: "esm",
-        sourcemap: true
-      }
-    ],
-    ...common(folderPath, options)
-  }));
+  return [...sourceExports.entries()].map(([ sourceExportRoot, conditionalExport ]) => {
+    const sourceRoot = join(folderPath, sourceExportRoot);
+    return {
+      input: join(sourceRoot, 'index.ts'),
+      output: [
+        {
+          file: conditionalExport['import'],
+          format: 'esm',
+          sourcemap: true
+        },
+      ],
+      ...common(folderPath, options, sourceRoot, dirname(conditionalExport['types']))
+    }
+  });
 }

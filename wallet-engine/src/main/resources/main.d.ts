@@ -106,6 +106,10 @@ export declare class ScalaEither<A, B> {}
 export declare class JsEither {
   static fold<A, B, R>(either: ScalaEither<A, B>, onLeft: (a: A) => R, onRight: (b: B) => R): R;
 }
+export declare class ScalaOption<R> {}
+export declare class JsOption {
+  static asResult<R>(option: ScalaOption<R>): R | undefined;
+}
 
 export declare class IndexerClient {
   static create(wsUrl: string, tracer: TracerCarrier): JsResource<IndexerClient>;
@@ -124,8 +128,17 @@ export declare const V1EncryptionSecretKey: EncryptionSecretKey<zswap.Encryption
 /* blockchain / domain types */
 export declare class IndexerUpdateEvent {}
 export declare class IndexerUpdate {}
-export declare class Progress {
-  readonly isComplete: boolean;
+export declare class ProgressUpdate {
+  appliedIndex: ScalaOption<Offset>;
+  highestRelevantWalletIndex: ScalaOption<Offset>;
+  highestIndex: ScalaOption<Offset>;
+  highestRelevantIndex: ScalaOption<Offset>;
+}
+export declare class ProtocolVersion {
+  readonly version: bigint;
+}
+export declare class Offset {
+  readonly value: bigint;
 }
 
 /* Wallet and capabilities */
@@ -139,7 +152,8 @@ export declare class CoreWallet<State, SecretKeys> {
   readonly state: State;
   readonly secretKeys: SecretKeys;
   readonly isConnected: boolean;
-  readonly progress: Progress;
+  readonly progress: ProgressUpdate;
+  readonly protocolVersion: ProtocolVersion;
 }
 export declare class DefaultTxHistoryCapability {}
 

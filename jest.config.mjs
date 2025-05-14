@@ -5,13 +5,13 @@
  * via `turborepo`.
  */
 export default {
-  testEnvironment: "node",
+  testEnvironment: 'node',
   transform: {
-    "^.+\\.tsx?$": [
-      "ts-jest",
+    '^.+\\.tsx?$': [
+      'ts-jest',
       {
-        "tsconfig": "./tsconfig.base.json",
-        "useESM": true
+        'tsconfig': './tsconfig.base.json',
+        'useESM': true
       }
     ]
   },

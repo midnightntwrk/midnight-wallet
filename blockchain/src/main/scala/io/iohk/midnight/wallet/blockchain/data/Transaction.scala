@@ -2,6 +2,8 @@ package io.iohk.midnight.wallet.blockchain.data
 
 import cats.{Eq, Order, Show}
 import cats.syntax.contravariant.*
+import scala.scalajs.js
+import scala.scalajs.js.annotation.JSExport
 
 final case class Transaction(hash: Hash[Transaction], raw: String)
 
@@ -11,6 +13,10 @@ object Transaction {
 
   final case class Offset(value: BigInt) {
     def decrement: Offset = Offset(value - 1)
+
+    @SuppressWarnings(Array("org.wartremover.warts.ToString"))
+    @JSExport("value")
+    def offsetValue: js.BigInt = js.BigInt(value.toString())
   }
 
   object Offset {
