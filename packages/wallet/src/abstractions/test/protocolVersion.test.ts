@@ -1,4 +1,4 @@
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolVersion } from '../index';
 import { Schema } from 'effect';
 
 describe('ProtocolVersion', () => {

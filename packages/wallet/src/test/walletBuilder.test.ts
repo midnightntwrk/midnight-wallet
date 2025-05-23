@@ -1,6 +1,6 @@
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-ts/abstractions';
 import { take } from 'rxjs';
+import { ProtocolVersion } from '../abstractions/index';
+import { WalletBuilderTs } from '../index';
 import { NumericRangeBuilder, NumericRangeMultiplierBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
 

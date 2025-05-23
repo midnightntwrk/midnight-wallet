@@ -10,8 +10,8 @@ import {
   WalletState,
   ProtocolVersion,
   AnyVersionedVariantBuilderArray,
-} from '@midnight-ntwrk/wallet-ts/abstractions';
-import { Runtime, Observable } from '@midnight-ntwrk/wallet-ts/effect';
+} from './abstractions/index';
+import { Runtime, Observable } from './effect/index';
 
 /**
  * Builds a wallet-like implementation from a collection of wallet-like variants, each specific

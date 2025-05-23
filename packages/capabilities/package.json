@@ -23,15 +23,15 @@
     }
   },
   "peerDependencies": {
-    "@midnight-ntwrk/zswap": "4.0.0"
+    "@midnight-ntwrk/zswap": "^4.0.0"
   },
   "devDependencies": {
-    "@midnight-ntwrk/zswap": "4.0.0"
+    "@midnight-ntwrk/zswap": "^4.0.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest --silent=false",
     "lint": "eslint",
-    "dist:prebuild": "rollup -c ./rollup.config.mjs"
+    "dist": "rollup -c ./rollup.config.mjs"
   }
 }

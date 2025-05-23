@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import { Stream, Effect, identity, Fiber } from 'effect';
-import { Observable } from '@midnight-ntwrk/wallet-ts/effect';
+import { Observable } from '../index';
 import * as rx from 'rxjs';
 
 describe('Observable', () => {

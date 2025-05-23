@@ -4,57 +4,63 @@
   "tasks": {
     "lint": {
       "inputs": [
-        "**/src/**/*.ts",
-        "eslint.config.mjs"
+        "src/**/*.ts",
+        "test/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "eslint.config.mjs",
+        "$TURBO_ROOT$/eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["dist"]
+      "dependsOn": ["^dist"]
     },
     "test": {
       "inputs": [
-        "**/test/**/*.ts",
-        "**/src/**/*.ts",
-        "tsconfig*.json"
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "jest.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["dist"]
+      "dependsOn": ["typecheck", "^dist"]
     },
     "typecheck": {
       "inputs": [
-        "**/test/**/*.ts",
-        "**/src/**/*.ts",
-        "tsconfig*.json"
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["dist"]
+      "dependsOn": ["^dist"]
     },
     "test-e2e": {
       "cache": false,
       "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
     },
-    "dist:prebuild": {
-      "inputs": [
-        "packages/capabilities/src/**/*.ts",
-        "packages/capabilities/tsconfig*.json",
-        "packages/address-format/src/**/*.ts",
-        "packages/address-format/tsconfig*.json"
-      ],
-      "outputs": [
-        "dist/**"
-      ]
-    },
     "dist": {
       "inputs": [
-        "**/src/**/*.ts",
-        "tsconfig*.json"
+        "src/**/*.ts",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "rollup.config.mjs",
+        "$TURBO_ROOT$/rollup.config.mjs"
       ],
       "outputs": [
         "dist/**"
       ],
-      "dependsOn": ["dist:prebuild", "^dist", "//#sbt:dist"]
+      "dependsOn": ["^dist"]
+    },
+    "@midnight-ntwrk/wallet#dist": {
+      "dependsOn": ["^dist", "//#sbt:dist"]
+    },
+    "@midnight-ntwrk/wallet#typecheck": {
+      "dependsOn": ["^dist", "//#sbt:dist"]
     },
     "verify": {
-      "dependsOn": ["//#sbt:verify", "typecheck", "lint", "test"]
+      "dependsOn": ["typecheck", "lint", "test", "//#sbt:verify"]
     },
     "//#sbt:dist": {
       "inputs": [
@@ -68,7 +74,11 @@
       "outputs": [
         "wallet-engine/dist/**"
       ],
-      "outputLogs": "new-only"
+      "outputLogs": "new-only",
+      "dependsOn": [
+        "@midnight-ntwrk/wallet-sdk-address-format#dist",
+        "@midnight-ntwrk/wallet-sdk-capabilities#dist"
+      ]
     },
     "//#sbt:verify": {
       "inputs": [

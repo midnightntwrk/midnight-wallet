@@ -1,4 +1,4 @@
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilderTs } from '../index';
 import type { Expect, Equal } from './testUtils';
 
 describe('WalletBuilder', () => {

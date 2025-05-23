@@ -1,11 +1,5 @@
 import { Effect, Context, SubscriptionRef, SynchronizedRef, Stream, identity, Types } from 'effect';
-import {
-  Variant,
-  ProtocolVersion,
-  ProtocolState,
-  StateChange,
-  VersionChangeType,
-} from '@midnight-ntwrk/wallet-ts/abstractions';
+import { Variant, ProtocolVersion, ProtocolState, StateChange, VersionChangeType } from '../abstractions/index';
 
 /**
  * Manages an array of variants, keeping track of the current variant as stream updates occur.

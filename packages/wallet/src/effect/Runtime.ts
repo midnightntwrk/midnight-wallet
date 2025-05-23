@@ -1,12 +1,12 @@
-import type { Variant } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { ProtocolState } from '@midnight-ntwrk/wallet-ts/abstractions';
-import * as Effect from 'effect/Effect';
-import * as Stream from 'effect/Stream';
-import { type Pipeable } from 'effect/Pipeable';
-import * as internal from './internal/runtime';
-import * as Context from 'effect/Context';
-import { VariantStream } from './VariantStream';
 import { Types } from 'effect';
+import * as Context from 'effect/Context';
+import * as Effect from 'effect/Effect';
+import { type Pipeable } from 'effect/Pipeable';
+import * as Stream from 'effect/Stream';
+import type { Variant } from '../abstractions/index';
+import { ProtocolState } from '../abstractions/index';
+import * as internal from './internal/runtime';
+import { VariantStream } from './VariantStream';
 
 const RuntimeSymbol = internal.RuntimeSymbol;
 

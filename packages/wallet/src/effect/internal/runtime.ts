@@ -4,7 +4,7 @@ import { pipeArguments } from 'effect/Pipeable';
 import type * as Runtime from '../Runtime';
 import { dual, identity } from 'effect/Function';
 import { Mutable } from 'effect/Types';
-import type { Variant, ProtocolState } from '@midnight-ntwrk/wallet-ts/abstractions';
+import type { Variant, ProtocolState } from '../../abstractions/index';
 import * as VariantStream from '../VariantStream';
 
 /** @internal */

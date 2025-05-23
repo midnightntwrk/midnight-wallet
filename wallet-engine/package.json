@@ -24,16 +24,11 @@
         "type": "git",
         "url": "https://github.com/midnight-ntwrk/artifacts.git"
     },
-    "scripts": {
-        "typecheck": "",
-        "test": "",
-        "dist": ""
-    },
     "dependencies": {
         "@midnight-ntwrk/wallet-api": "^5.0.0",
         "@midnight-ntwrk/wallet-sdk-address-format": "^2.0.0",
         "@midnight-ntwrk/wallet-sdk-capabilities": "^2.0.0",
-        "@midnight-ntwrk/zswap": "4.0.0",
+        "@midnight-ntwrk/zswap": "^4.0.0",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",

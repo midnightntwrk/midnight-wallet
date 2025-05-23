@@ -7,7 +7,7 @@
 
 describe('TypeScript Wallet', () => {
   it('should export Scala "WalletBuilder"', async () => {
-    const wallet = await import('@midnight-ntwrk/wallet-ts');
+    const wallet = await import('../index');
 
     expect(wallet).toBeDefined();
     expect(wallet.WalletBuilder).toBeDefined();

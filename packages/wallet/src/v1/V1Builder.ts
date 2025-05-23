@@ -6,8 +6,8 @@ import {
   Fluent,
   ProtocolVersion,
   VersionChangeType,
-} from '@midnight-ntwrk/wallet-ts/abstractions';
-import { Observable } from '@midnight-ntwrk/wallet-ts/effect';
+} from '../abstractions/index';
+import { Observable } from '../effect/index';
 import { LocalState, NetworkId, SecretKeys } from '@midnight-ntwrk/zswap';
 import {
   IndexerUpdate,
@@ -59,7 +59,7 @@ export class V1Builder<out R = V1Builder.Context>
     V1Builder<Exclude<R, SyncService | SyncCapability>>,
     V1BuilderMethods.AllSyncMethods
   > {
-    const sync = ({ indexerWsUrl, networkId }: V1Configuration, state: V1State) => {
+    const sync = ({ indexerWsUrl, networkId }: V1Configuration, _state: V1State) => {
       const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
       const bech32mESK = ShieldedEncryptionSecretKey.codec
         .encode(

@@ -1,4 +1,4 @@
-import { ProtocolVersion, VersionChangeType } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolVersion, VersionChangeType } from '../index';
 
 describe('VersionChangeType', () => {
   it('should create a version change with a given protocol version number', () => {

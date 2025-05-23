@@ -25,7 +25,7 @@
     "@midnight-ntwrk/wallet_pre_hf": "npm:@midnight-ntwrk/wallet@3.6.0",
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4",
     "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.4",
-    "@midnight-ntwrk/zswap": "4.0.0",
+    "@midnight-ntwrk/zswap": "^4.0.0",
     "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@3.0.2",
     "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@3.0.0-hard-fork-test",
     "@types/jest": "^29.2.0",

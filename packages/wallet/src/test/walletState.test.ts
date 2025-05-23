@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { WalletBuilderTs } from '../index';
+import { ProtocolVersion } from '../abstractions/index';
 import { NumericRangeBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
 

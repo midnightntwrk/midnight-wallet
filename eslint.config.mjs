@@ -4,9 +4,13 @@ import esLintPrettier from 'eslint-plugin-prettier/recommended';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+//TODO: consider defining config for config JS files too (for consistent formatting at the very least)
 export default tsLint.config(
   esLint.configs.recommended,
   ...tsLint.configs.recommendedTypeChecked,
+  {
+    ignores: ["dist/"]
+  },
   {
     languageOptions: {
       parserOptions: {

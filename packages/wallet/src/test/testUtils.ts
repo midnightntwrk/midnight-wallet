@@ -1,4 +1,4 @@
-import { ProtocolState } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolState } from '../abstractions/index';
 import { catchError, throwError, Observable } from 'rxjs';
 
 /**
