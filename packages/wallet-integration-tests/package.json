@@ -3,7 +3,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest"
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint"
   },
   "dependencies": {
     "@midnight-ntwrk/wallet": "workspace:*",

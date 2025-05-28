@@ -3,7 +3,8 @@ import rootConfig from "../../eslint.config.mjs";
 export default [
   {
     ignores: [
-      '*.mjs'
+      '*.mjs',
+      "dist/**"
     ]
   },
   ...rootConfig.map(config => ({

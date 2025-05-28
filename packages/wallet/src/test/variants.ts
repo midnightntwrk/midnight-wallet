@@ -1,4 +1,4 @@
-import { VariantBuilder, Variant, StateChange, VersionChangeType } from '../abstractions/index';
+import { VariantBuilder, Variant, StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index';
 import { Effect, Stream, Option } from 'effect';
 
 export type RangeConfig = {
@@ -19,26 +19,33 @@ export class NumericRange implements Variant.Variant<number, null> {
     return this.#state;
   }
 
-  start(state: number): Stream.Stream<StateChange.StateChange<number>> {
+  start(
+    _context: Variant.VariantContext<number>,
+    state: number,
+  ): Effect.Effect<Variant.RunningVariant<number, object>> {
     const max = this.configuration.max ?? 10;
     this.#state = state ?? this.configuration.min ?? 0;
 
-    return Stream.fromAsyncIterable(
-      // eslint-disable-next-line @typescript-eslint/require-await
-      (async function* (self: NumericRange) {
-        for (let value = self.#state; value <= max; value++) {
-          self.#state = value;
-          yield StateChange.State({ state: value });
+    return Effect.succeed({
+      state: Stream.fromAsyncIterable<StateChange.StateChange<number>, WalletRuntimeError>(
+        // eslint-disable-next-line @typescript-eslint/require-await
+        (async function* (self: NumericRange) {
+          for (let value = self.#state; value <= max; value++) {
+            self.#state = value;
+            yield StateChange.State({ state: value });
 
-          if (--self.yieldCount === 0) {
-            if (self.throwError) throw new Error('NumericRange: forced break');
+            if (--self.yieldCount === 0) {
+              if (self.throwError) {
+                throw new Error('NumericRange: forced break');
+              }
 
-            yield StateChange.VersionChange({ change: VersionChangeType.Next() });
+              yield StateChange.VersionChange({ change: VersionChangeType.Next() });
+            }
           }
-        }
-      })(this),
-      (e) => e,
-    ) as Stream.Stream<StateChange.StateChange<number>>;
+        })(this),
+        (e) => new WalletRuntimeError({ message: 'NumericRange error', cause: e }),
+      ),
+    });
   }
 
   migrateState(): Effect.Effect<number> {
@@ -66,19 +73,24 @@ export class NumericRangeMultiplier implements Variant.Variant<number, number> {
     return this.#state;
   }
 
-  start(state: number): Stream.Stream<StateChange.StateChange<number>> {
+  start(
+    _context: Variant.VariantContext<number>,
+    state: number,
+  ): Effect.Effect<Variant.RunningVariant<number, object>> {
     const max = this.configuration.max ?? 10;
     this.#state = state ?? this.configuration.min ?? 0;
 
-    return Stream.fromIterable(
-      (function* (self: NumericRangeMultiplier) {
-        for (let value = self.#state; value <= max; value++) {
-          self.#state = value;
-          yield StateChange.State({ state: value * self.configuration.multiplier });
-        }
-        return Option.none();
-      })(this),
-    );
+    return Effect.succeed({
+      state: Stream.fromIterable(
+        (function* (self: NumericRangeMultiplier) {
+          for (let value = self.#state; value <= max; value++) {
+            self.#state = value;
+            yield StateChange.State({ state: value * self.configuration.multiplier });
+          }
+          return Option.none();
+        })(this),
+      ),
+    });
   }
 
   migrateState(state: number): Effect.Effect<number> {
@@ -86,8 +98,9 @@ export class NumericRangeMultiplier implements Variant.Variant<number, number> {
   }
 }
 
-// eslint-disable-next-line prettier/prettier
-export class NumericRangeMultiplierBuilder implements VariantBuilder<number, number, RangeConfig & { multiplier: number }> {
+export class NumericRangeMultiplierBuilder
+  implements VariantBuilder<number, number, RangeConfig & { multiplier: number }>
+{
   build(configuration: RangeConfig & { multiplier: number }): NumericRangeMultiplier {
     return new NumericRangeMultiplier(configuration);
   }

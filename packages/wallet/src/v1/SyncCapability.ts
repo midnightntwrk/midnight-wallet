@@ -1,4 +1,4 @@
-import { Effect, Context } from 'effect';
+import { Context } from 'effect';
 
 export class SyncCapability extends Context.Tag('@midnight-ntwrk/wallet#SyncCapability')<
   SyncCapability,
@@ -8,6 +8,6 @@ export class SyncCapability extends Context.Tag('@midnight-ntwrk/wallet#SyncCapa
 
 export declare namespace SyncCapability {
   interface Service<TState, TUpdate> {
-    applyUpdate: (state: TState, update: TUpdate) => Effect.Effect<TState>;
+    applyUpdate: (state: TState, update: TUpdate) => TState;
   }
 }

@@ -6,6 +6,7 @@ import {
   Fluent,
   ProtocolVersion,
   VersionChangeType,
+  WalletRuntimeError,
 } from '../abstractions/index';
 import { Observable } from '../effect/index';
 import { LocalState, NetworkId, SecretKeys } from '@midnight-ntwrk/zswap';
@@ -24,7 +25,7 @@ import {
   JsOption,
 } from '@midnight-ntwrk/wallet';
 import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { Effect, Stream, Layer, identity, Types } from 'effect';
+import { Effect, Stream, Layer, Types, SubscriptionRef, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { SyncService } from './SyncService';
 import { SyncCapability } from './SyncCapability';
@@ -99,7 +100,7 @@ export class V1Builder<out R = V1Builder.Context>
             (error) => {
               throw error;
             },
-            (state) => Effect.succeed(state),
+            (state) => state,
           );
         },
       }),
@@ -123,7 +124,7 @@ export class V1Builder<out R = V1Builder.Context>
     const layer = this.#buildLayersFromBuildState(configuration);
     const { networkId } = configuration;
 
-    const progress = (state: V1State) => {
+    const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
       if (!state.isConnected) return [];
 
       const appliedIndex = JsOption.asResult(state.progress.appliedIndex)?.value ?? 0n;
@@ -138,41 +139,53 @@ export class V1Builder<out R = V1Builder.Context>
     };
 
     return {
-      start(state: V1State): Stream.Stream<StateChange.StateChange<V1State>> {
-        return Stream.fromEffect(
-          Effect.gen(function* () {
-            const syncService = (yield* SyncService) as SyncService.Service<V1State, IndexerUpdate>;
-            const syncCapability = (yield* SyncCapability) as SyncCapability.Service<V1State, IndexerUpdate>;
-
-            return syncService.updates(state).pipe(
-              Stream.scanEffect(
-                [state, false] as const,
-                (streamState: readonly [V1State, boolean], update: IndexerUpdate) =>
-                  Effect.gen(function* () {
-                    const [previousState] = streamState;
-                    const newState = yield* syncCapability.applyUpdate(previousState, update);
-                    return [
-                      newState,
-                      newState.protocolVersion.version !== previousState.protocolVersion.version,
-                    ] as const;
-                  }),
-              ),
-              Stream.flatMap(([state, versionChangeToggle]) =>
-                versionChangeToggle
-                  ? Stream.fromIterable([
-                      StateChange.State({ state }),
-                      ...progress(state),
-                      StateChange.VersionChange({
-                        change: VersionChangeType.Version({
-                          version: ProtocolVersion.ProtocolVersion(state.protocolVersion.version),
-                        }),
-                      }),
-                    ])
-                  : Stream.fromIterable([StateChange.State({ state }), ...progress(state)]),
-              ),
+      start(
+        context,
+        initialState,
+      ): Effect.Effect<Variant.RunningVariant<V1State, object>, WalletRuntimeError, Scope.Scope> {
+        return Effect.Do.pipe(
+          Effect.bind('syncService', () => SyncService),
+          Effect.bind('syncCapability', () => SyncCapability),
+          Effect.bind('runningSync', ({ syncCapability, syncService }) => {
+            return syncService.updates(initialState).pipe(
+              Stream.mapEffect((update) => {
+                return SubscriptionRef.update(
+                  context.stateRef,
+                  (state) => syncCapability.applyUpdate(state, update) as V1State, // It seems layers involve losing type information, do we need to proceed with them?
+                );
+              }),
+              Stream.runDrain,
+              Effect.forkScoped,
             );
           }),
-        ).pipe(Stream.flatMap(identity), Stream.provideLayer(layer));
+          Effect.provide(layer),
+          Effect.as({
+            state: context.stateRef.changes.pipe(
+              Stream.mapAccum(initialState, (previous: V1State, current: V1State) => {
+                return [current, [previous, current]] as const;
+              }),
+              Stream.mapConcat(
+                ([previous, current]: readonly [V1State, V1State]): StateChange.StateChange<V1State>[] => {
+                  // TODO: emit progress only upon actual change
+                  const out = [StateChange.State({ state: current }), ...progress(current)];
+                  const outWithMaybeProtocolVersionChange =
+                    previous.protocolVersion.version != current.protocolVersion.version
+                      ? [
+                          ...out,
+                          StateChange.VersionChange({
+                            change: VersionChangeType.Version({
+                              version: ProtocolVersion.ProtocolVersion(current.protocolVersion.version),
+                            }),
+                          }),
+                        ]
+                      : out;
+
+                  return outWithMaybeProtocolVersionChange;
+                },
+              ),
+            ),
+          }),
+        );
       },
 
       migrateState() {

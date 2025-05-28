@@ -9,7 +9,7 @@ export default tsLint.config(
   esLint.configs.recommended,
   ...tsLint.configs.recommendedTypeChecked,
   {
-    ignores: ["dist/"]
+    ignores: ["dist/**"]
   },
   {
     languageOptions: {
@@ -41,6 +41,13 @@ export default tsLint.config(
           'argsIgnorePattern': '^_',
           'destructuredArrayIgnorePattern': '^_',
           'varsIgnorePattern': '^_'
+        }
+      ],
+      '@typescript-eslint/no-namespace': [
+        'error',
+        // Ensure that we allow namespace declarations to support Effect style typing.
+        {
+          'allowDeclarations': true
         }
       ]
     }

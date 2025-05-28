@@ -1,5 +1,6 @@
 import { ProtocolState } from '../abstractions/index';
-import { catchError, throwError, Observable } from 'rxjs';
+import { Chunk } from 'effect';
+import { Observable, reduce, OperatorFunction } from 'rxjs';
 
 /**
  * A utility type that ensures that a given type is `true` or otherwise forces a compile time error.
@@ -26,29 +27,31 @@ export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T exte
  * @internal
  */
 export const toProtocolStateArray = <T>(
-  observable: Observable<ProtocolState<T>>,
+  observable: Observable<ProtocolState.ProtocolState<T>>,
   onErrCallback?: (err: unknown) => void,
-): Promise<ProtocolState<T>[]> =>
-  new Promise<ProtocolState<T>[]>((resolve) => {
-    const receivedStates: ProtocolState<T>[] = [];
+): Promise<ProtocolState.ProtocolState<T>[]> =>
+  new Promise<ProtocolState.ProtocolState<T>[]>((resolve) => {
+    const receivedStates: ProtocolState.ProtocolState<T>[] = [];
 
-    observable
-      .pipe(
-        catchError((err) => {
-          onErrCallback?.call(undefined, err);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-          return throwError(() => err);
-        }),
-      )
-      .subscribe({
-        next(value) {
-          receivedStates.push(value);
-        },
-        complete() {
-          resolve(receivedStates);
-        },
-        error() {
-          resolve(receivedStates);
-        },
-      });
+    observable.subscribe({
+      next(value) {
+        receivedStates.push(value);
+      },
+      complete() {
+        resolve(receivedStates);
+      },
+      error(err) {
+        onErrCallback?.call(undefined, err);
+        resolve(receivedStates);
+      },
+    });
   });
+
+export const reduceToChunk = <T>(): OperatorFunction<T, Chunk.Chunk<T>> =>
+  reduce((chunk, value) => Chunk.append(chunk, value), Chunk.empty<T>());
+
+export const isRange = (values: Chunk.Chunk<number>): boolean => {
+  const firstDropped = Chunk.drop(values, 1);
+  const lastDropped = Chunk.dropRight(values, 1);
+  return Chunk.zip(lastDropped, firstDropped).pipe(Chunk.every(([l, r]) => r == l + 1));
+};

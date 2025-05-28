@@ -4,12 +4,7 @@ import type { Expect, Equal } from './testUtils';
 describe('WalletBuilder', () => {
   describe('without variants', () => {
     it('should not build a valid wallet', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const wallet = new WalletBuilderTs().build();
-      // Without any variants, the returned wallet type from the `build` method should be `never`.
-      const walletAsExpectedType: Expect<Equal<typeof wallet, never>> = true;
-
-      expect(walletAsExpectedType).toBeTruthy();
+      expect(() => new WalletBuilderTs().build()).toThrow();
     });
 
     it('prevents configuration', () => {

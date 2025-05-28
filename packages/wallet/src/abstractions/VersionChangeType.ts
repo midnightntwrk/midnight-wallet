@@ -14,7 +14,7 @@ export type VersionChangeType = Data.TaggedEnum<{
   /** A change to a particular protocol version. */
   Version: { readonly version: ProtocolVersion };
 
-  /** A change to the 'next' protocol version. */
+  /** A change to the 'next' protocol version. Particularly useful in testing */
   Next: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type
 }>;
 const VersionChangeType = Data.taggedEnum<VersionChangeType>();

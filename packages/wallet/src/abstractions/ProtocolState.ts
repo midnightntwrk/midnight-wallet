@@ -6,3 +6,5 @@ import * as ProtocolVersion from './ProtocolVersion';
  * @typeParam TState The type of state.
  */
 export type ProtocolState<TState> = readonly [ProtocolVersion.ProtocolVersion, TState];
+
+export const state = <TState>(ps: ProtocolState<TState>): TState => ps[1];

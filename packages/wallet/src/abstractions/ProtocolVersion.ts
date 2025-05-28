@@ -28,6 +28,7 @@ export declare namespace ProtocolVersion {
  * @throws `TypeError`
  * Thrown when `start` is after `end`, or the difference between them is less than one.
  */
+// TODO: make it possible to represent an open range on the end side to remove special "MaxSupportedVersion"
 export const makeRange = (start: ProtocolVersion, end: ProtocolVersion): ProtocolVersion.Range => {
   if (end - start < 1) throw new TypeError('Invalid protocol version range.');
   return [start, end] as const;

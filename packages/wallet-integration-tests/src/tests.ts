@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import * as w from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import * as process from 'process';

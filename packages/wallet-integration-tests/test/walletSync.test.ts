@@ -35,7 +35,7 @@ describe('Wallet Sync', () => {
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder.V1Builder().withSyncDefaults())
       .withConfiguration(configuration)
       .build();
-    const [, syncedState]: ProtocolState<V1Builder.V1State> = await rx.lastValueFrom(
+    const [, syncedState]: ProtocolState.ProtocolState<V1Builder.V1State> = await rx.lastValueFrom(
       wallet.state.pipe(
         rx.takeWhile(() => !wallet.syncComplete)
       ),

@@ -1,5 +1,6 @@
 export default {
   testEnvironment: 'node',
+  maxWorkers: 1, // Due to beloved usage of JSON.stringify and its issues with BigInt
   transform: {
     '^.+\\.tsx?$': [
       'ts-jest',

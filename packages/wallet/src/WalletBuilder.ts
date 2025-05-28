@@ -1,4 +1,4 @@
-import { Effect, Types } from 'effect';
+import { Effect, Exit, Scope, Types } from 'effect';
 import {
   Variant,
   Builder,
@@ -12,6 +12,7 @@ import {
   AnyVersionedVariantBuilderArray,
 } from './abstractions/index';
 import { Runtime, Observable } from './effect/index';
+import * as rx from 'rxjs';
 
 /**
  * Builds a wallet-like implementation from a collection of wallet-like variants, each specific
@@ -57,7 +58,8 @@ export class WalletBuilder<
    * @returns A new {@link WalletBuilder} that uses the variant that will be built from `variantBuilder`.
    */
   withVariant<
-    TVariantBuilder extends VariantBuilder<unknown, TPreviousState, TVariantConfiguration>,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    TVariantBuilder extends VariantBuilder<any, TPreviousState, TVariantConfiguration>,
     TVariantConfiguration extends Variant.AnyVariantConfiguration = AnyVariantBuilder.Configuration<TVariantBuilder>,
     TPreviousState = Variant.AnyVariant.State<Variant.AnyVariantArray.Latest<TVariants>>,
   >(
@@ -119,29 +121,36 @@ export class WalletBuilder<
    */
   build(state: WalletState.WalletState): AnyVariantWalletLike<TVariants>;
   build(seedOrState?: WalletSeed.WalletSeed | WalletState.WalletState): AnyVariantWalletLike<TVariants> {
-    if (seedOrState) {
-      throw new Error('NotImplemented: restoring from seed or state is not currently supported.');
-    }
-    // TODO: Do something with the seed or provided state.
-    const variants = this.#buildState.variants.map(
-      ([sinceVersion, variantBuilder]) => [sinceVersion, variantBuilder.build(this.#buildState.configuration)] as const,
-    );
+    return Effect.gen(this, function* () {
+      if (seedOrState) {
+        throw new Error('NotImplemented: restoring from seed or state is not currently supported.');
+      }
+      // TODO: Do something with the seed or provided state.
+      const variants = this.#buildState.variants.map(
+        ([sinceVersion, variantBuilder]) =>
+          [sinceVersion, variantBuilder.build(this.#buildState.configuration)] as const,
+      );
 
-    const runtime = Runtime.make().pipe(
-      // TODO: Replace `undefined` state with state that may be received from caller.
-      Runtime.withVariants(variants, undefined),
-    );
+      const scope = yield* Scope.make();
+      const runtime = yield* Runtime.make(variants, null).pipe(Effect.provideService(Scope.Scope, scope));
 
-    return {
-      state: Observable.fromStream(Runtime.asStream<Variant.AnyVariantArray.States<TVariants>>(runtime)),
-      get syncComplete() {
-        const [sourceGap, applyGap] = Effect.runSync(Runtime.getProgress(runtime));
-        return sourceGap === 0n && applyGap === 0n;
-      },
-      balanceTransaction(_: unknown) {
-        throw new Error('NotImplemented');
-      },
-    } as unknown as AnyVariantWalletLike<TVariants>;
+      return {
+        state: Observable.fromStream(runtime.stateChanges).pipe(
+          rx.finalize(() => {
+            //It's actually weird that rx.js does not expect finalizers to be async
+            void Scope.close(scope, Exit.void).pipe(Effect.runPromise);
+          }),
+          rx.shareReplay({ refCount: true, bufferSize: 1 }),
+        ),
+        get syncComplete() {
+          const { sourceGap, applyGap } = Effect.runSync(runtime.progress);
+          return sourceGap === 0n && applyGap === 0n;
+        },
+        balanceTransaction(_: unknown) {
+          throw new Error('NotImplemented');
+        },
+      } as unknown as AnyVariantWalletLike<TVariants>;
+    }).pipe(Effect.runSync);
   }
 }
 

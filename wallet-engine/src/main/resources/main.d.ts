@@ -133,6 +133,7 @@ export declare class ProgressUpdate {
   highestRelevantWalletIndex: ScalaOption<Offset>;
   highestIndex: ScalaOption<Offset>;
   highestRelevantIndex: ScalaOption<Offset>;
+  isComplete: boolean;
 }
 export declare class ProtocolVersion {
   readonly version: bigint;

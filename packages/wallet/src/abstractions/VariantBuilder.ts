@@ -55,5 +55,6 @@ export declare namespace AnyVariantBuilder {
   /**
    * The type of configuration that the given variant builder can be configured with.
    */
-  type Configuration<T> = T extends VariantBuilder<unknown, unknown, infer C> ? C : never;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  type Configuration<T> = T extends VariantBuilder<any, unknown, infer C> ? C : never;
 }

@@ -69,7 +69,8 @@
         "**/src/**/*.scala",
         "project/**/*.scala",
         "project/build.properties",
-        "project/*.sbt"
+        "project/*.sbt",
+        "**/src/**/resources/**.d.ts"
       ],
       "outputs": [
         "wallet-engine/dist/**"

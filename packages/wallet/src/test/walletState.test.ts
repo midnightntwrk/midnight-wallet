@@ -1,8 +1,9 @@
-import { jest } from '@jest/globals';
+import { jest, describe, expect } from '@jest/globals';
 import { WalletBuilderTs } from '../index';
 import { ProtocolVersion } from '../abstractions/index';
 import { NumericRangeBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
+import * as rx from 'rxjs';
 
 describe('Wallet', () => {
   describe('state', () => {
@@ -19,7 +20,7 @@ describe('Wallet', () => {
       expect(wallet).toBeDefined();
 
       const errorHandler = jest.fn();
-      const receivedStates = await toProtocolStateArray(wallet.state, errorHandler);
+      const receivedStates = await toProtocolStateArray(wallet.state.pipe(rx.take(3)), errorHandler);
 
       expect(receivedStates).toEqual([
         [ProtocolVersion.MinSupportedVersion, 0],
