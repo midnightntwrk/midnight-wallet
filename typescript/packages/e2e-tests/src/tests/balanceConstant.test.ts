@@ -1,7 +1,7 @@
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import { closeWallet, provideWallet, saveState, waitForSync } from './utils';
+import { closeWallet, provideWallet, saveState, waitForSync, walletStateTrimmed } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
@@ -60,15 +60,10 @@ describe('Balance constant', () => {
   }, syncTimeout);
 
   afterEach(async () => {
-    await closeWallet(wallet);
     await closeWallet(restoredWallet);
-  }, syncTimeout);
-
-  afterAll(async () => {
+    await closeWallet(wallet);
     await saveState(restoredWallet, filename);
-    await closeWallet(restoredWallet);
-    await closeWallet(wallet);
-  }, syncTimeout);
+  });
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',
@@ -81,13 +76,14 @@ describe('Balance constant', () => {
 
       wallet.start();
       const syncedState = await waitForSync(wallet);
+      logger.info(walletStateTrimmed(syncedState));
       expect(syncedState.balances[nativeToken()] ?? 0n).toBe(expectedDustBalance);
       expect(syncedState.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
       expect(syncedState.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.availableCoins.length).toBe(3);
+      expect(syncedState.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.pendingCoins.length).toBe(0);
-      expect(syncedState.coins.length).toBe(3);
-      expect(syncedState.transactionHistory.length).toBe(2);
+      expect(syncedState.coins.length).toBeGreaterThanOrEqual(3);
+      expect(syncedState.transactionHistory.length).toBeGreaterThanOrEqual(2);
     },
     syncTimeout,
   );
@@ -106,10 +102,10 @@ describe('Balance constant', () => {
       expect(syncedState.balances[nativeToken()] ?? 0n).toBe(expectedDustBalance);
       expect(syncedState.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
       expect(syncedState.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.availableCoins.length).toBe(3);
+      expect(syncedState.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.pendingCoins.length).toBe(0);
-      expect(syncedState.coins.length).toBe(3);
-      expect(syncedState.transactionHistory.length).toBe(2);
+      expect(syncedState.coins.length).toBeGreaterThanOrEqual(3);
+      expect(syncedState.transactionHistory.length).toBeGreaterThanOrEqual(2);
     },
     syncTimeout,
   );

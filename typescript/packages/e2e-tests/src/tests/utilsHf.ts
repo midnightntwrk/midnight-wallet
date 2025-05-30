@@ -10,7 +10,7 @@ import { Resource } from '@midnight-ntwrk/wallet_pre_hf';
 import { TransactionHistoryEntry, WalletState, type Wallet } from '@midnight-ntwrk/wallet-api_hf';
 import { Readable } from 'node:stream';
 import { logger } from './logger';
-import { filter, firstValueFrom, tap } from 'rxjs';
+import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { nativeToken } from '@midnight-ntwrk/zswap_v2';
 
 export function verifyThatLogIsPresent(
@@ -94,9 +94,40 @@ export const waitForIndex = (wallet: Wallet, index: number) =>
     ),
   );
 
-export const waitForSync = (wallet: Wallet) => OriginalFunctions.waitForSync(wallet as any);
+export const waitForSync = (wallet: Wallet) =>
+  firstValueFrom(
+    wallet.state().pipe(
+      throttleTime(5_000),
+      tap((state) => {
+        const scanned = state.syncProgress?.synced ?? 0n;
+        const total = state.syncProgress?.total.toString() ?? 'unknown number';
+        const txs = state.transactionHistory.length;
+        logger.info(`Wallet scanned ${scanned} indices out of ${total}, transactions=${txs}`);
+      }),
+      filter((state) => {
+        // Let's allow progress only if wallet is synced fully
+        const synced = state.syncProgress?.synced ?? 0n;
+        const total = state.syncProgress?.total ?? 50n;
+        return state.syncProgress !== undefined && total === synced;
+      }),
+    ),
+  );
 
-export const waitForTxInHistory = (txId: string, wallet: Wallet) =>
-  OriginalFunctions.waitForTxInHistory(txId, wallet as any);
+export const waitForTxInHistory = async (txId: string, wallet: Wallet) =>
+  firstValueFrom(
+    wallet.state().pipe(
+      tap({
+        next: (state) => {
+          const tx = state.transactionHistory.some((tx) => tx.identifiers.includes(txId));
+          if (tx) {
+            logger.info(`Transaction ${txId} found in history.`);
+          } else {
+            logger.info(`Transaction ${txId} not found yet.`);
+          }
+        },
+      }),
+      filter((state) => state.transactionHistory.some((tx) => tx.identifiers.includes(txId))),
+    ),
+  );
 
 export const walletStateTrimmed = (state: WalletState) => OriginalFunctions.walletStateTrimmed(state as any) as any;

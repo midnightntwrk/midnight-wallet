@@ -236,19 +236,22 @@ export const waitForFinalizedBalance = (wallet: Wallet) =>
     ),
   );
 
-export const waitForTxInHistory = async (txId: string, wallet: Wallet) => {
-  let foundTxId = false;
-  logger.info('Waiting for a txId...');
-  while (!foundTxId) {
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    const state = await waitForSync(wallet);
-    foundTxId = state.transactionHistory.flatMap((tx) => tx.identifiers).some((id) => id === txId);
-    if (foundTxId) {
-      console.timeEnd('txProcessing');
-      logger.info(`TxId ${txId} found`);
-    }
-  }
-};
+export const waitForTxInHistory = async (txId: string, wallet: Wallet) =>
+  firstValueFrom(
+    wallet.state().pipe(
+      tap({
+        next: (state) => {
+          const tx = state.transactionHistory.some((tx) => tx.identifiers.includes(txId));
+          if (tx) {
+            logger.info(`Transaction ${txId} found in history.`);
+          } else {
+            logger.info(`Transaction ${txId} not found yet.`);
+          }
+        },
+      }),
+      filter((state) => state.transactionHistory.some((tx) => tx.identifiers.includes(txId))),
+    ),
+  );
 
 export const walletStateTrimmed = (state: WalletState) => {
   const { transactionHistory, coins, availableCoins, ...rest } = state; // eslint-disable-line @typescript-eslint/no-unused-vars

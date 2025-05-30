@@ -86,7 +86,7 @@ export class TestContainersFixture {
   ) {}
 
   public async down() {
-    await this.composeEnvironment.down();
+    await this.composeEnvironment.down({ timeout: 10_000, removeVolumes: true });
   }
 
   public static readonly PROOF_SERVER_PORT = 6300;

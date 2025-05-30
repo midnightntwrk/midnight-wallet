@@ -39,7 +39,7 @@ describe('Transaction balancing examples', () => {
   const output50 = 50_000_000n;
   const output30 = 30_000_000n;
 
-  beforeEach(async () => {
+  beforeAll(async () => {
     await allure.step('Distribute coins to sender', async function () {
       fixture = getFixture();
 
@@ -141,10 +141,10 @@ describe('Transaction balancing examples', () => {
     });
   }, timeout);
 
-  afterEach(async () => {
-    await closeWallet(walletFunded);
-    await closeWallet(sender);
-  });
+  afterAll(async () => {
+    await walletFunded.close();
+    await sender.close();
+  }, timeout);
 
   test(
     'tDUST transfer up to 2nd lowest native coin',
