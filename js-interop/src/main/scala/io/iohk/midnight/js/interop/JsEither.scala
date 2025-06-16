@@ -12,4 +12,8 @@ object JsEither {
       onRight: js.Function1[B, R],
   ): R =
     either.fold(onLeft, onRight)
+
+  def right[B](value: B): Either[Any, B] = Right(value)
+
+  def left[A](value: A): Either[A, Any] = Left(value)
 }

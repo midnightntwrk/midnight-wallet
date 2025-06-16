@@ -84,7 +84,7 @@ class WalletTransactionServiceWithProvingStub(
       EncPublicKey,
     ] {
   override def prepareTransferRecipe(
-      outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]],
+      outputs: Seq[TokenTransfer[TokenType, CoinPublicKey, EncPublicKey]],
   ): IO[TransactionToProve[UnprovenTransaction]] =
     IO.pure(transferRecipe)
 

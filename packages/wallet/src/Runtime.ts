@@ -1,3 +1,4 @@
+import { Effect, Either, Exit, Option, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
 import {
   ProtocolState,
   ProtocolVersion,
@@ -5,60 +6,42 @@ import {
   Variant,
   VersionChangeType,
   WalletRuntimeError,
-} from '../abstractions/index';
-import { Context, Effect, Either, Option, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
+} from './abstractions/index';
 
 /**
- * Manages an array of variants, keeping track of the current variant as stream updates occur.
+ * The {@link Runtime} service type.
  */
-export class Runtime extends Context.Tag('@midnight-ntwrk/wallet#Runtime')<Runtime, Runtime.Service>() {}
+//TODO: It needs take state type from variants it is built from
+export interface Runtime {
+  readonly stateChanges: Stream.Stream<unknown, WalletRuntimeError>;
 
-export declare namespace Runtime {
-  /**
-   * The {@link Runtime} service type.
-   */
-  //TODO: It needs take state type from variants it is built from
-  interface Service {
-    readonly stateChanges: Stream.Stream<unknown, WalletRuntimeError>;
+  readonly progress: Effect.Effect<Progress>;
 
-    readonly progress: Effect.Effect<Runtime.Progress>;
-
-    readonly currentVariant: Effect.Effect<RunningVariant>;
-  }
-
-  type RunningVariant = {
-    variant: Variant.AnyVersionedVariant;
-    runningVariant: Variant.AnyRunningVariant;
-    initialState: unknown;
-    variantScope: Scope.CloseableScope;
-    currentStateRef: SynchronizedRef.SynchronizedRef<unknown>;
-    restVariants: Variant.AnyVersionedVariantArray;
-    initProtocolVersion: ProtocolVersion.ProtocolVersion;
-    validVersionRange: ProtocolVersion.ProtocolVersion.Range;
-    nextProtocolVersion: ProtocolVersion.ProtocolVersion | null;
-  };
-
-  /**
-   * A tuple type that represents a reference to a 'current' variant, and the Midnight protocol version that
-   * follows it.
-   *
-   * @remarks
-   * Given a `Ref` of `[100, V]`, `V` would represent the _current_ variant, and 100 would be the protocol version
-   * that is the next highest after that registered for `V`.
-   */
-  type Ref = readonly [nextProtocolVersion: ProtocolVersion.ProtocolVersion, Variant.AnyVersionedVariant];
-
-  /**
-   * A type that represents the reported progress of a variant expressed in terms of gaps to reaching synced
-   * progress in application site and data source site
-   */
-  type Progress = { readonly sourceGap: bigint; readonly applyGap: bigint };
+  readonly currentVariant: Effect.Effect<RunningVariant>;
 }
+
+export type RunningVariant = {
+  variant: Variant.AnyVersionedVariant;
+  runningVariant: Variant.AnyRunningVariant;
+  initialState: unknown;
+  variantScope: Scope.CloseableScope;
+  currentStateRef: SynchronizedRef.SynchronizedRef<unknown>;
+  restVariants: Variant.AnyVersionedVariantArray;
+  initProtocolVersion: ProtocolVersion.ProtocolVersion;
+  validVersionRange: ProtocolVersion.ProtocolVersion.Range;
+  nextProtocolVersion: ProtocolVersion.ProtocolVersion | null;
+};
+
+/**
+ * A type that represents the reported progress of a variant expressed in terms of gaps to reaching synced
+ * progress in application site and data source site
+ */
+type Progress = { readonly sourceGap: bigint; readonly applyGap: bigint };
 
 export const make = (
   variants: Variant.AnyVersionedVariantArray,
   state: unknown,
-): Effect.Effect<Runtime.Service, WalletRuntimeError, Scope.Scope> => {
+): Effect.Effect<Runtime, WalletRuntimeError, Scope.Scope> => {
   //Rewritten from generators to better track type issues reported
   return Effect.Do.pipe(
     Effect.bind('initiatedFirstVariant', () => initHeadVariant(variants, state)),
@@ -71,9 +54,17 @@ export const make = (
         ),
       ),
     ),
-    Effect.bind('progressRef', () => SynchronizedRef.make<Runtime.Progress>({ applyGap: 0n, sourceGap: 0n })),
+    Effect.bind('progressRef', () => SynchronizedRef.make<Progress>({ applyGap: 0n, sourceGap: 0n })),
     Effect.bind('currentVariantRef', ({ initiatedFirstVariant }) =>
-      SynchronizedRef.make<Runtime.RunningVariant>(initiatedFirstVariant),
+      Effect.acquireRelease(SynchronizedRef.make<RunningVariant>(initiatedFirstVariant), (ref, exit) =>
+        Effect.gen(function* () {
+          // This is needed to properly close variant scope when whole runtime closes
+          // Otherwise variant would be running in the background
+          // TODO: For somewhat unclear reason the existing test case does not cover this scenario
+          const runningVariant = yield* SynchronizedRef.get(ref);
+          yield* Scope.close(runningVariant.variantScope, exit);
+        }),
+      ),
     ),
     Effect.bind('runningStream', ({ initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef }) => {
       return runVariantStream(initiatedFirstVariant, currentStateRef, progressRef, currentVariantRef).pipe(
@@ -105,7 +96,7 @@ const initHeadVariant = (
   variants: Variant.AnyVersionedVariantArray,
   previousState: unknown,
   initProtocolVersion?: ProtocolVersion.ProtocolVersion,
-): Effect.Effect<Runtime.RunningVariant, WalletRuntimeError> => {
+): Effect.Effect<RunningVariant, WalletRuntimeError> => {
   return Effect.gen(function* () {
     const [headVersionedVariant, maybeNextVersionedVariant, ...rest] = variants;
     if (!headVersionedVariant) {
@@ -141,10 +132,10 @@ const initHeadVariant = (
 };
 
 const runVariantStream = (
-  initiatedVariant: Runtime.RunningVariant,
+  initiatedVariant: RunningVariant,
   stateRef: SubscriptionRef.SubscriptionRef<Either.Either<ProtocolState.ProtocolState<unknown>, WalletRuntimeError>>,
-  progressRef: SynchronizedRef.SynchronizedRef<Runtime.Progress>,
-  currentVariantRef: SynchronizedRef.SynchronizedRef<Runtime.RunningVariant>,
+  progressRef: SynchronizedRef.SynchronizedRef<Progress>,
+  currentVariantRef: SynchronizedRef.SynchronizedRef<RunningVariant>,
 ): Effect.Effect<void, WalletRuntimeError> => {
   return initiatedVariant.runningVariant.state.pipe(
     Stream.scanEffect(
@@ -185,11 +176,10 @@ const runVariantStream = (
                 ...accumulator,
                 protocolVersion: newProtocolVersion,
                 shouldInitChange: true,
-                followEffect: initHeadVariant(
-                  initiatedVariant.restVariants,
-                  accumulator.lastState,
-                  newProtocolVersion,
-                ).pipe(
+                followEffect: Scope.close(initiatedVariant.variantScope, Exit.void).pipe(
+                  Effect.andThen(
+                    initHeadVariant(initiatedVariant.restVariants, accumulator.lastState, newProtocolVersion),
+                  ),
                   Effect.flatMap((newInitiatedVariant) =>
                     SynchronizedRef.setAndGet(currentVariantRef, newInitiatedVariant),
                   ),

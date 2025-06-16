@@ -66,6 +66,7 @@
       "inputs": [
         "build.sbt",
         "**/package.json",
+        "**/src/**/resources/**",
         "**/src/**/*.scala",
         "project/**/*.scala",
         "project/build.properties",

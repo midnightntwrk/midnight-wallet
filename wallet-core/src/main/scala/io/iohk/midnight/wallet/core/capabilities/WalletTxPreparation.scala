@@ -12,6 +12,6 @@ trait WalletTxPreparation[
     EncryptionPublicKey,
 ] {
   def prepareTransferRecipe(
-      outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
+      outputs: Seq[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
   ): Either[WalletError, (TWallet, ProvingRecipe[UnprovenTransaction, Transaction])]
 }

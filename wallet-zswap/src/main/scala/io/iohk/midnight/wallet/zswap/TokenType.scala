@@ -12,10 +12,12 @@ trait TokenType[T, CostModel] {
   def native: T
   def inputFeeOverhead: BigInt
   def outputFeeOverhead: BigInt
+  def fromJS(input: String): T
 }
 
 given TokenType[v1.TokenType, v1.TransactionCostModel] with {
   override def create(name: v1.CoinPublicKey): v1.TokenType = name
+  override def fromJS(input: String): v1.TokenType = input
   override lazy val dummyCostModel: TransactionCostModel =
     v1.TransactionCostModel.dummyTransactionCostModel()
   override lazy val native: v1.TokenType =

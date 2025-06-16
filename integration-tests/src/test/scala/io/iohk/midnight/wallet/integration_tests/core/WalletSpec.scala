@@ -19,6 +19,7 @@ import io.iohk.midnight.wallet.core.domain.{
   ViewingUpdate,
   IndexerUpdate as CoreIndexerUpdate,
 }
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.MapOps.*
 import io.iohk.midnight.wallet.integration_tests.core.capabilities.*

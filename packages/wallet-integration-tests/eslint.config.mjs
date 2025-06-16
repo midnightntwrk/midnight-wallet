@@ -4,6 +4,8 @@ export default [
   {
     ignores: [
       '*.mjs',
+      'dist/',
+      '.rollup.cache/'
     ]
   },
   ...rootConfig.map(config => ({
@@ -13,4 +15,15 @@ export default [
       'test/**/*.ts'
     ]
   })),
+  {
+    rules: {
+      '@typescript-eslint/no-namespace': [
+        'error',
+        // Ensure that we allow namespace declarations to support Effect style typing.
+        {
+          'allowDeclarations': true
+        }
+      ]
+    }
+  }
 ];

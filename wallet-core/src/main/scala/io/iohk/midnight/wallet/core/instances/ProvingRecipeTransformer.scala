@@ -1,4 +1,4 @@
-package io.iohk.midnight.wallet.engine.js
+package io.iohk.midnight.wallet.core.instances
 
 import cats.syntax.all.*
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
@@ -12,11 +12,14 @@ import io.iohk.midnight.midnightNtwrkWalletApi.mod.{
   NOTHING_TO_PROVE,
   TRANSACTION_TO_PROVE,
 }
+import io.iohk.midnight.midnightNtwrkZswap.mod.{Transaction, UnprovenTransaction}
 import io.iohk.midnight.wallet.core.domain
 import io.iohk.midnight.wallet.core.domain.ProvingRecipe
-import io.iohk.midnight.midnightNtwrkZswap.mod.{Transaction, UnprovenTransaction}
+
 import scala.scalajs.js
 
+// It's not the best place for it (the previous of wallet-engine/js was much better),
+// But it's needed here because of capabilities need to expose a TS-compatible API
 object ProvingRecipeTransformer {
 
   @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf"))
@@ -58,4 +61,17 @@ object ProvingRecipeTransformer {
       recipe: domain.TransactionToProve[UnprovenTransaction],
   ): TransactionToProve =
     TransactionToProve(recipe.transaction, TRANSACTION_TO_PROVE)
+
+  def toApiRecipe(
+      recipe: DefaultBalancingCapability.Recipe[UnprovenTransaction, Transaction],
+  ): ApiProvingRecipe = {
+    recipe match {
+      case recipe: domain.BalanceTransactionToProve[UnprovenTransaction, Transaction] =>
+        toApiBalanceTransactionToProve(recipe)
+      case recipe: domain.NothingToProve[UnprovenTransaction, Transaction] =>
+        toApiNothingToProve(recipe)
+      case recipe: domain.TransactionToProve[UnprovenTransaction] =>
+        toApiTransactionToProve(recipe)
+    }
+  }
 }

@@ -44,7 +44,7 @@ class TransactionBalancer[
   }
 
   def balanceTx(
-      coins: List[QualifiedCoinInfo],
+      coins: Seq[QualifiedCoinInfo],
       transaction: Either[Transaction, UnprovenTransaction],
   ): Either[
     Throwable,

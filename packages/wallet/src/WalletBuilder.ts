@@ -135,6 +135,7 @@ export class WalletBuilder<
       const runtime = yield* Runtime.make(variants, null).pipe(Effect.provideService(Scope.Scope, scope));
 
       return {
+        runtime,
         state: Observable.fromStream(runtime.stateChanges).pipe(
           rx.finalize(() => {
             //It's actually weird that rx.js does not expect finalizers to be async
@@ -185,7 +186,7 @@ declare namespace WalletBuilderMethods {
  */
 export type AnyVariantWalletLike<TVariants extends Variant.AnyVariantArray> = TVariants extends []
   ? never
-  : WalletLike<unknown, Variant.AnyVariantArray.States<TVariants>>;
+  : WalletLike<Variant.AnyVariantArray.States<TVariants>>;
 
 /**
  * Ensures that a configuration type is not `never` or an empty object.

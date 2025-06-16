@@ -1,5 +1,5 @@
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Wallet } from '@midnight-ntwrk/wallet-api';
+import { ApplyStage, Wallet, ProvingRecipe } from '@midnight-ntwrk/wallet-api';
 import { Observable } from 'rxjs';
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error';
@@ -8,6 +8,10 @@ export interface Resource {
   start(): void;
 
   close(): Promise<void>;
+}
+
+export declare class WalletError {
+  readonly message: string;
 }
 
 export declare class WalletBuilder {
@@ -90,6 +94,7 @@ export declare class WalletBuilder {
 export declare class NetworkId {
   static fromJs(id: zswap.NetworkId): NetworkId;
 }
+
 export declare class TracerCarrier {
   static createLoggingTracer(logLevel: LogLevel): TracerCarrier;
 }
@@ -98,15 +103,21 @@ export interface Allocated<T> {
   value: T;
   deallocate: () => Promise<void>;
 }
+
 export declare class JsResource<T> {
   allocate(): Promise<Allocated<T>>;
 }
 
 export declare class ScalaEither<A, B> {}
+
 export declare class JsEither {
   static fold<A, B, R>(either: ScalaEither<A, B>, onLeft: (a: A) => R, onRight: (b: B) => R): R;
+  static right<B>(value: B): ScalaEither<never, B>;
+  static left<A>(value: A): ScalaEither<A, never>;
 }
+
 export declare class ScalaOption<R> {}
+
 export declare class JsOption {
   static asResult<R>(option: ScalaOption<R>): R | undefined;
 }
@@ -117,17 +128,22 @@ export declare class IndexerClient {
 
 /* Zswap typeclasses */
 export declare interface Transaction<Tx> {}
+
 export declare const V1Transaction: Transaction<zswap.Transaction>;
 
 export declare interface EvolveState<State, SecretKeys> {}
+
 export declare const V1EvolveState: EvolveState<zswap.LocalState, zswap.SecretKeys>;
 
 export declare interface EncryptionSecretKey<ESK> {}
+
 export declare const V1EncryptionSecretKey: EncryptionSecretKey<zswap.EncryptionSecretKey>;
 
 /* blockchain / domain types */
 export declare class IndexerUpdateEvent {}
+
 export declare class IndexerUpdate {}
+
 export declare class ProgressUpdate {
   appliedIndex: ScalaOption<Offset>;
   highestRelevantWalletIndex: ScalaOption<Offset>;
@@ -135,11 +151,18 @@ export declare class ProgressUpdate {
   highestRelevantIndex: ScalaOption<Offset>;
   isComplete: boolean;
 }
+
 export declare class ProtocolVersion {
   readonly version: bigint;
 }
+
 export declare class Offset {
   readonly value: bigint;
+}
+
+export declare class AppliedTransaction<Tx> {
+  readonly tx: Tx;
+  readonly applyState: ApplyStage;
 }
 
 /* Wallet and capabilities */
@@ -155,7 +178,16 @@ export declare class CoreWallet<State, SecretKeys> {
   readonly isConnected: boolean;
   readonly progress: ProgressUpdate;
   readonly protocolVersion: ProtocolVersion;
+  readonly networkId: NetworkId;
+
+  applyTransaction(tx: AppliedTransaction<zswap.Transaction>): CoreWallet<State, SecretKeys>;
+
+  /**
+   * @deprecated Temporary, only for internal use
+   */
+  applyState(state: State): CoreWallet<State, SecretKeys>;
 }
+
 export declare class DefaultTxHistoryCapability {}
 
 export declare class DefaultSyncCapability<S, K> {
@@ -166,6 +198,45 @@ export declare class DefaultSyncCapability<S, K> {
   );
 
   applyUpdate<S, K>(wallet: CoreWallet<S, K>, update: IndexerUpdate): ScalaEither<Error, CoreWallet<S, K>>;
+}
+
+export declare class DefaultCoinsCapability<TWallet> {
+  static createV1<TWallet>(
+    getCoins: (wallet: TWallet) => Array<zswap.QualifiedCoinInfo>,
+    getNullifiers: (wallet: TWallet) => Array<zswap.Nullifier>,
+    getAvailableCoins: (wallet: TWallet) => Array<zswap.QualifiedCoinInfo>,
+    getPendingCoins: (wallet: TWallet) => Array<zswap.CoinInfo>,
+  ): DefaultCoinsCapability<TWallet>;
+}
+
+export declare class DefaultBalancingCapability<TWallet> {
+  static createV1<TWallet>(
+    coins: DefaultCoinsCapability<TWallet>,
+    applyState: (wallet: TWallet, state: zswap.LocalState) => TWallet,
+    getSecretKeys: (wallet: TWallet) => zswap.SecretKeys,
+    getState: (wallet: TWallet) => zswap.LocalState,
+  ): DefaultBalancingCapability<TWallet>;
+
+  balanceTransaction(
+    wallet: TWallet,
+    tx: ScalaEither<zswap.Transaction, zswap.UnprovenTransaction>,
+    coins: Array<zswap.CoinInfo>,
+  ): ScalaEither<WalletError, { wallet: TWallet; result: ProvingRecipe }>;
+}
+
+export declare class DefaultTransferCapability<TWallet> {
+  static createV1<TWallet>(
+    applyTransaction: (wallet: TWallet, tx: AppliedTransaction<zswap.Transaction>) => TWallet,
+    getState: (wallet: TWallet) => zswap.LocalState,
+    applyState: (wallet: TWallet, state: zswap.LocalState) => TWallet,
+    getNetworkId: (wallet: TWallet) => NetworkId,
+  ): DefaultTransferCapability<TWallet>;
+
+  prepareTransferRecipe(wallet: TWallet, outputs: TokenTransfer[]): ScalaEither<WalletError, zswap.UnprovenTransaction>;
+
+  applyFailedTransaction(wallet: TWallet, tx: zswap.Transaction): ScalaEither<WalletError, TWallet>;
+
+  applyFailedUnprovenTransaction(wallet: TWallet, tx: zswap.UnprovenTransaction): ScalaEither<WalletError, TWallet>;
 }
 
 export declare class V1Combination {

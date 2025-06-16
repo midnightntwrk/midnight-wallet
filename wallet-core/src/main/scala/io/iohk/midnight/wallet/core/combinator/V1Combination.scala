@@ -12,8 +12,8 @@ import io.iohk.midnight.tracer.logging.StructuredLog
 import io.iohk.midnight.wallet.blockchain.data.{IndexerEvent, ProtocolVersion, Transaction}
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.capabilities.{WalletTxBalancing, WalletTxHistory}
-import io.iohk.midnight.wallet.core.combinator.V1Combination.walletInstances.given
 import io.iohk.midnight.wallet.core.domain.*
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.wallet.core.services.{ProvingService, SyncService, TxSubmissionService}
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.zswap
@@ -67,8 +67,10 @@ final class V1Combination(
 
   private def updateState(
       update: IndexerUpdate[v1.MerkleTreeCollapsedUpdate, v1.Transaction],
-  ): IO[Unit] =
+  ): IO[Unit] = {
+    import V1Combination.walletInstances.given
     stateContainer.updateStateEither(_.apply(update)).rethrow.void
+  }
 
   private def isSupported(event: IndexerEvent): Boolean =
     event match {

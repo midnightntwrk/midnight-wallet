@@ -17,7 +17,10 @@ export const fromStream = <A, E = never>(stream: Stream.Stream<A, E>): Observabl
           while (true) {
             const shouldBreak = yield* Effect.match(pull, {
               onSuccess(values) {
-                Chunk.toReadonlyArray(values).map(subscriber.next.bind(subscriber));
+                Chunk.forEach(values, (element) => {
+                  subscriber.next(element);
+                });
+                return false;
               },
               onFailure(error) {
                 return Option.match(error, {
@@ -25,7 +28,10 @@ export const fromStream = <A, E = never>(stream: Stream.Stream<A, E>): Observabl
                     subscriber.complete();
                     return true; // Stream has completed, signal the break.
                   },
-                  onSome: subscriber.error.bind(subscriber),
+                  onSome: (err) => {
+                    subscriber.error(err);
+                    return true;
+                  },
                 });
               },
             });

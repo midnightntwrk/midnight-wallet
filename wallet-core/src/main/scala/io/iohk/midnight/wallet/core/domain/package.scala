@@ -22,17 +22,20 @@ package object domain {
       extends BalanceTransactionRecipe[UnprovenTransaction, Nothing] {
     override def unprovenTransaction: Option[UnprovenTransaction] = Some(transaction)
   }
+
   final case class BalanceTransactionToProve[UnprovenTransaction, Transaction](
       toProve: UnprovenTransaction,
       toBalance: Transaction,
   ) extends BalanceTransactionRecipe[UnprovenTransaction, Transaction] {
     override def unprovenTransaction: Option[UnprovenTransaction] = Some(toProve)
   }
+
   final case class NothingToProve[UnprovenTransaction, Transaction](transaction: Transaction)
       extends BalanceTransactionRecipe[UnprovenTransaction, Transaction] {
     override def unprovenTransaction: Option[UnprovenTransaction] = None
   }
 
+  @JSExportAll
   final case class TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey](
       amount: BigInt,
       tokenType: TokenType,
@@ -41,10 +44,12 @@ package object domain {
 
   final case class TransactionIdentifier(txId: String) extends AnyVal
 
+  @JSExportAll
   enum ApplyStage {
     case FailEntirely, FailFallible, SucceedEntirely
   }
 
+  @JSExportAll
   final case class AppliedTransaction[Transaction](tx: Transaction, applyStage: ApplyStage)
 
   @JSExportAll sealed trait IndexerUpdate[+MerkleTreeCollapsedUpdate, +Transaction]

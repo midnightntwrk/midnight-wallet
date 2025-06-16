@@ -9,6 +9,6 @@
         "@midnight-ntwrk/zswap": "^4.0.0"
     },
     "devDependencies": {
-        "typescript": "^4.8.3"
+        "typescript": "^5.8.3"
     }
 }

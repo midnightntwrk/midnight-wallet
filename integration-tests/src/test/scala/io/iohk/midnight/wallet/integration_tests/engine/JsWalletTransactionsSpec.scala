@@ -14,6 +14,7 @@ import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
 import io.iohk.midnight.midnightNtwrkWalletApi.mod.{NOTHING_TO_PROVE, TRANSACTION_TO_PROVE}
 import io.iohk.midnight.wallet.core.Generators.{*, given}
 import io.iohk.midnight.wallet.core.capabilities.WalletTxHistory
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.wallet.core.combinator.{
   CombinationMigrations,
   VersionCombination,
@@ -30,8 +31,9 @@ import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.given
 import io.iohk.midnight.midnightNtwrkZswap.mod.*
+import io.iohk.midnight.wallet.core.instances.ProvingRecipeTransformer
 import io.iohk.midnight.wallet.core.parser.AddressParser
-import io.iohk.midnight.wallet.engine.js.{JsWallet, ProvingRecipeTransformer}
+import io.iohk.midnight.wallet.engine.js.JsWallet
 import org.scalacheck.effect.PropF.forAllF
 
 import scala.scalajs.js.JSConverters.*

@@ -15,6 +15,7 @@ import io.iohk.midnight.wallet.core.combinator.{
 import io.iohk.midnight.wallet.core.util.BetterOutputSuite
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.{core, zswap}
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.wallet.zswap.{Transaction, given}
 import munit.{CatsEffectSuite, ScalaCheckEffectSuite}
 import org.scalacheck.Gen

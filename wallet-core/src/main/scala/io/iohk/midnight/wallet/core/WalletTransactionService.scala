@@ -17,7 +17,7 @@ trait WalletTransactionService[
     EncryptionPublicKey,
 ] {
   def prepareTransferRecipe(
-      outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
+      outputs: Seq[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
   ): IO[TransactionToProve[UnprovenTransaction]]
 
   def proveTransaction(
@@ -87,7 +87,7 @@ class WalletTransactionServiceFactory[
       walletTxBalancing: WalletTxBalancing[TWallet, Transaction, UnprovenTransaction, CoinInfo],
   ): Service = new Service {
     override def prepareTransferRecipe(
-        outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
+        outputs: Seq[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
     ): IO[TransactionToProve[UnprovenTransaction]] = {
       val unprovenTransaction: Either[WalletError, UnprovenTransaction] =
         walletTxTransfer.prepareTransferRecipe(outputs)

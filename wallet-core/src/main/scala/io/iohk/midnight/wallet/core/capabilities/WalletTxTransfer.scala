@@ -12,7 +12,7 @@ trait WalletTxTransfer[
     EncryptionPublicKey,
 ] {
   def prepareTransferRecipe(
-      outputs: List[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
+      outputs: Seq[TokenTransfer[TokenType, CoinPublicKey, EncryptionPublicKey]],
   ): Either[WalletError, UnprovenTransaction]
 
   def applyFailedTransaction(wallet: TWallet, tx: Transaction): Either[WalletError, TWallet]

@@ -3,6 +3,8 @@ package io.iohk.midnight.wallet.core
 import cats.Show
 import cats.syntax.show.*
 
+import scala.scalajs.js.annotation.JSExportAll
+
 sealed trait ReadableMessage {
   def message: String
 }
@@ -11,15 +13,14 @@ sealed trait ThrowableError extends Exception {
   def toThrowable: Throwable
 }
 
-sealed trait WalletError extends ThrowableError
+@JSExportAll
+sealed trait WalletError extends ThrowableError, ReadableMessage {
+  def toString: String
+  override def message: String = this.toString
+}
 
 @SuppressWarnings(Array("org.wartremover.warts.ToString"))
 object WalletError {
-
-  @SuppressWarnings(Array("org.wartremover.warts.ImplicitConversion"))
-  implicit def toReadableMessage(error: WalletError): ReadableMessage = new ReadableMessage {
-    override def message: String = error.toString
-  }
   final case class NotSufficientFunds[TokenType: Show](tokenType: TokenType) extends WalletError {
     override def toString: String = s"Not sufficient funds to balance token: ${tokenType.show}"
 
@@ -47,5 +48,16 @@ object WalletError {
   final case class InvalidAddress(error: Throwable) extends WalletError {
     override def toString: String = s"InvalidAddressError: ${error.getMessage}"
     override def toThrowable: Throwable = error
+  }
+
+  final case class Composite(errors: Seq[WalletError]) extends WalletError {
+    override def toString: String =
+      s"Multiple errors occurred: ${errors.map(_.toString).mkString(", ")}"
+
+    override def toThrowable: Throwable = errors.headOption match {
+      case Some(err) => new Throwable("Multiple errors occurred", err)
+      case None      => new Throwable("Unknown error occurred")
+    }
+
   }
 }

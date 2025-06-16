@@ -17,6 +17,7 @@ import io.iohk.midnight.wallet.core.{
   WalletStateServiceFactory,
   Wallet as CoreWallet,
 }
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.js.interop.util.BigIntOps.*

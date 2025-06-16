@@ -1,30 +1,30 @@
 package io.iohk.midnight.wallet.engine.js
 
-import cats.effect.{Deferred, IO}
 import cats.effect.unsafe.implicits.global
+import cats.effect.{Deferred, IO}
 import cats.syntax.all.*
 import io.iohk.midnight.js.interop.TracerCarrier
 import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.js.interop.util.ObservableOps.*
-import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.{
-  ShieldedAddress,
-  ShieldedCoinPublicKey,
-  ShieldedEncryptionPublicKey,
-}
 import io.iohk.midnight.midnightNtwrkWalletApi.distTypesMod.{
   ApplyStage,
   BalanceTransactionToProve,
   NothingToProve,
+  SyncLag,
   SyncProgress,
   TransactionHistoryEntry,
   TransactionIdentifier,
   TransactionToProve,
   WalletState,
-  SyncLag,
   ProvingRecipe as ApiProvingRecipe,
   TokenTransfer as ApiTokenTransfer,
 }
 import io.iohk.midnight.midnightNtwrkWalletApi.distWalletMod as api
+import io.iohk.midnight.midnightNtwrkWalletSdkAddressFormat.mod.{
+  ShieldedAddress,
+  ShieldedCoinPublicKey,
+  ShieldedEncryptionPublicKey,
+}
 import io.iohk.midnight.midnightNtwrkZswap.mod
 import io.iohk.midnight.rxjs.mod.Observable_
 import io.iohk.midnight.tracer.logging.{ConsoleTracer, LogLevel}
@@ -32,14 +32,13 @@ import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.blockchain.data.Transaction.Offset
 import io.iohk.midnight.wallet.core.*
 import io.iohk.midnight.wallet.core.Config.InitialState
-import io.iohk.midnight.wallet.core.WalletError.InvalidAddress
 import io.iohk.midnight.wallet.core.combinator.VersionCombinator
-import io.iohk.midnight.wallet.core.domain.{ProvingRecipe, TokenTransfer}
+import io.iohk.midnight.wallet.core.instances.{DefaultTransferCapability, ProvingRecipeTransformer}
+import io.iohk.midnight.wallet.core.parser.AddressParser
+import io.iohk.midnight.wallet.engine.WalletBuilder
 import io.iohk.midnight.wallet.engine.config.{Config, RawConfig}
 import io.iohk.midnight.wallet.engine.tracing.JsWalletTracer
-import io.iohk.midnight.wallet.engine.WalletBuilder
-import io.iohk.midnight.wallet.core.parser.AddressParser
-import io.iohk.midnight.wallet.zswap.*
+import io.iohk.midnight.wallet.zswap.{*, given}
 import org.scalablytyped.runtime.StringDictionary
 
 import scala.scalajs.js
@@ -58,7 +57,7 @@ class JsWallet(
 )(using networkId: NetworkId)
     extends api.Wallet {
 
-  import Transaction.{given, *}
+  import Transaction.{*, given}
 
   override def submitTransaction(
       tx: mod.Transaction,
@@ -155,29 +154,16 @@ class JsWallet(
   override def transferTransaction(
       outputs: js.Array[ApiTokenTransfer],
   ): Promise[TransactionToProve] = {
-    (parseApiTokenTransfers(outputs) match {
-      case Left(invalidAddresses) =>
-        IO.raiseError(Exception(invalidAddresses.map(_.toString).mkString))
+    (DefaultTransferCapability
+      .parseApiTokenTransfers[mod.TokenType, mod.CoinPublicKey, mod.EncPublicKey](outputs) match {
+      case Left(error) =>
+        IO.raiseError(Exception(error.message))
       case Right(validTransfers) =>
         versionCombinator
           .transactionService(ProtocolVersion.V1)
           .flatMap(_.prepareTransferRecipe(validTransfers))
           .map(ProvingRecipeTransformer.toApiTransactionToProve)
     }).unsafeToPromise()
-  }
-
-  private def parseApiTokenTransfers(outputs: js.Array[ApiTokenTransfer]) = {
-    val (invalidAddresses, validTransfers) = outputs.toList
-      .map(tt =>
-        AddressParser
-          .decode[domain.Address[mod.CoinPublicKey, mod.EncPublicKey]](tt.receiverAddress)
-          .left
-          .map(InvalidAddress.apply)
-          .map { address => TokenTransfer(tt.amount.toScalaBigInt, tt.`type`, address) },
-      )
-      .partitionMap(identity)
-
-    Either.cond(invalidAddresses.isEmpty, validTransfers, invalidAddresses)
   }
 
   def serializeState(): Promise[String] =
@@ -316,7 +302,6 @@ object JsWallet {
 
   @JSExport
   def calculateCost(tx: mod.Transaction): js.BigInt = {
-    import io.iohk.midnight.wallet.zswap.given
     WalletStateService.calculateCost[mod.Transaction, mod.TokenType](tx).toJsBigInt
   }
 

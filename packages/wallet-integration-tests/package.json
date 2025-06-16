@@ -9,14 +9,19 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet": "workspace:*",
+    "@midnight-ntwrk/wallet-api": "^5.0.0",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnight-ntwrk/wallet-ts": "workspace:*",
     "@midnight-ntwrk/zswap": "^4.0.0",
     "@types/node": "^22.11.0",
+    "effect": "^3.15.4",
+    "fast-check": "^4.1.1",
+    "pure-rand": "^7.0.1",
     "rxjs": "^7.5.5",
     "testcontainers": "^10.14.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "eslint": "^9.26.0",
+    "typescript": "^5.8.3"
   }
 }

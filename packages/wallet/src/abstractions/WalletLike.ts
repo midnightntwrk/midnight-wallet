@@ -1,13 +1,15 @@
 import { Observable } from 'rxjs';
+import { Runtime } from '../Runtime';
 import { ProtocolState } from './ProtocolState';
 
 /**
  * Defines a wallet like implementation.
  *
- * @typeParam TTransaction The type of transaction that the wallet will operate over.
  * @typeParam TTState The type of state that the wallet will maintain and operate over.
  */
-export interface WalletLike<TTransaction, TState> {
+export interface WalletLike<TState> {
+  readonly runtime: Runtime;
+
   /**
    * A stream of state changes over any amount of time that have been processed by the wallet.
    */
@@ -22,7 +24,4 @@ export interface WalletLike<TTransaction, TState> {
    * over time.
    */
   readonly syncComplete: boolean;
-
-  balanceTransaction(tx: TTransaction): Promise<TTransaction>;
-  // proveTransaction(recipe: unknown): Promise<TTransaction>;
 }

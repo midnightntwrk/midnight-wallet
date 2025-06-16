@@ -19,6 +19,7 @@ import io.iohk.midnight.wallet.core.{
   domain,
   Wallet as CoreWallet,
 }
+import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.given
 import io.iohk.midnight.wallet.core.services.*
 import io.iohk.midnight.wallet.core.tracing.{WalletTxServiceTracer, WalletTxSubmissionTracer}
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite

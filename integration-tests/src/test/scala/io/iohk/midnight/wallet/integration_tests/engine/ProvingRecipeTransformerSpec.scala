@@ -19,9 +19,9 @@ import io.iohk.midnight.wallet.core.Generators.{
   unprovenTransactionArbitrary,
 }
 import io.iohk.midnight.wallet.core.domain
-import io.iohk.midnight.wallet.engine.js.ProvingRecipeTransformer
 import io.iohk.midnight.wallet.integration_tests.WithProvingServerSuite
 import io.iohk.midnight.midnightNtwrkZswap.mod.{UnprovenTransaction, Transaction}
+import io.iohk.midnight.wallet.core.instances.ProvingRecipeTransformer
 import org.scalacheck.Prop.forAll
 import org.scalacheck.effect.PropF.forAllF
 import scala.scalajs.js
