@@ -1,21 +1,58 @@
-import { WalletBuilderTs } from '../index';
-import type { Expect, Equal } from './testUtils';
+import { describe, it } from '@jest/globals';
+import { VariantBuilder } from '../abstractions/index';
+import { FullConfiguration } from '../WalletBuilder';
+import { CanAssign, Equal, Expect } from './testUtils';
+import {
+  InterceptingVariantBuilder,
+  NumericRangeBuilder,
+  NumericRangeMultiplierBuilder,
+  RangeConfig,
+  RangeMultiplierConfig,
+} from './variants';
 
 describe('WalletBuilder', () => {
-  describe('without variants', () => {
-    it('should not build a valid wallet', () => {
-      expect(() => new WalletBuilderTs().build()).toThrow();
+  describe('inferring configuration type', () => {
+    it('infers undefined for no variants', () => {
+      type _1 = Expect<Equal<FullConfiguration<[]>, undefined>>;
     });
 
-    it('prevents configuration', () => {
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
-      const builder = new WalletBuilderTs();
-      // Without any variants, the `configuration` parameter of the `withConfiguration` method should
-      // be `never` - preventing it from being invoked.
-      const withConfigurationExpectedType: Expect<Equal<Parameters<typeof builder.withConfiguration>, [_: never]>> =
-        true;
+    it('infers undefined for a variant with no effective configuration to pass', () => {
+      type _11 = Expect<
+        Equal<
+          FullConfiguration<[VariantBuilder.VersionedVariantBuilder<InterceptingVariantBuilder<string, string>>]>,
+          undefined
+        >
+      >;
+    });
 
-      expect(withConfigurationExpectedType).toBeTruthy();
+    it('infers an expected intersection type with multiple variants', () => {
+      //Note: CanAssign assertion is used because the exact types are following the pattern object & Variant1Config & Variant2Config
+      type _2 = Expect<
+        Equal<FullConfiguration<[VariantBuilder.VersionedVariantBuilder<NumericRangeBuilder>]>, RangeConfig>
+      >;
+      type _3 = Expect<
+        CanAssign<
+          RangeConfig,
+          FullConfiguration<
+            [
+              VariantBuilder.VersionedVariantBuilder<NumericRangeBuilder>,
+              VariantBuilder.VersionedVariantBuilder<InterceptingVariantBuilder<string, string>>,
+            ]
+          >
+        >
+      >;
+      type _4 = Expect<
+        CanAssign<
+          RangeMultiplierConfig,
+          FullConfiguration<
+            [
+              VariantBuilder.VersionedVariantBuilder<NumericRangeBuilder>,
+              VariantBuilder.VersionedVariantBuilder<InterceptingVariantBuilder<string, string>>,
+              VariantBuilder.VersionedVariantBuilder<NumericRangeMultiplierBuilder>,
+            ]
+          >
+        >
+      >;
     });
   });
 });

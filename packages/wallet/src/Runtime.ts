@@ -7,56 +7,87 @@ import {
   VersionChangeType,
   WalletRuntimeError,
 } from './abstractions/index';
+import * as Poly from './utils/polyFunction';
+import * as H from './utils/hlist';
 
 /**
  * The {@link Runtime} service type.
  */
-//TODO: It needs take state type from variants it is built from
-export interface Runtime {
-  readonly stateChanges: Stream.Stream<unknown, WalletRuntimeError>;
+export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
+  readonly stateChanges: Stream.Stream<
+    ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>,
+    WalletRuntimeError
+  >;
 
   readonly progress: Effect.Effect<Progress>;
 
-  readonly currentVariant: Effect.Effect<RunningVariant>;
+  readonly currentVariant: Effect.Effect<EachRunningVariant<Variants>>;
+
+  dispatch<TResult>(
+    impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+  ): Effect.Effect<TResult, WalletRuntimeError>;
 }
 
-export type RunningVariant = {
-  variant: Variant.AnyVersionedVariant;
-  runningVariant: Variant.AnyRunningVariant;
-  initialState: unknown;
+export type RunningVariant<
+  TVariant extends Variant.AnyVersionedVariant,
+  TRest extends Variant.AnyVersionedVariantArray,
+> = Poly.WithTagFrom<TVariant['variant']> & {
+  variant: TVariant;
+  runningVariant: Variant.RunningVariantOf<TVariant>;
+  initialState: Variant.StateOf<TVariant>;
   variantScope: Scope.CloseableScope;
-  currentStateRef: SynchronizedRef.SynchronizedRef<unknown>;
-  restVariants: Variant.AnyVersionedVariantArray;
+  currentStateRef: SynchronizedRef.SynchronizedRef<Variant.StateOf<TVariant>>;
+  restVariants: TRest;
   initProtocolVersion: ProtocolVersion.ProtocolVersion;
   validVersionRange: ProtocolVersion.ProtocolVersion.Range;
   nextProtocolVersion: ProtocolVersion.ProtocolVersion | null;
 };
-
+type EachRunningVariant<TAll extends Variant.AnyVersionedVariantArray> = TAll extends [
+  infer THead extends Variant.AnyVersionedVariant,
+  ...infer TRest extends Variant.AnyVersionedVariantArray,
+]
+  ? RunningVariant<THead, TRest> | EachRunningVariant<TRest>
+  : never;
 /**
  * A type that represents the reported progress of a variant expressed in terms of gaps to reaching synced
  * progress in application site and data source site
  */
 type Progress = { readonly sourceGap: bigint; readonly applyGap: bigint };
 
-export const make = (
-  variants: Variant.AnyVersionedVariantArray,
-  state: unknown,
-): Effect.Effect<Runtime, WalletRuntimeError, Scope.Scope> => {
+export type InitRuntimeHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
+  variants: Variants;
+  state: Variant.StateOf<H.Head<Variants>>;
+};
+export const initHead = <Variants extends Variant.AnyVersionedVariantArray>(
+  initArgs: InitRuntimeHeadArgs<Variants>,
+): Effect.Effect<Runtime<Variants>, WalletRuntimeError, Scope.Scope> => {
+  const headVariant: H.Head<Variants> = H.head(initArgs.variants);
+  return init({ variants: initArgs.variants, tag: Poly.getTag(headVariant.variant), state: initArgs.state });
+};
+
+export type InitRuntimeArgs<Variants extends Variant.AnyVersionedVariantArray, InitTag extends string | symbol> = {
+  variants: Variants;
+  tag: InitTag;
+  state: Variant.StateOf<H.Find<Variants, { variant: Poly.WithTag<InitTag> }>>;
+};
+export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag extends string | symbol>(
+  initArgs: InitRuntimeArgs<Variants, InitTag>,
+): Effect.Effect<Runtime<Variants>, WalletRuntimeError, Scope.Scope> => {
   //Rewritten from generators to better track type issues reported
   return Effect.Do.pipe(
-    Effect.bind('initiatedFirstVariant', () => initHeadVariant(variants, state)),
+    Effect.bind('initiatedFirstVariant', () => initVariant(initArgs)),
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
-        Effect.flatMap((state) =>
-          SubscriptionRef.make<Either.Either<ProtocolState.ProtocolState<unknown>, WalletRuntimeError>>(
-            Either.right([initiatedFirstVariant.initProtocolVersion, state] as const),
-          ),
+        Effect.flatMap((state: Variant.StateOf<H.Each<Variants>>) =>
+          SubscriptionRef.make<
+            Either.Either<ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>, WalletRuntimeError>
+          >(Either.right({ version: initiatedFirstVariant.initProtocolVersion, state })),
         ),
       ),
     ),
     Effect.bind('progressRef', () => SynchronizedRef.make<Progress>({ applyGap: 0n, sourceGap: 0n })),
     Effect.bind('currentVariantRef', ({ initiatedFirstVariant }) =>
-      Effect.acquireRelease(SynchronizedRef.make<RunningVariant>(initiatedFirstVariant), (ref, exit) =>
+      Effect.acquireRelease(SynchronizedRef.make<EachRunningVariant<Variants>>(initiatedFirstVariant), (ref, exit) =>
         Effect.gen(function* () {
           // This is needed to properly close variant scope when whole runtime closes
           // Otherwise variant would be running in the background
@@ -74,8 +105,8 @@ export const make = (
         Effect.forkScoped,
       );
     }),
-    Effect.map(({ currentStateRef, progressRef, currentVariantRef }) => {
-      return {
+    Effect.map(({ currentStateRef, progressRef, currentVariantRef }): Runtime<Variants> => {
+      const runtime = {
         stateChanges: currentStateRef.changes.pipe(
           Stream.mapEffect((value) => {
             return Either.match(value, {
@@ -87,117 +118,187 @@ export const make = (
         ),
         progress: progressRef.get,
         currentVariant: currentVariantRef.get,
+        dispatch: <TResult>(
+          impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+        ): Effect.Effect<TResult, WalletRuntimeError> => dispatch(runtime, impl),
       };
+
+      return runtime;
     }),
   );
 };
 
-const initHeadVariant = (
-  variants: Variant.AnyVersionedVariantArray,
-  previousState: unknown,
-  initProtocolVersion?: ProtocolVersion.ProtocolVersion,
-): Effect.Effect<RunningVariant, WalletRuntimeError> => {
+export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult>(
+  runtime: Runtime<Variants>,
+  impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+): Effect.Effect<TResult, WalletRuntimeError> => {
+  return runtime.currentVariant.pipe(
+    Effect.map((current) => Poly.dispatch(current.runningVariant as Variant.RunningVariantOf<H.Each<Variants>>, impl)),
+  );
+};
+
+type MigrateArgs<Variants extends Variant.AnyVersionedVariantArray> = {
+  variants: Variants;
+  state: Variant.PreviousStateOf<H.Head<Variants>>;
+  initProtocolVersion?: ProtocolVersion.ProtocolVersion;
+};
+const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>(
+  migrateArgs: MigrateArgs<Variants>,
+): Effect.Effect<EachRunningVariant<Variants>, WalletRuntimeError> => {
   return Effect.gen(function* () {
-    const [headVersionedVariant, maybeNextVersionedVariant, ...rest] = variants;
+    const [headVersionedVariant] = migrateArgs.variants;
     if (!headVersionedVariant) {
       yield* Effect.fail(new WalletRuntimeError({ message: 'No variant to init' }));
     }
 
-    const [sinceVersionHead, headVariant] = headVersionedVariant;
-    const actualInitProtocolVersion = initProtocolVersion ?? sinceVersionHead;
-    const nextActivationVersion = maybeNextVersionedVariant
-      ? maybeNextVersionedVariant[0]
-      : ProtocolVersion.MaxSupportedVersion;
-    const validVersionRange = ProtocolVersion.makeRange(sinceVersionHead, nextActivationVersion);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- It seems that TS is defaulting to the constraint provided for a generic type with its inference, which includes any
+    const newState = yield* headVersionedVariant.variant.migrateState(migrateArgs.state);
 
-    const initialState = yield* headVariant.migrateState(previousState);
-    const stateRef = yield* SubscriptionRef.make(initialState);
-    const variantScope = yield* Scope.make();
-    const runningVariant = yield* headVariant
-      .start({ stateRef }, initialState)
-      .pipe(Effect.provideService(Scope.Scope, variantScope));
-
-    return {
-      variant: headVersionedVariant,
-      initialState,
-      runningVariant,
-      currentStateRef: stateRef,
-      restVariants: [maybeNextVersionedVariant, ...rest],
-      initProtocolVersion: actualInitProtocolVersion,
-      validVersionRange,
-      nextProtocolVersion: maybeNextVersionedVariant ? maybeNextVersionedVariant[0] : null,
-      variantScope,
-    };
+    return yield* initHeadVariant({
+      variants: migrateArgs.variants,
+      state: newState as Variant.StateOf<H.Head<Variants>>,
+      initProtocolVersion: migrateArgs.initProtocolVersion,
+    });
   });
 };
 
-const runVariantStream = (
-  initiatedVariant: RunningVariant,
-  stateRef: SubscriptionRef.SubscriptionRef<Either.Either<ProtocolState.ProtocolState<unknown>, WalletRuntimeError>>,
+type InitArgs<Variants extends Variant.AnyVersionedVariantArray, TTag extends string | symbol> = {
+  variants: Variants;
+  tag: TTag;
+  state: Variant.StateOf<H.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
+};
+// Arguments are gathered to a separate type because presence of H.Find is crashing TS compiler ¯\_(ツ)_/¯
+const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag extends string | symbol>(
+  init: InitArgs<Variants, TTag>,
+): Effect.Effect<EachRunningVariant<Variants>, WalletRuntimeError> => {
+  return Effect.gen(function* () {
+    const index = init.variants.findIndex((variant) => Poly.getTag(variant.variant) === init.tag);
+    const theRest = init.variants.toSpliced(0, index);
+
+    //These casts are terrible, but they allow to call the initHeadVariant
+    return yield* initHeadVariant({
+      variants: theRest as Variants,
+      state: init.state as unknown as Variant.StateOf<H.Head<Variants>>,
+    });
+  });
+};
+
+type InitHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
+  variants: Variants;
+  state: Variant.StateOf<H.Head<Variants>>;
+  initProtocolVersion?: ProtocolVersion.ProtocolVersion | undefined;
+};
+// Following pattern from `initVariant` for consistency
+const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
+  init: InitHeadArgs<Variants>,
+): Effect.Effect<EachRunningVariant<Variants>, WalletRuntimeError> => {
+  return Effect.gen(function* () {
+    const [anyHeadVersionedVariant, maybeNextVersionedVariant] = init.variants;
+    if (!anyHeadVersionedVariant) {
+      yield* Effect.fail(new WalletRuntimeError({ message: 'No variant to init' }));
+    }
+    const headVersionedVariant = anyHeadVersionedVariant as H.Head<Variants> & Variant.AnyVersionedVariant;
+
+    const actualInitProtocolVersion = init.initProtocolVersion ?? headVersionedVariant.sinceVersion;
+    const nextActivationVersion = maybeNextVersionedVariant
+      ? maybeNextVersionedVariant.sinceVersion
+      : ProtocolVersion.MaxSupportedVersion;
+    const validVersionRange = ProtocolVersion.makeRange(headVersionedVariant.sinceVersion, nextActivationVersion);
+
+    const stateRef = yield* SubscriptionRef.make(init.state);
+    const variantScope = yield* Scope.make();
+    const runningVariant = yield* headVersionedVariant.variant
+      .start({ stateRef }, init.state)
+      .pipe(Effect.provideService(Scope.Scope, variantScope)) as Effect.Effect<
+      Variant.RunningVariantOf<H.Head<Variants>>,
+      WalletRuntimeError
+    >;
+    //This type declaration helps with setting right properties...
+    const out: RunningVariant<H.Head<Variants> & Variant.AnyVersionedVariant, H.Tail<Variants>> = {
+      __polyTag__: headVersionedVariant.variant.__polyTag__ as Poly.TagOf<H.Each<Variants>['variant']>,
+      variant: headVersionedVariant,
+      initialState: init.state,
+      runningVariant: runningVariant,
+      currentStateRef: stateRef,
+      restVariants: H.tail(init.variants),
+      initProtocolVersion: actualInitProtocolVersion,
+      validVersionRange,
+      nextProtocolVersion: maybeNextVersionedVariant ? maybeNextVersionedVariant.sinceVersion : null,
+      variantScope,
+    };
+    // ...while this type casting makes things bearable in the rest of the code (TS's type inference is great, but still limited)
+    return out as unknown as EachRunningVariant<Variants>;
+  });
+};
+
+const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
+  initiatedVariant: EachRunningVariant<Variants>,
+  stateRef: SubscriptionRef.SubscriptionRef<
+    Either.Either<ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>, WalletRuntimeError>
+  >,
   progressRef: SynchronizedRef.SynchronizedRef<Progress>,
-  currentVariantRef: SynchronizedRef.SynchronizedRef<RunningVariant>,
+  currentVariantRef: SynchronizedRef.SynchronizedRef<EachRunningVariant<Variants>>,
 ): Effect.Effect<void, WalletRuntimeError> => {
+  type Accumulator = {
+    protocolVersion: ProtocolVersion.ProtocolVersion;
+    followEffect: Effect.Effect<void, WalletRuntimeError>;
+    shouldInitChange: boolean;
+    lastState: Variant.StateOf<H.Each<Variants>>;
+  };
+  type StreamState = StateChange.StateChange<Variant.StateOf<H.Each<Variants>>>;
+
+  const initialAcc: Accumulator = {
+    protocolVersion: initiatedVariant.initProtocolVersion,
+    shouldInitChange: false,
+    followEffect: Effect.void,
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    lastState: initiatedVariant.initialState,
+  };
   return initiatedVariant.runningVariant.state.pipe(
-    Stream.scanEffect(
-      {
-        protocolVersion: initiatedVariant.initProtocolVersion,
-        shouldInitChange: false,
-        followEffect: Effect.void,
-        lastState: initiatedVariant.initialState,
-      },
-      (
-        accumulator: {
-          protocolVersion: ProtocolVersion.ProtocolVersion;
-          followEffect: Effect.Effect<void, WalletRuntimeError>;
-          shouldInitChange: boolean;
-          lastState: unknown;
+    Stream.scanEffect(initialAcc, (accumulator: Accumulator, change: StreamState) => {
+      return StateChange.match(change, {
+        State: ({ state }) => {
+          return SubscriptionRef.set(
+            stateRef,
+            Either.right({ version: accumulator.protocolVersion, state } as const),
+          ).pipe(Effect.as({ ...accumulator, lastState: state }));
         },
-        change,
-      ) => {
-        return StateChange.match(change, {
-          State: ({ state }) => {
-            return SubscriptionRef.set(stateRef, Either.right([accumulator.protocolVersion, state] as const)).pipe(
-              Effect.as({ ...accumulator, lastState: state }),
-            );
-          },
-          ProgressUpdate: (progress) => {
-            return SynchronizedRef.set(progressRef, progress).pipe(Effect.as(accumulator));
-          },
-          VersionChange: ({ change }) => {
-            const newProtocolVersion: ProtocolVersion.ProtocolVersion | null = VersionChangeType.match(change, {
-              Version: ({ version }) => version,
-              Next: () => initiatedVariant.nextProtocolVersion,
+        ProgressUpdate: (progress) => {
+          return SynchronizedRef.set(progressRef, progress).pipe(Effect.as(accumulator));
+        },
+        VersionChange: ({ change }) => {
+          const newProtocolVersion: ProtocolVersion.ProtocolVersion | null = VersionChangeType.match(change, {
+            Version: ({ version }) => version,
+            Next: () => initiatedVariant.nextProtocolVersion,
+          });
+          if (
+            newProtocolVersion != null &&
+            !ProtocolVersion.withinRange(newProtocolVersion, initiatedVariant.validVersionRange)
+          ) {
+            return Effect.succeed({
+              ...accumulator,
+              protocolVersion: newProtocolVersion,
+              shouldInitChange: true,
+              followEffect: Effect.gen(function* () {
+                yield* Scope.close(initiatedVariant.variantScope, Exit.void);
+                const newInitiatedVariant = yield* migrateToNextVariant({
+                  variants: initiatedVariant.restVariants,
+                  state: accumulator.lastState as Variant.PreviousStateOf<H.Head<typeof initiatedVariant.restVariants>>,
+                  initProtocolVersion: newProtocolVersion,
+                });
+                yield* SynchronizedRef.set(currentVariantRef, newInitiatedVariant);
+                return yield* runVariantStream(newInitiatedVariant, stateRef, progressRef, currentVariantRef);
+              }),
             });
-            if (
-              newProtocolVersion != null &&
-              !ProtocolVersion.withinRange(newProtocolVersion, initiatedVariant.validVersionRange)
-            ) {
-              return Effect.succeed({
-                ...accumulator,
-                protocolVersion: newProtocolVersion,
-                shouldInitChange: true,
-                followEffect: Scope.close(initiatedVariant.variantScope, Exit.void).pipe(
-                  Effect.andThen(
-                    initHeadVariant(initiatedVariant.restVariants, accumulator.lastState, newProtocolVersion),
-                  ),
-                  Effect.flatMap((newInitiatedVariant) =>
-                    SynchronizedRef.setAndGet(currentVariantRef, newInitiatedVariant),
-                  ),
-                  Effect.flatMap((newInitiatedVariant) =>
-                    runVariantStream(newInitiatedVariant, stateRef, progressRef, currentVariantRef),
-                  ),
-                ),
-              });
-            } else {
-              return Effect.succeed({
-                ...accumulator,
-                protocolVersion: newProtocolVersion ?? accumulator.protocolVersion,
-              });
-            }
-          },
-        });
-      },
-    ),
+          } else {
+            return Effect.succeed({
+              ...accumulator,
+              protocolVersion: newProtocolVersion ?? accumulator.protocolVersion,
+            });
+          }
+        },
+      });
+    }),
     Stream.filter((streamAcc) => streamAcc.shouldInitChange),
     Stream.runHead,
     Effect.flatMap((streamAccOption) => {

@@ -8,8 +8,8 @@ import {
 } from '@midnight-ntwrk/wallet-api';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Runtime, WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolState, ProtocolVersion, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { V1Builder, V1Variant } from '@midnight-ntwrk/wallet-ts/v1';
+import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { V1Builder, V1Variant, V1Configuration, V1State, V1Tag, RunningV1Variant } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect } from 'effect';
 import * as fc from 'fast-check';
@@ -30,7 +30,7 @@ const timeout = 120_000;
 describe('Wallet transacting', () => {
   const environmentId = randomUUID();
   let environment: StartedDockerComposeEnvironment | null = null;
-  let configuration: V1Builder.V1Configuration | null = null;
+  let configuration: V1Configuration | null = null;
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
@@ -52,33 +52,29 @@ describe('Wallet transacting', () => {
     await environment?.down();
   });
 
-  let wallet: WalletLike<V1Variant.State>;
-  let runningSubscription: rx.Subscription | null = null;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant>]>;
+  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant>]>;
   beforeEach(() => {
-    wallet = new WalletBuilderTs()
-      .withVariant(
-        ProtocolVersion.MinSupportedVersion,
-        new V1Builder.V1Builder().withSyncDefaults().withTransactingDefaults(),
-      )
-      .withConfiguration(configuration!)
-      .build();
-    runningSubscription = wallet.state.subscribe();
+    Wallet = WalletBuilderTs.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withSyncDefaults().withTransactingDefaults())
+      .build(configuration!);
+    wallet = Wallet.startEmpty(Wallet);
   });
 
-  afterEach(() => {
-    if (runningSubscription != null) {
-      runningSubscription.unsubscribe();
+  afterEach(async () => {
+    if (wallet != null) {
+      await wallet.stop();
     }
   });
 
   it(
     'should create a successful transfer transaction',
     async () => {
-      const syncedState: V1Variant.State = await rx.lastValueFrom(
+      const syncedState: V1State = await rx.lastValueFrom(
         wallet.state.pipe(
           rx.map(ProtocolState.state),
           rx.skip(1),
-          rx.takeWhile((state: V1Variant.State) => !state.progress.isComplete && state.state.coins.size > 0, true),
+          rx.takeWhile((state: V1State) => !state.progress.isComplete && state.state.coins.size > 0, true),
         ),
       );
 
@@ -101,12 +97,11 @@ describe('Wallet transacting', () => {
       ).generate(new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() * 0x100000000))), undefined).value;
       const usedTokenTypes = new Set(outputs.map((o) => o.type));
 
-      const runtime: Runtime.Runtime = wallet!.runtime;
-      const recipe: ProvingRecipe = await runtime.currentVariant.pipe(
-        Effect.map((r: Runtime.RunningVariant) => r.runningVariant as V1Variant),
-        Effect.flatMap((runningV1: V1Variant) => runningV1.transferTransaction(outputs)),
-        Effect.runPromise,
-      );
+      const recipe: ProvingRecipe = await wallet.runtime
+        .dispatch({
+          [V1Tag]: (v1: RunningV1Variant) => v1.transferTransaction(outputs),
+        })
+        .pipe(Effect.flatten, Effect.runPromise);
 
       switch (recipe.type) {
         case BALANCE_TRANSACTION_TO_PROVE:

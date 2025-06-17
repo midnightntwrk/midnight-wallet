@@ -1,6 +1,5 @@
-import { ConfigurableBuilder } from './Builder';
-import type * as ProtocolVersion from './ProtocolVersion';
-import { Variant, AnyVariantConfiguration } from './Variant';
+import { ProtocolVersion } from './ProtocolVersion';
+import { AnyVariant, VersionedVariant } from './Variant';
 
 /**
  * Builds a target {@link Variant} object from internal build state.
@@ -10,9 +9,7 @@ import { Variant, AnyVariantConfiguration } from './Variant';
  * @typeParam TConfiguration A type representing the configuration required by the variant.
  */
 
-export abstract class VariantBuilder<TState, TPreviousState = null, TConfiguration = AnyVariantConfiguration>
-  implements ConfigurableBuilder<TConfiguration, Variant<TState, TPreviousState>>
-{
+export interface VariantBuilder<TVariant extends AnyVariant, TConfiguration extends object = object> {
   /**
    * Builds the target variant object from the internal build state.
    *
@@ -20,41 +17,52 @@ export abstract class VariantBuilder<TState, TPreviousState = null, TConfigurati
    *
    * @returns An instance of {@link Variant} that operates over `TState`.
    */
-  abstract build(configuration: TConfiguration): Variant<TState, TPreviousState>;
+  build(configuration: TConfiguration): TVariant;
 }
+
+/**
+ * Base type that represents variant configuration.
+ */
+export type AnyBuilderConfiguration = object;
 
 /**
  * A utility type that represents any {@link VariantBuilder}.
  */
-export type AnyVariantBuilder = VariantBuilder<unknown, unknown, unknown>;
+export type AnyVariantBuilder = VariantBuilder<AnyVariant, AnyBuilderConfiguration>;
 
-/**
- * A tuple that associates a {@link VariantBuilder} with a given version of the Midnight protocol.
- */
-export type AnyVersionedVariantBuilder = readonly [sinceVersion: ProtocolVersion.ProtocolVersion, AnyVariantBuilder];
+export type VariantOf<T> =
+  T extends VersionedVariantBuilder<infer TBuilder>
+    ? VariantOf<TBuilder>
+    : T extends VariantBuilder<infer TVariant, object>
+      ? TVariant
+      : never;
 
-/**
- * An array of tuples that associates a {@link VariantBuilder} with a given version of the Midnight protocol.
- */
-export type AnyVersionedVariantBuilderArray = AnyVersionedVariantBuilder[];
+export type VersionedVariantBuilder<TBuilder extends AnyVariantBuilder> = Readonly<{
+  sinceVersion: ProtocolVersion;
+  variantBuilder: TBuilder;
+}>;
 
-export declare namespace AnyVariantBuilder {
-  /**
-   * The type of variant being built by a given {@link VariantBuilder}.
-   *
-   * @typeParam TVariantBuilder The {@link VariantBuilder}.
-   *
-   * @remarks
-   * The returned type is the narrow type returned by the {@link VariantBuilder.build} method found
-   * on `TVariantBuilder` (being more specific); otherwise `never`.
-   */
-  type TargetVariant<TVariantBuilder> = TVariantBuilder extends AnyVariantBuilder
-    ? ReturnType<TVariantBuilder['build']>
+export type VariantsOf<T> = T extends [infer THead, ...infer TRest]
+  ? [VariantOf<THead>, ...VariantsOf<TRest>]
+  : T extends []
+    ? []
     : never;
 
-  /**
-   * The type of configuration that the given variant builder can be configured with.
-   */
+export type VersionedVariantsOf<T> = T extends [infer THead, ...infer Rest]
+  ? [VersionedVariant<VariantOf<THead>>, ...VersionedVariantsOf<Rest>]
+  : T extends []
+    ? []
+    : never;
+
+export type ConfigurationOf<T> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  type Configuration<T> = T extends VariantBuilder<any, unknown, infer C> ? C : never;
-}
+  T extends VariantBuilder<any, infer Config>
+    ? Config
+    : T extends VersionedVariantBuilder<infer Builder>
+      ? ConfigurationOf<Builder>
+      : never;
+
+/**
+ * A type that associates a {@link VariantBuilder} with a given version of the Midnight protocol.
+ */
+export type AnyVersionedVariantBuilder = VersionedVariantBuilder<AnyVariantBuilder>;

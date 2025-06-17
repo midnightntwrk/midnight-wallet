@@ -1284,6 +1284,7 @@ __metadata:
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
     scale-ts: "npm:^1.1.0"
+    to-words: "npm:^4.5.1"
     ws: "npm:^8.8.1"
   languageName: unknown
   linkType: soft
@@ -10086,6 +10087,13 @@ __metadata:
   dependencies:
     is-number: "npm:^7.0.0"
   checksum: 10c0/487988b0a19c654ff3e1961b87f471702e708fa8a8dd02a298ef16da7206692e8552a0250e8b3e8759270f62e9d8314616f6da274734d3b558b1fc7b7724e892
+  languageName: node
+  linkType: hard
+
+"to-words@npm:^4.5.1":
+  version: 4.5.1
+  resolution: "to-words@npm:4.5.1"
+  checksum: 10c0/14fa56b9c57a614de9e78b087c9bc255c885fe275601bea0a485f358bfcef624d97ef6fa5b517e529ba655d046f225dad3bec2c9652b92e151f19ae10e9fb28a
   languageName: node
   linkType: hard
 

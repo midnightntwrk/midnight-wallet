@@ -1,20 +1,39 @@
-import { expect } from '@jest/globals';
+import { describe, expect, it } from '@jest/globals';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolState, ProtocolVersion, StateChange, VariantBuilder } from '../abstractions/index';
+import {
+  ProtocolState,
+  ProtocolVersion,
+  StateChange,
+  Variant,
+  VariantBuilder,
+  WalletLike,
+} from '../abstractions/index';
 import { WalletBuilderTs } from '../index';
-import { isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
-import { NumericRangeBuilder, NumericRangeMultiplierBuilder } from './variants';
+import { Runtime } from '../Runtime';
+import { Equal, Expect, isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
+import { NumericRange, NumericRangeBuilder, NumericRangeMultiplier, NumericRangeMultiplierBuilder } from './variants';
 
 describe('Wallet Builder', () => {
+  describe('without variants', () => {
+    it('should not build a valid wallet', () => {
+      //TODO: it should be possible to play with types to hide build method unless variant is registered
+      expect(() => WalletBuilderTs.init().build()).toThrow();
+    });
+  });
+
   it('should support single variant implementations', async () => {
-    const builder = new WalletBuilderTs()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder())
-      .withConfiguration({
-        min: 0,
-        max: 1,
-      });
-    const wallet = builder.build();
+    const builder = WalletBuilderTs.init().withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder());
+    const Wallet = builder.build({
+      min: 0,
+      max: 1,
+    });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    type _1 = Expect<Equal<typeof Wallet, WalletLike.BaseWalletClass<[Variant.VersionedVariant<NumericRange>]>>>;
+    type _2 = Expect<Equal<typeof wallet, WalletLike.WalletLike<[Variant.VersionedVariant<NumericRange>]>>>;
+    type _3 = Expect<Equal<typeof wallet.runtime, Runtime<[Variant.VersionedVariant<NumericRange>]>>>;
+    type _4 = Expect<Equal<typeof wallet.state, rx.Observable<ProtocolState.ProtocolState<number>>>>;
 
     expect(wallet).toBeDefined();
 
@@ -22,22 +41,28 @@ describe('Wallet Builder', () => {
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
-      [ProtocolVersion.MinSupportedVersion, 0],
-      [ProtocolVersion.MinSupportedVersion, 1],
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
     ]);
   });
 
   it('should support multiple variant implementations through state migration', async () => {
-    const builder = new WalletBuilderTs()
+    const builder = WalletBuilderTs.init()
       // Have the first variant complete after producing two values, signifying a protocol change.
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
-      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
-      .withConfiguration({
-        min: 0,
-        max: 4,
-        multiplier: 2,
-      });
-    const wallet = builder.build();
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+
+    const Wallet = builder.build({
+      min: 0,
+      max: 4,
+      multiplier: 2,
+    });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    type Variants = [Variant.VersionedVariant<NumericRange>, Variant.VersionedVariant<NumericRangeMultiplier>];
+    type _1 = Expect<Equal<typeof wallet, WalletLike.WalletLike<Variants>>>;
+    type _2 = Expect<Equal<typeof wallet.runtime, Runtime<Variants>>>;
+    type _3 = Expect<Equal<typeof wallet.state, rx.Observable<ProtocolState.ProtocolState<number>>>>;
 
     expect(wallet).toBeDefined();
 
@@ -45,21 +70,24 @@ describe('Wallet Builder', () => {
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
-      [ProtocolVersion.MinSupportedVersion, 0],
-      [ProtocolVersion.MinSupportedVersion, 1],
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).
-      [ProtocolVersion.ProtocolVersion(100n), 4],
-      [ProtocolVersion.ProtocolVersion(100n), 6],
-      [ProtocolVersion.ProtocolVersion(100n), 8],
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 4 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
     ]);
   });
 
-  it('should stop variant once state observable is unsubscribed', async () => {
+  it('should stop variant once stop is called', async () => {
     const pubsub = Effect.runSync(PubSub.bounded<number>({ capacity: 1, replay: 1 }));
 
-    const pubSubVariantBuilder: VariantBuilder<number> = {
+    const pubSubVariantBuilder: VariantBuilder.VariantBuilder<
+      Variant.Variant<'pubsub', number, null, Variant.RunningVariant<'pubsub', number>>
+    > = {
       build: () => {
         return {
+          __polyTag__: 'pubsub',
           start(_context, state: number) {
             return Stream.unfold(state, (previous: number) => {
               const next = previous + 1;
@@ -71,6 +99,7 @@ describe('Wallet Builder', () => {
               Effect.forkScoped,
               Effect.flatMap(() => Scope.Scope),
               Effect.map((scope) => ({
+                __polyTag__: 'pubsub',
                 state: Stream.acquireRelease(Effect.succeed(pubsub), () => PubSub.shutdown(pubsub)).pipe(
                   Stream.mapEffect(PubSub.subscribe),
                   Stream.flatMap(Stream.fromQueue),
@@ -87,9 +116,22 @@ describe('Wallet Builder', () => {
       },
     };
 
-    const wallet = new WalletBuilderTs().withVariant(ProtocolVersion.MinSupportedVersion, pubSubVariantBuilder).build();
+    const Wallet = WalletBuilderTs.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, pubSubVariantBuilder)
+      .build();
+    const wallet = Wallet.startEmpty(Wallet);
 
-    const values = await rx.firstValueFrom(wallet.state.pipe(rx.map(ProtocolState.state), rx.take(5), reduceToChunk()));
+    const stopSubject = new rx.Subject<boolean>();
+
+    const valuesP = rx.firstValueFrom(
+      wallet.state.pipe(rx.map(ProtocolState.state), rx.takeUntil(stopSubject), rx.takeLast(5), reduceToChunk()),
+    );
+
+    await wallet.stop();
+    stopSubject.next(true);
+
+    const values = await valuesP;
+
     const isShutDown = await PubSub.awaitShutdown(pubsub).pipe(
       Effect.timeoutTo({
         duration: 1_000,

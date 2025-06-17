@@ -41,5 +41,8 @@
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "lint": "eslint",
     "dist": "rollup -c ./rollup.config.mjs"
+  },
+  "devDependencies": {
+    "to-words": "^4.5.1"
   }
 }

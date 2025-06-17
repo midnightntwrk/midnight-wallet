@@ -1,12 +1,16 @@
 import { VariantBuilder, Variant, StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index';
-import { Effect, Stream, Option } from 'effect';
+import { Effect, Stream, Option, Scope, PubSub } from 'effect';
 
 export type RangeConfig = {
   min: number;
   max: number;
 };
 
-export class NumericRange implements Variant.Variant<number, null> {
+export const Numeric = 'NumericRange' as const;
+export class NumericRange
+  implements Variant.Variant<typeof Numeric, number, null, Variant.RunningVariant<typeof Numeric, number>>
+{
+  __polyTag__: typeof Numeric = Numeric;
   #state: number = 0;
 
   constructor(
@@ -22,11 +26,12 @@ export class NumericRange implements Variant.Variant<number, null> {
   start(
     _context: Variant.VariantContext<number>,
     state: number,
-  ): Effect.Effect<Variant.RunningVariant<number, object>> {
+  ): Effect.Effect<Variant.RunningVariant<typeof Numeric, number>> {
     const max = this.configuration.max ?? 10;
     this.#state = state ?? this.configuration.min ?? 0;
 
     return Effect.succeed({
+      __polyTag__: Numeric,
       state: Stream.fromAsyncIterable<StateChange.StateChange<number>, WalletRuntimeError>(
         // eslint-disable-next-line @typescript-eslint/require-await
         (async function* (self: NumericRange) {
@@ -53,7 +58,7 @@ export class NumericRange implements Variant.Variant<number, null> {
   }
 }
 
-export class NumericRangeBuilder implements VariantBuilder<number, null, RangeConfig> {
+export class NumericRangeBuilder implements VariantBuilder.VariantBuilder<NumericRange, RangeConfig> {
   constructor(
     private yieldCount: number = 10,
     private throwError: boolean = false,
@@ -64,10 +69,16 @@ export class NumericRangeBuilder implements VariantBuilder<number, null, RangeCo
   }
 }
 
-export class NumericRangeMultiplier implements Variant.Variant<number, number> {
+export type RangeMultiplierConfig = RangeConfig & { multiplier: number };
+export const NumericMultiplier = 'NumericMultiplier';
+export class NumericRangeMultiplier
+  implements
+    Variant.Variant<typeof NumericMultiplier, number, number, Variant.RunningVariant<typeof NumericMultiplier, number>>
+{
+  __polyTag__: typeof NumericMultiplier = NumericMultiplier;
   #state: number = 0;
 
-  constructor(protected configuration: RangeConfig & { multiplier: number }) {}
+  constructor(protected configuration: RangeMultiplierConfig) {}
 
   get currentState(): number {
     return this.#state;
@@ -76,20 +87,23 @@ export class NumericRangeMultiplier implements Variant.Variant<number, number> {
   start(
     _context: Variant.VariantContext<number>,
     state: number,
-  ): Effect.Effect<Variant.RunningVariant<number, object>> {
-    const max = this.configuration.max ?? 10;
-    this.#state = state ?? this.configuration.min ?? 0;
+  ): Effect.Effect<Variant.RunningVariant<typeof NumericMultiplier, number>> {
+    return Effect.sync(() => {
+      const max = this.configuration.max ?? 10;
+      this.#state = state ?? this.configuration.min ?? 0;
 
-    return Effect.succeed({
-      state: Stream.fromIterable(
-        (function* (self: NumericRangeMultiplier) {
-          for (let value = self.#state; value <= max; value++) {
-            self.#state = value;
-            yield StateChange.State({ state: value * self.configuration.multiplier });
-          }
-          return Option.none();
-        })(this),
-      ),
+      return {
+        __polyTag__: NumericMultiplier,
+        state: Stream.fromIterable(
+          (function* (self: NumericRangeMultiplier) {
+            for (let value = self.#state; value <= max; value++) {
+              self.#state = value;
+              yield StateChange.State({ state: value * self.configuration.multiplier });
+            }
+            return Option.none();
+          })(this),
+        ),
+      };
     });
   }
 
@@ -99,9 +113,63 @@ export class NumericRangeMultiplier implements Variant.Variant<number, number> {
 }
 
 export class NumericRangeMultiplierBuilder
-  implements VariantBuilder<number, number, RangeConfig & { multiplier: number }>
+  implements VariantBuilder.VariantBuilder<NumericRangeMultiplier, RangeMultiplierConfig>
 {
-  build(configuration: RangeConfig & { multiplier: number }): NumericRangeMultiplier {
+  build(configuration: RangeMultiplierConfig): NumericRangeMultiplier {
     return new NumericRangeMultiplier(configuration);
+  }
+}
+
+export type InterceptingRunningVariant<TTag extends string | symbol, TState> = Variant.RunningVariant<TTag, TState> & {
+  emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => Effect.Effect<void>;
+};
+export class InterceptingVariant<TTag extends string | symbol, TState>
+  implements Variant.Variant<TTag, TState, TState, InterceptingRunningVariant<TTag, TState>>
+{
+  __polyTag__: TTag;
+  constructor(tag: TTag) {
+    this.__polyTag__ = tag;
+  }
+
+  migrateState(previousState: TState): Effect.Effect<TState> {
+    return Effect.succeed(previousState);
+  }
+  start(
+    context: Variant.VariantContext<TState>,
+    state: TState,
+  ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {
+    const tag = this.__polyTag__;
+    return Effect.gen(this, function* () {
+      const pubsub = yield* PubSub.bounded<StateChange.StateChange<TState>>({
+        capacity: 1,
+        replay: 1,
+      });
+      yield* PubSub.publish(pubsub, StateChange.State({ state }));
+      return {
+        __polyTag__: tag,
+        state: Stream.fromPubSub(pubsub, {
+          shutdown: true,
+        }),
+        emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => {
+          return PubSub.publish(pubsub, StateChange.VersionChange({ change }));
+        },
+      };
+    });
+  }
+}
+
+/**
+ * Builder of an intercepting variant
+ * It allows removing the possibility of race conditions by requiring an explicit gesture to migrate to a next/specific protocol version
+ */
+export class InterceptingVariantBuilder<TTag extends string | symbol, TState>
+  implements VariantBuilder.VariantBuilder<InterceptingVariant<TTag, TState>, object>
+{
+  tag: TTag;
+  constructor(tag: TTag) {
+    this.tag = tag;
+  }
+  build(): InterceptingVariant<TTag, TState> {
+    return new InterceptingVariant(this.tag);
   }
 }

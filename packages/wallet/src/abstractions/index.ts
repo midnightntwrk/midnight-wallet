@@ -1,8 +1,7 @@
-export * from './Builder';
 export * from './Fluent';
 export * as Variant from './Variant';
-export * from './VariantBuilder';
-export * from './WalletLike';
+export * as VariantBuilder from './VariantBuilder';
+export * as WalletLike from './WalletLike';
 export * as WalletSeed from './WalletSeed';
 export * as WalletState from './WalletState';
 export * as SerializedTransaction from './SerializedTransaction';

@@ -1,0 +1,154 @@
+import { describe, expect } from '@jest/globals';
+import { Effect } from 'effect';
+import * as rx from 'rxjs';
+import { ProtocolVersion, VersionChangeType } from '../abstractions/index';
+import { WalletBuilderTs } from '../index';
+import { toProtocolStateArray } from './testUtils';
+import {
+  InterceptingRunningVariant,
+  InterceptingVariantBuilder,
+  Numeric,
+  NumericMultiplier,
+  NumericRangeBuilder,
+  NumericRangeMultiplierBuilder,
+} from './variants';
+
+describe('Wallet runtime', () => {
+  it('allows to dispatch a poly function on a running variant', async () => {
+    const interceptingTag = 'intercept' as const;
+    const builder = WalletBuilderTs.init()
+      // Have the first variant complete after producing two values, signifying a protocol change.
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(
+        ProtocolVersion.ProtocolVersion(50n),
+        new InterceptingVariantBuilder<typeof interceptingTag, number>(interceptingTag),
+      )
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+    const Wallet = builder.build({
+      min: 0,
+      max: 4,
+      multiplier: 2,
+    });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    const allCollectedState = toProtocolStateArray<number>(wallet.state.pipe(rx.take(5)));
+
+    // Let's wait for the intercepting variant to be initiated to remove any chance of races
+    await rx.firstValueFrom(
+      wallet.state.pipe(rx.find(({ version }) => version == ProtocolVersion.ProtocolVersion(50n))),
+    );
+
+    const dispatchResult = await wallet.runtime
+      .dispatch({
+        [Numeric]: () => Effect.succeed(false),
+        [NumericMultiplier]: () => Effect.succeed(false),
+        [interceptingTag]: (interceptingVariant) =>
+          interceptingVariant
+            .emitProtocolVersionChange(VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }))
+            .pipe(Effect.as(true)),
+      })
+      .pipe(Effect.flatten, Effect.runPromise);
+
+    expect(dispatchResult).toBe(true);
+    expect(await allCollectedState).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 1 }, // This is expected to be emitted by the intercepting variant
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 4 }, // This is the rest
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
+    ]);
+  });
+
+  it('allows wallet to implement own starting procedure', async () => {
+    const builder = WalletBuilderTs.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+    const BaseWallet = builder.build({
+      min: 0,
+      max: 46,
+      multiplier: 2,
+    });
+    class Wallet extends BaseWallet {
+      static startFrom(nr: number): Wallet {
+        return Wallet.startFirst(Wallet, nr);
+      }
+    }
+
+    const wallet = Wallet.startFrom(42);
+
+    expect(wallet).toBeInstanceOf(BaseWallet);
+    expect(wallet).toBeInstanceOf(Wallet);
+
+    const state = wallet.state.pipe(rx.take(5)); // We expect five values.
+    const receivedStates = await toProtocolStateArray(state);
+
+    expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 43 },
+      // The second variant starts applying the multiplier to the state (represents a protocol change).
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
+    ]);
+  });
+
+  it('allows to start from arbitrary variant by providing its state', async () => {
+    const Intercepting = 'intercepting' as const;
+    const builder = WalletBuilderTs.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(
+        ProtocolVersion.ProtocolVersion(50n),
+        new InterceptingVariantBuilder<typeof Intercepting, number>(Intercepting),
+      )
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+    const Wallet = builder.build({
+      min: 0,
+      max: 44,
+      multiplier: 2,
+    });
+    const wallet = Wallet.start(Wallet, Intercepting, 42);
+
+    const state = wallet.state.pipe(rx.take(2));
+
+    await wallet.runtime
+      .dispatch({
+        [Numeric]: () => Effect.void,
+        [NumericMultiplier]: () => Effect.void,
+        [Intercepting]: (interceptingVariant: InterceptingRunningVariant<typeof Intercepting, number>) =>
+          interceptingVariant.emitProtocolVersionChange(VersionChangeType.Next()),
+      })
+      .pipe(Effect.flatten, Effect.runPromise);
+
+    const receivedStates = await toProtocolStateArray(state);
+
+    expect(receivedStates).toEqual([
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
+    ]);
+  });
+
+  it('allows to start from the first variant by providing its state', async () => {
+    const builder = WalletBuilderTs.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+    const Wallet = builder.build({
+      min: 0,
+      max: 46,
+      multiplier: 2,
+    });
+
+    const wallet = Wallet.startFirst(Wallet, 42);
+
+    const state = wallet.state.pipe(rx.take(5)); // We expect five values.
+    const receivedStates = await toProtocolStateArray(state);
+
+    expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 43 },
+      // The second variant starts applying the multiplier to the state (represents a protocol change).
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
+    ]);
+  });
+});

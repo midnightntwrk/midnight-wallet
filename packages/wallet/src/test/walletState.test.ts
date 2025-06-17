@@ -8,23 +8,23 @@ import * as rx from 'rxjs';
 describe('Wallet', () => {
   describe('state', () => {
     it('should report errors', async () => {
-      const builder = new WalletBuilderTs()
+      const builder = WalletBuilderTs.init()
         // Have the variant throw an error after producing two elements.
-        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2, true))
-        .withConfiguration({
-          min: 0,
-          max: 9,
-        });
-      const wallet = builder.build();
+        .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2, true));
+      const Wallet = builder.build({
+        min: 0,
+        max: 9,
+      });
+      const wallet = Wallet.startEmpty(Wallet);
 
       expect(wallet).toBeDefined();
 
       const errorHandler = jest.fn();
-      const receivedStates = await toProtocolStateArray(wallet.state.pipe(rx.take(3)), errorHandler);
+      const receivedStates = await toProtocolStateArray<number>(wallet.state.pipe(rx.take(3)), errorHandler);
 
       expect(receivedStates).toEqual([
-        [ProtocolVersion.MinSupportedVersion, 0],
-        [ProtocolVersion.MinSupportedVersion, 1],
+        { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+        { version: ProtocolVersion.MinSupportedVersion, state: 1 },
       ]);
       expect(errorHandler).toHaveBeenCalled();
     });

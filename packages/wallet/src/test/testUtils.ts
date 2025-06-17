@@ -17,6 +17,13 @@ export type Expect<T extends true> = T;
 export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 
 /**
+ * A utility type that checks whether type A can be assigned to type To
+ * It appears to be useful when mental inferred type are slightly too complex to express and we want the express
+ * a slightly simplified type rule like Expect<CanAssign<{foo: number}, object & {foo: number}>>
+ */
+export type CanAssign<A, To> = A extends To ? true : false;
+
+/**
  * Utility function that takes state values from an RxJS observable until it completes or errors.
  *
  * @param observable The RxJS observable from which state values should be read.
