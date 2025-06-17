@@ -590,6 +590,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@effect/platform@npm:^0.84.6":
+  version: 0.84.11
+  resolution: "@effect/platform@npm:0.84.11"
+  dependencies:
+    find-my-way-ts: "npm:^0.1.5"
+    msgpackr: "npm:^1.11.4"
+    multipasta: "npm:^0.2.5"
+  peerDependencies:
+    effect: ^3.16.7
+  checksum: 10c0/d99e5d83f88b5c38b206747bae2901de4ad668ebacd38ec3a56c70e55b1d96d8618b72c021236b482f80d76376201808aa4a7db4331d53b4f7c297c803b9a1fe
+  languageName: node
+  linkType: hard
+
 "@emurgo/cardano-message-signing-nodejs@npm:^1.0.1":
   version: 1.1.0
   resolution: "@emurgo/cardano-message-signing-nodejs@npm:1.1.0"
@@ -1184,7 +1197,7 @@ __metadata:
     "@midnight-ntwrk/wallet-ts": "workspace:*"
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@types/node": "npm:^22.11.0"
-    effect: "npm:^3.15.4"
+    effect: "npm:^3.16.3"
     eslint: "npm:^9.26.0"
     fast-check: "npm:^4.1.1"
     pure-rand: "npm:^7.0.1"
@@ -1266,7 +1279,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@scure/base": "npm:^1.1.9"
-    effect: "npm:^3.15.4"
+    effect: "npm:^3.16.3"
     isomorphic-ws: "npm:^5.0.0"
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
@@ -1468,6 +1481,17 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnight/wallet-prover-client-ts@workspace:packages/prover-client":
+  version: 0.0.0-use.local
+  resolution: "@midnight/wallet-prover-client-ts@workspace:packages/prover-client"
+  dependencies:
+    "@effect/platform": "npm:^0.84.6"
+    "@midnight-ntwrk/zswap": "npm:^4.0.0"
+    effect: "npm:^3.16.3"
+    testcontainers: "npm:^11.0.3"
+  languageName: unknown
+  linkType: soft
+
 "@midnight/wallet-prover-client@workspace:prover-client":
   version: 0.0.0-use.local
   resolution: "@midnight/wallet-prover-client@workspace:prover-client"
@@ -1523,6 +1547,48 @@ __metadata:
     zod: "npm:^3.23.8"
     zod-to-json-schema: "npm:^3.24.1"
   checksum: 10c0/18e49f42138303075e710b744e8ee958033b29e9a75852def3a320788bfe79128743a439189fad71ed4fd8fcc6c291ae7e38d41a22ed82585569cc6f5965e938
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-darwin-arm64@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-darwin-arm64@npm:3.0.3"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-darwin-x64@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-darwin-x64@npm:3.0.3"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-linux-arm64@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-linux-arm64@npm:3.0.3"
+  conditions: os=linux & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-linux-arm@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-linux-arm@npm:3.0.3"
+  conditions: os=linux & cpu=arm
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-linux-x64@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-linux-x64@npm:3.0.3"
+  conditions: os=linux & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@msgpackr-extract/msgpackr-extract-win32-x64@npm:3.0.3":
+  version: 3.0.3
+  resolution: "@msgpackr-extract/msgpackr-extract-win32-x64@npm:3.0.3"
+  conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
@@ -2328,6 +2394,17 @@ __metadata:
     "@types/node": "npm:*"
     "@types/ssh2": "npm:*"
   checksum: 10c0/1086d5f2703dcb2357be5d050e1b813930737bb7a85f077ab96792a841e79e9a473d8d3965a32bc954d66dff606dee451545b8e9705859c529868894efcde42a
+  languageName: node
+  linkType: hard
+
+"@types/dockerode@npm:^3.3.39":
+  version: 3.3.41
+  resolution: "@types/dockerode@npm:3.3.41"
+  dependencies:
+    "@types/docker-modem": "npm:*"
+    "@types/node": "npm:*"
+    "@types/ssh2": "npm:*"
+  checksum: 10c0/41c6efe6c0153ec62f98ec292046fde3c4c233486c709fc4a394d915a1d26740effb8739857693e02e282469f49d657cfc3bac6b85f492c5f32b94cc2578e8e7
   languageName: node
   linkType: hard
 
@@ -3988,6 +4065,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"debug@npm:^4.4.1":
+  version: 4.4.1
+  resolution: "debug@npm:4.4.1"
+  dependencies:
+    ms: "npm:^2.1.3"
+  peerDependenciesMeta:
+    supports-color:
+      optional: true
+  checksum: 10c0/d2b44bc1afd912b49bb7ebb0d50a860dc93a4dd7d946e8de94abc957bb63726b7dd5aa48c18c2386c379ec024c46692e15ed3ed97d481729f929201e671fcd55
+  languageName: node
+  linkType: hard
+
 "decimal.js@npm:^10.4.2":
   version: 10.5.0
   resolution: "decimal.js@npm:10.5.0"
@@ -4083,6 +4172,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"detect-libc@npm:^2.0.1":
+  version: 2.0.4
+  resolution: "detect-libc@npm:2.0.4"
+  checksum: 10c0/c15541f836eba4b1f521e4eecc28eefefdbc10a94d3b8cb4c507689f332cc111babb95deda66f2de050b22122113189986d5190be97d51b5a2b23b938415e67c
+  languageName: node
+  linkType: hard
+
 "detect-newline@npm:^3.0.0":
   version: 3.1.0
   resolution: "detect-newline@npm:3.1.0"
@@ -4122,6 +4218,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"docker-compose@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "docker-compose@npm:1.2.0"
+  dependencies:
+    yaml: "npm:^2.2.2"
+  checksum: 10c0/0bc4ef187904dba55b76b3450b7b2d65b7ee19afdff0d74ffc6ccb573d7ae63de329f13ad01ffc76ddf702a12060a848287b3ff76477014d5e9b63e0958146dd
+  languageName: node
+  linkType: hard
+
 "docker-modem@npm:^5.0.6":
   version: 5.0.6
   resolution: "docker-modem@npm:5.0.6"
@@ -4146,6 +4251,21 @@ __metadata:
     tar-fs: "npm:~2.1.2"
     uuid: "npm:^10.0.0"
   checksum: 10c0/c0c974425fcca8c91c6c6419f0f06be13a63c17c38b73f78bd79cd35c8cb5699211727366747c7357fdfe749f5bf5823ab2896abd0db77fadab11001c294c1a4
+  languageName: node
+  linkType: hard
+
+"dockerode@npm:^4.0.7":
+  version: 4.0.7
+  resolution: "dockerode@npm:4.0.7"
+  dependencies:
+    "@balena/dockerignore": "npm:^1.0.2"
+    "@grpc/grpc-js": "npm:^1.11.1"
+    "@grpc/proto-loader": "npm:^0.7.13"
+    docker-modem: "npm:^5.0.6"
+    protobufjs: "npm:^7.3.2"
+    tar-fs: "npm:~2.1.2"
+    uuid: "npm:^10.0.0"
+  checksum: 10c0/1ac6e1c0b589ea4878416ef334ae94d79da4261b3b7710a469cc27840667acbcf5ee22a4ec00a0ab61b03b670689f7605114ae9f021e5d2a6dfc22314d098b75
   languageName: node
   linkType: hard
 
@@ -4197,13 +4317,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"effect@npm:^3.15.4":
-  version: 3.15.4
-  resolution: "effect@npm:3.15.4"
+"effect@npm:^3.16.3":
+  version: 3.16.8
+  resolution: "effect@npm:3.16.8"
   dependencies:
     "@standard-schema/spec": "npm:^1.0.0"
     fast-check: "npm:^3.23.1"
-  checksum: 10c0/818e725d399384ab26f9293fcbb0448597e23f39c5f2a372cccef6aa6770312fb1a9e4f8391777bb3386e91fa4e5ca57480f0cb9af65a1e3e059a9a1ee9c429d
+  checksum: 10c0/8cb6b299225507f651e623799d59b3ef42904abf61a354cd4a8da8cd199986a7b5d804ddc7436e43ddff73f2e189849ce77eb9aea449f1cc41d63f7e44fb21e4
   languageName: node
   linkType: hard
 
@@ -4895,6 +5015,13 @@ __metadata:
     parseurl: "npm:^1.3.3"
     statuses: "npm:^2.0.1"
   checksum: 10c0/da0bbca6d03873472ee890564eb2183f4ed377f25f3628a0fc9d16dac40bed7b150a0d82ebb77356e4c6d97d2796ad2dba22948b951dddee2c8768b0d1b9fb1f
+  languageName: node
+  linkType: hard
+
+"find-my-way-ts@npm:^0.1.5":
+  version: 0.1.5
+  resolution: "find-my-way-ts@npm:0.1.5"
+  checksum: 10c0/703797b8466e1fbf437f0a6f7e100e02ca5922c0d7afb0548b5e77fa9c7b4e4a5bed5d2589e27cc037a516b144e3ba334acce5369387a79975ffaf61b2900398
   languageName: node
   linkType: hard
 
@@ -7428,10 +7555,60 @@ __metadata:
   languageName: node
   linkType: hard
 
+"msgpackr-extract@npm:^3.0.2":
+  version: 3.0.3
+  resolution: "msgpackr-extract@npm:3.0.3"
+  dependencies:
+    "@msgpackr-extract/msgpackr-extract-darwin-arm64": "npm:3.0.3"
+    "@msgpackr-extract/msgpackr-extract-darwin-x64": "npm:3.0.3"
+    "@msgpackr-extract/msgpackr-extract-linux-arm": "npm:3.0.3"
+    "@msgpackr-extract/msgpackr-extract-linux-arm64": "npm:3.0.3"
+    "@msgpackr-extract/msgpackr-extract-linux-x64": "npm:3.0.3"
+    "@msgpackr-extract/msgpackr-extract-win32-x64": "npm:3.0.3"
+    node-gyp: "npm:latest"
+    node-gyp-build-optional-packages: "npm:5.2.2"
+  dependenciesMeta:
+    "@msgpackr-extract/msgpackr-extract-darwin-arm64":
+      optional: true
+    "@msgpackr-extract/msgpackr-extract-darwin-x64":
+      optional: true
+    "@msgpackr-extract/msgpackr-extract-linux-arm":
+      optional: true
+    "@msgpackr-extract/msgpackr-extract-linux-arm64":
+      optional: true
+    "@msgpackr-extract/msgpackr-extract-linux-x64":
+      optional: true
+    "@msgpackr-extract/msgpackr-extract-win32-x64":
+      optional: true
+  bin:
+    download-msgpackr-prebuilds: bin/download-prebuilds.js
+  checksum: 10c0/e504fd8bf86a29d7527c83776530ee6dc92dcb0273bb3679fd4a85173efead7f0ee32fb82c8410a13c33ef32828c45f81118ffc0fbed5d6842e72299894623b4
+  languageName: node
+  linkType: hard
+
+"msgpackr@npm:^1.11.4":
+  version: 1.11.4
+  resolution: "msgpackr@npm:1.11.4"
+  dependencies:
+    msgpackr-extract: "npm:^3.0.2"
+  dependenciesMeta:
+    msgpackr-extract:
+      optional: true
+  checksum: 10c0/171f6e15b628e91969cbb715c076e218886dc505fdac9ce31aa9e8641877cb5cf52d89fe0ca2930520711b1bbc9f792e10d0a9fc08806ad5d543c50abfab322c
+  languageName: node
+  linkType: hard
+
 "multiformats@npm:^13.0.0, multiformats@npm:^13.0.1":
   version: 13.3.3
   resolution: "multiformats@npm:13.3.3"
   checksum: 10c0/0e465f7dd7e3bff2592d756c74ef2ba488a655254306a0a7073da8fe53e444b7d5f328d58f353b375bfa2eb98bf97bf2d80ce3c2b84e4a965c5bc8a7646b73f6
+  languageName: node
+  linkType: hard
+
+"multipasta@npm:^0.2.5":
+  version: 0.2.5
+  resolution: "multipasta@npm:0.2.5"
+  checksum: 10c0/f0790b1bdfc6b84ae6139982ead353957b668fe54fec8a4d93c19e9d051b02c837c93fbdff10b26bff2dbfcf7792c6435c27786c14ad82a0fb33b939c1bf96c6
   languageName: node
   linkType: hard
 
@@ -7534,6 +7711,19 @@ __metadata:
     encoding:
       optional: true
   checksum: 10c0/b55786b6028208e6fbe594ccccc213cab67a72899c9234eb59dba51062a299ea853210fcf526998eaa2867b0963ad72338824450905679ff0fa304b8c5093ae8
+  languageName: node
+  linkType: hard
+
+"node-gyp-build-optional-packages@npm:5.2.2":
+  version: 5.2.2
+  resolution: "node-gyp-build-optional-packages@npm:5.2.2"
+  dependencies:
+    detect-libc: "npm:^2.0.1"
+  bin:
+    node-gyp-build-optional-packages: bin.js
+    node-gyp-build-optional-packages-optional: optional.js
+    node-gyp-build-optional-packages-test: build-test.js
+  checksum: 10c0/c81128c6f91873381be178c5eddcbdf66a148a6a89a427ce2bcd457593ce69baf2a8662b6d22cac092d24aa9c43c230dec4e69b3a0da604503f4777cd77e282b
   languageName: node
   linkType: hard
 
@@ -9689,6 +9879,23 @@ __metadata:
   languageName: node
   linkType: hard
 
+"tar-fs@npm:^3.0.9":
+  version: 3.0.10
+  resolution: "tar-fs@npm:3.0.10"
+  dependencies:
+    bare-fs: "npm:^4.0.1"
+    bare-path: "npm:^3.0.0"
+    pump: "npm:^3.0.0"
+    tar-stream: "npm:^3.1.5"
+  dependenciesMeta:
+    bare-fs:
+      optional: true
+    bare-path:
+      optional: true
+  checksum: 10c0/b8e8c1c3e9be6928a6252b491a58fe435ad01e3d7c62959cf7796f3f733d07a5ccece8b1ab81ea94c18167388759f33b6d59d6022103cdbb40a4c7c7879b63ab
+  languageName: node
+  linkType: hard
+
 "tar-fs@npm:~2.1.2":
   version: 2.1.2
   resolution: "tar-fs@npm:2.1.2"
@@ -9784,6 +9991,29 @@ __metadata:
     tmp: "npm:^0.2.3"
     undici: "npm:^5.28.5"
   checksum: 10c0/1de2da2e9f688f8708ae454e1ac0613e330e967d456cd018be948473f3ab1317d865dfea5e055fff78e6fe01408c8348b4c51a732315cf6c90bcc26a5f8fc99b
+  languageName: node
+  linkType: hard
+
+"testcontainers@npm:^11.0.3":
+  version: 11.0.3
+  resolution: "testcontainers@npm:11.0.3"
+  dependencies:
+    "@balena/dockerignore": "npm:^1.0.2"
+    "@types/dockerode": "npm:^3.3.39"
+    archiver: "npm:^7.0.1"
+    async-lock: "npm:^1.4.1"
+    byline: "npm:^5.0.0"
+    debug: "npm:^4.4.1"
+    docker-compose: "npm:^1.2.0"
+    dockerode: "npm:^4.0.7"
+    get-port: "npm:^7.1.0"
+    proper-lockfile: "npm:^4.1.2"
+    properties-reader: "npm:^2.3.0"
+    ssh-remote-port-forward: "npm:^1.0.4"
+    tar-fs: "npm:^3.0.9"
+    tmp: "npm:^0.2.3"
+    undici: "npm:^7.10.0"
+  checksum: 10c0/c5cfec9596aa8f9dd05671c0f1480fd38bc9a70c4b8c124be1245c0294ace040f6a8ea0428c39223baa2e50542d8b0182a2992cabe1e3ebe085035b9186f738d
   languageName: node
   linkType: hard
 
@@ -10218,6 +10448,13 @@ __metadata:
   dependencies:
     "@fastify/busboy": "npm:^2.0.0"
   checksum: 10c0/e4e4d631ca54ee0ad82d2e90e7798fa00a106e27e6c880687e445cc2f13b4bc87c5eba2a88c266c3eecffb18f26e227b778412da74a23acc374fca7caccec49b
+  languageName: node
+  linkType: hard
+
+"undici@npm:^7.10.0":
+  version: 7.10.0
+  resolution: "undici@npm:7.10.0"
+  checksum: 10c0/756ac876a8df845bc89eb8348c35d33a0ff63c17eb45b664075c961a7fbd4a398f94f9dce438262f55fe66e4bbb0a46aa63a3fd58ce51361c616aff11a270450
   languageName: node
   linkType: hard
 

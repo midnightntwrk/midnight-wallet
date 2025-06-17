@@ -1,5 +1,5 @@
 {
-  "name": "@midnight-ntwrk/wallet-ts",
+  "name": "@midnight/wallet-prover-client-ts",
   "version": "5.0.0",
   "type": "module",
   "module": "dist/index.js",
@@ -17,24 +17,15 @@
     "./effect": {
       "import": "./dist/effect/index.mjs",
       "types": "./dist/effect/index.d.ts"
-    },
-    "./v1": {
-      "import": "./dist/v1/index.mjs",
-      "types": "./dist/v1/index.d.ts"
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-api": "^5.0.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@effect/platform": "^0.84.6",
     "@midnight-ntwrk/zswap": "^4.0.0",
-    "@scure/base": "^1.1.9",
-    "effect": "^3.16.3",
-    "isomorphic-ws": "^5.0.0",
-    "node-fetch": "3.3.2",
-    "rxjs": "^7.5",
-    "scale-ts": "^1.1.0",
-    "ws": "^8.8.1"
+    "effect": "^3.16.3"
+  },
+  "devDependencies": {
+    "testcontainers": "^11.0.3"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
