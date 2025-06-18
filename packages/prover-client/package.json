@@ -10,10 +10,6 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./abstractions": {
-      "import": "./dist/abstractions/index.mjs",
-      "types": "./dist/abstractions/index.d.ts"
-    },
     "./effect": {
       "import": "./dist/effect/index.mjs",
       "types": "./dist/effect/index.d.ts"
