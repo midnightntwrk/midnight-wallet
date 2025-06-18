@@ -39,7 +39,7 @@ describe('Transaction balancing examples', () => {
   const output50 = 50_000_000n;
   const output30 = 30_000_000n;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     await allure.step('Distribute coins to sender', async function () {
       fixture = getFixture();
 
@@ -141,7 +141,7 @@ describe('Transaction balancing examples', () => {
     });
   }, timeout);
 
-  afterAll(async () => {
+  afterEach(async () => {
     await walletFunded.close();
     await sender.close();
   }, timeout);
