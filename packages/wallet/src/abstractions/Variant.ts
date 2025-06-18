@@ -2,7 +2,7 @@
 import { Scope, SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
-import { WithTag } from '../utils/polyFunction';
+import { WithTag, getTag } from '../utils/polyFunction';
 import type { ProtocolVersion } from './ProtocolVersion';
 import { StateChange } from './StateChange';
 import { WalletRuntimeError } from './WalletRuntimeError';
@@ -81,3 +81,20 @@ export type AnyVersionedVariant = VersionedVariant<AnyVariant>;
  * The expected order of the variants will be ascending on `sinceVersion`.
  */
 export type AnyVersionedVariantArray = AnyVersionedVariant[];
+
+export type VariantTag<T> =
+  T extends VersionedVariant<infer V> ? VariantTag<V> : T extends WithTag<infer Tag> ? Tag : never;
+export type VariantRecord<Variants> = Variants extends [infer THead, ...infer TRest]
+  ? { readonly [K in VariantTag<THead>]: THead } & VariantRecord<TRest>
+  : Variants extends []
+    ? object
+    : never;
+export const getVersionedVariantTag = <Variant extends AnyVariant>(v: VersionedVariant<Variant>): VariantTag<Variant> =>
+  getTag(v.variant) as VariantTag<Variant>;
+export const makeVersionedRecord = <Variants extends AnyVersionedVariantArray>(
+  variants: Variants,
+): VariantRecord<Variants> => {
+  return variants.reduce((acc: Partial<VariantRecord<Variants>>, variant) => {
+    return { ...acc, [getVersionedVariantTag(variant)]: variant };
+  }, {}) as VariantRecord<Variants>;
+};

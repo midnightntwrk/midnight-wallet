@@ -1,5 +1,5 @@
 import { describe, it } from '@jest/globals';
-import { Equal, Expect } from '../../test/testUtils';
+import { CanAssign, Equal, Expect } from '../../test/testUtils';
 import {
   InterceptingRunningVariant,
   InterceptingVariant,
@@ -10,7 +10,8 @@ import {
 } from '../../test/variants';
 import * as H from '../../utils/hlist';
 import * as Poly from '../../utils/polyFunction';
-import { RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
+import { ProtocolVersion } from '../ProtocolVersion';
+import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
 
 describe('Variant', () => {
   it('infers its state correctly', () => {
@@ -86,5 +87,75 @@ describe('Variant', () => {
         | InterceptingRunningVariant<string, string>
       >
     >;
+  });
+
+  describe('building a tagged record', () => {
+    it('returns and infers an empty object in case of empty array provided', () => {
+      const record = makeVersionedRecord([] as const);
+      expect(record).toEqual({});
+      type _1 = Expect<Equal<typeof record, object>>;
+    });
+
+    it('returns and infers in single-variant case correctly', () => {
+      const range: VersionedVariant<NumericRange> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new NumericRange({ min: 0, max: 1 }, 1, false),
+      };
+      const record1 = makeVersionedRecord([range] as const);
+      expect(record1).toEqual({ [Numeric]: range });
+      type _1 = Expect<Equal<typeof record1, object & { readonly NumericRange: VersionedVariant<NumericRange> }>>;
+
+      const rangeMultiplier: VersionedVariant<NumericRangeMultiplier> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
+      };
+      const record2 = makeVersionedRecord([rangeMultiplier] as const);
+      expect(record2).toEqual({ [NumericMultiplier]: rangeMultiplier });
+      type _2 = Expect<
+        Equal<typeof record2, object & { readonly NumericMultiplier: VersionedVariant<NumericRangeMultiplier> }>
+      >;
+
+      const interceptor: VersionedVariant<InterceptingVariant<'foo', number>> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new InterceptingVariant('foo'),
+      };
+      const record3 = makeVersionedRecord([interceptor] as const);
+      expect(record3).toEqual({ foo: interceptor });
+      type _3 = Expect<
+        Equal<typeof record3, object & { readonly foo: VersionedVariant<InterceptingVariant<'foo', number>> }>
+      >;
+    });
+
+    it('returns and infers in multi-variant case correctly', () => {
+      const range: VersionedVariant<NumericRange> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new NumericRange({ min: 0, max: 1 }, 1, false),
+      };
+      const rangeMultiplier: VersionedVariant<NumericRangeMultiplier> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
+      };
+      const interceptor: VersionedVariant<InterceptingVariant<'foo', number>> = {
+        sinceVersion: ProtocolVersion(1n),
+        variant: new InterceptingVariant('foo'),
+      };
+
+      const record = makeVersionedRecord([range, rangeMultiplier, interceptor] as const);
+      expect(record).toEqual({
+        [Numeric]: range,
+        [NumericMultiplier]: rangeMultiplier,
+        foo: interceptor,
+      });
+      type _1 = Expect<
+        CanAssign<
+          {
+            readonly NumericRange: VersionedVariant<NumericRange>;
+            readonly NumericMultiplier: VersionedVariant<NumericRangeMultiplier>;
+            readonly foo: VersionedVariant<InterceptingVariant<'foo', number>>;
+          },
+          typeof record
+        >
+      >;
+    });
   });
 });

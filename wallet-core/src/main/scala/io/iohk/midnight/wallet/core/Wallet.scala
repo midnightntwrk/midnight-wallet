@@ -65,6 +65,16 @@ final case class Wallet[LocalState, SecretKeys, Transaction](
 
     this.copy(state = newState)
   }
+
+  def toSnapshot(): Snapshot[LocalState, Transaction] = {
+    Snapshot(
+      this.state,
+      this.txHistory,
+      this.offset,
+      this.protocolVersion,
+      this.networkId,
+    )
+  }
 }
 
 @JSExportTopLevel("CoreWallet")
@@ -84,6 +94,22 @@ object Wallet {
       V1,
       networkId,
       false,
+    )
+  }
+
+  def fromSnapshot[LocalState, SecretKeys, Transaction](
+      secretKeys: SecretKeys,
+      snapshot: Snapshot[LocalState, Transaction],
+  ): Wallet[LocalState, SecretKeys, Transaction] = {
+    new Wallet(
+      snapshot.state,
+      secretKeys,
+      snapshot.txHistory.toVector,
+      snapshot.offset,
+      ProgressUpdate(snapshot.offset.map(_.decrement), None, None, None),
+      snapshot.protocolVersion,
+      snapshot.networkId,
+      isConnected = false,
     )
   }
 }
@@ -166,16 +192,7 @@ class WalletInstances[
 
   given walletCreation: WalletCreation[TWallet, Snapshot[LocalState, Transaction]] =
     (seed: Array[Byte], snapshot: Snapshot[LocalState, Transaction]) => {
-      new TWallet(
-        snapshot.state,
-        secretKeys.fromSeed(seed),
-        snapshot.txHistory.toVector,
-        snapshot.offset,
-        ProgressUpdate(snapshot.offset.map(_.decrement), None, None, None),
-        snapshot.protocolVersion,
-        snapshot.networkId,
-        isConnected = false,
-      )
+      Wallet.fromSnapshot(secretKeys.fromSeed(seed), snapshot)
     }
 
   given walletBalances: WalletBalances[TWallet, TokenType] with {
@@ -285,18 +302,25 @@ class WalletInstances[
   val walletDiscardTxHistory: WalletTxHistory[TWallet, Transaction] =
     new DiscardTxHistoryCapability()
 
-  given serializeState: WalletStateSerialize[TWallet, SerializedWalletState] =
-    import snapshotInstances.given
-    (wallet: TWallet) =>
-      SerializedWalletState(
-        Snapshot(
-          wallet.state,
-          wallet.txHistory,
-          wallet.offset,
-          wallet.protocolVersion,
-          wallet.networkId,
-        ).serialize,
-      )
+  given serializeState: WalletStateSerialize[TWallet, SecretKeys, SerializedWalletState] = {
+    val default = new DefaultSerializeCapability[TWallet, SecretKeys, LocalState, Transaction](
+      toSnapshot = (wallet) => wallet.toSnapshot(),
+      fromSnapshot = (secretKeys, snapshot) => Wallet.fromSnapshot(secretKeys, snapshot),
+    )
+
+    new WalletStateSerialize[TWallet, SecretKeys, SerializedWalletState] {
+      extension (wallet: TWallet)
+        override def serialize: SerializedWalletState = SerializedWalletState(
+          default.serialize(wallet),
+        )
+
+      override def deserialize(
+          secretKeys: SecretKeys,
+          serialized: SerializedWalletState,
+      ): Either[WalletError, TWallet] =
+        default.deserialize(secretKeys, serialized.serializedState)
+    }
+  }
 
   given walletSync(using
       txHistory: WalletTxHistory[TWallet, Transaction],

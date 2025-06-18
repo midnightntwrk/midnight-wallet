@@ -9,6 +9,12 @@ import io.iohk.midnight.wallet.blockchain.data.ProtocolVersion
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.HexUtil
 
+import scala.scalajs.js
+import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
+import scala.scalajs.js.JSConverters.given
+
+@JSExportTopLevel("SnapshotInstance")
+@JSExportAll
 final case class Snapshot[LocalState, Transaction](
     state: LocalState,
     txHistory: Seq[Transaction],
@@ -16,8 +22,22 @@ final case class Snapshot[LocalState, Transaction](
     protocolVersion: ProtocolVersion,
     networkId: zswap.NetworkId,
 ) {
+  lazy val txHistoryArray: js.Array[Transaction] = txHistory.toJSArray;
+
   def serialize(using Encoder[Snapshot[LocalState, Transaction]]): String =
     this.asJson.noSpaces
+}
+
+@JSExportTopLevel("Snapshot")
+@JSExportAll
+object Snapshot {
+  def deserialize[LocalState, Transaction](
+      serialized: String,
+  )(using
+      Decoder[Snapshot[LocalState, Transaction]],
+  ): Either[Throwable, Snapshot[LocalState, Transaction]] = {
+    decode[Snapshot[LocalState, Transaction]](serialized)
+  }
 }
 
 class SnapshotInstances[LocalState, Transaction](using

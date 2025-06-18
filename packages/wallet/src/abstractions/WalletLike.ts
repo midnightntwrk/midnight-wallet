@@ -4,7 +4,7 @@ import { Observable } from 'rxjs';
 import { Runtime } from '../Runtime';
 import * as Poly from '../utils/polyFunction';
 import { ProtocolState } from './ProtocolState';
-import { AnyVersionedVariantArray, StateOf } from './Variant';
+import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant';
 import * as H from '../utils/hlist';
 
 /**
@@ -13,6 +13,7 @@ import * as H from '../utils/hlist';
 export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray> {
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): WalletLike<TVariants>;
   allVariants(): TVariants;
+  allVariantsRecord(): VariantRecord<TVariants>;
   startEmpty<T extends WalletClassLike<TVariants, any>>(walletClass: T): WalletOf<T>;
   startFirst<T extends WalletClassLike<TVariants, any>>(walletClass: T, state: StateOf<H.Head<TVariants>>): WalletOf<T>;
   start<T extends WalletClassLike<TVariants, any>, Tag extends string | symbol>(

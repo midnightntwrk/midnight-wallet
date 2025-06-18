@@ -88,7 +88,7 @@ class WalletStateServiceFactory[
     WalletBalances[TWallet, TokenType],
     WalletCoins[TWallet, QualifiedCoinInfo, CoinInfo, Nullifier],
     WalletTxHistory[TWallet, Transaction],
-    WalletStateSerialize[TWallet, WalletStateService.SerializedWalletState],
+    WalletStateSerialize[TWallet, ?, WalletStateService.SerializedWalletState],
     zswap.Transaction.HasImbalances[Transaction, TokenType],
     zswap.Transaction.Transaction[Transaction, ?],
 )(using

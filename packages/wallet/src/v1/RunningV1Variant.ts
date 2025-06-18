@@ -1,9 +1,10 @@
 import { CoreWallet, JsOption } from '@midnight-ntwrk/wallet';
 import { ProvingRecipe, TokenTransfer, TransactionToProve } from '@midnight-ntwrk/wallet-api';
-import { CoinInfo, LocalState, SecretKeys, Transaction } from '@midnight-ntwrk/zswap';
+import * as zswap from '@midnight-ntwrk/zswap';
 import { Context, Effect, Layer, Stream, SubscriptionRef } from 'effect';
 import { WalletRuntimeError, StateChange, VersionChangeType, ProtocolVersion, Variant } from '../abstractions/index';
 import { EitherOps } from '../effect/index';
+import { SerializationCapability } from './Serialization';
 import { SyncCapability } from './SyncCapability';
 import { SyncService } from './SyncService';
 import { TransactingCapability } from './Transacting';
@@ -45,32 +46,41 @@ const protocolVersionChange = (previous: V1State, current: V1State): StateChange
     : [];
 };
 
-export type V1State = CoreWallet<LocalState, SecretKeys>;
+export type V1State = CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
 export declare namespace RunningV1Variant {
-  export type Context = SyncService | SyncCapability | TransactingCapabilityTag;
-  interface API {
-    balanceTransaction(tx: Transaction, newCoins: CoinInfo[]): Effect.Effect<ProvingRecipe, WalletError>;
+  export type LayerContext = SyncService | SyncCapability | TransactingCapabilityTag;
+  //TODO: Migrate to such record whole V1 context instead of layers
+  export type Context<TSerialized> = {
+    serializationCapability: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+  };
+
+  interface API<TSerialized> {
+    balanceTransaction(tx: zswap.Transaction, newCoins: zswap.CoinInfo[]): Effect.Effect<ProvingRecipe, WalletError>;
     transferTransaction(outputs: TokenTransfer[]): Effect.Effect<TransactionToProve, WalletError>;
+    serializeState(state: V1State): TSerialized;
   }
 }
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export class RunningV1Variant implements Variant.RunningVariant<typeof V1Tag, V1State> {
+export class RunningV1Variant<TSerialized> implements Variant.RunningVariant<typeof V1Tag, V1State> {
   __polyTag__: typeof V1Tag = V1Tag;
   #context: Variant.VariantContext<V1State>;
-  #layer: Layer.Layer<RunningV1Variant.Context>;
+  #v1Context: RunningV1Variant.Context<TSerialized>;
+  #layer: Layer.Layer<RunningV1Variant.LayerContext>;
 
   readonly state: Stream.Stream<StateChange.StateChange<V1State>, WalletRuntimeError>;
 
   constructor(
     context: Variant.VariantContext<V1State>,
     initialState: V1State,
-    layer: Layer.Layer<RunningV1Variant.Context>,
+    layer: Layer.Layer<RunningV1Variant.LayerContext>,
+    v1Context: RunningV1Variant.Context<TSerialized>,
   ) {
     this.#context = context;
     this.#layer = layer;
+    this.#v1Context = v1Context;
     this.state = context.stateRef.changes.pipe(
       Stream.mapAccum(initialState, (previous: V1State, current: V1State) => {
         return [current, [previous, current]] as const;
@@ -104,7 +114,7 @@ export class RunningV1Variant implements Variant.RunningVariant<typeof V1Tag, V1
     );
   }
 
-  balanceTransaction(tx: Transaction, newCoins: CoinInfo[]): Effect.Effect<ProvingRecipe, WalletError> {
+  balanceTransaction(tx: zswap.Transaction, newCoins: zswap.CoinInfo[]): Effect.Effect<ProvingRecipe, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return TransactingCapabilityTag.pipe(
         Effect.map((transacting) => transacting.balanceTransaction(state, tx, newCoins)),
@@ -124,5 +134,9 @@ export class RunningV1Variant implements Variant.RunningVariant<typeof V1Tag, V1
         Effect.provide(this.#layer),
       );
     });
+  }
+
+  serializeState(state: V1State): TSerialized {
+    return this.#v1Context.serializationCapability.serialize(state);
   }
 }

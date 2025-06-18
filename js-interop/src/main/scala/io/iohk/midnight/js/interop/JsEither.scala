@@ -16,4 +16,10 @@ object JsEither {
   def right[B](value: B): Either[Any, B] = Right(value)
 
   def left[A](value: A): Either[A, Any] = Left(value)
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def get[A, B](either: Either[A, B]): B = either match {
+    case Left(value)  => throw js.JavaScriptException(s"Called get on left value ${value}")
+    case Right(value) => value
+  }
 }

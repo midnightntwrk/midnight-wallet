@@ -7,7 +7,7 @@ import {
   TRANSACTION_TO_PROVE,
 } from '@midnight-ntwrk/wallet-api';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { Runtime, WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import { V1Builder, V1Variant, V1Configuration, V1State, V1Tag, RunningV1Variant } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
@@ -52,11 +52,14 @@ describe('Wallet transacting', () => {
     await environment?.down();
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant>]>;
-  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant>]>;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<string>>]>;
+  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<string>>]>;
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withSyncDefaults().withTransactingDefaults())
+      .withVariant(
+        ProtocolVersion.MinSupportedVersion,
+        new V1Builder().withSyncDefaults().withTransactingDefaults().withSerializationDefaults(),
+      )
       .build(configuration!);
     wallet = Wallet.startEmpty(Wallet);
   });
@@ -99,7 +102,7 @@ describe('Wallet transacting', () => {
 
       const recipe: ProvingRecipe = await wallet.runtime
         .dispatch({
-          [V1Tag]: (v1: RunningV1Variant) => v1.transferTransaction(outputs),
+          [V1Tag]: (v1: RunningV1Variant<string>) => v1.transferTransaction(outputs),
         })
         .pipe(Effect.flatten, Effect.runPromise);
 

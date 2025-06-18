@@ -95,6 +95,10 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
         return variants;
       }
 
+      static allVariantsRecord(): Variant.VariantRecord<Variants> {
+        return Variant.makeVersionedRecord(BaseWallet.allVariants());
+      }
+
       static startEmpty<T extends WalletLike.AnyWalletClass<Variants>>(WalletClass: T): WalletLike.WalletOf<T> {
         return Effect.gen(this, function* () {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment

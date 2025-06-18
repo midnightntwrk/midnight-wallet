@@ -1,4 +1,4 @@
-import { afterEach, beforeEach } from '@jest/globals';
+import { describe, it, afterEach, beforeEach } from '@jest/globals';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import * as path from 'node:path';
 import * as rx from 'rxjs';
@@ -35,11 +35,14 @@ describe('Wallet Sync', () => {
     await environment?.down();
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant>]>;
-  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant>]>;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<string>>]>;
+  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<string>>]>;
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withSyncDefaults().withTransactingDefaults())
+      .withVariant(
+        ProtocolVersion.MinSupportedVersion,
+        new V1Builder().withSyncDefaults().withTransactingDefaults().withSerializationDefaults(),
+      )
       .build(configuration!);
     wallet = Wallet.startEmpty(Wallet);
   });

@@ -60,4 +60,9 @@ object WalletError {
     }
 
   }
+
+  final case class SerializationError(error: Throwable) extends WalletError {
+    override def toString: String = s"SerializationError: ${error.getMessage}"
+    override def toThrowable: Throwable = error
+  }
 }

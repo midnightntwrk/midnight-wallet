@@ -114,6 +114,7 @@ export declare class JsEither {
   static fold<A, B, R>(either: ScalaEither<A, B>, onLeft: (a: A) => R, onRight: (b: B) => R): R;
   static right<B>(value: B): ScalaEither<never, B>;
   static left<A>(value: A): ScalaEither<A, never>;
+  static get<A, B>(either: ScalaEither<A, B>): B;
 }
 
 export declare class ScalaOption<R> {}
@@ -173,6 +174,8 @@ export declare class CoreWallet<State, SecretKeys> {
     networkId: NetworkId,
   ): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
+  static fromSnapshot(keys: zswap.SecretKeys, snapshot: Snapshot): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
+
   readonly state: State;
   readonly secretKeys: SecretKeys;
   readonly isConnected: boolean;
@@ -186,6 +189,26 @@ export declare class CoreWallet<State, SecretKeys> {
    * @deprecated Temporary, only for internal use
    */
   applyState(state: State): CoreWallet<State, SecretKeys>;
+
+  toSnapshot(): Snapshot;
+}
+
+export declare class Snapshot {
+  readonly state: zswap.LocalState;
+  readonly txHistoryArray: ReadonlyArray<Transaction>;
+  readonly offset: ScalaOption<Offset>;
+  readonly protocolVersion: ProtocolVersion;
+  readonly networkId: NetworkId;
+}
+
+export declare class DefaultSerializeCapability<TWallet, TAuxiliary> {
+  static createV1<TWallet, TAuxiliary>(
+    toSnapshot: (wallet: TWallet) => Snapshot,
+    fromSnapshot: (auxiliary: TAuxiliary, snapshot: Snapshot) => TWallet,
+  ): DefaultSerializeCapability<TWallet, TAuxiliary>;
+
+  serialize(wallet: TWallet): string;
+  deserialize(auxiliary: TAuxiliary, serialized: string): ScalaEither<WalletError, TWallet>;
 }
 
 export declare class DefaultTxHistoryCapability {}

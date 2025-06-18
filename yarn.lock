@@ -1280,6 +1280,7 @@ __metadata:
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@scure/base": "npm:^1.1.9"
     effect: "npm:^3.16.3"
+    fast-check: "npm:^4.1.1"
     isomorphic-ws: "npm:^5.0.0"
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
