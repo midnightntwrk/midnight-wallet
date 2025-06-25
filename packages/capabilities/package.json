@@ -31,7 +31,7 @@
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest --silent=false",
-    "lint": "eslint",
+    "lint": "eslint --max-warnings 0",
     "dist": "rollup -c ./rollup.config.mjs"
   }
 }

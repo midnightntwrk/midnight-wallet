@@ -1,4 +1,5 @@
 export * from './V1Builder';
-export * as SyncCapability from './SyncCapability';
-export * as SyncService from './SyncService';
+export * as Sync from './Sync';
+export * as Transacting from './Transacting';
+export * as Serialization from './Serialization';
 export * from './RunningV1Variant';

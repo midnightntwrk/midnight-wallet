@@ -3,7 +3,7 @@ import * as rx from 'rxjs';
 import { Fluent, ProtocolVersion, Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions/index';
 import { ProtocolState } from './abstractions/ProtocolState';
 import { StateOf } from './abstractions/Variant';
-import { Observable, Runtime } from './effect/index';
+import { ObservableOps, Runtime } from './effect/index';
 import * as H from './utils/hlist';
 import * as Poly from './utils/polyFunction';
 
@@ -76,7 +76,6 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     type Variants = VariantBuilder.VersionedVariantsOf<TBuilders>;
 
     if (this.#buildState.variants.length == 0) {
-      // eslint-disable-next-line @typescript-eslint/only-throw-error -- Effect's TaggedError does not extend Error
       throw new WalletRuntimeError({ message: 'Empty variants list' });
     }
 
@@ -149,7 +148,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       constructor(runtime: Runtime.Runtime<Variants>, runtimeScope: Scope.CloseableScope) {
         this.runtime = runtime;
         this.runtimeScope = runtimeScope;
-        this.state = Observable.fromStream(runtime.stateChanges).pipe(
+        this.state = ObservableOps.fromStream(runtime.stateChanges).pipe(
           rx.shareReplay({ refCount: true, bufferSize: 1 }),
         );
       }

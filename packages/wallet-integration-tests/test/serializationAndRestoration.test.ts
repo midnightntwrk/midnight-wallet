@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, it } from '@jest/globals';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { V1Builder, V1Configuration, V1State, V1Tag, V1Variant } from '@midnight-ntwrk/wallet-ts/v1';
+import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, Either } from 'effect';
 import { randomUUID } from 'node:crypto';
@@ -14,7 +14,7 @@ const timeout = 120_000;
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
   let environment: StartedDockerComposeEnvironment | null = null;
-  let configuration: V1Configuration | null = null;
+  let configuration: DefaultV1Configuration | null = null;
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
@@ -36,14 +36,11 @@ describe('Wallet serialization and restoration', () => {
     await environment?.down();
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<string>>]>;
-  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<string>>]>;
+  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]>;
+  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
-      .withVariant(
-        ProtocolVersion.MinSupportedVersion,
-        new V1Builder().withSyncDefaults().withTransactingDefaults().withSerializationDefaults(),
-      )
+      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration!);
     wallet = Wallet.startEmpty(Wallet);
   });
@@ -76,9 +73,7 @@ describe('Wallet serialization and restoration', () => {
       const originalBalances = getBalances(syncedState);
       const serializedState = await wallet.runtime
         .dispatch({
-          [V1Tag]: (runningV1) => {
-            return runningV1.serializeState(syncedState);
-          },
+          [V1Tag]: (runningV1) => runningV1.serializeState(syncedState),
         })
         .pipe(Effect.runPromise);
       const restoredWalletState: V1State = Wallet.allVariantsRecord()

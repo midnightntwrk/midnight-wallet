@@ -1,6 +1,6 @@
 import { jest } from '@jest/globals';
 import { Stream, Effect, identity, Fiber } from 'effect';
-import { Observable } from '../index';
+import { ObservableOps } from '../index';
 import * as rx from 'rxjs';
 
 describe('Observable', () => {
@@ -28,7 +28,7 @@ describe('Observable', () => {
       const { generator, iterationsYielded } = makeGenerator(MAX_ITERATIONS);
 
       const observable = rx.from(generator());
-      const stream = Observable.toStream(observable).pipe(Stream.takeWhile((i) => i < TAKEN_ITERATIONS));
+      const stream = ObservableOps.toStream(observable).pipe(Stream.takeWhile((i) => i < TAKEN_ITERATIONS));
       const collected = await Effect.runPromise(Stream.runCollect(stream));
 
       expect(collected.length).toEqual(TAKEN_ITERATIONS);
@@ -41,7 +41,7 @@ describe('Observable', () => {
       const { generator, iterationsYielded } = makeGenerator(MAX_ITERATIONS);
 
       const stream = Stream.fromAsyncIterable(generator(), identity);
-      const observable = Observable.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
+      const observable = ObservableOps.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
       const collected = await rx.lastValueFrom(observable.pipe(rx.toArray()));
 
       expect(collected.length).toEqual(TAKEN_ITERATIONS);
@@ -58,7 +58,7 @@ describe('Observable', () => {
         const stream = Stream.acquireRelease(Effect.succeed(anyResource), cleanupFn).pipe(
           Stream.flatMap(() => Stream.fromAsyncIterable(generator(), identity)),
         );
-        const observable = Observable.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
+        const observable = ObservableOps.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
 
         yield* Effect.promise(() => rx.lastValueFrom(observable.pipe(rx.toArray())));
       });
@@ -81,8 +81,8 @@ describe('Observable', () => {
       const { generator, iterationsYielded } = makeGenerator(MAX_ITERATIONS);
 
       const observable = rx.from(generator());
-      const stream = Observable.toStream(observable);
-      const chainedObservable = Observable.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
+      const stream = ObservableOps.toStream(observable);
+      const chainedObservable = ObservableOps.fromStream(stream).pipe(rx.takeWhile((i) => i < TAKEN_ITERATIONS));
       const collected = await rx.lastValueFrom(chainedObservable.pipe(rx.toArray()));
 
       expect(collected.length).toEqual(TAKEN_ITERATIONS);

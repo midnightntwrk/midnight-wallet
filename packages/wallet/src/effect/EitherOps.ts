@@ -9,7 +9,7 @@ export const fromScala = <A, B>(scalaEither: ScalaEither<A, B>): Either.Either<B
   );
 };
 
-export const toEffect = <L, R>(either: Either.Either<R, L>): Effect.Effect<R, L, never> => {
+export const toEffect = <L, R>(either: Either.Either<R, L>): Effect.Effect<R, L> => {
   return Either.match(either, {
     onLeft: (l) => Effect.fail(l),
     onRight: (r) => Effect.succeed(r),
