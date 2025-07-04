@@ -72,7 +72,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
    */
   build(
     ...[maybeConfiguration]: BuildArguments<TBuilders>
-  ): WalletLike.BaseWalletClass<VariantBuilder.VersionedVariantsOf<TBuilders>> {
+  ): WalletLike.BaseWalletClass<VariantBuilder.VersionedVariantsOf<TBuilders>, FullConfiguration<TBuilders>> {
     type Variants = VariantBuilder.VersionedVariantsOf<TBuilders>;
 
     if (this.#buildState.variants.length == 0) {
@@ -90,6 +90,9 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     type WalletState = Variant.StateOf<H.Each<Variants>>;
 
     return class BaseWallet implements WalletLike.WalletLike<Variants> {
+      static readonly configuration: FullConfiguration<TBuilders> = (maybeConfiguration ??
+        {}) as FullConfiguration<TBuilders>;
+
       static allVariants(): Variants {
         return variants;
       }
@@ -181,17 +184,14 @@ declare namespace WalletBuilderMethods {
   type AllMethods = AllVariantMethods;
 }
 
-export type BuildArguments<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> =
-  FullConfiguration<TBuilders> extends undefined ? [] : [FullConfiguration<TBuilders>];
-
 /**
- * Ensures that a configuration type is not `never` or an empty object.
- *
- * @internal
+ * Allows properly expressing no need for configuration if an empty one needs to be provided
  */
-export type FullConfiguration<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> = VoidIfEmpty<
-  Types.UnionToIntersection<Configurations<TBuilders>>
->;
+export type BuildArguments<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> =
+  VoidIfEmpty<FullConfiguration<TBuilders>> extends undefined ? [] : [FullConfiguration<TBuilders>];
+
+export type FullConfiguration<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> =
+  Types.UnionToIntersection<Configurations<TBuilders>>;
 
 type VoidIfEmpty<TObject> = keyof TObject extends never ? undefined : TObject;
 

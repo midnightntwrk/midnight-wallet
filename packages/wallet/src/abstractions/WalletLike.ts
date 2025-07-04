@@ -10,7 +10,8 @@ import * as H from '../utils/hlist';
 /**
  * Defines the static portion of base wallet class definition
  */
-export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray> {
+export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TConfiguration = object> {
+  readonly configuration: Readonly<TConfiguration>;
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): WalletLike<TVariants>;
   allVariants(): TVariants;
   allVariantsRecord(): VariantRecord<TVariants>;

@@ -43,9 +43,8 @@ describe('Working in simulation mode', () => {
       });
 
     class Wallet extends WalletBase {
-      //TODO: thread config to static methods
       static init(keys: zswap.SecretKeys): Wallet {
-        return Wallet.startFirst(Wallet, initEmptyState(keys, zswap.NetworkId.Undeployed));
+        return Wallet.startFirst(Wallet, initEmptyState(keys, Wallet.configuration.networkId));
       }
     }
 

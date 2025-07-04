@@ -13,7 +13,13 @@ import { WalletBuilderTs } from '../index';
 import { Runtime } from '../Runtime';
 import { Equal, isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
 import { Expect } from '../utils/types';
-import { NumericRange, NumericRangeBuilder, NumericRangeMultiplier, NumericRangeMultiplierBuilder } from './variants';
+import {
+  NumericRange,
+  NumericRangeBuilder,
+  NumericRangeMultiplier,
+  NumericRangeMultiplierBuilder,
+  RangeConfig,
+} from './variants';
 
 describe('Wallet Builder', () => {
   describe('without variants', () => {
@@ -31,7 +37,9 @@ describe('Wallet Builder', () => {
     });
     const wallet = Wallet.startEmpty(Wallet);
 
-    type _1 = Expect<Equal<typeof Wallet, WalletLike.BaseWalletClass<[Variant.VersionedVariant<NumericRange>]>>>;
+    type _1 = Expect<
+      Equal<typeof Wallet, WalletLike.BaseWalletClass<[Variant.VersionedVariant<NumericRange>], RangeConfig>>
+    >;
     type _2 = Expect<Equal<typeof wallet, WalletLike.WalletLike<[Variant.VersionedVariant<NumericRange>]>>>;
     type _3 = Expect<Equal<typeof wallet.runtime, Runtime<[Variant.VersionedVariant<NumericRange>]>>>;
     type _4 = Expect<Equal<typeof wallet.state, rx.Observable<ProtocolState.ProtocolState<number>>>>;
@@ -145,5 +153,39 @@ describe('Wallet Builder', () => {
 
     expect(isRange(values)).toBe(true);
     expect(isShutDown).toBe(true);
+  });
+
+  const staticConfigCases = [
+    () => {
+      const config = {
+        min: 0,
+        max: 1,
+      };
+      return {
+        config: config,
+        Wallet: WalletBuilderTs.init()
+          .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder())
+          .build(config),
+      };
+    },
+    () => {
+      const config = {
+        min: 0,
+        max: 4,
+        multiplier: 2,
+      };
+      return {
+        config: config,
+        Wallet: WalletBuilderTs.init()
+          .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+          .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
+          .build(config),
+      };
+    },
+  ] as const;
+
+  it.each(staticConfigCases)('should make config available statically', (factory) => {
+    const { Wallet, config } = factory();
+    expect(Wallet.configuration).toEqual(config);
   });
 });
