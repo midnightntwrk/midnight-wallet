@@ -1,12 +1,10 @@
 import { afterEach, describe } from '@jest/globals';
+import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
-  BALANCE_TRANSACTION_TO_PROVE,
-  NOTHING_TO_PROVE,
-  ProvingRecipe,
-  TokenTransfer,
-  TRANSACTION_TO_PROVE,
-} from '@midnight-ntwrk/wallet-api';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+  ShieldedAddress,
+  ShieldedCoinPublicKey,
+  ShieldedEncryptionPublicKey,
+} from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import {
@@ -25,7 +23,7 @@ import path from 'node:path';
 import prand from 'pure-rand';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
-import { outputsArbitrary, recipientArbitrary, shieldedAddressArbitrary } from '../src/arbitraries';
+import { outputsArbitrary, recipientArbitrary } from '../src/arbitraries';
 
 const timeout = 120_000;
 
@@ -51,6 +49,9 @@ describe('Wallet transacting', () => {
 
     configuration = {
       indexerWsUrl: `ws://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql/ws`,
+      provingServerUrl: new URL(
+        `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+      ),
       networkId: zswap.NetworkId.Undeployed,
     };
   }, timeout);
@@ -95,35 +96,42 @@ describe('Wallet transacting', () => {
         {},
       );
 
-      const outputs: ReadonlyArray<TokenTransfer> = outputsArbitrary(
-        balances,
-        configuration!.networkId,
-        shieldedAddressArbitrary(recipientArbitrary).map((address) =>
-          ShieldedAddress.codec.encode(configuration!.networkId, address).asString(),
-        ),
-      ).generate(new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() * 0x100000000))), undefined).value;
-      const usedTokenTypes = new Set(outputs.map((o) => o.type));
+      const rawOutputs = outputsArbitrary(balances, configuration!.networkId, recipientArbitrary).generate(
+        new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() * 0x100000000))),
+        undefined,
+      ).value;
+      const usedTokenTypes = new Set(rawOutputs.map((o) => o.type));
 
-      const recipe: ProvingRecipe = await wallet.runtime
+      const transaction: zswap.Transaction = await wallet.runtime
         .dispatch({
-          [V1Tag]: (v1: DefaultRunningV1) => v1.transferTransaction(outputs),
+          [V1Tag]: (v1: DefaultRunningV1) => {
+            const transferOutputs = rawOutputs.map(({ amount, type, receiverAddress }): TokenTransfer => {
+              const address = new ShieldedAddress(
+                new ShieldedCoinPublicKey(Buffer.from(receiverAddress.coinPublicKey, 'hex')),
+                new ShieldedEncryptionPublicKey(Buffer.from(receiverAddress.encryptionPublicKey, 'hex')),
+              );
+              return {
+                amount,
+                type,
+                receiverAddress: ShieldedAddress.codec.encode(configuration!.networkId, address).asString(),
+              };
+            });
+            return v1
+              .transferTransaction(transferOutputs)
+              .pipe(Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)));
+          },
         })
         .pipe(Effect.flatten, Effect.runPromise);
 
-      switch (recipe.type) {
-        case BALANCE_TRANSACTION_TO_PROVE:
-        case NOTHING_TO_PROVE:
-          expect(recipe.type).toEqual(TRANSACTION_TO_PROVE);
-          break;
-        case TRANSACTION_TO_PROVE:
-          expect(recipe.transaction.guaranteedCoins!.outputs.length).toBeGreaterThanOrEqual(outputs.length);
-          usedTokenTypes.forEach((tokenType) => {
-            const delta = recipe.transaction.guaranteedCoins!.deltas.get(tokenType);
-            expect(delta == undefined || delta >= 0n).toBe(true);
-          });
-          break;
-      }
-      expect.hasAssertions();
+      expect(transaction.guaranteedCoins!.outputs.length).toBeGreaterThanOrEqual(rawOutputs.length);
+      usedTokenTypes.forEach((tokenType) => {
+        const delta = transaction.guaranteedCoins!.deltas.get(tokenType);
+        expect(delta == undefined || delta >= 0n).toBe(true);
+      });
+      rawOutputs.forEach((rawOutput) => {
+        const appliedState = new zswap.LocalState().applyTx(rawOutput.receiverAddress, transaction, 'success');
+        expect(Array.from(appliedState.coins)).toMatchObject([{ value: rawOutput.amount, type: rawOutput.type }]);
+      });
     },
     timeout,
   );

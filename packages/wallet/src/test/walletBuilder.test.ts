@@ -11,7 +11,8 @@ import {
 } from '../abstractions/index';
 import { WalletBuilderTs } from '../index';
 import { Runtime } from '../Runtime';
-import { Equal, Expect, isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
+import { Equal, isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
+import { Expect } from '../utils/types';
 import { NumericRange, NumericRangeBuilder, NumericRangeMultiplier, NumericRangeMultiplierBuilder } from './variants';
 
 describe('Wallet Builder', () => {

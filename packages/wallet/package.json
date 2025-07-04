@@ -24,8 +24,10 @@
     }
   },
   "dependencies": {
+    "@midnight-ntwrk/ledger": "^4.0.0",
     "@midnight-ntwrk/wallet": "workspace:*",
     "@midnight-ntwrk/wallet-api": "^5.0.0",
+    "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnight-ntwrk/zswap": "^4.0.0",
     "@scure/base": "^1.1.9",
@@ -44,6 +46,7 @@
   },
   "devDependencies": {
     "fast-check": "^4.1.1",
+    "testcontainers": "^11.0.3",
     "to-words": "^4.5.1"
   }
 }

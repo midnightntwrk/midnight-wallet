@@ -1,7 +1,9 @@
 import { CoreWallet, IndexerUpdate, NetworkId } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, Either, Scope, Sink, Stream, Types } from 'effect';
-import { Fluent, Variant, VariantBuilder, WalletRuntimeError, WalletSeed } from '../abstractions/index';
+import { Variant, VariantBuilder, WalletRuntimeError, WalletSeed } from '../abstractions/index';
+import { Expect, ItemType } from '../utils/types';
+import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
 
 import { RunningV1Variant, V1State, V1Tag } from './RunningV1Variant';
 import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization';
@@ -19,7 +21,7 @@ export type BaseV1Configuration = {
   networkId: zswap.NetworkId;
 };
 
-export type DefaultV1Configuration = BaseV1Configuration & DefaultSyncConfiguration;
+export type DefaultV1Configuration = BaseV1Configuration & DefaultSyncConfiguration & DefaultProvingConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -27,12 +29,12 @@ const V1BuilderSymbol: {
   typeId: Symbol('@midnight-ntwrk/wallet#V1Builder') as (typeof V1BuilderSymbol)['typeId'],
 } as const;
 
-export type DefaultV1Variant = V1Variant<string, IndexerUpdate>;
-export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
+export type DefaultV1Variant = V1Variant<string, IndexerUpdate, zswap.Transaction>;
+export type V1Variant<TSerialized, TSyncUpdate, TTransaction> = Variant.Variant<
   typeof V1Tag,
   V1State,
   null,
-  RunningV1Variant<TSerialized, TSyncUpdate>
+  RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
 > & {
   deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized) => Either.Either<V1State, WalletError>;
 };
@@ -41,33 +43,44 @@ export class V1Builder<
   TConfig extends BaseV1Configuration = BaseV1Configuration,
   TSerialized = never,
   TSyncUpdate = never,
-> implements VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate>, TConfig>
+  TTransaction = never,
+> implements VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction>, TConfig>
 {
-  #buildState: V1Builder.BuildState<TConfig, TSerialized, TSyncUpdate>;
+  #buildState: V1Builder.PartialBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction>;
 
-  constructor(buildState: V1Builder.BuildState<TConfig, TSerialized, TSyncUpdate> = {}) {
+  constructor(buildState: V1Builder.PartialBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction> = {}) {
     this.#buildState = buildState;
   }
 
-  withDefaults(): Fluent.ExcludeMethod<
-    V1Builder<DefaultV1Configuration, string, IndexerUpdate>,
-    V1BuilderMethods.AllMethods
-  > {
-    return this.withSyncDefaults().withSerializationDefaults().withTransactingDefaults();
+  withDefaults(): V1Builder<DefaultV1Configuration, string, IndexerUpdate, zswap.Transaction> {
+    return this.withDefaultTransactionType()
+      .withSyncDefaults()
+      .withSerializationDefaults()
+      .withTransactingDefaults()
+      .withProvingDefaults() as V1Builder<DefaultV1Configuration, string, IndexerUpdate, zswap.Transaction>;
   }
 
-  withSyncDefaults(): Fluent.ExcludeMethod<
-    V1Builder<TConfig & DefaultSyncConfiguration, TSerialized, IndexerUpdate>,
-    V1BuilderMethods.AllSyncMethods
-  > {
+  withTransactionType<Transaction>(): V1Builder<TConfig, TSerialized, TSyncUpdate, Transaction> {
+    return new V1Builder<TConfig, TSerialized, TSyncUpdate, Transaction>({
+      ...this.#buildState,
+      provingService: undefined,
+      transactingCapability: undefined,
+    });
+  }
+
+  withDefaultTransactionType(): V1Builder<TConfig, TSerialized, TSyncUpdate, zswap.Transaction> {
+    return this.withTransactionType<zswap.Transaction>();
+  }
+
+  withSyncDefaults(): V1Builder<TConfig & DefaultSyncConfiguration, TSerialized, IndexerUpdate, TTransaction> {
     return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
   }
 
   withSync<TSyncConfig, TSyncUpdate>(
     syncService: (configuration: TSyncConfig) => SyncService<V1State, TSyncUpdate>,
     syncCapability: (configuration: TSyncConfig) => SyncCapability<V1State, TSyncUpdate>,
-  ): Fluent.ExcludeMethod<V1Builder<TConfig & TSyncConfig, TSerialized, TSyncUpdate>, V1BuilderMethods.AllSyncMethods> {
-    return new V1Builder<TConfig & TSyncConfig, TSerialized, TSyncUpdate>({
+  ): V1Builder<TConfig & TSyncConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TSyncConfig, TSerialized, TSyncUpdate, TTransaction>({
       ...this.#buildState,
       syncService,
       syncCapability,
@@ -78,47 +91,52 @@ export class V1Builder<
     serializationCapability: (
       configuration: TSerializationConfig,
     ) => SerializationCapability<V1State, zswap.SecretKeys, TSerialized>,
-  ): Fluent.ExcludeMethod<
-    V1Builder<TConfig & TSerializationConfig, TSerialized, TSyncUpdate>,
-    V1BuilderMethods.AllSerializationMethods
-  > {
-    return new V1Builder<TConfig & TSerializationConfig, TSerialized, TSyncUpdate>({
+  ): V1Builder<TConfig & TSerializationConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TSerializationConfig, TSerialized, TSyncUpdate, TTransaction>({
       ...this.#buildState,
       serializationCapability,
     });
   }
 
-  withSerializationDefaults(): Fluent.ExcludeMethod<
-    V1Builder<TConfig, string, TSyncUpdate>,
-    V1BuilderMethods.AllSerializationMethods
-  > {
+  withSerializationDefaults(): V1Builder<TConfig, string, TSyncUpdate, TTransaction> {
     return this.withSerialization(makeDefaultV1SerializationCapability);
   }
 
-  withTransactingDefaults(): Fluent.ExcludeMethod<
-    V1Builder<TConfig, TSerialized, TSyncUpdate>,
-    V1BuilderMethods.AllTransactingMethods
-  > {
+  withTransactingDefaults(
+    this: V1Builder<TConfig, TSerialized, TSyncUpdate, zswap.Transaction>,
+  ): V1Builder<TConfig, TSerialized, TSyncUpdate, zswap.Transaction> {
     return this.withTransacting(makeDefaultTransactingCapability);
   }
 
   withTransacting<TTransactingConfig>(
-    transactingCapability: (config: TTransactingConfig) => TransactingCapability<V1State>,
-  ): Fluent.ExcludeMethod<
-    V1Builder<TConfig & TTransactingConfig, TSerialized, TSyncUpdate>,
-    V1BuilderMethods.AllTransactingMethods
-  > {
-    return new V1Builder<TConfig & TTransactingConfig, TSerialized, TSyncUpdate>({
+    transactingCapability: (config: TTransactingConfig) => TransactingCapability<V1State, TTransaction>,
+  ): V1Builder<TConfig & TTransactingConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TTransactingConfig, TSerialized, TSyncUpdate, TTransaction>({
       ...this.#buildState,
       transactingCapability,
     });
   }
 
+  withProving<TProvingConfig>(
+    provingService: (config: TProvingConfig) => ProvingService<TTransaction>,
+  ): V1Builder<TConfig & TProvingConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TProvingConfig, TSerialized, TSyncUpdate, TTransaction>({
+      ...this.#buildState,
+      provingService,
+    });
+  }
+
+  withProvingDefaults(
+    this: V1Builder<TConfig, TSerialized, TSyncUpdate, zswap.Transaction>,
+  ): V1Builder<TConfig & DefaultProvingConfiguration, TSerialized, TSyncUpdate, zswap.Transaction> {
+    return this.withProving(makeDefaultProvingService);
+  }
+
   build(
-    this: V1Builder<TConfig, TSerialized, TSyncUpdate>,
+    this: V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction>,
     configuration: TConfig,
-  ): V1Variant<TSerialized, TSyncUpdate> {
-    const { v1Context } = this.#buildLayersFromBuildState(configuration);
+  ): V1Variant<TSerialized, TSyncUpdate, TTransaction> {
+    const v1Context = this.#buildContextFromBuildState(configuration);
     const { networkId } = configuration;
 
     return {
@@ -126,7 +144,7 @@ export class V1Builder<
       start(
         context: Variant.VariantContext<V1State>,
         initialState: V1State,
-      ): Effect.Effect<RunningV1Variant<TSerialized, TSyncUpdate>, WalletRuntimeError, Scope.Scope> {
+      ): Effect.Effect<RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>, WalletRuntimeError, Scope.Scope> {
         return Effect.gen(function* () {
           const variantInstance = new RunningV1Variant(context, initialState, v1Context);
           yield* variantInstance.startSync(initialState).pipe(Stream.runScoped(Sink.drain), Effect.forkScoped);
@@ -148,38 +166,61 @@ export class V1Builder<
     };
   }
 
-  #buildLayersFromBuildState(
-    this: V1Builder<TConfig, TSerialized, TSyncUpdate>,
+  #buildContextFromBuildState(
+    this: V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction>,
     configuration: TConfig,
-  ): {
-    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>;
-  } {
-    const { syncCapability, syncService, transactingCapability, serializationCapability } = this
-      .#buildState as unknown as Required<V1Builder.BuildState<TConfig, TSerialized, TSyncUpdate>>;
+  ): RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction> {
+    if (!isBuildStateFull(this.#buildState)) {
+      throw new Error('Not all components are configured in V1 Builder');
+    }
+
+    const { syncCapability, syncService, transactingCapability, serializationCapability, provingService } =
+      this.#buildState;
 
     return {
-      v1Context: {
-        serializationCapability: serializationCapability(configuration),
-        syncCapability: syncCapability(configuration),
-        syncService: syncService(configuration),
-        transactingCapability: transactingCapability(configuration),
-      },
+      serializationCapability: serializationCapability(configuration),
+      syncCapability: syncCapability(configuration),
+      syncService: syncService(configuration),
+      transactingCapability: transactingCapability(configuration),
+      provingService: provingService(configuration),
     };
   }
 }
 
 /** @internal */
 declare namespace V1Builder {
+  type HasSync<TConfig, TSyncUpdate> = {
+    readonly syncService: (configuration: TConfig) => SyncService<V1State, TSyncUpdate>;
+    readonly syncCapability: (configuration: TConfig) => SyncCapability<V1State, TSyncUpdate>;
+  };
+
+  type HasTransacting<TConfig, TTransaction> = {
+    readonly transactingCapability: (configuration: TConfig) => TransactingCapability<V1State, TTransaction>;
+  };
+
+  type HasSerialization<TConfig, TSerialized> = {
+    readonly serializationCapability: (
+      configuration: TConfig,
+    ) => SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+  };
+
+  type HasProving<TConfig, TTransaction> = {
+    readonly provingService: (configuration: TConfig) => ProvingService<TTransaction>;
+  };
+
   /**
    * The internal build state of {@link V1Builder}.
    */
-  type BuildState<TConfig = object, TSerialized = never, TSyncUpdate = never> = {
-    readonly syncService?: (configuration: TConfig) => SyncService<V1State, TSyncUpdate>;
-    readonly syncCapability?: (configuration: TConfig) => SyncCapability<V1State, TSyncUpdate>;
-    readonly transactingCapability?: (configuration: TConfig) => TransactingCapability<V1State>;
-    readonly serializationCapability?: (
-      configuration: TConfig,
-    ) => SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+  type FullBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction> = Types.Simplify<
+    HasSync<TConfig, TSyncUpdate> &
+      HasSerialization<TConfig, TSerialized> &
+      HasTransacting<TConfig, TTransaction> &
+      HasProving<TConfig, TTransaction>
+  >;
+  type PartialBuildState<TConfig = object, TSerialized = never, TSyncUpdate = never, TTransaction = never> = {
+    [K in keyof FullBuildState<never, never, never, never>]?:
+      | FullBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction>[K]
+      | undefined;
   };
 
   /**
@@ -192,8 +233,27 @@ declare namespace V1Builder {
   }
 }
 
+const isBuildStateFull = <TConfig, TSerialized, TSyncUpdate, TTransaction>(
+  buildState: V1Builder.PartialBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction>,
+): buildState is V1Builder.FullBuildState<TConfig, TSerialized, TSyncUpdate, TTransaction> => {
+  const allBuildStateKeys = [
+    'syncService',
+    'syncCapability',
+    'transactingCapability',
+    'serializationCapability',
+    'provingService',
+  ] as const;
+  /**
+   * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
+   */
+  type _1 = Expect<
+    Types.Equals<keyof V1Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
+  >;
+  return allBuildStateKeys.every((key) => typeof buildState[key] == 'function');
+};
+
 /** @internal */
-declare namespace V1BuilderMethods {
+declare namespace _V1BuilderMethods {
   type WithSyncDefaults = 'withSyncDefaults';
   type WithSyncMethod = 'withSync';
   type WithTransactingMethod = 'withTransacting';
@@ -202,5 +262,6 @@ declare namespace V1BuilderMethods {
   type AllSyncMethods = WithSyncDefaults | WithSyncMethod;
   type AllTransactingMethods = WithTransactingMethod;
   type AllSerializationMethods = WithSerializationMethod | WithSerializationDefaults;
-  type AllMethods = AllSyncMethods | AllTransactingMethods | AllSerializationMethods;
+  type AllProvingMethods = 'withProving' | 'withProvingDefaults';
+  type AllMethods = AllSyncMethods | AllTransactingMethods | AllSerializationMethods | AllProvingMethods;
 }

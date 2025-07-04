@@ -1,9 +1,5 @@
 import { Effect } from 'effect';
-import {
-  ProverClient,
-  HttpProverClient as _HttpProverClient,
-  SerializedUnprovenTransaction,
-} from '@midnight/wallet-prover-client-ts/effect';
+import { ProverClient, HttpProverClient as _HttpProverClient, SerializedUnprovenTransaction } from './effect/index';
 
 /**
  * Sends serialized unproven transactions to a Proof Server over HTTP.

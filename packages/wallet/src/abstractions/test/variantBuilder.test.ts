@@ -1,5 +1,5 @@
 import { describe } from '@jest/globals';
-import { Equal, Expect } from '../../test/testUtils';
+import { Equal } from '../../test/testUtils';
 import {
   InterceptingVariant,
   InterceptingVariantBuilder,
@@ -11,6 +11,7 @@ import {
   RangeMultiplierConfig,
 } from '../../test/variants';
 import * as H from '../../utils/hlist';
+import { Expect } from '../../utils/types';
 import { VersionedVariant } from '../Variant';
 import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder';
 

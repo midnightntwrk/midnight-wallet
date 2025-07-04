@@ -1,6 +1,7 @@
 import { describe, it } from '@jest/globals';
-import { Equal, Expect } from '../../test/testUtils';
+import { Equal } from '../../test/testUtils';
 import { dispatch, PolyFunction, TagOf } from '../polyFunction';
+import { Expect } from '../types';
 
 describe('PolyFunction', () => {
   type NumberVariant = {

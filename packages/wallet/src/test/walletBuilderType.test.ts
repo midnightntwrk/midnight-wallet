@@ -1,7 +1,7 @@
 import { describe, it } from '@jest/globals';
 import { VariantBuilder } from '../abstractions/index';
 import { FullConfiguration } from '../WalletBuilder';
-import { CanAssign, Equal, Expect } from './testUtils';
+import { CanAssign, Equal } from './testUtils';
 import {
   InterceptingVariantBuilder,
   NumericRangeBuilder,
@@ -9,6 +9,7 @@ import {
   RangeConfig,
   RangeMultiplierConfig,
 } from './variants';
+import { Expect } from '../utils/types';
 
 describe('WalletBuilder', () => {
   describe('inferring configuration type', () => {

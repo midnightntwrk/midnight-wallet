@@ -1,5 +1,5 @@
 import { describe, it } from '@jest/globals';
-import { CanAssign, Equal, Expect } from '../../test/testUtils';
+import { CanAssign, Equal } from '../../test/testUtils';
 import {
   InterceptingRunningVariant,
   InterceptingVariant,
@@ -10,6 +10,7 @@ import {
 } from '../../test/variants';
 import * as H from '../../utils/hlist';
 import * as Poly from '../../utils/polyFunction';
+import { Expect } from '../../utils/types';
 import { ProtocolVersion } from '../ProtocolVersion';
 import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
 

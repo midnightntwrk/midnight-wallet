@@ -1,5 +1,5 @@
 {
-  "name": "@midnight/wallet-prover-client-ts",
+  "name": "@midnight-ntwrk/wallet-prover-client-ts",
   "version": "5.0.0",
   "type": "module",
   "module": "dist/index.js",

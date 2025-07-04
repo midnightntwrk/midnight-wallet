@@ -1,9 +1,11 @@
 import { CoreWallet, IndexerUpdate, JsOption } from '@midnight-ntwrk/wallet';
-import { ProvingRecipe, TokenTransfer } from '@midnight-ntwrk/wallet-api';
+import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, pipe, Stream, SubscriptionRef } from 'effect';
 import { ProtocolVersion, StateChange, Variant, VersionChangeType, WalletRuntimeError } from '../abstractions/index';
 import { EitherOps } from '../effect/index';
+import { ProvingService } from './Proving';
+import { ProvingRecipe } from './ProvingRecipe';
 import { SerializationCapability } from './Serialization';
 import { SyncCapability, SyncService } from './Sync';
 import { TransactingCapability } from './Transacting';
@@ -37,30 +39,37 @@ const protocolVersionChange = (previous: V1State, current: V1State): StateChange
 
 export type V1State = CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
+export const initEmptyState = (keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
+  return CoreWallet.emptyV1(new zswap.LocalState(), keys, networkId);
+};
+
 export declare namespace RunningV1Variant {
-  export type Context<TSerialized, TSyncUpdate> = {
+  export type Context<TSerialized, TSyncUpdate, TTransaction> = {
     serializationCapability: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
     syncService: SyncService<V1State, TSyncUpdate>;
     syncCapability: SyncCapability<V1State, TSyncUpdate>;
-    transactingCapability: TransactingCapability<V1State>;
+    transactingCapability: TransactingCapability<V1State, TTransaction>;
+    provingService: ProvingService<TTransaction>;
   };
 }
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, IndexerUpdate>;
+export type DefaultRunningV1 = RunningV1Variant<string, IndexerUpdate, zswap.Transaction>;
 
-export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.RunningVariant<typeof V1Tag, V1State> {
+export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
+  implements Variant.RunningVariant<typeof V1Tag, V1State>
+{
   __polyTag__: typeof V1Tag = V1Tag;
   #context: Variant.VariantContext<V1State>;
-  #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>;
+  #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>;
 
   readonly state: Stream.Stream<StateChange.StateChange<V1State>, WalletRuntimeError>;
 
   constructor(
     context: Variant.VariantContext<V1State>,
     initialState: V1State,
-    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>,
+    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>,
   ) {
     this.#context = context;
     this.#v1Context = v1Context;
@@ -89,7 +98,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     );
   }
 
-  balanceTransaction(tx: zswap.Transaction, newCoins: zswap.CoinInfo[]): Effect.Effect<ProvingRecipe, WalletError> {
+  balanceTransaction(
+    tx: TTransaction,
+    newCoins: zswap.CoinInfo[],
+  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.balanceTransaction(state, tx, newCoins),
@@ -99,7 +111,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     });
   }
 
-  transferTransaction(outputs: ReadonlyArray<TokenTransfer>): Effect.Effect<ProvingRecipe, WalletError> {
+  transferTransaction(outputs: ReadonlyArray<TokenTransfer>): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.makeTransfer(state, outputs),
@@ -107,6 +119,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );
     });
+  }
+
+  finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError> {
+    return this.#v1Context.provingService.prove(recipe);
   }
 
   serializeState(state: V1State): TSerialized {

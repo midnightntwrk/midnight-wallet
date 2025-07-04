@@ -3,13 +3,6 @@ import { Chunk } from 'effect';
 import { Observable, reduce, OperatorFunction } from 'rxjs';
 
 /**
- * A utility type that ensures that a given type is `true` or otherwise forces a compile time error.
- *
- * @internal
- */
-export type Expect<T extends true> = T;
-
-/**
  * A utility type that exactly compares two types for equality.
  *
  * @internal

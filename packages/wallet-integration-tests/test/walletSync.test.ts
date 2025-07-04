@@ -27,6 +27,9 @@ describe('Wallet Sync', () => {
 
     configuration = {
       indexerWsUrl: `ws://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql/ws`,
+      provingServerUrl: new URL(
+        `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+      ),
       networkId: NetworkId.Undeployed,
     };
   }, timeout);

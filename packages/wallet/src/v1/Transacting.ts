@@ -7,10 +7,11 @@ import {
   NetworkId,
   WalletError as ScalaWalletError,
 } from '@midnight-ntwrk/wallet';
-import { ProvingRecipe, TokenTransfer } from '@midnight-ntwrk/wallet-api';
+import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Either } from 'effect';
 import { EitherOps } from '../effect/index';
+import { ProvingRecipe } from './ProvingRecipe';
 import { V1State } from './RunningV1Variant';
 import { WalletError } from './WalletError';
 
@@ -21,26 +22,26 @@ import { WalletError } from './WalletError';
  * - initSwap(state: TState, desiredImbalances: Record<zswap.TokenType, bigint>): { newState: TState; tx: zswap.UnprovenTransaction };
  * - applyFailedProofErasedTransaction
  */
-export interface TransactingCapability<TState> {
+export interface TransactingCapability<TState, TTransaction> {
   balanceTransaction(
     state: TState,
-    tx: zswap.Transaction,
+    tx: TTransaction,
     newCoins: zswap.CoinInfo[],
-  ): Either.Either<{ recipe: ProvingRecipe; newState: TState }, WalletError>;
+  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   makeTransfer(
     state: TState,
     outputs: ReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe; newState: TState }, WalletError>;
+  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   //These functions below do not exactly match here, but also seem to be somewhat good place to put
   //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
-  applyFailedTransaction(state: TState, tx: zswap.Transaction): Either.Either<TState, WalletError>;
+  applyFailedTransaction(state: TState, tx: TTransaction): Either.Either<TState, WalletError>;
 
   applyFailedUnprovenTransaction(state: TState, tx: zswap.UnprovenTransaction): Either.Either<TState, WalletError>;
 }
 
-export const makeDefaultTransactingCapability = (): TransactingCapability<V1State> => {
+export const makeDefaultTransactingCapability = (): TransactingCapability<V1State, zswap.Transaction> => {
   const applyTransaction = (wallet: V1State, tx: AppliedTransaction<zswap.Transaction>): V1State => {
     return wallet.applyTransaction(tx);
   };
@@ -76,8 +77,8 @@ export const makeDefaultTransactingCapability = (): TransactingCapability<V1Stat
   );
 
   const resultFromScala: (
-    res: Either.Either<{ wallet: V1State; result: ProvingRecipe }, ScalaWalletError>,
-  ) => Either.Either<{ recipe: ProvingRecipe; newState: V1State }, WalletError> = Either.mapBoth({
+    res: Either.Either<{ wallet: V1State; result: ProvingRecipe<zswap.Transaction> }, ScalaWalletError>,
+  ) => Either.Either<{ recipe: ProvingRecipe<zswap.Transaction>; newState: V1State }, WalletError> = Either.mapBoth({
     onLeft: (err) => WalletError.fromScala(err),
     onRight: (result) => ({ recipe: result.result, newState: result.wallet }),
   });
@@ -87,7 +88,7 @@ export const makeDefaultTransactingCapability = (): TransactingCapability<V1Stat
       state: V1State,
       tx: zswap.Transaction,
       newCoins: zswap.CoinInfo[],
-    ): Either.Either<{ recipe: ProvingRecipe; newState: V1State }, WalletError> {
+    ): Either.Either<{ recipe: ProvingRecipe<zswap.Transaction>; newState: V1State }, WalletError> {
       return EitherOps.fromScala(defaultBalancing.balanceTransaction(state, JsEither.left(tx), newCoins)).pipe(
         resultFromScala,
       );
@@ -95,7 +96,7 @@ export const makeDefaultTransactingCapability = (): TransactingCapability<V1Stat
     makeTransfer(
       state: V1State,
       outputs: TokenTransfer[],
-    ): Either.Either<{ recipe: ProvingRecipe; newState: V1State }, WalletError> {
+    ): Either.Either<{ recipe: ProvingRecipe<zswap.Transaction>; newState: V1State }, WalletError> {
       return EitherOps.fromScala(defaultTransacting.prepareTransferRecipe(state, outputs)).pipe(
         Either.flatMap((unprovenTx: zswap.UnprovenTransaction) =>
           EitherOps.fromScala(defaultBalancing.balanceTransaction(state, JsEither.right(unprovenTx), [])),

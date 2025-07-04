@@ -8,6 +8,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@midnight-ntwrk/ledger": "^4.0.0",
     "@midnight-ntwrk/wallet": "workspace:*",
     "@midnight-ntwrk/wallet-api": "^5.0.0",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",

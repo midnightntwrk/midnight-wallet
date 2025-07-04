@@ -1147,6 +1147,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/ledger@npm:^4.0.0":
+  version: 4.0.0
+  resolution: "@midnight-ntwrk/ledger@npm:4.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger%2F4.0.0%2F2cf7370ff6e27482cce60724f114935512b5e473"
+  checksum: 10c0/21f0be65c1c531624af831d5e5c91b28c23baddeb81945619c210e737eb88d54cc4cfbe4403e34bbaafde9397f35439928f21157b000a889f11e347b36d9d044
+  languageName: node
+  linkType: hard
+
 "@midnight-ntwrk/midnight-js-network-id@npm:0.2.5":
   version: 0.2.5
   resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.2.5::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.2.5%2Fd27788cb24b11431e501f034070e3d16c966bcfa"
@@ -1191,6 +1198,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-integration-tests@workspace:packages/wallet-integration-tests"
   dependencies:
+    "@midnight-ntwrk/ledger": "npm:^4.0.0"
     "@midnight-ntwrk/wallet": "workspace:*"
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
@@ -1204,6 +1212,17 @@ __metadata:
     rxjs: "npm:^7.5.5"
     testcontainers: "npm:^10.14.0"
     typescript: "npm:^5.8.3"
+  languageName: unknown
+  linkType: soft
+
+"@midnight-ntwrk/wallet-prover-client-ts@workspace:*, @midnight-ntwrk/wallet-prover-client-ts@workspace:packages/prover-client":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/wallet-prover-client-ts@workspace:packages/prover-client"
+  dependencies:
+    "@effect/platform": "npm:^0.84.6"
+    "@midnight-ntwrk/zswap": "npm:^4.0.0"
+    effect: "npm:^3.16.3"
+    testcontainers: "npm:^11.0.3"
   languageName: unknown
   linkType: soft
 
@@ -1274,8 +1293,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-ts@workspace:packages/wallet"
   dependencies:
+    "@midnight-ntwrk/ledger": "npm:^4.0.0"
     "@midnight-ntwrk/wallet": "workspace:*"
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
+    "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@scure/base": "npm:^1.1.9"
@@ -1285,6 +1306,7 @@ __metadata:
     node-fetch: "npm:3.3.2"
     rxjs: "npm:^7.5"
     scale-ts: "npm:^1.1.0"
+    testcontainers: "npm:^11.0.3"
     to-words: "npm:^4.5.1"
     ws: "npm:^8.8.1"
   languageName: unknown
@@ -1480,17 +1502,6 @@ __metadata:
     buffer: "npm:^6.0.3"
     rxjs: "npm:^7.5"
     typescript: "npm:^5.8.3"
-  languageName: unknown
-  linkType: soft
-
-"@midnight/wallet-prover-client-ts@workspace:packages/prover-client":
-  version: 0.0.0-use.local
-  resolution: "@midnight/wallet-prover-client-ts@workspace:packages/prover-client"
-  dependencies:
-    "@effect/platform": "npm:^0.84.6"
-    "@midnight-ntwrk/zswap": "npm:^4.0.0"
-    effect: "npm:^3.16.3"
-    testcontainers: "npm:^11.0.3"
   languageName: unknown
   linkType: soft
 

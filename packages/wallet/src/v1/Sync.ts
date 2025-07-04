@@ -16,6 +16,7 @@ import { Effect, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { ObservableOps } from '../effect/index';
 import { V1State } from './RunningV1Variant';
+import { Simulator, SimulatorState } from './Simulator';
 
 export interface SyncService<TState, TUpdate> {
   updates: (state: TState) => Stream.Stream<TUpdate>;
@@ -70,6 +71,26 @@ export const makeDefaultSyncCapability = (): SyncCapability<V1State, IndexerUpda
         },
         (state) => state,
       );
+    },
+  };
+};
+
+export const makeSimulatorSyncService = (config: { simulator: Simulator }): SyncService<V1State, SimulatorState> => {
+  return {
+    updates: () => config.simulator.state$,
+  };
+};
+
+export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorState> => {
+  return {
+    applyUpdate: (state: V1State, update: SimulatorState) => {
+      const currentLocalState = state.state;
+      const newLocalState = currentLocalState.applyProofErasedTx(
+        state.secretKeys,
+        update.lastTx,
+        update.lastTxResult.type,
+      );
+      return state.applyState(newLocalState);
     },
   };
 };

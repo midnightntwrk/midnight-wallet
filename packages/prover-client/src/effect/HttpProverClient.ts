@@ -1,8 +1,8 @@
-import { Effect, Context, Layer, Stream, Chunk, Schedule, Duration } from 'effect';
-import { HttpClientRequest, HttpClientResponse, HttpClient, FetchHttpClient } from '@effect/platform';
-import { ProverClient, InvalidProtocolSchemeError, ProverClientError, ProverServerError } from './ProverClient';
-import { SerializedUnprovenTransaction } from './SerializedUnprovenTransaction';
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { Chunk, Context, Duration, Effect, Layer, pipe, Schedule, Stream } from 'effect';
+import { InvalidProtocolSchemeError, ProverClient, ProverClientError, ProverServerError } from './ProverClient';
 import { SerializedTransaction } from './SerializedTransaction';
+import { SerializedUnprovenTransaction } from './SerializedUnprovenTransaction';
 
 const PROVE_TX_PATH = '/prove-tx';
 
@@ -32,12 +32,34 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
         proveTransaction(
           transaction: SerializedUnprovenTransaction,
         ): Effect.Effect<SerializedTransaction, ProverClientError | ProverServerError> {
-          const proveTxRequest = HttpClientRequest.post(url).pipe(
-            HttpClientRequest.bodyUint8Array(transaction),
-            HttpClient.execute,
-            HttpClientResponse.stream,
-            Stream.runCollect,
-            Effect.flatMap((chunks) => Effect.promise(() => new Blob(Chunk.toArray(chunks)).bytes())),
+          const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
+            Effect.promise(() => new Blob(chunks).bytes());
+
+          const receiveBody = (response: HttpClientResponse.HttpClientResponse) =>
+            pipe(
+              response.stream,
+              Stream.runCollect,
+              Effect.flatMap((chunks) => concatBytes(Chunk.toArray(chunks))),
+            );
+
+          const proveTxRequest = pipe(
+            //The 4 empty bytes is an encoding of additional parameters proof server expects, in this case - empty
+            concatBytes([transaction, new Uint8Array([0, 0, 0, 0])]),
+            Effect.map((requestBody) =>
+              HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(requestBody)),
+            ),
+            Effect.flatMap(HttpClient.execute),
+            Effect.flatMap((response: HttpClientResponse.HttpClientResponse) => {
+              return Effect.gen(function* () {
+                // Simplistic, but so is the proof server
+                if (response.status !== 200) {
+                  const text = yield* response.text;
+                  return yield* new ProverClientError({ message: `Failed to prove: ${text}` });
+                }
+
+                return yield* receiveBody(response);
+              });
+            }),
             Effect.retry({
               times: 3,
               while: (error) =>
@@ -48,7 +70,7 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
           );
 
           return proveTxRequest.pipe(
-            Effect.flatMap((a) => Effect.succeed(SerializedTransaction(a))),
+            Effect.map((a) => SerializedTransaction(a)),
             Effect.catchTags({
               RequestError: (err) =>
                 new ProverClientError({ message: `Failed to connect to Proof Server: ${err.message}` }),

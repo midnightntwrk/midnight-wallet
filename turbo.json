@@ -51,12 +51,15 @@
       "outputs": [
         "dist/**"
       ],
+      "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
     "@midnight-ntwrk/wallet#dist": {
+      "outputLogs": "new-only",
       "dependsOn": ["^dist", "//#sbt:dist"]
     },
     "@midnight-ntwrk/wallet#typecheck": {
+      "outputLogs": "new-only",
       "dependsOn": ["^dist", "//#sbt:dist"]
     },
     "verify": {
@@ -94,6 +97,7 @@
       "outputs": [
         "**/target/test-reports/**"
       ],
+      "outputLogs": "new-only",
       "dependsOn": ["//#sbt:dist"]
     }
   }

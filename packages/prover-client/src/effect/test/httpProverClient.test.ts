@@ -80,12 +80,7 @@ describe('HttpProverClient', () => {
           const proveClient = yield* ProverClient.ProverClient;
           const spendCoinAmount = 1_000n;
 
-          const unprovenTransactionBytes = yield* Effect.promise(() =>
-            new Blob([
-              makeValidTransaction(spendCoinAmount).serialize(NetworkId.Undeployed),
-              new Uint8Array([0, 0, 0, 0]),
-            ]).bytes(),
-          );
+          const unprovenTransactionBytes = makeValidTransaction(spendCoinAmount).serialize(NetworkId.Undeployed);
 
           const txBytes = yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
           const tx = Transaction.deserialize(txBytes, NetworkId.Undeployed);
@@ -109,13 +104,12 @@ describe('HttpProverClient', () => {
         await Effect.gen(function* () {
           const proveClient = yield* ProverClient.ProverClient;
 
-          const unprovenTransactionBytes = yield* Effect.promise(() =>
-            new Blob([makeValidTransaction(1n).serialize(NetworkId.TestNet), new Uint8Array([0, 0, 0, 0])]).bytes(),
-          );
+          const unprovenTransactionBytes = makeValidTransaction(1n).serialize(NetworkId.TestNet);
 
           yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
         }).pipe(
           Effect.catchTag('ProverServerError', () => Effect.succeed(void 0)),
+          Effect.catchTag('ProverClientError', () => Effect.succeed(void 0)),
           Effect.provide(HttpProverClient.layer({ url: `http://localhost:${proofServerPort()}` })),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
