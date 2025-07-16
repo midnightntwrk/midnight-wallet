@@ -3,7 +3,7 @@ name: Healthcheck - qanet
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 */2 * * *'
+    - cron: '0 7 * * *'
 
 jobs:
   test:
