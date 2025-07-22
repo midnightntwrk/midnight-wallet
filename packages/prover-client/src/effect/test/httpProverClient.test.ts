@@ -1,6 +1,3 @@
-import * as ProverClient from '../ProverClient';
-import * as HttpProverClient from '../HttpProverClient';
-import { SerializedUnprovenTransaction } from '../SerializedUnprovenTransaction';
 import { Effect } from 'effect';
 import {
   UnprovenTransaction,
@@ -14,7 +11,10 @@ import {
   Transaction,
   LedgerParameters,
 } from '@midnight-ntwrk/zswap';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
+import * as ProverClient from '../ProverClient';
+import * as HttpProverClient from '../HttpProverClient';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:4.0.0';
 const PROOF_SERVER_PORT: number = 6300;
@@ -90,7 +90,7 @@ describe('HttpProverClient', () => {
           expect(imbalances.get(dustToken)).toEqual(-spendCoinAmount);
           expect(tx.fees(LedgerParameters.dummyParameters())).not.toEqual(0n);
         }).pipe(
-          Effect.provide(HttpProverClient.layer({ url: `http://localhost:${proofServerPort()}` })),
+          Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );
@@ -108,9 +108,8 @@ describe('HttpProverClient', () => {
 
           yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
         }).pipe(
-          Effect.catchTag('ProverServerError', () => Effect.succeed(void 0)),
-          Effect.catchTag('ProverClientError', () => Effect.succeed(void 0)),
-          Effect.provide(HttpProverClient.layer({ url: `http://localhost:${proofServerPort()}` })),
+          Effect.catchTag('ClientError', () => Effect.succeed(void 0)),
+          Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );

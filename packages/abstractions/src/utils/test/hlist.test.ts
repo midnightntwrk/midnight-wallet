@@ -1,4 +1,4 @@
-import { Equal } from '../../test/testUtils';
+import type { Equal, Expect } from '../testUtils';
 import {
   Append,
   append,
@@ -20,7 +20,6 @@ import {
   Tail,
   Tails,
 } from '../hlist';
-import { Expect } from '../types';
 
 describe('HList', () => {
   it('properly prepends to the list', () => {

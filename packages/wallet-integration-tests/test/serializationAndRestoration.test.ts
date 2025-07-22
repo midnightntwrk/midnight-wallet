@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, it } from '@jest/globals';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, Either } from 'effect';

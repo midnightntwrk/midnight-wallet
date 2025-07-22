@@ -9,6 +9,7 @@
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\""
   },
   "dependencies": {
+    "@midnight-ntwrk/abstractions": "workspace:*",
     "@midnight-ntwrk/ledger": "^4.0.0",
     "@midnight-ntwrk/wallet": "workspace:*",
     "@midnight-ntwrk/wallet-api": "^5.0.0",

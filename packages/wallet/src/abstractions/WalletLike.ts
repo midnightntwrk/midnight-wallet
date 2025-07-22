@@ -2,10 +2,9 @@
 import { Scope } from 'effect';
 import { Observable } from 'rxjs';
 import { Runtime } from '../Runtime';
-import * as Poly from '../utils/polyFunction';
-import { ProtocolState } from './ProtocolState';
 import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant';
-import * as H from '../utils/hlist';
+import { HList, Poly } from '@midnight-ntwrk/abstractions';
+import { ProtocolState } from '@midnight-ntwrk/abstractions';
 
 /**
  * Defines the static portion of base wallet class definition
@@ -16,11 +15,14 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
   allVariants(): TVariants;
   allVariantsRecord(): VariantRecord<TVariants>;
   startEmpty<T extends WalletClassLike<TVariants, any>>(walletClass: T): WalletOf<T>;
-  startFirst<T extends WalletClassLike<TVariants, any>>(walletClass: T, state: StateOf<H.Head<TVariants>>): WalletOf<T>;
+  startFirst<T extends WalletClassLike<TVariants, any>>(
+    walletClass: T,
+    state: StateOf<HList.Head<TVariants>>,
+  ): WalletOf<T>;
   start<T extends WalletClassLike<TVariants, any>, Tag extends string | symbol>(
     walletClass: T,
     tag: Tag,
-    state: StateOf<H.Find<TVariants, { variant: Poly.WithTag<Tag> }>>,
+    state: StateOf<HList.Find<TVariants, { variant: Poly.WithTag<Tag> }>>,
   ): WalletOf<T>;
 }
 
@@ -47,7 +49,7 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   /**
    * A stream of state changes over any amount of time that have been processed by the wallet.
    */
-  readonly state: Observable<ProtocolState<StateOf<H.Each<TVariants>>>>;
+  readonly state: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
 
   /**
    * Returns an indicator whether the underlying state of the wallet is fully synchronized.

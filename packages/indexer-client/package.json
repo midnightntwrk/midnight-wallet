@@ -1,0 +1,42 @@
+{
+  "name": "@midnight-ntwrk/wallet-indexer-client-ts",
+  "version": "5.0.0",
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./effect": {
+      "import": "./dist/effect/index.mjs",
+      "types": "./dist/effect/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@effect/platform": "^0.84.6",
+    "@graphql-typed-document-node/core": "^3.2.0",
+    "@midnight-ntwrk/abstractions": "workspace:*",
+    "@midnight-ntwrk/zswap": "^4.0.0",
+    "effect": "^3.16.3",
+    "graphql": "^16.11.0",
+    "graphql-http": "^1.22.4",
+    "graphql-ws": "^6.0.5"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.7",
+    "@graphql-codegen/client-preset": "^4.8.2",
+    "@graphql-codegen/typescript": "^4.1.6",
+    "@graphql-codegen/typescript-operations": "^4.6.1",
+    "testcontainers": "^11.0.3"
+  },
+  "scripts": {
+    "codegen": "graphql-codegen",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint",
+    "dist": "rollup -c ./rollup.config.mjs"
+  }
+}

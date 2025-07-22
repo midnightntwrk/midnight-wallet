@@ -1,6 +1,10 @@
-import { Effect, Context, Data } from 'effect';
-import { SerializedUnprovenTransaction } from './SerializedUnprovenTransaction';
-import { SerializedTransaction } from './SerializedTransaction';
+import { Effect, Context } from 'effect';
+import {
+  ClientError,
+  ServerError,
+  SerializedTransaction,
+  SerializedUnprovenTransaction,
+} from '@midnight-ntwrk/abstractions';
 
 /**
  * A client that provides proof services for unproven transactions.
@@ -29,36 +33,6 @@ export declare namespace ProverClient {
      */
     proveTransaction(
       transaction: SerializedUnprovenTransaction,
-    ): Effect.Effect<SerializedTransaction, ProverClientError | ProverServerError>;
+    ): Effect.Effect<SerializedTransaction, ClientError | ServerError>;
   }
 }
-
-/**
- * A configuration error where the protocol scheme of a given Proof Server URL was unexpected (e.g., used
- * `'ftp:'` rather than `'http:'` for a Proof Server running over HTTP).
- */
-export class InvalidProtocolSchemeError extends Data.TaggedError('InvalidProtocolSchemeError')<{
-  /** The scheme that caused the error. */
-  readonly invalidScheme: string;
-
-  /** An array of schemes that were permissible. */
-  readonly allowedSchemes: string[];
-}> {}
-
-/**
- * An error representing a connection or client-side error.
- *
- * @remarks
- * This error typically indicates a connection issue with a target Proof Server, or when the client has submitted an
- * invalid transaction that could not be processed.
- */
-export class ProverClientError extends Data.TaggedError('ProverClientError')<{
-  readonly message: string;
-}> {}
-
-/**
- * An error representing a server-side error.
- */
-export class ProverServerError extends Data.TaggedError('ProverServerError')<{
-  readonly message: string;
-}> {}

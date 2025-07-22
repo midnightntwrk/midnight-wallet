@@ -1,5 +1,6 @@
 import { describe, it } from '@jest/globals';
-import { CanAssign, Equal } from '../../test/testUtils';
+import { CanAssign } from '../../test/testUtils';
+import { type Expect, type Equal, HList, Poly, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import {
   InterceptingRunningVariant,
   InterceptingVariant,
@@ -8,10 +9,6 @@ import {
   NumericRange,
   NumericRangeMultiplier,
 } from '../../test/variants';
-import * as H from '../../utils/hlist';
-import * as Poly from '../../utils/polyFunction';
-import { Expect } from '../../utils/types';
-import { ProtocolVersion } from '../ProtocolVersion';
 import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
 
 describe('Variant', () => {
@@ -43,7 +40,7 @@ describe('Variant', () => {
       VersionedVariant<NumericRangeMultiplier>,
       VersionedVariant<NumericRange>,
     ];
-    type InferState<TTag extends string | symbol> = StateOf<H.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
+    type InferState<TTag extends string | symbol> = StateOf<HList.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
 
     type _1 = Expect<Equal<InferState<'foo'>, string>>;
     type _2 = Expect<Equal<InferState<typeof Numeric>, number>>;
@@ -99,7 +96,7 @@ describe('Variant', () => {
 
     it('returns and infers in single-variant case correctly', () => {
       const range: VersionedVariant<NumericRange> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new NumericRange({ min: 0, max: 1 }, 1, false),
       };
       const record1 = makeVersionedRecord([range] as const);
@@ -107,7 +104,7 @@ describe('Variant', () => {
       type _1 = Expect<Equal<typeof record1, object & { readonly NumericRange: VersionedVariant<NumericRange> }>>;
 
       const rangeMultiplier: VersionedVariant<NumericRangeMultiplier> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
       };
       const record2 = makeVersionedRecord([rangeMultiplier] as const);
@@ -117,7 +114,7 @@ describe('Variant', () => {
       >;
 
       const interceptor: VersionedVariant<InterceptingVariant<'foo', number>> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new InterceptingVariant('foo'),
       };
       const record3 = makeVersionedRecord([interceptor] as const);
@@ -129,15 +126,15 @@ describe('Variant', () => {
 
     it('returns and infers in multi-variant case correctly', () => {
       const range: VersionedVariant<NumericRange> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new NumericRange({ min: 0, max: 1 }, 1, false),
       };
       const rangeMultiplier: VersionedVariant<NumericRangeMultiplier> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new NumericRangeMultiplier({ min: 0, max: 1, multiplier: 2 }),
       };
       const interceptor: VersionedVariant<InterceptingVariant<'foo', number>> = {
-        sinceVersion: ProtocolVersion(1n),
+        sinceVersion: ProtocolVersion.ProtocolVersion(1n),
         variant: new InterceptingVariant('foo'),
       };
 

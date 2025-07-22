@@ -6,7 +6,8 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolState, ProtocolVersion, Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import {
   DefaultRunningV1,
   DefaultV1Configuration,

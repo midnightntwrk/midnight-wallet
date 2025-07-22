@@ -1,7 +1,8 @@
 import { describe, it } from '@jest/globals';
-import { VariantBuilder } from '../abstractions/index';
-import { BuildArguments, FullConfiguration } from '../WalletBuilder';
-import { CanAssign, Equal } from './testUtils';
+import type { Expect, Equal } from '@midnight-ntwrk/abstractions';
+import { VariantBuilder } from '../abstractions';
+import { FullConfiguration, BuildArguments } from '../WalletBuilder';
+import { CanAssign } from './testUtils';
 import {
   InterceptingVariantBuilder,
   NumericRangeBuilder,
@@ -9,15 +10,14 @@ import {
   RangeConfig,
   RangeMultiplierConfig,
 } from './variants';
-import { Expect } from '../utils/types';
 
 describe('WalletBuilder', () => {
   describe('inferring configuration type', () => {
-    it('infers empty object for no variants', () => {
+    it('infers undefined for no variants', () => {
       type _1 = Expect<Equal<FullConfiguration<[]>, unknown>>;
     });
 
-    it('infers empty object for a variant with no effective configuration to pass', () => {
+    it('infers undefined for a variant with no effective configuration to pass', () => {
       type _11 = Expect<
         Equal<
           FullConfiguration<[VariantBuilder.VersionedVariantBuilder<InterceptingVariantBuilder<string, string>>]>,

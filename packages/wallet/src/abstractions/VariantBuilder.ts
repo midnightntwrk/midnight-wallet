@@ -1,4 +1,4 @@
-import { ProtocolVersion } from './ProtocolVersion';
+import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { AnyVariant, VersionedVariant } from './Variant';
 
 /**
@@ -38,7 +38,7 @@ export type VariantOf<T> =
       : never;
 
 export type VersionedVariantBuilder<TBuilder extends AnyVariantBuilder> = Readonly<{
-  sinceVersion: ProtocolVersion;
+  sinceVersion: ProtocolVersion.ProtocolVersion;
   variantBuilder: TBuilder;
 }>;
 

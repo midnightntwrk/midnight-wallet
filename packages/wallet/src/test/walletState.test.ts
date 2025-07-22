@@ -1,6 +1,6 @@
 import { jest, describe, expect } from '@jest/globals';
 import { WalletBuilderTs } from '../index';
-import { ProtocolVersion } from '../abstractions/index';
+import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { NumericRangeBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
 import * as rx from 'rxjs';

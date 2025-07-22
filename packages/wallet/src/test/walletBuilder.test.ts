@@ -1,18 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
-import {
-  ProtocolState,
-  ProtocolVersion,
-  StateChange,
-  Variant,
-  VariantBuilder,
-  WalletLike,
-} from '../abstractions/index';
+import { ProtocolState, ProtocolVersion, StateChange, Expect, Equal } from '@midnight-ntwrk/abstractions';
+import { Variant, VariantBuilder, WalletLike } from '../abstractions';
 import { WalletBuilderTs } from '../index';
 import { Runtime } from '../Runtime';
-import { Equal, isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
-import { Expect } from '../utils/types';
+import { isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
 import {
   NumericRange,
   NumericRangeBuilder,

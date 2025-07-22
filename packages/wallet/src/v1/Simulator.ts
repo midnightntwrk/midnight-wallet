@@ -1,7 +1,7 @@
 // TODO: once rewrite commences - rewire things to ledger package
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as EArray, Effect, pipe, Stream, SubscriptionRef } from 'effect';
-import { NonEmptyArrayOps } from '../effect/index';
+import { NonEmptyArrayOps } from '../effect';
 import * as zswap from '@midnight-ntwrk/zswap';
 
 export type SimulatorState = Readonly<{

@@ -1,5 +1,5 @@
 import { describe } from '@jest/globals';
-import { Equal } from '../../test/testUtils';
+import { HList, type Expect, type Equal } from '@midnight-ntwrk/abstractions';
 import {
   InterceptingVariant,
   InterceptingVariantBuilder,
@@ -10,8 +10,6 @@ import {
   RangeConfig,
   RangeMultiplierConfig,
 } from '../../test/variants';
-import * as H from '../../utils/hlist';
-import { Expect } from '../../utils/types';
 import { VersionedVariant } from '../Variant';
 import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder';
 
@@ -48,7 +46,7 @@ describe('VariantBuilder', () => {
       Equal<ConfigurationOf<VersionedVariantBuilder<NumericRangeMultiplierBuilder>>, RangeMultiplierConfig>
     >;
     type _6 = Expect<Equal<ConfigurationOf<NumericRangeMultiplierBuilder>, RangeMultiplierConfig>>;
-    type _7 = Expect<Equal<ConfigurationOf<H.Each<Builders>>, Expected>>;
-    type _8 = Expect<Equal<ConfigurationOf<H.Each<VersionedBuilders>>, Expected>>;
+    type _7 = Expect<Equal<ConfigurationOf<HList.Each<Builders>>, Expected>>;
+    type _8 = Expect<Equal<ConfigurationOf<HList.Each<VersionedBuilders>>, Expected>>;
   });
 });

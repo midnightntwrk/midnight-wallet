@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@effect/platform": "^0.84.6",
+    "@midnight-ntwrk/abstractions": "workspace:*",
     "@midnight-ntwrk/zswap": "^4.0.0",
     "effect": "^3.16.3"
   },

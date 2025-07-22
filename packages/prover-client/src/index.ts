@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
-import { ProverClient, HttpProverClient as _HttpProverClient, SerializedUnprovenTransaction } from './effect/index';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
+import { ProverClient, HttpProverClient as _HttpProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
 
 /**
  * Sends serialized unproven transactions to a Proof Server over HTTP.
@@ -27,15 +28,15 @@ export class HttpProverClient {
    * @param transaction A serialized unproven transaction.
    * @returns A `Promise` that resolves with a serialized transaction representing the proven version of
    * `transaction`; or fails with a client or server side error.
-   * @throws {@link ProverClient.ProverClientError}
+   * @throws {@link ClientError}
    * There was an issue with the provided `transaction`, or a connection with the configured Proof
    * Server could not be initiated.
-   * @throws {@link ProverClient.ProverServerError}
+   * @throws {@link ServerError}
    * Unable to establish a connection with the configured Proof Server, or there was an internal error that
    * prevented the proof request from being executed.
    */
   proveTransaction(transaction: Uint8Array): Promise<Uint8Array> {
-    const unprovenTx = SerializedUnprovenTransaction.SerializedUnprovenTransaction(transaction);
+    const unprovenTx = SerializedUnprovenTransaction(transaction);
 
     return this.#innerClient.proveTransaction(unprovenTx).pipe(Effect.runPromise);
   }

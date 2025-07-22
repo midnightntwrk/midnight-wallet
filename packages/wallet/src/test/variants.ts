@@ -1,4 +1,5 @@
-import { VariantBuilder, Variant, StateChange, VersionChangeType, WalletRuntimeError } from '../abstractions/index';
+import { StateChange, VersionChangeType } from '@midnight-ntwrk/abstractions';
+import { VariantBuilder, Variant, WalletRuntimeError } from '../abstractions';
 import { Effect, Stream, Option, Scope, PubSub } from 'effect';
 
 export type RangeConfig = {

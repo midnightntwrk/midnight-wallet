@@ -1,8 +1,5 @@
-import {
-  HttpProverClient,
-  ProverClient,
-  SerializedUnprovenTransaction,
-} from '@midnight-ntwrk/wallet-prover-client-ts/effect';
+import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
 import { ProofErasedTransaction } from '@midnight-ntwrk/zswap';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, pipe } from 'effect';
@@ -24,9 +21,7 @@ export const httpProveTx = (
 ): Effect.Effect<zswap.Transaction, WalletError, ProverClient.ProverClient> => {
   return Effect.gen(function* () {
     const client = yield* ProverClient.ProverClient;
-    const unprovenSerialized = SerializedUnprovenTransaction.SerializedUnprovenTransaction(
-      unproven.serialize(networkId),
-    );
+    const unprovenSerialized = SerializedUnprovenTransaction(unproven.serialize(networkId));
     const provenSerialized = yield* client.proveTransaction(unprovenSerialized);
     return zswap.Transaction.deserialize(provenSerialized, networkId);
   }).pipe(Effect.mapError((err) => WalletError.proving(err)));

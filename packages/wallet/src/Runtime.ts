@@ -3,19 +3,18 @@ import {
   ProtocolState,
   ProtocolVersion,
   StateChange,
-  Variant,
   VersionChangeType,
-  WalletRuntimeError,
-} from './abstractions/index';
-import * as Poly from './utils/polyFunction';
-import * as H from './utils/hlist';
+  HList,
+  Poly,
+} from '@midnight-ntwrk/abstractions';
+import { Variant, WalletRuntimeError } from './abstractions/index';
 
 /**
  * The {@link Runtime} service type.
  */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
   readonly stateChanges: Stream.Stream<
-    ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>,
+    ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>,
     WalletRuntimeError
   >;
 
@@ -24,7 +23,7 @@ export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
   readonly currentVariant: Effect.Effect<EachRunningVariant<Variants>>;
 
   dispatch<TResult>(
-    impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+    impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
   ): Effect.Effect<TResult, WalletRuntimeError>;
 }
 
@@ -56,19 +55,19 @@ type Progress = { readonly sourceGap: bigint; readonly applyGap: bigint };
 
 export type InitRuntimeHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
-  state: Variant.StateOf<H.Head<Variants>>;
+  state: Variant.StateOf<HList.Head<Variants>>;
 };
 export const initHead = <Variants extends Variant.AnyVersionedVariantArray>(
   initArgs: InitRuntimeHeadArgs<Variants>,
 ): Effect.Effect<Runtime<Variants>, WalletRuntimeError, Scope.Scope> => {
-  const headVariant: H.Head<Variants> = H.head(initArgs.variants);
+  const headVariant: HList.Head<Variants> = HList.head(initArgs.variants);
   return init({ variants: initArgs.variants, tag: Poly.getTag(headVariant.variant), state: initArgs.state });
 };
 
 export type InitRuntimeArgs<Variants extends Variant.AnyVersionedVariantArray, InitTag extends string | symbol> = {
   variants: Variants;
   tag: InitTag;
-  state: Variant.StateOf<H.Find<Variants, { variant: Poly.WithTag<InitTag> }>>;
+  state: Variant.StateOf<HList.Find<Variants, { variant: Poly.WithTag<InitTag> }>>;
 };
 export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag extends string | symbol>(
   initArgs: InitRuntimeArgs<Variants, InitTag>,
@@ -78,9 +77,9 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
     Effect.bind('initiatedFirstVariant', () => initVariant(initArgs)),
     Effect.bind('currentStateRef', ({ initiatedFirstVariant }) =>
       initiatedFirstVariant.currentStateRef.get.pipe(
-        Effect.flatMap((state: Variant.StateOf<H.Each<Variants>>) =>
+        Effect.flatMap((state: Variant.StateOf<HList.Each<Variants>>) =>
           SubscriptionRef.make<
-            Either.Either<ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>, WalletRuntimeError>
+            Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
           >(Either.right({ version: initiatedFirstVariant.initProtocolVersion, state })),
         ),
       ),
@@ -119,7 +118,7 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         progress: progressRef.get,
         currentVariant: currentVariantRef.get,
         dispatch: <TResult>(
-          impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+          impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
         ): Effect.Effect<TResult, WalletRuntimeError> => dispatch(runtime, impl),
       };
 
@@ -130,16 +129,18 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
 
 export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult>(
   runtime: Runtime<Variants>,
-  impl: Poly.PolyFunction<Variant.RunningVariantOf<H.Each<Variants>>, TResult>,
+  impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
 ): Effect.Effect<TResult, WalletRuntimeError> => {
   return runtime.currentVariant.pipe(
-    Effect.map((current) => Poly.dispatch(current.runningVariant as Variant.RunningVariantOf<H.Each<Variants>>, impl)),
+    Effect.map((current) =>
+      Poly.dispatch(current.runningVariant as Variant.RunningVariantOf<HList.Each<Variants>>, impl),
+    ),
   );
 };
 
 type MigrateArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
-  state: Variant.PreviousStateOf<H.Head<Variants>>;
+  state: Variant.PreviousStateOf<HList.Head<Variants>>;
   initProtocolVersion?: ProtocolVersion.ProtocolVersion;
 };
 const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>(
@@ -156,7 +157,7 @@ const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>
 
     return yield* initHeadVariant({
       variants: migrateArgs.variants,
-      state: newState as Variant.StateOf<H.Head<Variants>>,
+      state: newState as Variant.StateOf<HList.Head<Variants>>,
       initProtocolVersion: migrateArgs.initProtocolVersion,
     });
   });
@@ -165,9 +166,9 @@ const migrateToNextVariant = <Variants extends Variant.AnyVersionedVariantArray>
 type InitArgs<Variants extends Variant.AnyVersionedVariantArray, TTag extends string | symbol> = {
   variants: Variants;
   tag: TTag;
-  state: Variant.StateOf<H.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
+  state: Variant.StateOf<HList.Find<Variants, { variant: Poly.WithTag<TTag> }>>;
 };
-// Arguments are gathered to a separate type because presence of H.Find is crashing TS compiler ¯\_(ツ)_/¯
+// Arguments are gathered to a separate type because presence of HList.Find is crashing TS compiler ¯\_(ツ)_/¯
 const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag extends string | symbol>(
   init: InitArgs<Variants, TTag>,
 ): Effect.Effect<EachRunningVariant<Variants>, WalletRuntimeError> => {
@@ -178,14 +179,14 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
     //These casts are terrible, but they allow to call the initHeadVariant
     return yield* initHeadVariant({
       variants: theRest as Variants,
-      state: init.state as unknown as Variant.StateOf<H.Head<Variants>>,
+      state: init.state as unknown as Variant.StateOf<HList.Head<Variants>>,
     });
   });
 };
 
 type InitHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
-  state: Variant.StateOf<H.Head<Variants>>;
+  state: Variant.StateOf<HList.Head<Variants>>;
   initProtocolVersion?: ProtocolVersion.ProtocolVersion | undefined;
 };
 // Following pattern from `initVariant` for consistency
@@ -197,7 +198,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
     if (!anyHeadVersionedVariant) {
       yield* Effect.fail(new WalletRuntimeError({ message: 'No variant to init' }));
     }
-    const headVersionedVariant = anyHeadVersionedVariant as H.Head<Variants> & Variant.AnyVersionedVariant;
+    const headVersionedVariant = anyHeadVersionedVariant as HList.Head<Variants> & Variant.AnyVersionedVariant;
 
     const actualInitProtocolVersion = init.initProtocolVersion ?? headVersionedVariant.sinceVersion;
     const nextActivationVersion = maybeNextVersionedVariant
@@ -210,17 +211,17 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
     const runningVariant = yield* headVersionedVariant.variant
       .start({ stateRef }, init.state)
       .pipe(Effect.provideService(Scope.Scope, variantScope)) as Effect.Effect<
-      Variant.RunningVariantOf<H.Head<Variants>>,
+      Variant.RunningVariantOf<HList.Head<Variants>>,
       WalletRuntimeError
     >;
     //This type declaration helps with setting right properties...
-    const out: RunningVariant<H.Head<Variants> & Variant.AnyVersionedVariant, H.Tail<Variants>> = {
-      __polyTag__: headVersionedVariant.variant.__polyTag__ as Poly.TagOf<H.Each<Variants>['variant']>,
+    const out: RunningVariant<HList.Head<Variants> & Variant.AnyVersionedVariant, HList.Tail<Variants>> = {
+      __polyTag__: headVersionedVariant.variant.__polyTag__ as Poly.TagOf<HList.Each<Variants>['variant']>,
       variant: headVersionedVariant,
       initialState: init.state,
       runningVariant: runningVariant,
       currentStateRef: stateRef,
-      restVariants: H.tail(init.variants),
+      restVariants: HList.tail(init.variants),
       initProtocolVersion: actualInitProtocolVersion,
       validVersionRange,
       nextProtocolVersion: maybeNextVersionedVariant ? maybeNextVersionedVariant.sinceVersion : null,
@@ -234,7 +235,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
 const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
   initiatedVariant: EachRunningVariant<Variants>,
   stateRef: SubscriptionRef.SubscriptionRef<
-    Either.Either<ProtocolState.ProtocolState<Variant.StateOf<H.Each<Variants>>>, WalletRuntimeError>
+    Either.Either<ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>, WalletRuntimeError>
   >,
   progressRef: SynchronizedRef.SynchronizedRef<Progress>,
   currentVariantRef: SynchronizedRef.SynchronizedRef<EachRunningVariant<Variants>>,
@@ -243,9 +244,9 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
     protocolVersion: ProtocolVersion.ProtocolVersion;
     followEffect: Effect.Effect<void, WalletRuntimeError>;
     shouldInitChange: boolean;
-    lastState: Variant.StateOf<H.Each<Variants>>;
+    lastState: Variant.StateOf<HList.Each<Variants>>;
   };
-  type StreamState = StateChange.StateChange<Variant.StateOf<H.Each<Variants>>>;
+  type StreamState = StateChange.StateChange<Variant.StateOf<HList.Each<Variants>>>;
 
   const initialAcc: Accumulator = {
     protocolVersion: initiatedVariant.initProtocolVersion,
@@ -283,7 +284,9 @@ const runVariantStream = <Variants extends Variant.AnyVersionedVariantArray>(
                 yield* Scope.close(initiatedVariant.variantScope, Exit.void);
                 const newInitiatedVariant = yield* migrateToNextVariant({
                   variants: initiatedVariant.restVariants,
-                  state: accumulator.lastState as Variant.PreviousStateOf<H.Head<typeof initiatedVariant.restVariants>>,
+                  state: accumulator.lastState as Variant.PreviousStateOf<
+                    HList.Head<typeof initiatedVariant.restVariants>
+                  >,
                   initProtocolVersion: newProtocolVersion,
                 });
                 yield* SynchronizedRef.set(currentVariantRef, newInitiatedVariant);

@@ -1,0 +1,27 @@
+{
+  "name": "@midnight-ntwrk/abstractions",
+  "version": "5.0.0",
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "effect": "^3.16.3"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint",
+    "dist": "rollup -c ./rollup.config.mjs"
+  },
+  "devDependencies": {
+    "fast-check": "^4.1.1",
+    "to-words": "^4.5.1"
+  }
+}

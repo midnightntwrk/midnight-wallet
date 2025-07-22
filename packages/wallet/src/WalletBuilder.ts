@@ -1,11 +1,9 @@
 import { Effect, Exit, Scope, Types } from 'effect';
 import * as rx from 'rxjs';
-import { Fluent, ProtocolVersion, Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions/index';
-import { ProtocolState } from './abstractions/ProtocolState';
+import { Fluent, ProtocolVersion, ProtocolState, HList, Poly } from '@midnight-ntwrk/abstractions';
+import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions';
 import { StateOf } from './abstractions/Variant';
 import { ObservableOps, Runtime } from './effect/index';
-import * as H from './utils/hlist';
-import * as Poly from './utils/polyFunction';
 
 /**
  * Builds a wallet-like implementation from a collection of wallet-like variants, each specific
@@ -49,7 +47,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     sinceVersion: ProtocolVersion.ProtocolVersion,
     variantBuilder: TBuilder,
   ): Fluent.ExcludeMethod<
-    WalletBuilder<H.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>,
+    WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>,
     WalletBuilderMethods.WithDefaultVariantsMethod
   > {
     const { sinceVersion: previousVersion } = this.#buildState.variants.at(-1) ?? {
@@ -62,8 +60,8 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
     const newBuilder: VariantBuilder.VersionedVariantBuilder<TBuilder> = { sinceVersion, variantBuilder };
 
-    return new WalletBuilder<H.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>({
-      variants: H.append(this.#buildState.variants, newBuilder),
+    return new WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>({
+      variants: HList.append(this.#buildState.variants, newBuilder),
     });
   }
 
@@ -87,7 +85,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     ) as Variants;
 
     type WalletRuntime = Runtime.Runtime<Variants>;
-    type WalletState = Variant.StateOf<H.Each<Variants>>;
+    type WalletState = Variant.StateOf<HList.Each<Variants>>;
 
     return class BaseWallet implements WalletLike.WalletLike<Variants> {
       static readonly configuration: FullConfiguration<TBuilders> = (maybeConfiguration ??
@@ -104,8 +102,8 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       static startEmpty<T extends WalletLike.AnyWalletClass<Variants>>(WalletClass: T): WalletLike.WalletOf<T> {
         return Effect.gen(this, function* () {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          const initialState: Variant.StateOf<H.Head<Variants>> = yield* (
-            H.head(BaseWallet.allVariants()) as Variant.AnyVersionedVariant
+          const initialState: Variant.StateOf<HList.Head<Variants>> = yield* (
+            HList.head(BaseWallet.allVariants()) as Variant.AnyVersionedVariant
           ).variant.migrateState(null);
 
           return BaseWallet.startFirst(WalletClass, initialState);
@@ -114,7 +112,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
       static startFirst<T extends WalletLike.AnyWalletClass<Variants>>(
         WalletClass: T,
-        state: StateOf<H.Head<Variants>>,
+        state: StateOf<HList.Head<Variants>>,
       ): WalletLike.WalletOf<T> {
         return Effect.gen(this, function* () {
           const scope = yield* Scope.make();
@@ -128,7 +126,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       static start<T extends WalletLike.AnyWalletClass<Variants>, Tag extends string | symbol>(
         WalletClass: T,
         tag: Tag,
-        state: Variant.StateOf<H.Find<Variants, { variant: Poly.WithTag<Tag> }>>,
+        state: Variant.StateOf<HList.Find<Variants, { variant: Poly.WithTag<Tag> }>>,
       ): WalletLike.WalletOf<T> {
         return Effect.gen(this, function* () {
           const scope = yield* Scope.make();
@@ -141,7 +139,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
       readonly runtime: WalletRuntime;
       readonly runtimeScope: Scope.CloseableScope;
-      readonly state: rx.Observable<ProtocolState<WalletState>>;
+      readonly state: rx.Observable<ProtocolState.ProtocolState<WalletState>>;
 
       get syncComplete(): boolean {
         const { sourceGap, applyGap } = Effect.runSync(this.runtime.progress);
@@ -196,5 +194,5 @@ export type FullConfiguration<TBuilders extends VariantBuilder.AnyVersionedVaria
 type VoidIfEmpty<TObject> = keyof TObject extends never ? undefined : TObject;
 
 type Configurations<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> = VariantBuilder.ConfigurationOf<
-  H.Each<TBuilders>
+  HList.Each<TBuilders>
 >;

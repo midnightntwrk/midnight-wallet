@@ -1,12 +1,4 @@
-export * from './Fluent';
 export * as Variant from './Variant';
 export * as VariantBuilder from './VariantBuilder';
 export * as WalletLike from './WalletLike';
-export * as WalletSeed from './WalletSeed';
-export * as WalletState from './WalletState';
-export * as SerializedTransaction from './SerializedTransaction';
-export * as ProtocolState from './ProtocolState';
-export * as ProtocolVersion from './ProtocolVersion';
-export * as VersionChangeType from './VersionChangeType';
-export * as StateChange from './StateChange';
 export * from './WalletRuntimeError';

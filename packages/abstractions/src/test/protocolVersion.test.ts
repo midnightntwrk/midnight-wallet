@@ -1,4 +1,4 @@
-import { ProtocolVersion } from '../index';
+import * as ProtocolVersion from '../ProtocolVersion';
 import { Schema } from 'effect';
 
 describe('ProtocolVersion', () => {

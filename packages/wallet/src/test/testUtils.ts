@@ -1,13 +1,6 @@
-import { ProtocolState } from '../abstractions/index';
 import { Chunk } from 'effect';
+import { ProtocolState } from '@midnight-ntwrk/abstractions';
 import { Observable, reduce, OperatorFunction } from 'rxjs';
-
-/**
- * A utility type that exactly compares two types for equality.
- *
- * @internal
- */
-export type Equal<X, Y> = (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? true : false;
 
 /**
  * A utility type that checks whether type A can be assigned to type To

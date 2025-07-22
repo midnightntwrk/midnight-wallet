@@ -2,9 +2,8 @@
 import { Scope, SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
-import { WithTag, getTag } from '../utils/polyFunction';
-import type { ProtocolVersion } from './ProtocolVersion';
-import { StateChange } from './StateChange';
+import { Poly } from '@midnight-ntwrk/abstractions';
+import type { ProtocolVersion, StateChange } from '@midnight-ntwrk/abstractions';
 import { WalletRuntimeError } from './WalletRuntimeError';
 
 export interface VariantContext<TState> {
@@ -24,14 +23,14 @@ export type Variant<
   TState,
   TPreviousState,
   TRunning extends RunningVariant<TTag, TState>,
-> = WithTag<TTag> & {
+> = Poly.WithTag<TTag> & {
   start(context: VariantContext<TState>, state: TState): Effect<TRunning, WalletRuntimeError, Scope.Scope>;
 
   migrateState(previousState: TPreviousState): Effect<TState>;
 };
 
-export type RunningVariant<TTag extends symbol | string, TState> = WithTag<TTag> & {
-  state: Stream<StateChange<TState>, WalletRuntimeError>;
+export type RunningVariant<TTag extends symbol | string, TState> = Poly.WithTag<TTag> & {
+  state: Stream<StateChange.StateChange<TState>, WalletRuntimeError>;
 };
 
 /**
@@ -70,7 +69,10 @@ export type AnyVariantArray = AnyVariant[];
 /**
  * A type that associates a {@link Variant} with a given version of the Midnight protocol.
  */
-export type VersionedVariant<T extends AnyVariant> = Readonly<{ sinceVersion: ProtocolVersion; variant: T }>;
+export type VersionedVariant<T extends AnyVariant> = Readonly<{
+  sinceVersion: ProtocolVersion.ProtocolVersion;
+  variant: T;
+}>;
 
 export type AnyVersionedVariant = VersionedVariant<AnyVariant>;
 
@@ -83,14 +85,14 @@ export type AnyVersionedVariant = VersionedVariant<AnyVariant>;
 export type AnyVersionedVariantArray = AnyVersionedVariant[];
 
 export type VariantTag<T> =
-  T extends VersionedVariant<infer V> ? VariantTag<V> : T extends WithTag<infer Tag> ? Tag : never;
+  T extends VersionedVariant<infer V> ? VariantTag<V> : T extends Poly.WithTag<infer Tag> ? Tag : never;
 export type VariantRecord<Variants> = Variants extends [infer THead, ...infer TRest]
   ? { readonly [K in VariantTag<THead>]: THead } & VariantRecord<TRest>
   : Variants extends []
     ? object
     : never;
 export const getVersionedVariantTag = <Variant extends AnyVariant>(v: VersionedVariant<Variant>): VariantTag<Variant> =>
-  getTag(v.variant) as VariantTag<Variant>;
+  Poly.getTag(v.variant) as VariantTag<Variant>;
 export const makeVersionedRecord = <Variants extends AnyVersionedVariantArray>(
   variants: Variants,
 ): VariantRecord<Variants> => {

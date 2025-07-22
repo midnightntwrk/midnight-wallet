@@ -1,0 +1,64 @@
+/* eslint-disable */
+import * as types from './graphql';
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
+
+/**
+ * Map of all GraphQL operations in the project.
+ *
+ * This map has several performance disadvantages:
+ * 1. It is not tree-shakeable, so it will include all operations in the project.
+ * 2. It is not minifiable, so the string of a GraphQL query will be multiple times inside the bundle.
+ * 3. It does not support dead code elimination, so it will add unused operations.
+ *
+ * Therefore it is highly recommended to use the babel or swc plugin for production.
+ * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
+ */
+type Documents = {
+    "\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  ": typeof types.BlockHashDocument,
+    "\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ": typeof types.ConnectDocument,
+    "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  ": typeof types.DisconnectDocument,
+    "\n    subscription Wallet($sessionId: HexEncoded!, $index: Int) {\n      wallet(sessionId: $sessionId, index: $index) {\n        __typename\n        ... on ProgressUpdate {\n          highestIndex\n          highestRelevantIndex\n          highestRelevantWalletIndex\n        }\n        ... on ViewingUpdate {\n          index\n          update {\n            ... on MerkleTreeCollapsedUpdate {\n              update\n              protocolVersion\n            }\n            ... on RelevantTransaction {\n              transaction {\n                hash\n                raw\n                # The following code will be required for Indexer ^3.0.0 (replacing the line that follows the comment)\n                # transactionResult {\n                #  status\n                # }\n                applyStage\n                protocolVersion\n              }\n            }\n          }\n        }\n      }\n    }\n  ": typeof types.WalletDocument,
+};
+const documents: Documents = {
+    "\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  ": types.BlockHashDocument,
+    "\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ": types.ConnectDocument,
+    "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  ": types.DisconnectDocument,
+    "\n    subscription Wallet($sessionId: HexEncoded!, $index: Int) {\n      wallet(sessionId: $sessionId, index: $index) {\n        __typename\n        ... on ProgressUpdate {\n          highestIndex\n          highestRelevantIndex\n          highestRelevantWalletIndex\n        }\n        ... on ViewingUpdate {\n          index\n          update {\n            ... on MerkleTreeCollapsedUpdate {\n              update\n              protocolVersion\n            }\n            ... on RelevantTransaction {\n              transaction {\n                hash\n                raw\n                # The following code will be required for Indexer ^3.0.0 (replacing the line that follows the comment)\n                # transactionResult {\n                #  status\n                # }\n                applyStage\n                protocolVersion\n              }\n            }\n          }\n        }\n      }\n    }\n  ": types.WalletDocument,
+};
+
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ *
+ *
+ * @example
+ * ```ts
+ * const query = gql(`query GetUser($id: ID!) { user(id: $id) { name } }`);
+ * ```
+ *
+ * The query argument is unknown!
+ * Please regenerate the types.
+ */
+export function gql(source: string): unknown;
+
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  "): (typeof documents)["\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  "];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  "): (typeof documents)["\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  "];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  "): (typeof documents)["\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  "];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    subscription Wallet($sessionId: HexEncoded!, $index: Int) {\n      wallet(sessionId: $sessionId, index: $index) {\n        __typename\n        ... on ProgressUpdate {\n          highestIndex\n          highestRelevantIndex\n          highestRelevantWalletIndex\n        }\n        ... on ViewingUpdate {\n          index\n          update {\n            ... on MerkleTreeCollapsedUpdate {\n              update\n              protocolVersion\n            }\n            ... on RelevantTransaction {\n              transaction {\n                hash\n                raw\n                # The following code will be required for Indexer ^3.0.0 (replacing the line that follows the comment)\n                # transactionResult {\n                #  status\n                # }\n                applyStage\n                protocolVersion\n              }\n            }\n          }\n        }\n      }\n    }\n  "): (typeof documents)["\n    subscription Wallet($sessionId: HexEncoded!, $index: Int) {\n      wallet(sessionId: $sessionId, index: $index) {\n        __typename\n        ... on ProgressUpdate {\n          highestIndex\n          highestRelevantIndex\n          highestRelevantWalletIndex\n        }\n        ... on ViewingUpdate {\n          index\n          update {\n            ... on MerkleTreeCollapsedUpdate {\n              update\n              protocolVersion\n            }\n            ... on RelevantTransaction {\n              transaction {\n                hash\n                raw\n                # The following code will be required for Indexer ^3.0.0 (replacing the line that follows the comment)\n                # transactionResult {\n                #  status\n                # }\n                applyStage\n                protocolVersion\n              }\n            }\n          }\n        }\n      }\n    }\n  "];
+
+export function gql(source: string) {
+  return (documents as any)[source] ?? {};
+}
+
+export type DocumentType<TDocumentNode extends DocumentNode<any, any>> = TDocumentNode extends DocumentNode<  infer TType,  any>  ? TType  : never;

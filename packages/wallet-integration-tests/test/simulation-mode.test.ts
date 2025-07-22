@@ -6,7 +6,7 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { initEmptyState, Proving, Simulator, Sync, V1Builder, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as EArray, Effect, pipe } from 'effect';

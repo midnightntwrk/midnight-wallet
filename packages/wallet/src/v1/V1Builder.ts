@@ -1,10 +1,9 @@
 import { CoreWallet, IndexerUpdate, NetworkId } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, Either, Scope, Sink, Stream, Types } from 'effect';
-import { Variant, VariantBuilder, WalletRuntimeError, WalletSeed } from '../abstractions/index';
-import { Expect, ItemType } from '../utils/types';
+import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/abstractions';
+import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
-
 import { RunningV1Variant, V1State, V1Tag } from './RunningV1Variant';
 import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization';
 import {

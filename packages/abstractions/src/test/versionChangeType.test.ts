@@ -1,4 +1,5 @@
-import { ProtocolVersion, VersionChangeType } from '../index';
+import * as ProtocolVersion from '../ProtocolVersion';
+import * as VersionChangeType from '../VersionChangeType';
 
 describe('VersionChangeType', () => {
   it('should create a version change with a given protocol version number', () => {
