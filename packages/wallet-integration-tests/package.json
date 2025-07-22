@@ -5,7 +5,8 @@
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
-    "lint": "eslint"
+    "lint": "eslint",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\""
   },
   "dependencies": {
     "@midnight-ntwrk/ledger": "^4.0.0",

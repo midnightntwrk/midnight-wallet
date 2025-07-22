@@ -3,9 +3,8 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "lib": ["ESNext", "dom"],
+    "lib": ["ESNext", "dom"]
   },
-  "include": [
-    "src/**/*.ts"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/test/**/*.ts", "src/**/*.test.ts"]
 }

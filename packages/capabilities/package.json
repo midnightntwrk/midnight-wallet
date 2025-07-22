@@ -32,6 +32,8 @@
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest --silent=false",
     "lint": "eslint --max-warnings 0",
-    "dist": "rollup -c ./rollup.config.mjs"
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "rollup -c rollup.config.mjs",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   }
 }

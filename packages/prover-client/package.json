@@ -11,7 +11,7 @@
       "types": "./dist/index.d.ts"
     },
     "./effect": {
-      "import": "./dist/effect/index.mjs",
+      "import": "./dist/effect/index.js",
       "types": "./dist/effect/index.d.ts"
     }
   },
@@ -27,6 +27,8 @@
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "lint": "eslint",
-    "dist": "rollup -c ./rollup.config.mjs"
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   }
 }

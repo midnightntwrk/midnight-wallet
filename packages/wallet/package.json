@@ -11,15 +11,15 @@
       "types": "./dist/index.d.ts"
     },
     "./abstractions": {
-      "import": "./dist/abstractions/index.mjs",
+      "import": "./dist/abstractions/index.js",
       "types": "./dist/abstractions/index.d.ts"
     },
     "./effect": {
-      "import": "./dist/effect/index.mjs",
+      "import": "./dist/effect/index.js",
       "types": "./dist/effect/index.d.ts"
     },
     "./v1": {
-      "import": "./dist/v1/index.mjs",
+      "import": "./dist/v1/index.js",
       "types": "./dist/v1/index.d.ts"
     }
   },
@@ -42,7 +42,9 @@
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "lint": "eslint --max-warnings 0",
-    "dist": "rollup -c ./rollup.config.mjs"
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   },
   "devDependencies": {
     "fast-check": "^4.1.1",

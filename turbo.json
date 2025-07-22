@@ -15,23 +15,12 @@
       "dependsOn": ["^dist"]
     },
     "test": {
-      "inputs": [
-        "test/**/*.ts",
-        "src/**/*.ts",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/tsconfig.base.json",
-        "jest.config.mjs"
-      ],
+      "inputs": ["test/**/*.ts", "src/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json", "jest.config.mjs"],
       "outputLogs": "new-only",
       "dependsOn": ["typecheck", "^dist"]
     },
     "typecheck": {
-      "inputs": [
-        "test/**/*.ts",
-        "src/**/*.ts",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/tsconfig.base.json"
-      ],
+      "inputs": ["test/**/*.ts", "src/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
@@ -48,11 +37,20 @@
         "rollup.config.mjs",
         "$TURBO_ROOT$/rollup.config.mjs"
       ],
-      "outputs": [
-        "dist/**"
-      ],
+      "outputs": ["dist/**"],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": ["clean", "^dist"]
+    },
+    "clean": {
+      "cache": false,
+      "inputs": [],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
+    "format": {
+      "inputs": ["**/*.{ts,js,json,yaml,yml}", ".prettierrc.json", "**/.prettierignore"],
+      "outputs": [],
+      "outputLogs": "new-only"
     },
     "@midnight-ntwrk/wallet#dist": {
       "outputLogs": "new-only",
@@ -74,16 +72,11 @@
         "project/**/*.scala",
         "project/build.properties",
         "project/*.sbt",
-        "**/src/**/resources/**.d.ts"
+        "**/src/**/resources/**/*.d.ts"
       ],
-      "outputs": [
-        "wallet-engine/dist/**"
-      ],
+      "outputs": ["wallet-engine/dist/**"],
       "outputLogs": "new-only",
-      "dependsOn": [
-        "@midnight-ntwrk/wallet-sdk-address-format#dist",
-        "@midnight-ntwrk/wallet-sdk-capabilities#dist"
-      ]
+      "dependsOn": ["@midnight-ntwrk/wallet-sdk-address-format#dist", "@midnight-ntwrk/wallet-sdk-capabilities#dist"]
     },
     "//#sbt:verify": {
       "inputs": [
@@ -94,9 +87,7 @@
         "project/build.properties",
         "project/*.sbt"
       ],
-      "outputs": [
-        "**/target/test-reports/**"
-      ],
+      "outputs": ["**/target/test-reports/**"],
       "outputLogs": "new-only",
       "dependsOn": ["//#sbt:dist"]
     }

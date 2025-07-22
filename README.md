@@ -55,14 +55,45 @@ Finally, [direnv](https://direnv.net) is optional but strongly recommended.
 
 Follow all authentication steps from the [Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
 
-## Build
+## Install dependencies
+
+Install all project dependencies using Yarn.
 
 ```shell
 yarn
+```
+
+## Build
+
+Build the projects once, generated Javascript code is written to the project's `dist` directory.
+
+```shell
 turbo dist
 ```
 
-The generated JavaScript code is written to `wallet-engine/dist`.
+## Build and watch
+
+Build the project and watch for changes to automatically rebuild. Generated Javascript code is written to the project's `dist` directory
+
+```shell
+turbo watch dist
+```
+
+## Clean
+
+Clean exiting `dist` directories.
+
+```shell
+turbo clean
+```
+
+## Format
+
+Formats source code.
+
+```shell
+turbo format
+```
 
 ## Test
 
@@ -87,6 +118,7 @@ turbo verify
 ```
 
 It runs across all workspaces and sbt modules:
+
 - necessary builds and typechecking
 - lints
 - unit tests
@@ -111,7 +143,7 @@ To execute the same verifications that are enabled on the CI, there's an sbt tas
 does the following:
 
 - Compile the code with strict scala compiler flags through the use of
-[sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
+  [sbt-tpolecat](https://github.com/DavidGregory084/sbt-tpolecat)
 - Check the code with [wartremover](https://www.wartremover.org/)
 - Run the unit and integration tests
 - Generate coverage reports

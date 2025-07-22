@@ -1,6 +1,13 @@
 {
   "jest.jestCommandLine": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js",
   "files.watcherExclude": {
-    "**/target": true
+    "**/target": true,
+    "**/dist": true
   },
+  "search.exclude": {
+    "**/target": true,
+    "**/dist": true
+  },
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode"
 }
