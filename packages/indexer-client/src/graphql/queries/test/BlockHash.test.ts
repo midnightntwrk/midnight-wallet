@@ -1,18 +1,14 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import { Effect, Option } from 'effect';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
-import { jest } from '@jest/globals';
 import { randomUUID } from 'node:crypto';
 import { BlockHash } from '../BlockHash';
 import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql';
 import { HttpQueryClient } from '../../../effect';
+import { Mock } from 'vitest';
 
-const COMPOSE_PATH = path.resolve(
-  new URL(import.meta.url).pathname,
-  '../../../../../../../typescript/packages/e2e-tests',
-);
+const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../../e2e-tests');
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
@@ -20,7 +16,7 @@ describe('BlockHash query', () => {
   describe('with available Indexer Server', () => {
     const environmentId = randomUUID();
     let environment: StartedDockerComposeEnvironment | undefined = undefined;
-    const getIndexerPort = () => environment?.getContainer(`indexer_${environmentId}`).getMappedPort(8088) ?? 8088;
+    const getIndexerPort = () => environment?.getContainer(`indexer_${environmentId}`)?.getMappedPort(8088) ?? 8088;
 
     beforeAll(async () => {
       environment = await new DockerComposeEnvironment(COMPOSE_PATH, 'docker-compose-dynamic.yml')
@@ -95,7 +91,7 @@ describe('BlockHash query', () => {
         hash: block.block.hash,
       }),
     });
-    const mockedQueryFn: jest.Mock<(v: BlockHashQueryVariables) => Effect.Effect<BlockHashQuery>> = jest.fn();
+    const mockedQueryFn: Mock<(v: BlockHashQueryVariables) => Effect.Effect<BlockHashQuery>> = vi.fn();
 
     mockedQueryFn.mockReturnValue(Effect.succeed(block));
 
@@ -106,7 +102,6 @@ describe('BlockHash query', () => {
       expect(result).toEqual(blockExpectation);
     }).pipe(
       Effect.provideService(BlockHash.tag, mockedQueryFn),
-      // TODO: Rather than providing a 'broken' HTTP query client, provide a test layer instead.
       Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v1/graphql' })),
       Effect.scoped,
       Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
@@ -119,7 +114,6 @@ describe('BlockHash query', () => {
       expect(result).toEqual(blockExpectation);
     }).pipe(
       Effect.provideService(BlockHash.tag, mockedQueryFn),
-      // TODO: Rather than providing a 'broken' HTTP query client, provide a test layer instead.
       Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v1/graphql' })),
       Effect.scoped,
       Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),

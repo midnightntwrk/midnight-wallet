@@ -1,9 +1,11 @@
-import { describe } from '@jest/globals';
 import { CoreWallet, DefaultSerializeCapability, JsEither, NetworkId } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { CoinInfo } from '@midnight-ntwrk/zswap';
 import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
+
+const minutes = (mins: number) => 1_000 * 60 * mins;
+vi.setConfig({ testTimeout: minutes(1) });
 
 const tokenTypeArbitrary = (maxSize: number) => {
   const number = fc.nat(maxSize);

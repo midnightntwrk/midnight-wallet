@@ -1,4 +1,3 @@
-import { describe, expect, it, jest } from '@jest/globals';
 import { HttpProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, Either, Layer, pipe } from 'effect';
@@ -12,7 +11,7 @@ const PROOF_SERVER_PORT: number = 6300;
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 
-jest.setTimeout(minutes(1));
+vi.setConfig({ testTimeout: minutes(1) });
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);

@@ -5,6 +5,7 @@ import { closeWallet, provideWallet, saveState, waitForSync, walletStateTrimmed 
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests checking balance is constant

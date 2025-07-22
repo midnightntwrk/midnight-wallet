@@ -1,4 +1,3 @@
-import { jest } from '@jest/globals';
 import { Stream, Effect, identity, Fiber } from 'effect';
 import { ObservableOps } from '../index';
 import * as rx from 'rxjs';
@@ -51,7 +50,7 @@ describe('Observable', () => {
     it('should cleanup allocated resource in underlying Stream', async () => {
       const { generator } = makeGenerator(MAX_ITERATIONS);
       const anyResource = 'A Resource';
-      const cleanupFn = jest.fn((_) => Effect.void);
+      const cleanupFn = vi.fn((_) => Effect.void);
 
       const runStream = Effect.gen(function* () {
         // Create a stream that makes use of a resource.

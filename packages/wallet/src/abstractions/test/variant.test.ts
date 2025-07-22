@@ -1,4 +1,3 @@
-import { describe, it } from '@jest/globals';
 import { CanAssign } from '../../test/testUtils';
 import { type Expect, type Equal, HList, Poly, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import {

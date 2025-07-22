@@ -59,7 +59,7 @@ jobs:
                 ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
               run: |
                 yarn install --immutable
-                yarn dlx turbo test-e2e -- typescript/packages/e2e-tests/src/tests/fundTestWallets.test.ts
+                yarn dlx turbo test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
 
             - name: Run funding script for testnet envs
               if: env.NETWORK == 'testnet'
@@ -71,4 +71,4 @@ jobs:
                 ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
               run: |
                 yarn install --immutable
-                yarn dlx turbo test-e2e -- typescript/packages/e2e-tests/src/tests/fundTestWallets.test.ts
+                yarn dlx turbo test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts

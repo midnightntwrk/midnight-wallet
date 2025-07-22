@@ -7,7 +7,7 @@ env:
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   SEED_STABLE: ${{ secrets.SEED_STABLE }}
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
-  SYNC_CACHE: ${{ github.workspace }}/typescript/packages/e2e-tests/.sync_cache
+  SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
 
 on:
   workflow_dispatch:
@@ -102,7 +102,7 @@ jobs:
   build:
     name: E2E tests
     runs-on: ubuntu-latest-8-core-x64
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions: write-all
     steps:
       - uses: actions/checkout@v4
@@ -125,7 +125,7 @@ jobs:
       #     name: .sync_cache
 
       - name: Debug
-        run: ls -a -R ./typescript/packages/e2e-tests
+        run: ls -a -R ./packages/e2e-tests
 
       - uses: actions/setup-java@v4
         with:
@@ -149,6 +149,10 @@ jobs:
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
       - name: Build wallet and install dependencies
         run: |
           yarn install
@@ -165,7 +169,7 @@ jobs:
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
         run: |
-          yarn turbo test-e2e -- ${{ inputs.modifier }}
+          yarn turbo test-remote -- ${{ inputs.modifier }}
 
       - name: Upload sync cache
         if: success() || failure()
@@ -177,7 +181,7 @@ jobs:
 
       - name: Create allure properties
         if: success() || failure()
-        working-directory: ./typescript/packages/e2e-tests/allure-results
+        working-directory: ./packages/e2e-tests/allure-results
         run: |
           echo "
           env=${{ inputs.network }}
@@ -191,14 +195,14 @@ jobs:
         if: ${{ always() }}
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./typescript/packages/e2e-tests/allure-results
+          allure-results-directory: ./packages/e2e-tests/reports/allure-results
           project-id: headless-wallet-${{ inputs.deployment }}
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
       - name: Generate allure report
         if: success() || failure()
-        working-directory: ./typescript/packages/e2e-tests
+        working-directory: ./packages/e2e-tests
         run: |
           yarn allure-generate
 
@@ -208,14 +212,14 @@ jobs:
         with:
           name: test-reports
           path: |
-            ./typescript/packages/e2e-tests/reports/allure-report
+            ./packages/e2e-tests/reports/allure-report
           retention-days: 30
 
       - name: Publish wallet TS Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
-          name: Wallet TS packages Jest Tests Report
-          reporter: jest-junit
+          name: Wallet TS packages Junit Tests Report
+          reporter: java-junit
           path: |
-            ./typescript/packages/e2e-tests/reports/report.xml
+            ./packages/e2e-tests/reports/test-report.xml

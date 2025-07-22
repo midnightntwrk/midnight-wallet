@@ -34,7 +34,7 @@
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
     "dist": "tsc -b ./tsconfig.build.json",

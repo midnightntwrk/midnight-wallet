@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 import { logger } from './logger';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
 import { closeWallet, waitForSync } from './utils';
+import * as allure from 'allure-js-commons';
 
 /**
  * Syncing tests

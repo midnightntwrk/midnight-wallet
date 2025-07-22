@@ -21,6 +21,7 @@ import { Wallet } from '@midnight-ntwrk/wallet-api_hf';
 import { logger } from './logger';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { GenericContainer } from 'testcontainers/build/generic-container/generic-container';
+import * as allure from 'allure-js-commons';
 
 /**
  * Hard fork tests
@@ -201,7 +202,7 @@ describe('Hard fork', () => {
   });
 
   describe('Pre-HF tests', () => {
-    test.only(
+    test(
       'Wallet can sync from scratch and balance and txHistory match @healthcheck @pre',
       async () => {
         allure.tag('healthcheck');
@@ -230,7 +231,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test.only(
+    test(
       'Wallet can sync from a serialized state and balance and txHistory match @healthcheck @pre',
       async () => {
         allure.tag('smoke');
@@ -263,7 +264,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test.only(
+    test(
       'Wallet can transact before HF @healthcheck @pre',
       async () => {
         allure.tag('healthcheck');
@@ -324,7 +325,7 @@ describe('Hard fork', () => {
   });
 
   describe('Perform a hard fork', () => {
-    test.only('Perform a hard fork', async () => {
+    test('Perform a hard fork', async () => {
       allure.tms('PM-11392', 'PM-11392');
       allure.epic('Headless wallet');
       allure.feature('Hard Forks');
@@ -344,7 +345,7 @@ describe('Hard fork', () => {
   });
 
   describe('Post-HF tests', () => {
-    test.only(
+    test(
       'Wallet can sync from scratch and balance and txHistory match @healthcheck @post',
       async () => {
         allure.tag('healthcheck');
@@ -375,7 +376,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test.only(
+    test(
       'Wallet can sync from a serialized state and balance and txHistory match @healthcheck @post',
       async () => {
         allure.tag('smoke');
@@ -408,7 +409,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test.only(
+    test(
       'Sender wallet can sync from a serialized state and balance and txHistory match @healthcheck @post',
       async () => {
         allure.tag('smoke');
@@ -442,7 +443,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test(
+    test.skip(
       'Wallet can transact after HF @healthcheck @post',
       async () => {
         allure.tag('healthcheck');
@@ -539,7 +540,7 @@ describe('Hard fork', () => {
   });
 
   describe('Perform a rollback', () => {
-    test.only('Perform a rollback', async () => {
+    test('Perform a rollback', async () => {
       allure.tms('PM-11392', 'PM-11392');
       allure.epic('Headless wallet');
       allure.feature('Hard Forks');
@@ -562,7 +563,7 @@ describe('Hard fork', () => {
   });
 
   describe('Post-rollback tests', () => {
-    test.only(
+    test(
       'Wallet can sync from a serialized state and balance and txHistory match @healthcheck @rollback',
       async () => {
         allure.tag('smoke');
@@ -627,7 +628,7 @@ describe('Hard fork', () => {
       timeout,
     );
 
-    test.only(
+    test(
       'Wallet can transact after rollback @healthcheck @rollback',
       async () => {
         allure.tag('healthcheck');

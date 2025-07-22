@@ -3,6 +3,7 @@ import { useTestContainersFixture } from './test-fixture';
 import { NetworkId, nativeToken } from '@midnight-ntwrk/zswap';
 import { closeWallet, isArrayUnique, waitForSync } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests using a funded wallet

@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
-import { jest } from '@jest/globals';
 import * as SubscriptionClient from '../SubscriptionClient';
 
-jest.unstable_mockModule('graphql-ws', () => ({
-  createClient: jest.fn(),
+vi.mock('graphql-ws', () => ({
+  createClient: vi.fn(),
 }));
 
 describe('WsSubscriptionClient', () => {
@@ -12,8 +11,8 @@ describe('WsSubscriptionClient', () => {
       const graphqlWS = await import('graphql-ws');
       const SpiedWsSubscriptionClient = await import('../WsSubscriptionClient');
 
-      const dispose = jest.fn();
-      const spiedCreateClient = jest
+      const dispose = vi.fn();
+      const spiedCreateClient = vi
         .spyOn(graphqlWS, 'createClient')
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-explicit-any
         .mockImplementationOnce(() => ({ dispose }) as any);

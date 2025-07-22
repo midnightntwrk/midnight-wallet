@@ -1,4 +1,3 @@
-import { jest, describe, expect } from '@jest/globals';
 import { WalletBuilderTs } from '../index';
 import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { NumericRangeBuilder } from './variants';
@@ -19,7 +18,7 @@ describe('Wallet', () => {
 
       expect(wallet).toBeDefined();
 
-      const errorHandler = jest.fn();
+      const errorHandler = vi.fn();
       const receivedStates = await toProtocolStateArray<number>(wallet.state.pipe(rx.take(3)), errorHandler);
 
       expect(receivedStates).toEqual([

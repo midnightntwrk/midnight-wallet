@@ -1,4 +1,3 @@
-import { describe, it } from '@jest/globals';
 import type { Equal, Expect } from '../testUtils';
 import { dispatch, PolyFunction, TagOf } from '../polyFunction';
 

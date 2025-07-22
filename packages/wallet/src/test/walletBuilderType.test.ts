@@ -1,6 +1,5 @@
-import { describe, it } from '@jest/globals';
 import type { Expect, Equal } from '@midnight-ntwrk/abstractions';
-import { VariantBuilder } from '../abstractions';
+import { VariantBuilder } from '../abstractions/index';
 import { FullConfiguration, BuildArguments } from '../WalletBuilder';
 import { CanAssign } from './testUtils';
 import {

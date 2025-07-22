@@ -16,7 +16,7 @@
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test": "vitest run",
     "lint": "eslint",
     "dist": "rollup -c ./rollup.config.mjs"
   },

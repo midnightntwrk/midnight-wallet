@@ -1,4 +1,3 @@
-import { afterEach, describe } from '@jest/globals';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
@@ -40,7 +39,7 @@ describe('Wallet transacting', () => {
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
-      path.resolve(new URL(import.meta.url).pathname, '../../../../typescript/packages/e2e-tests'),
+      path.resolve(new URL(import.meta.url).pathname, '../../../../packages/e2e-tests'),
       'docker-compose-dynamic.yml',
     )
       .withEnvironment({

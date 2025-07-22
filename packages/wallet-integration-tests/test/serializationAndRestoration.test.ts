@@ -1,4 +1,3 @@
-import { afterEach, beforeEach, describe, it } from '@jest/globals';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
@@ -19,7 +18,7 @@ describe('Wallet serialization and restoration', () => {
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
-      path.resolve(new URL(import.meta.url).pathname, '../../../../typescript/packages/e2e-tests'),
+      path.resolve(new URL(import.meta.url).pathname, '../../../../packages/e2e-tests'),
       'docker-compose-dynamic.yml',
     )
       .withEnvironment({

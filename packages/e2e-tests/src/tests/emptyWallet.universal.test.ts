@@ -8,6 +8,7 @@ import { MidnightNetwork, closeWallet, compareStates, validateNetworkInAddress, 
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests using an empty wallet

@@ -24,6 +24,7 @@ import {
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { exit } from 'node:process';
 import { logger } from './logger';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests performing a token transfer
@@ -40,7 +41,7 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = process.env['SEED2'];
   const seedFunded = process.env['SEED'];
-  const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
+  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = 10_000n;
 

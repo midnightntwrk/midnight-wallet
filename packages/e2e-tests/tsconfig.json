@@ -1,10 +1,10 @@
 {
   "include": [
     "src/**/*.ts",
-    "setup-jest.ts",
     ".eslintrc.cjs"
   ],
   "compilerOptions": {
+    "types": ["vitest/globals"],
     "rootDir": "src",
     "target": "ES2022",
     "module": "ESNext",

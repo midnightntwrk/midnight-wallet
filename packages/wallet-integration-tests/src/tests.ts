@@ -9,7 +9,7 @@ import * as path from 'node:path';
 import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const currentFile = new URL(import.meta.url).pathname;
-const composePath = path.resolve(currentFile, '../../../../typescript/packages/e2e-tests');
+const composePath = path.resolve(currentFile, '../../../../packages/e2e-tests');
 const environment = await new DockerComposeEnvironment(composePath, 'docker-compose.yml')
   .withWaitStrategy('proof-server-1', Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
   .withWaitStrategy('node-1', Wait.forListeningPorts())

@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test": "NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' vitest run",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\""
   },

@@ -13,6 +13,7 @@ import {
 import { TransactionToProve, Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { randomBytes } from 'node:crypto';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests checking transaction balancing

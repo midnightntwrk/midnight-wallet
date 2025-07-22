@@ -1,9 +1,8 @@
 import { Effect } from 'effect';
-import { jest } from '@jest/globals';
 import * as QueryClient from '../QueryClient';
 
-jest.unstable_mockModule('graphql-http', () => ({
-  createClient: jest.fn(),
+vi.mock('graphql-http', () => ({
+  createClient: vi.fn(),
 }));
 
 describe('HttpQueryClient', () => {
@@ -12,8 +11,8 @@ describe('HttpQueryClient', () => {
       const graphqlHTTP = await import('graphql-http');
       const SpiedHttpQueryClient = await import('../HttpQueryClient');
 
-      const dispose = jest.fn();
-      const spiedCreateClient = jest
+      const dispose = vi.fn();
+      const spiedCreateClient = vi
         .spyOn(graphqlHTTP, 'createClient')
         // eslint-disable-next-line @typescript-eslint/no-unsafe-return, @typescript-eslint/no-explicit-any
         .mockImplementationOnce(() => ({ dispose }) as any);

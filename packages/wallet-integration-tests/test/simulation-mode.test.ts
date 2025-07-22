@@ -1,4 +1,3 @@
-import { describe } from '@jest/globals';
 import * as ledger from '@midnight-ntwrk/ledger';
 import {
   ShieldedAddress,

@@ -12,8 +12,8 @@ jobs:
     with:
       network: devnet
       deployment: qanet
-      seed: c4696553a5989098f72c22dbddb233f6fe19243c8a90ff8d6177bd2ab79b498a
-      seed2: 491cab0b23239a233faae62b36fdb92cd4df3036757fd0f5f0b9eccf8b2a533c
+      seed: 1b2c2d3f981e495b399ae4699a21dd65096037c773bd3c6ad2ee858fc4914b98
+      seed2: b5583ac1b80f74447c1a325a504002afcea2c812def06c1c3a662e6b58befb99
       nt_seed: f331ffb6856d10eaae9a3610bfffd785d23d035518694364195ffb0dc0f3a66e
       nt_seed2: 8a80a5a8315c5add29d9065a37dfb74a20b594ef6cdd52bbb1b1a6e5e0c70bdf
       modifier: '-t @healthcheck'

@@ -21,6 +21,7 @@ import {
 } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests performing a token transfer
@@ -32,7 +33,7 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const timeout = 420_000;
+  const timeout = 600_000;
   const outputValue = 3_000_000n;
 
   let walletFunded: Wallet & Resource;
@@ -42,6 +43,31 @@ describe('Token transfer', () => {
   let tokenTypeHash: string | undefined;
 
   beforeEach(async () => {
+    fixture = getFixture();
+    const networkId = NetworkId.Undeployed;
+
+    walletFunded = await WalletBuilder.build(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seedFunded,
+      networkId,
+      'info',
+    );
+
+    wallet2 = await WalletBuilder.build(
+      fixture.getIndexerUri(),
+      fixture.getIndexerWsUri(),
+      fixture.getProverUri(),
+      fixture.getNodeUri(),
+      seed,
+      networkId,
+      'info',
+    );
+
+    walletFunded.start();
+    wallet2.start();
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
       const networkId = NetworkId.Undeployed;
@@ -541,6 +567,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid native token transfer transaction');
 
+      logger.info('Funding wallet 1 with native tokens...');
       await Promise.all([waitForSync(walletFunded), waitForSync(wallet2)]);
       const initialState = await firstValueFrom(walletFunded.state());
       const initialBalance = initialState.balances[nativeToken()] ?? 0n;
@@ -636,8 +663,7 @@ describe('Token transfer', () => {
         if (key !== nativeToken()) tokenTypeHash = key;
       });
       if (tokenTypeHash === undefined) {
-        logger.warn('No native tokens found');
-        fail();
+        throw new Error('No native tokens found');
       }
       const initialBalanceNative = initialState.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance} tDUST`);

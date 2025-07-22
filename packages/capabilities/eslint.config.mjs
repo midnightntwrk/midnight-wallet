@@ -4,7 +4,8 @@ export default [
   {
     ignores: [
       '*.mjs',
-      "dist/**"
+      "dist/**",
+      "coverage/**",
     ]
   },
   ...rootConfig.map(config => ({

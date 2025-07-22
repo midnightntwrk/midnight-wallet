@@ -81,11 +81,11 @@ jobs:
 
       - name: Run smoke e2e tests
         run: |
-          yarn dlx turbo test-e2e -- smoke.test.ts
+          yarn dlx turbo test-undeployed -- -t @smoke
 
       - name: Create allure properties
         if: success() || failure()
-        working-directory: ./typescript/packages/e2e-tests/allure-results
+        working-directory: ./packages/e2e-tests/allure-results
         run: |
           echo "
           env=${{ env.NETWORK }}
@@ -99,22 +99,22 @@ jobs:
         if: ${{ always() }}
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./typescript/packages/e2e-tests/allure-results
+          allure-results-directory: ./packages/e2e-tests/reports/allure-results
           project-id: headless-wallet-${{ env.DEPLOYMENT }}
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
-      - name: Publish Jest E2E Test Report
+      - name: Publish wallet TS Test Report
         uses: dorny/test-reporter@v1
         if: success() || failure()
         with:
-          name: Jest E2E Tests Report
-          reporter: jest-junit
+          name: Wallet TS packages Junit Tests Report
+          reporter: java-junit
           path: |
-            ./typescript/packages/e2e-tests/reports/report.xml
+            ./packages/e2e-tests/reports/test-report.xml
 
       - name: Upload Artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
         with:
           name: 'test-results-junit'
-          path: ./typescript/packages/e2e-tests/reports/report.xml
+          path: ./packages/e2e-tests/reports/report.xml

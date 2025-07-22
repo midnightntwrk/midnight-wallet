@@ -1,6 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_AUTH_TOKEN", "MIDNIGHT_GH_USER", "MIDNIGHT_GH_TOKEN"],
+  "globalEnv": [
+    "NODE_AUTH_TOKEN",
+    "MIDNIGHT_GH_USER",
+    "MIDNIGHT_GH_TOKEN"
+  ],
   "tasks": {
     "lint": {
       "inputs": [
@@ -12,21 +16,56 @@
         "$TURBO_ROOT$/eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": [
+        "^dist"
+      ]
     },
     "test": {
-      "inputs": ["test/**/*.ts", "src/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json", "jest.config.mjs"],
+      "inputs": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "vitest.config.mjs"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["typecheck", "^dist"]
+      "dependsOn": [
+        "typecheck",
+        "^dist"
+      ]
     },
     "typecheck": {
-      "inputs": ["test/**/*.ts", "src/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
+      "inputs": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": [
+        "^dist"
+      ]
     },
-    "test-e2e": {
+    "test-undeployed": {
       "cache": false,
-      "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
+      "env": [
+        "NETWORK",
+        "DEPLOYMENT"
+      ]
+    },
+    "test-remote": {
+      "cache": false,
+      "env": [
+        "NETWORK",
+        "DEPLOYMENT",
+        "SEED",
+        "SEED2",
+        "SEED_STABLE",
+        "ADDRESSES",
+        "NT_SEED",
+        "NT_SEED2",
+        "SYNC_CACHE"
+      ]
     },
     "dist": {
       "inputs": [
@@ -37,9 +76,14 @@
         "rollup.config.mjs",
         "$TURBO_ROOT$/rollup.config.mjs"
       ],
-      "outputs": ["dist/**"],
+      "outputs": [
+        "dist/**"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["clean", "^dist"]
+      "dependsOn": [
+        "clean",
+        "^dist"
+      ]
     },
     "clean": {
       "cache": false,
@@ -48,20 +92,35 @@
       "outputLogs": "new-only"
     },
     "format": {
-      "inputs": ["**/*.{ts,js,json,yaml,yml}", ".prettierrc.json", "**/.prettierignore"],
+      "inputs": [
+        "**/*.{ts,js,json,yaml,yml}",
+        ".prettierrc.json",
+        "**/.prettierignore"
+      ],
       "outputs": [],
       "outputLogs": "new-only"
     },
     "@midnight-ntwrk/wallet#dist": {
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "//#sbt:dist"]
+      "dependsOn": [
+        "^dist",
+        "//#sbt:dist"
+      ]
     },
     "@midnight-ntwrk/wallet#typecheck": {
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "//#sbt:dist"]
+      "dependsOn": [
+        "^dist",
+        "//#sbt:dist"
+      ]
     },
     "verify": {
-      "dependsOn": ["typecheck", "lint", "test", "//#sbt:verify"]
+      "dependsOn": [
+        "typecheck",
+        "lint",
+        "test",
+        "//#sbt:verify"
+      ]
     },
     "//#sbt:dist": {
       "inputs": [
@@ -74,9 +133,14 @@
         "project/*.sbt",
         "**/src/**/resources/**/*.d.ts"
       ],
-      "outputs": ["wallet-engine/dist/**"],
+      "outputs": [
+        "wallet-engine/dist/**"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["@midnight-ntwrk/wallet-sdk-address-format#dist", "@midnight-ntwrk/wallet-sdk-capabilities#dist"]
+      "dependsOn": [
+        "@midnight-ntwrk/wallet-sdk-address-format#dist",
+        "@midnight-ntwrk/wallet-sdk-capabilities#dist"
+      ]
     },
     "//#sbt:verify": {
       "inputs": [
@@ -87,9 +151,13 @@
         "project/build.properties",
         "project/*.sbt"
       ],
-      "outputs": ["**/target/test-reports/**"],
+      "outputs": [
+        "**/target/test-reports/**"
+      ],
       "outputLogs": "new-only",
-      "dependsOn": ["//#sbt:dist"]
+      "dependsOn": [
+        "//#sbt:dist"
+      ]
     }
   }
 }

@@ -15,6 +15,7 @@ import {
 } from './utils';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
+import * as allure from 'allure-js-commons';
 
 /**
  * Smoke tests

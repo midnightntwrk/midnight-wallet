@@ -1,4 +1,3 @@
-import { describe } from '@jest/globals';
 import { HList, type Expect, type Equal } from '@midnight-ntwrk/abstractions';
 import {
   InterceptingVariant,

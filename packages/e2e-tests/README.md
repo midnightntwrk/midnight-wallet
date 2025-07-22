@@ -1,6 +1,6 @@
 # Midnight Wallet E2E Tests in TypeScript
 
-This directory contains e2e wallet tests written using Jest that run against a local docker compose environment or a hosted deployment of choice.
+This directory contains e2e wallet tests written using Vitest that run against a local docker compose environment or a hosted deployment of choice.
 
 ## Setup
 

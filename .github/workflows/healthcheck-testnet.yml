@@ -12,8 +12,8 @@ jobs:
     with:
       network: testnet
       deployment: testnet
-      seed: 27d107d60a7bd6619b7f804318ef41e94f5129e6067dd4d38114ee7cfad3ca4a
-      seed2: be59e8b637ced06ce3b53ecab46bea845953f236cf4b10447b24a69b6cc28e17
+      seed: b0dcbe35cba84c11863e973e75c22fc482812b76da09a47e16fabcf534ec6709
+      seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
       nt_seed: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
       nt_seed2: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
       modifier: '-t @healthcheck'

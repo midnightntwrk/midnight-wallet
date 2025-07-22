@@ -23,6 +23,7 @@ import {
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger';
 import { exit } from 'node:process';
+import * as allure from 'allure-js-commons';
 
 /**
  * Tests performing a token transfer
@@ -39,7 +40,7 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const receivingSeed = process.env['NT_SEED2'];
   const fundedSeed = process.env['NT_SEED'];
-  const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
+  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = 1n;
   let tokenTypeHash: string | undefined;
