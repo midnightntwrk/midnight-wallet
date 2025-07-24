@@ -37,6 +37,7 @@
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint",
-    "dist": "rollup -c ./rollup.config.mjs"
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   }
 }

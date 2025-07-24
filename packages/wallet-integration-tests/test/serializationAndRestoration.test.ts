@@ -54,15 +54,6 @@ describe('Wallet serialization and restoration', () => {
     }
   });
 
-  const getBalances = (state: V1State): Record<zswap.TokenType, bigint> => {
-    return [...state.state.coins].reduce((acc: Record<zswap.TokenType, bigint>, coin) => {
-      return {
-        ...acc,
-        [coin.type]: acc[coin.type] === undefined ? coin.value : acc[coin.type] + coin.value,
-      };
-    }, {});
-  };
-
   it(
     'allows to restart wallet from the serialized state',
     async () => {
@@ -73,7 +64,9 @@ describe('Wallet serialization and restoration', () => {
         ),
       );
       const keys = syncedState.secretKeys;
-      const originalBalances = getBalances(syncedState);
+      const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
+      const originalBalances = coinsAndBalancesCapability.getTotalBalances(syncedState);
+
       const serializedState = await wallet.runtime
         .dispatch({
           [V1Tag]: (runningV1) => runningV1.serializeState(syncedState),
@@ -82,13 +75,14 @@ describe('Wallet serialization and restoration', () => {
       const restoredWalletState: V1State = Wallet.allVariantsRecord()
         [V1Tag].variant.deserializeState(keys, serializedState)
         .pipe(Either.getOrThrow);
+
       const restoredBalances = await Effect.acquireRelease(
         Effect.sync(() => Wallet.start(Wallet, V1Tag, restoredWalletState)),
         (wallet) => Effect.promise(() => wallet.stop()),
       ).pipe(
         Effect.flatMap((wallet) => Effect.promise(() => rx.firstValueFrom(wallet.state))),
         Effect.map(ProtocolState.state),
-        Effect.map(getBalances),
+        Effect.map((state) => coinsAndBalancesCapability.getAvailableBalances(state)),
         Effect.scoped,
         Effect.runPromise,
       );

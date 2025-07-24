@@ -15,6 +15,8 @@ import {
 } from './Sync';
 import { makeDefaultTransactingCapability, TransactingCapability } from './Transacting';
 import { WalletError } from './WalletError';
+import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances';
+import { KeysCapability, makeDefaultKeysCapability } from './Keys';
 
 export type BaseV1Configuration = {
   networkId: zswap.NetworkId;
@@ -36,6 +38,8 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction> = Variant.Variant<
   RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
 > & {
   deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized) => Either.Either<V1State, WalletError>;
+  coinsAndBalances: CoinsAndBalancesCapability<V1State>;
+  keys: KeysCapability<V1State>;
 };
 
 export class V1Builder<
@@ -56,6 +60,8 @@ export class V1Builder<
       .withSyncDefaults()
       .withSerializationDefaults()
       .withTransactingDefaults()
+      .withCoinsAndBalancesDefaults()
+      .withKeysDefaults()
       .withProvingDefaults() as V1Builder<DefaultV1Configuration, string, IndexerUpdate, zswap.Transaction>;
   }
 
@@ -86,6 +92,10 @@ export class V1Builder<
     });
   }
 
+  withSerializationDefaults(): V1Builder<TConfig, string, TSyncUpdate, TTransaction> {
+    return this.withSerialization(makeDefaultV1SerializationCapability);
+  }
+
   withSerialization<TSerializationConfig, TSerialized>(
     serializationCapability: (
       configuration: TSerializationConfig,
@@ -95,10 +105,6 @@ export class V1Builder<
       ...this.#buildState,
       serializationCapability,
     });
-  }
-
-  withSerializationDefaults(): V1Builder<TConfig, string, TSyncUpdate, TTransaction> {
-    return this.withSerialization(makeDefaultV1SerializationCapability);
   }
 
   withTransactingDefaults(
@@ -131,6 +137,32 @@ export class V1Builder<
     return this.withProving(makeDefaultProvingService);
   }
 
+  withCoinsAndBalancesDefaults(): V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return this.withCoinsAndBalances(makeDefaultCoinsAndBalancesCapability);
+  }
+
+  withCoinsAndBalances<TBalancesConfig>(
+    coinsAndBalancesCapability: (configuration: TBalancesConfig) => CoinsAndBalancesCapability<V1State>,
+  ): V1Builder<TConfig & TBalancesConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TBalancesConfig, TSerialized, TSyncUpdate, TTransaction>({
+      ...this.#buildState,
+      coinsAndBalancesCapability,
+    });
+  }
+
+  withKeysDefaults(): V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return this.withKeys(makeDefaultKeysCapability);
+  }
+
+  withKeys<TKeysConfig>(
+    keysCapability: (configuration: TKeysConfig) => KeysCapability<V1State>,
+  ): V1Builder<TConfig & TKeysConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TKeysConfig, TSerialized, TSyncUpdate, TTransaction>({
+      ...this.#buildState,
+      keysCapability,
+    });
+  }
+
   build(
     this: V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction>,
     configuration: TConfig,
@@ -140,6 +172,8 @@ export class V1Builder<
 
     return {
       __polyTag__: V1Tag,
+      coinsAndBalances: v1Context.coinsAndBalancesCapability,
+      keys: v1Context.keysCapability,
       start(
         context: Variant.VariantContext<V1State>,
         initialState: V1State,
@@ -150,7 +184,6 @@ export class V1Builder<
           return variantInstance;
         });
       },
-
       migrateState() {
         const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
 
@@ -173,14 +206,23 @@ export class V1Builder<
       throw new Error('Not all components are configured in V1 Builder');
     }
 
-    const { syncCapability, syncService, transactingCapability, serializationCapability, provingService } =
-      this.#buildState;
+    const {
+      syncCapability,
+      syncService,
+      transactingCapability,
+      serializationCapability,
+      provingService,
+      coinsAndBalancesCapability,
+      keysCapability,
+    } = this.#buildState;
 
     return {
       serializationCapability: serializationCapability(configuration),
       syncCapability: syncCapability(configuration),
       syncService: syncService(configuration),
       transactingCapability: transactingCapability(configuration),
+      coinsAndBalancesCapability: coinsAndBalancesCapability(configuration),
+      keysCapability: keysCapability(configuration),
       provingService: provingService(configuration),
     };
   }
@@ -207,6 +249,14 @@ declare namespace V1Builder {
     readonly provingService: (configuration: TConfig) => ProvingService<TTransaction>;
   };
 
+  type HasCoinsAndBalances<TConfig> = {
+    readonly coinsAndBalancesCapability: (configuration: TConfig) => CoinsAndBalancesCapability<V1State>;
+  };
+
+  type HasKeys<TConfig> = {
+    readonly keysCapability: (configuration: TConfig) => KeysCapability<V1State>;
+  };
+
   /**
    * The internal build state of {@link V1Builder}.
    */
@@ -214,7 +264,9 @@ declare namespace V1Builder {
     HasSync<TConfig, TSyncUpdate> &
       HasSerialization<TConfig, TSerialized> &
       HasTransacting<TConfig, TTransaction> &
-      HasProving<TConfig, TTransaction>
+      HasProving<TConfig, TTransaction> &
+      HasCoinsAndBalances<TConfig> &
+      HasKeys<TConfig>
   >;
   type PartialBuildState<TConfig = object, TSerialized = never, TSyncUpdate = never, TTransaction = never> = {
     [K in keyof FullBuildState<never, never, never, never>]?:
@@ -241,6 +293,8 @@ const isBuildStateFull = <TConfig, TSerialized, TSyncUpdate, TTransaction>(
     'transactingCapability',
     'serializationCapability',
     'provingService',
+    'coinsAndBalancesCapability',
+    'keysCapability',
   ] as const;
   /**
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
@@ -258,9 +312,19 @@ declare namespace _V1BuilderMethods {
   type WithTransactingMethod = 'withTransacting';
   type WithSerializationMethod = 'withSerialization';
   type WithSerializationDefaults = 'withSerializationDefaults';
+  type WithCoinsAndBalancesDefaults = 'withCoinsAndBalancesDefaults';
+  type WithKeysDefaults = 'withKeysDefaults';
   type AllSyncMethods = WithSyncDefaults | WithSyncMethod;
   type AllTransactingMethods = WithTransactingMethod;
   type AllSerializationMethods = WithSerializationMethod | WithSerializationDefaults;
   type AllProvingMethods = 'withProving' | 'withProvingDefaults';
-  type AllMethods = AllSyncMethods | AllTransactingMethods | AllSerializationMethods | AllProvingMethods;
+  type AllCoinsAndBalancesMethods = WithCoinsAndBalancesDefaults;
+  type AllKeysMethods = WithKeysDefaults;
+  type AllMethods =
+    | AllSyncMethods
+    | AllTransactingMethods
+    | AllSerializationMethods
+    | AllProvingMethods
+    | AllCoinsAndBalancesMethods
+    | AllKeysMethods;
 }

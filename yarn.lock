@@ -1723,6 +1723,7 @@ __metadata:
     "@midnight-ntwrk/abstractions": "workspace:*"
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     effect: "npm:^3.16.3"
+    rimraf: "npm:^6.0.1"
     testcontainers: "npm:^11.0.3"
   languageName: unknown
   linkType: soft
@@ -1734,6 +1735,7 @@ __metadata:
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@scure/base": "npm:^1.1.9"
     "@types/node": "npm:22.10.5"
+    rimraf: "npm:^6.0.1"
   peerDependencies:
     "@midnight-ntwrk/zswap": ^4.0.0
   languageName: unknown
@@ -1744,6 +1746,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
+    rimraf: "npm:^6.0.1"
   peerDependencies:
     "@midnight-ntwrk/zswap": ^4.0.0
   languageName: unknown
@@ -1758,6 +1761,7 @@ __metadata:
     "@scure/bip32": "npm:^1.6.2"
     "@scure/bip39": "npm:^1.5.4"
     fast-check: "npm:^3.23.2"
+    rimraf: "npm:^6.0.1"
   languageName: unknown
   linkType: soft
 
@@ -1808,6 +1812,7 @@ __metadata:
     fast-check: "npm:^4.1.1"
     isomorphic-ws: "npm:^5.0.0"
     node-fetch: "npm:3.3.2"
+    rimraf: "npm:^6.0.1"
     rxjs: "npm:^7.5"
     scale-ts: "npm:^1.1.0"
     testcontainers: "npm:^11.0.3"

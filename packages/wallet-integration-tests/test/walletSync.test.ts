@@ -1,7 +1,7 @@
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State } from '@midnight-ntwrk/wallet-ts/v1';
+import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
@@ -62,12 +62,9 @@ describe('Wallet Sync', () => {
           rx.takeWhile(() => !wallet.syncComplete, true),
         ),
       );
-      const balances = [...syncedState.state.coins].reduce((acc: Record<string, bigint>, coin) => {
-        return {
-          ...acc,
-          [coin.type]: acc[coin.type] === undefined ? coin.value : acc[coin.type] + coin.value,
-        };
-      }, {});
+
+      const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
+      const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
       expect(balances).toStrictEqual({
         '02000000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,

@@ -9,27 +9,27 @@ export default tsLint.config(
   esLint.configs.recommended,
   ...tsLint.configs.recommendedTypeChecked,
   {
-    ignores: ["dist/**"]
+    ignores: ['dist/**', '*.mjs'],
   },
   {
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: dirname(fileURLToPath(import.meta.url))
-      }
+        tsconfigRootDir: dirname(fileURLToPath(import.meta.url)),
+      },
     },
     rules: {
-      'max-len': [ 'warn', { 'code': 120, 'tabWidth': 2 } ],
-      'eol-last': [ 'error', 'always' ],
-      'brace-style': [ 'error', 'stroustrup' ],
+      'max-len': ['warn', { code: 120, tabWidth: 2 }],
+      'eol-last': ['error', 'always'],
+      'brace-style': ['error', 'stroustrup'],
       'no-console': 'warn',
       'no-unused-vars': 'off',
       'object-curly-newline': [
         'error',
         {
-          'ObjectExpression': { 'consistent': true },
-          'ObjectPattern': { 'consistent': true }
-        }
+          ObjectExpression: { consistent: true },
+          ObjectPattern: { consistent: true },
+        },
       ],
       'object-curly-spacing': ['error', 'always'],
       'no-trailing-spaces': 'off',
@@ -38,19 +38,19 @@ export default tsLint.config(
         'warn',
         // Ensure that discards (i.e., _, __) don't trigger this rule.
         {
-          'argsIgnorePattern': '^_',
-          'destructuredArrayIgnorePattern': '^_',
-          'varsIgnorePattern': '^_'
-        }
+          argsIgnorePattern: '^_',
+          destructuredArrayIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
       ],
       '@typescript-eslint/no-namespace': [
         'error',
         // Ensure that we allow namespace declarations to support Effect style typing.
         {
-          'allowDeclarations': true
-        }
-      ]
-    }
+          allowDeclarations: true,
+        },
+      ],
+    },
   },
-  esLintPrettier
+  esLintPrettier,
 );

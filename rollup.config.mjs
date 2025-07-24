@@ -90,7 +90,7 @@ export default function (folderPath, packageJson, options) {
           del({ targets: `${options.distRootFolder}/**/__typings__`, hook: 'writeBundle' }),
         ],
         external: options.external,
-      }
+      },
     ];
   });
 }

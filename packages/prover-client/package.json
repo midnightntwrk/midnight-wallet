@@ -2,8 +2,9 @@
   "name": "@midnight-ntwrk/wallet-prover-client-ts",
   "version": "5.0.0",
   "type": "module",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "private": true,
   "exports": {
     ".": {
@@ -22,6 +23,7 @@
     "effect": "^3.16.3"
   },
   "devDependencies": {
+    "rimraf": "^6.0.1",
     "testcontainers": "^11.0.3"
   },
   "scripts": {

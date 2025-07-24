@@ -3,19 +3,20 @@
   "version": "2.0.0",
   "type": "module",
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "author": "IOHK",
   "license": "Apache-2.0",
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
+  "files": [
+    "dist/"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/midnight-ntwrk/artifacts.git"
   },
-  "files": [
-    "dist/"
-  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -26,7 +27,8 @@
     "@midnight-ntwrk/zswap": "^4.0.0"
   },
   "devDependencies": {
-    "@midnight-ntwrk/zswap": "^4.0.0"
+    "@midnight-ntwrk/zswap": "^4.0.0",
+    "rimraf": "^6.0.1"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",

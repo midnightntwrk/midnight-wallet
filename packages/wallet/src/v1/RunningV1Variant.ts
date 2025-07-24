@@ -11,6 +11,8 @@ import { SerializationCapability } from './Serialization';
 import { SyncCapability, SyncService } from './Sync';
 import { TransactingCapability } from './Transacting';
 import { WalletError } from './WalletError';
+import { CoinsAndBalancesCapability } from './CoinsAndBalances';
+import { KeysCapability } from './Keys';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   if (!state.isConnected) return [];
@@ -51,6 +53,8 @@ export declare namespace RunningV1Variant {
     syncCapability: SyncCapability<V1State, TSyncUpdate>;
     transactingCapability: TransactingCapability<V1State, TTransaction>;
     provingService: ProvingService<TTransaction>;
+    coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
+    keysCapability: KeysCapability<V1State>;
   };
 }
 

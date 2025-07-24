@@ -20,8 +20,6 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "ignoreDeprecations": "5.0",
-    "lib": [
-      "ESNext"
-    ]
+    "lib": ["ESNext"]
   }
 }

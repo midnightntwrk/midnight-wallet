@@ -2,8 +2,9 @@
   "name": "@midnight-ntwrk/wallet-ts",
   "version": "5.0.0",
   "type": "module",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "private": true,
   "exports": {
     ".": {
@@ -49,6 +50,7 @@
   },
   "devDependencies": {
     "fast-check": "^4.1.1",
+    "rimraf": "^6.0.1",
     "testcontainers": "^11.0.3",
     "to-words": "^4.5.1"
   }
