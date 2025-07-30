@@ -13,6 +13,7 @@ import { TransactingCapability } from './Transacting';
 import { WalletError } from './WalletError';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
+import { SubmissionService, SubmitTransactionMethod } from './Submission';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   if (!state.isConnected) return [];
@@ -55,6 +56,7 @@ export declare namespace RunningV1Variant {
     provingService: ProvingService<TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
     keysCapability: KeysCapability<V1State>;
+    submissionService: SubmissionService<TTransaction>;
   };
 }
 
@@ -129,6 +131,26 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
   finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError> {
     return this.#v1Context.provingService.prove(recipe);
   }
+
+  submitTransaction: SubmitTransactionMethod<TTransaction> = ((
+    transaction: TTransaction,
+    waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
+  ) => {
+    const handleError = Effect.tapError(() =>
+      SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+        EitherOps.toEffect(this.#v1Context.transactingCapability.applyFailedTransaction(state, transaction)),
+      ),
+    );
+
+    switch (waitForStatus) {
+      case 'Submitted':
+        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
+      case 'InBlock':
+        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
+      case 'Finalized':
+        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
+    }
+  }) as SubmitTransactionMethod<TTransaction>;
 
   serializeState(state: V1State): TSerialized {
     return this.#v1Context.serializationCapability.serialize(state);

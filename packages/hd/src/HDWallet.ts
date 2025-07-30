@@ -41,10 +41,13 @@ export class HDWallet {
 }
 
 export class AccountKey {
-  constructor(
-    private rootKey: HDKey,
-    private account: number,
-  ) {}
+  private rootKey: HDKey;
+  private account: number;
+
+  constructor(rootKey: HDKey, account: number) {
+    this.account = account;
+    this.rootKey = rootKey;
+  }
 
   // After account, select a role.
   public selectRole(role: Role): RoleKey {
@@ -53,11 +56,15 @@ export class AccountKey {
 }
 
 export class RoleKey {
-  constructor(
-    private rootKey: HDKey,
-    private account: number,
-    private role: Role,
-  ) {}
+  private rootKey: HDKey;
+  private account: number;
+  private role: Role;
+
+  constructor(rootKey: HDKey, account: number, role: Role) {
+    this.role = role;
+    this.account = account;
+    this.rootKey = rootKey;
+  }
 
   // Finally, derive the key at the given index.
   public deriveKeyAt(index: number): DerivationResult {

@@ -14,11 +14,15 @@ export class NumericRange
   __polyTag__: typeof Numeric = Numeric;
   #state: number = 0;
 
-  constructor(
-    protected configuration: RangeConfig,
-    protected yieldCount: number,
-    protected throwError: boolean,
-  ) {}
+  protected configuration: RangeConfig;
+  protected yieldCount: number;
+  protected throwError: boolean;
+
+  constructor(configuration: RangeConfig, yieldCount: number, throwError: boolean) {
+    this.throwError = throwError;
+    this.yieldCount = yieldCount;
+    this.configuration = configuration;
+  }
 
   get currentState(): number {
     return this.#state;
@@ -60,10 +64,13 @@ export class NumericRange
 }
 
 export class NumericRangeBuilder implements VariantBuilder.VariantBuilder<NumericRange, RangeConfig> {
-  constructor(
-    private yieldCount: number = 10,
-    private throwError: boolean = false,
-  ) {}
+  private yieldCount: number;
+  private throwError: boolean;
+
+  constructor(yieldCount: number = 10, throwError: boolean = false) {
+    this.throwError = throwError;
+    this.yieldCount = yieldCount;
+  }
 
   build(configuration: RangeConfig): NumericRange {
     return new NumericRange(configuration, this.yieldCount, this.throwError);
@@ -79,7 +86,11 @@ export class NumericRangeMultiplier
   __polyTag__: typeof NumericMultiplier = NumericMultiplier;
   #state: number = 0;
 
-  constructor(protected configuration: RangeMultiplierConfig) {}
+  protected configuration: RangeMultiplierConfig;
+
+  constructor(configuration: RangeMultiplierConfig) {
+    this.configuration = configuration;
+  }
 
   get currentState(): number {
     return this.#state;

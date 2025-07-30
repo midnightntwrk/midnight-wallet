@@ -33,7 +33,6 @@ describe('Wallet subscription', () => {
     it(
       'should stream GraphQL subscription',
       async () => {
-        // eslint-disable-next-line prettier/prettier
         const makeScopedSession = Effect.acquireRelease(Connect.run({ viewingKey: KNOWN_VIEWING_KEY }), (session) =>
           Disconnect.run({ sessionId: session.connect }).pipe(Effect.catchAll((_) => Effect.void)),
         );

@@ -68,11 +68,13 @@ class QueryImpl<
   extends Effectable.Class<F>
   implements Query<R, V, F>
 {
-  constructor(
-    readonly name: string,
-    protected readonly document: T,
-  ) {
+  readonly name: string;
+  protected readonly document: T;
+
+  constructor(name: string, document: T) {
     super();
+    this.document = document;
+    this.name = name;
     this.tag = Context.GenericTag(name);
     this.run = ((variables: V) => Effect.flatMap(this, (f) => f(variables))) as F;
   }

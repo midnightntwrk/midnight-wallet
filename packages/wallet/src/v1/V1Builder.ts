@@ -17,12 +17,16 @@ import { makeDefaultTransactingCapability, TransactingCapability } from './Trans
 import { WalletError } from './WalletError';
 import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability, makeDefaultKeysCapability } from './Keys';
+import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission';
 
 export type BaseV1Configuration = {
   networkId: zswap.NetworkId;
 };
 
-export type DefaultV1Configuration = BaseV1Configuration & DefaultSyncConfiguration & DefaultProvingConfiguration;
+export type DefaultV1Configuration = BaseV1Configuration &
+  DefaultSyncConfiguration &
+  DefaultProvingConfiguration &
+  DefaultSubmissionConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -62,6 +66,7 @@ export class V1Builder<
       .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
+      .withSubmissionDefaults()
       .withProvingDefaults() as V1Builder<DefaultV1Configuration, string, IndexerUpdate, zswap.Transaction>;
   }
 
@@ -70,6 +75,7 @@ export class V1Builder<
       ...this.#buildState,
       provingService: undefined,
       transactingCapability: undefined,
+      submissionService: undefined,
     });
   }
 
@@ -163,6 +169,21 @@ export class V1Builder<
     });
   }
 
+  withSubmission<TSubmissionConfig>(
+    submissionService: (config: TSubmissionConfig) => SubmissionService<TTransaction>,
+  ): V1Builder<TConfig & TSubmissionConfig, TSerialized, TSyncUpdate, TTransaction> {
+    return new V1Builder<TConfig & TSubmissionConfig, TSerialized, TSyncUpdate, TTransaction>({
+      ...this.#buildState,
+      submissionService,
+    });
+  }
+
+  withSubmissionDefaults(
+    this: V1Builder<TConfig, TSerialized, TSyncUpdate, zswap.Transaction>,
+  ): V1Builder<TConfig & DefaultSubmissionConfiguration, TSerialized, TSyncUpdate, zswap.Transaction> {
+    return this.withSubmission(makeDefaultSubmissionService);
+  }
+
   build(
     this: V1Builder<TConfig, TSerialized, TSyncUpdate, TTransaction>,
     configuration: TConfig,
@@ -179,6 +200,7 @@ export class V1Builder<
         initialState: V1State,
       ): Effect.Effect<RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>, WalletRuntimeError, Scope.Scope> {
         return Effect.gen(function* () {
+          yield* Effect.addFinalizer(() => v1Context.submissionService.close());
           const variantInstance = new RunningV1Variant(context, initialState, v1Context);
           yield* variantInstance.startSync(initialState).pipe(Stream.runScoped(Sink.drain), Effect.forkScoped);
           return variantInstance;
@@ -214,6 +236,7 @@ export class V1Builder<
       provingService,
       coinsAndBalancesCapability,
       keysCapability,
+      submissionService,
     } = this.#buildState;
 
     return {
@@ -224,6 +247,7 @@ export class V1Builder<
       coinsAndBalancesCapability: coinsAndBalancesCapability(configuration),
       keysCapability: keysCapability(configuration),
       provingService: provingService(configuration),
+      submissionService: submissionService(configuration),
     };
   }
 }
@@ -257,6 +281,10 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig) => KeysCapability<V1State>;
   };
 
+  type HasSubmission<TConfig, TTransaction> = {
+    readonly submissionService: (configuration: TConfig) => SubmissionService<TTransaction>;
+  };
+
   /**
    * The internal build state of {@link V1Builder}.
    */
@@ -265,6 +293,7 @@ declare namespace V1Builder {
       HasSerialization<TConfig, TSerialized> &
       HasTransacting<TConfig, TTransaction> &
       HasProving<TConfig, TTransaction> &
+      HasSubmission<TConfig, TTransaction> &
       HasCoinsAndBalances<TConfig> &
       HasKeys<TConfig>
   >;
@@ -295,6 +324,7 @@ const isBuildStateFull = <TConfig, TSerialized, TSyncUpdate, TTransaction>(
     'provingService',
     'coinsAndBalancesCapability',
     'keysCapability',
+    'submissionService',
   ] as const;
   /**
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
@@ -318,6 +348,7 @@ declare namespace _V1BuilderMethods {
   type AllTransactingMethods = WithTransactingMethod;
   type AllSerializationMethods = WithSerializationMethod | WithSerializationDefaults;
   type AllProvingMethods = 'withProving' | 'withProvingDefaults';
+  type AllSubmissionMethods = 'withSubmission' | 'withSubmissionDefaults';
   type AllCoinsAndBalancesMethods = WithCoinsAndBalancesDefaults;
   type AllKeysMethods = WithKeysDefaults;
   type AllMethods =
@@ -325,6 +356,7 @@ declare namespace _V1BuilderMethods {
     | AllTransactingMethods
     | AllSerializationMethods
     | AllProvingMethods
+    | AllSubmissionMethods
     | AllCoinsAndBalancesMethods
     | AllKeysMethods;
 }

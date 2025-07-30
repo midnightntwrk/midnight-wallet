@@ -1,7 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
   "files": [],
-  "references": [
-    { "path": "./tsconfig.test.json" }
-  ]
+  "references": [{ "path": "./tsconfig.test.json" }]
 }

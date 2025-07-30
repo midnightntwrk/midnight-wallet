@@ -6,13 +6,14 @@
       "inputs": [
         "src/**/*.ts",
         "test/**/*.ts",
+        "scripts/**/*.ts",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
         "eslint.config.mjs",
         "$TURBO_ROOT$/eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": ["^dist", "pre-build"]
     },
     "test": {
       "inputs": [
@@ -26,7 +27,20 @@
       "dependsOn": ["typecheck", "^dist"]
     },
     "typecheck": {
-      "inputs": ["test/**/*.ts", "src/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
+      "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist", "pre-build"]
+    },
+    "pre-build": {
+      "inputs": [
+        "test/**/*.ts",
+        "src/**/*.ts",
+        "scripts/**/*.ts",
+        "tsconfig*.json",
+        "package.json", "$TURBO_ROOT$/tsconfig.base.json"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
@@ -49,7 +63,9 @@
       ],
       "outputs": ["dist/**"],
       "outputLogs": "new-only",
-      "dependsOn": ["clean", "^dist"]
+      "dependsOn": ["clean", "typecheck",
+        "pre-build",
+        "^dist"]
     },
     "clean": {
       "cache": false,

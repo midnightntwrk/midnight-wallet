@@ -1,0 +1,66 @@
+{
+  "name": "@midnight-ntwrk/wallet-node-client-ts",
+  "version": "5.0.0",
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "private": true,
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./effect": {
+      "import": "./dist/effect/index.js",
+      "types": "./dist/effect/index.d.ts"
+    },
+    "./testing": {
+      "import": "./dist/testing/index.js",
+      "types": "./dist/testing/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@polkadot/api": "^16.3.1",
+    "@polkadot/api-augment": "^16.3.1",
+    "@polkadot/api-base": "^16.3.1",
+    "@polkadot/rpc-augment": "^16.3.1",
+    "@polkadot/rpc-core": "^16.3.1",
+    "@polkadot/types": "^16.3.1",
+    "@polkadot/types-augment": "^16.3.1",
+    "@polkadot/types-codec": "^16.3.1",
+    "@polkadot/types-known": "^16.3.1",
+    "@polkadot/types-support": "^16.3.1",
+    "@types/bn.js": "^5.2.0",
+    "bn.js": "^5.2.2",
+    "effect": "^3.17.1",
+    "portfinder": "^1.0.37",
+    "rxjs": "^7.5",
+    "testcontainers": "^11.0.3"
+  },
+  "devDependencies": {
+    "@effect/cluster": "^0.46.0",
+    "@effect/experimental": "^0.54.0",
+    "@effect/platform": "^0.90.0",
+    "@effect/platform-node": "^0.94.0",
+    "@effect/rpc": "^0.68.0",
+    "@effect/sql": "^0.44.0",
+    "@effect/workflow": "^0.8.1",
+    "@midnight-ntwrk/abstractions": "workspace:*",
+    "@midnight-ntwrk/ledger": "^4.0.0",
+    "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*",
+    "@polkadot/typegen": "^16.3.1",
+    "@types/yargs": "^17.0.33",
+    "yargs": "^18.0.0"
+  },
+  "scripts": {
+    "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",
+    "polkadot-typegen": "node --experimental-strip-types ./scripts/generate-types.ts",
+    "gen-test-tx": "node --experimental-strip-types ./scripts/generate-test-tx.ts",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
+  }
+}

@@ -7,3 +7,4 @@ export * as CoinsAndBalances from './CoinsAndBalances';
 export * as Keys from './Keys';
 export * from './RunningV1Variant';
 export * as Simulator from './Simulator';
+export * as Submission from './Submission';

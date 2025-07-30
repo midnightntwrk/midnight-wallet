@@ -1,12 +1,12 @@
-import { Effect, Context, Layer, Stream, Chunk, Schedule, Duration, pipe } from 'effect';
-import { HttpClientRequest, HttpClientResponse, HttpClient, FetchHttpClient } from '@effect/platform';
+import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
 import {
-  InvalidProtocolSchemeError,
   ClientError,
-  ServerError,
+  HttpURL,
+  InvalidProtocolSchemeError,
   SerializedTransaction,
   SerializedUnprovenTransaction,
-  HttpURL,
+  ServerError,
 } from '@midnight-ntwrk/abstractions';
 import { ProverClient } from './ProverClient';
 
@@ -24,7 +24,13 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
 ) =>
   Layer.effect(
     ProverClient,
-    HttpURL.make(new URL(PROVE_TX_PATH, config.url)).pipe(Effect.map((url) => new HttpProverClientImpl(url))),
+    HttpURL.make(new URL(PROVE_TX_PATH, config.url)).pipe(
+      Either.map((url) => new HttpProverClientImpl(url)),
+      Either.match({
+        onLeft: (l) => Effect.fail(l),
+        onRight: (r) => Effect.succeed(r),
+      }),
+    ),
   );
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {

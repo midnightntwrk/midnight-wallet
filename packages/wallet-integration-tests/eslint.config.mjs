@@ -5,6 +5,7 @@ export default [
     ignores: [
       '*.mjs',
       'dist/',
+      'coverage/',
       '.rollup.cache/'
     ]
   },
@@ -15,15 +16,4 @@ export default [
       'test/**/*.ts'
     ]
   })),
-  {
-    rules: {
-      '@typescript-eslint/no-namespace': [
-        'error',
-        // Ensure that we allow namespace declarations to support Effect style typing.
-        {
-          'allowDeclarations': true
-        }
-      ]
-    }
-  }
 ];

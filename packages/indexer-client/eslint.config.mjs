@@ -6,7 +6,8 @@ export default [
       '*.mjs',
       'dist/',
       '.rollup.cache/',
-      'src/graphql/generated'
+      'src/graphql/generated',
+      'coverage'
     ]
   },
   ...rootConfig.map(config => ({

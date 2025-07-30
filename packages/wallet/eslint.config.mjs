@@ -5,7 +5,8 @@ export default [
     ignores: [
       '*.mjs',
       'dist/',
-      '.rollup.cache/'
+      '.rollup.cache/',
+      'coverage'
     ]
   },
   ...rootConfig.map(config => ({

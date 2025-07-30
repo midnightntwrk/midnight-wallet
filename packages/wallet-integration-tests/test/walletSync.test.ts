@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 
-const timeout = 120_000;
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
 describe('Wallet Sync', () => {
   const environmentId = randomUUID();
@@ -30,12 +30,13 @@ describe('Wallet Sync', () => {
       provingServerUrl: new URL(
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
+      relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
       networkId: NetworkId.Undeployed,
     };
-  }, timeout);
+  });
 
   afterAll(async () => {
-    await environment?.down();
+    await environment?.down({ timeout: 10_000 });
   });
 
   let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]>;
@@ -53,25 +54,20 @@ describe('Wallet Sync', () => {
     }
   });
 
-  it(
-    'should resync an empty wallet',
-    async () => {
-      const syncedState: V1State = await rx.lastValueFrom(
-        wallet.state.pipe(
-          rx.map(ProtocolState.state),
-          rx.takeWhile(() => !wallet.syncComplete, true),
-        ),
-      );
+  it('should resync an empty wallet', async () => {
+    const syncedState: V1State = await rx.lastValueFrom(
+      wallet.state.pipe(
+        rx.map(ProtocolState.state),
+        rx.takeWhile(() => !wallet.syncComplete, true),
+      ),
+    );
+    const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
+    const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
-      const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
-      const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
-
-      expect(balances).toStrictEqual({
-        '02000000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,
-        '02000000000000000000000000000000000000000000000000000000000000000001': 5000000000000000n,
-        '02000000000000000000000000000000000000000000000000000000000000000002': 5000000000000000n,
-      });
-    },
-    timeout,
-  );
+    expect(balances).toStrictEqual({
+      '02000000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,
+      '02000000000000000000000000000000000000000000000000000000000000000001': 5000000000000000n,
+      '02000000000000000000000000000000000000000000000000000000000000000002': 5000000000000000n,
+    });
+  });
 });

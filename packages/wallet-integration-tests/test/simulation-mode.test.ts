@@ -6,7 +6,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
-import { initEmptyState, Proving, Simulator, Sync, V1Builder, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
+import { initEmptyState, Proving, Simulator, Sync, V1Builder, V1Tag, Submission } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as EArray, Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
@@ -34,7 +34,8 @@ describe('Working in simulation mode', () => {
           .withTransactionType<zswap.ProofErasedTransaction>()
           .withProving(Proving.makeProofErasingProvingService)
           .withSerializationDefaults()
-          .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability),
+          .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
+          .withSubmission(Submission.makeSimulatorSubmissionService),
       )
       .build({
         simulator,
@@ -72,15 +73,7 @@ describe('Working in simulation mode', () => {
             ])
             .pipe(
               Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
-              Effect.flatMap((tx) => {
-                //TODO: replace with proper submission: v1.submitTx(tx)
-                return simulator.submitRegularTx(
-                  ledger.ProofErasedTransaction.deserialize(
-                    tx.serialize(zswap.NetworkId.Undeployed),
-                    ledger.NetworkId.Undeployed,
-                  ),
-                );
-              }),
+              Effect.flatMap((tx) => v1.submitTransaction(tx)),
             );
         },
       })
