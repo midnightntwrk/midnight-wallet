@@ -1,6 +1,6 @@
 import * as zswap from '@midnight-ntwrk/zswap';
 import { makeDefaultKeysCapability } from '../Keys';
-import { initEmptyState } from '../RunningV1Variant';
+import { V1State } from '../RunningV1Variant';
 import * as fc from 'fast-check';
 
 const seedArbitrary = fc.uint8Array({ minLength: 32, maxLength: 32 });
@@ -14,8 +14,8 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const networkId = zswap.NetworkId.Undeployed;
-          const state1 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -30,8 +30,8 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const networkId = zswap.NetworkId.Undeployed;
-          const state1 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -46,7 +46,7 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const secretKeys = zswap.SecretKeys.fromSeed(seed);
-          const state = initEmptyState(secretKeys, zswap.NetworkId.Undeployed);
+          const state = V1State.initEmpty(secretKeys, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);
@@ -63,8 +63,8 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const networkId = zswap.NetworkId.Undeployed;
-          const state1 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = initEmptyState(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const encryptionSecretKey1 = capability.getEncryptionSecretKey(state1);
@@ -88,8 +88,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
           const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = initEmptyState(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = initEmptyState(secretKeys2, zswap.NetworkId.Undeployed);
+          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -105,8 +105,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
           const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = initEmptyState(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = initEmptyState(secretKeys2, zswap.NetworkId.Undeployed);
+          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -122,8 +122,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
           const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = initEmptyState(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = initEmptyState(secretKeys2, zswap.NetworkId.Undeployed);
+          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const address1 = capability.getAddress(state1);
@@ -140,8 +140,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
           const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = initEmptyState(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = initEmptyState(secretKeys2, zswap.NetworkId.Undeployed);
+          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const encryptionSecretKey1 = capability.getEncryptionSecretKey(state1);
@@ -166,7 +166,7 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const secretKeys = zswap.SecretKeys.fromSeed(seed);
-          const state = initEmptyState(secretKeys, zswap.NetworkId.Undeployed);
+          const state = V1State.initEmpty(secretKeys, zswap.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);

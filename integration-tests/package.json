@@ -11,13 +11,14 @@
         "@midnight-ntwrk/zswap": "^4.0.0",
         "@midnight-ntwrk/zswap_v1": "npm:@midnight-ntwrk/zswap@^0.3.11",
         "@midnight-ntwrk/zswap_v2": "npm:@midnight-ntwrk/zswap@^0.3.11",
+        "@types/node": "^24.1.0",
         "extensionless": "^1.9.9",
         "isomorphic-ws": "^5.0.0",
         "node-fetch": "3.3.2",
         "rxjs": "^7.5",
         "scale-ts": "^1.1.0",
-        "testcontainers": "^10.2.1",
-        "ws": "^8.8.1"
+        "testcontainers": "^11.4.0",
+        "ws": "^8.18.3"
     },
     "devDependencies": {
         "fp-ts": "^2.12.2",

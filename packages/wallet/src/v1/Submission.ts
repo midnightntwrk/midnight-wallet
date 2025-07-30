@@ -84,44 +84,43 @@ export const makeDefaultSubmissionService = (
 export type SimulatorSubmissionConfiguration = {
   simulator: Simulator;
 };
-export const makeSimulatorSubmissionService = (
-  config: SimulatorSubmissionConfiguration,
-  waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
-): SubmissionService<zswap.ProofErasedTransaction> => {
-  const submit = (transaction: zswap.ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
-    const serializedTx = transaction.serialize(zswap.NetworkId.Undeployed);
-    return config.simulator
-      .submitRegularTx(ledger.ProofErasedTransaction.deserialize(serializedTx, ledger.NetworkId.Undeployed))
-      .pipe(
-        Effect.map((output) => {
-          // Let's mimic node's client behavior here
-          switch (waitForStatus) {
-            case 'Submitted':
-              return SubmissionEvent.Submitted({
-                tx: serializedTx,
-                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-              });
-            case 'InBlock':
-              return SubmissionEvent.InBlock({
-                tx: serializedTx,
-                blockHash: output.blockHash,
-                blockHeight: output.blockNumber,
-                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-              });
-            case 'Finalized':
-              return SubmissionEvent.Finalized({
-                tx: serializedTx,
-                blockHash: output.blockHash,
-                blockHeight: output.blockNumber,
-                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-              });
-          }
-        }),
-      );
-  };
+export const makeSimulatorSubmissionService =
+  (waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock') =>
+  (config: SimulatorSubmissionConfiguration): SubmissionService<zswap.ProofErasedTransaction> => {
+    const submit = (transaction: zswap.ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
+      const serializedTx = transaction.serialize(zswap.NetworkId.Undeployed);
+      return config.simulator
+        .submitRegularTx(ledger.ProofErasedTransaction.deserialize(serializedTx, ledger.NetworkId.Undeployed))
+        .pipe(
+          Effect.map((output) => {
+            // Let's mimic node's client behavior here
+            switch (waitForStatus) {
+              case 'Submitted':
+                return SubmissionEvent.Submitted({
+                  tx: serializedTx,
+                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+                });
+              case 'InBlock':
+                return SubmissionEvent.InBlock({
+                  tx: serializedTx,
+                  blockHash: output.blockHash,
+                  blockHeight: output.blockNumber,
+                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+                });
+              case 'Finalized':
+                return SubmissionEvent.Finalized({
+                  tx: serializedTx,
+                  blockHash: output.blockHash,
+                  blockHeight: output.blockNumber,
+                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+                });
+            }
+          }),
+        );
+    };
 
-  return {
-    submitTransaction: submit as SubmitTransactionMethod<zswap.ProofErasedTransaction>,
-    close: (): Effect.Effect<void> => Effect.void,
+    return {
+      submitTransaction: submit as SubmitTransactionMethod<zswap.ProofErasedTransaction>,
+      close: (): Effect.Effect<void> => Effect.void,
+    };
   };
-};

@@ -8,6 +8,7 @@ import {
   Poly,
 } from '@midnight-ntwrk/abstractions';
 import { Variant, WalletRuntimeError } from './abstractions/index';
+import { EitherOps } from './effect';
 
 /**
  * The {@link Runtime} service type.
@@ -104,26 +105,26 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         Effect.forkScoped,
       );
     }),
-    Effect.map(({ currentStateRef, progressRef, currentVariantRef }): Runtime<Variants> => {
-      const runtime = {
-        stateChanges: currentStateRef.changes.pipe(
-          Stream.mapEffect((value) => {
-            return Either.match(value, {
-              onLeft: (error) => Effect.fail(error),
-              onRight: (value) => Effect.succeed(value),
-            });
-          }),
-          Stream.drop(1), // Orchestration requires first setting value in the ref, so we're dropping it here to only receive values emitted in the variant streams
-        ),
-        progress: progressRef.get,
-        currentVariant: currentVariantRef.get,
-        dispatch: <TResult>(
-          impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
-        ): Effect.Effect<TResult, WalletRuntimeError> => dispatch(runtime, impl),
-      };
+    Effect.flatMap(
+      ({ currentStateRef, progressRef, currentVariantRef }): Effect.Effect<Runtime<Variants>, never, Scope.Scope> => {
+        return Effect.gen(function* () {
+          const changesStream = yield* currentStateRef.changes.pipe(
+            Stream.mapEffect((value) => EitherOps.toEffect(value)),
+            Stream.share({ capacity: 'unbounded', replay: 1 }),
+          );
+          const runtime = {
+            stateChanges: changesStream,
+            progress: progressRef.get,
+            currentVariant: currentVariantRef.get,
+            dispatch: <TResult>(
+              impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
+            ): Effect.Effect<TResult, WalletRuntimeError> => dispatch(runtime, impl),
+          };
 
-      return runtime;
-    }),
+          return runtime;
+        });
+      },
+    ),
   );
 };
 

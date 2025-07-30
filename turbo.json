@@ -65,7 +65,7 @@
       "outputLogs": "new-only",
       "dependsOn": ["clean", "typecheck",
         "pre-build",
-        "^dist"]
+        "^dist", "typecheck"]
     },
     "clean": {
       "cache": false,

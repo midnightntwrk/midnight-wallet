@@ -38,10 +38,11 @@ describe('Wallet Builder', () => {
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.state.pipe(rx.take(2)); // We expect two values.
+    const state = wallet.state.pipe(rx.take(3)); // We expect two values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
     ]);
@@ -67,10 +68,11 @@ describe('Wallet Builder', () => {
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.state.pipe(rx.take(5)); // We expect five values.
+    const state = wallet.state.pipe(rx.take(6)); // We expect five values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).

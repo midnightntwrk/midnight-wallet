@@ -7,6 +7,8 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import os from 'node:os';
+import * as zswap from '@midnight-ntwrk/zswap';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
@@ -22,6 +24,7 @@ describe('Wallet Sync', () => {
     )
       .withEnvironment({
         TESTCONTAINERS_UID: environmentId,
+        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
       })
       .up();
 
@@ -32,6 +35,10 @@ describe('Wallet Sync', () => {
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
       networkId: NetworkId.Undeployed,
+      costParameters: {
+        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        additionalFeeOverhead: 50_000n,
+      },
     };
   });
 
@@ -57,6 +64,7 @@ describe('Wallet Sync', () => {
   it('should resync an empty wallet', async () => {
     const syncedState: V1State = await rx.lastValueFrom(
       wallet.state.pipe(
+        rx.skip(1),
         rx.map(ProtocolState.state),
         rx.takeWhile(() => !wallet.syncComplete, true),
       ),

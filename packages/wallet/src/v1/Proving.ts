@@ -1,10 +1,10 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
+import { InvalidProtocolSchemeError, SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
 import { ProofErasedTransaction } from '@midnight-ntwrk/zswap';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe';
-import { WalletError } from './WalletError';
+import { ProvingError, WalletError } from './WalletError';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;
@@ -42,9 +42,28 @@ export const makeDefaultProvingService = (
             httpProveTx(configuration.networkId, recipe.transactionToProve),
             Effect.map((proven) => recipe.transactionToBalance.merge(proven)),
             Effect.provide(clientLayer),
+            Effect.catchTag(InvalidProtocolSchemeError.tag, (invalidProtocolScheme) => {
+              return Effect.fail(
+                new ProvingError({
+                  message: 'Invalid proving client configuration',
+                  cause: invalidProtocolScheme,
+                }),
+              );
+            }),
           );
         case 'TransactionToProve':
-          return pipe(httpProveTx(configuration.networkId, recipe.transaction), Effect.provide(clientLayer));
+          return pipe(
+            httpProveTx(configuration.networkId, recipe.transaction),
+            Effect.provide(clientLayer),
+            Effect.catchTag(InvalidProtocolSchemeError.tag, (invalidProtocolScheme) => {
+              return Effect.fail(
+                new ProvingError({
+                  message: 'Invalid proving client configuration',
+                  cause: invalidProtocolScheme,
+                }),
+              );
+            }),
+          );
         case 'NothingToProve':
           return Effect.succeed(recipe.transaction);
       }
@@ -52,7 +71,7 @@ export const makeDefaultProvingService = (
   };
 };
 
-export const makeProofErasingProvingService = (): ProvingService<zswap.ProofErasedTransaction> => {
+export const makeSimulatorProvingService = (): ProvingService<zswap.ProofErasedTransaction> => {
   return {
     prove(recipe: ProvingRecipe<ProofErasedTransaction>): Effect.Effect<ProofErasedTransaction, WalletError> {
       switch (recipe.type) {

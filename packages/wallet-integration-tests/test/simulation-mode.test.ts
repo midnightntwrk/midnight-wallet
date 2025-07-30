@@ -1,4 +1,5 @@
 import * as ledger from '@midnight-ntwrk/ledger';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -6,86 +7,116 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
-import { initEmptyState, Proving, Simulator, Sync, V1Builder, V1Tag, Submission } from '@midnight-ntwrk/wallet-ts/v1';
+import {
+  Proving,
+  Simulator,
+  Sync,
+  Transacting,
+  V1Builder,
+  V1State,
+  V1Tag,
+  Submission,
+} from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as EArray, Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 
+vi.setConfig({ testTimeout: 10_000 });
+
 describe('Working in simulation mode', () => {
-  //TODO: This test needs to pass once transacting capability is rewritten and made flexible enough to work with proof-erased transactions
-  it.skip('allows to make transactions', async () => {
-    const senderKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0));
-    const receiverKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1));
+  it('allows to make transactions', async () => {
+    return Effect.gen(function* () {
+      const senderKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const receiverKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1));
 
-    const genesisMints = [
-      {
-        amount: 10000n,
-        type: ledger.nativeToken(),
-        recipient: senderKeys,
-      },
-    ] as const;
+      const genesisMints = [
+        {
+          amount: 10_000_000n,
+          type: ledger.nativeToken(),
+          recipient: senderKeys,
+        },
+      ] as const;
+      const simulator = yield* Simulator.Simulator.init(genesisMints);
 
-    const simulator = Simulator.Simulator.init(genesisMints).pipe(Effect.runSync);
+      const WalletBase = WalletBuilderTs.init()
+        .withVariant(
+          ProtocolVersion.MinSupportedVersion,
+          new V1Builder()
+            .withTransactionType<zswap.ProofErasedTransaction>()
+            .withProving(Proving.makeSimulatorProvingService)
+            .withCoinSelectionDefaults()
+            .withTransacting(Transacting.makeSimulatorTransactingCapability)
+            .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
+            .withCoinsAndBalancesDefaults()
+            .withKeysDefaults()
+            .withSubmission(Submission.makeSimulatorSubmissionService())
+            .withSerializationDefaults(),
+        )
+        .build({
+          simulator,
+          networkId: zswap.NetworkId.Undeployed,
+          costParameters: {
+            ledgerParams: zswap.LedgerParameters.dummyParameters(),
+            additionalFeeOverhead: 0n,
+          },
+        });
 
-    const WalletBase = WalletBuilderTs.init()
-      .withVariant(
-        ProtocolVersion.MinSupportedVersion,
-        new V1Builder()
-          .withTransactionType<zswap.ProofErasedTransaction>()
-          .withProving(Proving.makeProofErasingProvingService)
-          .withSerializationDefaults()
-          .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
-          .withSubmission(Submission.makeSimulatorSubmissionService),
-      )
-      .build({
-        simulator,
-        networkId: zswap.NetworkId.Undeployed,
+      const getAddress = (keys: zswap.SecretKeys): string => {
+        return ShieldedAddress.codec
+          .encode(
+            ledger.NetworkId.Undeployed,
+            new ShieldedAddress(
+              new ShieldedCoinPublicKey(Buffer.from(keys.coinPublicKey, 'hex')),
+              new ShieldedEncryptionPublicKey(Buffer.from(keys.encryptionPublicKey, 'hex')),
+            ),
+          )
+          .asString();
+      };
+
+      class Wallet extends WalletBase {
+        static init(keys: zswap.SecretKeys): Wallet {
+          return Wallet.startFirst(Wallet, V1State.initEmpty(keys, Wallet.configuration.networkId));
+        }
+      }
+
+      const senderWallet = Wallet.init(senderKeys);
+      const receiverWallet = Wallet.init(receiverKeys);
+
+      yield* Effect.promise(() => {
+        return pipe(
+          senderWallet.state,
+          rx.filter((s) => s.state.state.coins.size > 0),
+          rx.firstValueFrom,
+        );
       });
 
-    class Wallet extends WalletBase {
-      static init(keys: zswap.SecretKeys): Wallet {
-        return Wallet.startFirst(Wallet, initEmptyState(keys, Wallet.configuration.networkId));
-      }
-    }
+      //Making the transfer is meant to run in background
+      yield* pipe(
+        senderWallet.runtime.dispatch({
+          [V1Tag]: (v1) => {
+            return v1
+              .transferTransaction([
+                { type: ledger.nativeToken(), amount: 42n, receiverAddress: getAddress(receiverKeys) },
+              ])
+              .pipe(
+                Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
+                Effect.flatMap((tx) => v1.submitTransaction(tx)),
+              );
+          },
+        }),
+        Effect.flatten,
+      );
 
-    const senderWallet = Wallet.init(senderKeys);
-    const receiverWallet = Wallet.init(receiverKeys);
+      const finalBalance = yield* Effect.promise(() =>
+        pipe(
+          receiverWallet.state,
+          rx.concatMap((state) => (state.state.state.coins.size > 0 ? [Array.from(state.state.state.coins)] : [])),
+          rx.map(EArray.reduce(0n, (acc, coin: zswap.QualifiedCoinInfo) => acc + coin.value)),
+          (a) => rx.firstValueFrom(a),
+        ),
+      );
 
-    //Making the transfer is meant to run in background
-    void senderWallet.runtime
-      .dispatch({
-        [V1Tag]: (v1) => {
-          return v1
-            .transferTransaction([
-              {
-                type: ledger.nativeToken(),
-                amount: 42n,
-                receiverAddress: ShieldedAddress.codec
-                  .encode(
-                    ledger.NetworkId.Undeployed,
-                    new ShieldedAddress(
-                      new ShieldedCoinPublicKey(Buffer.from(receiverKeys.coinPublicKey, 'hex')),
-                      new ShieldedEncryptionPublicKey(Buffer.from(receiverKeys.encryptionPublicKey, 'hex')),
-                    ),
-                  )
-                  .asString(),
-              },
-            ])
-            .pipe(
-              Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
-              Effect.flatMap((tx) => v1.submitTransaction(tx)),
-            );
-        },
-      })
-      .pipe(Effect.flatten, Effect.runPromise);
-
-    const finalBalance = await pipe(
-      receiverWallet.state,
-      rx.concatMap((state) => (state.state.state.coins.size > 0 ? [Array.from(state.state.state.coins)] : [])),
-      rx.map(EArray.reduce(0n, (acc, coin: zswap.QualifiedCoinInfo) => acc + coin.value)),
-      (a) => rx.firstValueFrom(a),
-    );
-
-    expect(finalBalance).toEqual(42n);
+      expect(finalBalance).toEqual(42n);
+    }).pipe(Effect.scoped, Effect.runPromise);
   });
 });

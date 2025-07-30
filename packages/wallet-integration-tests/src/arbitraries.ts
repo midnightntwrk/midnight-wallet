@@ -5,6 +5,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as zswap from '@midnight-ntwrk/zswap';
 import * as fc from 'fast-check';
+import { Record } from 'effect';
+import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 
 export const recipientArbitrary = fc
   .uint8Array({ minLength: 32, maxLength: 32 })
@@ -52,4 +54,64 @@ export const outputsArbitrary = <TRecipient>(
       return availableAmount > transferAmount;
     });
   });
+};
+
+export const swapParamsArbitrary = (
+  balances: Record<zswap.TokenType, bigint>,
+  selfAddress: string,
+): fc.Arbitrary<{
+  inputs: Record<zswap.TokenType, bigint>;
+  outputs: TokenTransfer[];
+}> => {
+  const availableTypes = Record.keys(balances);
+  const valueAssignments: fc.Arbitrary<Record<zswap.TokenType, bigint>> = availableTypes.reduce(
+    (accArbitrary: fc.Arbitrary<Record<zswap.TokenType, bigint>>, tokenType) => {
+      return accArbitrary.chain((acc) => {
+        return fc.bigInt({ min: 1n, max: balances[tokenType] - 1_000_000n }).map((value) => ({
+          ...acc,
+          [tokenType]: value,
+        }));
+      });
+    },
+    fc.constant({}),
+  );
+  const inputOutputTypeAssignments = fc
+    .integer({ min: 0, max: availableTypes.length })
+    .chain((inputTypesCount) => {
+      return fc
+        .integer({ min: 0, max: availableTypes.length - inputTypesCount })
+        .map((outputTypesCount) => ({ inputTypesCount, outputTypesCount }));
+    })
+    .chain(({ inputTypesCount, outputTypesCount }) => {
+      return fc
+        .shuffledSubarray(availableTypes, { minLength: availableTypes.length, maxLength: availableTypes.length })
+        .map((shuffledTypes) => {
+          const inputTypes = shuffledTypes.splice(0, inputTypesCount);
+          const outputTypes = shuffledTypes.splice(0, outputTypesCount);
+          return { inputTypes, outputTypes };
+        });
+    });
+  return fc
+    .record({
+      valueAssignments: valueAssignments,
+      inputOutputTypeAssignments: inputOutputTypeAssignments,
+    })
+    .map((params) => {
+      const inputs: Record<zswap.TokenType, bigint> = params.inputOutputTypeAssignments.inputTypes.reduce(
+        (acc, type) => ({
+          ...acc,
+          [type]: params.valueAssignments[type],
+        }),
+        {},
+      );
+      const outputs = params.inputOutputTypeAssignments.outputTypes.map((outputType): TokenTransfer => {
+        return {
+          amount: params.valueAssignments[outputType],
+          type: outputType,
+          receiverAddress: selfAddress,
+        };
+      });
+
+      return { inputs, outputs };
+    });
 };

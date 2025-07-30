@@ -1,7 +1,7 @@
 // TODO: once rewrite commences - rewire things to ledger package
 import * as ledger from '@midnight-ntwrk/ledger';
-import { Array as EArray, Effect, Encoding, pipe, Stream, SubscriptionRef } from 'effect';
-import { EitherOps, NonEmptyArrayOps } from '../effect';
+import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
+import { ArrayOps, EitherOps } from '../effect';
 import * as zswap from '@midnight-ntwrk/zswap';
 import * as crypto from 'crypto';
 
@@ -23,7 +23,10 @@ const simpleHash = (input: string): Effect.Effect<string> => {
 
 export class Simulator {
   static nextBlockContext = (number: bigint): Effect.Effect<ledger.BlockContext> =>
-    simpleHash(number.toString(16)).pipe(
+    pipe(
+      number.toString(16),
+      (str) => (str.length % 2 == 0 ? str : str.padStart(str.length + 1, '0')),
+      simpleHash,
       Effect.map((hash) => ({
         blockHash: hash,
         secondsSinceEpoch: number,
@@ -32,14 +35,12 @@ export class Simulator {
     );
 
   static init(
-    genesisMints: Readonly<
-      EArray.NonEmptyArray<{ amount: bigint; type: ledger.TokenType; recipient: zswap.SecretKeys }>
-    >,
-  ): Effect.Effect<Simulator> {
+    genesisMints: Readonly<Arr.NonEmptyArray<{ amount: bigint; type: ledger.TokenType; recipient: zswap.SecretKeys }>>,
+  ): Effect.Effect<Simulator, never, Scope.Scope> {
     const makeTransactions = (context: ledger.BlockContext) => {
       const tx = pipe(
         genesisMints,
-        EArray.map((transfer) => {
+        Arr.map((transfer) => {
           const coin: ledger.CoinInfo = ledger.createCoinInfo(transfer.type, transfer.amount);
           const output = ledger.UnprovenOutput.new(
             coin,
@@ -49,7 +50,7 @@ export class Simulator {
           );
           return ledger.UnprovenOffer.fromOutput(output, transfer.type, transfer.amount);
         }),
-        NonEmptyArrayOps.fold((acc: ledger.UnprovenOffer, offer: ledger.UnprovenOffer) => acc.merge(offer)),
+        ArrayOps.fold((acc: ledger.UnprovenOffer, offer: ledger.UnprovenOffer) => acc.merge(offer)),
         (offer) => new ledger.UnprovenTransaction(offer).eraseProofs(),
       );
       const emptyState = ledger.LedgerState.blank();
@@ -71,17 +72,22 @@ export class Simulator {
         lastTxNumber: 0n,
       };
       const ref = yield* SubscriptionRef.make<SimulatorState>(initialState);
-      return new Simulator(ref);
+      const changesStream = yield* Stream.share(ref.changes, {
+        capacity: 'unbounded',
+        replay: Number.MAX_SAFE_INTEGER,
+      });
+      yield* pipe(changesStream, Stream.runDrain, Effect.forkScoped);
+      return new Simulator(ref, changesStream);
     });
   }
 
-  #stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>;
+  readonly #stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>;
 
-  state$: Stream.Stream<SimulatorState>;
+  readonly state$: Stream.Stream<SimulatorState>;
 
-  constructor(stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>) {
+  constructor(stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>, state$: Stream.Stream<SimulatorState>) {
     this.#stateRef = stateRef;
-    this.state$ = stateRef.changes;
+    this.state$ = state$;
   }
 
   submitRegularTx(tx: ledger.ProofErasedTransaction): Effect.Effect<{ blockNumber: bigint; blockHash: string }> {

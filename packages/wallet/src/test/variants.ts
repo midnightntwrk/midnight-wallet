@@ -1,6 +1,6 @@
 import { StateChange, VersionChangeType } from '@midnight-ntwrk/abstractions';
-import { VariantBuilder, Variant, WalletRuntimeError } from '../abstractions';
-import { Effect, Stream, Option, Scope, PubSub } from 'effect';
+import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions';
+import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 
 export type RangeConfig = {
   min: number;

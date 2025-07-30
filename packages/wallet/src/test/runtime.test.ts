@@ -30,7 +30,7 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.startEmpty(Wallet);
 
-    const allCollectedState = toProtocolStateArray<number>(wallet.state.pipe(rx.take(5)));
+    const allCollectedState = toProtocolStateArray<number>(wallet.state.pipe(rx.take(6)));
 
     // Let's wait for the intercepting variant to be initiated to remove any chance of races
     await rx.firstValueFrom(
@@ -50,6 +50,7 @@ describe('Wallet runtime', () => {
 
     expect(dispatchResult).toBe(true);
     expect(await allCollectedState).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 0 },
       { version: ProtocolVersion.MinSupportedVersion, state: 1 },
       { version: ProtocolVersion.ProtocolVersion(50n), state: 1 }, // This is expected to be emitted by the intercepting variant
@@ -78,10 +79,11 @@ describe('Wallet runtime', () => {
     expect(wallet).toBeInstanceOf(BaseWallet);
     expect(wallet).toBeInstanceOf(Wallet);
 
-    const state = wallet.state.pipe(rx.take(5)); // We expect five values.
+    const state = wallet.state.pipe(rx.take(6)); // We expect five values + the initial one.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 43 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).
@@ -107,7 +109,7 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.start(Wallet, Intercepting, 42);
 
-    const state = wallet.state.pipe(rx.take(2));
+    const state = wallet.state.pipe(rx.take(3));
 
     await wallet.runtime
       .dispatch({
@@ -121,6 +123,7 @@ describe('Wallet runtime', () => {
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // this is the state we provided, and runtime automatically emits it
       { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
     ]);
@@ -138,10 +141,11 @@ describe('Wallet runtime', () => {
 
     const wallet = Wallet.startFirst(Wallet, 42);
 
-    const state = wallet.state.pipe(rx.take(5)); // We expect five values.
+    const state = wallet.state.pipe(rx.take(6)); // We expect five values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 42 }, // The initial state is emitted both by runtime and the variant
       { version: ProtocolVersion.MinSupportedVersion, state: 42 },
       { version: ProtocolVersion.MinSupportedVersion, state: 43 },
       // The second variant starts applying the multiplier to the state (represents a protocol change).

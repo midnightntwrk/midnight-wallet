@@ -12,16 +12,18 @@
     }
   },
   "dependencies": {
-    "effect": "^3.17.1"
+    "effect": "^3.17.3"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "vitest run",
-    "lint": "eslint",
-    "dist": "rollup -c ./rollup.config.mjs"
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   },
   "devDependencies": {
-    "fast-check": "^4.1.1",
+    "fast-check": "^4.2.0",
     "to-words": "^4.5.1"
   }
 }

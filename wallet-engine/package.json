@@ -33,7 +33,7 @@
     "node-fetch": "3.3.2",
     "rxjs": "^7.5",
     "scale-ts": "^1.1.0",
-    "ws": "^8.8.1"
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "fp-ts": "^2.12.2",

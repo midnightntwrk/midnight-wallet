@@ -1,5 +1,5 @@
 import { CoinRecipe, Imbalance, Imbalances } from './Imbalances';
-import { QualifiedCoinInfo, CoinInfo, createCoinInfo } from '@midnight-ntwrk/zswap';
+import { QualifiedCoinInfo, CoinInfo, createCoinInfo, TokenType } from '@midnight-ntwrk/zswap';
 
 export interface TransactionCostModel {
   inputFeeOverhead: bigint;
@@ -12,27 +12,36 @@ export class CounterOffer {
   public readonly feeTokenType: string;
   public readonly inputsRecipe: QualifiedCoinInfo[];
   public readonly outputsRecipe: CoinInfo[];
+  public readonly targetImbalances: Imbalances;
 
-  constructor(imbalances: Imbalances, transactionCostModel: TransactionCostModel, feeTokenType: string) {
-    this.imbalances = imbalances;
+  constructor(
+    imbalances: Imbalances,
+    transactionCostModel: TransactionCostModel,
+    feeTokenType: string,
+    targetImbalances: Imbalances,
+  ) {
+    this.imbalances = Imbalances.ensureZerosFor(imbalances, Imbalances.typeSet(targetImbalances));
     this.transactionCostModel = transactionCostModel;
     this.feeTokenType = feeTokenType;
     this.inputsRecipe = [];
     this.outputsRecipe = [];
+    this.targetImbalances = targetImbalances;
+  }
+
+  getTargetImbalance(tokenType: TokenType): bigint {
+    return this.targetImbalances.get(tokenType) ?? 0n;
   }
 
   findNonNativeImbalance(): Imbalance | undefined {
-    for (const [tokenType, value] of this.imbalances) {
-      if (tokenType !== this.feeTokenType && value !== 0n) {
-        return [tokenType, value];
-      }
-    }
-    return undefined;
+    return this.imbalances
+      .entries()
+      .filter(([tokenType]) => tokenType !== this.feeTokenType)
+      .find(([tokenType, value]) => value !== this.getTargetImbalance(tokenType));
   }
 
   findNativeImbalance(): Imbalance | undefined {
     const nativeImbalance = this.imbalances.get(this.feeTokenType);
-    if (nativeImbalance !== undefined && nativeImbalance !== 0n) {
+    if (nativeImbalance !== undefined && nativeImbalance !== this.getTargetImbalance(this.feeTokenType)) {
       return [this.feeTokenType, nativeImbalance];
     }
     return undefined;

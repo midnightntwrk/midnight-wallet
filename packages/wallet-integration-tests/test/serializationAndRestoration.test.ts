@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import os from 'node:os';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
@@ -24,6 +25,7 @@ describe('Wallet serialization and restoration', () => {
     )
       .withEnvironment({
         TESTCONTAINERS_UID: environmentId,
+        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
       })
       .up();
 
@@ -34,6 +36,10 @@ describe('Wallet serialization and restoration', () => {
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
       networkId: zswap.NetworkId.Undeployed,
+      costParameters: {
+        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        additionalFeeOverhead: 50_000n,
+      },
     };
   });
 

@@ -4,7 +4,13 @@ import { pipe, Array } from 'effect';
 import * as RecordOps from '../effect/RecordOps';
 
 export type AvailableCoin = {
-  coin: zswap.QualifiedCoinInfo | zswap.CoinInfo;
+  coin: zswap.QualifiedCoinInfo;
+  commitment: zswap.CoinCommitment;
+  nullifier: zswap.Nullifier;
+};
+
+export type PendingCoin = {
+  coin: zswap.CoinInfo;
   commitment: zswap.CoinCommitment;
   nullifier: zswap.Nullifier;
 };
@@ -15,12 +21,12 @@ export type CoinsAndBalancesCapability<TState> = {
   getAvailableBalances(state: TState): Balances;
   getPendingBalances(state: TState): Balances;
   getTotalBalances(state: TState): Balances;
-  getAvailableCoins(state: TState): AvailableCoin[];
-  getPendingCoins(state: TState): AvailableCoin[];
-  getTotalCoins(state: TState): AvailableCoin[];
+  getAvailableCoins(state: TState): readonly AvailableCoin[];
+  getPendingCoins(state: TState): readonly PendingCoin[];
+  getTotalCoins(state: TState): ReadonlyArray<AvailableCoin | PendingCoin>;
 };
 
-const calculateBalances = <T extends AvailableCoin>(coins: T[]): Balances =>
+const calculateBalances = <T extends AvailableCoin | PendingCoin>(coins: T[]): Balances =>
   coins.reduce(
     (acc: Balances, { coin }) => ({
       ...acc,
@@ -65,7 +71,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     );
   };
 
-  const getPendingCoins = (state: V1State): AvailableCoin[] =>
+  const getPendingCoins = (state: V1State): PendingCoin[] =>
     pipe(
       [...state.state.pendingOutputs.values()],
       Array.map((coin) => ({
@@ -75,7 +81,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
       })),
     );
 
-  const getTotalCoins = (state: V1State): AvailableCoin[] =>
+  const getTotalCoins = (state: V1State): Array<PendingCoin | AvailableCoin> =>
     pipe(
       [...getAvailableCoins(state), ...getPendingCoins(state)],
       Array.map(({ coin, commitment, nullifier }) => ({ coin, commitment, nullifier })),

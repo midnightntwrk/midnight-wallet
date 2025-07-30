@@ -1,9 +1,10 @@
 import { Effect, Exit, Scope, Types } from 'effect';
 import * as rx from 'rxjs';
-import { Fluent, ProtocolVersion, ProtocolState, HList, Poly } from '@midnight-ntwrk/abstractions';
+import { Fluent, HList, Poly, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions';
 import { StateOf } from './abstractions/Variant';
-import { ObservableOps, Runtime } from './effect/index';
+import { ObservableOps } from './effect/index';
+import * as Runtime from './Runtime';
 
 /**
  * Builds a wallet-like implementation from a collection of wallet-like variants, each specific

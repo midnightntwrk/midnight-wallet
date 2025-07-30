@@ -1,18 +1,11 @@
-import rootConfig from "../../eslint.config.mjs";
+import rootConfig from '../../eslint.config.mjs';
 
 export default [
   {
-    ignores: [
-      '*.mjs',
-      "dist/**",
-      "coverage"
-    ]
+    ignores: ['*.mjs', 'dist/**', 'coverage'],
   },
-  ...rootConfig.map(config => ({
+  ...rootConfig.map((config) => ({
     ...config,
-    files: [
-      "src/**/*.ts",
-      "test/**/*.ts"
-    ]
-  }))
+    files: ['src/**/*.ts', 'test/**/*.ts'],
+  })),
 ];

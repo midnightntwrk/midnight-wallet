@@ -2,7 +2,7 @@ import * as zswap from '@midnight-ntwrk/zswap';
 import { CoreWallet } from '@midnight-ntwrk/wallet';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
-import { makeDefaultCoinsAndBalancesCapability, AvailableCoin } from '../CoinsAndBalances';
+import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances';
 
 const amountArbitrary = fc.bigInt({ min: 1n, max: 1000n });
 const tokenTypeArbitrary = fc.constantFrom(zswap.nativeToken(), zswap.sampleTokenType());
@@ -12,6 +12,15 @@ const coinArbitrary = fc.record({
 });
 
 const toAvailableCoin = (c: { value: bigint; tokenType: string }, secretKeys: zswap.SecretKeys): AvailableCoin => {
+  const coin = zswap.createCoinInfo(c.tokenType, BigInt(c.value));
+  return {
+    coin: { ...coin, mt_index: 0n },
+    commitment: zswap.coin_commitment(coin, secretKeys.coinPublicKey),
+    nullifier: zswap.coin_nullifier(coin, secretKeys),
+  };
+};
+
+const toPendingCoin = (c: { value: bigint; tokenType: string }, secretKeys: zswap.SecretKeys): PendingCoin => {
   const coin = zswap.createCoinInfo(c.tokenType, BigInt(c.value));
   return {
     coin,
@@ -43,7 +52,7 @@ const createInitialState = (secretKeys: zswap.SecretKeys, coins: AvailableCoin[]
 const applyPendingCoinValues = (
   state: zswap.LocalState,
   secretKeys: zswap.SecretKeys,
-  coins: AvailableCoin[],
+  coins: PendingCoin[],
 ): zswap.LocalState =>
   pipe(
     coins,
@@ -67,7 +76,7 @@ const issueSpendingOfCoins = (
     }),
   );
 
-function groupByTokenType<T extends AvailableCoin>(coins: Array<T>): Record<string, bigint[]> {
+function groupByTokenType<T extends AvailableCoin | PendingCoin>(coins: readonly T[]): Record<string, bigint[]> {
   return pipe(
     coins,
     Array.groupBy((c) => c.coin.type),
@@ -115,7 +124,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
       fc.property(fc.array(coinArbitrary), fc.array(coinArbitrary), (fixtureAvailableCoins, fixturePendingCoins) => {
         const secretKeys = zswap.SecretKeys.fromSeed(new Uint8Array(32).fill(1));
         const setupAvailableCoins: AvailableCoin[] = fixtureAvailableCoins.map((c) => toAvailableCoin(c, secretKeys));
-        const setupPendingCoins: AvailableCoin[] = fixturePendingCoins.map((c) => toAvailableCoin(c, secretKeys));
+        const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) => toPendingCoin(c, secretKeys));
         const networkId = zswap.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 

@@ -32,14 +32,14 @@
     "@polkadot/types-support": "^16.3.1",
     "@types/bn.js": "^5.2.0",
     "bn.js": "^5.2.2",
-    "effect": "^3.17.1",
+    "effect": "^3.17.3",
     "portfinder": "^1.0.37",
     "rxjs": "^7.5",
-    "testcontainers": "^11.0.3"
+    "testcontainers": "^11.4.0"
   },
   "devDependencies": {
-    "@effect/cluster": "^0.46.0",
-    "@effect/experimental": "^0.54.0",
+    "@effect/cluster": "^0.46.2",
+    "@effect/experimental": "^0.54.2",
     "@effect/platform": "^0.90.0",
     "@effect/platform-node": "^0.94.0",
     "@effect/rpc": "^0.68.0",

@@ -1,0 +1,156 @@
+import { HttpProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
+import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-ts/v1';
+import * as zswap from '@midnight-ntwrk/zswap';
+import { Effect, Either, Layer, pipe } from 'effect';
+import * as os from 'node:os';
+import { GenericContainer, Wait } from 'testcontainers';
+import { describe, expect, it, vi } from 'vitest';
+
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:4.0.0';
+const PROOF_SERVER_PORT: number = 6300;
+
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
+
+const makeTransaction = () => {
+  const seed = Buffer.alloc(32, 0);
+  const recipient = zswap.SecretKeys.fromSeed(seed);
+  const amount = 42n;
+  const coin = zswap.createCoinInfo(zswap.nativeToken(), amount);
+  const output = zswap.UnprovenOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+  const offer = zswap.UnprovenOffer.fromOutput(output, zswap.nativeToken(), amount);
+  return new zswap.UnprovenTransaction(offer);
+};
+
+const proofServerContainerResource = Effect.acquireRelease(
+  Effect.promise(() => {
+    return new GenericContainer(PROOF_SERVER_IMAGE)
+      .withExposedPorts(PROOF_SERVER_PORT)
+      .withWaitStrategy(Wait.forListeningPorts())
+      .withEnvironment({
+        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
+      })
+      .withReuse()
+      .start();
+  }),
+  (container) => Effect.promise(() => container.stop()),
+).pipe(
+  Effect.map((proofServerContainer) => {
+    const proofServerPort = proofServerContainer.getMappedPort(PROOF_SERVER_PORT);
+    return new URL(`http://localhost:${proofServerPort}`);
+  }),
+);
+
+describe('Default Proving Service', () => {
+  const adHocProve = (tx: zswap.UnprovenTransaction): Effect.Effect<zswap.Transaction> => {
+    const res = pipe(
+      Proving.httpProveTx(zswap.NetworkId.Undeployed, tx),
+      Effect.provide(
+        proofServerContainerResource.pipe(
+          Effect.map((url) =>
+            HttpProverClient.layer({
+              url,
+            }),
+          ),
+          Layer.unwrapEffect,
+        ),
+      ),
+      Effect.scoped,
+      Effect.orDie,
+    );
+
+    // ¯\_(ツ)_/¯ jest's TS integration argues some environment type is not `never` at this point
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
+    return res as Effect.Effect<zswap.Transaction>;
+  };
+
+  const testProvenTxEffect = pipe(makeTransaction(), adHocProve, Effect.cached, Effect.flatten);
+  const testUnprovenTx = makeTransaction();
+
+  const recipes: ReadonlyArray<{
+    recipe: Effect.Effect<ProvingRecipe.ProvingRecipe<zswap.Transaction>>;
+    expectedImbalance: bigint;
+  }> = [
+    {
+      recipe: pipe(
+        testProvenTxEffect,
+        Effect.map((testProvenTx) => ({ type: ProvingRecipe.NOTHING_TO_PROVE, transaction: testProvenTx })),
+      ),
+      expectedImbalance: -42n,
+    },
+    {
+      recipe: pipe(
+        testProvenTxEffect,
+        Effect.map((testProvenTx) => ({
+          type: ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE,
+          transactionToBalance: testProvenTx,
+          transactionToProve: testUnprovenTx,
+        })),
+      ),
+      expectedImbalance: -84n,
+    },
+    {
+      recipe: Effect.succeed({ type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx }),
+      expectedImbalance: -42n,
+    },
+  ] as const;
+  it.each(recipes)(
+    'does transform proving recipe into final, proven transaction',
+    async ({ recipe, expectedImbalance }) => {
+      const finalTx = await Effect.gen(function* () {
+        const readyRecipe = yield* recipe;
+        const proofServerUrl = yield* proofServerContainerResource;
+        const service = Proving.makeDefaultProvingService({
+          provingServerUrl: proofServerUrl,
+          networkId: zswap.NetworkId.Undeployed,
+        });
+
+        return yield* service.prove(readyRecipe);
+      }).pipe(Effect.scoped, Effect.runPromise);
+
+      expect(finalTx).toBeInstanceOf(zswap.Transaction);
+      expect(finalTx.imbalances(true).get(zswap.nativeToken())).toEqual(expectedImbalance);
+    },
+  );
+
+  it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
+    const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
+    const result = await Effect.gen(function* () {
+      const proofServerUrl = yield* proofServerContainerResource;
+      const misconfiguredService = Proving.makeDefaultProvingService({
+        provingServerUrl: proofServerUrl,
+        networkId: zswap.NetworkId.MainNet,
+      });
+      return yield* misconfiguredService.prove(recipe);
+    }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
+
+    Either.match(result, {
+      onRight: (result) => {
+        throw new Error(`Unexpected success: ${result.toString()}`);
+      },
+      onLeft: (error) => {
+        expect(error).toBeInstanceOf(WalletError.ProvingError);
+      },
+    });
+  });
+
+  it('does fail with wallet error instance when proving fails (e.g. due to connection error)', async () => {
+    const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
+    const result = await Effect.gen(function* () {
+      const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
+      const misconfiguredService = Proving.makeDefaultProvingService({
+        provingServerUrl: proofServerUrl,
+        networkId: zswap.NetworkId.Undeployed,
+      });
+      return yield* misconfiguredService.prove(recipe);
+    }).pipe(Effect.either, Effect.runPromise);
+
+    Either.match(result, {
+      onRight: (result) => {
+        throw new Error(`Unexpected success: ${result.toString()}`);
+      },
+      onLeft: (error) => {
+        expect(error).toBeInstanceOf(WalletError.ProvingError);
+      },
+    });
+  });
+});

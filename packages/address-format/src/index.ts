@@ -160,6 +160,10 @@ export class ShieldedCoinPublicKey {
     (repr) => new ShieldedCoinPublicKey(repr),
   );
 
+  static fromHexString(hexString: string): ShieldedCoinPublicKey {
+    return new ShieldedCoinPublicKey(Buffer.from(hexString, 'hex'));
+  }
+
   public readonly data: Buffer;
 
   constructor(data: Buffer) {
@@ -167,6 +171,16 @@ export class ShieldedCoinPublicKey {
     if (data.length != ShieldedCoinPublicKey.key_length) {
       throw new Error('Coin public key needs to be 32 bytes long');
     }
+  }
+  toHexString(): string {
+    return this.data.toString('hex');
+  }
+
+  equals(other: string): boolean;
+  equals(other: ShieldedCoinPublicKey): boolean;
+  equals(other: string | ShieldedCoinPublicKey): boolean {
+    const otherKey = typeof other === 'string' ? ShieldedCoinPublicKey.fromHexString(other) : other;
+    return otherKey.data.equals(this.data);
   }
 }
 
@@ -179,9 +193,24 @@ export class ShieldedEncryptionPublicKey {
     (repr) => new ShieldedEncryptionPublicKey(repr),
   );
 
+  static fromHexString(hexString: string): ShieldedEncryptionPublicKey {
+    return new ShieldedEncryptionPublicKey(Buffer.from(hexString, 'hex'));
+  }
+
   public readonly data: Buffer;
 
   constructor(data: Buffer) {
     this.data = data;
+  }
+
+  toHexString(): string {
+    return this.data.toString('hex');
+  }
+
+  equals(other: string): boolean;
+  equals(other: ShieldedEncryptionPublicKey): boolean;
+  equals(other: string | ShieldedEncryptionPublicKey): boolean {
+    const otherKey = typeof other === 'string' ? ShieldedEncryptionPublicKey.fromHexString(other) : other;
+    return otherKey.data.equals(this.data);
   }
 }

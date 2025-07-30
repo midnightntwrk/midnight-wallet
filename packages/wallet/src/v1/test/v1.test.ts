@@ -9,6 +9,9 @@ import { makeDefaultTransactingCapability } from '../Transacting';
 import { TestTransactions } from '@midnight-ntwrk/wallet-node-client-ts/testing';
 import { NodeContext } from '@effect/platform-node';
 import { WalletSeed } from '@midnight-ntwrk/abstractions';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
+import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { makeDefaultKeysCapability } from '../Keys';
 
 describe('V1 Variant', () => {
   it('gracefully stops submission service', async () => {
@@ -31,6 +34,10 @@ describe('V1 Variant', () => {
           relayURL: new URL('http://localhost:9944'),
           indexerWsUrl: 'http://localhost:8080',
           provingServerUrl: new URL('http://localhost:6300'),
+          costParameters: {
+            additionalFeeOverhead: 1n,
+            ledgerParams: zswap.LedgerParameters.dummyParameters(),
+          },
         });
       const initialState = CoreWallet.emptyV1(
         new zswap.LocalState(),
@@ -53,6 +60,16 @@ describe('V1 Variant', () => {
   });
 
   it('reverts transaction, which failed submission', async () => {
+    const config = {
+      networkId: zswap.NetworkId.Undeployed,
+      relayURL: new URL('http://localhost:9944'),
+      indexerWsUrl: 'http://localhost:8080',
+      provingServerUrl: new URL('http://localhost:6300'),
+      costParameters: {
+        additionalFeeOverhead: 1n,
+        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+      },
+    };
     const expectedState = CoreWallet.emptyV1(
       new zswap.LocalState(),
       zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
@@ -64,8 +81,12 @@ describe('V1 Variant', () => {
         submitTransaction: () => Effect.fail(WalletError.submission(new Error('boo!'))),
         close: () => Effect.void,
       };
-      const transacting = makeDefaultTransactingCapability();
-      const spiedRevert = vi.spyOn(transacting, 'applyFailedTransaction');
+      const transacting = makeDefaultTransactingCapability(config, () => ({
+        coinsAndBalancesCapability: makeDefaultCoinsAndBalancesCapability(),
+        coinSelection: chooseCoin,
+        keysCapability: makeDefaultKeysCapability(),
+      }));
+      const spiedRevert = vi.spyOn(transacting, 'revert');
       spiedRevert.mockImplementation((state, transaction) => {
         if (
           Encoding.encodeHex(transaction.serialize(zswap.NetworkId.Undeployed)) ===
@@ -82,12 +103,7 @@ describe('V1 Variant', () => {
         .withDefaults()
         .withSubmission(() => failingSubmission)
         .withTransacting(() => transacting)
-        .build({
-          networkId: zswap.NetworkId.Undeployed,
-          relayURL: new URL('http://localhost:9944'),
-          indexerWsUrl: 'http://localhost:8080',
-          provingServerUrl: new URL('http://localhost:6300'),
-        });
+        .build(config);
       const initialState = CoreWallet.emptyV1(
         new zswap.LocalState(),
         zswap.SecretKeys.fromSeed(

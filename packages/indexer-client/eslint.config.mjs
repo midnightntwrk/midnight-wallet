@@ -1,20 +1,12 @@
-import rootConfig from "../../eslint.config.mjs";
+import rootConfig from '../../eslint.config.mjs';
 
 export default [
   {
-    ignores: [
-      '*.mjs',
-      'dist/',
-      '.rollup.cache/',
-      'src/graphql/generated',
-      'coverage'
-    ]
+    ignores: ['*.mjs', 'dist/', '.rollup.cache/', 'src/graphql/generated', 'coverage'
+    ],
   },
-  ...rootConfig.map(config => ({
+  ...rootConfig.map((config) => ({
     ...config,
-    files: [
-      'src/**/*.ts',
-      'test/**/*.ts'
-    ]
+    files: ['src/**/*.ts', 'test/**/*.ts'],
   })),
 ];

@@ -20,11 +20,11 @@
     "@effect/platform": "^0.90.0",
     "@midnight-ntwrk/abstractions": "workspace:*",
     "@midnight-ntwrk/zswap": "^4.0.0",
-    "effect": "^3.17.1"
+    "effect": "^3.17.3"
   },
   "devDependencies": {
     "rimraf": "^6.0.1",
-    "testcontainers": "^11.0.3"
+    "testcontainers": "^11.4.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",

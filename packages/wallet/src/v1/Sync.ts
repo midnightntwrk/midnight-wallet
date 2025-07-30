@@ -75,19 +75,25 @@ export const makeDefaultSyncCapability = (): SyncCapability<V1State, IndexerUpda
   };
 };
 
-export const makeSimulatorSyncService = (config: { simulator: Simulator }): SyncService<V1State, SimulatorState> => {
+export type SimulatorSyncConfiguration = {
+  simulator: Simulator;
+  networkId: zswap.NetworkId;
+};
+
+export const makeSimulatorSyncService = (config: SimulatorSyncConfiguration): SyncService<V1State, SimulatorState> => {
   return {
     updates: () => config.simulator.state$,
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorState> => {
+export const makeSimulatorSyncCapability = (
+  config: SimulatorSyncConfiguration,
+): SyncCapability<V1State, SimulatorState> => {
   return {
     applyUpdate: (state: V1State, update: SimulatorState) => {
-      const currentLocalState = state.state;
-      const newLocalState = currentLocalState.applyProofErasedTx(
+      const newLocalState = state.state.applyProofErasedTx(
         state.secretKeys,
-        update.lastTx,
+        zswap.ProofErasedTransaction.deserialize(update.lastTx.serialize(config.networkId), config.networkId),
         update.lastTxResult.type,
       );
       return state.applyState(newLocalState);

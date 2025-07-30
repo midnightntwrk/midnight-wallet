@@ -10,4 +10,6 @@ export class InvalidProtocolSchemeError extends Data.TaggedError('InvalidProtoco
 
   /** The scheme that caused the error. */
   readonly invalidScheme: string;
-}> {}
+}> {
+  static tag = 'InvalidProtocolSchemeError' as const;
+}

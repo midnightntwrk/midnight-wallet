@@ -40,7 +40,7 @@ libmidnight_zswap_c_bindings_v*.*
 coverage
 .turbo
 packages/*/*.tgz
-.rollup.cache
+.rollup.cache/
 packages/src/**/*.d.ts*
 
 # reports

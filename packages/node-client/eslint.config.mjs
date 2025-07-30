@@ -6,7 +6,8 @@ export default [
       '*.mjs',
       'dist/',
       '.rollup.cache/',
-      'src/gen/'
+      'src/gen/',
+      'coverage/',
     ]
   },
   ...rootConfig.map(config => ({
