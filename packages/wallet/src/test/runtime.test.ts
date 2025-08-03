@@ -30,11 +30,11 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.startEmpty(Wallet);
 
-    const allCollectedState = toProtocolStateArray<number>(wallet.state.pipe(rx.take(6)));
+    const allCollectedState = toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(6)));
 
     // Let's wait for the intercepting variant to be initiated to remove any chance of races
     await rx.firstValueFrom(
-      wallet.state.pipe(rx.find(({ version }) => version == ProtocolVersion.ProtocolVersion(50n))),
+      wallet.rawState.pipe(rx.find(({ version }) => version == ProtocolVersion.ProtocolVersion(50n))),
     );
 
     const dispatchResult = await wallet.runtime
@@ -46,7 +46,7 @@ describe('Wallet runtime', () => {
             .emitProtocolVersionChange(VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(100n) }))
             .pipe(Effect.as(true)),
       })
-      .pipe(Effect.flatten, Effect.runPromise);
+      .pipe(Effect.runPromise);
 
     expect(dispatchResult).toBe(true);
     expect(await allCollectedState).toEqual([
@@ -79,7 +79,7 @@ describe('Wallet runtime', () => {
     expect(wallet).toBeInstanceOf(BaseWallet);
     expect(wallet).toBeInstanceOf(Wallet);
 
-    const state = wallet.state.pipe(rx.take(6)); // We expect five values + the initial one.
+    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values + the initial one.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
@@ -109,7 +109,7 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.start(Wallet, Intercepting, 42);
 
-    const state = wallet.state.pipe(rx.take(3));
+    const state = wallet.rawState.pipe(rx.take(3));
 
     await wallet.runtime
       .dispatch({
@@ -118,7 +118,7 @@ describe('Wallet runtime', () => {
         [Intercepting]: (interceptingVariant: InterceptingRunningVariant<typeof Intercepting, number>) =>
           interceptingVariant.emitProtocolVersionChange(VersionChangeType.Next()),
       })
-      .pipe(Effect.flatten, Effect.runPromise);
+      .pipe(Effect.runPromise);
 
     const receivedStates = await toProtocolStateArray(state);
 
@@ -141,7 +141,7 @@ describe('Wallet runtime', () => {
 
     const wallet = Wallet.startFirst(Wallet, 42);
 
-    const state = wallet.state.pipe(rx.take(6)); // We expect five values.
+    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([

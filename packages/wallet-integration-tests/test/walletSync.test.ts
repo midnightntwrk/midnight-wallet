@@ -63,7 +63,7 @@ describe('Wallet Sync', () => {
 
   it('should resync an empty wallet', async () => {
     const syncedState: V1State = await rx.lastValueFrom(
-      wallet.state.pipe(
+      wallet.rawState.pipe(
         rx.skip(1),
         rx.map(ProtocolState.state),
         rx.takeWhile(() => !wallet.syncComplete, true),

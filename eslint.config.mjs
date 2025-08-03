@@ -1,21 +1,30 @@
 import esLint from '@eslint/js';
 import tsLint from 'typescript-eslint';
 import esLintPrettier from 'eslint-plugin-prettier/recommended';
-import { dirname } from 'node:path';
+import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { includeIgnoreFile } from '@eslint/compat';
+
+export const packageConfig = (cfg) => {
+  const filesArr = cfg?.files ?? ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts'];
+  const ignores = cfg?.ignores ?? [];
+  return [...defaultConfig.map((config) => ({ ...config, files: filesArr })), globalIgnores, { ignores }];
+};
+
+const globalIgnores = includeIgnoreFile(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.gitignore'),
+  'From gitignore',
+);
 
 //TODO: consider defining config for config JS files too (for consistent formatting at the very least)
-export default tsLint.config(
+export const defaultConfig = tsLint.config(
   esLint.configs.recommended,
   ...tsLint.configs.recommendedTypeChecked,
-  {
-    ignores: ['dist/**', '*.mjs'],
-  },
   {
     languageOptions: {
       parserOptions: {
         projectService: true,
-        tsconfigRootDir: dirname(fileURLToPath(import.meta.url)),
+        tsconfigRootDir: path.dirname(fileURLToPath(import.meta.url)),
       },
     },
     rules: {

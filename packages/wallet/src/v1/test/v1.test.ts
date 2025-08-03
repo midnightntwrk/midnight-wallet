@@ -12,6 +12,7 @@ import { WalletSeed } from '@midnight-ntwrk/abstractions';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { makeDefaultKeysCapability } from '../Keys';
+import { V1State } from '../RunningV1Variant';
 
 describe('V1 Variant', () => {
   it('gracefully stops submission service', async () => {
@@ -39,12 +40,11 @@ describe('V1 Variant', () => {
             ledgerParams: zswap.LedgerParameters.dummyParameters(),
           },
         });
-      const initialState = CoreWallet.emptyV1(
-        new zswap.LocalState(),
+      const initialState = V1State.initEmpty(
         zswap.SecretKeys.fromSeed(
           WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
         ),
-        NetworkId.fromJs(zswap.NetworkId.Undeployed),
+        zswap.NetworkId.Undeployed,
       );
       yield* variant.start({ stateRef: yield* SubscriptionRef.make(initialState) }, initialState);
       return fakeSubmission.wasClosedRef;
@@ -70,11 +70,7 @@ describe('V1 Variant', () => {
         ledgerParams: zswap.LedgerParameters.dummyParameters(),
       },
     };
-    const expectedState = CoreWallet.emptyV1(
-      new zswap.LocalState(),
-      zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
-      zswap.NetworkId.Undeployed,
-    );
+    const expectedState = V1State.initEmpty(zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), zswap.NetworkId.Undeployed);
     const testProgram = Effect.gen(function* () {
       const theTransaction = yield* TestTransactions.load.pipe(Effect.map((t) => t.initial_tx));
       const failingSubmission: SubmissionService<zswap.Transaction> = {

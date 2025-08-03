@@ -23,7 +23,7 @@ export interface TransactingCapability<TState, TTransaction> {
   balanceTransaction(
     state: TState,
     tx: TTransaction,
-    newCoins: zswap.CoinInfo[],
+    newCoins: readonly zswap.CoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   makeTransfer(
@@ -197,7 +197,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
 
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         state,
-        TransactionImbalances.feeTokenOnly(outputsParseResult.imbalances),
+        TransactionImbalances.feesOnly(outputsParseResult.imbalances),
         this.getCoinSelection(),
         outputsParseResult.selfCoins.length,
         inputsParseResult,

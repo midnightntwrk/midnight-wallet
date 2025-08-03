@@ -66,13 +66,17 @@ package object domain {
       highestIndex: Option[Offset],
       highestRelevantIndex: Option[Offset],
   ) extends IndexerUpdate[Nothing, Nothing] {
-    lazy val isComplete: Boolean =
+    lazy val isComplete: Boolean = isCompleteWithin(50)
+
+    lazy val isStrictlyComplete: Boolean = isCompleteWithin(0)
+
+    def isCompleteWithin(maxGap: Int): Boolean =
       (appliedIndex, highestRelevantWalletIndex, highestIndex, highestRelevantIndex) match
         case (_, Some(hrw), Some(hi), Some(hri)) => {
           val ai = appliedIndex.getOrElse(Offset.Zero)
           val applyGap = (hrw.value - ai.value).abs
           val sourceGap = (hi.value - hri.value).abs
-          applyGap === BigInt(0) && sourceGap <= BigInt(50)
+          applyGap === BigInt(0) && sourceGap <= BigInt(maxGap)
         }
         case _ => false
   }

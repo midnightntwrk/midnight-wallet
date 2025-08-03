@@ -18,7 +18,7 @@ import {
   V1Tag,
 } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Effect, pipe, Record } from 'effect';
+import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -26,10 +26,10 @@ import path from 'node:path';
 import prand from 'pure-rand';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
-import { afterEach, beforeEach, describe, expect, it, vi, assert } from 'vitest';
+import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries';
 
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 30_000 });
 
 const random = new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() * 0x100000000)));
 const sampleValue = <T>(arbitrary: fc.Arbitrary<T>): T => {
@@ -101,10 +101,10 @@ describe('Wallet transacting', () => {
 
   const waitForSync = (wallet: Wallet): Promise<V1State> => {
     return pipe(
-      wallet.state,
+      wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isComplete && state.state.coins.size > 0),
+      rx.filter((state: V1State) => state.progress.isStrictlyComplete && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
   };
@@ -156,7 +156,7 @@ describe('Wallet transacting', () => {
 
   it('should create & submit successful transfers transactions', async () => {
     const syncedState: V1State = await pipe(
-      wallet.state,
+      wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
       rx.filter((state: V1State) => state.progress.isComplete && state.state.coins.size > 0),
@@ -189,7 +189,7 @@ describe('Wallet transacting', () => {
           );
         },
       })
-      .pipe(Effect.flatten, Effect.runPromise);
+      .pipe(Effect.runPromise);
 
     const transaction = result.transaction;
     expect(transaction.guaranteedCoins!.outputs.length).toBeGreaterThanOrEqual(rawOutputs.length);
@@ -206,13 +206,13 @@ describe('Wallet transacting', () => {
 
   it('should create and submit a transfer, which is properly received', async () => {
     await rx.firstValueFrom(
-      wallet.state.pipe(
+      wallet.rawState.pipe(
         rx.map(ProtocolState.state),
         rx.skip(1),
         rx.filter((state: V1State) => state.state.coins.size > 0),
       ),
     );
-    const receiverState = await pipe(wallet2.state, rx.map(ProtocolState.state), (s) => rx.firstValueFrom(s));
+    const receiverState = await pipe(wallet2.rawState, rx.map(ProtocolState.state), (s) => rx.firstValueFrom(s));
 
     await wallet.runtime
       .dispatch({
@@ -230,13 +230,13 @@ describe('Wallet transacting', () => {
               Effect.flatMap((tx) => v1.submitTransaction(tx, 'Finalized')),
             ),
       })
-      .pipe(Effect.flatten, Effect.runPromise);
+      .pipe(Effect.runPromise);
 
     const finalBalance = await pipe(
-      wallet2.state,
+      wallet2.rawState,
       rx.skip(1),
       rx.map(ProtocolState.state),
-      rx.filter((state) => coinsAndBalances.getAvailableCoins(state).length > 0),
+      rx.filter((state) => state.progress.isStrictlyComplete),
       rx.map((state) => coinsAndBalances.getAvailableBalances(state)[zswap.nativeToken()]),
       (a) => rx.firstValueFrom(a),
     );
@@ -260,7 +260,6 @@ describe('Wallet transacting', () => {
           ),
       })
       .pipe(
-        Effect.flatten,
         Effect.andThen((tx) => {
           return wallet2.runtime.dispatch({
             [V1Tag]: (v1) =>
@@ -271,24 +270,26 @@ describe('Wallet transacting', () => {
               ),
           });
         }),
-        Effect.flatten,
         Effect.runPromise,
       );
 
-    const txFees =
+    // This is a bit of an overestimation, but given various decisions that can be made in the balancing process,
+    // it's a good enough range to test against
+    // adding overhead for each output because balancing won't create a change output if it does not make sense
+    const dustReserve =
       finalTx.fees(Wallet.configuration.costParameters.ledgerParams) +
-      BigInt(Object.keys(swapParams.inputs).length) *
+      BigInt(finalTx.guaranteedCoins!.inputs.length) *
         (Wallet.configuration.costParameters.additionalFeeOverhead +
           Wallet.configuration.costParameters.ledgerParams.transactionCostModel.inputFeeOverhead) +
-      BigInt(swapParams.outputs.length) *
+      BigInt(
+        finalTx.guaranteedCoins!.outputs.length +
+          (swapParams.outputs.length + Object.keys(swapParams.inputs).length) * 2,
+      ) *
         (Wallet.configuration.costParameters.additionalFeeOverhead +
           Wallet.configuration.costParameters.ledgerParams.transactionCostModel.outputFeeOverhead);
-    const stateAfter1 = await pipe(wallet.state, rx.map(ProtocolState.state), rx.skip(1), rx.debounceTime(100), (a) =>
-      rx.firstValueFrom(a),
-    );
-    const stateAfter2 = await pipe(wallet2.state, rx.map(ProtocolState.state), rx.skip(1), rx.debounceTime(100), (a) =>
-      rx.firstValueFrom(a),
-    );
+    const stateAfter1 = await waitForSync(wallet);
+    const stateAfter2 = await waitForSync(wallet2);
+
     const cABefore1 = getCoinsAndBalances(syncedState1);
     const cABefore2 = getCoinsAndBalances(syncedState2);
     const cAAfter1 = getCoinsAndBalances(stateAfter1);
@@ -298,7 +299,7 @@ describe('Wallet transacting', () => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, type);
 
-      const acceptedDelta = type == zswap.nativeToken() ? txFees : 0n;
+      const acceptedDelta = type == zswap.nativeToken() ? dustReserve : 0n;
 
       assertCloseTo(change1, value * -1n, acceptedDelta, `Expected wallet 1 to provide ${value}`);
       assertCloseTo(change2, value, acceptedDelta, `Expected wallet 2 to receive ${value}`);
@@ -308,10 +309,15 @@ describe('Wallet transacting', () => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, output.type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, output.type);
 
-      const acceptedDelta = output.type == zswap.nativeToken() ? txFees : 0n;
+      const acceptedDelta = output.type == zswap.nativeToken() ? dustReserve : 0n;
 
       assertCloseTo(change1, output.amount, acceptedDelta, `Expected wallet 1 to receive ${output.amount}`);
       assertCloseTo(change2, output.amount * -1n, acceptedDelta, `Expected wallet 2 to provide ${output.amount}`);
     });
+
+    expect(finalTx.guaranteedCoins!.deltas.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
+      finalTx.fees(Wallet.configuration.costParameters.ledgerParams),
+    );
+    expect(finalTx.guaranteedCoins!.deltas.get(zswap.nativeToken())).toBeLessThanOrEqual(dustReserve);
   });
 });

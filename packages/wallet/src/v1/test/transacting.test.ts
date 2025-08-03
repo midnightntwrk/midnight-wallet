@@ -1,16 +1,3 @@
-import { describe, expect, it } from 'vitest';
-import * as zswap from '@midnight-ntwrk/zswap';
-import { V1State } from '../RunningV1Variant';
-import { CoreWallet } from '@midnight-ntwrk/wallet';
-import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
-  makeSimulatorTransactingCapability,
-} from '../Transacting';
-import { Array as Arr, Effect, Either, Iterable, Order, pipe, Record } from 'effect';
-import { makeSimulatorProvingService } from '../Proving';
-import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe';
-import { ArrayOps, EitherOps } from '../../effect/index';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
@@ -18,8 +5,20 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import * as zswap from '@midnight-ntwrk/zswap';
+import { Array as Arr, Effect, Either, Iterable, Order, pipe, Record } from 'effect';
+import { describe, expect, it } from 'vitest';
+import { ArrayOps, EitherOps } from '../../effect/index';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { makeDefaultKeysCapability } from '../Keys';
+import { makeSimulatorProvingService } from '../Proving';
+import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe';
+import { V1State } from '../RunningV1Variant';
+import {
+  DefaultTransactingConfiguration,
+  DefaultTransactingContext,
+  makeSimulatorTransactingCapability,
+} from '../Transacting';
 
 const dust = (value: number): bigint => BigInt(value * 10 ** 6);
 
@@ -66,7 +65,7 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
     desired,
     Record.map((entry) => {
       const state = new zswap.LocalState().applyProofErasedTx(entry.keys, tx, 'success');
-      return CoreWallet.emptyV1(state, entry.keys, zswap.NetworkId.Undeployed);
+      return V1State.init(state, entry.keys, zswap.NetworkId.Undeployed);
     }),
   );
 };
@@ -400,7 +399,7 @@ describe('V1 Wallet Transacting', () => {
   });
 
   describe('when handling swaps', () => {
-    it('inits a swap', () => {
+    it('inits a swap with dust input and non-dust output', () => {
       const theOtherTokenType = zswap.sampleTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(1), dust(2), dust(3)];
@@ -427,6 +426,85 @@ describe('V1 Wallet Transacting', () => {
         expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(dust(1));
         expect(imbalances.get(zswap.nativeToken())).toBeLessThanOrEqual(dust(1) + dust(1));
         expect(imbalances.get(theOtherTokenType)).toEqual(-1n * theOtherTokenAmount);
+      }).pipe(Effect.runPromise);
+    });
+
+    it('inits a swap with non-dust input and dust output', () => {
+      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenAmount = 10_000n;
+      const initialCoinValues = [
+        dust(1),
+        dust(2),
+        dust(3),
+        { tokenType: theOtherTokenType, value: theOtherTokenAmount },
+      ];
+      const wallets = prepareWallets({
+        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingService();
+
+      return Effect.gen(function* () {
+        const result = yield* EitherOps.toEffect(
+          transacting.initSwap(wallets.A, { [theOtherTokenType]: theOtherTokenAmount }, [
+            makeTransferOutput({
+              recipient: wallets.A,
+              coin: dust(1),
+            }),
+          ]),
+        );
+        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const imbalances = proven.imbalances(true, proven.fees(zswap.LedgerParameters.dummyParameters()));
+
+        expect(new Set(imbalances.keys())).toEqual(new Set([zswap.nativeToken(), theOtherTokenType]));
+        expect(imbalances.get(zswap.nativeToken())).toBeLessThan(0n);
+        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(
+          -1n * dust(1) + proven.fees(zswap.LedgerParameters.dummyParameters()),
+        );
+        expect(imbalances.get(theOtherTokenType)).toEqual(theOtherTokenAmount);
+      }).pipe(Effect.runPromise);
+    });
+
+    it('inits a swap with non-dust input and non-dust output', () => {
+      const theOtherTokenType1 = zswap.sampleTokenType();
+      const theOtherTokenAmount1 = 10_000n;
+      const theOtherTokenType2 = zswap.sampleTokenType();
+      const theOtherTokenAmount2 = 10_000n;
+      const initialCoinValues = [
+        dust(1),
+        dust(2),
+        dust(3),
+        { tokenType: theOtherTokenType1, value: theOtherTokenAmount1 },
+      ];
+      const wallets = prepareWallets({
+        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingService();
+
+      return Effect.gen(function* () {
+        const result = yield* EitherOps.toEffect(
+          transacting.initSwap(wallets.A, { [theOtherTokenType1]: theOtherTokenAmount1 }, [
+            makeTransferOutput({
+              recipient: wallets.A,
+              coin: { tokenType: theOtherTokenType2, value: theOtherTokenAmount2 },
+            }),
+          ]),
+        );
+        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const imbalances = proven.imbalances(true, proven.fees(zswap.LedgerParameters.dummyParameters()));
+
+        expect(new Set(imbalances.keys())).toEqual(
+          new Set([zswap.nativeToken(), theOtherTokenType1, theOtherTokenType2]),
+        );
+        expect(imbalances.get(zswap.nativeToken())).toBeLessThan(dust(1));
+        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(
+          proven.fees(zswap.LedgerParameters.dummyParameters()),
+        );
+        expect(imbalances.get(theOtherTokenType1)).toEqual(theOtherTokenAmount1);
+        expect(imbalances.get(theOtherTokenType2)).toEqual(-1n * theOtherTokenAmount2);
       }).pipe(Effect.runPromise);
     });
 
@@ -475,7 +553,7 @@ describe('V1 Wallet Transacting', () => {
           .filter((c) => c.type === zswap.nativeToken())
           .map((c) => c.value)
           .toArray()
-          .toSorted();
+          .toSorted((a, b) => Number(a - b));
 
         expect(new Set(imbalances.keys())).toEqual(new Set([zswap.nativeToken()]));
         expect(imbalances.get(zswap.nativeToken())).toBeGreaterThanOrEqual(

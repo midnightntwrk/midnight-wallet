@@ -1,25 +1,25 @@
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import * as ledger from '@midnight-ntwrk/ledger';
-import { describe, expect, it, vi } from 'vitest';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import {
   Proving,
   Simulator,
+  Submission,
   Sync,
   Transacting,
   V1Builder,
   V1State,
   V1Tag,
-  Submission,
 } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Array as EArray, Effect, pipe } from 'effect';
+import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 10_000 });
 
@@ -74,6 +74,7 @@ describe('Working in simulation mode', () => {
       };
 
       class Wallet extends WalletBase {
+        static coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
         static init(keys: zswap.SecretKeys): Wallet {
           return Wallet.startFirst(Wallet, V1State.initEmpty(keys, Wallet.configuration.networkId));
         }
@@ -84,8 +85,9 @@ describe('Working in simulation mode', () => {
 
       yield* Effect.promise(() => {
         return pipe(
-          senderWallet.state,
-          rx.filter((s) => s.state.state.coins.size > 0),
+          senderWallet.rawState,
+          rx.map(ProtocolState.state),
+          rx.filter((s) => Wallet.coinsAndBalances.getAvailableCoins(s).length > 0),
           rx.firstValueFrom,
         );
       });
@@ -104,14 +106,14 @@ describe('Working in simulation mode', () => {
               );
           },
         }),
-        Effect.flatten,
       );
 
       const finalBalance = yield* Effect.promise(() =>
         pipe(
-          receiverWallet.state,
-          rx.concatMap((state) => (state.state.state.coins.size > 0 ? [Array.from(state.state.state.coins)] : [])),
-          rx.map(EArray.reduce(0n, (acc, coin: zswap.QualifiedCoinInfo) => acc + coin.value)),
+          receiverWallet.rawState,
+          rx.map(ProtocolState.state),
+          rx.filter((state) => Wallet.coinsAndBalances.getAvailableCoins(state).length > 0),
+          rx.map((state) => Wallet.coinsAndBalances.getTotalBalances(state)[zswap.nativeToken()]),
           (a) => rx.firstValueFrom(a),
         ),
       );

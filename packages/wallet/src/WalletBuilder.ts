@@ -140,7 +140,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
 
       readonly runtime: WalletRuntime;
       readonly runtimeScope: Scope.CloseableScope;
-      readonly state: rx.Observable<ProtocolState.ProtocolState<WalletState>>;
+      readonly rawState: rx.Observable<ProtocolState.ProtocolState<WalletState>>;
 
       get syncComplete(): boolean {
         const { sourceGap, applyGap } = Effect.runSync(this.runtime.progress);
@@ -150,7 +150,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
       constructor(runtime: Runtime.Runtime<Variants>, runtimeScope: Scope.CloseableScope) {
         this.runtime = runtime;
         this.runtimeScope = runtimeScope;
-        this.state = ObservableOps.fromStream(runtime.stateChanges).pipe(
+        this.rawState = ObservableOps.fromStream(runtime.stateChanges).pipe(
           rx.shareReplay({ refCount: true, bufferSize: 1 }),
         );
       }

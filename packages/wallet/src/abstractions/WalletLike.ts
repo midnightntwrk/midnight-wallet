@@ -49,7 +49,7 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   /**
    * A stream of state changes over any amount of time that have been processed by the wallet.
    */
-  readonly state: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
+  readonly rawState: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
 
   /**
    * Returns an indicator whether the underlying state of the wallet is fully synchronized.

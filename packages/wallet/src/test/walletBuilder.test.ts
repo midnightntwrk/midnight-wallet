@@ -34,11 +34,11 @@ describe('Wallet Builder', () => {
     >;
     type _2 = Expect<Equal<typeof wallet, WalletLike.WalletLike<[Variant.VersionedVariant<NumericRange>]>>>;
     type _3 = Expect<Equal<typeof wallet.runtime, Runtime<[Variant.VersionedVariant<NumericRange>]>>>;
-    type _4 = Expect<Equal<typeof wallet.state, rx.Observable<ProtocolState.ProtocolState<number>>>>;
+    type _4 = Expect<Equal<typeof wallet.rawState, rx.Observable<ProtocolState.ProtocolState<number>>>>;
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.state.pipe(rx.take(3)); // We expect two values.
+    const state = wallet.rawState.pipe(rx.take(3)); // We expect two values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
@@ -64,11 +64,11 @@ describe('Wallet Builder', () => {
     type Variants = [Variant.VersionedVariant<NumericRange>, Variant.VersionedVariant<NumericRangeMultiplier>];
     type _1 = Expect<Equal<typeof wallet, WalletLike.WalletLike<Variants>>>;
     type _2 = Expect<Equal<typeof wallet.runtime, Runtime<Variants>>>;
-    type _3 = Expect<Equal<typeof wallet.state, rx.Observable<ProtocolState.ProtocolState<number>>>>;
+    type _3 = Expect<Equal<typeof wallet.rawState, rx.Observable<ProtocolState.ProtocolState<number>>>>;
 
     expect(wallet).toBeDefined();
 
-    const state = wallet.state.pipe(rx.take(6)); // We expect five values.
+    const state = wallet.rawState.pipe(rx.take(6)); // We expect five values.
     const receivedStates = await toProtocolStateArray(state);
 
     expect(receivedStates).toEqual([
@@ -127,7 +127,7 @@ describe('Wallet Builder', () => {
     const stopSubject = new rx.Subject<boolean>();
 
     const valuesP = rx.firstValueFrom(
-      wallet.state.pipe(rx.map(ProtocolState.state), rx.takeUntil(stopSubject), rx.takeLast(5), reduceToChunk()),
+      wallet.rawState.pipe(rx.map(ProtocolState.state), rx.takeUntil(stopSubject), rx.takeLast(5), reduceToChunk()),
     );
 
     await wallet.stop();

@@ -56,7 +56,7 @@ class SnapshotInstances[LocalState, Transaction](using
 
   given (using zswap.NetworkId): Encoder[LocalState] =
     Encoder.instance(localState => HexUtil.encodeHex(localState.serialize).asJson)
-  given Encoder[zswap.NetworkId] = Encoder[String].contramap(_.name)
+  given Encoder[zswap.NetworkId] = Encoder[String].contramap(nid => nid.name)
   given (using zswap.NetworkId): Encoder[Transaction] = Encoder.instance(_.serialize.asJson)
   given Encoder[data.Transaction.Offset] = Encoder.encodeBigInt.contramap(_.value)
   given Encoder[ProtocolVersion] = Encoder[Int].contramap(_.version)

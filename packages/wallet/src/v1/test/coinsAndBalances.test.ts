@@ -1,5 +1,5 @@
 import * as zswap from '@midnight-ntwrk/zswap';
-import { CoreWallet } from '@midnight-ntwrk/wallet';
+import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances';
@@ -95,7 +95,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const localState = createInitialState(secretKeys, setupAvailableCoins);
-        const state = CoreWallet.emptyV1(localState, secretKeys, networkId);
+        const state = CoreWallet.emptyV1(localState, secretKeys, NetworkId.fromJs(networkId));
         const pendingBalances = capability.getPendingBalances(state);
         const availableBalances = capability.getAvailableBalances(state);
         const totalBalances = capability.getTotalBalances(state);
@@ -130,7 +130,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
 
         let localState = createInitialState(secretKeys, setupAvailableCoins);
         localState = applyPendingCoinValues(localState, secretKeys, setupPendingCoins);
-        const state = CoreWallet.emptyV1(localState, secretKeys, networkId);
+        const state = CoreWallet.emptyV1(localState, secretKeys, NetworkId.fromJs(networkId));
         const availableBalances = capability.getAvailableBalances(state);
         const pendingBalances = capability.getPendingBalances(state);
         const totalBalances = capability.getTotalBalances(state);
@@ -200,11 +200,11 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const initialState = createInitialState(secretKeys, setupAvailableCoins);
 
         // Get initial balances before spending
-        const stateBeforeSpends = CoreWallet.emptyV1(initialState, secretKeys, networkId);
+        const stateBeforeSpends = CoreWallet.emptyV1(initialState, secretKeys, NetworkId.fromJs(networkId));
         const initialAvailableBalances = capability.getAvailableBalances(stateBeforeSpends);
 
         const localState = issueSpendingOfCoins(initialState, secretKeys, spends);
-        const state = CoreWallet.emptyV1(localState, secretKeys, networkId);
+        const state = CoreWallet.emptyV1(localState, secretKeys, NetworkId.fromJs(networkId));
         const pendingBalances = capability.getPendingBalances(state);
         const availableBalances = capability.getAvailableBalances(state);
         const totalBalances = capability.getTotalBalances(state);

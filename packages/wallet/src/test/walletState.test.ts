@@ -19,7 +19,7 @@ describe('Wallet', () => {
       expect(wallet).toBeDefined();
 
       const errorHandler = vi.fn();
-      const receivedStates = await toProtocolStateArray<number>(wallet.state.pipe(rx.take(4)), errorHandler);
+      const receivedStates = await toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(4)), errorHandler);
 
       expect(receivedStates).toEqual([
         { version: ProtocolVersion.MinSupportedVersion, state: 0 }, // The initial state is emitted both by runtime and the variant

@@ -51,7 +51,16 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction> = Variant.Variant<
   deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized) => Either.Either<V1State, WalletError>;
   coinsAndBalances: CoinsAndBalancesCapability<V1State>;
   keys: KeysCapability<V1State>;
+  serialization: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
 };
+
+export type DefaultV1Builder = V1Builder<
+  DefaultV1Configuration,
+  RunningV1Variant.Context<string, IndexerUpdate, zswap.Transaction>,
+  string,
+  IndexerUpdate,
+  zswap.Transaction
+>;
 
 export class V1Builder<
   TConfig extends BaseV1Configuration = BaseV1Configuration,
@@ -67,13 +76,7 @@ export class V1Builder<
     this.#buildState = buildState;
   }
 
-  withDefaults(): V1Builder<
-    DefaultV1Configuration,
-    RunningV1Variant.Context<string, IndexerUpdate, zswap.Transaction>,
-    string,
-    IndexerUpdate,
-    zswap.Transaction
-  > {
+  withDefaults(): DefaultV1Builder {
     return this.withDefaultTransactionType()
       .withSyncDefaults()
       .withSerializationDefaults()
@@ -82,13 +85,7 @@ export class V1Builder<
       .withKeysDefaults()
       .withSubmissionDefaults()
       .withProvingDefaults()
-      .withCoinSelectionDefaults() as V1Builder<
-      DefaultV1Configuration,
-      RunningV1Variant.Context<string, IndexerUpdate, zswap.Transaction>,
-      string,
-      IndexerUpdate,
-      zswap.Transaction
-    >;
+      .withCoinSelectionDefaults() as DefaultV1Builder;
   }
 
   withTransactionType<Transaction>(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, Transaction> {
@@ -306,6 +303,7 @@ export class V1Builder<
       __polyTag__: V1Tag,
       coinsAndBalances: v1Context.coinsAndBalancesCapability,
       keys: v1Context.keysCapability,
+      serialization: v1Context.serializationCapability,
       start(
         context: Variant.VariantContext<V1State>,
         initialState: V1State,

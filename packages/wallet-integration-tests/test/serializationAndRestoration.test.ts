@@ -1,20 +1,17 @@
-import { vi, describe, it, beforeAll, afterAll } from 'vitest';
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
+import { ShieldedWallet, ShieldedWalletClass, ShieldedWalletState } from '@midnight-ntwrk/wallet-ts';
+import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-ts/v1';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Effect, Either } from 'effect';
 import { randomUUID } from 'node:crypto';
-import * as path from 'node:path';
-import * as rx from 'rxjs';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import os from 'node:os';
+import * as path from 'node:path';
+import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import { afterAll, beforeAll, describe, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
+  const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex');
   let environment: StartedDockerComposeEnvironment | null = null;
   let configuration: DefaultV1Configuration | null = null;
 
@@ -47,13 +44,11 @@ describe('Wallet serialization and restoration', () => {
     await environment?.down({ timeout: 10_000 });
   });
 
-  let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]>;
-  let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
+  let Wallet: ShieldedWalletClass;
+  let wallet: ShieldedWallet;
   beforeEach(() => {
-    Wallet = WalletBuilderTs.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
-      .build(configuration!);
-    wallet = Wallet.startEmpty(Wallet);
+    Wallet = ShieldedWallet(configuration!);
+    wallet = Wallet.startWithShieldedSeed(seed);
   });
 
   afterEach(async () => {
@@ -63,36 +58,19 @@ describe('Wallet serialization and restoration', () => {
   });
 
   it('allows to restart wallet from the serialized state', async () => {
-    const syncedState: V1State = await rx.lastValueFrom(
-      wallet.state.pipe(
-        rx.map(ProtocolState.state),
-        rx.takeWhile(() => !wallet.syncComplete, true),
-      ),
-    );
-    const keys = syncedState.secretKeys;
-    const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
-    const originalBalances = coinsAndBalancesCapability.getTotalBalances(syncedState);
+    const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
+    const originalBalances = syncedState.balances;
 
-    const serializedState = await wallet.runtime
-      .dispatch({
-        [V1Tag]: (runningV1) => runningV1.serializeState(syncedState),
-      })
-      .pipe(Effect.runPromise);
-    const restoredWalletState: V1State = Wallet.allVariantsRecord()
-      [V1Tag].variant.deserializeState(keys, serializedState)
-      .pipe(Either.getOrThrow);
+    const serializedState = await wallet.serializeState();
+    const restored = Wallet.restore(seed, serializedState);
+    try {
+      const state = await restored.waitForSyncedState();
+      const restoredBalances = state.balances;
 
-    const restoredBalances = await Effect.acquireRelease(
-      Effect.sync(() => Wallet.start(Wallet, V1Tag, restoredWalletState)),
-      (wallet) => Effect.promise(() => wallet.stop()),
-    ).pipe(
-      Effect.flatMap((wallet) => Effect.promise(() => rx.firstValueFrom(wallet.state))),
-      Effect.map(ProtocolState.state),
-      Effect.map((state) => coinsAndBalancesCapability.getAvailableBalances(state)),
-      Effect.scoped,
-      Effect.runPromise,
-    );
-
-    expect(restoredBalances).toEqual(originalBalances);
+      expect(originalBalances).not.toEqual({});
+      expect(restoredBalances).toEqual(originalBalances);
+    } finally {
+      await restored.stop();
+    }
   });
 });

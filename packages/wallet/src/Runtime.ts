@@ -23,9 +23,9 @@ export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
 
   readonly currentVariant: Effect.Effect<EachRunningVariant<Variants>>;
 
-  dispatch<TResult>(
-    impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
-  ): Effect.Effect<TResult, WalletRuntimeError>;
+  dispatch<TResult, E = never>(
+    impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
+  ): Effect.Effect<TResult, WalletRuntimeError | E>;
 }
 
 export type RunningVariant<
@@ -116,9 +116,9 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
             stateChanges: changesStream,
             progress: progressRef.get,
             currentVariant: currentVariantRef.get,
-            dispatch: <TResult>(
-              impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
-            ): Effect.Effect<TResult, WalletRuntimeError> => dispatch(runtime, impl),
+            dispatch: <TResult, E = never>(
+              impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
+            ): Effect.Effect<TResult, WalletRuntimeError | E> => dispatch(runtime, impl),
           };
 
           return runtime;
@@ -128,12 +128,12 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
   );
 };
 
-export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult>(
+export const dispatch = <Variants extends Variant.AnyVersionedVariantArray, TResult, E = never>(
   runtime: Runtime<Variants>,
-  impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, TResult>,
-): Effect.Effect<TResult, WalletRuntimeError> => {
+  impl: Poly.PolyFunction<Variant.RunningVariantOf<HList.Each<Variants>>, Effect.Effect<TResult, E>>,
+): Effect.Effect<TResult, WalletRuntimeError | E> => {
   return runtime.currentVariant.pipe(
-    Effect.map((current) =>
+    Effect.flatMap((current) =>
       Poly.dispatch(current.runningVariant as Variant.RunningVariantOf<HList.Each<Variants>>, impl),
     ),
   );

@@ -58,6 +58,14 @@ export const TransactionImbalances = new (class {
     };
   };
 
+  feesOnly = (imbalances: TransactionImbalances): TransactionImbalances => {
+    return {
+      guaranteed: Imbalances.fromEntry(zswap.nativeToken(), imbalances.fees),
+      fallible: Imbalances.empty(),
+      fees: imbalances.fees,
+    };
+  };
+
   areBalanced =
     (costParams: TotalCostParameters) =>
     (imbalances: TransactionImbalances): boolean => {

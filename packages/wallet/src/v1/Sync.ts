@@ -5,6 +5,7 @@ import {
   IndexerClient,
   IndexerUpdate,
   JsEither,
+  NetworkId,
   TracerCarrier,
   V1Combination,
   V1EvolveState,
@@ -50,7 +51,9 @@ export const makeDefaultSyncService = ({
         ),
         Stream.flatMap((service) =>
           ObservableOps.toStream(
-            service.sync$().pipe(rx.concatMap((update) => V1Combination.mapIndexerEvent(update, networkId))),
+            service
+              .sync$()
+              .pipe(rx.concatMap((update) => V1Combination.mapIndexerEvent(update, NetworkId.fromJs(networkId)))),
           ),
         ),
       );

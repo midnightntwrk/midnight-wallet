@@ -1,4 +1,4 @@
-import { CoreWallet, IndexerUpdate, JsOption } from '@midnight-ntwrk/wallet';
+import { CoreWallet, IndexerUpdate, JsOption, NetworkId } from '@midnight-ntwrk/wallet';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as Arr, Effect, pipe, Record, Stream, SubscriptionRef } from 'effect';
@@ -44,18 +44,25 @@ const protocolVersionChange = (previous: V1State, current: V1State): StateChange
 
 export type V1State = CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 export const V1State = new (class {
-  #modifyLocalState = <A>(state: V1State, modifier: (s: zswap.LocalState) => [A, zswap.LocalState]): [A, V1State] => {
+  readonly #modifyLocalState = <A>(
+    state: V1State,
+    modifier: (s: zswap.LocalState) => [A, zswap.LocalState],
+  ): [A, V1State] => {
     const [output, newState] = modifier(state.state);
     const updatedState = state.applyState(newState);
     return [output, updatedState];
   };
 
-  #updateLocalState = (state: V1State, updater: (s: zswap.LocalState) => zswap.LocalState): V1State => {
+  readonly #updateLocalState = (state: V1State, updater: (s: zswap.LocalState) => zswap.LocalState): V1State => {
     return state.applyState(updater(state.state));
   };
 
   initEmpty = (keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
-    return CoreWallet.emptyV1(new zswap.LocalState(), keys, networkId);
+    return CoreWallet.emptyV1(new zswap.LocalState(), keys, NetworkId.fromJs(networkId));
+  };
+
+  init = (state: zswap.LocalState, keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
+    return CoreWallet.emptyV1(state, keys, NetworkId.fromJs(networkId));
   };
 
   spendCoins = (
@@ -158,7 +165,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
 
   balanceTransaction(
     tx: TTransaction,
-    newCoins: zswap.CoinInfo[],
+    newCoins: readonly zswap.CoinInfo[],
   ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
@@ -193,27 +200,30 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
   }
 
   finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError> {
-    return this.#v1Context.provingService.prove(recipe);
+    return this.#v1Context.provingService
+      .prove(recipe)
+      .pipe(
+        Effect.tapError(() =>
+          SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertRecipe(state, recipe)),
+          ),
+        ),
+      );
   }
 
   submitTransaction: SubmitTransactionMethod<TTransaction> = ((
     transaction: TTransaction,
     waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
   ) => {
-    const handleError = Effect.tapError(() =>
-      SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-        EitherOps.toEffect(this.#v1Context.transactingCapability.revert(state, transaction)),
-      ),
-    );
-
-    switch (waitForStatus) {
-      case 'Submitted':
-        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
-      case 'InBlock':
-        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
-      case 'Finalized':
-        return this.#v1Context.submissionService.submitTransaction(transaction, waitForStatus).pipe(handleError);
-    }
+    return this.#v1Context.submissionService
+      .submitTransaction(transaction, waitForStatus)
+      .pipe(
+        Effect.tapError(() =>
+          SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revert(state, transaction)),
+          ),
+        ),
+      );
   }) as SubmitTransactionMethod<TTransaction>;
 
   serializeState(state: V1State): TSerialized {

@@ -1,19 +1,9 @@
-import rootConfig from '../../eslint.config.mjs';
+import {packageConfig} from '../../eslint.config.mjs';
 
 export default [
+  ...packageConfig(),
   {
-    ignores: [
-      '*.mjs',
-      '**/*/*.mjs'
-    ]
-  },
-  ...rootConfig.map(config => ({
-    ...config,
-    files: [
-      "src/**/*.ts"
-    ]
-  })),
-  {
+    files: ['src/**/*.ts'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-misused-promises': 'off', // https://github.com/typescript-eslint/typescript-eslint/issues/5807

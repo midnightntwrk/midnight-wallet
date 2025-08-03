@@ -1,5 +1,4 @@
 #!/usr/bin/env -S node  --experimental-specifier-resolution=node
-/* eslint-disable import/no-extraneous-dependencies */
 
 import * as KeyManagement from "@cardano-sdk/key-management"
 

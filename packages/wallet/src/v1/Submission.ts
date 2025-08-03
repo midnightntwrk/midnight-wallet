@@ -19,10 +19,14 @@ export declare namespace SubmissionEventCases {
 }
 
 export type SubmitTransactionMethod<TTransaction> = {
-  (transaction: TTransaction, waitForStatus?: 'Submitted'): Effect.Effect<SubmissionEventCases.Submitted, WalletError>;
-  (transaction: TTransaction, waitForStatus?: 'InBlock'): Effect.Effect<SubmissionEventCases.InBlock, WalletError>;
-  (transaction: TTransaction, waitForStatus?: 'Finalized'): Effect.Effect<SubmissionEventCases.Finalized, WalletError>;
+  (transaction: TTransaction, waitForStatus: 'Submitted'): Effect.Effect<SubmissionEventCases.Submitted, WalletError>;
+  (transaction: TTransaction, waitForStatus: 'InBlock'): Effect.Effect<SubmissionEventCases.InBlock, WalletError>;
+  (transaction: TTransaction, waitForStatus: 'Finalized'): Effect.Effect<SubmissionEventCases.Finalized, WalletError>;
   (transaction: TTransaction): Effect.Effect<SubmissionEventCases.InBlock, WalletError>;
+  (
+    transaction: TTransaction,
+    waitForStatus?: 'Submitted' | 'InBlock' | 'Finalized',
+  ): Effect.Effect<SubmissionEvent, WalletError>;
 };
 
 export interface SubmissionService<TTransaction> {

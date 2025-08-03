@@ -4,12 +4,16 @@
  *
  * @module
  */
+import { describe, it, expect } from 'vitest';
+import * as wallet from '../index';
 
 describe('TypeScript Wallet', () => {
-  it('should export Scala "WalletBuilder"', async () => {
-    const wallet = await import('../index');
-
+  it('should export Scala "WalletBuilder"', () => {
     expect(wallet).toBeDefined();
     expect(wallet.WalletBuilder).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(wallet.WalletBuilder.build).toBeDefined();
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    expect(wallet.WalletBuilder.build).toBeInstanceOf(Function);
   });
 });

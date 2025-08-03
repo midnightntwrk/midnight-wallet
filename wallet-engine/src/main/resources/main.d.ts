@@ -92,6 +92,8 @@ export declare class WalletBuilder {
 /* infra and helpers */
 
 export declare class NetworkId {
+  readonly name: string;
+  readonly toJs: zswap.NetworkId;
   static fromJs(id: zswap.NetworkId): NetworkId;
 }
 
@@ -151,6 +153,8 @@ export declare class ProgressUpdate {
   highestIndex: ScalaOption<Offset>;
   highestRelevantIndex: ScalaOption<Offset>;
   isComplete: boolean;
+  isStrictlyComplete: boolean;
+  isCompleteWithin(maxGap: number): boolean;
 }
 
 export declare class ProtocolVersion {

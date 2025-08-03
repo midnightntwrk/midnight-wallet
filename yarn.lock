@@ -844,6 +844,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@eslint/compat@npm:^1.3.1":
+  version: 1.3.1
+  resolution: "@eslint/compat@npm:1.3.1"
+  peerDependencies:
+    eslint: ^8.40 || 9
+  peerDependenciesMeta:
+    eslint:
+      optional: true
+  checksum: 10c0/8dfcea5ecb854111f9c0acc23a469e0a25cdaddceb5fb40c47988c247d6e32ec199bcd00f1b8ba9ed779228526552703c4b74948169e78b78b5fd814e04b042b
+  languageName: node
+  linkType: hard
+
 "@eslint/config-array@npm:^0.21.0":
   version: 0.21.0
   resolution: "@eslint/config-array@npm:0.21.0"
@@ -1974,6 +1986,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
+    "@eslint/compat": "npm:^1.3.1"
     "@eslint/js": "npm:^9.21.0"
     "@rollup/plugin-node-resolve": "npm:^16.0.0"
     "@rollup/plugin-typescript": "npm:^12.1.2"
@@ -2185,6 +2198,7 @@ __metadata:
     testcontainers: "npm:^11.4.0"
     tsc-watch: "npm:^6.0.0"
     typescript: "npm:~5.8.3"
+    typescript-eslint: "npm:^8.38.0"
     vitest: "npm:^3.2.4"
     vitest-ctrf-json-reporter: "npm:^0.0.2"
     ws: "npm:^8.18.3"
