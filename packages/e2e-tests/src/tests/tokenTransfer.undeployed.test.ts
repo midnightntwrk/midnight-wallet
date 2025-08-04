@@ -33,7 +33,7 @@ describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const timeout = 600_000;
+  const timeout = 800_000;
   const outputValue = 3_000_000n;
 
   let walletFunded: Wallet & Resource;

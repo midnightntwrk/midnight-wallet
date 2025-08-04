@@ -19,7 +19,7 @@ import {
 } from './utilsHf';
 import { Wallet } from '@midnight-ntwrk/wallet-api_hf';
 import { logger } from './logger';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { GenericContainer } from 'testcontainers/build/generic-container/generic-container';
 import * as allure from 'allure-js-commons';
 
@@ -49,6 +49,7 @@ describe('Hard fork', () => {
   const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
 
   beforeAll(async () => {
+    mkdirSync('res', { recursive: true });
     wallet = await WalletBuilderPreHF.buildFromSeed(
       'http://localhost:8088',
       'ws://localhost:8088',

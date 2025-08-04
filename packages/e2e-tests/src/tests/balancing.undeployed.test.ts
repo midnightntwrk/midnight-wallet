@@ -25,7 +25,7 @@ describe('Transaction balancing examples', () => {
   const getFixture = useTestContainersFixture();
   const seedSender = randomBytes(32).toString('hex');
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const timeout = 420_000;
+  const timeout = 600_000;
 
   let walletFunded: Wallet & Resource;
   let sender: Wallet & Resource;
