@@ -23,4 +23,12 @@ object NetworkId {
       case mod.NetworkId.TestNet    => NetworkId.TestNet
       case mod.NetworkId.MainNet    => NetworkId.MainNet
     }
+
+  @JSExport def toJs(js: NetworkId): mod.NetworkId =
+    js match {
+      case NetworkId.Undeployed => mod.NetworkId.Undeployed
+      case NetworkId.DevNet     => mod.NetworkId.DevNet
+      case NetworkId.TestNet    => mod.NetworkId.TestNet
+      case NetworkId.MainNet    => mod.NetworkId.MainNet
+    }
 }

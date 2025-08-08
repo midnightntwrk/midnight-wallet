@@ -1,8 +1,15 @@
-import { CoreWallet, DefaultSerializeCapability, JsEither, NetworkId } from '@midnight-ntwrk/wallet';
+import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
+import { OtherWalletError } from '../WalletError';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { CoinInfo } from '@midnight-ntwrk/zswap';
-import { Array as Arr, pipe } from 'effect';
+import { Array as Arr, Chunk, Effect, pipe, Stream } from 'effect';
 import * as fc from 'fast-check';
+import { makeDefaultV1SerializationCapability } from '../Serialization';
+import { Either } from 'effect';
+import { V1State } from '../RunningV1Variant';
+import { TestTransactions } from '@midnight-ntwrk/wallet-node-client-ts/testing';
+import { NodeContext } from '@effect/platform-node';
+import * as ledger from '@midnight-ntwrk/ledger';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 vi.setConfig({ testTimeout: minutes(1) });
@@ -95,21 +102,43 @@ const walletArbitrary = (txDepth: number) => {
 };
 
 describe('V1 Wallet serialization', () => {
-  it('maintains serialize ◦ deserialize === id property', () => {
-    const serializationCapability = DefaultSerializeCapability.createV1<
-      CoreWallet<zswap.LocalState, zswap.SecretKeys>,
-      zswap.SecretKeys
-    >(
-      (wallet) => wallet.toSnapshot(),
-      (aux, snapshot) => CoreWallet.fromSnapshot(aux, snapshot),
+  it.each([
+    { seed: '0000000000000000000000000000000000000000000000000000000000000001' },
+    { seed: '0000000000000000000000000000000000000000000000000000000000000002' },
+    { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
+    { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
+  ])('maintains serialize ◦ deserialize, including transaction history', async ({ seed }) => {
+    const capability = makeDefaultV1SerializationCapability();
+    const testTxs = await TestTransactions.load.pipe(
+      Effect.flatMap((txs) => TestTransactions.streamAllValid(txs).pipe(Stream.runCollect)),
+      Effect.provide(NodeContext.layer),
+      Effect.runPromise,
     );
+    const keys = zswap.SecretKeys.fromSeed(Buffer.from(seed, 'hex'));
+    const wallet = V1State.initEmpty(keys, zswap.NetworkId.Undeployed);
+    const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
+      const serializedLedgerTx = tx.serialize(ledger.NetworkId.Undeployed);
+      const deserializedZswapTx = zswap.Transaction.deserialize(serializedLedgerTx, zswap.NetworkId.Undeployed);
+
+      const newState = wallet.state.applyTx(keys, deserializedZswapTx, 'success');
+
+      return wallet.applyState(newState).addTransaction(deserializedZswapTx).setOffset(newState.firstFree);
+    });
+
+    const firstIteration = capability.serialize(preparedWallet);
+
+    const restored = pipe(capability.deserialize(preparedWallet.secretKeys, firstIteration), Either.getOrThrow);
+    const secondIteration = capability.serialize(restored);
+
+    expect(firstIteration).toEqual(secondIteration);
+  });
+  it('maintains serialize ◦ deserialize', () => {
+    const capability = makeDefaultV1SerializationCapability();
     fc.assert(
       fc.property(walletArbitrary(10), ({ wallet }) => {
-        const firstIteration = serializationCapability.serialize(wallet);
-        const restored = pipe(serializationCapability.deserialize(wallet.secretKeys, firstIteration), (r) =>
-          JsEither.get(r),
-        );
-        const secondIteration = serializationCapability.serialize(restored);
+        const firstIteration = capability.serialize(wallet);
+        const restored = pipe(capability.deserialize(wallet.secretKeys, firstIteration), Either.getOrThrow);
+        const secondIteration = capability.serialize(restored);
 
         //We can't meaningfully compare equality, so we compare the result of second serialization
         expect(firstIteration).toEqual(secondIteration);
@@ -117,6 +146,42 @@ describe('V1 Wallet serialization', () => {
       {
         numRuns: 10,
       },
+    );
+  });
+
+  it('handles invalid JSON strings gracefully', () => {
+    const capability = makeDefaultV1SerializationCapability();
+    const keys = zswap.SecretKeys.fromSeed(
+      Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+    );
+
+    fc.assert(
+      fc.property(fc.string(), (invalidJson) => {
+        const result = capability.deserialize(keys, invalidJson);
+
+        expect(Either.isLeft(result)).toBe(true);
+        if (Either.isLeft(result)) {
+          expect(result.left instanceof OtherWalletError).toBe(true);
+        }
+      }),
+    );
+  });
+
+  it('handles random valid JSON strings gracefully', () => {
+    const capability = makeDefaultV1SerializationCapability();
+    const keys = zswap.SecretKeys.fromSeed(
+      Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+    );
+
+    fc.assert(
+      fc.property(fc.json(), (randomJsonValue) => {
+        const result = capability.deserialize(keys, randomJsonValue);
+
+        expect(Either.isLeft(result)).toBe(true);
+        if (Either.isLeft(result)) {
+          expect(result.left instanceof OtherWalletError).toBe(true);
+        }
+      }),
     );
   });
 });

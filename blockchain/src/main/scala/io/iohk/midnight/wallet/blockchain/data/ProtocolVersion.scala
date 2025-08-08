@@ -19,4 +19,9 @@ object ProtocolVersion {
     if (value >= 1) Right(ProtocolVersion.V1)
     else Left(new Exception(s"Unknown protocol version: $value"))
   }
+
+  def fromBigInt(value: BigInt): Either[Exception, ProtocolVersion] = {
+    if (value >= BigInt(1)) Right(ProtocolVersion.V1)
+    else Left(new Exception(s"Unknown protocol version: $value"))
+  }
 }

@@ -15,7 +15,10 @@ import io.iohk.midnight.wallet.core.instances.DefaultBalancingCapability.Recipe
 import io.iohk.midnight.wallet.core.parser.{Bech32Decoder, HexDecoder}
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.wallet.zswap.UnprovenOutput.Segment
+import io.iohk.midnight.js.interop.util.BigIntOps.*
 
+import scala.scalajs.js
+import scala.scalajs.js.JSConverters.*
 import scala.scalajs.js.annotation.{JSExportAll, JSExportTopLevel}
 
 @JSExportTopLevel("CoreWalletInstance")
@@ -30,8 +33,18 @@ final case class Wallet[LocalState, SecretKeys, Transaction](
     networkId: zswap.NetworkId,
     isConnected: Boolean,
 ) {
+  lazy val txHistoryArray: js.Array[Transaction] = txHistory.toJSArray;
+
   def applyState(state: LocalState): Wallet[LocalState, SecretKeys, Transaction] = {
     this.copy(state = state)
+  }
+
+  def setOffset(newOffset: js.BigInt): Wallet[LocalState, SecretKeys, Transaction] = {
+    this.copy(offset = Some(data.Transaction.Offset(newOffset.toScalaBigInt)))
+  }
+
+  def addTransaction(transaction: Transaction): Wallet[LocalState, SecretKeys, Transaction] = {
+    this.copy(txHistory = txHistory :+ transaction)
   }
 
   def applyTransaction[
@@ -80,6 +93,34 @@ final case class Wallet[LocalState, SecretKeys, Transaction](
 @JSExportTopLevel("CoreWallet")
 @JSExportAll
 object Wallet {
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def restore(
+      secretKeys: mod.SecretKeys,
+      state: mod.LocalState,
+      txHistory: js.Array[mod.Transaction],
+      offset: js.UndefOr[js.BigInt],
+      protocolVersion: js.BigInt,
+      networkId: zswap.NetworkId,
+  ): Wallet[mod.LocalState, mod.SecretKeys, mod.Transaction] = {
+    val protocolVersionParsed = ProtocolVersion.fromBigInt(protocolVersion) match {
+      case Right(version) => version
+      case Left(error) => throw new Exception(s"Unknown protocol version: $protocolVersion", error)
+    }
+
+    val offsetParsed = offset.toOption.map(i => data.Transaction.Offset(i.toScalaBigInt))
+
+    new Wallet(
+      state,
+      secretKeys,
+      txHistory.toVector,
+      offsetParsed,
+      ProgressUpdate(offsetParsed.map(_.decrement), None, None, None),
+      protocolVersionParsed,
+      networkId,
+      isConnected = false,
+    )
+  }
+
   def emptyV1(
       localState: mod.LocalState,
       secretKeys: mod.SecretKeys,

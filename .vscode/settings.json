@@ -10,5 +10,6 @@
   },
   "editor.formatOnSave": true,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
-  "sonarlint.testFilePattern": "**/*.test.ts"
+  "sonarlint.testFilePattern": "**/*.test.ts",
+  "bun.test.enable": false
 }

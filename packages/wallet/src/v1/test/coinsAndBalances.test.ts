@@ -67,9 +67,11 @@ const issueSpendingOfCoins = (
   pipe(
     coins,
     Array.reduce(state, (currentState, { coin }) => {
-      const coinToSpend = [...currentState.coins].find((c) => c.value === coin.value && c.type === coin.type);
+      const coinToSpend = [...currentState.coins].find(
+        (c) => c.value === coin.value && c.type === coin.type && c.nonce === coin.nonce,
+      );
       if (!coinToSpend) {
-        throw new Error(`Could not find coin with value ${coin.value}n and type ${coin.type}`);
+        throw new Error(`Could not find coin with value ${coin.value}n, type ${coin.type}, and nonce ${coin.nonce}`);
       }
       const [newLocalState, _] = currentState.spend(secretKeys, coinToSpend, 0);
       return newLocalState;

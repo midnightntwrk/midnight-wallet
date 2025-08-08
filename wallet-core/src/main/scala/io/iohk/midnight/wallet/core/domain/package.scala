@@ -70,15 +70,27 @@ package object domain {
 
     lazy val isStrictlyComplete: Boolean = isCompleteWithin(0)
 
-    def isCompleteWithin(maxGap: Int): Boolean =
-      (appliedIndex, highestRelevantWalletIndex, highestIndex, highestRelevantIndex) match
-        case (_, Some(hrw), Some(hi), Some(hri)) => {
-          val ai = appliedIndex.getOrElse(Offset.Zero)
-          val applyGap = (hrw.value - ai.value).abs
-          val sourceGap = (hi.value - hri.value).abs
-          applyGap === BigInt(0) && sourceGap <= BigInt(maxGap)
+    def isCompleteWithin(maxGap: Int): Boolean = {
+      val res =
+        (appliedIndex, highestRelevantWalletIndex, highestIndex, highestRelevantIndex) match {
+
+          case (_, Some(hrw), Some(hi), Some(hri)) => {
+            val ai = appliedIndex.getOrElse(Offset.Zero)
+            val applyGap = (hrw.value - ai.value).abs
+            val sourceGap = (hi.value - hri.value).abs
+            applyGap === BigInt(0) && sourceGap <= BigInt(maxGap)
+          }
+          case _ => false
         }
-        case _ => false
+
+      println(s"""isCompleteWithin($maxGap) = $res";
+        appliedIndex: $appliedIndex;
+        highestRelevantWalletIndex: $highestRelevantWalletIndex;
+        highestIndex: $highestIndex;
+        highestRelevantIndex: $highestRelevantIndex
+        """)
+      res
+    }
   }
 
   @JSExportAll object ProgressUpdate {

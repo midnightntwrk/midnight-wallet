@@ -95,6 +95,7 @@ export declare class NetworkId {
   readonly name: string;
   readonly toJs: zswap.NetworkId;
   static fromJs(id: zswap.NetworkId): NetworkId;
+  static toJs(id: NetworkId): zswap.NetworkId;
 }
 
 export declare class TracerCarrier {
@@ -179,6 +180,14 @@ export declare class CoreWallet<State, SecretKeys> {
   ): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
   static fromSnapshot(keys: zswap.SecretKeys, snapshot: Snapshot): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
+  static restore(
+    secretKeys: zswap.SecretKeys,
+    state: zswap.LocalState,
+    txHistory: readonly zswap.Transaction[],
+    offset: bigint | undefined,
+    protocolVersion: bigint,
+    networkId: NetworkId,
+  ): CoreWallet<zswap.LocalState, zswap.SecretKeys>;
 
   readonly state: State;
   readonly secretKeys: SecretKeys;
@@ -186,8 +195,14 @@ export declare class CoreWallet<State, SecretKeys> {
   readonly progress: ProgressUpdate;
   readonly protocolVersion: ProtocolVersion;
   readonly networkId: NetworkId;
+  readonly offset: ScalaOption<Offset>;
+
+  readonly txHistoryArray: readonly zswap.Transaction[];
 
   applyTransaction(tx: AppliedTransaction<zswap.Transaction>): CoreWallet<State, SecretKeys>;
+
+  addTransaction(tx: zswap.Transaction): CoreWallet<State, SecretKeys>;
+  setOffset(newOffset: bigint): CoreWallet<State, SecretKeys>;
 
   /**
    * @deprecated Temporary, only for internal use
