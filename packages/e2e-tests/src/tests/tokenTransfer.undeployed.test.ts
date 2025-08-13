@@ -451,7 +451,7 @@ describe('Token transfer', () => {
         },
       ];
       await expect(walletFunded.transferTransaction(outputsToCreate)).rejects.toThrow(
-        `Not sufficient funds to balance token: 02000000000000000000000000000000000000000000000000000000000000000000`,
+        `Insufficient Funds: could not balance 02000000000000000000000000000000000000000000000000000000000000000000`,
       );
     },
     timeout,

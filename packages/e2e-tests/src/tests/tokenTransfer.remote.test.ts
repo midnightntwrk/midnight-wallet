@@ -474,7 +474,7 @@ describe('Token transfer', () => {
       } catch (e: unknown) {
         if (e instanceof Error) {
           expect(e.message).toContain(
-            'Not sufficient funds to balance token: 02000000000000000000000000000000000000000000000000000000000000000000',
+            'Insufficient Funds: could not balance 02000000000000000000000000000000000000000000000000000000000000000000',
           );
         } else {
           logger.info(e);

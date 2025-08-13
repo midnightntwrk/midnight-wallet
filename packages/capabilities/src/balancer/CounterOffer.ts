@@ -1,17 +1,16 @@
-import { CoinRecipe, Imbalance, Imbalances } from './Imbalances';
-import { QualifiedCoinInfo, CoinInfo, createCoinInfo, TokenType } from '@midnight-ntwrk/zswap';
+import { CoinRecipe, Imbalance, Imbalances, TokenType } from './Imbalances';
 
 export interface TransactionCostModel {
   inputFeeOverhead: bigint;
   outputFeeOverhead: bigint;
 }
 
-export class CounterOffer {
+export class CounterOffer<TInput extends CoinRecipe, TOutput extends CoinRecipe> {
   public readonly imbalances: Imbalances;
   public readonly transactionCostModel: TransactionCostModel;
   public readonly feeTokenType: string;
-  public readonly inputsRecipe: QualifiedCoinInfo[];
-  public readonly outputsRecipe: CoinInfo[];
+  public readonly inputs: TInput[];
+  public readonly outputs: TOutput[];
   public readonly targetImbalances: Imbalances;
 
   constructor(
@@ -23,8 +22,8 @@ export class CounterOffer {
     this.imbalances = Imbalances.ensureZerosFor(imbalances, Imbalances.typeSet(targetImbalances));
     this.transactionCostModel = transactionCostModel;
     this.feeTokenType = feeTokenType;
-    this.inputsRecipe = [];
-    this.outputsRecipe = [];
+    this.inputs = [];
+    this.outputs = [];
     this.targetImbalances = targetImbalances;
   }
 
@@ -40,6 +39,10 @@ export class CounterOffer {
   }
 
   findNativeImbalance(): Imbalance | undefined {
+    if (!this.feeTokenType) {
+      return undefined;
+    }
+
     const nativeImbalance = this.imbalances.get(this.feeTokenType);
     if (nativeImbalance !== undefined && nativeImbalance !== this.getTargetImbalance(this.feeTokenType)) {
       return [this.feeTokenType, nativeImbalance];
@@ -47,8 +50,8 @@ export class CounterOffer {
     return undefined;
   }
 
-  addInput(input: QualifiedCoinInfo): void {
-    this.inputsRecipe.push(input);
+  addInput(input: TInput): void {
+    this.inputs.push(input);
     const imbalance = this.imbalances.get(input.type) || 0n;
     this.imbalances.set(input.type, imbalance + input.value);
     const nativeImbalance = this.imbalances.get(this.feeTokenType) || 0n;
@@ -56,12 +59,12 @@ export class CounterOffer {
     this.imbalances.set(this.feeTokenType, nativeImbalance - this.transactionCostModel.inputFeeOverhead);
   }
 
-  addOutput(output: CoinRecipe): void {
+  addOutput(output: TOutput): void {
     const imbalance = this.imbalances.get(output.type) || 0n;
     const subtractFee = output.type === this.feeTokenType ? this.transactionCostModel.outputFeeOverhead : 0n;
     const absoluteCoinValue = output.value < 0n ? -output.value : output.value;
 
-    this.outputsRecipe.push(createCoinInfo(output.type, absoluteCoinValue - subtractFee));
+    this.outputs.push({ ...output, type: output.type, value: absoluteCoinValue - subtractFee });
 
     this.imbalances.set(output.type, imbalance - absoluteCoinValue);
 

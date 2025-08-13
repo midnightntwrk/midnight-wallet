@@ -1,6 +1,5 @@
-import { CoinInfo, QualifiedCoinInfo, TokenType } from '@midnight-ntwrk/zswap';
 import { CounterOffer, TransactionCostModel } from './CounterOffer';
-import { Imbalance, Imbalances } from './Imbalances';
+import { CoinRecipe, Imbalance, Imbalances, TokenType, TokenValue } from './Imbalances';
 
 export class InsufficientFundsError extends Error {
   readonly tokenType: TokenType;
@@ -11,79 +10,96 @@ export class InsufficientFundsError extends Error {
   }
 }
 
-export interface BalanceRecipe {
-  inputs: QualifiedCoinInfo[];
-  outputs: CoinInfo[];
+export interface BalanceRecipe<TInput extends CoinRecipe, TOutput extends CoinRecipe> {
+  inputs: TInput[];
+  outputs: TOutput[];
 }
 
-export type CoinSelection = (
-  coins: readonly QualifiedCoinInfo[],
+export type CoinSelection<TInput extends CoinRecipe> = (
+  coins: readonly TInput[],
   tokenType: TokenType,
-  amountNeeded: bigint,
+  amountNeeded: TokenValue,
   costModel: TransactionCostModel,
-) => QualifiedCoinInfo | undefined;
+) => TInput | undefined;
 
-//TODO: make this interface immutable
-export const getBalanceRecipe = (
-  coins: QualifiedCoinInfo[],
-  initialImbalances: Imbalances,
-  transactionCostModel: TransactionCostModel,
-  feeTokenType: string,
-  coinSelection: CoinSelection = chooseCoin,
-  targetImbalances: Imbalances = new Map(),
-): BalanceRecipe => {
+export type BalanceRecipeProps<TInput extends CoinRecipe, TOutput extends CoinRecipe> = {
+  coins: TInput[];
+  initialImbalances: Imbalances;
+  transactionCostModel: TransactionCostModel;
+  feeTokenType: string;
+  createOutput: (coin: CoinRecipe) => TOutput;
+  isCoinEqual: (a: TInput, b: TInput) => boolean;
+  coinSelection?: CoinSelection<TInput> | undefined;
+  targetImbalances?: Imbalances;
+};
+
+export const getBalanceRecipe = <TInput extends CoinRecipe, TOutput extends CoinRecipe>({
+  coins,
+  initialImbalances,
+  transactionCostModel,
+  feeTokenType,
+  createOutput,
+  coinSelection,
+  isCoinEqual,
+  targetImbalances,
+}: BalanceRecipeProps<TInput, TOutput>): BalanceRecipe<TInput, TOutput> => {
   const counterOffer = createCounterOffer(
     coins,
     initialImbalances,
     transactionCostModel,
     feeTokenType,
-    coinSelection,
+    coinSelection ?? chooseCoin,
+    createOutput,
+    isCoinEqual,
     targetImbalances,
   );
 
   return {
-    inputs: counterOffer.inputsRecipe,
-    outputs: counterOffer.outputsRecipe,
+    inputs: counterOffer.inputs,
+    outputs: counterOffer.outputs,
   };
 };
 
-export const createCounterOffer = (
-  coins: QualifiedCoinInfo[],
+export const createCounterOffer = <TInput extends CoinRecipe, TOutput extends CoinRecipe>(
+  coins: TInput[],
   initialImbalances: Imbalances,
   transactionCostModel: TransactionCostModel,
   feeTokenType: string,
-  coinSelection: CoinSelection,
+  coinSelection: CoinSelection<TInput>,
+  createOutput: (coin: CoinRecipe) => TOutput,
+  isCoinEqual: (a: TInput, b: TInput) => boolean,
   targetImbalances: Imbalances = new Map(),
-): CounterOffer => {
-  // 1. Create an empty offer
-  // 2. Calculate total fees to be paid for the unbalanced transaction and the offer
-  // 3. Calculate resulting imbalances by merging ones from the unbalanced transaction, the offer and target imbalances
-  const counterOffer = new CounterOffer(initialImbalances, transactionCostModel, feeTokenType, targetImbalances);
+): CounterOffer<TInput, TOutput> => {
+  const counterOffer = new CounterOffer<TInput, TOutput>(
+    initialImbalances,
+    transactionCostModel,
+    feeTokenType,
+    targetImbalances,
+  );
 
   let imbalance: Imbalance | undefined;
 
-  // 4. Verify if target imbalances are met. If they are, create transaction from the offer, merge with the unbalanced transaction, and return
-  // 5. Sort token types present in result imbalances in a way, that DUST is left last and select first token type
   while ((imbalance = counterOffer.findNonNativeImbalance())) {
-    coins = doBalance(imbalance, coins, counterOffer, coinSelection);
+    coins = doBalance(imbalance, coins, counterOffer, coinSelection, createOutput, isCoinEqual);
   }
 
   while ((imbalance = counterOffer.findNativeImbalance())) {
-    coins = doBalance(imbalance, coins, counterOffer, coinSelection);
+    coins = doBalance(imbalance, coins, counterOffer, coinSelection, createOutput, isCoinEqual);
   }
 
   return counterOffer;
 };
 
-const doBalance = (
+const doBalance = <TInput extends CoinRecipe, TOutput extends CoinRecipe>(
   imbalance: Imbalance,
-  coins: QualifiedCoinInfo[],
-  counterOffer: CounterOffer,
-  coinSelection: CoinSelection,
-): QualifiedCoinInfo[] => {
+  coins: TInput[],
+  counterOffer: CounterOffer<TInput, TOutput>,
+  coinSelection: CoinSelection<TInput>,
+  createOutput: (coin: CoinRecipe) => TOutput,
+  isCoinEqual: (a: TInput, b: TInput) => boolean,
+): TInput[] => {
   const [tokenType, imbalanceAmount] = imbalance;
-  // 6a. If the imbalance is positive and greater than the output fee,
-  // create an output for self with the amount equal to imbalance
+
   const shouldAddOutput =
     (tokenType === counterOffer.feeTokenType &&
       imbalanceAmount >=
@@ -92,9 +108,13 @@ const doBalance = (
     (tokenType !== counterOffer.feeTokenType && imbalanceAmount > counterOffer.getTargetImbalance(tokenType));
 
   if (shouldAddOutput) {
-    counterOffer.addOutput({ type: tokenType, value: imbalanceAmount - counterOffer.getTargetImbalance(tokenType) });
+    const output = createOutput({
+      type: tokenType,
+      value: imbalanceAmount - counterOffer.getTargetImbalance(tokenType),
+    });
+
+    counterOffer.addOutput(output);
   } else {
-    // 6b. If the imbalance is negative, select a single coin of the selected type, and create an input
     const coin = coinSelection(coins, tokenType, imbalanceAmount, counterOffer.transactionCostModel);
 
     if (typeof coin === 'undefined') {
@@ -103,16 +123,16 @@ const doBalance = (
 
     counterOffer.addInput(coin);
 
-    coins = coins.filter((c) => c.nonce !== coin.nonce);
+    coins = coins.filter((c) => !isCoinEqual(c, coin));
   }
 
   return coins;
 };
 
-export const chooseCoin: CoinSelection = (
-  coins: readonly QualifiedCoinInfo[],
+export const chooseCoin = <TInput extends CoinRecipe>(
+  coins: readonly TInput[],
   tokenType: TokenType,
-): QualifiedCoinInfo | undefined => {
+): TInput | undefined => {
   return coins
     .filter((coin) => coin.type === tokenType)
     .sort((a, b) => Number(a.value - b.value))

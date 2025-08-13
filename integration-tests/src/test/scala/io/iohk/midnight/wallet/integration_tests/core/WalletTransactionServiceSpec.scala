@@ -226,7 +226,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
         buildWalletTransactionService().use { (walletTransactionService, _) =>
           walletTransactionService.prepareTransferRecipe(transfers.toList).attempt.map {
             case Left(error) =>
-              assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
+              assert(error.getMessage.startsWith("Insufficient Funds: could not balance"))
             case Right(value) => fail("prepareTransferRecipe without funds must fail")
           }
         }
@@ -276,7 +276,7 @@ class WalletTransactionServiceSpec extends WithProvingServerSuite {
           buildWalletTransactionService().use { (walletTransactionService, _) =>
             walletTransactionService.balanceTransaction(transaction, coins.toList).attempt.map {
               case Left(error) =>
-                assert(error.getMessage.startsWith("Not sufficient funds to balance token:"))
+                assert(error.getMessage.startsWith("Insufficient Funds: could not balance"))
               case Right(_) => fail("balanceTransaction without funds must fail")
             }
           }

@@ -8,7 +8,7 @@ import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql
 import { HttpQueryClient } from '../../../effect';
 import { Mock } from 'vitest';
 
-const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../../e2e-tests');
+const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../');
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
@@ -19,7 +19,7 @@ describe('BlockHash query', () => {
     const getIndexerPort = () => environment?.getContainer(`indexer_${environmentId}`)?.getMappedPort(8088) ?? 8088;
 
     beforeAll(async () => {
-      environment = await new DockerComposeEnvironment(COMPOSE_PATH, 'docker-compose-dynamic.yml')
+      environment = await new DockerComposeEnvironment(COMPOSE_PATH, 'docker-compose.yml')
         .withEnvironment({
           TESTCONTAINERS_UID: environmentId,
         })

@@ -109,8 +109,8 @@ export class ShieldedAddress {
     'shield-addr',
     (addr) => Buffer.concat([addr.coinPublicKey.data, addr.encryptionPublicKey.data]),
     (bytes) => {
-      const coinPublicKey = new ShieldedCoinPublicKey(bytes.subarray(0, ShieldedCoinPublicKey.key_length));
-      const encryptionPublicKey = new ShieldedEncryptionPublicKey(bytes.subarray(ShieldedCoinPublicKey.key_length));
+      const coinPublicKey = new ShieldedCoinPublicKey(bytes.subarray(0, ShieldedCoinPublicKey.keyLength));
+      const encryptionPublicKey = new ShieldedEncryptionPublicKey(bytes.subarray(ShieldedCoinPublicKey.keyLength));
       return new ShieldedAddress(coinPublicKey, encryptionPublicKey);
     },
   );
@@ -152,7 +152,7 @@ export class ShieldedEncryptionSecretKey {
 }
 
 export class ShieldedCoinPublicKey {
-  static readonly key_length = 32;
+  static readonly keyLength = 32;
 
   static codec: Bech32mCodec<ShieldedCoinPublicKey> = new Bech32mCodec(
     'shield-cpk',
@@ -168,7 +168,7 @@ export class ShieldedCoinPublicKey {
 
   constructor(data: Buffer) {
     this.data = data;
-    if (data.length != ShieldedCoinPublicKey.key_length) {
+    if (data.length != ShieldedCoinPublicKey.keyLength) {
       throw new Error('Coin public key needs to be 32 bytes long');
     }
   }
@@ -185,7 +185,7 @@ export class ShieldedCoinPublicKey {
 }
 
 export class ShieldedEncryptionPublicKey {
-  static readonly key_length = 32;
+  static readonly keyLength = 32;
 
   static codec: Bech32mCodec<ShieldedEncryptionPublicKey> = new Bech32mCodec(
     'shield-epk',
@@ -212,5 +212,23 @@ export class ShieldedEncryptionPublicKey {
   equals(other: string | ShieldedEncryptionPublicKey): boolean {
     const otherKey = typeof other === 'string' ? ShieldedEncryptionPublicKey.fromHexString(other) : other;
     return otherKey.data.equals(this.data);
+  }
+}
+
+export class UnshieldedAddress {
+  readonly data: Buffer;
+  static readonly keyLength = 32;
+  static codec: Bech32mCodec<UnshieldedAddress> = new Bech32mCodec(
+    'addr',
+    (addr) => addr.data,
+    (repr) => new UnshieldedAddress(repr),
+  );
+
+  constructor(data: Buffer) {
+    if (data.length != UnshieldedAddress.keyLength) {
+      throw new Error('Unshielded address needs to be 32 bytes long');
+    }
+
+    this.data = data;
   }
 }

@@ -1,4 +1,4 @@
-import { createCoinInfo, QualifiedCoinInfo, sampleTokenType, TokenType } from '@midnight-ntwrk/zswap';
+import { CoinInfo, createCoinInfo, QualifiedCoinInfo, sampleTokenType, TokenType } from '@midnight-ntwrk/zswap';
 import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index';
 import * as fc from 'fast-check';
 
@@ -38,19 +38,31 @@ const costModelArbitrary: fc.Arbitrary<TransactionCostModel> = fc.oneof(
 
 describe('Balancer', () => {
   test('Nothing to balance', () => {
-    const counterOffer = getBalanceRecipe([], Imbalances.empty(), transactionCostModel, nativeTokenType);
+    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+      coins: [],
+      initialImbalances: Imbalances.empty(),
+      transactionCostModel,
+      feeTokenType: nativeTokenType,
+      createOutput: (c) => createCoinInfo(c.type, c.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
+
     expect(counterOffer.inputs).toHaveLength(0);
     expect(counterOffer.outputs).toHaveLength(0);
   });
 
   test('Use exactly one coin', () => {
     const coin = createQualifiedCoin(nativeTokenType, 1_000n + transactionCostModel.inputFeeOverhead);
-    const counterOffer = getBalanceRecipe(
-      [coin],
-      Imbalances.fromEntry(nativeTokenType, -1_000n),
+
+    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+      coins: [coin],
+      initialImbalances: Imbalances.fromEntry(nativeTokenType, -1_000n),
       transactionCostModel,
-      nativeTokenType,
-    );
+      feeTokenType: nativeTokenType,
+      createOutput: (c) => createCoinInfo(c.type, c.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
+
     expect(counterOffer.inputs).toHaveLength(1);
     expect(counterOffer.inputs[0]).toBe(coin);
     expect(counterOffer.outputs).toHaveLength(0);
@@ -63,12 +75,14 @@ describe('Balancer', () => {
       createQualifiedCoin(nativeTokenType, dust(10)),
     ];
 
-    const counterOffer = getBalanceRecipe(
+    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
       coins,
-      Imbalances.fromEntry(nativeTokenType, -dust(1)),
+      initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(1)),
       transactionCostModel,
-      nativeTokenType,
-    );
+      feeTokenType: nativeTokenType,
+      createOutput: (c) => createCoinInfo(c.type, c.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
 
     expect(counterOffer.inputs).toHaveLength(1);
     expect(counterOffer.outputs).toHaveLength(1);
@@ -77,18 +91,20 @@ describe('Balancer', () => {
   test('Balance custom native token', () => {
     const customTokenType = '02000000000000000000000000000000000000000000000000000000000000000002';
     const coins = [
-      createQualifiedCoin(nativeTokenType, dust(10)),
+      createQualifiedCoin(nativeTokenType, dust(100)),
       createQualifiedCoin(customTokenType, 1n),
       createQualifiedCoin(customTokenType, 2n),
       createQualifiedCoin(customTokenType, 3n),
     ];
 
-    const counterOffer = getBalanceRecipe(
+    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
       coins,
-      Imbalances.fromEntry(customTokenType, -1n),
+      initialImbalances: Imbalances.fromEntry(customTokenType, -1n),
       transactionCostModel,
-      nativeTokenType,
-    );
+      feeTokenType: nativeTokenType,
+      createOutput: (c) => createCoinInfo(c.type, c.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
 
     expect(counterOffer.inputs).toHaveLength(2);
     expect(counterOffer.outputs).toHaveLength(1);
@@ -112,7 +128,14 @@ describe('Balancer', () => {
       [customTokenType, -1n],
     ]);
 
-    const counterOffer = getBalanceRecipe(coins, targetImbalances, transactionCostModel, nativeTokenType);
+    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+      coins,
+      initialImbalances: targetImbalances,
+      transactionCostModel,
+      feeTokenType: nativeTokenType,
+      createOutput: (coin) => createCoinInfo(coin.type, coin.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
 
     expect(counterOffer.inputs).toHaveLength(4);
     expect(counterOffer.outputs).toHaveLength(2);
@@ -120,12 +143,14 @@ describe('Balancer', () => {
 
   test('Add change output', () => {
     const coin = createQualifiedCoin(nativeTokenType, dust(10));
-    const counterOffer = getBalanceRecipe(
-      [coin],
-      Imbalances.fromEntry(nativeTokenType, -dust(3)),
+    const counterOffer = getBalanceRecipe({
+      coins: [coin],
+      initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(3)),
       transactionCostModel,
-      nativeTokenType,
-    );
+      feeTokenType: nativeTokenType,
+      createOutput: (c) => createCoinInfo(c.type, c.value),
+      isCoinEqual: (a, b) => a.nonce === b.nonce,
+    });
 
     expect(counterOffer.outputs).toHaveLength(1);
     expect(counterOffer.inputs).toContain(coin);
@@ -135,12 +160,14 @@ describe('Balancer', () => {
     // due mapping the error in scala, the message in the thrown error is only the token type
     expect(() => {
       const coin = createQualifiedCoin(nativeTokenType, dust(1));
-      return getBalanceRecipe(
-        [coin],
-        Imbalances.fromEntry(nativeTokenType, -dust(1)),
+      return getBalanceRecipe({
+        coins: [coin],
+        initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(1)),
         transactionCostModel,
-        nativeTokenType,
-      );
+        feeTokenType: nativeTokenType,
+        createOutput: (c) => createCoinInfo(c.type, c.value),
+        isCoinEqual: (a, b) => a.nonce === b.nonce,
+      });
     }).toThrow(nativeTokenType);
   });
 
@@ -150,17 +177,19 @@ describe('Balancer', () => {
 
       const imbalanceValue = -(5n + transactionCostModel.outputFeeOverhead);
 
-      return getBalanceRecipe(
-        [coin],
-        Imbalances.fromEntry(nativeTokenType, imbalanceValue),
+      return getBalanceRecipe({
+        coins: [coin],
+        initialImbalances: Imbalances.fromEntry(nativeTokenType, imbalanceValue),
         transactionCostModel,
-        nativeTokenType,
-      );
+        feeTokenType: nativeTokenType,
+        createOutput: (c) => createCoinInfo(c.type, c.value),
+        isCoinEqual: (a, b) => a.nonce === b.nonce,
+      });
     }).toThrow(nativeTokenType);
   });
 
   test('Uses provided coin selection', () => {
-    const nonceBasedSelection: CoinSelection = (coins, type) => {
+    const nonceBasedSelection: CoinSelection<QualifiedCoinInfo> = (coins, type) => {
       return coins
         .filter((c) => c.type === type)
         .toSorted((a, b) => a.nonce.localeCompare(b.nonce))
@@ -182,13 +211,16 @@ describe('Balancer', () => {
     fc.assert(
       fc.property(coinsWithATargetValue, ({ coins, valueToBalance }) => {
         const nonceSortedCoins = coins.toSorted((a, b) => a.nonce.localeCompare(b.nonce));
-        const counterOffer = getBalanceRecipe(
+        const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
           coins,
-          Imbalances.fromEntry(nativeTokenType, -1n * valueToBalance),
+          initialImbalances: Imbalances.fromEntry(nativeTokenType, -1n * valueToBalance),
           transactionCostModel,
-          nativeTokenType,
-          nonceBasedSelection,
-        );
+          feeTokenType: nativeTokenType,
+          createOutput: (c) => createCoinInfo(c.type, c.value),
+          coinSelection: nonceBasedSelection,
+          isCoinEqual: (a, b) => a.nonce === b.nonce,
+        });
+
         const counterOfferInputNonces = new Set(counterOffer.inputs.map((i) => i.nonce));
         const expectedNonces = new Set(nonceSortedCoins.slice(0, counterOffer.inputs.length).map((i) => i.nonce));
 
@@ -244,14 +276,17 @@ describe('Balancer', () => {
           );
           const initialDesiredDustImbalance = (desiredImbalances.get(nativeTokenType) ?? 0n) + existingFeesToCover;
 
-          const result = getBalanceRecipe(
-            availableCoins,
-            new Map([[nativeTokenType, -1n * existingFeesToCover]]),
-            costModel,
-            nativeTokenType,
-            chooseCoin,
-            desiredImbalances,
-          );
+          const result = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+            coins: availableCoins,
+            initialImbalances: new Map([[nativeTokenType, -1n * existingFeesToCover]]),
+            transactionCostModel: costModel,
+            feeTokenType: nativeTokenType,
+            createOutput: (c) => createCoinInfo(c.type, c.value),
+            coinSelection: chooseCoin,
+            targetImbalances: desiredImbalances,
+            isCoinEqual: (a, b) => a.nonce === b.nonce,
+          });
+
           const resultInputImbalances: Imbalances = result.inputs.reduce((acc, coin) => {
             const existingValue = acc.get(coin.type) ?? 0n;
             acc.set(coin.type, existingValue + coin.value);
@@ -300,9 +335,18 @@ describe('Balancer', () => {
 
     fc.assert(
       fc.property(testCoinsArbitrary, desiredInputsArbitrary, costModelArbitrary, (coins, inputs, costModel) => {
-        expect(() => getBalanceRecipe(coins, new Map(), costModel, nativeTokenType, chooseCoin, inputs)).toThrow(
-          otherTokenType,
-        );
+        expect(() =>
+          getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+            coins,
+            initialImbalances: new Map(),
+            transactionCostModel: costModel,
+            feeTokenType: nativeTokenType,
+            createOutput: (c) => createCoinInfo(c.type, c.value),
+            coinSelection: chooseCoin,
+            targetImbalances: inputs,
+            isCoinEqual: (a, b) => a.nonce === b.nonce,
+          }),
+        ).toThrow(otherTokenType);
       }),
     );
   });

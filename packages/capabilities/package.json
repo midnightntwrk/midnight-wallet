@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "2.0.0",
+  "version": "2.0.0-beta.2",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -23,8 +23,11 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "peerDependencies": {
-    "@midnight-ntwrk/zswap": "^4.0.0"
+  "dependencies": {
+    "@midnight-ntwrk/ledger": "^5.0.0-alpha.3",
+    "@midnight-ntwrk/wallet-sdk-address-format": "2.0.0-beta.1",
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
+    "effect": "^3.17.3"
   },
   "devDependencies": {
     "@midnight-ntwrk/zswap": "^4.0.0",

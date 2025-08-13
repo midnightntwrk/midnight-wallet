@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet-api": "^5.0.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "^2.0.0",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "^2.0.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
     "@midnight-ntwrk/zswap": "^4.0.0",
     "isomorphic-ws": "^5.0.0",
     "node-fetch": "3.3.2",

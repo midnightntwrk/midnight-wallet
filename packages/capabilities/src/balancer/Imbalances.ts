@@ -1,14 +1,14 @@
-import { TokenType } from '@midnight-ntwrk/zswap';
+export type TokenType = string;
+export type TokenValue = bigint;
 
 export interface CoinRecipe {
-  type: string;
-  value: bigint;
+  type: TokenType;
+  value: TokenValue;
 }
 
-export type Imbalance = [string, bigint];
+export type Imbalance = [TokenType, TokenValue];
 
-export type Imbalances = Map<string, bigint>;
-
+export type Imbalances = Map<TokenType, TokenValue>;
 export const Imbalances = new (class {
   empty = (): Imbalances => {
     return new Map();

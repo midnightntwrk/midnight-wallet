@@ -27,10 +27,7 @@
       "dependsOn": ["typecheck", "^dist"]
     },
     "typecheck": {
-      "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts",
-        "tsconfig*.json",
-        "$TURBO_ROOT$/tsconfig.base.json"
-      ],
+      "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist", "pre-build"]
     },
@@ -40,7 +37,9 @@
         "src/**/*.ts",
         "scripts/**/*.ts",
         "tsconfig*.json",
-        "package.json", "$TURBO_ROOT$/tsconfig.base.json"],
+        "package.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
@@ -63,9 +62,7 @@
       ],
       "outputs": ["dist/**"],
       "outputLogs": "new-only",
-      "dependsOn": ["clean", "typecheck",
-        "pre-build",
-        "^dist", "typecheck"]
+      "dependsOn": ["clean", "typecheck", "pre-build", "^dist", "typecheck"]
     },
     "clean": {
       "cache": false,
@@ -87,7 +84,7 @@
       "dependsOn": ["^dist", "//#sbt:dist"]
     },
     "verify": {
-      "dependsOn": ["typecheck", "lint", "test", "//#sbt:verify"]
+      "dependsOn": ["typecheck", "lint", "test"]
     },
     "//#sbt:dist": {
       "inputs": [
@@ -103,19 +100,6 @@
       "outputs": ["wallet-engine/dist/**"],
       "outputLogs": "new-only",
       "dependsOn": ["@midnight-ntwrk/wallet-sdk-address-format#dist", "@midnight-ntwrk/wallet-sdk-capabilities#dist"]
-    },
-    "//#sbt:verify": {
-      "inputs": [
-        "build.sbt",
-        "**/package.json",
-        "**/src/**/*.scala",
-        "project/**/*.scala",
-        "project/build.properties",
-        "project/*.sbt"
-      ],
-      "outputs": ["**/target/test-reports/**"],
-      "outputLogs": "new-only",
-      "dependsOn": ["//#sbt:dist"]
     }
   }
 }

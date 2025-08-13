@@ -1,17 +1,26 @@
 {
-  "name": "@midnight-ntwrk/wallet-indexer-client-ts",
-  "version": "5.0.0",
+  "name": "@midnight-ntwrk/wallet-sdk-indexer-client",
+  "version": "1.0.0-beta.2",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "private": true,
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "files": [
+    "dist/"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
     "./effect": {
-      "import": "./dist/effect/index.mjs",
+      "import": "./dist/effect/index.js",
       "types": "./dist/effect/index.d.ts"
     }
   },
@@ -33,7 +42,7 @@
     "testcontainers": "^11.4.0"
   },
   "scripts": {
-    "codegen": "graphql-codegen",
+    "gql:codegen": "graphql-codegen",
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint",

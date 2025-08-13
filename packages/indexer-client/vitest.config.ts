@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
 /// <reference types="vitest/globals" />
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   test: {
@@ -20,5 +21,12 @@ export default defineConfig({
       ['junit', { outputFile: `reports/report/test-report.xml` }],
       ['html', { outputFile: `reports/report/test-report.html` }],
     ],
+  },
+  resolve: {
+    alias: {
+      '@midnight-ntwrk/wallet-sdk-indexer-client/effect': fileURLToPath(
+        new URL('../indexer-client/src/effect.ts', import.meta.url),
+      ),
+    },
   },
 });

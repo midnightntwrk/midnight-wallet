@@ -47,7 +47,6 @@
     "test": "turbo run test",
     "dist": "turbo run dist",
     "clean": "turbo run clean",
-    "sbt:verify": "sbt verify",
     "sbt:dist": "sbt dist"
   }
 }

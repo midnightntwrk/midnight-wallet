@@ -50,7 +50,7 @@ export type DefaultTransactingConfiguration = {
 };
 
 export type DefaultTransactingContext = {
-  coinSelection: CoinSelection;
+  coinSelection: CoinSelection<zswap.QualifiedCoinInfo>;
   coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
   keysCapability: KeysCapability<V1State>;
 };
@@ -88,7 +88,7 @@ class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 export class TransactingCapabilityImplementation<TTransaction> implements TransactingCapability<V1State, TTransaction> {
   public readonly networkId: zswap.NetworkId;
   public readonly costParams: TotalCostParameters;
-  public readonly getCoinSelection: () => CoinSelection;
+  public readonly getCoinSelection: () => CoinSelection<zswap.QualifiedCoinInfo>;
   public readonly txTrait: TransactionTrait<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<V1State>;
   readonly getKeys: () => KeysCapability<V1State>;
@@ -96,7 +96,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   constructor(
     networkId: zswap.NetworkId,
     costParams: TotalCostParameters,
-    getCoinSelection: () => CoinSelection,
+    getCoinSelection: () => CoinSelection<zswap.QualifiedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<V1State>,
     getKeys: () => KeysCapability<V1State>,
     txTrait: TransactionTrait<TTransaction>,
@@ -261,7 +261,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
 
   #prepareOffer(
     state: V1State,
-    recipe: BalanceRecipe,
+    recipe: BalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>,
     segment: 0 | 1,
   ): Option.Option<{ newState: V1State; offer: zswap.UnprovenOffer }> {
     const [inputOffers, stateAfterSpends] = V1State.spendCoins(state, recipe.inputs, segment);
@@ -294,7 +294,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   balanceFallibleSection(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection,
+    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
   ): Either.Either<
     { offer: zswap.UnprovenOffer | undefined; newState: V1State; newImbalances: TransactionImbalances },
     WalletError
@@ -303,15 +303,17 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
       try: () => {
         // Fallible section does not pay fees, so we balance all tokens to zero
         const fakeCostModel = { inputFeeOverhead: 0n, outputFeeOverhead: 0n };
-        const fallibleBalanceRecipe = getBalanceRecipe(
-          this.getCoins()
+        const fallibleBalanceRecipe = getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+          coins: this.getCoins()
             .getAvailableCoins(state)
             .map((c) => c.coin),
-          imbalances.fallible,
-          fakeCostModel,
-          zswap.nativeToken(),
+          initialImbalances: imbalances.fallible,
+          transactionCostModel: fakeCostModel,
+          feeTokenType: zswap.nativeToken(),
           coinSelection,
-        );
+          createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+          isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+        });
         const fallibleCounterOfferFeeOverhead = TransactionTrait.shared.estimateFeeOverhead({
           numberOfInputs: fallibleBalanceRecipe.inputs.length,
           numberOfOutputs: fallibleBalanceRecipe.outputs.length,
@@ -353,7 +355,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   #balanceGuaranteedSection(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection,
+    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
     knownSelfOutputs: number,
     targetImbalances: Imbalances,
   ): Either.Either<{ offer: zswap.UnprovenOffer; newState: V1State }, WalletError> {
@@ -361,16 +363,18 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
         try: () =>
-          getBalanceRecipe(
-            this.getCoins()
+          getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+            coins: this.getCoins()
               .getAvailableCoins(state)
               .map((c) => c.coin),
-            imbalances.guaranteed,
-            correctedCostModel,
-            zswap.nativeToken(),
+            initialImbalances: imbalances.guaranteed,
+            transactionCostModel: correctedCostModel,
+            feeTokenType: zswap.nativeToken(),
             coinSelection,
+            createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+            isCoinEqual: (a, b) => a.nonce === b.nonce,
             targetImbalances,
-          ),
+          }),
         catch: (err) => {
           if (err instanceof BalancingInsufficientFundsError) {
             return new InsufficientFundsError({
@@ -419,7 +423,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   #balanceGuaranteedWithSelfOutput(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection,
+    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
     correctedCostModel: TransactionCostModel,
     targetImbalances: Imbalances,
   ) {
@@ -427,22 +431,24 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
       const additionalOutputValue = 100_000n;
       const balanceRecipe = yield* Either.try({
         try: () => {
-          return getBalanceRecipe(
-            this.getCoins()
+          return getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+            coins: this.getCoins()
               .getAvailableCoins(state)
               .map((c) => c.coin),
-            Imbalances.merge(
+            initialImbalances: Imbalances.merge(
               imbalances.guaranteed,
               Imbalances.fromEntry(
                 zswap.nativeToken(),
                 -1n * (additionalOutputValue + correctedCostModel.outputFeeOverhead),
               ),
             ),
-            this.costParams.ledgerParams.transactionCostModel,
-            zswap.nativeToken(),
+            transactionCostModel: this.costParams.ledgerParams.transactionCostModel,
+            feeTokenType: zswap.nativeToken(),
             coinSelection,
             targetImbalances,
-          );
+            createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+            isCoinEqual: (a, b) => a.nonce === b.nonce,
+          });
         },
         catch: (err) => {
           if (err instanceof BalancingInsufficientFundsError) {

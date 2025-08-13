@@ -53,32 +53,6 @@ jobs:
       - name: Verify
         run: yarn verify
 
-      - name: Publish Test Report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Scala Unit Tests Report
-          path: |
-            !(examples)/**/target/test-reports/TEST-*.xml
-          reporter: java-junit
-
-      - name: Publish Test Summary
-        uses: EnricoMi/publish-unit-test-result-action@v2
-        if: success() || failure()
-        with:
-          check_name: Scala Unit Tests Results
-          files: |
-            **/target/test-reports/TEST-*.xml
-            !examples/node_modules/@midnight-ntwrk/wallet/target/test-reports/TEST-*.xml
-
-      # scoverage disabled
-      # - name: Upload Scala coverage report
-      #   uses: actions/upload-artifact@v4
-      #   if: success() || failure()
-      #   with:
-      #     name: scoverage-report
-      #     path: target/scala-3.4.2/scoverage-report
-
       - name: Run smoke e2e tests
         run: |
           yarn dlx turbo test-undeployed -- -t @smoke

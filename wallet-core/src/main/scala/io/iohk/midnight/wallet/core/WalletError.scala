@@ -22,7 +22,7 @@ sealed trait WalletError extends ThrowableError, ReadableMessage {
 @SuppressWarnings(Array("org.wartremover.warts.ToString"))
 object WalletError {
   final case class NotSufficientFunds[TokenType: Show](tokenType: TokenType) extends WalletError {
-    override def toString: String = s"Not sufficient funds to balance token: ${tokenType.show}"
+    override def toString: String = s"Insufficient Funds: could not balance ${tokenType.show}"
 
     override def toThrowable: Throwable = new Throwable(this.message)
   }

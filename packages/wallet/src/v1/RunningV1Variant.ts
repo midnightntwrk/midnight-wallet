@@ -105,7 +105,7 @@ export declare namespace RunningV1Variant {
     coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
     keysCapability: KeysCapability<V1State>;
     submissionService: SubmissionService<TTransaction>;
-    coinSelection: CoinSelection;
+    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any>;

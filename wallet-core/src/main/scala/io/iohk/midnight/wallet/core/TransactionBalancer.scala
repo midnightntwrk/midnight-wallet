@@ -9,8 +9,14 @@ import io.iohk.midnight.js.interop.util.BigIntOps.*
 import io.iohk.midnight.wallet.zswap
 import io.iohk.midnight.midnightNtwrkWalletSdkCapabilities.mod.{
   getBalanceRecipe,
-  TransactionCostModel,
   Imbalances,
+  BalanceRecipeProps,
+  TransactionCostModel,
+}
+import io.iohk.midnight.midnightNtwrkZswap.mod.{
+  QualifiedCoinInfo => JsQualifiedCoinInfo,
+  CoinInfo => JsCoinInfo,
+  createCoinInfo,
 }
 
 class TransactionBalancer[
@@ -43,6 +49,7 @@ class TransactionBalancer[
     case ReadyTransactionAndState(tx: Transaction, state: LocalState)
   }
 
+  @SuppressWarnings(Array("org.wartremover.warts.AsInstanceOf", "org.wartremover.warts.Equals"))
   def balanceTx(
       coins: Seq[QualifiedCoinInfo],
       transaction: Either[Transaction, UnprovenTransaction],
@@ -50,33 +57,49 @@ class TransactionBalancer[
     Throwable,
     ((List[QualifiedCoinInfo], List[CoinInfo]), (List[QualifiedCoinInfo], List[CoinInfo])),
   ] = {
-    val transactionCostModel = TransactionCostModel(
-      inputFeeOverhead = tokenType.inputFeeOverhead.toJsBigInt,
-      outputFeeOverhead = tokenType.outputFeeOverhead.toJsBigInt,
-    )
 
     val (jsGuaranteedImbalances, jsFallibleImbalances) = toJsImbalances(transaction, BigInt(100000))
+
+    val isCoinEqualFn: (JsQualifiedCoinInfo, JsQualifiedCoinInfo) => Boolean =
+      (a: JsQualifiedCoinInfo, b: JsQualifiedCoinInfo) =>
+        qualifiedCoinInfo.fromJs(a) == qualifiedCoinInfo.fromJs(b)
+
+    val createOutputFn: js.Any => JsCoinInfo = (coin: js.Any) => {
+      val d = coin.asInstanceOf[js.Dynamic]
+      createCoinInfo(
+        d.selectDynamic("type").asInstanceOf[String],
+        d.selectDynamic("value").asInstanceOf[js.BigInt],
+      )
+    }
 
     val guaranteedImbalancesRecipe = Either
       .catchNonFatal(
         getBalanceRecipe(
-          coins.map(coin => qualifiedCoinInfo.toJs(coin)).toJSArray,
-          jsGuaranteedImbalances,
-          transactionCostModel,
-          tokenType.native.show,
+          BalanceRecipeProps(
+            coins = coins.map(c => qualifiedCoinInfo.toJs(c)).toJSArray,
+            createOutput = createOutputFn,
+            feeTokenType = tokenType.native.show,
+            initialImbalances = jsGuaranteedImbalances,
+            isCoinEqual = isCoinEqualFn,
+            transactionCostModel = TransactionCostModel(
+              inputFeeOverhead = tokenType.inputFeeOverhead.toJsBigInt,
+              outputFeeOverhead = tokenType.outputFeeOverhead.toJsBigInt,
+            ),
+          ),
         ),
       )
       .leftMap(error => {
         val cleanedErrorMessage = error.getMessage.replaceFirst("^Error: ", "")
-
         NotSufficientFunds(cleanedErrorMessage)
       })
-      .map(balanceRecipe =>
+      .map { br =>
+        val inputsArr = br.inputs
+        val outputsArr = br.outputs
         (
-          balanceRecipe.inputs.map(input => qualifiedCoinInfo.fromJs(input)).toList,
-          balanceRecipe.outputs.map(output => coinInfo.fromJs(output)).toList,
-        ),
-      )
+          inputsArr.map(input => qualifiedCoinInfo.fromJs(input)).toList,
+          outputsArr.map(output => coinInfo.fromJs(output)).toList,
+        )
+      }
 
     val fallibleImbalancesRecipe = jsFallibleImbalances match {
       case Some(fallibleImbalances) => {
@@ -88,23 +111,31 @@ class TransactionBalancer[
         val recipe = Either
           .catchNonFatal(
             getBalanceRecipe(
-              remainingCoins.map(coin => qualifiedCoinInfo.toJs(coin)).toJSArray,
-              fallibleImbalances,
-              transactionCostModel,
-              tokenType.native.show,
+              BalanceRecipeProps(
+                coins = remainingCoins.map(c => qualifiedCoinInfo.toJs(c)).toJSArray,
+                createOutput = createOutputFn,
+                feeTokenType = tokenType.native.show,
+                initialImbalances = fallibleImbalances,
+                isCoinEqual = isCoinEqualFn,
+                transactionCostModel = TransactionCostModel(
+                  inputFeeOverhead = tokenType.inputFeeOverhead.toJsBigInt,
+                  outputFeeOverhead = tokenType.outputFeeOverhead.toJsBigInt,
+                ),
+              ),
             ),
           )
           .leftMap(error => {
             val cleanedErrorMessage = error.getMessage.replaceFirst("^Error: ", "")
-
             NotSufficientFunds(cleanedErrorMessage)
           })
-          .map(balanceRecipe =>
+          .map { br =>
+            val inputsArr = br.inputs
+            val outputsArr = br.outputs
             (
-              balanceRecipe.inputs.map(input => qualifiedCoinInfo.fromJs(input)).toList,
-              balanceRecipe.outputs.map(output => coinInfo.fromJs(output)).toList,
-            ),
-          )
+              inputsArr.map(input => qualifiedCoinInfo.fromJs(input)).toList,
+              outputsArr.map(output => coinInfo.fromJs(output)).toList,
+            )
+          }
 
         Option(recipe)
       }
@@ -223,6 +254,5 @@ class TransactionBalancer[
     (totalGuaranteedCoinsImbalances, totalFallibleCoinsImbalances)
   }
 
-  case class NotSufficientFunds(message: String)
-      extends Throwable(s"Not sufficient funds to balance token: $message")
+  case class NotSufficientFunds(message: String) extends Throwable(message)
 }

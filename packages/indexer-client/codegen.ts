@@ -14,11 +14,11 @@ export default {
     './src/graphql/generated/': {
       documents: [
         './src/graphql/queries/*.ts',
-        './src/graphql/subscriptions/*.ts'
+        './src/graphql/subscriptions/*.ts',
+        './src/graphql/legacy-subscriptions/*.ts',
       ],
-      schema: './indexer.gql',
+      schema: ['./indexer.gql', './indexer-legacy.gql'],
       preset: 'client',
-      plugins: ['typescript', 'typescript-operations'],
       config: {
         avoidOptionals: true,
         skipTypename: true,
@@ -37,16 +37,16 @@ export default {
           ApplyStage: 'string',
           HexEncoded: 'string',
           ViewingKey: 'string',
-          UnshieldedAddress: 'string'
+          UnshieldedAddress: 'string',
         },
         namingConvention: {
-          transformUnderscore: true
-        }
+          transformUnderscore: true,
+        },
       },
       presetConfig: {
-        gqlTagName: 'gql'
+        gqlTagName: 'gql',
       },
-      hooks: { afterAllFileWrite: ['prettier --write'] }
-    }
-  }
+      hooks: { afterAllFileWrite: ['prettier --write'] },
+    },
+  },
 } as CodegenConfig;

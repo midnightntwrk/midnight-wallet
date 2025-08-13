@@ -188,7 +188,10 @@ export class V1Builder<
   }
 
   withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV1Variant.AnyContext>>(
-    coinSelection: (config: TCoinSelectionConfig, getContext: () => TCoinSelectionContext) => CoinSelection,
+    coinSelection: (
+      config: TCoinSelectionConfig,
+      getContext: () => TCoinSelectionContext,
+    ) => CoinSelection<zswap.QualifiedCoinInfo>,
   ): V1Builder<
     TConfig & TCoinSelectionConfig,
     TContext & TCoinSelectionContext,
@@ -393,7 +396,10 @@ declare namespace V1Builder {
   };
 
   type HasCoinSelection<TConfig, TContext> = {
-    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection;
+    readonly coinSelection: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => CoinSelection<zswap.QualifiedCoinInfo>;
   };
 
   type HasSerialization<TConfig, TContext, TSerialized> = {
