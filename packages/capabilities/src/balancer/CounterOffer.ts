@@ -32,8 +32,7 @@ export class CounterOffer<TInput extends CoinRecipe, TOutput extends CoinRecipe>
   }
 
   findNonNativeImbalance(): Imbalance | undefined {
-    return this.imbalances
-      .entries()
+    return Array.from(this.imbalances.entries())
       .filter(([tokenType]) => tokenType !== this.feeTokenType)
       .find(([tokenType, value]) => value !== this.getTargetImbalance(tokenType));
   }
