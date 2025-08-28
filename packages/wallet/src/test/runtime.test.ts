@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { ProtocolVersion, VersionChangeType } from '@midnight-ntwrk/abstractions';
-import { WalletBuilderTs } from '../index';
+import { WalletBuilder } from '../index';
 import { toProtocolStateArray } from './testUtils';
 import {
   InterceptingRunningVariant,
@@ -15,7 +15,7 @@ import {
 describe('Wallet runtime', () => {
   it('allows to dispatch a poly function on a running variant', async () => {
     const interceptingTag = 'intercept' as const;
-    const builder = WalletBuilderTs.init()
+    const builder = WalletBuilder.init()
       // Have the first variant complete after producing two values, signifying a protocol change.
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
       .withVariant(
@@ -60,7 +60,7 @@ describe('Wallet runtime', () => {
   });
 
   it('allows wallet to implement own starting procedure', async () => {
-    const builder = WalletBuilderTs.init()
+    const builder = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
       .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
     const BaseWallet = builder.build({
@@ -95,7 +95,7 @@ describe('Wallet runtime', () => {
 
   it('allows to start from arbitrary variant by providing its state', async () => {
     const Intercepting = 'intercepting' as const;
-    const builder = WalletBuilderTs.init()
+    const builder = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
       .withVariant(
         ProtocolVersion.ProtocolVersion(50n),
@@ -130,7 +130,7 @@ describe('Wallet runtime', () => {
   });
 
   it('allows to start from the first variant by providing its state', async () => {
-    const builder = WalletBuilderTs.init()
+    const builder = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
       .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
     const Wallet = builder.build({

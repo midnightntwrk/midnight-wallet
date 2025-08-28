@@ -1,4 +1,4 @@
-import { WalletBuilderTs } from '../index';
+import { WalletBuilder } from '../index';
 import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { NumericRangeBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
@@ -7,7 +7,7 @@ import * as rx from 'rxjs';
 describe('Wallet', () => {
   describe('state', () => {
     it('should report errors', async () => {
-      const builder = WalletBuilderTs.init()
+      const builder = WalletBuilder.init()
         // Have the variant throw an error after producing two elements.
         .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2, true));
       const Wallet = builder.build({

@@ -1,4 +1,4 @@
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
@@ -65,7 +65,7 @@ describe('Wallet Sync', () => {
   };
 
   beforeEach(() => {
-    Wallet = WalletBuilderTs.init()
+    Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
     wallet = Wallet.startEmpty(Wallet);

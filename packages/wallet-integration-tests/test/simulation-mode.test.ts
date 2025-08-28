@@ -5,7 +5,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
 import {
   Proving,
   Simulator,
@@ -39,7 +39,7 @@ describe('Working in simulation mode', () => {
       ] as const;
       const simulator = yield* Simulator.Simulator.init(genesisMints);
 
-      const WalletBase = WalletBuilderTs.init()
+      const WalletBase = WalletBuilder.init()
         .withVariant(
           ProtocolVersion.MinSupportedVersion,
           new V1Builder()

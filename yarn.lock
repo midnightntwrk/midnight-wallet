@@ -1879,7 +1879,6 @@ __metadata:
   dependencies:
     "@midnight-ntwrk/abstractions": "workspace:*"
     "@midnight-ntwrk/ledger": "npm:^4.0.0"
-    "@midnight-ntwrk/wallet": "workspace:*"
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
     "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
@@ -2092,7 +2091,6 @@ __metadata:
     "@effect/workflow": "npm:^0.8.1"
     "@midnight-ntwrk/abstractions": "workspace:*"
     "@midnight-ntwrk/ledger": "npm:^4.0.0"
-    "@midnight-ntwrk/wallet": "workspace:*"
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
     "@midnight-ntwrk/wallet-node-client-ts": "workspace:*"
     "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*"

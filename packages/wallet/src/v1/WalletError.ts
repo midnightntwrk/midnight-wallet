@@ -1,15 +1,7 @@
-import { WalletError as TheScalaWalletError } from '@midnight-ntwrk/wallet';
 import { Data } from 'effect';
 import * as zswap from '@midnight-ntwrk/zswap';
 
 export const WalletError = {
-  fromScala(scalaWalletError: TheScalaWalletError): WalletError {
-    return new ScalaWalletError({
-      message: `Wallet error: ${scalaWalletError.message}`,
-      cause: scalaWalletError,
-    });
-  },
-
   proving(err: Error): WalletError {
     return new ProvingError({
       message: `Wallet proving error: ${err.message}`,
@@ -39,18 +31,12 @@ export const WalletError = {
   },
 };
 export type WalletError =
-  | ScalaWalletError
   | ProvingError
   | OtherWalletError
   | InsufficientFundsError
   | SubmissionError
   | AddressError
   | SyncWalletError;
-
-export class ScalaWalletError extends Data.TaggedError('Wallet.Scala')<{
-  message: string;
-  cause: TheScalaWalletError;
-}> {}
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
   message: string;

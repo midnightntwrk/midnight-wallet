@@ -5,7 +5,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilderTs } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
 import {
   CoinsAndBalances,
@@ -129,7 +129,7 @@ describe('Wallet transacting', () => {
   };
 
   beforeEach(() => {
-    Wallet = WalletBuilderTs.init()
+    Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
     coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;

@@ -2,7 +2,7 @@ import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { ProtocolState, ProtocolVersion, StateChange, Expect, Equal } from '@midnight-ntwrk/abstractions';
 import { Variant, VariantBuilder, WalletLike } from '../abstractions';
-import { WalletBuilderTs } from '../index';
+import { WalletBuilder } from '../index';
 import { Runtime } from '../Runtime';
 import { isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
 import {
@@ -17,12 +17,12 @@ describe('Wallet Builder', () => {
   describe('without variants', () => {
     it('should not build a valid wallet', () => {
       //TODO: it should be possible to play with types to hide build method unless variant is registered
-      expect(() => WalletBuilderTs.init().build()).toThrow();
+      expect(() => WalletBuilder.init().build()).toThrow();
     });
   });
 
   it('should support single variant implementations', async () => {
-    const builder = WalletBuilderTs.init().withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder());
+    const builder = WalletBuilder.init().withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder());
     const Wallet = builder.build({
       min: 0,
       max: 1,
@@ -49,7 +49,7 @@ describe('Wallet Builder', () => {
   });
 
   it('should support multiple variant implementations through state migration', async () => {
-    const builder = WalletBuilderTs.init()
+    const builder = WalletBuilder.init()
       // Have the first variant complete after producing two values, signifying a protocol change.
       .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
       .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
@@ -119,9 +119,7 @@ describe('Wallet Builder', () => {
       },
     };
 
-    const Wallet = WalletBuilderTs.init()
-      .withVariant(ProtocolVersion.MinSupportedVersion, pubSubVariantBuilder)
-      .build();
+    const Wallet = WalletBuilder.init().withVariant(ProtocolVersion.MinSupportedVersion, pubSubVariantBuilder).build();
     const wallet = Wallet.startEmpty(Wallet);
 
     const stopSubject = new rx.Subject<boolean>();
@@ -157,7 +155,7 @@ describe('Wallet Builder', () => {
       };
       return {
         config: config,
-        Wallet: WalletBuilderTs.init()
+        Wallet: WalletBuilder.init()
           .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder())
           .build(config),
       };
@@ -170,7 +168,7 @@ describe('Wallet Builder', () => {
       };
       return {
         config: config,
-        Wallet: WalletBuilderTs.init()
+        Wallet: WalletBuilder.init()
           .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
           .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
           .build(config),
