@@ -16,8 +16,8 @@ vi.setConfig({ testTimeout: 600_000, hookTimeout: 30_000 });
 
 describe('Wallet Sync', () => {
   const environmentId = randomUUID();
-  let environment: StartedDockerComposeEnvironment | null = null;
-  let configuration: DefaultV1Configuration | null = null;
+  let environment: StartedDockerComposeEnvironment;
+  let configuration: DefaultV1Configuration;
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
@@ -59,7 +59,7 @@ describe('Wallet Sync', () => {
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isStrictlyComplete && state.state.coins.size > 0),
+      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
   };
@@ -67,7 +67,7 @@ describe('Wallet Sync', () => {
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
-      .build(configuration!);
+      .build(configuration);
     wallet = Wallet.startEmpty(Wallet);
   });
 

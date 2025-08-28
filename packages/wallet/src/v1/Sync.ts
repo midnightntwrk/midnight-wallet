@@ -1,7 +1,6 @@
 import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { JsOption } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Effect, Layer, ParseResult, Scope, Stream, Schema, pipe, Either, Option } from 'effect';
+import { Effect, Layer, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
 import { V1State } from './RunningV1Variant';
 import { Simulator, SimulatorState } from './Simulator';
 import { Connect, Wallet } from '@midnight-ntwrk/wallet-sdk-indexer-client';
@@ -12,7 +11,6 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError';
 import { KeysCapability } from './Keys';
-import { fromScala } from '../effect/OptionOps';
 import { HttpURL, WsURL } from '@midnight-ntwrk/abstractions';
 import { TransactionHistoryCapability } from './TransactionHistory';
 import { EitherOps } from '../effect';
@@ -331,10 +329,7 @@ export const makeDefaultSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
 
       const keysCapability = getContext().keysCapability;
-      const appliedIndex = fromScala(state.progress.appliedIndex).pipe(
-        Option.map((offset) => Number(offset.value)),
-        Option.getOrNull,
-      );
+      const { appliedIndex } = state.progress;
       const encryptionSecretKey = keysCapability.getEncryptionSecretKey(state);
 
       const bech32mESK = ShieldedEncryptionSecretKey.codec.encode(networkId, encryptionSecretKey).asString();
@@ -342,7 +337,7 @@ export const makeDefaultSyncService = (
       return pipe(
         Connect.run({ viewingKey: bech32mESK }),
         Stream.flatMap((session) => {
-          return Wallet.run({ sessionId: session.connect, index: appliedIndex });
+          return Wallet.run({ sessionId: session.connect, index: Number(appliedIndex) });
         }),
         Stream.provideSomeLayer(
           Layer.mergeAll(
@@ -373,12 +368,11 @@ export const makeDefaultSyncCapability = (
     applyUpdate(state: V1State, update: WalletSyncSubscription): V1State {
       switch (update._tag) {
         case 'ProgressUpdate':
-          return state.updateProgress(
-            JsOption.asResult(state.progress.appliedIndex)?.value,
-            BigInt(update.highestRelevantWalletIndex),
-            BigInt(update.highestIndex),
-            BigInt(update.highestRelevantIndex),
-          );
+          return state.updateProgress({
+            highestRelevantWalletIndex: BigInt(update.highestRelevantWalletIndex),
+            highestIndex: BigInt(update.highestIndex),
+            highestRelevantIndex: BigInt(update.highestRelevantIndex),
+          });
 
         case 'ViewingUpdateWithMerkleTreeUpdate': {
           const newLocalState = state.state.applyCollapsedUpdate(update.update);
@@ -386,24 +380,16 @@ export const makeDefaultSyncCapability = (
         }
 
         case 'ViewingUpdateWithTransaction': {
-          const newLocalState = state.state.applyTx(
-            state.secretKeys,
-            update.appliedTransaction.tx,
-            update.appliedTransaction.applyState,
-          );
-
-          let updatedState = state.applyState(newLocalState);
-
           const offset = BigInt(update.index);
           const appliedIndex = update.appliedTransaction.applyState === 'failure' ? offset : offset - 1n;
 
-          updatedState = updatedState.update(appliedIndex, offset, BigInt(update.protocolVersion), true);
+          const wallet = state
+            .applyTransaction(update.appliedTransaction.tx, update.appliedTransaction.applyState)
+            .updateProgress({ appliedIndex });
 
           const transactionHistoryCapability = getContext().transactionHistoryCapability;
 
-          updatedState = transactionHistoryCapability.updateTxHistory(updatedState, [update.appliedTransaction.tx]);
-
-          return updatedState;
+          return transactionHistoryCapability.updateTxHistory(wallet, [update.appliedTransaction.tx]);
         }
       }
     },
@@ -439,8 +425,7 @@ export const makeSimulatorSyncCapability = (
 export const makeTxApplierSyncCapability = (): SyncCapability<V1State, zswap.Transaction> => {
   return {
     applyUpdate: (state: V1State, update: zswap.Transaction) => {
-      const newLocalState = state.state.applyTx(state.secretKeys, update, 'success');
-      return state.applyState(newLocalState);
+      return state.applyTransaction(update, 'success');
     },
   };
 };

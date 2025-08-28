@@ -14,7 +14,7 @@ const clientLayer = (node: StartedTestContainer) =>
   });
 
 // It takes some time to pass through enough rounds of consensus, even in tests
-vi.setConfig({ testTimeout: 60_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 describe('PolkadotNodeClient', () => {
   describe('error cases', () => {

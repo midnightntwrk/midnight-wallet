@@ -1,9 +1,8 @@
-import { Effect, ParseResult, Either, pipe, Schema, Option } from 'effect';
+import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import { V1State } from './RunningV1Variant';
 import { WalletError } from './WalletError';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
-import { OptionOps } from '../effect';
+import { CoreWallet } from './CoreWallet';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -100,12 +99,9 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       const buildSnapshot = (w: V1State): Snapshot => ({
         txHistory: w.txHistoryArray,
         state: w.state,
-        protocolVersion: w.protocolVersion.version,
-        networkId: NetworkId.toJs(w.networkId),
-        offset: OptionOps.fromScala(w.offset).pipe(
-          Option.map((o) => o.value),
-          Option.getOrUndefined,
-        ),
+        protocolVersion: w.protocolVersion,
+        networkId: w.networkId,
+        offset: w.progress?.appliedIndex,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -119,12 +115,17 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
           Either.try({
             try: () =>
               CoreWallet.restore(
-                aux,
                 snapshot.state,
+                aux,
                 snapshot.txHistory,
-                snapshot.offset,
+                {
+                  appliedIndex: snapshot.offset ?? 0n,
+                  highestRelevantWalletIndex: 0n,
+                  highestIndex: 0n,
+                  highestRelevantIndex: 0n,
+                },
                 snapshot.protocolVersion,
-                NetworkId.fromJs(snapshot.networkId),
+                snapshot.networkId,
               ),
             catch: (err) => WalletError.other(err),
           }),

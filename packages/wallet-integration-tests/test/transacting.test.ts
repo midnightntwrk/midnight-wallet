@@ -47,8 +47,8 @@ const assertCloseTo = (actual: bigint, expected: bigint, delta: bigint, message:
  * It's the job of unit tests in various setups to perform quick and exhaustive testing
  */
 describe('Wallet transacting', () => {
-  let environment: StartedDockerComposeEnvironment | null = null;
-  let configuration: DefaultV1Configuration | null = null;
+  let environment: StartedDockerComposeEnvironment;
+  let configuration: DefaultV1Configuration;
 
   beforeEach(async () => {
     const environmentId = randomUUID();
@@ -106,7 +106,7 @@ describe('Wallet transacting', () => {
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isStrictlyComplete && state.state.coins.size > 0),
+      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
   };
@@ -131,7 +131,7 @@ describe('Wallet transacting', () => {
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
-      .build(configuration!);
+      .build(configuration);
     coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     keys = Wallet.allVariantsRecord()[V1Tag].variant.keys;
     wallet = Wallet.startEmpty(Wallet);
@@ -161,7 +161,7 @@ describe('Wallet transacting', () => {
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isComplete && state.state.coins.size > 0),
+      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
 
@@ -238,7 +238,7 @@ describe('Wallet transacting', () => {
       wallet2.rawState,
       rx.skip(1),
       rx.map(ProtocolState.state),
-      rx.filter((state) => state.progress.isStrictlyComplete),
+      rx.filter((state) => state.progress.isStrictlyComplete()),
       rx.map((state) => coinsAndBalances.getAvailableBalances(state)[zswap.nativeToken()]),
       (a) => rx.firstValueFrom(a),
     );

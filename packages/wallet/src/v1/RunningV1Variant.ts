@@ -1,4 +1,3 @@
-import { CoreWallet, JsOption, NetworkId } from '@midnight-ntwrk/wallet';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as Arr, Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration } from 'effect';
@@ -15,15 +14,16 @@ import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
 import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { CoreWallet } from './CoreWallet';
 import { TransactionHistoryCapability } from './TransactionHistory';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   if (!state.isConnected) return [];
 
-  const appliedIndex = JsOption.asResult(state.progress.appliedIndex)?.value ?? 0n;
-  const highestRelevantWalletIndex = JsOption.asResult(state.progress.highestRelevantWalletIndex)?.value ?? 0n;
-  const highestIndex = JsOption.asResult(state.progress.highestIndex)?.value ?? 0n;
-  const highestRelevantIndex = JsOption.asResult(state.progress.highestRelevantIndex)?.value ?? 0n;
+  const appliedIndex = state.progress?.appliedIndex ?? 0n;
+  const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
+  const highestIndex = state.progress?.highestIndex ?? 0n;
+  const highestRelevantIndex = state.progress?.highestRelevantIndex ?? 0n;
 
   const sourceGap = highestIndex - highestRelevantIndex;
   const applyGap = highestRelevantWalletIndex - appliedIndex;
@@ -32,18 +32,18 @@ const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
 };
 
 const protocolVersionChange = (previous: V1State, current: V1State): StateChange.StateChange<V1State>[] => {
-  return previous.protocolVersion.version != current.protocolVersion.version
+  return previous.protocolVersion != current.protocolVersion
     ? [
         StateChange.VersionChange({
           change: VersionChangeType.Version({
-            version: ProtocolVersion.ProtocolVersion(current.protocolVersion.version),
+            version: ProtocolVersion.ProtocolVersion(current.protocolVersion),
           }),
         }),
       ]
     : [];
 };
 
-export type V1State = CoreWallet<zswap.LocalState, zswap.SecretKeys>;
+export type V1State = CoreWallet;
 export const V1State = new (class {
   readonly #modifyLocalState = <A>(
     state: V1State,
@@ -59,11 +59,11 @@ export const V1State = new (class {
   };
 
   initEmpty = (keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
-    return CoreWallet.emptyV1(new zswap.LocalState(), keys, NetworkId.fromJs(networkId));
+    return CoreWallet.empty(new zswap.LocalState(), keys, networkId);
   };
 
   init = (state: zswap.LocalState, keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
-    return CoreWallet.emptyV1(state, keys, NetworkId.fromJs(networkId));
+    return CoreWallet.empty(state, keys, networkId);
   };
 
   spendCoins = (

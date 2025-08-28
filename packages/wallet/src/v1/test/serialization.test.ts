@@ -1,7 +1,5 @@
-import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
 import { OtherWalletError } from '../WalletError';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { CoinInfo } from '@midnight-ntwrk/zswap';
 import { Array as Arr, Chunk, Effect, pipe, Stream } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultV1SerializationCapability } from '../Serialization';
@@ -10,6 +8,7 @@ import { V1State } from '../RunningV1Variant';
 import { TestTransactions } from '@midnight-ntwrk/wallet-node-client-ts/testing';
 import { NodeContext } from '@effect/platform-node';
 import * as ledger from '@midnight-ntwrk/ledger';
+import { CoreWallet } from '../CoreWallet';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 vi.setConfig({ testTimeout: minutes(1) });
@@ -26,7 +25,7 @@ const secretKeysArbitrary: fc.Arbitrary<zswap.SecretKeys> = fc
   .uint8Array({ minLength: 32, maxLength: 32 })
   .map((seed) => zswap.SecretKeys.fromSeed(seed));
 
-type OutputPreimage = { coin: CoinInfo; recipient: zswap.SecretKeys };
+type OutputPreimage = { coin: zswap.CoinInfo; recipient: zswap.SecretKeys };
 const outputPreimageArbitrary = (
   keysArbitrary: fc.Arbitrary<zswap.SecretKeys>,
   tokenTypeArbitrary: fc.Arbitrary<zswap.TokenType>,
@@ -91,7 +90,7 @@ const walletArbitrary = (txDepth: number) => {
       const state: zswap.LocalState = transactions.reduce((state: zswap.LocalState, tx): zswap.LocalState => {
         return state.applyProofErasedTx(keys, tx.transaction, 'success');
       }, new zswap.LocalState());
-      const wallet = CoreWallet.emptyV1(state, keys, NetworkId.fromJs(networkId));
+      const wallet = CoreWallet.empty(state, keys, networkId);
 
       return {
         transactions,
@@ -122,7 +121,7 @@ describe('V1 Wallet serialization', () => {
 
       const newState = wallet.state.applyTx(keys, deserializedZswapTx, 'success');
 
-      return wallet.applyState(newState).addTransaction(deserializedZswapTx).setOffset(newState.firstFree);
+      return wallet.applyState(newState).updateProgress({ appliedIndex: newState.firstFree });
     });
 
     const firstIteration = capability.serialize(preparedWallet);

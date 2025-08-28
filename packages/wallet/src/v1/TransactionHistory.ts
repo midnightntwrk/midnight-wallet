@@ -1,6 +1,5 @@
 import { V1State } from './RunningV1Variant';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { JsOption } from '@midnight-ntwrk/wallet';
 
 export type ProgressUpdate = {
   appliedIndex: bigint | undefined;
@@ -25,10 +24,10 @@ export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCap
     },
     progress: (state: V1State): ProgressUpdate => {
       return {
-        appliedIndex: JsOption.asResult(state.progress.appliedIndex)?.value,
-        highestRelevantWalletIndex: JsOption.asResult(state.progress.highestRelevantWalletIndex)?.value,
-        highestIndex: JsOption.asResult(state.progress.highestIndex)?.value,
-        highestRelevantIndex: JsOption.asResult(state.progress.highestRelevantIndex)?.value,
+        appliedIndex: state.progress.appliedIndex,
+        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+        highestIndex: state.progress.highestIndex,
+        highestRelevantIndex: state.progress.highestRelevantIndex,
       };
     },
   };
@@ -47,10 +46,10 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
     },
     progress: (state: V1State): ProgressUpdate => {
       return {
-        appliedIndex: JsOption.asResult(state.progress.appliedIndex)?.value,
-        highestRelevantWalletIndex: JsOption.asResult(state.progress.highestRelevantWalletIndex)?.value,
-        highestIndex: JsOption.asResult(state.progress.highestIndex)?.value,
-        highestRelevantIndex: JsOption.asResult(state.progress.highestRelevantIndex)?.value,
+        appliedIndex: state.progress.appliedIndex,
+        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+        highestIndex: state.progress.highestIndex,
+        highestRelevantIndex: state.progress.highestRelevantIndex,
       };
     },
   };
@@ -66,10 +65,10 @@ export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCap
     },
     progress: (state: V1State): ProgressUpdate => {
       return {
-        appliedIndex: JsOption.asResult(state.progress.appliedIndex)?.value,
-        highestRelevantWalletIndex: JsOption.asResult(state.progress.highestRelevantWalletIndex)?.value,
-        highestIndex: JsOption.asResult(state.progress.highestIndex)?.value,
-        highestRelevantIndex: JsOption.asResult(state.progress.highestRelevantIndex)?.value,
+        appliedIndex: state.progress.appliedIndex,
+        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+        highestIndex: state.progress.highestIndex,
+        highestRelevantIndex: state.progress.highestRelevantIndex,
       };
     },
   };

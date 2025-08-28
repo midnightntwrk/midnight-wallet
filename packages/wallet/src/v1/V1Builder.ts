@@ -1,4 +1,3 @@
-import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { Console, Effect, Either, Scope, Sink, Stream, Types } from 'effect';
 import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/abstractions';
@@ -26,6 +25,7 @@ import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } fro
 import { KeysCapability, makeDefaultKeysCapability } from './Keys';
 import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission';
 import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { CoreWallet } from './CoreWallet';
 import { makeDefaultTransactionHistoryCapability, TransactionHistoryCapability } from './TransactionHistory';
 
 export type BaseV1Configuration = {
@@ -361,9 +361,7 @@ export class V1Builder<
       migrateState() {
         const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
 
-        return Effect.succeed(
-          CoreWallet.emptyV1(new zswap.LocalState(), zswap.SecretKeys.fromSeed(seed), NetworkId.fromJs(networkId)),
-        );
+        return Effect.succeed(CoreWallet.empty(new zswap.LocalState(), zswap.SecretKeys.fromSeed(seed), networkId));
       },
 
       deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized): Either.Either<V1State, WalletError> => {

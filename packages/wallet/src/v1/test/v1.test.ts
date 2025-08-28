@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultV1Variant, V1Builder } from '../V1Builder';
-import { CoreWallet, NetworkId } from '@midnight-ntwrk/wallet';
 import * as zswap from '@midnight-ntwrk/zswap';
 import { WalletError } from '../WalletError';
 import { Effect, Either, Encoding, Option, pipe, Ref, SubscriptionRef } from 'effect';
@@ -13,6 +12,7 @@ import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { makeDefaultKeysCapability } from '../Keys';
 import { V1State } from '../RunningV1Variant';
+import { CoreWallet } from '../CoreWallet';
 
 describe('V1 Variant', () => {
   it('gracefully stops submission service', async () => {
@@ -104,12 +104,12 @@ describe('V1 Variant', () => {
         .withSubmission(() => failingSubmission)
         .withTransacting(() => transacting)
         .build(config);
-      const initialState = CoreWallet.emptyV1(
+      const initialState = CoreWallet.empty(
         new zswap.LocalState(),
         zswap.SecretKeys.fromSeed(
           WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
         ),
-        NetworkId.fromJs(zswap.NetworkId.Undeployed),
+        zswap.NetworkId.Undeployed,
       );
       const stateRef = yield* SubscriptionRef.make(initialState);
       const running = yield* variant.start({ stateRef: stateRef }, initialState);
