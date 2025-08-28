@@ -44,7 +44,8 @@ export type WalletError =
   | OtherWalletError
   | InsufficientFundsError
   | SubmissionError
-  | AddressError;
+  | AddressError
+  | SyncWalletError;
 
 export class ScalaWalletError extends Data.TaggedError('Wallet.Scala')<{
   message: string;
@@ -57,6 +58,11 @@ export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
 }> {}
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+export class SyncWalletError extends Data.TaggedError('Wallet.Sync')<{
   message: string;
   cause?: unknown;
 }> {}

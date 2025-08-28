@@ -12,6 +12,7 @@ import {
   Submission,
   Sync,
   Transacting,
+  TransactionHistory,
   V1Builder,
   V1State,
   V1Tag,
@@ -46,6 +47,7 @@ describe('Working in simulation mode', () => {
             .withProving(Proving.makeSimulatorProvingService)
             .withCoinSelectionDefaults()
             .withTransacting(Transacting.makeSimulatorTransactingCapability)
+            .withTransactionHistory(TransactionHistory.makeSimulatorTransactionHistoryCapability)
             .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
             .withCoinsAndBalancesDefaults()
             .withKeysDefaults()

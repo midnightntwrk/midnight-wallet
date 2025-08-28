@@ -3,13 +3,20 @@ import * as SubmissionEvent from './SubmissionEvent';
 import * as NodeClientError from './NodeClientError';
 
 export type SerializedMnTransaction = Uint8Array;
+
+export type Genesis = { readonly transactions: readonly SerializedMnTransaction[] };
+
 export interface Service {
   sendMidnightTransaction(
     serializedTransaction: SerializedMnTransaction,
   ): Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError>;
+  getGenesis(): Effect.Effect<Genesis, NodeClientError.NodeClientError>;
 }
 
 export class NodeClient extends Context.Tag('@midnight-ntwrk/wallet-node-client#NodeClient')<NodeClient, Service>() {}
+
+export const getGenesisTransactions = (): Effect.Effect<Genesis, NodeClientError.NodeClientError, NodeClient> =>
+  NodeClient.pipe(Effect.flatMap((client) => client.getGenesis()));
 
 export const sendMidnightTransaction = (
   serializedTransaction: SerializedMnTransaction,

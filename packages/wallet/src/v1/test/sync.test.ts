@@ -1,12 +1,12 @@
 import { Effect, Layer, Stream } from 'effect';
 import * as path from 'node:path';
+import { existsSync } from 'node:fs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
-import { Wallet } from '../Wallet';
-import { Connect, Disconnect } from '../../queries';
-import { WsSubscriptionClient, HttpQueryClient } from '../../../effect';
+import { HttpQueryClient, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { Connect, Disconnect, Wallet } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 
-const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../../e2e-tests');
+const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../e2e-tests');
 
 const KNOWN_VIEWING_KEY = 'mn_shield-esk_undeployed1qvqzp338tsl9e76kay06pyqyu60suelywytqux9c058mqhm6350smhczah53pj';
 
@@ -17,9 +17,14 @@ describe('Wallet subscription', () => {
     const environmentId = randomUUID();
     let environment: StartedDockerComposeEnvironment | undefined = undefined;
     const getIndexerPort = () => environment?.getContainer(`indexer_${environmentId}`).getMappedPort(8088) ?? 8088;
+    const composeFile = 'docker-compose-dynamic.yml';
+    const composeFullPath = path.join(COMPOSE_PATH, composeFile);
+    if (!existsSync(composeFullPath)) {
+      throw new Error(`Docker compose file not found: ${composeFile}`);
+    }
 
     beforeAll(async () => {
-      environment = await new DockerComposeEnvironment(COMPOSE_PATH, 'docker-compose-dynamic.yml')
+      environment = await new DockerComposeEnvironment(COMPOSE_PATH, composeFile)
         .withEnvironment({
           TESTCONTAINERS_UID: environmentId,
         })

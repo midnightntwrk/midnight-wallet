@@ -204,6 +204,22 @@ export declare class CoreWallet<State, SecretKeys> {
   addTransaction(tx: zswap.Transaction): CoreWallet<State, SecretKeys>;
   setOffset(newOffset: bigint): CoreWallet<State, SecretKeys>;
 
+  updateProgress(
+    appliedIndex: bigint | undefined,
+    highestRelevantWalletIndex: bigint | undefined,
+    highestIndex: bigint | undefined,
+    highestRelevantIndex: bigint | undefined,
+  ): CoreWallet<State, SecretKeys>;
+
+  update(
+    appliedIndex: bigint | undefined,
+    offset: bigint | undefined,
+    protocolVersion: bigint,
+    isConnected: boolean,
+  ): CoreWallet<State, SecretKeys>;
+
+  updateTxHistory(newTxHistory: readonly zswap.Transaction[]): CoreWallet<State, SecretKeys>;
+
   /**
    * @deprecated Temporary, only for internal use
    */

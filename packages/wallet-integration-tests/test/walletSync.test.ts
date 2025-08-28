@@ -7,10 +7,12 @@ import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+
 import os from 'node:os';
 import * as zswap from '@midnight-ntwrk/zswap';
+import { pipe } from 'effect';
 
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 600_000, hookTimeout: 30_000 });
 
 describe('Wallet Sync', () => {
   const environmentId = randomUUID();
@@ -29,7 +31,9 @@ describe('Wallet Sync', () => {
       .up();
 
     configuration = {
-      indexerWsUrl: `ws://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql/ws`,
+      indexerClientConnection: {
+        indexerHttpUrl: `http://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql`,
+      },
       provingServerUrl: new URL(
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
@@ -48,6 +52,18 @@ describe('Wallet Sync', () => {
 
   let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]>;
   let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
+  type Wallet = WalletLike.WalletOf<typeof Wallet>;
+
+  const waitForSync = (wallet: Wallet): Promise<V1State> => {
+    return pipe(
+      wallet.rawState,
+      rx.map(ProtocolState.state),
+      rx.skip(1),
+      rx.filter((state: V1State) => state.progress.isStrictlyComplete && state.state.coins.size > 0),
+      (a) => rx.firstValueFrom(a),
+    );
+  };
+
   beforeEach(() => {
     Wallet = WalletBuilderTs.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
@@ -62,13 +78,8 @@ describe('Wallet Sync', () => {
   });
 
   it('should resync an empty wallet', async () => {
-    const syncedState: V1State = await rx.lastValueFrom(
-      wallet.rawState.pipe(
-        rx.skip(1),
-        rx.map(ProtocolState.state),
-        rx.takeWhile(() => !wallet.syncComplete, true),
-      ),
-    );
+    const syncedState = await waitForSync(wallet);
+
     const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 

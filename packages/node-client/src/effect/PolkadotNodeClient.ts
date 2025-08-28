@@ -122,6 +122,31 @@ export class PolkadotNodeClient implements NodeClient.Service {
     );
   }
 
+  getGenesis(): Effect.Effect<
+    { readonly transactions: readonly NodeClient.SerializedMnTransaction[] },
+    NodeClientError.NodeClientError
+  > {
+    return Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash)).pipe(
+      Effect.map((block) => {
+        // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
+        return {
+          transactions: block.block.extrinsics
+            .filter(
+              (extrinsic) => extrinsic.method.section === 'midnight' && extrinsic.method.method === 'sendMnTransaction',
+            )
+            .map((extrinsic) => extrinsic.method.args[0].toU8a()),
+        };
+      }),
+      Effect.mapError(
+        (error) =>
+          new NodeClientError.ConnectionError({
+            message: 'Failed to retrieve genesis transactions',
+            cause: error,
+          }),
+      ),
+    );
+  }
+
   #handleSubmissionResult = (
     serializedTransaction: NodeClient.SerializedMnTransaction,
     emit: StreamEmit.Emit<never, NodeClientError.NodeClientError, SubmissionEvent.SubmissionEvent, void>,

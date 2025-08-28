@@ -1,6 +1,7 @@
 export * from './V1Builder';
 export * as Sync from './Sync';
 export * as Transacting from './Transacting';
+export * as TransactionHistory from './TransactionHistory';
 export * as Serialization from './Serialization';
 export * as Proving from './Proving';
 export * as ProvingRecipe from './ProvingRecipe';

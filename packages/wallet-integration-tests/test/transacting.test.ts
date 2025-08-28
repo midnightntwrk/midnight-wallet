@@ -63,7 +63,9 @@ describe('Wallet transacting', () => {
       .up();
 
     configuration = {
-      indexerWsUrl: `ws://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql/ws`,
+      indexerClientConnection: {
+        indexerHttpUrl: `http://localhost:${environment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v1/graphql`,
+      },
       provingServerUrl: new URL(
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),

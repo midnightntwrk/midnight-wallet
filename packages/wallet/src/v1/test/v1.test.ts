@@ -33,7 +33,9 @@ describe('V1 Variant', () => {
         .build({
           networkId: zswap.NetworkId.Undeployed,
           relayURL: new URL('http://localhost:9944'),
-          indexerWsUrl: 'http://localhost:8080',
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8080',
+          },
           provingServerUrl: new URL('http://localhost:6300'),
           costParameters: {
             additionalFeeOverhead: 1n,
@@ -63,7 +65,9 @@ describe('V1 Variant', () => {
     const config = {
       networkId: zswap.NetworkId.Undeployed,
       relayURL: new URL('http://localhost:9944'),
-      indexerWsUrl: 'http://localhost:8080',
+      indexerClientConnection: {
+        indexerHttpUrl: 'http://localhost:8080',
+      },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
         additionalFeeOverhead: 1n,

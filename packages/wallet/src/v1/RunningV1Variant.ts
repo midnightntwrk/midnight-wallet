@@ -1,20 +1,21 @@
-import { CoreWallet, IndexerUpdate, JsOption, NetworkId } from '@midnight-ntwrk/wallet';
+import { CoreWallet, JsOption, NetworkId } from '@midnight-ntwrk/wallet';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import * as zswap from '@midnight-ntwrk/zswap';
-import { Array as Arr, Effect, pipe, Record, Stream, SubscriptionRef } from 'effect';
+import { Array as Arr, Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration } from 'effect';
 import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/abstractions';
 import { WalletRuntimeError, Variant } from '../abstractions/index';
 import { EitherOps } from '../effect/index';
 import { ProvingService } from './Proving';
 import { ProvingRecipe } from './ProvingRecipe';
 import { SerializationCapability } from './Serialization';
-import { SyncCapability, SyncService } from './Sync';
+import { SyncCapability, SyncService, WalletSyncSubscription } from './Sync';
 import { TransactingCapability } from './Transacting';
 import { OtherWalletError, WalletError } from './WalletError';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
 import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { TransactionHistoryCapability } from './TransactionHistory';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   if (!state.isConnected) return [];
@@ -106,6 +107,7 @@ export declare namespace RunningV1Variant {
     keysCapability: KeysCapability<V1State>;
     submissionService: SubmissionService<TTransaction>;
     coinSelection: CoinSelection<zswap.QualifiedCoinInfo>;
+    transactionHistoryCapability: TransactionHistoryCapability<V1State, TTransaction>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any>;
@@ -113,7 +115,7 @@ export declare namespace RunningV1Variant {
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, IndexerUpdate, zswap.Transaction>;
+export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncSubscription, zswap.Transaction>;
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
   implements Variant.RunningVariant<typeof V1Tag, V1State>
@@ -146,8 +148,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
     );
   }
 
-  startSync(initialState: V1State): Stream.Stream<void, WalletError> {
-    return this.#v1Context.syncService.updates(initialState).pipe(
+  startSync(): Stream.Stream<void, WalletError, Scope.Scope> {
+    return pipe(
+      SubscriptionRef.get(this.#context.stateRef),
+      Stream.fromEffect,
+      Stream.flatMap((state) => this.#v1Context.syncService.updates(state)),
       Stream.mapEffect((update) => {
         return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
           Effect.try({
@@ -160,6 +165,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
           }),
         );
       }),
+      Stream.retry(
+        pipe(
+          Schedule.exponential(Duration.seconds(1), 2),
+          Schedule.map((delay) => {
+            const maxDelay = Duration.minutes(2);
+            const jitter = Duration.millis(Math.floor(Math.random() * 1000));
+            const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
+
+            return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
+          }),
+        ),
+      ),
     );
   }
 

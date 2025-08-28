@@ -531,6 +531,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@effect/language-service@npm:^0.34.0":
+  version: 0.34.0
+  resolution: "@effect/language-service@npm:0.34.0"
+  bin:
+    effect-language-service: cli.js
+  checksum: 10c0/ece443c5c767a99d12ed2101a2623eeab2175766511fb60133dec09ad51e7416c6a8ab2dc599948f600611169fb799c9b307e2af99ebdae28ad064993e92694f
+  languageName: node
+  linkType: hard
+
 "@effect/platform-node-shared@npm:^0.47.0":
   version: 0.47.0
   resolution: "@effect/platform-node-shared@npm:0.47.0"
@@ -1884,6 +1893,7 @@ __metadata:
     rxjs: "npm:^7.5.5"
     testcontainers: "npm:^11.4.0"
     typescript: "npm:^5.8.3"
+    vitest: "npm:^3.2.4"
   languageName: unknown
   linkType: soft
 
@@ -1987,7 +1997,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-indexer-client@npm:1.0.0-beta.2, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
+"@midnight-ntwrk/wallet-sdk-indexer-client@npm:1.0.0-beta.2, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:*, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client"
   dependencies:
@@ -2011,6 +2021,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
+    "@effect/language-service": "npm:^0.34.0"
     "@eslint/compat": "npm:^1.3.1"
     "@eslint/js": "npm:^9.21.0"
     "@rollup/plugin-node-resolve": "npm:^16.0.0"
@@ -2087,6 +2098,7 @@ __metadata:
     "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*"
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
     "@polkadot/types": "npm:^16.4.1"
     "@scure/base": "npm:^1.1.9"

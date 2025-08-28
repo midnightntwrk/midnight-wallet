@@ -47,6 +47,54 @@ final case class Wallet[LocalState, SecretKeys, Transaction](
     this.copy(txHistory = txHistory :+ transaction)
   }
 
+  def updateProgress(
+      appliedIndex: js.UndefOr[js.BigInt],
+      highestRelevantWalletIndex: js.UndefOr[js.BigInt],
+      highestIndex: js.UndefOr[js.BigInt],
+      highestRelevantIndex: js.UndefOr[js.BigInt],
+  ): Wallet[LocalState, SecretKeys, Transaction] = {
+    this.copy(
+      progress = this.progress.copy(
+        appliedIndex = appliedIndex.toOption.map(n => data.Transaction.Offset(n.toScalaBigInt)),
+        highestRelevantWalletIndex =
+          highestRelevantWalletIndex.toOption.map(n => data.Transaction.Offset(n.toScalaBigInt)),
+        highestIndex = highestIndex.toOption.map(n => data.Transaction.Offset(n.toScalaBigInt)),
+        highestRelevantIndex =
+          highestRelevantIndex.toOption.map(n => data.Transaction.Offset(n.toScalaBigInt)),
+      ),
+    )
+  }
+
+  @SuppressWarnings(Array("org.wartremover.warts.Throw"))
+  def update(
+      appliedIndex: js.UndefOr[js.BigInt],
+      offset: js.UndefOr[js.BigInt],
+      protocolVersion: js.BigInt,
+      isConnected: Boolean,
+  ): Wallet[LocalState, SecretKeys, Transaction] = {
+    val protocolVersionParsed = ProtocolVersion.fromBigInt(protocolVersion) match {
+      case Right(version) => version
+      case Left(error) => throw new Exception(s"Unknown protocol version: $protocolVersion", error)
+    }
+
+    val offsetParsed = offset.toOption.map(i => data.Transaction.Offset(i.toScalaBigInt))
+
+    this.copy(
+      progress = this.progress.copy(appliedIndex =
+        appliedIndex.toOption.map(n => data.Transaction.Offset(n.toScalaBigInt)),
+      ),
+      offset = offsetParsed,
+      protocolVersion = protocolVersionParsed,
+      isConnected = isConnected,
+    )
+  }
+
+  def updateTxHistory(
+      newTxHistory: Vector[Transaction],
+  ): Wallet[LocalState, SecretKeys, Transaction] = {
+    this.copy(txHistory = newTxHistory)
+  }
+
   def applyTransaction[
       Offer,
       ProofErasedOffer,

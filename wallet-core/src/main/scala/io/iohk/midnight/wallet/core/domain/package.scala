@@ -112,5 +112,13 @@ package object domain {
 
   @JSExportAll case object ConnectionLost extends IndexerUpdate[Nothing, Nothing]
 
+  @JSExportAll
+  final case class ProgressUpdateParams(
+      appliedIndex: Option[Offset],
+      highestRelevantWalletIndex: Option[Offset],
+      highestIndex: Option[Offset],
+      highestRelevantIndex: Option[Offset],
+  )
+
   final case class Seed(seed: Array[Byte]) extends AnyVal
 }

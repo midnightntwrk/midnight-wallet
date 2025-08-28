@@ -13,6 +13,11 @@
     "resolveJsonModule": true,
     "target": "ESNext",
     "moduleResolution": "Bundler",
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ],
     "noPropertyAccessFromIndexSignature": true,
     "alwaysStrict": true,
     "exactOptionalPropertyTypes": true,
