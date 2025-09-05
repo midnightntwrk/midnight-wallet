@@ -55,6 +55,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction> = Variant.Variant<
   coinsAndBalances: CoinsAndBalancesCapability<V1State>;
   keys: KeysCapability<V1State>;
   serialization: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+  transactionHistory: TransactionHistoryCapability<V1State, TTransaction>;
 };
 
 export type DefaultV1Builder = V1Builder<
@@ -345,6 +346,7 @@ export class V1Builder<
       coinsAndBalances: v1Context.coinsAndBalancesCapability,
       keys: v1Context.keysCapability,
       serialization: v1Context.serializationCapability,
+      transactionHistory: v1Context.transactionHistoryCapability,
       start(
         context: Variant.VariantContext<V1State>,
         initialState: V1State,

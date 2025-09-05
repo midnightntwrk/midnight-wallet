@@ -10,6 +10,7 @@ import { WalletLike } from './abstractions';
 import { ProvingRecipe } from './v1/ProvingRecipe';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import { SerializationCapability } from './v1/Serialization';
+import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory';
 import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances';
 import { KeysCapability } from './v1/Keys';
 import {
@@ -23,6 +24,7 @@ export type ShieldedWalletCapabilities = {
   serialization: SerializationCapability<V1State, zswap.SecretKeys, string>;
   coinsAndBalances: CoinsAndBalancesCapability<V1State>;
   keys: KeysCapability<V1State>;
+  transactionHistory: TransactionHistoryCapability<V1State, zswap.Transaction>;
 };
 
 export class ShieldedWalletState {
@@ -62,6 +64,14 @@ export class ShieldedWalletState {
 
   get address(): ShieldedAddress {
     return this.capabilities.keys.getAddress(this.state);
+  }
+
+  get progress(): ProgressUpdate {
+    return this.capabilities.transactionHistory.progress(this.state);
+  }
+
+  get transactionHistory(): readonly zswap.Transaction[] {
+    return this.capabilities.transactionHistory.transactionHistory(this.state);
   }
 
   constructor(state: ProtocolState.ProtocolState<V1State>, capabilities: ShieldedWalletCapabilities) {
