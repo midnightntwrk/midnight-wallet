@@ -2,7 +2,7 @@ import { Effect, Stream, Context, Layer, Scope } from 'effect';
 import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient';
-import { WsURL, ClientError, ServerError, InvalidProtocolSchemeError } from '@midnight-ntwrk/abstractions';
+import { WsURL, ClientError, ServerError, InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Query } from './Query';
 
 export const layer: (

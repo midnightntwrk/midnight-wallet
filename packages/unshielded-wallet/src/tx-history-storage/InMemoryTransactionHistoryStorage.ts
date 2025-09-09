@@ -1,27 +1,10 @@
 import { Either, Schema } from 'effect';
-import { TransactionHistoryStorage } from './TransactionHistoryStorage';
-
-const TransactionHashSchema = Schema.String;
-
-export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
-
-const TransactionHistoryEntrySchema = Schema.Struct({
-  id: Schema.Number,
-  hash: TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  identifiers: Schema.Array(Schema.String),
-  transactionResult: Schema.Struct({
-    status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
-    segments: Schema.Array(
-      Schema.Struct({
-        id: Schema.String,
-        success: Schema.Boolean,
-      }),
-    ),
-  }),
-});
-
-export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;
+import {
+  TransactionHistoryStorage,
+  TransactionHistoryEntrySchema,
+  TransactionHistoryEntry,
+  TransactionHash,
+} from './TransactionHistoryStorage';
 
 const TransactionHistorySchema = Schema.Map({
   key: Schema.String,

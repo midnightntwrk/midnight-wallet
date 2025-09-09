@@ -1,11 +1,22 @@
 {
-  "name": "@midnight-ntwrk/wallet-ts",
-  "version": "5.0.0",
+  "name": "@midnight-ntwrk/wallet-sdk-shielded",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "private": true,
+  "author": "IOHK",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -25,15 +36,13 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/abstractions": "workspace:*",
-    "@midnight-ntwrk/ledger": "^4.0.0",
-    "@midnight-ntwrk/wallet-api": "^5.0.0",
-    "@midnight-ntwrk/wallet-node-client-ts": "workspace:*",
-    "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*",
+    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*",
-    "@midnight-ntwrk/zswap": "^4.0.0",
+    "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*",
     "@scure/base": "^1.1.9",
     "effect": "^3.17.3",
     "isomorphic-ws": "^5.0.0",
@@ -62,6 +71,7 @@
     "fast-check": "^4.2.0",
     "rimraf": "^6.0.1",
     "testcontainers": "^11.4.0",
-    "to-words": "^4.5.1"
+    "to-words": "^4.5.1",
+    "vitest": "^3.2.4"
   }
 }

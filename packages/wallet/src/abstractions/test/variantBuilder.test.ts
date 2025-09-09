@@ -1,4 +1,4 @@
-import { HList, type Expect, type Equal } from '@midnight-ntwrk/abstractions';
+import { HList, type Expect, type Equal } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   InterceptingVariant,
   InterceptingVariantBuilder,

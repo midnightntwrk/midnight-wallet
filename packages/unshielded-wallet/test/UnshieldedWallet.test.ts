@@ -5,8 +5,9 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { WalletBuilder } from '../src';
 import { NetworkId } from '@midnight-ntwrk/ledger';
 import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage';
+import { getUnshieldedSeed } from './testUtils';
 
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 const currentFile = new URL(import.meta.url).pathname;
 const environmentUID = Math.floor(Math.random() * 1000).toString();
@@ -15,9 +16,10 @@ const environment = new DockerComposeEnvironment(path.resolve(currentFile, '..')
   .withWaitStrategy(`indexer_${environmentUID}`, Wait.forLogMessage(/block indexed/))
   .withEnvironment({ TESTCONTAINERS_UID: environmentUID });
 
-describe.skip('UnshieldedWallet', () => {
+describe('UnshieldedWallet', () => {
   let indexerPort: number;
   let startedEnvironment: StartedDockerComposeEnvironment;
+  const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000001');
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -29,7 +31,7 @@ describe.skip('UnshieldedWallet', () => {
 
     const wallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
       txHistoryStorage,
     });
@@ -41,17 +43,14 @@ describe.skip('UnshieldedWallet', () => {
         .state()
         .pipe(
           filter(
-            (state) =>
-              state !== undefined &&
-              state.syncProgress !== undefined &&
-              Object.values(state.availableBalances).length > 0,
+            (state) => state !== undefined && state.syncProgress !== undefined && state.syncProgress.applyGap === 0,
           ),
         ),
     );
 
     expect(state.address).toBe('mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s');
-    expect(Object.values(state.availableBalances).length).toBeGreaterThan(0);
-    expect(Object.values(state.pendingBalances).length).toBe(0);
+    expect(state.balances.size).toBeGreaterThan(0);
+    expect(state.pendingCoins.length).toBe(0);
     expect(state.syncProgress).toBeDefined();
 
     await wallet.stop();
@@ -62,7 +61,7 @@ describe.skip('UnshieldedWallet', () => {
 
     const initialWallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
       txHistoryStorage,
     });
@@ -92,7 +91,7 @@ describe.skip('UnshieldedWallet', () => {
 
     const restoredWallet = await WalletBuilder.restore({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
       serializedState,
       txHistoryStorage: restoredTxHistoryStorage,
@@ -101,8 +100,8 @@ describe.skip('UnshieldedWallet', () => {
     const restoredState = await firstValueFrom(restoredWallet.state());
 
     expect(restoredState.address).toBe(initialState.address);
-    expect(Object.values(restoredState.availableBalances).length).toBeGreaterThan(0);
-    expect(Object.values(restoredState.pendingBalances).length).toBe(0);
+    expect(restoredState.balances.size).toBeGreaterThan(0);
+    expect(restoredState.pendingCoins.length).toBe(0);
     expect(restoredState.syncProgress).toBeDefined();
     expect(restoredState.syncProgress?.applyGap).toBe(0);
     expect(restoredState.syncProgress?.synced).toBe(true);
@@ -113,7 +112,7 @@ describe.skip('UnshieldedWallet', () => {
   it('should instantiate without transaction history service', async () => {
     const wallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
     });
 
@@ -122,14 +121,7 @@ describe.skip('UnshieldedWallet', () => {
     await firstValueFrom(
       wallet
         .state()
-        .pipe(
-          filter(
-            (state) =>
-              state !== undefined &&
-              state.syncProgress !== undefined &&
-              Object.values(state.availableBalances).length > 0,
-          ),
-        ),
+        .pipe(filter((state) => state !== undefined && state.syncProgress !== undefined && state.balances.size > 0)),
     );
     expect(wallet.transactionHistory).toBeUndefined();
 
@@ -143,7 +135,7 @@ describe.skip('UnshieldedWallet', () => {
   it('should restore from serialized state', async () => {
     const initialWallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
     });
 
@@ -168,7 +160,7 @@ describe.skip('UnshieldedWallet', () => {
 
     const restoredWallet = await WalletBuilder.restore({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: '0000000000000000000000000000000000000000000000000000000000000001',
+      seed: unshieldedSeed,
       networkId: NetworkId.Undeployed,
       serializedState,
     });
@@ -176,8 +168,8 @@ describe.skip('UnshieldedWallet', () => {
     const restoredState = await firstValueFrom(restoredWallet.state());
 
     expect(restoredState.address).toBe(initialState.address);
-    expect(Object.values(restoredState.availableBalances).length).toBeGreaterThan(0);
-    expect(Object.values(restoredState.pendingBalances).length).toBe(0);
+    expect(restoredState.balances.size).toBeGreaterThan(0);
+    expect(restoredState.pendingCoins.length).toBe(0);
     expect(restoredState.syncProgress).toBeDefined();
     expect(restoredState.syncProgress?.applyGap).toBe(0);
     expect(restoredState.syncProgress?.synced).toBe(true);

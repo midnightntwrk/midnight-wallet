@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 
 export const WalletError = {
   proving(err: Error): WalletError {
@@ -60,7 +60,7 @@ export class SubmissionError extends Data.TaggedError('Wallet.SubmissionWalletEr
 
 export class InsufficientFundsError extends Data.TaggedError('Wallet.InsufficientFunds')<{
   message: string;
-  tokenType: zswap.TokenType;
+  tokenType: ledger.RawTokenType;
   amount: bigint;
 }> {}
 

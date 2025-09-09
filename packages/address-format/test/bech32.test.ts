@@ -1,6 +1,6 @@
 import addresses from './addresses.json';
 import { MidnightBech32m, ShieldedAddress, ShieldedCoinPublicKey, ShieldedEncryptionSecretKey } from '../src';
-import { NetworkId } from '@midnight-ntwrk/zswap';
+import { NetworkId } from '@midnight-ntwrk/ledger';
 
 function mapNetworkId(networkId: string | null): NetworkId {
   switch (networkId) {

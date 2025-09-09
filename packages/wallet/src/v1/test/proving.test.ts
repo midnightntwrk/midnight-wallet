@@ -1,16 +1,19 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect } from 'effect';
 import { makeSimulatorProvingService } from '../Proving';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe';
+import { ProofErasedTransaction, shieldedToken } from '../types/ledger';
+import { getNonDustImbalance } from '../../test/testUtils';
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
-  const recipient = zswap.SecretKeys.fromSeed(seed);
+  const recipient = ledger.ZswapSecretKeys.fromSeed(seed);
   const amount = 42n;
-  const coin = zswap.createCoinInfo(zswap.nativeToken(), amount);
-  const output = zswap.UnprovenOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-  const offer = zswap.UnprovenOffer.fromOutput(output, zswap.nativeToken(), amount);
-  return new zswap.UnprovenTransaction(offer);
+  const shieldedTokenType = shieldedToken();
+  const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, amount);
+  const output = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+  const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenType.raw, amount);
+  return ledger.Transaction.fromParts(offer);
 };
 
 describe('Simulator proving service', () => {
@@ -34,10 +37,10 @@ describe('Simulator proving service', () => {
     'does transform proving recipe into final, proof-erased transaction',
     async ({ recipe, expectedImbalance }) => {
       const service = makeSimulatorProvingService();
-      const finalTx: zswap.ProofErasedTransaction = await service.prove(recipe).pipe(Effect.runPromise);
+      const finalTx: ProofErasedTransaction = await service.prove(recipe).pipe(Effect.runPromise);
 
-      expect(finalTx).toBeInstanceOf(zswap.ProofErasedTransaction);
-      expect(finalTx.imbalances(true).get(zswap.nativeToken())).toEqual(expectedImbalance);
+      expect(finalTx).toBeInstanceOf(ledger.Transaction);
+      expect(getNonDustImbalance(finalTx.imbalances(0), shieldedToken().raw)).toEqual(expectedImbalance);
     },
   );
 });

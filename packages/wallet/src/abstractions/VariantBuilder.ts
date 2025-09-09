@@ -1,4 +1,4 @@
-import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { AnyVariant, VersionedVariant } from './Variant';
 
 /**

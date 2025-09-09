@@ -1,8 +1,30 @@
-import { TransactionHash, UnshieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
+import { Schema } from 'effect';
+
+const TransactionHashSchema = Schema.String;
+
+export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
+
+export const TransactionHistoryEntrySchema = Schema.Struct({
+  id: Schema.Number,
+  hash: TransactionHashSchema,
+  protocolVersion: Schema.Number,
+  identifiers: Schema.Array(Schema.String),
+  transactionResult: Schema.Struct({
+    status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+    segments: Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        success: Schema.Boolean,
+      }),
+    ),
+  }),
+});
+
+export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;
 
 export interface TransactionHistoryStorage {
-  create(entry: UnshieldedTransactionHistoryEntry): Promise<void>;
-  delete(hash: TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined>;
-  getAll(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
-  get(hash: TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined>;
+  create(entry: TransactionHistoryEntry): Promise<void>;
+  delete(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
+  getAll(): AsyncIterableIterator<TransactionHistoryEntry>;
+  get(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
 }

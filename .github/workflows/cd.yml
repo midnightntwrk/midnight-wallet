@@ -29,8 +29,8 @@ jobs:
           cache-dependency-path: 'yarn.lock'
           # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@midnight-ntwrk"
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
 
       - name: Configure yarn
         run: |
@@ -43,7 +43,7 @@ jobs:
           yarn install --immutable
 
       - name: Build
-        run:  yarn dist --filter '*wallet-sdk-*'
+        run: yarn dist
 
       - name: Publish release
         run: |
@@ -54,3 +54,8 @@ jobs:
           yarn workspace @midnight-ntwrk/wallet-sdk-indexer-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-indexer-client failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-unshielded-state npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-unshielded-state failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-unshielded-wallet npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-unshielded-wallet failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-shielded npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-shielded failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-abstractions npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-abstractions failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-prover-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-prover-client failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-facade npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-facade failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-node-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-node-client failed"

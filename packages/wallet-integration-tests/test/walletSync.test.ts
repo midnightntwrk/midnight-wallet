@@ -1,16 +1,22 @@
-import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from '@midnight-ntwrk/wallet-ts/v1';
-import { NetworkId } from '@midnight-ntwrk/zswap';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
+import {
+  DefaultV1Configuration,
+  DefaultV1Variant,
+  V1Builder,
+  V1State,
+  V1Tag,
+} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 
 import os from 'node:os';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { pipe } from 'effect';
+import { getShieldedSeed } from './utils';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 30_000 });
 
@@ -38,9 +44,9 @@ describe('Wallet Sync', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: NetworkId.Undeployed,
+      networkId: ledger.NetworkId.Undeployed,
       costParameters: {
-        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        ledgerParams: ledger.LedgerParameters.dummyParameters(),
         additionalFeeOverhead: 50_000n,
       },
     };
@@ -68,7 +74,12 @@ describe('Wallet Sync', () => {
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
-    wallet = Wallet.startEmpty(Wallet);
+
+    const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001');
+    wallet = Wallet.startFirst(
+      Wallet,
+      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), configuration.networkId),
+    );
   });
 
   afterEach(async () => {
@@ -84,9 +95,9 @@ describe('Wallet Sync', () => {
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
     expect(balances).toStrictEqual({
-      '02000000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,
-      '02000000000000000000000000000000000000000000000000000000000000000001': 5000000000000000n,
-      '02000000000000000000000000000000000000000000000000000000000000000002': 5000000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000001': 5000000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000002': 5000000000000000n,
     });
   });
 });

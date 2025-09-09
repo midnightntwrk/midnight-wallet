@@ -77,29 +77,14 @@
     },
     "@midnight-ntwrk/wallet#dist": {
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "//#sbt:dist"]
+      "dependsOn": ["^dist"]
     },
     "@midnight-ntwrk/wallet#typecheck": {
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "//#sbt:dist"]
+      "dependsOn": ["^dist"]
     },
     "verify": {
       "dependsOn": ["typecheck", "lint", "test"]
-    },
-    "//#sbt:dist": {
-      "inputs": [
-        "build.sbt",
-        "**/package.json",
-        "**/src/**/resources/**",
-        "**/src/**/*.scala",
-        "project/**/*.scala",
-        "project/build.properties",
-        "project/*.sbt",
-        "**/src/**/resources/**/*.d.ts"
-      ],
-      "outputs": ["wallet-engine/dist/**"],
-      "outputLogs": "new-only",
-      "dependsOn": ["@midnight-ntwrk/wallet-sdk-address-format#dist", "@midnight-ntwrk/wallet-sdk-capabilities#dist"]
     }
   }
 }

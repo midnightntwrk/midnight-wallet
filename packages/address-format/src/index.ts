@@ -1,4 +1,4 @@
-import { NetworkId, EncryptionSecretKey } from '@midnight-ntwrk/zswap';
+import { NetworkId, EncryptionSecretKey } from '@midnight-ntwrk/ledger';
 import { bech32m } from '@scure/base';
 
 export type FormatContext = {
@@ -135,11 +135,8 @@ export class ShieldedAddress {
 export class ShieldedEncryptionSecretKey {
   static codec = new Bech32mCodec<ShieldedEncryptionSecretKey>(
     'shield-esk',
-    (esk) => Buffer.from(esk.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(NetworkId.Undeployed).subarray(1)),
-    (repr) =>
-      new ShieldedEncryptionSecretKey(
-        EncryptionSecretKey.deserialize(Buffer.concat([Buffer.of(0), repr]), NetworkId.Undeployed),
-      ),
+    (esk) => Buffer.from(esk.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(NetworkId.Undeployed)),
+    (repr) => new ShieldedEncryptionSecretKey(EncryptionSecretKey.deserialize(repr, NetworkId.Undeployed)),
   );
 
   // There are some bits in serialization of field elements and elliptic curve points, that are hard to replicate

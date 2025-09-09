@@ -3,15 +3,7 @@
   "name": "@midnight-ntwrk/wallet-sdk-monorepo",
   "type": "module",
   "workspaces": [
-    "packages/*",
-    "wallet-engine",
-    "wallet-core",
-    "substrate-client",
-    "pubsub-indexer-client",
-    "prover-client",
-    "js-interop",
-    "integration-tests",
-    "wallet-zswap"
+    "packages/*"
   ],
   "devDependencies": {
     "@effect/language-service": "^0.34.0",

@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
-import { ProverClient, HttpProverClient as _HttpProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProverClient, HttpProverClient as _HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 
 /**
  * Sends serialized unproven transactions to a Proof Server over HTTP.

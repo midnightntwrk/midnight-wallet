@@ -1,34 +1,51 @@
-import { UnshieldedKeystore, Roles } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { UnshieldedAddress, MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { NetworkId } from '@midnight-ntwrk/ledger';
-import { Effect } from 'effect';
+import {
+  addressFromKey,
+  NetworkId,
+  Signature,
+  SignatureVerifyingKey,
+  signData,
+  UserAddress,
+  signatureVerifyingKey,
+} from '@midnight-ntwrk/ledger';
+export interface UnshieldedKeystore {
+  getSecretKey(): Buffer;
+  getBech32Address(): MidnightBech32m;
+  getPublicKey(): SignatureVerifyingKey;
+  getAddress(includeVersion?: boolean): UserAddress;
+  signData(data: Uint8Array): Signature;
+}
 
 export interface Keystore {
   keystore: UnshieldedKeystore;
-  getBech32Address(): Effect.Effect<MidnightBech32m, Error>;
+  getBech32Address(): MidnightBech32m;
+  getPublicKey(): SignatureVerifyingKey;
 }
 
-export const createKeystore = (
-  seed: Buffer,
-  networkId: NetworkId,
-  accountIndex = 0,
-  addressIndex = 0,
-  role = Roles.NightExternal,
-): Effect.Effect<Keystore, Error> =>
-  Effect.try({
-    try: () => {
-      const keystore = new UnshieldedKeystore(seed, accountIndex, addressIndex, role);
+export const createKeystore = (shieldedSeed: Uint8Array<ArrayBufferLike>, networkId: NetworkId): UnshieldedKeystore => {
+  const MAJOR_VERSION = 1;
+  const MINOR_VERSION = 0;
 
-      return {
-        keystore,
-        getBech32Address: () =>
-          Effect.gen(function* () {
-            const address = yield* keystore.getAddress(false);
-            const addressBuffer = Buffer.from(address, 'hex');
-            return UnshieldedAddress.codec.encode(networkId, new UnshieldedAddress(addressBuffer));
-          }),
-      };
+  const keystore: UnshieldedKeystore = {
+    getSecretKey: () => Buffer.from([MAJOR_VERSION, MINOR_VERSION, ...shieldedSeed]),
+
+    getBech32Address: () => {
+      const address = keystore.getAddress(false);
+      const addressBuffer = Buffer.from(address, 'hex');
+      return UnshieldedAddress.codec.encode(networkId, new UnshieldedAddress(addressBuffer));
     },
-    catch: (error) =>
-      new Error(`something went wrong ${error instanceof Error ? error.message : JSON.stringify(error)}`),
-  });
+
+    getPublicKey: () => signatureVerifyingKey(keystore.getSecretKey().toString('hex')),
+
+    getAddress: (includeVersion = true) => {
+      const publicKey = keystore.getPublicKey();
+      const address = addressFromKey(publicKey);
+
+      return includeVersion ? address : address.slice(4);
+    },
+
+    signData: (data: Uint8Array) => signData(keystore.getSecretKey().toString('hex'), data),
+  };
+
+  return keystore;
+};

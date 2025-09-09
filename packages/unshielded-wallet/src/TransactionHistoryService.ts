@@ -1,10 +1,5 @@
 import { Effect, Layer, Context, Data, SubscriptionRef, Stream } from 'effect';
-import {
-  TransactionHash,
-  UnshieldedTransactionHistoryEntry,
-  UnshieldedTransactionHistoryChange,
-} from '@midnight-ntwrk/wallet-api';
-import { TransactionHistoryStorage } from './tx-history-storage';
+import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage';
 
 export class TransactionHistoryServiceError extends Data.TaggedError('TransactionHistoryServiceError')<{
   readonly error?: unknown;
@@ -14,19 +9,22 @@ export class TransactionHistoryServiceError extends Data.TaggedError('Transactio
   }
 }
 
+export type TransactionHistoryChange = {
+  type: 'created' | 'updated' | 'deleted';
+  entry: TransactionHistoryEntry;
+};
+
 /**
  * TransactionHistoryService API
  *
  * Extend with tx lifecycle methods when needed in the future.
  */
 export interface TransactionHistoryServiceAPI {
-  create: (item: UnshieldedTransactionHistoryEntry) => Effect.Effect<void, TransactionHistoryServiceError>;
+  create: (item: TransactionHistoryEntry) => Effect.Effect<void, TransactionHistoryServiceError>;
   delete: (hash: TransactionHash) => Effect.Effect<void, TransactionHistoryServiceError>;
-  getAll: () => Stream.Stream<UnshieldedTransactionHistoryEntry, TransactionHistoryServiceError>;
-  get: (
-    hash: TransactionHash,
-  ) => Effect.Effect<UnshieldedTransactionHistoryEntry | undefined, TransactionHistoryServiceError>;
-  changes: Stream.Stream<UnshieldedTransactionHistoryChange | undefined>;
+  getAll: () => Stream.Stream<TransactionHistoryEntry, TransactionHistoryServiceError>;
+  get: (hash: TransactionHash) => Effect.Effect<TransactionHistoryEntry | undefined, TransactionHistoryServiceError>;
+  changes: Stream.Stream<TransactionHistoryChange | undefined>;
 }
 
 export class TransactionHistoryService extends Context.Tag(
@@ -36,10 +34,10 @@ export class TransactionHistoryService extends Context.Tag(
     Layer.effect(
       TransactionHistoryService,
       Effect.gen(function* () {
-        const txHistoryRef = yield* SubscriptionRef.make<UnshieldedTransactionHistoryChange | undefined>(undefined);
+        const txHistoryRef = yield* SubscriptionRef.make<TransactionHistoryChange | undefined>(undefined);
 
         return {
-          create: (entry: UnshieldedTransactionHistoryEntry) =>
+          create: (entry: TransactionHistoryEntry) =>
             Effect.tryPromise({
               try: async () => storage.create(entry),
               catch: (error) => new TransactionHistoryServiceError({ error }),
@@ -48,7 +46,7 @@ export class TransactionHistoryService extends Context.Tag(
                 SubscriptionRef.set(txHistoryRef, {
                   type: 'created',
                   entry,
-                } as UnshieldedTransactionHistoryChange),
+                } as TransactionHistoryChange),
               ),
             ),
           delete: (hash: TransactionHash) =>
@@ -59,7 +57,7 @@ export class TransactionHistoryService extends Context.Tag(
                 SubscriptionRef.set(txHistoryRef, {
                   type: 'deleted',
                   entry: deletedEntry,
-                } as UnshieldedTransactionHistoryChange);
+                } as TransactionHistoryChange);
               },
               catch: (error) => new TransactionHistoryServiceError({ error }),
             }),

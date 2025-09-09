@@ -1,16 +1,28 @@
-import { Effect, ParseResult, pipe, Schema, Stream } from 'effect';
+import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger';
-import path from 'node:path';
 import { FileSystem, Error } from '@effect/platform';
+import {
+  ClientError,
+  SerializedTransaction,
+  SerializedUnprovenTransaction,
+  ServerError,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { normalizeTxs } from './normalize-txs';
+import { StartedNetwork } from 'testcontainers';
+import { TestContainers } from '.';
+import { Scope } from 'effect/Scope';
 
-const paths = new (class {
-  currentDir = path.dirname(new URL(import.meta.url).pathname);
-  packageDir = path.resolve(this.currentDir, '..', '..');
-  testTxs = path.resolve(this.packageDir, 'resources/test-txs.json');
-})();
+export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+
+// const paths = new (class {
+//   currentDir = path.dirname(new URL(import.meta.url).pathname);
+//   packageDir = path.resolve(this.currentDir, '..', '..');
+//   testTxs = path.resolve(this.packageDir, 'resources/test-txs.json');
+// })();
 
 const TxSchema = Schema.declare(
-  (input: unknown): input is ledger.Transaction => input instanceof ledger.Transaction,
+  (input: unknown): input is FinalizedTransaction => input instanceof ledger.Transaction,
 ).annotations({
   identifier: 'ledger.Transaction',
 });
@@ -19,18 +31,21 @@ const Uint8ArraySchema = Schema.declare(
 ).annotations({
   identifier: 'Uint8Array',
 });
-const TxFromUint8Array: Schema.Schema<ledger.Transaction, Uint8Array> = Schema.asSchema(
+
+const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema.asSchema(
   Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
     encode: (tx) => Effect.sync(() => tx.serialize(ledger.NetworkId.Undeployed)),
     decode: (bytes) =>
       Effect.try({
-        try: () => ledger.Transaction.deserialize(bytes, ledger.NetworkId.Undeployed),
+        try: () =>
+          ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, ledger.NetworkId.Undeployed),
+
         catch: (err) => new ParseResult.Unexpected(err, 'Could not deserialize transaction'),
       }),
   }),
 );
 
-const HexedTx: Schema.Schema<ledger.Transaction, string> = pipe(
+const HexedTx: Schema.Schema<FinalizedTransaction, string> = pipe(
   Schema.Uint8ArrayFromHex,
   Schema.compose(TxFromUint8Array),
 );
@@ -39,29 +54,104 @@ type TxSchema = Schema.Schema.Type<typeof HexedTx>;
 const TestTransactionsSchema = Schema.Struct({
   initial_tx: HexedTx,
   unbalanced_tx: HexedTx,
-  batches: Schema.Array(
-    Schema.Struct({
-      txs: Schema.Array(HexedTx),
-    }),
-  ),
+  batches: Schema.Array(HexedTx),
 });
 export type TestTransactions = Schema.Schema.Type<typeof TestTransactionsSchema>;
 
-export const load: Effect.Effect<
-  TestTransactions,
-  ParseResult.ParseError | Error.PlatformError,
-  FileSystem.FileSystem
-> = pipe(
-  FileSystem.FileSystem.pipe(Effect.flatMap((fs) => fs.readFileString(paths.testTxs))),
-  Effect.map((str) => JSON.parse(str) as unknown),
-  Effect.andThen(Schema.decodeUnknown(TestTransactionsSchema, { errors: 'all' })),
-  Effect.cached,
-  Effect.flatten,
-);
+export const load: (
+  file: string,
+) => Effect.Effect<TestTransactions, ParseResult.ParseError | Error.PlatformError, FileSystem.FileSystem> = (file) =>
+  pipe(
+    FileSystem.FileSystem.pipe(Effect.flatMap((fs) => fs.readFileString(file))),
+    Effect.map((str) => JSON.parse(str) as unknown),
+    Effect.andThen(Schema.decodeUnknown(TestTransactionsSchema, { errors: 'all' })),
+    Effect.cached,
+    Effect.flatten,
+  );
 
-export const streamAllValid = (txs: TestTransactions): Stream.Stream<ledger.Transaction> => {
+export const streamAllValid = (txs: TestTransactions): Stream.Stream<FinalizedTransaction> => {
   const initial = Stream.succeed(txs.initial_tx);
-  const batches = Stream.fromIterable(txs.batches).pipe(Stream.flatMap((batch) => Stream.fromIterable(batch.txs)));
+  const batches = Stream.fromIterable(txs.batches);
 
   return Stream.concat(initial, batches);
 };
+
+export const genUnbalancedTx = (): Effect.Effect<
+  SerializedTransaction,
+  ClientError | ServerError,
+  ProverClient.ProverClient
+> =>
+  Effect.Do.pipe(
+    Effect.bind('value', () => Random.nextIntBetween(1, 100_000_000).pipe(Effect.map((nr) => BigInt(nr)))),
+    Effect.bind('shieldedTokenType', () =>
+      Effect.succeed(ledger.shieldedToken() as unknown as { type: 'shielded'; raw: string }),
+    ),
+    Effect.let('unprovenTx', ({ value, shieldedTokenType }) => {
+      const recipient = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(0));
+      const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, value);
+      const unprovenOutput = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+      const unprovenOffer = ledger.ZswapOffer.fromOutput(unprovenOutput, shieldedTokenType.raw, value);
+      return ledger.Transaction.fromParts(unprovenOffer);
+    }),
+    Effect.flatMap(({ unprovenTx }) =>
+      Effect.gen(function* () {
+        const serializedTx = SerializedUnprovenTransaction(unprovenTx.serialize(ledger.NetworkId.Undeployed));
+        const proverClient = yield* ProverClient.ProverClient;
+        return yield* proverClient.proveTransaction(serializedTx);
+      }),
+    ),
+  );
+
+const normalizeAndSaveUnbalancedTx = (txsPath: string, tx: Uint8Array) => {
+  /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-explicit-any */
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const outputFileData: any = yield* fs.readFileString(txsPath, 'utf8').pipe(Effect.map((str) => normalizeTxs(str)));
+
+    const augmentedOutput = {
+      ...outputFileData,
+      unbalanced_tx: Encoding.encodeHex(tx),
+    };
+    yield* fs.writeFileString(txsPath, JSON.stringify(augmentedOutput));
+  });
+  /* eslint-enable */
+};
+
+const generateUnbalancedTransaction = (proofServerUrl: string) => {
+  // Originally written with `Effect.gen`, but rewritten to Do notation to debug some typing issue
+  // It seems to be a somewhat regular issue
+  return Effect.Do.pipe(
+    Effect.bind('tx', () => genUnbalancedTx()),
+    Effect.map(({ tx }) => tx),
+    Effect.provide(
+      HttpProverClient.layer({
+        url: new URL(proofServerUrl),
+      }),
+    ),
+  );
+};
+
+export const generateTestTransactions = (
+  nodeUrl: string,
+  proofServerUrl: string,
+  network: StartedNetwork,
+  outputPath: string,
+  fileName: string,
+): Effect.Effect<void, Error | Error.PlatformError, FileSystem.FileSystem | Scope> =>
+  Effect.gen(function* () {
+    const [, unbalancedTx] = yield* Effect.all([
+      TestContainers.runTxGenerator(
+        {
+          nodeUrl: nodeUrl,
+          destPath: outputPath,
+          fileName: fileName,
+          txsPerBatch: 1,
+          batches: 1,
+        },
+        (c) => c.withNetwork(network),
+      ),
+      generateUnbalancedTransaction(proofServerUrl),
+    ]);
+
+    yield* normalizeAndSaveUnbalancedTx(`${outputPath}/${fileName}`, unbalancedTx);
+  });

@@ -6,7 +6,7 @@ import {
   VersionChangeType,
   HList,
   Poly,
-} from '@midnight-ntwrk/abstractions';
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, WalletRuntimeError } from './abstractions/index';
 import { EitherOps } from './effect';
 

@@ -1,22 +1,23 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { createSyncProgress, SyncProgressData, SyncProgress } from './SyncProgress';
-import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { FinalizedTransaction } from './types/ledger';
 
 export class CoreWallet {
-  readonly state: zswap.LocalState;
-  readonly secretKeys: zswap.SecretKeys;
+  readonly state: ledger.ZswapLocalState;
+  readonly secretKeys: ledger.ZswapSecretKeys;
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
 
   readonly isConnected: boolean;
   readonly progress: SyncProgress;
-  readonly networkId: zswap.NetworkId;
-  readonly txHistoryArray: readonly zswap.Transaction[];
+  readonly networkId: ledger.NetworkId;
+  readonly txHistoryArray: readonly FinalizedTransaction[];
 
   constructor(
-    state: zswap.LocalState,
-    secretKeys: zswap.SecretKeys,
-    networkId: zswap.NetworkId,
-    txHistory: readonly zswap.Transaction[] = [],
+    state: ledger.ZswapLocalState,
+    secretKeys: ledger.ZswapSecretKeys,
+    networkId: ledger.NetworkId,
+    txHistory: readonly FinalizedTransaction[] = [],
     syncProgress?: SyncProgressData,
     protocolVersion?: ProtocolVersion.ProtocolVersion,
   ) {
@@ -29,18 +30,37 @@ export class CoreWallet {
     this.progress = syncProgress ? createSyncProgress(syncProgress) : createSyncProgress();
   }
 
-  applyCollapsedUpdate(collapsedUpdate: zswap.MerkleTreeCollapsedUpdate): CoreWallet {
+  applyCollapsedUpdate(collapsedUpdate: ledger.MerkleTreeCollapsedUpdate): CoreWallet {
     const newState = this.state.applyCollapsedUpdate(collapsedUpdate);
     return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
-  applyTransaction(tx: zswap.Transaction, res: 'success' | 'partialSuccess' | 'failure'): CoreWallet {
-    const newState = this.state.applyTx(this.secretKeys, tx, res);
+  applyTransaction(tx: FinalizedTransaction, _res: ledger.TransactionResult): CoreWallet {
+    const newState = this.state.applyTx(this.secretKeys, tx, _res.type);
+
     return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
-  applyState(state: zswap.LocalState): CoreWallet {
+  applyState(state: ledger.ZswapLocalState): CoreWallet {
     return new CoreWallet(state, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
+  }
+
+  applyProofErasedTx(
+    tx: ledger.Transaction<ledger.Signaturish, ledger.NoProof, ledger.NoBinding>,
+    result: ledger.TransactionResult,
+  ): CoreWallet {
+    const newState = this.state.applyTx(this.secretKeys, tx, result.type);
+    return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
+  }
+
+  applyFailed(offer: ledger.ZswapOffer<ledger.Proof>): CoreWallet {
+    const newState = this.state.applyFailed(offer);
+    return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
+  }
+
+  applyFailedProofErased(offer: ledger.ZswapOffer<ledger.NoProof>): CoreWallet {
+    const newState = this.state.applyFailed(offer);
+    return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
   updateProgress({
@@ -59,11 +79,11 @@ export class CoreWallet {
     return new CoreWallet(this.state, this.secretKeys, this.networkId, this.txHistoryArray, updatedProgress);
   }
 
-  addTransaction(tx: zswap.Transaction): CoreWallet {
+  addTransaction(tx: FinalizedTransaction): CoreWallet {
     return new CoreWallet(this.state, this.secretKeys, this.networkId, [...this.txHistoryArray, tx], this.progress);
   }
 
-  updateTxHistory(newTxs: readonly zswap.Transaction[]): CoreWallet {
+  updateTxHistory(newTxs: readonly FinalizedTransaction[]): CoreWallet {
     return new CoreWallet(
       this.state,
       this.secretKeys,
@@ -73,17 +93,21 @@ export class CoreWallet {
     );
   }
 
-  static empty(localState: zswap.LocalState, secretKeys: zswap.SecretKeys, networkId: zswap.NetworkId): CoreWallet {
+  static empty(
+    localState: ledger.ZswapLocalState,
+    secretKeys: ledger.ZswapSecretKeys,
+    networkId: ledger.NetworkId,
+  ): CoreWallet {
     return new CoreWallet(localState, secretKeys, networkId);
   }
 
   static restore(
-    localState: zswap.LocalState,
-    secretKeys: zswap.SecretKeys,
-    txHistory: readonly zswap.Transaction[],
+    localState: ledger.ZswapLocalState,
+    secretKeys: ledger.ZswapSecretKeys,
+    txHistory: readonly FinalizedTransaction[],
     syncProgress: SyncProgressData,
     protocolVersion: bigint,
-    networkId: zswap.NetworkId,
+    networkId: ledger.NetworkId,
   ): CoreWallet {
     return new CoreWallet(
       localState,

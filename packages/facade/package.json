@@ -1,0 +1,47 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk-facade",
+  "version": "1.0.0-beta.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "IOHK",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "dependencies": {
+    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:^",
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:^",
+    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^",
+    "rxjs": "^7.5"
+  },
+  "devDependencies": {
+    "rimraf": "^6.0.1",
+    "testcontainers": "^11.4.0",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "test": "vitest run",
+    "lint": "eslint",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
+  }
+}

@@ -1,5 +1,4 @@
-import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps, EitherOps } from '../effect/index';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe';
@@ -18,12 +17,19 @@ import { TotalCostParameters, TransactionImbalances } from './TransactionImbalan
 import { TransactionTrait } from './Transaction';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
+import { FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './types/ledger';
+
+export interface TokenTransfer {
+  readonly amount: bigint;
+  readonly type: ledger.RawTokenType;
+  readonly receiverAddress: string;
+}
 
 export interface TransactingCapability<TState, TTransaction> {
   balanceTransaction(
     state: TState,
     tx: TTransaction,
-    newCoins: readonly zswap.CoinInfo[],
+    newCoins: readonly ledger.ShieldedCoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   makeTransfer(
@@ -33,7 +39,7 @@ export interface TransactingCapability<TState, TTransaction> {
 
   initSwap(
     state: TState,
-    desiredInputs: Record<zswap.TokenType, bigint>,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
@@ -45,12 +51,12 @@ export interface TransactingCapability<TState, TTransaction> {
 }
 
 export type DefaultTransactingConfiguration = {
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
   costParameters: TotalCostParameters;
 };
 
 export type DefaultTransactingContext = {
-  coinSelection: CoinSelection<zswap.QualifiedCoinInfo>;
+  coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
   keysCapability: KeysCapability<V1State>;
 };
@@ -58,7 +64,7 @@ export type DefaultTransactingContext = {
 export const makeDefaultTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<V1State, zswap.Transaction> => {
+): TransactingCapability<V1State, FinalizedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -72,7 +78,7 @@ export const makeDefaultTransactingCapability = (
 export const makeSimulatorTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<V1State, zswap.ProofErasedTransaction> => {
+): TransactingCapability<V1State, ProofErasedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -86,17 +92,17 @@ export const makeSimulatorTransactingCapability = (
 class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 
 export class TransactingCapabilityImplementation<TTransaction> implements TransactingCapability<V1State, TTransaction> {
-  public readonly networkId: zswap.NetworkId;
+  public readonly networkId: ledger.NetworkId;
   public readonly costParams: TotalCostParameters;
-  public readonly getCoinSelection: () => CoinSelection<zswap.QualifiedCoinInfo>;
+  public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   public readonly txTrait: TransactionTrait<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<V1State>;
   readonly getKeys: () => KeysCapability<V1State>;
 
   constructor(
-    networkId: zswap.NetworkId,
+    networkId: ledger.NetworkId,
     costParams: TotalCostParameters,
-    getCoinSelection: () => CoinSelection<zswap.QualifiedCoinInfo>,
+    getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<V1State>,
     getKeys: () => KeysCapability<V1State>,
     txTrait: TransactionTrait<TTransaction>,
@@ -112,7 +118,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   balanceTransaction(
     state: V1State,
     tx: TTransaction,
-    newCoins: zswap.CoinInfo[],
+    newCoins: ledger.ShieldedCoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
@@ -147,7 +153,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
         recipe: {
           type: BALANCE_TRANSACTION_TO_PROVE,
           transactionToBalance: tx,
-          transactionToProve: new zswap.UnprovenTransaction(guaranteed, maybeFallible),
+          transactionToProve: ledger.Transaction.fromParts(guaranteed, maybeFallible),
         },
       };
     });
@@ -164,7 +170,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
         Arr.map((o) => o.outputOffer),
         ArrayOps.fold((a, b) => a.merge(b)),
       );
-      const unprovenTxToBalance = new zswap.UnprovenTransaction(offerToBalance);
+      const unprovenTxToBalance = ledger.Transaction.fromParts(offerToBalance);
       const imbalances = TransactionTrait.unproven.getImbalancesWithFeesOverhead(unprovenTxToBalance, this.costParams);
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         state,
@@ -174,7 +180,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
         Imbalances.empty(),
       );
       const finalState = V1State.watchCoins(newState, selfCoins);
-      const finalTx = unprovenTxToBalance.merge(new zswap.UnprovenTransaction(offer));
+      const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(offer));
 
       return {
         newState: finalState,
@@ -188,7 +194,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
 
   initSwap(
     state: V1State,
-    desiredInputs: Record<zswap.TokenType, bigint>,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
     return Either.gen(this, function* () {
@@ -203,7 +209,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
         inputsParseResult,
       );
       const finalState = V1State.watchCoins(newState, outputsParseResult.selfCoins);
-      const balancingTx = new zswap.UnprovenTransaction(offer);
+      const balancingTx = ledger.Transaction.fromParts(offer);
       const finalTx = outputsParseResult.unprovenTxToBalance
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
         : balancingTx;
@@ -221,8 +227,8 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   revert(state: V1State, tx: TTransaction): Either.Either<V1State, WalletError> {
     return Either.try({
       try: () => {
-        const newLocalState = this.txTrait.getRevertedFromLocalState(tx, state.state);
-        return state.applyState(newLocalState);
+        const newLocalState = this.txTrait.getRevertedFromLocalState(tx, state);
+        return state.applyState(newLocalState.state); // @TODO is this needed?
       },
       catch: (err) => {
         return new OtherWalletError({
@@ -234,11 +240,11 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   }
 
   revertRecipe(state: V1State, recipe: ProvingRecipe<TTransaction>): Either.Either<V1State, WalletError> {
-    const doRevert = (tx: zswap.UnprovenTransaction) => {
+    const doRevert = (tx: UnprovenTransaction) => {
       return Either.try({
         try: () => {
-          const newLocalState = TransactionTrait.unproven.getRevertedFromLocalState(tx, state.state);
-          return state.applyState(newLocalState);
+          const newLocalState = TransactionTrait.unproven.getRevertedFromLocalState(tx, state);
+          return state.applyState(newLocalState.state); // @TODO is this needed?
         },
         catch: (err) => {
           return new OtherWalletError({
@@ -261,25 +267,25 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
 
   #prepareOffer(
     state: V1State,
-    recipe: BalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>,
+    recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
     segment: 0 | 1,
-  ): Option.Option<{ newState: V1State; offer: zswap.UnprovenOffer }> {
+  ): Option.Option<{ newState: V1State; offer: ledger.ZswapOffer<ledger.PreProof> }> {
     const [inputOffers, stateAfterSpends] = V1State.spendCoins(state, recipe.inputs, segment);
     const stateAfterWatches = V1State.watchCoins(stateAfterSpends, recipe.outputs);
     const outputOffers = recipe.outputs.map((coin) => {
-      const output = zswap.UnprovenOutput.new(
+      const output = ledger.ZswapOutput.new(
         coin,
         segment,
         this.getKeys().getCoinPublicKey(state).toHexString(),
         this.getKeys().getEncryptionPublicKey(state).toHexString(),
       );
-      return zswap.UnprovenOffer.fromOutput(output, coin.type, coin.value);
+      return ledger.ZswapOffer.fromOutput(output, coin.type, coin.value);
     });
 
     return pipe(
       Arr.appendAll(inputOffers, outputOffers),
       Arr.match({
-        onEmpty: () => Option.none<zswap.UnprovenOffer>(),
+        onEmpty: () => Option.none<ledger.ZswapOffer<ledger.PreProof>>(),
         onNonEmpty: (nonEmpty) =>
           pipe(
             nonEmpty,
@@ -294,24 +300,24 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   balanceFallibleSection(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
   ): Either.Either<
-    { offer: zswap.UnprovenOffer | undefined; newState: V1State; newImbalances: TransactionImbalances },
+    { offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: V1State; newImbalances: TransactionImbalances },
     WalletError
   > {
     return Either.try({
       try: () => {
         // Fallible section does not pay fees, so we balance all tokens to zero
         const fakeCostModel = { inputFeeOverhead: 0n, outputFeeOverhead: 0n };
-        const fallibleBalanceRecipe = getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+        const fallibleBalanceRecipe = getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
           coins: this.getCoins()
             .getAvailableCoins(state)
             .map((c) => c.coin),
           initialImbalances: imbalances.fallible,
           transactionCostModel: fakeCostModel,
-          feeTokenType: zswap.nativeToken(),
+          feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
           coinSelection,
-          createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+          createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
           isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
         });
         const fallibleCounterOfferFeeOverhead = TransactionTrait.shared.estimateFeeOverhead({
@@ -355,23 +361,23 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   #balanceGuaranteedSection(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     knownSelfOutputs: number,
     targetImbalances: Imbalances,
-  ): Either.Either<{ offer: zswap.UnprovenOffer; newState: V1State }, WalletError> {
+  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: V1State }, WalletError> {
     const correctedCostModel = TotalCostParameters.getCorrectedCostModel(this.costParams);
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
         try: () =>
-          getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+          getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
             coins: this.getCoins()
               .getAvailableCoins(state)
               .map((c) => c.coin),
             initialImbalances: imbalances.guaranteed,
             transactionCostModel: correctedCostModel,
-            feeTokenType: zswap.nativeToken(),
+            feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
             coinSelection,
-            createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+            createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
             isCoinEqual: (a, b) => a.nonce === b.nonce,
             targetImbalances,
           }),
@@ -423,7 +429,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   #balanceGuaranteedWithSelfOutput(
     state: V1State,
     imbalances: TransactionImbalances,
-    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>,
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     correctedCostModel: TransactionCostModel,
     targetImbalances: Imbalances,
   ) {
@@ -431,22 +437,22 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
       const additionalOutputValue = 100_000n;
       const balanceRecipe = yield* Either.try({
         try: () => {
-          return getBalanceRecipe<zswap.QualifiedCoinInfo, zswap.CoinInfo>({
+          return getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
             coins: this.getCoins()
               .getAvailableCoins(state)
               .map((c) => c.coin),
             initialImbalances: Imbalances.merge(
               imbalances.guaranteed,
               Imbalances.fromEntry(
-                zswap.nativeToken(),
+                (ledger.shieldedToken() as { raw: string }).raw,
                 -1n * (additionalOutputValue + correctedCostModel.outputFeeOverhead),
               ),
             ),
             transactionCostModel: this.costParams.ledgerParams.transactionCostModel,
-            feeTokenType: zswap.nativeToken(),
+            feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
             coinSelection,
             targetImbalances,
-            createOutput: (coin) => zswap.createCoinInfo(coin.type, coin.value),
+            createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
             isCoinEqual: (a, b) => a.nonce === b.nonce,
           });
         },
@@ -465,17 +471,21 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
           }
         },
       });
-      const additionalCoin = zswap.createCoinInfo(zswap.nativeToken(), additionalOutputValue);
+      const additionalCoin = ledger.createShieldedCoinInfo(
+        (ledger.shieldedToken() as { raw: string }).raw,
+        additionalOutputValue,
+      );
       const additionalOffer = pipe(
         additionalCoin,
         (coin) =>
-          zswap.UnprovenOutput.new(
+          ledger.ZswapOutput.new(
             coin,
             0,
             this.getKeys().getCoinPublicKey(state).toHexString(),
             this.getKeys().getEncryptionPublicKey(state).toHexString(),
           ),
-        (output) => zswap.UnprovenOffer.fromOutput(output, zswap.nativeToken(), additionalOutputValue),
+        (output) =>
+          ledger.ZswapOffer.fromOutput(output, (ledger.shieldedToken() as { raw: string }).raw, additionalOutputValue),
       );
 
       return yield* pipe(
@@ -519,14 +529,14 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
           return pipe(
             this.#parseAddress(transfer.receiverAddress),
             Either.map((address) => {
-              const coin = zswap.createCoinInfo(transfer.type, transfer.amount);
-              const output = zswap.UnprovenOutput.new(
+              const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
+              const output = ledger.ZswapOutput.new(
                 coin,
                 0,
                 address.coinPublicKey.toHexString(),
                 address.encryptionPublicKey.toHexString(),
               );
-              const outputOffer = zswap.UnprovenOffer.fromOutput(output, transfer.type, transfer.amount);
+              const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
 
               return {
                 coin,
@@ -538,13 +548,16 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
         }),
         Either.all,
       );
-      const selfCoins = Arr.flatMap(initialOffersAndCoins, ({ coin, isForSelf }): readonly zswap.CoinInfo[] => {
-        if (isForSelf) {
-          return [coin];
-        } else {
-          return [];
-        }
-      });
+      const selfCoins = Arr.flatMap(
+        initialOffersAndCoins,
+        ({ coin, isForSelf }): readonly ledger.ShieldedCoinInfo[] => {
+          if (isForSelf) {
+            return [coin];
+          } else {
+            return [];
+          }
+        },
+      );
 
       return { initialOffersAndCoins, selfCoins };
     });
@@ -570,7 +583,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
                 Arr.map((o) => o.outputOffer),
                 ArrayOps.fold((a, b) => a.merge(b)),
               );
-              const unprovenTxToBalance = new zswap.UnprovenTransaction(offerToBalance);
+              const unprovenTxToBalance = ledger.Transaction.fromParts(offerToBalance);
               const imbalances = TransactionTrait.unproven.getImbalancesWithFeesOverhead(
                 unprovenTxToBalance,
                 this.costParams,

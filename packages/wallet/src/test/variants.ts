@@ -1,4 +1,4 @@
-import { StateChange, VersionChangeType } from '@midnight-ntwrk/abstractions';
+import { StateChange, VersionChangeType } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 

@@ -1,4 +1,4 @@
-import type { Expect, Equal } from '@midnight-ntwrk/abstractions';
+import type { Expect, Equal } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { VariantBuilder } from '../abstractions/index';
 import { FullConfiguration, BuildArguments } from '../WalletBuilder';
 import { CanAssign } from './testUtils';

@@ -12,12 +12,8 @@ import type { CodegenConfig } from '@graphql-codegen/cli';
 export default {
   generates: {
     './src/graphql/generated/': {
-      documents: [
-        './src/graphql/queries/*.ts',
-        './src/graphql/subscriptions/*.ts',
-        './src/graphql/legacy-subscriptions/*.ts',
-      ],
-      schema: ['./indexer.gql', './indexer-legacy.gql'],
+      documents: ['./src/graphql/queries/*.ts', './src/graphql/subscriptions/*.ts'],
+      schema: './indexer.gql',
       preset: 'client',
       config: {
         avoidOptionals: true,

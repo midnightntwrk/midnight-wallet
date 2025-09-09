@@ -14,7 +14,7 @@ export function useTestContainersFixture() {
     let composeEnvironment: StartedDockerComposeEnvironment;
     switch (process.env['NETWORK'] as MidnightNetwork) {
       case 'undeployed': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic.yml')
+        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic-v4.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
           .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())

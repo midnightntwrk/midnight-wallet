@@ -1,6 +1,7 @@
 import { Chunk } from 'effect';
-import { ProtocolState } from '@midnight-ntwrk/abstractions';
+import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Observable, reduce, OperatorFunction } from 'rxjs';
+import * as ledger from '@midnight-ntwrk/ledger';
 
 /**
  * A utility type that checks whether type A can be assigned to type To
@@ -47,4 +48,22 @@ export const isRange = (values: Chunk.Chunk<number>): boolean => {
   const firstDropped = Chunk.drop(values, 1);
   const lastDropped = Chunk.dropRight(values, 1);
   return Chunk.zip(lastDropped, firstDropped).pipe(Chunk.every(([l, r]) => r == l + 1));
+};
+
+/**
+ * Temporary function until the ledger fixes imbalances.get()
+ *
+ * @param imbalances
+ * @param rawTokenType
+ * @returns bigint
+ */
+export const getNonDustImbalance = (
+  imbalances: Map<ledger.TokenType, bigint>,
+  rawTokenType: ledger.RawTokenType,
+): bigint => {
+  const [, value] = Array.from(imbalances.entries()).find(([t, value]) =>
+    t.tag !== 'dust' && t.raw == rawTokenType ? value : undefined,
+  ) ?? [undefined, BigInt(0)];
+
+  return value;
 };

@@ -1,20 +1,19 @@
-import { TransactionHash, UnshieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
-import { TransactionHistoryStorage } from './TransactionHistoryStorage';
+import { TransactionHistoryStorage, TransactionHash, TransactionHistoryEntry } from './TransactionHistoryStorage';
 
 export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
-  create(_entry: UnshieldedTransactionHistoryEntry): Promise<void> {
+  create(_entry: TransactionHistoryEntry): Promise<void> {
     return Promise.resolve();
   }
 
-  delete(_hash: TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined> {
+  delete(_hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> {
     return Promise.resolve(undefined);
   }
 
-  async *getAll(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry> {
+  async *getAll(): AsyncIterableIterator<TransactionHistoryEntry> {
     return Promise.resolve(yield* []);
   }
 
-  get(_hash: TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined> {
+  get(_hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> {
     return Promise.resolve(undefined);
   }
 

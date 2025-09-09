@@ -1,21 +1,18 @@
 import { V1State } from './RunningV1Variant';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { pipe, Array } from 'effect';
 import * as RecordOps from '../effect/RecordOps';
 
-export type AvailableCoin = {
-  coin: zswap.QualifiedCoinInfo;
-  commitment: zswap.CoinCommitment;
-  nullifier: zswap.Nullifier;
+export type Coin<T extends ledger.QualifiedShieldedCoinInfo | ledger.ShieldedCoinInfo> = {
+  coin: T;
+  ttl: Date | undefined;
 };
 
-export type PendingCoin = {
-  coin: zswap.CoinInfo;
-  commitment: zswap.CoinCommitment;
-  nullifier: zswap.Nullifier;
-};
+export type AvailableCoin = Coin<ledger.QualifiedShieldedCoinInfo>;
 
-export type Balances = Record<zswap.TokenType, bigint>;
+export type PendingCoin = Coin<ledger.ShieldedCoinInfo>;
+
+export type Balances = Record<ledger.RawTokenType, bigint>;
 
 export type CoinsAndBalancesCapability<TState> = {
   getAvailableBalances(state: TState): Balances;
@@ -59,14 +56,13 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
   };
 
   const getAvailableCoins = (state: V1State): AvailableCoin[] => {
-    const pendingSpends = new Set([...state.state.pendingSpends.values()].map((coin) => coin.nonce));
+    const pendingSpends = new Set([...state.state.pendingSpends.values()].map(([coin]) => coin.nonce));
     return pipe(
       [...state.state.coins],
       Array.filter((coin) => !pendingSpends.has(coin.nonce)),
       Array.map((coin) => ({
         coin,
-        commitment: zswap.coin_commitment(coin, state.secretKeys.coinPublicKey),
-        nullifier: zswap.coin_nullifier(coin, state.secretKeys),
+        ttl: undefined,
       })),
     );
   };
@@ -74,17 +70,16 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
   const getPendingCoins = (state: V1State): PendingCoin[] =>
     pipe(
       [...state.state.pendingOutputs.values()],
-      Array.map((coin) => ({
+      Array.map(([coin, ttl]) => ({
         coin,
-        commitment: zswap.coin_commitment(coin, state.secretKeys.coinPublicKey),
-        nullifier: zswap.coin_nullifier(coin, state.secretKeys),
+        ttl,
       })),
     );
 
   const getTotalCoins = (state: V1State): Array<PendingCoin | AvailableCoin> =>
     pipe(
       [...getAvailableCoins(state), ...getPendingCoins(state)],
-      Array.map(({ coin, commitment, nullifier }) => ({ coin, commitment, nullifier })),
+      Array.map(({ coin, ttl }) => ({ coin, ttl })),
     );
 
   return {

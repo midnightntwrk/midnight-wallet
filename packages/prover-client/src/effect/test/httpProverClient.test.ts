@@ -1,22 +1,21 @@
 import { Effect } from 'effect';
 import {
-  UnprovenTransaction,
-  UnprovenOffer,
+  ZswapOffer,
   NetworkId,
-  UnprovenOutput,
-  nativeToken,
-  createCoinInfo,
+  ZswapOutput,
+  createShieldedCoinInfo,
   sampleCoinPublicKey,
   sampleEncryptionPublicKey,
   Transaction,
   LedgerParameters,
-} from '@midnight-ntwrk/zswap';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
+  shieldedToken,
+} from '@midnight-ntwrk/ledger';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import * as ProverClient from '../ProverClient';
 import * as HttpProverClient from '../HttpProverClient';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:4.0.0';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:5.0.0-alpha.2';
 const PROOF_SERVER_PORT: number = 6300;
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
@@ -51,15 +50,15 @@ describe('HttpProverClient', () => {
 
     const proofServerPort = () => proofServerContainer?.getMappedPort(PROOF_SERVER_PORT) ?? PROOF_SERVER_PORT;
 
-    const dustToken = nativeToken();
+    const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
     const makeValidTransaction = (spendCoinAmount: bigint) => {
-      const spendCoin = createCoinInfo(dustToken, spendCoinAmount);
+      const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
       const cpk = sampleCoinPublicKey();
       const epk = sampleEncryptionPublicKey();
-      const output = UnprovenOutput.new(spendCoin, 0, cpk, epk);
-      const unprovenOffer = UnprovenOffer.fromOutput(output, dustToken, spendCoinAmount);
+      const output = ZswapOutput.new(spendCoin, 0, cpk, epk);
+      const unprovenOffer = ZswapOffer.fromOutput(output, shieldedTokenType.raw, spendCoinAmount);
 
-      return new UnprovenTransaction(unprovenOffer);
+      return Transaction.fromParts(unprovenOffer);
     };
 
     beforeAll(async () => {
@@ -83,11 +82,16 @@ describe('HttpProverClient', () => {
           const unprovenTransactionBytes = makeValidTransaction(spendCoinAmount).serialize(NetworkId.Undeployed);
 
           const txBytes = yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
-          const tx = Transaction.deserialize(txBytes, NetworkId.Undeployed);
-          const imbalances = tx.imbalances(true);
+          const tx = Transaction.deserialize('signature', 'proof', 'pre-binding', txBytes, NetworkId.Undeployed);
+          const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.dummyParameters()));
 
           expect(imbalances.size).toEqual(1);
-          expect(imbalances.get(dustToken)).toEqual(-spendCoinAmount);
+          // limitation due to .get() method expecting an object
+          imbalances.forEach((value, key) => {
+            expect(key).toEqual(shieldedTokenType);
+            expect(value).toBeLessThanOrEqual(-spendCoinAmount);
+          });
+
           expect(tx.fees(LedgerParameters.dummyParameters())).not.toEqual(0n);
         }).pipe(
           Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),

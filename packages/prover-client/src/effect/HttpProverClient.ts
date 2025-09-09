@@ -7,7 +7,7 @@ import {
   SerializedTransaction,
   SerializedUnprovenTransaction,
   ServerError,
-} from '@midnight-ntwrk/abstractions';
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ProverClient } from './ProverClient';
 
 const PROVE_TX_PATH = '/prove-tx';

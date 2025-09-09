@@ -1,24 +1,27 @@
-import { HttpProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
-import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-ts/v1';
-import * as zswap from '@midnight-ntwrk/zswap';
+import { HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Either, Layer, pipe } from 'effect';
 import * as os from 'node:os';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
+import { getNonDustImbalance } from './utils';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:4.0.0';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:5.0.0-alpha.2';
 const PROOF_SERVER_PORT: number = 6300;
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
+const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
-  const recipient = zswap.SecretKeys.fromSeed(seed);
+  const recipient = ledger.ZswapSecretKeys.fromSeed(seed);
   const amount = 42n;
-  const coin = zswap.createCoinInfo(zswap.nativeToken(), amount);
-  const output = zswap.UnprovenOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
-  const offer = zswap.UnprovenOffer.fromOutput(output, zswap.nativeToken(), amount);
-  return new zswap.UnprovenTransaction(offer);
+  const coin = ledger.createShieldedCoinInfo(shieldedTokenType, amount);
+  const output = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
+  const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenType, amount);
+  return ledger.Transaction.fromParts(offer);
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
@@ -41,9 +44,11 @@ const proofServerContainerResource = Effect.acquireRelease(
 );
 
 describe('Default Proving Service', () => {
-  const adHocProve = (tx: zswap.UnprovenTransaction): Effect.Effect<zswap.Transaction> => {
+  const adHocProve = (
+    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
+  ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>> => {
     const res = pipe(
-      Proving.httpProveTx(zswap.NetworkId.Undeployed, tx),
+      Proving.httpProveTx(ledger.NetworkId.Undeployed, tx),
       Effect.provide(
         proofServerContainerResource.pipe(
           Effect.map((url) =>
@@ -59,15 +64,17 @@ describe('Default Proving Service', () => {
     );
 
     // ¯\_(ツ)_/¯ jest's TS integration argues some environment type is not `never` at this point
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-assertion
-    return res as Effect.Effect<zswap.Transaction>;
+
+    return res as Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>;
   };
 
   const testProvenTxEffect = pipe(makeTransaction(), adHocProve, Effect.cached, Effect.flatten);
   const testUnprovenTx = makeTransaction();
 
   const recipes: ReadonlyArray<{
-    recipe: Effect.Effect<ProvingRecipe.ProvingRecipe<zswap.Transaction>>;
+    recipe: Effect.Effect<
+      ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>
+    >;
     expectedImbalance: bigint;
   }> = [
     {
@@ -101,14 +108,14 @@ describe('Default Proving Service', () => {
         const proofServerUrl = yield* proofServerContainerResource;
         const service = Proving.makeDefaultProvingService({
           provingServerUrl: proofServerUrl,
-          networkId: zswap.NetworkId.Undeployed,
+          networkId: ledger.NetworkId.Undeployed,
         });
 
         return yield* service.prove(readyRecipe);
       }).pipe(Effect.scoped, Effect.runPromise);
 
-      expect(finalTx).toBeInstanceOf(zswap.Transaction);
-      expect(finalTx.imbalances(true).get(zswap.nativeToken())).toEqual(expectedImbalance);
+      expect(finalTx).toBeInstanceOf(ledger.Transaction);
+      expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
     },
   );
 
@@ -118,7 +125,7 @@ describe('Default Proving Service', () => {
       const proofServerUrl = yield* proofServerContainerResource;
       const misconfiguredService = Proving.makeDefaultProvingService({
         provingServerUrl: proofServerUrl,
-        networkId: zswap.NetworkId.MainNet,
+        networkId: ledger.NetworkId.MainNet,
       });
       return yield* misconfiguredService.prove(recipe);
     }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
@@ -139,7 +146,7 @@ describe('Default Proving Service', () => {
       const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
       const misconfiguredService = Proving.makeDefaultProvingService({
         provingServerUrl: proofServerUrl,
-        networkId: zswap.NetworkId.Undeployed,
+        networkId: ledger.NetworkId.Undeployed,
       });
       return yield* misconfiguredService.prove(recipe);
     }).pipe(Effect.either, Effect.runPromise);

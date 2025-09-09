@@ -1,69 +1,72 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances';
 import { CoreWallet } from '../CoreWallet';
 
+type ShieldedTokenType = { tokenType: { raw: string; tag: 'shielded' }; value: bigint };
+
 const amountArbitrary = fc.bigInt({ min: 1n, max: 1000n });
-const tokenTypeArbitrary = fc.constantFrom(zswap.nativeToken(), zswap.sampleTokenType());
+const tokenTypeArbitrary = fc.constantFrom(ledger.shieldedToken(), {
+  tag: 'shielded',
+  raw: ledger.sampleRawTokenType(),
+});
 const coinArbitrary = fc.record({
   value: amountArbitrary,
   tokenType: tokenTypeArbitrary,
 });
 
-const toAvailableCoin = (c: { value: bigint; tokenType: string }, secretKeys: zswap.SecretKeys): AvailableCoin => {
-  const coin = zswap.createCoinInfo(c.tokenType, BigInt(c.value));
+const toAvailableCoin = (c: ShieldedTokenType, _secretKeys: ledger.ZswapSecretKeys): AvailableCoin => {
+  const coin = ledger.createShieldedCoinInfo(c.tokenType.raw, BigInt(c.value));
   return {
     coin: { ...coin, mt_index: 0n },
-    commitment: zswap.coin_commitment(coin, secretKeys.coinPublicKey),
-    nullifier: zswap.coin_nullifier(coin, secretKeys),
+    ttl: undefined,
   };
 };
 
-const toPendingCoin = (c: { value: bigint; tokenType: string }, secretKeys: zswap.SecretKeys): PendingCoin => {
-  const coin = zswap.createCoinInfo(c.tokenType, BigInt(c.value));
+const toPendingCoin = (c: ShieldedTokenType, _secretKeys: ledger.ZswapSecretKeys): PendingCoin => {
+  const coin = ledger.createShieldedCoinInfo(c.tokenType.raw, BigInt(c.value));
   return {
     coin,
-    commitment: zswap.coin_commitment(coin, secretKeys.coinPublicKey),
-    nullifier: zswap.coin_nullifier(coin, secretKeys),
+    ttl: undefined,
   };
 };
 
-const createInitialState = (secretKeys: zswap.SecretKeys, coins: AvailableCoin[]): zswap.LocalState => {
+const createInitialState = (secretKeys: ledger.ZswapSecretKeys, coins: AvailableCoin[]): ledger.ZswapLocalState => {
   const finalOffer = pipe(
     coins,
     Array.map(({ coin }) =>
-      zswap.UnprovenOffer.fromOutput(
-        zswap.UnprovenOutput.new(coin, 0, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey),
+      ledger.ZswapOffer.fromOutput(
+        ledger.ZswapOutput.new(coin, 0, secretKeys.coinPublicKey, secretKeys.encryptionPublicKey),
         coin.type,
         coin.value,
       ),
     ),
-    Array.reduce(new zswap.UnprovenOffer(), (acc, offer) => acc.merge(offer)),
+    (offers) => (offers.length > 0 ? offers.reduce((acc, offer) => acc.merge(offer)) : undefined),
   );
 
-  const tx = new zswap.UnprovenTransaction(finalOffer).eraseProofs();
+  const tx = ledger.Transaction.fromParts(finalOffer).eraseProofs();
 
-  return tx.guaranteedCoins
-    ? new zswap.LocalState().applyProofErased(secretKeys, tx.guaranteedCoins)
-    : new zswap.LocalState();
+  return tx.guaranteedOffer
+    ? new ledger.ZswapLocalState().apply(secretKeys, tx.guaranteedOffer)
+    : new ledger.ZswapLocalState();
 };
 
 const applyPendingCoinValues = (
-  state: zswap.LocalState,
-  secretKeys: zswap.SecretKeys,
+  state: ledger.ZswapLocalState,
+  secretKeys: ledger.ZswapSecretKeys,
   coins: PendingCoin[],
-): zswap.LocalState =>
+): ledger.ZswapLocalState =>
   pipe(
     coins,
     Array.reduce(state, (currentState, { coin }) => currentState.watchFor(secretKeys.coinPublicKey, coin)),
   );
 
 const issueSpendingOfCoins = (
-  state: zswap.LocalState,
-  secretKeys: zswap.SecretKeys,
+  state: ledger.ZswapLocalState,
+  secretKeys: ledger.ZswapSecretKeys,
   coins: AvailableCoin[],
-): zswap.LocalState =>
+): ledger.ZswapLocalState =>
   pipe(
     coins,
     Array.reduce(state, (currentState, { coin }) => {
@@ -91,9 +94,11 @@ describe('DefaultCoinsAndBalancesCapability', () => {
   it('should return correct balances and coins when wallet has no pending coins and no pending balances', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), (coinInputs) => {
-        const secretKeys = zswap.SecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = coinInputs.map((c) => toAvailableCoin(c, secretKeys));
-        const networkId = zswap.NetworkId.Undeployed;
+        const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
+        const setupAvailableCoins: AvailableCoin[] = coinInputs.map((c) =>
+          toAvailableCoin(c as { tokenType: { raw: string; tag: 'shielded' }; value: bigint }, secretKeys),
+        );
+        const networkId = ledger.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const localState = createInitialState(secretKeys, setupAvailableCoins);
@@ -124,10 +129,14 @@ describe('DefaultCoinsAndBalancesCapability', () => {
   it('should return correct balances and coins when wallet has a pending coin and a pending balance', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), fc.array(coinArbitrary), (fixtureAvailableCoins, fixturePendingCoins) => {
-        const secretKeys = zswap.SecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = fixtureAvailableCoins.map((c) => toAvailableCoin(c, secretKeys));
-        const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) => toPendingCoin(c, secretKeys));
-        const networkId = zswap.NetworkId.Undeployed;
+        const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
+        const setupAvailableCoins: AvailableCoin[] = fixtureAvailableCoins.map((c) =>
+          toAvailableCoin(c as ShieldedTokenType, secretKeys),
+        );
+        const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) =>
+          toPendingCoin(c as ShieldedTokenType, secretKeys),
+        );
+        const networkId = ledger.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         let localState = createInitialState(secretKeys, setupAvailableCoins);
@@ -161,8 +170,12 @@ describe('DefaultCoinsAndBalancesCapability', () => {
           expect(pendingBalances[tokenType] ?? 0n).toEqual(pendingSum);
           expect(totalBalances[tokenType] ?? 0n).toEqual(totalSum);
 
-          const expectedAvailable = fixtureAvailableCoins.filter((c) => c.tokenType === tokenType).map((c) => c.value);
-          const expectedPending = fixturePendingCoins.filter((c) => c.tokenType === tokenType).map((c) => c.value);
+          const expectedAvailable = fixtureAvailableCoins
+            .filter((c) => (c.tokenType as { raw: string }).raw === tokenType)
+            .map((c) => c.value);
+          const expectedPending = fixturePendingCoins
+            .filter((c) => (c.tokenType as { raw: string }).raw === tokenType)
+            .map((c) => c.value);
           const expectedTotal = expectedAvailable.concat(expectedPending);
 
           const bigintCompare = (a: bigint, b: bigint) => (a < b ? -1 : a > b ? 1 : 0);
@@ -185,8 +198,10 @@ describe('DefaultCoinsAndBalancesCapability', () => {
   it('should return correct balances and coins when wallet has a pending spend', () => {
     fc.assert(
       fc.property(fc.array(coinArbitrary), fc.integer({ min: 0, max: 3 }), (availableInputs, numSpends) => {
-        const secretKeys = zswap.SecretKeys.fromSeed(new Uint8Array(32).fill(1));
-        const setupAvailableCoins: AvailableCoin[] = availableInputs.map((c) => toAvailableCoin(c, secretKeys));
+        const secretKeys = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(1));
+        const setupAvailableCoins: AvailableCoin[] = availableInputs.map((c) =>
+          toAvailableCoin(c as ShieldedTokenType, secretKeys),
+        );
 
         const spendsRaw = setupAvailableCoins.slice(0, Math.min(numSpends, setupAvailableCoins.length - 1));
 
@@ -196,7 +211,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
           seen.add(c.coin.nonce);
           return true;
         });
-        const networkId = zswap.NetworkId.Undeployed;
+        const networkId = ledger.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const initialState = createInitialState(secretKeys, setupAvailableCoins);

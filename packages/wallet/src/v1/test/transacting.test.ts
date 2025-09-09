@@ -1,11 +1,10 @@
-import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, Either, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '../../effect/index';
@@ -18,15 +17,21 @@ import {
   DefaultTransactingConfiguration,
   DefaultTransactingContext,
   makeSimulatorTransactingCapability,
+  TokenTransfer,
 } from '../Transacting';
+import { ProofErasedTransaction, shieldedToken } from '../types/ledger';
+import { getNonDustImbalance } from '../../test/testUtils';
 
 const dust = (value: number): bigint => BigInt(value * 10 ** 6);
 
+const shieldedTokenType = shieldedToken();
+const rawShieldedTokenType = shieldedTokenType.raw;
+
 const defaultConfig: DefaultTransactingConfiguration = {
-  networkId: zswap.NetworkId.Undeployed,
+  networkId: ledger.NetworkId.Undeployed,
   costParameters: {
     additionalFeeOverhead: 100_000n,
-    ledgerParams: zswap.LedgerParameters.dummyParameters(),
+    ledgerParams: ledger.LedgerParameters.dummyParameters(),
   },
 };
 const defaultContext: DefaultTransactingContext = {
@@ -36,13 +41,13 @@ const defaultContext: DefaultTransactingContext = {
 };
 
 const coinsAndBalances = makeDefaultCoinsAndBalancesCapability();
-const getAvailableCoins = (state: V1State): readonly zswap.QualifiedCoinInfo[] => {
+const getAvailableCoins = (state: V1State): readonly ledger.QualifiedShieldedCoinInfo[] => {
   return coinsAndBalances.getAvailableCoins(state).map((c) => c.coin);
 };
 
 type WalletEntry = {
-  keys: zswap.SecretKeys;
-  coins: ReadonlyArray<bigint | { tokenType: zswap.TokenType; value: bigint }>;
+  keys: ledger.ZswapSecretKeys;
+  coins: ReadonlyArray<bigint | { tokenType: ledger.RawTokenType; value: bigint }>;
 };
 const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry>): Record<Names, V1State> => {
   const tx = pipe(
@@ -53,19 +58,21 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
     Arr.map(({ keys, coin }) =>
       makeOutputOffer({
         recipient: keys,
-        coin: typeof coin === 'bigint' ? coin : zswap.createCoinInfo(coin.tokenType, coin.value),
+        coin: typeof coin === 'bigint' ? coin : ledger.createShieldedCoinInfo(coin.tokenType, coin.value),
       }),
     ),
     ArrayOps.assertNonEmpty,
-    ArrayOps.fold((offerA: zswap.UnprovenOffer, offerB: zswap.UnprovenOffer) => offerA.merge(offerB)),
-    (offer) => new zswap.UnprovenTransaction(offer).eraseProofs(),
+    ArrayOps.fold((offerA: ledger.ZswapOffer<ledger.PreProof>, offerB: ledger.ZswapOffer<ledger.PreProof>) =>
+      offerA.merge(offerB),
+    ),
+    (offer) => ledger.Transaction.fromParts(offer).eraseProofs(),
   );
 
   return pipe(
     desired,
     Record.map((entry) => {
-      const state = new zswap.LocalState().applyProofErasedTx(entry.keys, tx, 'success');
-      return V1State.init(state, entry.keys, zswap.NetworkId.Undeployed);
+      const state = new ledger.ZswapLocalState().applyTx(entry.keys, tx, 'success');
+      return V1State.init(state, entry.keys, ledger.NetworkId.Undeployed);
     }),
   );
 };
@@ -73,21 +80,22 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
 const orderCoinByValue = Order.mapInput(Order.bigint, (coin: { value: bigint }) => coin.value);
 
 const makeOutputOffer = (args: {
-  recipient: zswap.SecretKeys | V1State;
-  coin: zswap.CoinInfo | bigint;
+  recipient: ledger.ZswapSecretKeys | V1State;
+  coin: ledger.ShieldedCoinInfo | bigint;
   segment?: 0 | 1;
-}): zswap.UnprovenOffer => {
-  const keys: zswap.SecretKeys =
-    args.recipient instanceof zswap.SecretKeys ? args.recipient : args.recipient.secretKeys;
-  const coinToUse = typeof args.coin === 'bigint' ? zswap.createCoinInfo(zswap.nativeToken(), args.coin) : args.coin;
-  const output = zswap.UnprovenOutput.new(coinToUse, args.segment ?? 0, keys.coinPublicKey, keys.encryptionPublicKey);
-  return zswap.UnprovenOffer.fromOutput(output, coinToUse.type, coinToUse.value);
+}): ledger.ZswapOffer<ledger.PreProof> => {
+  const keys: ledger.ZswapSecretKeys =
+    args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.secretKeys;
+  const coinToUse =
+    typeof args.coin === 'bigint' ? ledger.createShieldedCoinInfo(rawShieldedTokenType, args.coin) : args.coin;
+  const output = ledger.ZswapOutput.new(coinToUse, args.segment ?? 0, keys.coinPublicKey, keys.encryptionPublicKey);
+  return ledger.ZswapOffer.fromOutput(output, coinToUse.type, coinToUse.value);
 };
 
-const encodeAddress = (keys: zswap.SecretKeys): string => {
+const encodeAddress = (keys: ledger.ZswapSecretKeys): string => {
   return ShieldedAddress.codec
     .encode(
-      zswap.NetworkId.Undeployed,
+      ledger.NetworkId.Undeployed,
       new ShieldedAddress(
         ShieldedCoinPublicKey.fromHexString(keys.coinPublicKey),
         ShieldedEncryptionPublicKey.fromHexString(keys.encryptionPublicKey),
@@ -97,11 +105,11 @@ const encodeAddress = (keys: zswap.SecretKeys): string => {
 };
 
 const makeTransferOutput = (args: {
-  recipient: zswap.SecretKeys | V1State;
-  coin: bigint | { tokenType: zswap.TokenType; value: bigint };
+  recipient: ledger.ZswapSecretKeys | V1State;
+  coin: bigint | { tokenType: ledger.RawTokenType; value: bigint };
 }): TokenTransfer => {
-  const typeAndValue = typeof args.coin == 'bigint' ? { tokenType: zswap.nativeToken(), value: args.coin } : args.coin;
-  const keys = args.recipient instanceof zswap.SecretKeys ? args.recipient : args.recipient.secretKeys;
+  const typeAndValue = typeof args.coin == 'bigint' ? { tokenType: rawShieldedTokenType, value: args.coin } : args.coin;
+  const keys = args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.secretKeys;
   return {
     type: typeAndValue.tokenType,
     amount: typeAndValue.value,
@@ -117,36 +125,41 @@ describe('V1 Wallet Transacting', () => {
   describe('when balancing', () => {
     it('balances a transaction containing just outputs', async () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
       const transactionValue = dust(4);
       const tx = pipe(transactionValue, (value) => {
         const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
-        return new zswap.UnprovenTransaction(offer).eraseProofs();
+        return ledger.Transaction.fromParts(offer).eraseProofs();
       });
 
       return Effect.gen(function* () {
         const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
-        const recipe = result.recipe as BalanceTransactionToProve<zswap.ProofErasedTransaction>;
+        const recipe = result.recipe as BalanceTransactionToProve<
+          ledger.Transaction<ledger.SignatureEnabled, ledger.NoProof, ledger.NoBinding>
+        >;
         const proven = yield* proving.prove(recipe);
-        expect(recipe.transactionToProve.guaranteedCoins?.deltas.get(zswap.nativeToken())).toBeGreaterThan(
+
+        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThan(
           transactionValue,
         );
-        expect(proven.guaranteedCoins?.deltas.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
-          proven.fees(zswap.LedgerParameters.dummyParameters()),
+        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
+          proven.fees(defaultConfig.costParameters.ledgerParams),
         );
-        const BAfterApply = wallets.B.state.applyProofErasedTx(wallets.B.secretKeys, proven, 'success');
-        expect(Array.from(BAfterApply.coins).map((c) => c.value)).toEqual([transactionValue]);
+        const BAfterApply = wallets.B.applyProofErasedTx(proven, {
+          type: 'success',
+        });
+        expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([transactionValue]);
       }).pipe(Effect.runPromise);
     });
 
     it('balances a transaction with a fallible offer', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -154,23 +167,28 @@ describe('V1 Wallet Transacting', () => {
       const transactionValueGuaranteed = dust(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       return Effect.gen(function* () {
         const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
-        const recipe = result.recipe as BalanceTransactionToProve<zswap.ProofErasedTransaction>;
+        const recipe = result.recipe as BalanceTransactionToProve<ProofErasedTransaction>;
         const proven = yield* proving.prove(recipe);
-        expect(recipe.transactionToProve.fallibleCoins?.deltas.get(zswap.nativeToken())).toEqual(
-          transactionValueFallible,
-        );
-        expect(recipe.transactionToProve.guaranteedCoins?.deltas.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
+        expect(
+          recipe.transactionToProve.fallibleOffer
+            ?.entries()
+            .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
+            .reduce((acc, curr) => acc + curr, 0n),
+        ).toEqual(transactionValueFallible);
+        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           transactionValueGuaranteed + proven.fees(defaultConfig.costParameters.ledgerParams),
         );
-        expect(proven.guaranteedCoins?.deltas.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
-          proven.fees(zswap.LedgerParameters.dummyParameters()),
+        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
+          proven.fees(ledger.LedgerParameters.dummyParameters()),
         );
-        const BAfterApply = wallets.B.state.applyProofErasedTx(wallets.B.secretKeys, proven, 'success');
-        expect(Array.from(BAfterApply.coins).map((c) => c.value)).toEqual([
+        const BAfterApply = wallets.B.applyProofErasedTx(proven, {
+          type: 'success',
+        });
+        expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([
           transactionValueGuaranteed,
           transactionValueFallible,
         ]);
@@ -179,41 +197,44 @@ describe('V1 Wallet Transacting', () => {
 
     it('books coins used in balancing', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const transactionValueFallible = dust(2);
       const transactionValueGuaranteed = dust(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
 
       expect(getAvailableCoins(result.newState).length).toBe(0);
-      expect(Arr.sort(result.newState.state.pendingSpends.values(), orderCoinByValue)).toEqual(
-        Arr.sort(wallets.A.state.coins, orderCoinByValue),
-      );
+      expect(
+        Arr.sort(
+          result.newState.state.pendingSpends.values().map(([coin]) => coin),
+          orderCoinByValue,
+        ),
+      ).toEqual(Arr.sort(wallets.A.state.coins, orderCoinByValue));
     });
 
     it('watches for change coins from balancing', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const transactionValueFallible = dust(2);
       const transactionValueGuaranteed = dust(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
 
       const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
       expect(pendingOutputs.length).toEqual(2);
-      pendingOutputs.forEach((output) => {
+      pendingOutputs.forEach(([output]) => {
         // Knowing that default coin selection is "smaller-first", and that fallible sections needs to be balanced first to properly pay fees in the guaranteed one,
         // It leaves fallible of value 2 to be balanced with coins of value 1 and 2
         // and guaranteed of value 2 to be balanced with coin of value 3
@@ -223,37 +244,37 @@ describe('V1 Wallet Transacting', () => {
 
     it('watches for new coins from balancing', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const transactionValueFallible = dust(2);
-      const changeCoin = zswap.createCoinInfo(zswap.nativeToken(), dust(2));
+      const changeCoin = ledger.createShieldedCoinInfo(rawShieldedTokenType, dust(2));
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.A, coin: changeCoin });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, [changeCoin]));
 
       const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
-      expect(pendingOutputs).toContainEqual(changeCoin);
+      expect(pendingOutputs).toContainEqual([changeCoin, undefined]);
       expect(pendingOutputs.length).toEqual(3);
-      for (const output of pendingOutputs.filter((c) => c.nonce !== changeCoin.nonce)) {
+      for (const [output] of pendingOutputs.filter(([c]) => c.nonce !== changeCoin.nonce)) {
         expect(output.value).toBeLessThanOrEqual(dust(1));
       }
     });
 
     it('raises an error if there are not enough tokens for balancing', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const transactionValueFallible = dust(3);
-      const changeCoin = zswap.createCoinInfo(zswap.nativeToken(), dust(3));
+      const changeCoin = ledger.createShieldedCoinInfo(rawShieldedTokenType, dust(3));
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.A, coin: changeCoin });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const result = transacting.balanceTransaction(wallets.A, tx, [changeCoin]);
 
@@ -262,19 +283,19 @@ describe('V1 Wallet Transacting', () => {
 
     it('does not try to spend booked coins for balancing', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const transactionValueFallible = dust(2);
       const transactionValueGuaranteed = dust(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
       const anotherTx = pipe(makeOutputOffer({ recipient: wallets.B, coin: dust(1) }), (offer) =>
-        new zswap.UnprovenTransaction(offer).eraseProofs(),
+        ledger.Transaction.fromParts(offer).eraseProofs(),
       );
 
       const secondResult = transacting.balanceTransaction(result.newState, anotherTx, []);
@@ -286,8 +307,8 @@ describe('V1 Wallet Transacting', () => {
   describe('when transferring', () => {
     it('prepares a transfer', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -298,8 +319,10 @@ describe('V1 Wallet Transacting', () => {
         );
         const proven = yield* proving.prove(result.recipe);
 
-        const walletBApplied = wallets.B.state.applyProofErasedTx(wallets.B.secretKeys, proven, 'success');
-        expect(Array.from(walletBApplied.coins).map((c) => c.value)).toEqual([dust(2)]);
+        const walletBApplied = wallets.B.applyProofErasedTx(proven, {
+          type: 'success',
+        });
+        expect(Array.from(walletBApplied.state.coins).map((c) => c.value)).toEqual([dust(2)]);
       }).pipe(Effect.runPromise);
     });
 
@@ -307,8 +330,8 @@ describe('V1 Wallet Transacting', () => {
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const transferValue = dust(2);
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -321,7 +344,7 @@ describe('V1 Wallet Transacting', () => {
 
         const bookedCoinValues = result.newState.state.pendingSpends
           .values()
-          .map((c) => c.value)
+          .map(([c]) => c.value)
           .toArray();
         const availableCoinValues = getAvailableCoins(result.newState).map((c) => c.value);
         const sumValues = ArrayOps.sumBigInt([...bookedCoinValues, ...availableCoinValues]);
@@ -330,7 +353,7 @@ describe('V1 Wallet Transacting', () => {
         expect(sumValues).toEqual(ArrayOps.sumBigInt(initialCoinValues));
         expect(Arr.sort([...bookedCoinValues, ...availableCoinValues], Order.bigint)).toEqual(initialCoinValues);
         expect(bookedCoinsSum).toBeGreaterThanOrEqual(
-          proven.fees(zswap.LedgerParameters.dummyParameters()) + transferValue,
+          proven.fees(ledger.LedgerParameters.dummyParameters()) + transferValue,
         );
       }).pipe(Effect.runPromise);
     });
@@ -339,8 +362,8 @@ describe('V1 Wallet Transacting', () => {
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const transferValue = dust(2);
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
@@ -351,7 +374,7 @@ describe('V1 Wallet Transacting', () => {
       const availableCoinValues = getAvailableCoins(result.newState).map((c) => c.value);
       const pendingCoinValues = result.newState.state.pendingOutputs
         .values()
-        .map((c) => c.value)
+        .map(([c]) => c.value)
         .toArray();
       const sumValues: bigint = pipe([pendingCoinValues, availableCoinValues], Arr.flatten, ArrayOps.sumBigInt);
 
@@ -367,8 +390,8 @@ describe('V1 Wallet Transacting', () => {
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const transferValue = dust(6);
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
@@ -383,8 +406,8 @@ describe('V1 Wallet Transacting', () => {
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const transferValue = dust(5);
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const result = Either.getOrThrow(
@@ -400,37 +423,40 @@ describe('V1 Wallet Transacting', () => {
 
   describe('when handling swaps', () => {
     it('inits a swap with dust input and non-dust output', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dust(1) }, [
+          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dust(1) }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const imbalances = proven.imbalances(true, proven.fees(zswap.LedgerParameters.dummyParameters()));
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const imbalances = proven.imbalances(0, proven.fees(ledger.LedgerParameters.dummyParameters()));
 
-        expect(new Set(imbalances.keys())).toEqual(new Set([zswap.nativeToken(), theOtherTokenType]));
-        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(dust(1));
-        expect(imbalances.get(zswap.nativeToken())).toBeLessThanOrEqual(dust(1) + dust(1));
-        expect(imbalances.get(theOtherTokenType)).toEqual(-1n * theOtherTokenAmount);
+        expect(new Set(imbalances.keys())).toEqual(
+          new Set([shieldedTokenType, { tag: 'shielded', raw: theOtherTokenType }]),
+        );
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).not.toBeUndefined();
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeGreaterThan(dust(1));
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeLessThanOrEqual(dust(1) + dust(1));
+        expect(getNonDustImbalance(imbalances, theOtherTokenType)).toEqual(-1n * theOtherTokenAmount);
       }).pipe(Effect.runPromise);
     });
 
     it('inits a swap with non-dust input and dust output', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [
         dust(1),
@@ -439,8 +465,8 @@ describe('V1 Wallet Transacting', () => {
         { tokenType: theOtherTokenType, value: theOtherTokenAmount },
       ];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -454,22 +480,24 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const imbalances = proven.imbalances(true, proven.fees(zswap.LedgerParameters.dummyParameters()));
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const imbalances = proven.imbalances(0, proven.fees(ledger.LedgerParameters.dummyParameters()));
 
-        expect(new Set(imbalances.keys())).toEqual(new Set([zswap.nativeToken(), theOtherTokenType]));
-        expect(imbalances.get(zswap.nativeToken())).toBeLessThan(0n);
-        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(
-          -1n * dust(1) + proven.fees(zswap.LedgerParameters.dummyParameters()),
+        expect(new Set(imbalances.keys())).toEqual(
+          new Set([shieldedTokenType, { tag: 'shielded', raw: theOtherTokenType }]),
         );
-        expect(imbalances.get(theOtherTokenType)).toEqual(theOtherTokenAmount);
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeLessThan(0n);
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeGreaterThan(
+          -1n * dust(1) + proven.fees(ledger.LedgerParameters.dummyParameters()),
+        );
+        expect(getNonDustImbalance(imbalances, theOtherTokenType)).toEqual(theOtherTokenAmount);
       }).pipe(Effect.runPromise);
     });
 
     it('inits a swap with non-dust input and non-dust output', () => {
-      const theOtherTokenType1 = zswap.sampleTokenType();
+      const theOtherTokenType1 = ledger.sampleRawTokenType();
       const theOtherTokenAmount1 = 10_000n;
-      const theOtherTokenType2 = zswap.sampleTokenType();
+      const theOtherTokenType2 = ledger.sampleRawTokenType();
       const theOtherTokenAmount2 = 10_000n;
       const initialCoinValues = [
         dust(1),
@@ -478,8 +506,8 @@ describe('V1 Wallet Transacting', () => {
         { tokenType: theOtherTokenType1, value: theOtherTokenAmount1 },
       ];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -493,29 +521,33 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const imbalances = proven.imbalances(true, proven.fees(zswap.LedgerParameters.dummyParameters()));
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const imbalances = proven.imbalances(0, proven.fees(ledger.LedgerParameters.dummyParameters()));
 
         expect(new Set(imbalances.keys())).toEqual(
-          new Set([zswap.nativeToken(), theOtherTokenType1, theOtherTokenType2]),
+          new Set([
+            shieldedTokenType,
+            { tag: 'shielded', raw: theOtherTokenType1 },
+            { tag: 'shielded', raw: theOtherTokenType2 },
+          ]),
         );
-        expect(imbalances.get(zswap.nativeToken())).toBeLessThan(dust(1));
-        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThan(
-          proven.fees(zswap.LedgerParameters.dummyParameters()),
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeLessThan(dust(1));
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeGreaterThan(
+          proven.fees(ledger.LedgerParameters.dummyParameters()),
         );
-        expect(imbalances.get(theOtherTokenType1)).toEqual(theOtherTokenAmount1);
-        expect(imbalances.get(theOtherTokenType2)).toEqual(-1n * theOtherTokenAmount2);
+        expect(getNonDustImbalance(imbalances, theOtherTokenType1)).toEqual(theOtherTokenAmount1);
+        expect(getNonDustImbalance(imbalances, theOtherTokenType2)).toEqual(-1n * theOtherTokenAmount2);
       }).pipe(Effect.runPromise);
     });
 
     it('balances a swap', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(1), dust(2), dust(3)] },
         B: {
-          keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
           coins: [dust(1), { tokenType: theOtherTokenType, value: theOtherTokenAmount }],
         },
       });
@@ -524,43 +556,39 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dustAmount }, [
+          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const aAfterApply: zswap.LocalState = result.newState.state.applyProofErasedTx(
-          wallets.A.secretKeys,
-          balancedProven,
-          'success',
-        );
-        const bAfterApply: zswap.LocalState = balancedResult.newState.state.applyProofErasedTx(
-          wallets.B.secretKeys,
-          balancedProven,
-          'success',
-        );
+        const aAfterApply = result.newState.applyProofErasedTx(balancedProven, {
+          type: 'success',
+        });
+        const bAfterApply = balancedResult.newState.applyProofErasedTx(balancedProven, {
+          type: 'success',
+        });
 
-        const imbalances = balancedProven.imbalances(true);
+        const imbalances = balancedProven.imbalances(0, proven.fees(ledger.LedgerParameters.dummyParameters()));
 
-        const bAfterApplyDustCoins = bAfterApply.coins
+        const bAfterApplyDustCoins = bAfterApply.state.coins
           .values()
-          .filter((c) => c.type === zswap.nativeToken())
+          .filter((c) => c.type === rawShieldedTokenType)
           .map((c) => c.value)
           .toArray()
           .toSorted((a, b) => Number(a - b));
 
-        expect(new Set(imbalances.keys())).toEqual(new Set([zswap.nativeToken()]));
-        expect(imbalances.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
+        expect(new Set(imbalances.keys())).toEqual(new Set([shieldedTokenType]));
+        expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBeGreaterThanOrEqual(
           balancedProven.fees(defaultConfig.costParameters.ledgerParams),
         );
         expect(
-          aAfterApply.coins
+          aAfterApply.state.coins
             .values()
             .filter((c) => c.type === theOtherTokenType)
             .map((c) => c.value)
@@ -572,17 +600,17 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('books coins spent in a swap', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
       const result = Either.getOrThrow(
-        transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dust(1) }, [
+        transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dust(1) }, [
           makeTransferOutput({
             recipient: wallets.A,
             coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -591,29 +619,29 @@ describe('V1 Wallet Transacting', () => {
       );
       const bookedCoins = pipe(
         result.newState.state.pendingSpends.values(),
-        Iterable.map((coin) => ({ type: coin.type, value: coin.value })),
+        Iterable.map(([coin]) => ({ type: coin.type, value: coin.value })),
         Arr.sort(orderCoinByValue),
       );
 
       expect(bookedCoins).toEqual([
-        { type: zswap.nativeToken(), value: dust(1) },
-        { type: zswap.nativeToken(), value: dust(2) },
+        { type: rawShieldedTokenType, value: dust(1) },
+        { type: rawShieldedTokenType, value: dust(2) },
       ]);
     });
 
     it('watches for coins expected to be received from a swap', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
       const result = Either.getOrThrow(
-        transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dustAmount }, [
+        transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
           makeTransferOutput({
             recipient: wallets.A,
             coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -622,24 +650,24 @@ describe('V1 Wallet Transacting', () => {
       );
       const expectedCoins = pipe(
         result.newState.state.pendingOutputs.values(),
-        Record.fromIterableWith((coin: zswap.CoinInfo) => [coin.type, coin.value]),
+        Record.fromIterableWith(([coin]) => [coin.type, coin.value]),
       );
 
-      expect(new Set(Record.keys(expectedCoins))).toEqual(new Set([zswap.nativeToken(), theOtherTokenType]));
+      expect(new Set(Record.keys(expectedCoins))).toEqual(new Set([rawShieldedTokenType, theOtherTokenType]));
       expect(expectedCoins[theOtherTokenType]).toEqual(theOtherTokenAmount);
-      expect(expectedCoins[zswap.nativeToken()]).toBeGreaterThan(dust(1));
-      expect(expectedCoins[zswap.nativeToken()]).toBeLessThan(dust(3) - dustAmount);
+      expect(expectedCoins[rawShieldedTokenType]).toBeGreaterThan(dust(1));
+      expect(expectedCoins[rawShieldedTokenType]).toBeLessThan(dust(3) - dustAmount);
     });
 
     it('raises an error if there are not enough tokens for swap', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const initialCoinValues = [dust(1), dust(2), dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
         B: {
-          keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
           coins: [{ tokenType: theOtherTokenType, value: theOtherTokenAmount }],
         },
       });
@@ -649,7 +677,7 @@ describe('V1 Wallet Transacting', () => {
         makeTransferOutput({ recipient: wallets.A, coin: dustAmount }),
       ]);
 
-      const resultB = transacting.initSwap(wallets.B, { [zswap.nativeToken()]: dustAmount }, [
+      const resultB = transacting.initSwap(wallets.B, { [rawShieldedTokenType]: dustAmount }, [
         makeTransferOutput({
           recipient: wallets.B,
           coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -661,14 +689,14 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('does not try to use booked coins for a swap', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const initialCoinValues = [dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
         B: {
-          keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
           coins: [],
         },
       });
@@ -677,7 +705,7 @@ describe('V1 Wallet Transacting', () => {
       const firstResult = Either.getOrThrow(
         transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dustAmount })]),
       );
-      const secondResult = transacting.initSwap(firstResult.newState, { [zswap.nativeToken()]: dustAmount }, [
+      const secondResult = transacting.initSwap(firstResult.newState, { [rawShieldedTokenType]: dustAmount }, [
         makeTransferOutput({
           recipient: wallets.A,
           coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -691,8 +719,8 @@ describe('V1 Wallet Transacting', () => {
   describe('when reverting and cancelling transactions', () => {
     it('reverts a transaction (e.g. due to a submission failure), releasing booked coins', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -705,7 +733,7 @@ describe('V1 Wallet Transacting', () => {
         const afterRevert: V1State = Either.getOrThrow(transacting.revert(result.newState, proven));
 
         expect(getAvailableCoins(afterRevert).map((coin) => ({ type: coin.type, value: coin.value }))).toEqual([
-          { type: zswap.nativeToken(), value: dust(3) },
+          { type: rawShieldedTokenType, value: dust(3) },
         ]);
         expect(afterRevert.state.pendingSpends.size).toEqual(0);
       }).pipe(Effect.runPromise);
@@ -713,8 +741,8 @@ describe('V1 Wallet Transacting', () => {
 
     it('reverts a transaction (e.g. due to a submission failure), cancelling coin watches', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
@@ -731,14 +759,14 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('reverts a transaction merged with some other one, releasing booked coins', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const initialCoinValues = [dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
         B: {
-          keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
           coins: [{ tokenType: theOtherTokenType, value: theOtherTokenAmount }],
         },
       });
@@ -747,14 +775,14 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dustAmount }, [
+          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
@@ -767,14 +795,14 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('reverts a transaction merged with some other one, cancelling coin watches', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const dustAmount = dust(1);
       const initialCoinValues = [dust(3)];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
         B: {
-          keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)),
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
           coins: [{ tokenType: theOtherTokenType, value: theOtherTokenAmount }],
         },
       });
@@ -783,14 +811,14 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [zswap.nativeToken()]: dustAmount }, [
+          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
             }),
           ]),
         );
-        const proven: zswap.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
@@ -803,19 +831,19 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('reverts a transaction, releasing booked coins from fallible offer', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(3), { tokenType: theOtherTokenType, value: theOtherTokenAmount }];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
         const fallibleOffer = makeOutputOffer({
-          coin: zswap.createCoinInfo(theOtherTokenType, theOtherTokenAmount),
+          coin: ledger.createShieldedCoinInfo(theOtherTokenType, theOtherTokenAmount),
           recipient: wallets.B,
           segment: 1,
         });
@@ -824,10 +852,10 @@ describe('V1 Wallet Transacting', () => {
           recipient: wallets.B,
           segment: 0,
         });
-        const txToBalance = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+        const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
         const balanceResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.A, txToBalance, []));
-        const balancedProven: zswap.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
+        const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
         const afterRevert: V1State = Either.getOrThrow(transacting.revert(balanceResult.newState, balancedProven));
 
@@ -841,26 +869,26 @@ describe('V1 Wallet Transacting', () => {
           ),
         ).toEqual([
           { type: theOtherTokenType, value: theOtherTokenAmount },
-          { type: zswap.nativeToken(), value: dust(3) },
+          { type: rawShieldedTokenType, value: dust(3) },
         ]);
         expect(afterRevert.state.pendingSpends.size).toEqual(0);
       }).pipe(Effect.runPromise);
     });
 
     it('reverts a transaction, cancelling coin watches from fallible offer', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(3), { tokenType: theOtherTokenType, value: theOtherTokenAmount }];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
         const fallibleOffer = makeOutputOffer({
-          coin: zswap.createCoinInfo(theOtherTokenType, theOtherTokenAmount),
+          coin: ledger.createShieldedCoinInfo(theOtherTokenType, theOtherTokenAmount),
           recipient: wallets.B,
           segment: 1,
         });
@@ -869,10 +897,10 @@ describe('V1 Wallet Transacting', () => {
           recipient: wallets.B,
           segment: 0,
         });
-        const txToBalance = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+        const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
         const balanceResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.A, txToBalance, []));
-        const balancedProven: zswap.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
+        const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
         const afterRevert: V1State = Either.getOrThrow(transacting.revert(balanceResult.newState, balancedProven));
 
@@ -881,17 +909,17 @@ describe('V1 Wallet Transacting', () => {
     });
 
     it('reverts a balancing recipe (e.g. due to user cancelling it), releasing booked coins from both fallible and guaranteed offer', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(3), { tokenType: theOtherTokenType, value: theOtherTokenAmount }];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
       const fallibleOffer = makeOutputOffer({
-        coin: zswap.createCoinInfo(theOtherTokenType, theOtherTokenAmount),
+        coin: ledger.createShieldedCoinInfo(theOtherTokenType, theOtherTokenAmount),
         recipient: wallets.B,
         segment: 1,
       });
@@ -900,7 +928,7 @@ describe('V1 Wallet Transacting', () => {
         recipient: wallets.B,
         segment: 0,
       });
-      const txToBalance = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const balanceResult = Either.getOrThrow(transacting.balanceTransaction(wallets.A, txToBalance, []));
 
@@ -918,23 +946,23 @@ describe('V1 Wallet Transacting', () => {
         ),
       ).toEqual([
         { type: theOtherTokenType, value: theOtherTokenAmount },
-        { type: zswap.nativeToken(), value: dust(3) },
+        { type: rawShieldedTokenType, value: dust(3) },
       ]);
       expect(afterRevert.state.pendingSpends.size).toEqual(0);
     });
 
     it('reverts a balancing recipe (e.g. due to user cancelling it), cancelling coin watches from both fallible and guaranteed offer', () => {
-      const theOtherTokenType = zswap.sampleTokenType();
+      const theOtherTokenType = ledger.sampleRawTokenType();
       const theOtherTokenAmount = 10_000n;
       const initialCoinValues = [dust(3), { tokenType: theOtherTokenType, value: theOtherTokenAmount }];
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
       const fallibleOffer = makeOutputOffer({
-        coin: zswap.createCoinInfo(theOtherTokenType, theOtherTokenAmount),
+        coin: ledger.createShieldedCoinInfo(theOtherTokenType, theOtherTokenAmount),
         recipient: wallets.B,
         segment: 1,
       });
@@ -943,7 +971,7 @@ describe('V1 Wallet Transacting', () => {
         recipient: wallets.B,
         segment: 0,
       });
-      const txToBalance = new zswap.UnprovenTransaction(guaranteedOffer, fallibleOffer).eraseProofs();
+      const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       const balanceResult = Either.getOrThrow(transacting.balanceTransaction(wallets.A, txToBalance, []));
 
@@ -956,8 +984,8 @@ describe('V1 Wallet Transacting', () => {
 
     it('reverts a transfer recipe, releasing booked coins', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
@@ -971,14 +999,14 @@ describe('V1 Wallet Transacting', () => {
           .values()
           .map((coin) => ({ type: coin.type, value: coin.value }))
           .toArray(),
-      ).toEqual([{ type: zswap.nativeToken(), value: dust(3) }]);
+      ).toEqual([{ type: rawShieldedTokenType, value: dust(3) }]);
       expect(afterRevert.state.pendingSpends.size).toEqual(0);
     });
 
     it('reverts a transfer recipe, cancelling coin watches', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
@@ -992,8 +1020,8 @@ describe('V1 Wallet Transacting', () => {
 
     it('does nothing reverting a "nothing to prove" recipe', () => {
       const wallets = prepareWallets({
-        A: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
-        B: { keys: zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [dust(3)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
@@ -1006,7 +1034,7 @@ describe('V1 Wallet Transacting', () => {
           type: NOTHING_TO_PROVE,
           transaction: pipe(
             makeOutputOffer({ recipient: wallets.A, coin: dust(1) }),
-            (offer) => new zswap.UnprovenTransaction(offer),
+            (offer) => ledger.Transaction.fromParts(offer),
             (tx) => tx.eraseProofs(),
           ),
         }),

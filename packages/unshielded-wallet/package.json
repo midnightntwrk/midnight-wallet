@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-unshielded-wallet",
-  "version": "1.0.0-beta.2",
+  "version": "1.0.0-beta.3",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -23,12 +23,11 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger": "5.0.0-alpha.3",
-    "@midnight-ntwrk/wallet-api": "6.0.0-pre.5665b1e",
-    "@midnight-ntwrk/wallet-sdk-address-format": "2.0.0-beta.2",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "2.0.0-beta.2",
-    "@midnight-ntwrk/wallet-sdk-hd": "2.0.0-beta.2",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.2",
+    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-unshielded-state": "workspace:*",
     "effect": "^3.17.3",
     "rxjs": "^7.5"

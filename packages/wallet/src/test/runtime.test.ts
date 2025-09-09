@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolVersion, VersionChangeType } from '@midnight-ntwrk/abstractions';
+import { ProtocolVersion, VersionChangeType } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletBuilder } from '../index';
 import { toProtocolStateArray } from './testUtils';
 import {

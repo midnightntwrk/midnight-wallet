@@ -4,11 +4,11 @@ import { existsSync } from 'node:fs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
 import { HttpQueryClient, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { Connect, Disconnect, Wallet } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { Connect, Disconnect, ShieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 
 const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../e2e-tests');
 
-const KNOWN_VIEWING_KEY = 'mn_shield-esk_undeployed1qvqzp338tsl9e76kay06pyqyu60suelywytqux9c058mqhm6350smhczah53pj';
+const KNOWN_VIEWING_KEY = 'mn_shield-esk_undeployed1qqpsq87f9ac09e95wjm2rp8vp0yd0z4pns7p2w7c9qus0vm20fj4dl93nu709t';
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
@@ -44,9 +44,13 @@ describe('Wallet subscription', () => {
 
         await Effect.gen(function* () {
           const session = yield* makeScopedSession;
-          const events = yield* Wallet.run({ sessionId: session.connect, index: null }).pipe(
+          const events = yield* ShieldedTransactions.run({
+            sessionId: session.connect,
+            index: null,
+            sendProgressUpdates: true,
+          }).pipe(
             Stream.take(5),
-            Stream.tap((data) => Effect.log(data.wallet.__typename)),
+            Stream.tap((data) => Effect.log(data.shieldedTransactions.__typename)),
             Stream.runCollect, // collect the elements into a single chunk.
           );
 

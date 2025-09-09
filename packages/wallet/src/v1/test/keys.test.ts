@@ -1,4 +1,4 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { makeDefaultKeysCapability } from '../Keys';
 import { V1State } from '../RunningV1Variant';
 import * as fc from 'fast-check';
@@ -13,9 +13,9 @@ describe('DefaultKeysCapability', () => {
     it('should generate consistent coin public keys for any seed', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
-          const networkId = zswap.NetworkId.Undeployed;
-          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const networkId = ledger.NetworkId.Undeployed;
+          const state1 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -29,9 +29,9 @@ describe('DefaultKeysCapability', () => {
     it('should generate consistent encryption public keys for any seed', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
-          const networkId = zswap.NetworkId.Undeployed;
-          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const networkId = ledger.NetworkId.Undeployed;
+          const state1 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -45,8 +45,8 @@ describe('DefaultKeysCapability', () => {
     it('should generate addresses composed of coin and encryption public keys for any seed', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
-          const secretKeys = zswap.SecretKeys.fromSeed(seed);
-          const state = V1State.initEmpty(secretKeys, zswap.NetworkId.Undeployed);
+          const secretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
+          const state = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);
@@ -62,9 +62,9 @@ describe('DefaultKeysCapability', () => {
     it('should generate consistent encryption secret keys for any seed', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
-          const networkId = zswap.NetworkId.Undeployed;
-          const state1 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
-          const state2 = V1State.initEmpty(zswap.SecretKeys.fromSeed(seed), networkId);
+          const networkId = ledger.NetworkId.Undeployed;
+          const state1 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state2 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const encryptionSecretKey1 = capability.getEncryptionSecretKey(state1);
@@ -72,10 +72,10 @@ describe('DefaultKeysCapability', () => {
 
           // Need to serialize to compare the actual key data, because internal __wbg_ptr always changes
           const serialized1 = encryptionSecretKey1.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(
-            zswap.NetworkId.Undeployed,
+            ledger.NetworkId.Undeployed,
           );
           const serialized2 = encryptionSecretKey2.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(
-            zswap.NetworkId.Undeployed,
+            ledger.NetworkId.Undeployed,
           );
 
           expect(Buffer.from(serialized1)).toEqual(Buffer.from(serialized2));
@@ -86,10 +86,10 @@ describe('DefaultKeysCapability', () => {
     it('should generate different coin public keys for different seeds', () => {
       fc.assert(
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
-          const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
-          const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
+          const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
+          const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
+          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -103,10 +103,10 @@ describe('DefaultKeysCapability', () => {
     it('should generate different encryption public keys for different seeds', () => {
       fc.assert(
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
-          const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
-          const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
+          const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
+          const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
+          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -120,10 +120,10 @@ describe('DefaultKeysCapability', () => {
     it('should generate different addresses for different seeds', () => {
       fc.assert(
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
-          const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
-          const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
+          const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
+          const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
+          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const address1 = capability.getAddress(state1);
@@ -138,10 +138,10 @@ describe('DefaultKeysCapability', () => {
     it('should generate different encryption secret keys for different seeds', () => {
       fc.assert(
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
-          const secretKeys1 = zswap.SecretKeys.fromSeed(seed1);
-          const secretKeys2 = zswap.SecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, zswap.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, zswap.NetworkId.Undeployed);
+          const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
+          const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
+          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const encryptionSecretKey1 = capability.getEncryptionSecretKey(state1);
@@ -149,10 +149,10 @@ describe('DefaultKeysCapability', () => {
 
           // Need to serialize to compare the actual key data, because internal __wbg_ptr always changes
           const serialized1 = encryptionSecretKey1.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(
-            zswap.NetworkId.Undeployed,
+            ledger.NetworkId.Undeployed,
           );
           const serialized2 = encryptionSecretKey2.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(
-            zswap.NetworkId.Undeployed,
+            ledger.NetworkId.Undeployed,
           );
 
           expect(Buffer.from(serialized1)).not.toEqual(Buffer.from(serialized2));
@@ -165,8 +165,8 @@ describe('DefaultKeysCapability', () => {
     it('should construct addresses from coin and encryption public keys for any seed', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
-          const secretKeys = zswap.SecretKeys.fromSeed(seed);
-          const state = V1State.initEmpty(secretKeys, zswap.NetworkId.Undeployed);
+          const secretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
+          const state = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);

@@ -1,5 +1,5 @@
 import { WalletBuilder } from '../index';
-import { ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { NumericRangeBuilder } from './variants';
 import { toProtocolStateArray } from './testUtils';
 import * as rx from 'rxjs';

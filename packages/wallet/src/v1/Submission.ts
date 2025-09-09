@@ -1,14 +1,14 @@
 import { Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
 import { WalletError } from './WalletError';
-import * as zswap from '@midnight-ntwrk/zswap';
 import { Simulator } from './Simulator';
 import {
   NodeClient,
   NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
-} from '@midnight-ntwrk/wallet-node-client-ts/effect';
+} from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger';
+import { FinalizedTransaction, ProofErasedTransaction } from './types/ledger';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;
@@ -36,11 +36,11 @@ export interface SubmissionService<TTransaction> {
 
 export type DefaultSubmissionConfiguration = {
   relayURL: URL;
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
 };
 export const makeDefaultSubmissionService = (
   config: DefaultSubmissionConfiguration,
-): SubmissionService<zswap.Transaction> => {
+): SubmissionService<FinalizedTransaction> => {
   //Using Deferred under the hood + allowing for "close" method in the service allows to keep resource usage in check and a synchronous API
   type ScopeAndClient = { scope: Scope.CloseableScope; client: NodeClient.Service };
 
@@ -57,7 +57,7 @@ export const makeDefaultSubmissionService = (
 
   void pipe(scopeAndClientDeferred, Deferred.complete(makeScopeAndClient), Effect.runPromise);
 
-  const submit = (transaction: zswap.Transaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
+  const submit = (transaction: FinalizedTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
     return pipe(
       NodeClient.sendMidnightTransactionAndWait(transaction.serialize(config.networkId), waitForStatus),
       Effect.provideServiceEffect(
@@ -73,7 +73,7 @@ export const makeDefaultSubmissionService = (
   };
 
   return {
-    submitTransaction: submit as SubmitTransactionMethod<zswap.Transaction>,
+    submitTransaction: submit as SubmitTransactionMethod<FinalizedTransaction>,
     close(): Effect.Effect<void> {
       return pipe(
         scopeAndClientDeferred,
@@ -90,11 +90,19 @@ export type SimulatorSubmissionConfiguration = {
 };
 export const makeSimulatorSubmissionService =
   (waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock') =>
-  (config: SimulatorSubmissionConfiguration): SubmissionService<zswap.ProofErasedTransaction> => {
-    const submit = (transaction: zswap.ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
-      const serializedTx = transaction.serialize(zswap.NetworkId.Undeployed);
+  (config: SimulatorSubmissionConfiguration): SubmissionService<ProofErasedTransaction> => {
+    const submit = (transaction: ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
+      const serializedTx = transaction.serialize(ledger.NetworkId.Undeployed);
       return config.simulator
-        .submitRegularTx(ledger.ProofErasedTransaction.deserialize(serializedTx, ledger.NetworkId.Undeployed))
+        .submitRegularTx(
+          ledger.Transaction.deserialize(
+            'signature-erased',
+            'no-proof',
+            'no-binding',
+            serializedTx,
+            ledger.NetworkId.Undeployed,
+          ),
+        )
         .pipe(
           Effect.map((output) => {
             // Let's mimic node's client behavior here
@@ -124,7 +132,7 @@ export const makeSimulatorSubmissionService =
     };
 
     return {
-      submitTransaction: submit as SubmitTransactionMethod<zswap.ProofErasedTransaction>,
+      submitTransaction: submit as SubmitTransactionMethod<ProofErasedTransaction>,
       close: (): Effect.Effect<void> => Effect.void,
     };
   };

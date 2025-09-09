@@ -1,4 +1,5 @@
 import { sampleIntentHash } from '@midnight-ntwrk/ledger';
+import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 
 /**
@@ -41,3 +42,21 @@ export const seedHex = (length: number = 64, seed: number = 42): string =>
   Array.from({ length }, (_, i) => ((seed + i) % 16).toString(16)).join('');
 
 export const blockTime = (blockTime: Date): bigint => BigInt(Math.ceil(+blockTime / 1000));
+
+export const getUnshieldedSeed = (seed: string): Uint8Array => {
+  const seedBuffer = Buffer.from(seed, 'hex');
+  const hdWalletResult = HDWallet.fromSeed(seedBuffer);
+
+  const { hdWallet } = hdWalletResult as {
+    type: 'seedOk';
+    hdWallet: HDWallet;
+  };
+
+  const derivationResult = hdWallet.selectAccount(0).selectRole(Roles.NightExternal).deriveKeyAt(0);
+
+  if (derivationResult.type === 'keyOutOfBounds') {
+    throw new Error('Key derivation out of bounds');
+  }
+
+  return Buffer.from(derivationResult.key);
+};

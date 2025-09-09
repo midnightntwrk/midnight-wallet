@@ -1,6 +1,6 @@
 import { Effect, Exit, Scope, Types } from 'effect';
 import * as rx from 'rxjs';
-import { Fluent, HList, Poly, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { Fluent, HList, Poly, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions';
 import { StateOf } from './abstractions/Variant';
 import { ObservableOps } from './effect/index';

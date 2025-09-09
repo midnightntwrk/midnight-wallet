@@ -1,3 +1,5 @@
+/* temporarily disable eslint until we upgrade to ledger 6 */
+/* eslint-disable */
 import { UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import { blockTime, generateMockTransaction, seedHex } from './testUtils';
 import { TransactionService, TransactionServiceError } from '../src/TransactionService';
@@ -22,12 +24,12 @@ describe('TransactionService', () => {
   it('should build a transfer transaction from one desired output', () =>
     Effect.gen(function* () {
       const token = sampleRawTokenType();
-      const recipient = sampleUserAddress();
+      const receiverAddress = sampleUserAddress();
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount,
         },
       ];
@@ -40,7 +42,7 @@ describe('TransactionService', () => {
       expect(offer.inputs.length).toEqual(0);
       expect(offer.outputs.length).toEqual(1);
       expect(offer.signatures.length).toEqual(0);
-      expect(offer.outputs.at(0)).toMatchObject({ owner: recipient, value: amount, type: token });
+      expect(offer.outputs.at(0)).toMatchObject({ owner: receiverAddress, value: amount, type: token });
     }).pipe(Effect.provide(TransactionService.Live), Effect.runPromise));
 
   it('should build a transfer transaction from multiple desired output', () =>
@@ -52,13 +54,13 @@ describe('TransactionService', () => {
       const amount2 = 20n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient: recipient1,
+          type: token,
+          receiverAddress: recipient1,
           amount: amount1,
         },
         {
-          tokenType: token,
-          recipient: recipient2,
+          type: token,
+          receiverAddress: recipient2,
           amount: amount2,
         },
       ];
@@ -79,14 +81,14 @@ describe('TransactionService', () => {
     Effect.gen(function* () {
       const ttl = new Date();
       const token = sampleRawTokenType();
-      const recipient = sampleUserAddress();
+      const receiverAddress = sampleUserAddress();
       const transactionService = yield* TransactionService;
 
       const amount1 = 0n;
       const desiredOutputs1 = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount: amount1,
         },
       ];
@@ -101,8 +103,8 @@ describe('TransactionService', () => {
       const amount2 = -10n;
       const desiredOutputs2 = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount: amount2,
         },
       ];
@@ -135,8 +137,8 @@ describe('TransactionService', () => {
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient: sampleUserAddress(),
+          type: token,
+          receiverAddress: sampleUserAddress(),
           amount,
         },
       ];
@@ -147,6 +149,7 @@ describe('TransactionService', () => {
         transferTransaction,
         unshieldedState,
         ownerAddress,
+        owner,
       );
       const tokenImbalances = balancedTx
         .imbalances(0)
@@ -173,12 +176,12 @@ describe('TransactionService', () => {
       const stateAfterTx = yield* unshieldedState.getLatestState();
       expect(HashSet.size(stateAfterTx.utxos)).toEqual(1);
 
-      const recipient = sampleUserAddress();
+      const receiverAddress = sampleUserAddress();
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount,
         },
       ];
@@ -198,6 +201,7 @@ describe('TransactionService', () => {
         transferTransaction,
         unshieldedState,
         ownerAddress,
+        owner,
       );
       const tokenImbalances = balancedTx
         .imbalances(1)
@@ -214,17 +218,18 @@ describe('TransactionService', () => {
     const amount = 1n;
     const desiredOutputs = [
       {
-        tokenType: token,
-        recipient: sampleUserAddress(),
+        type: token,
+        receiverAddress: sampleUserAddress(),
         amount,
       },
     ];
+    const owner = signatureVerifyingKey(sampleSigningKey());
 
     const result = await Effect.gen(function* () {
       const transactionService = yield* TransactionService;
       const unshieldedState = yield* UnshieldedStateService;
       const tx = yield* transactionService.transferTransaction(desiredOutputs, new Date());
-      return yield* transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress());
+      return yield* transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress(), owner);
     }).pipe(
       Effect.provide(TransactionService.Live),
       Effect.provide(UnshieldedStateService.Live()),
@@ -259,15 +264,15 @@ describe('TransactionService', () => {
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token2,
-          recipient: sampleUserAddress(),
+          type: token2,
+          receiverAddress: sampleUserAddress(),
           amount,
         },
       ];
 
       const tx = yield* transactionService.transferTransaction(desiredOutputs, new Date());
       const result = yield* Effect.either(
-        transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress()),
+        transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress(), owner),
       );
 
       expect(Either.isLeft(result)).toBe(true);
@@ -295,8 +300,8 @@ describe('TransactionService', () => {
       const amount = 3n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient: sampleUserAddress(),
+          type: token,
+          receiverAddress: sampleUserAddress(),
           amount,
         },
       ];
@@ -305,6 +310,7 @@ describe('TransactionService', () => {
         transferTransaction,
         unshieldedState,
         ownerAddress,
+        owner,
       );
       expect(balancedTransaction.intents?.size).toEqual(1);
       expect(balancedTransaction.intents?.get(1)?.guaranteedUnshieldedOffer).toBeDefined();
@@ -331,13 +337,13 @@ describe('TransactionService', () => {
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient: sampleUserAddress(),
+          type: token,
+          receiverAddress: sampleUserAddress(),
           amount,
         },
       ];
       const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
-      const _ = yield* transactionService.balanceTransaction(transferTransaction, unshieldedState, ownerAddress);
+      const _ = yield* transactionService.balanceTransaction(transferTransaction, unshieldedState, ownerAddress, owner);
 
       // validate the state got changed
       const currentState = yield* unshieldedState.getLatestState();
@@ -350,8 +356,8 @@ describe('TransactionService', () => {
       const transactionService = yield* TransactionService;
       const desiredOutputs = [
         {
-          tokenType: sampleRawTokenType(),
-          recipient: sampleUserAddress(),
+          type: sampleRawTokenType(),
+          receiverAddress: sampleUserAddress(),
           amount: 1n,
         },
       ];
@@ -366,8 +372,8 @@ describe('TransactionService', () => {
       const amount = 3n;
       const desiredOutputs = [
         {
-          tokenType: sampleRawTokenType(),
-          recipient: sampleUserAddress(),
+          type: sampleRawTokenType(),
+          receiverAddress: sampleUserAddress(),
           amount,
         },
       ];
@@ -393,8 +399,8 @@ describe('TransactionService', () => {
       const signingKey = sampleSigningKey();
       const desiredOutputs = [
         {
-          tokenType: sampleRawTokenType(),
-          recipient: sampleUserAddress(),
+          type: sampleRawTokenType(),
+          receiverAddress: sampleUserAddress(),
           amount: 3n,
         },
       ];
@@ -420,12 +426,12 @@ describe('TransactionService', () => {
   it('should serialize and deserialize transaction', () =>
     Effect.gen(function* () {
       const token = sampleRawTokenType();
-      const recipient = sampleUserAddress();
+      const receiverAddress = sampleUserAddress();
       const amount = 1n;
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount,
         },
       ];
@@ -451,7 +457,7 @@ describe('TransactionService', () => {
       expect(offer.inputs.length).toEqual(0);
       expect(offer.outputs.length).toEqual(1);
       expect(offer.signatures.length).toEqual(0);
-      expect(offer.outputs.at(0)).toMatchObject({ owner: recipient, value: amount, type: token });
+      expect(offer.outputs.at(0)).toMatchObject({ owner: receiverAddress, value: amount, type: token });
     }).pipe(Effect.provide(TransactionService.Live), Effect.runPromise));
 
   it('should validate the ledger state gets updated', () =>
@@ -515,11 +521,11 @@ describe('TransactionService', () => {
       });
 
       // simulate the spend tx
-      const recipient = sampleUserAddress();
+      const receiverAddress = sampleUserAddress();
       const desiredOutputs = [
         {
-          tokenType: token,
-          recipient,
+          type: token,
+          receiverAddress,
           amount: 1n,
         },
       ];
@@ -530,6 +536,7 @@ describe('TransactionService', () => {
         transferTransaction,
         unshieldedState,
         ownerAddress,
+        owner,
       );
       const signatureData = yield* transactionService.getOfferSignatureData(balancedTx, 1);
       const signature = signData(signingKey, signatureData);
@@ -544,6 +551,6 @@ describe('TransactionService', () => {
       expect(result2.type).toEqual('success');
       expect(ledgerStateAfter2.utxo.utxos.size).toEqual(withChange ? 2 : 1);
       expect(ledgerStateAfter2.utxo.filter(ownerAddress).size).toEqual(withChange ? 1 : 0);
-      expect(ledgerStateAfter2.utxo.filter(recipient).size).toEqual(1);
+      expect(ledgerStateAfter2.utxo.filter(receiverAddress).size).toEqual(1);
     }).pipe(Effect.provide(TransactionService.Live), Effect.provide(UnshieldedStateService.Live()), Effect.runPromise));
 });

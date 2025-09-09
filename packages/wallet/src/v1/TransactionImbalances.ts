@@ -1,9 +1,11 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { BigInt as BInt } from 'effect';
 import { Imbalances, TransactionCostModel } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
+const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+
 export type TotalCostParameters = {
-  ledgerParams: zswap.LedgerParameters;
+  ledgerParams: ledger.LedgerParameters;
   additionalFeeOverhead: bigint;
 };
 export const TotalCostParameters = new (class {
@@ -38,8 +40,8 @@ export const TransactionImbalances = new (class {
     (fees: bigint) =>
     (imbalances: TransactionImbalances): TransactionImbalances => {
       const newGuaranteed = Imbalances.merge(
-        Imbalances.fromEntry(zswap.nativeToken(), -1n * fees),
         imbalances.guaranteed,
+        Imbalances.fromEntry((ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw, -1n * fees),
       );
 
       return {
@@ -50,9 +52,9 @@ export const TransactionImbalances = new (class {
     };
 
   feeTokenOnly = (imbalances: TransactionImbalances): TransactionImbalances => {
-    const amount = imbalances.guaranteed.get(zswap.nativeToken()) ?? 0n;
+    const amount = imbalances.guaranteed.get(shieldedTokenType) ?? 0n;
     return {
-      guaranteed: Imbalances.fromEntry(zswap.nativeToken(), amount),
+      guaranteed: Imbalances.fromEntry(shieldedTokenType, amount),
       fallible: Imbalances.empty(),
       fees: amount,
     };
@@ -60,7 +62,7 @@ export const TransactionImbalances = new (class {
 
   feesOnly = (imbalances: TransactionImbalances): TransactionImbalances => {
     return {
-      guaranteed: Imbalances.fromEntry(zswap.nativeToken(), imbalances.fees),
+      guaranteed: Imbalances.fromEntry(shieldedTokenType, imbalances.fees),
       fallible: Imbalances.empty(),
       fees: imbalances.fees,
     };
@@ -72,11 +74,11 @@ export const TransactionImbalances = new (class {
       const areFallibleAllZeroes = imbalances.fallible.entries().every(([, value]) => value === 0n);
       const areGuaranteedWithoutDustAllZeroes = imbalances.guaranteed
         .entries()
-        .filter(([tokenType]) => tokenType != zswap.nativeToken())
+        .filter(([tokenType]) => tokenType != shieldedTokenType)
         .every(([, value]) => value === 0n);
       const [, guaranteedDustImbalance] = imbalances.guaranteed
         .entries()
-        .find(([tokenType]) => tokenType === zswap.nativeToken()) ?? [zswap.nativeToken(), 0n];
+        .find(([tokenType]) => tokenType === shieldedTokenType) ?? [shieldedTokenType, 0n];
       const isGuaranteedDustReasonablyBalanced = BInt.between(guaranteedDustImbalance, {
         minimum: imbalances.fees,
         maximum:

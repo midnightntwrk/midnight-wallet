@@ -1,34 +1,33 @@
 import { OtherWalletError } from '../WalletError';
-import * as zswap from '@midnight-ntwrk/zswap';
-import { Array as Arr, Chunk, Effect, pipe, Stream } from 'effect';
+import * as ledger from '@midnight-ntwrk/ledger';
+import { Array as Arr, Chunk, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultV1SerializationCapability } from '../Serialization';
 import { Either } from 'effect';
 import { V1State } from '../RunningV1Variant';
-import { TestTransactions } from '@midnight-ntwrk/wallet-node-client-ts/testing';
-import { NodeContext } from '@effect/platform-node';
-import * as ledger from '@midnight-ntwrk/ledger';
 import { CoreWallet } from '../CoreWallet';
+import { ProofErasedTransaction } from '../types/ledger';
+import { makeFakeTx } from '../../test/genTxs';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 vi.setConfig({ testTimeout: minutes(1) });
 
 const tokenTypeArbitrary = (maxSize: number) => {
   const number = fc.nat(maxSize);
-  const types = Array(number).map(() => zswap.sampleTokenType());
+  const types = Array(number).map(() => ledger.sampleRawTokenType());
   const tokenTypeArbitrary = fc.constantFrom(...types);
 
-  const nativeTokenTypeArbitrary = fc.constant(zswap.nativeToken());
+  const nativeTokenTypeArbitrary = fc.constant((ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw);
   return fc.oneof({ weight: 1, arbitrary: nativeTokenTypeArbitrary }, { weight: 1, arbitrary: tokenTypeArbitrary });
 };
-const secretKeysArbitrary: fc.Arbitrary<zswap.SecretKeys> = fc
+const secretKeysArbitrary: fc.Arbitrary<ledger.ZswapSecretKeys> = fc
   .uint8Array({ minLength: 32, maxLength: 32 })
-  .map((seed) => zswap.SecretKeys.fromSeed(seed));
+  .map((seed) => ledger.ZswapSecretKeys.fromSeed(seed));
 
-type OutputPreimage = { coin: zswap.CoinInfo; recipient: zswap.SecretKeys };
+type OutputPreimage = { coin: ledger.ShieldedCoinInfo; recipient: ledger.ZswapSecretKeys };
 const outputPreimageArbitrary = (
-  keysArbitrary: fc.Arbitrary<zswap.SecretKeys>,
-  tokenTypeArbitrary: fc.Arbitrary<zswap.TokenType>,
+  keysArbitrary: fc.Arbitrary<ledger.ZswapSecretKeys>,
+  tokenTypeArbitrary: fc.Arbitrary<ledger.RawTokenType>,
 ): fc.Arbitrary<OutputPreimage> => {
   return fc.record({
     coin: fc.record({
@@ -44,7 +43,7 @@ const transactionArbitrary = (
   depth: number,
 ): fc.Arbitrary<{
   outputPreimages: OutputPreimage[];
-  transaction: zswap.ProofErasedTransaction;
+  transaction: ProofErasedTransaction;
 }> => {
   return fc.array(outputPreimageArbitrary, { maxLength: depth, minLength: 1 }).map((outputPreimages) => {
     return {
@@ -52,17 +51,17 @@ const transactionArbitrary = (
       transaction: pipe(
         outputPreimages,
         Arr.map((preimage) => {
-          const output = zswap.UnprovenOutput.new(
+          const output = ledger.ZswapOutput.new(
             preimage.coin,
             0,
             preimage.recipient.coinPublicKey,
             preimage.recipient.encryptionPublicKey,
           );
-          return zswap.UnprovenOffer.fromOutput(output, preimage.coin.type, preimage.coin.value);
+          return ledger.ZswapOffer.fromOutput(output, preimage.coin.type, preimage.coin.value);
         }),
         (arr) => arr.reduce((offerA, offerB) => offerA.merge(offerB)), // effect lacks equivalent "fold" definition for Array
-        (offer) => new zswap.UnprovenTransaction(offer),
-        (tx: zswap.UnprovenTransaction) => tx.eraseProofs(),
+        (offer) => ledger.Transaction.fromParts(offer),
+        (tx) => tx.eraseProofs(),
       ),
     };
   });
@@ -79,17 +78,20 @@ const walletArbitrary = (txDepth: number) => {
     .chain((acc) => {
       return fc
         .constantFrom(
-          zswap.NetworkId.Undeployed,
-          zswap.NetworkId.DevNet,
-          zswap.NetworkId.TestNet,
-          zswap.NetworkId.MainNet,
+          ledger.NetworkId.Undeployed,
+          ledger.NetworkId.DevNet,
+          ledger.NetworkId.TestNet,
+          ledger.NetworkId.MainNet,
         )
         .map((networkId) => ({ ...acc, networkId }));
     })
     .map(({ transactions, keys, networkId }) => {
-      const state: zswap.LocalState = transactions.reduce((state: zswap.LocalState, tx): zswap.LocalState => {
-        return state.applyProofErasedTx(keys, tx.transaction, 'success');
-      }, new zswap.LocalState());
+      const state: ledger.ZswapLocalState = transactions.reduce(
+        (state: ledger.ZswapLocalState, tx): ledger.ZswapLocalState => {
+          return state.applyTx(keys, tx.transaction, 'success');
+        },
+        new ledger.ZswapLocalState(),
+      );
       const wallet = CoreWallet.empty(state, keys, networkId);
 
       return {
@@ -106,20 +108,13 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000002' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
-  ])('maintains serialize ◦ deserialize, including transaction history', async ({ seed }) => {
+  ])('maintains serialize ◦ deserialize, including transaction history', ({ seed }) => {
     const capability = makeDefaultV1SerializationCapability();
-    const testTxs = await TestTransactions.load.pipe(
-      Effect.flatMap((txs) => TestTransactions.streamAllValid(txs).pipe(Stream.runCollect)),
-      Effect.provide(NodeContext.layer),
-      Effect.runPromise,
-    );
-    const keys = zswap.SecretKeys.fromSeed(Buffer.from(seed, 'hex'));
-    const wallet = V1State.initEmpty(keys, zswap.NetworkId.Undeployed);
+    const testTxs = Chunk.fromIterable([makeFakeTx(10n), makeFakeTx(20n), makeFakeTx(30n)]);
+    const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
+    const wallet = V1State.initEmpty(keys, ledger.NetworkId.Undeployed);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
-      const serializedLedgerTx = tx.serialize(ledger.NetworkId.Undeployed);
-      const deserializedZswapTx = zswap.Transaction.deserialize(serializedLedgerTx, zswap.NetworkId.Undeployed);
-
-      const newState = wallet.state.applyTx(keys, deserializedZswapTx, 'success');
+      const newState = wallet.state.applyTx(keys, tx, 'success');
 
       return wallet.applyState(newState).updateProgress({ appliedIndex: newState.firstFree });
     });
@@ -150,7 +145,7 @@ describe('V1 Wallet serialization', () => {
 
   it('handles invalid JSON strings gracefully', () => {
     const capability = makeDefaultV1SerializationCapability();
-    const keys = zswap.SecretKeys.fromSeed(
+    const keys = ledger.ZswapSecretKeys.fromSeed(
       Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
     );
 
@@ -168,7 +163,7 @@ describe('V1 Wallet serialization', () => {
 
   it('handles random valid JSON strings gracefully', () => {
     const capability = makeDefaultV1SerializationCapability();
-    const keys = zswap.SecretKeys.fromSeed(
+    const keys = ledger.ZswapSecretKeys.fromSeed(
       Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
     );
 

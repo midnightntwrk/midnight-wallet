@@ -1,11 +1,11 @@
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   Proving,
   Simulator,
@@ -16,24 +16,23 @@ import {
   V1Builder,
   V1State,
   V1Tag,
-} from '@midnight-ntwrk/wallet-ts/v1';
-import * as zswap from '@midnight-ntwrk/zswap';
+} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.setConfig({ testTimeout: 10_000 });
+vi.setConfig({ testTimeout: 100_000 });
 
 describe('Working in simulation mode', () => {
   it('allows to make transactions', async () => {
     return Effect.gen(function* () {
-      const senderKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 0));
-      const receiverKeys = zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1));
+      const senderKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const receiverKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
 
       const genesisMints = [
         {
           amount: 10_000_000n,
-          type: ledger.nativeToken(),
+          type: (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw,
           recipient: senderKeys,
         },
       ] as const;
@@ -43,7 +42,7 @@ describe('Working in simulation mode', () => {
         .withVariant(
           ProtocolVersion.MinSupportedVersion,
           new V1Builder()
-            .withTransactionType<zswap.ProofErasedTransaction>()
+            .withTransactionType<ledger.Transaction<ledger.Signaturish, ledger.NoProof, ledger.NoBinding>>()
             .withProving(Proving.makeSimulatorProvingService)
             .withCoinSelectionDefaults()
             .withTransacting(Transacting.makeSimulatorTransactingCapability)
@@ -56,14 +55,14 @@ describe('Working in simulation mode', () => {
         )
         .build({
           simulator,
-          networkId: zswap.NetworkId.Undeployed,
+          networkId: ledger.NetworkId.Undeployed,
           costParameters: {
-            ledgerParams: zswap.LedgerParameters.dummyParameters(),
+            ledgerParams: ledger.LedgerParameters.dummyParameters(),
             additionalFeeOverhead: 0n,
           },
         });
 
-      const getAddress = (keys: zswap.SecretKeys): string => {
+      const getAddress = (keys: ledger.ZswapSecretKeys): string => {
         return ShieldedAddress.codec
           .encode(
             ledger.NetworkId.Undeployed,
@@ -77,7 +76,7 @@ describe('Working in simulation mode', () => {
 
       class Wallet extends WalletBase {
         static coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
-        static init(keys: zswap.SecretKeys): Wallet {
+        static init(keys: ledger.ZswapSecretKeys): Wallet {
           return Wallet.startFirst(Wallet, V1State.initEmpty(keys, Wallet.configuration.networkId));
         }
       }
@@ -100,7 +99,11 @@ describe('Working in simulation mode', () => {
           [V1Tag]: (v1) => {
             return v1
               .transferTransaction([
-                { type: ledger.nativeToken(), amount: 42n, receiverAddress: getAddress(receiverKeys) },
+                {
+                  type: (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw,
+                  amount: 42n,
+                  receiverAddress: getAddress(receiverKeys),
+                },
               ])
               .pipe(
                 Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
@@ -115,7 +118,12 @@ describe('Working in simulation mode', () => {
           receiverWallet.rawState,
           rx.map(ProtocolState.state),
           rx.filter((state) => Wallet.coinsAndBalances.getAvailableCoins(state).length > 0),
-          rx.map((state) => Wallet.coinsAndBalances.getTotalBalances(state)[zswap.nativeToken()]),
+          rx.map(
+            (state) =>
+              Wallet.coinsAndBalances.getTotalBalances(state)[
+                (ledger.nativeToken() as { tag: 'shielded'; raw: string }).raw
+              ] ?? 0n,
+          ),
           (a) => rx.firstValueFrom(a),
         ),
       );

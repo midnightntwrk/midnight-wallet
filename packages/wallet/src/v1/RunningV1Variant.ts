@@ -1,14 +1,13 @@
-import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration } from 'effect';
-import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletRuntimeError, Variant } from '../abstractions/index';
 import { EitherOps } from '../effect/index';
 import { ProvingService } from './Proving';
 import { ProvingRecipe } from './ProvingRecipe';
 import { SerializationCapability } from './Serialization';
 import { SyncCapability, SyncService, WalletSyncSubscription } from './Sync';
-import { TransactingCapability } from './Transacting';
+import { TransactingCapability, TokenTransfer } from './Transacting';
 import { OtherWalletError, WalletError } from './WalletError';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
@@ -16,6 +15,7 @@ import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet';
 import { TransactionHistoryCapability } from './TransactionHistory';
+import { FinalizedTransaction } from './types/ledger';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   if (!state.isConnected) return [];
@@ -47,38 +47,44 @@ export type V1State = CoreWallet;
 export const V1State = new (class {
   readonly #modifyLocalState = <A>(
     state: V1State,
-    modifier: (s: zswap.LocalState) => [A, zswap.LocalState],
+    modifier: (s: ledger.ZswapLocalState) => [A, ledger.ZswapLocalState],
   ): [A, V1State] => {
     const [output, newState] = modifier(state.state);
     const updatedState = state.applyState(newState);
     return [output, updatedState];
   };
 
-  readonly #updateLocalState = (state: V1State, updater: (s: zswap.LocalState) => zswap.LocalState): V1State => {
+  readonly #updateLocalState = (
+    state: V1State,
+    updater: (s: ledger.ZswapLocalState) => ledger.ZswapLocalState,
+  ): V1State => {
     return state.applyState(updater(state.state));
   };
 
-  initEmpty = (keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
-    return CoreWallet.empty(new zswap.LocalState(), keys, networkId);
+  initEmpty = (keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): V1State => {
+    return CoreWallet.empty(new ledger.ZswapLocalState(), keys, networkId);
   };
 
-  init = (state: zswap.LocalState, keys: zswap.SecretKeys, networkId: zswap.NetworkId): V1State => {
+  init = (state: ledger.ZswapLocalState, keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): V1State => {
     return CoreWallet.empty(state, keys, networkId);
   };
 
   spendCoins = (
     state: V1State,
-    coins: ReadonlyArray<zswap.QualifiedCoinInfo>,
+    coins: ReadonlyArray<ledger.QualifiedShieldedCoinInfo>,
     segment: 0 | 1,
-  ): [ReadonlyArray<zswap.UnprovenOffer>, V1State] => {
+  ): [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, V1State] => {
     return this.#modifyLocalState(state, (localState) => {
       return pipe(
         coins,
         Arr.reduce(
           [[], localState],
-          ([offers, localState]: [ReadonlyArray<zswap.UnprovenOffer>, zswap.LocalState], coinToSpend) => {
+          (
+            [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+            coinToSpend,
+          ) => {
             const [newState, newInput] = localState.spend(state.secretKeys, coinToSpend, segment);
-            const inputOffer = zswap.UnprovenOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
+            const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
             return [Arr.append(offers, inputOffer), newState];
           },
         ),
@@ -86,10 +92,10 @@ export const V1State = new (class {
     });
   };
 
-  watchCoins = (state: V1State, coins: ReadonlyArray<zswap.CoinInfo>): V1State => {
+  watchCoins = (state: V1State, coins: ReadonlyArray<ledger.ShieldedCoinInfo>): V1State => {
     return this.#updateLocalState(state, (localState) => {
       return coins.reduce(
-        (localState: zswap.LocalState, coin) => localState.watchFor(state.secretKeys.coinPublicKey, coin),
+        (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.secretKeys.coinPublicKey, coin),
         localState,
       );
     });
@@ -98,7 +104,7 @@ export const V1State = new (class {
 
 export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction> = {
-    serializationCapability: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+    serializationCapability: SerializationCapability<V1State, ledger.ZswapSecretKeys, TSerialized>;
     syncService: SyncService<V1State, TSyncUpdate>;
     syncCapability: SyncCapability<V1State, TSyncUpdate>;
     transactingCapability: TransactingCapability<V1State, TTransaction>;
@@ -106,7 +112,7 @@ export declare namespace RunningV1Variant {
     coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
     keysCapability: KeysCapability<V1State>;
     submissionService: SubmissionService<TTransaction>;
-    coinSelection: CoinSelection<zswap.QualifiedCoinInfo>;
+    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
     transactionHistoryCapability: TransactionHistoryCapability<V1State, TTransaction>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -115,7 +121,7 @@ export declare namespace RunningV1Variant {
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncSubscription, zswap.Transaction>;
+export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncSubscription, FinalizedTransaction>;
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
   implements Variant.RunningVariant<typeof V1Tag, V1State>
@@ -182,7 +188,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
 
   balanceTransaction(
     tx: TTransaction,
-    newCoins: readonly zswap.CoinInfo[],
+    newCoins: readonly ledger.ShieldedCoinInfo[],
   ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
@@ -204,7 +210,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
   }
 
   initSwap(
-    desiredInputs: Record<zswap.TokenType, bigint>,
+    desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
   ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {

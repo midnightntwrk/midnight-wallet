@@ -29,6 +29,7 @@ result
 !.vscode/extensions.json
 .bloop/
 metals.sbt
+tmp
 
 archive_info.txt
 libmidnight_zswap_c_bindings_v*.*

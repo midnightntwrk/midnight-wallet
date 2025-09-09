@@ -1,28 +1,31 @@
-import * as zswap from '@midnight-ntwrk/zswap';
 import { Array as Arr, Option, pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { TotalCostParameters, TransactionImbalances } from './TransactionImbalances';
+import { FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './types/ledger';
+import { V1State } from './RunningV1Variant';
 
 export type TransactionTrait<Tx> = {
   getImbalancesWithFeesOverhead(tx: Tx, costParams: TotalCostParameters): TransactionImbalances;
   /**
    * A subject-reversed function, allows to implement reversal once in the capability itself
    */
-  getRevertedFromLocalState(tx: Tx, state: zswap.LocalState): zswap.LocalState;
+  getRevertedFromLocalState(tx: Tx, state: V1State): V1State;
 
   id(tx: Tx): string;
 };
 export const TransactionTrait = new (class {
-  default: TransactionTrait<zswap.Transaction> = {
-    getImbalancesWithFeesOverhead(tx: zswap.Transaction, costParams): TransactionImbalances {
+  default: TransactionTrait<FinalizedTransaction> = {
+    getImbalancesWithFeesOverhead(tx: FinalizedTransaction, costParams): TransactionImbalances {
       return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
     },
-    getRevertedFromLocalState(tx: zswap.Transaction, state: zswap.LocalState): zswap.LocalState {
+    getRevertedFromLocalState(tx: FinalizedTransaction, state: V1State): V1State {
       //This might seem as an overcomplicated, but:
       // - reduces amount of handling "what-if-not" cases
       // - handles each concern exactly once (applying failed offer, handling possible non-existence of offer in tx)
+      const fallibleOffers = tx.fallibleOffer?.entries().map(([_, offer]) => offer) || [];
+
       return pipe(
-        [Option.fromNullable(tx.guaranteedCoins), Option.fromNullable(tx.fallibleCoins)],
+        [Option.fromNullable(tx.guaranteedOffer), Option.fromIterable(fallibleOffers)],
         Arr.flatMap((maybeOffer) => Option.toArray(maybeOffer)),
         Arr.reduce(state, (previousState, offer) => previousState.applyFailed(offer)),
       );
@@ -31,13 +34,14 @@ export const TransactionTrait = new (class {
       return tx.identifiers().at(0)!;
     },
   };
-  proofErased: TransactionTrait<zswap.ProofErasedTransaction> = {
+  proofErased: TransactionTrait<ProofErasedTransaction> = {
     getImbalancesWithFeesOverhead(tx, costParams): TransactionImbalances {
       return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
     },
-    getRevertedFromLocalState(tx: zswap.ProofErasedTransaction, state: zswap.LocalState): zswap.LocalState {
+    getRevertedFromLocalState(tx: ProofErasedTransaction, state: V1State): V1State {
+      const fallibleOffers = tx.fallibleOffer?.entries().map(([_, offer]) => offer) || [];
       return pipe(
-        [Option.fromNullable(tx.guaranteedCoins), Option.fromNullable(tx.fallibleCoins)],
+        [Option.fromNullable(tx.guaranteedOffer), Option.fromIterable(fallibleOffers)],
         Arr.flatMap((maybeOffer) => Option.toArray(maybeOffer)),
         Arr.reduce(state, (previousState, offer) => previousState.applyFailedProofErased(offer)),
       );
@@ -46,35 +50,11 @@ export const TransactionTrait = new (class {
       return tx.identifiers().at(0)!;
     },
   };
-  unproven: TransactionTrait<zswap.UnprovenTransaction> = {
-    getImbalancesWithFeesOverhead(
-      tx: zswap.UnprovenTransaction,
-      costParams: TotalCostParameters,
-    ): TransactionImbalances {
-      const guaranteedImbalances = Imbalances.fromMaybeMap(tx.guaranteedCoins?.deltas);
-      const fallibleImbalaces = Imbalances.fromMaybeMap(tx.fallibleCoins?.deltas);
-      const feesEstimation = (() => {
-        const totalNumberOfInputs = (tx.guaranteedCoins?.inputs.length ?? 0) + (tx.fallibleCoins?.inputs.length ?? 0);
-        const totalNumberOfOutputs =
-          (tx.guaranteedCoins?.outputs.length ?? 0) + (tx.fallibleCoins?.outputs.length ?? 0);
-
-        return TransactionTrait.shared.estimateFeeOverhead({
-          numberOfInputs: totalNumberOfInputs,
-          numberOfOutputs: totalNumberOfOutputs,
-          costParams,
-        });
-      })();
-
-      return pipe(
-        {
-          guaranteed: guaranteedImbalances,
-          fallible: fallibleImbalaces,
-          fees: 0n,
-        },
-        TransactionImbalances.addFeesOverhead(feesEstimation),
-      );
+  unproven: TransactionTrait<UnprovenTransaction> = {
+    getImbalancesWithFeesOverhead(tx: UnprovenTransaction, costParams: TotalCostParameters): TransactionImbalances {
+      return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
     },
-    getRevertedFromLocalState(tx: zswap.UnprovenTransaction, state: zswap.LocalState): zswap.LocalState {
+    getRevertedFromLocalState(tx: UnprovenTransaction, state: V1State): V1State {
       return TransactionTrait.proofErased.getRevertedFromLocalState(tx.eraseProofs(), state);
     },
     id(tx) {
@@ -84,12 +64,14 @@ export const TransactionTrait = new (class {
 
   shared = {
     getImbalancesWithFeesOverhead(
-      tx: zswap.Transaction | zswap.ProofErasedTransaction,
+      tx: FinalizedTransaction | UnprovenTransaction | ProofErasedTransaction,
       costParams: TotalCostParameters,
     ): TransactionImbalances {
-      const guaranteedImbalances = Imbalances.fromMap(tx.imbalances(true));
-      const fallibleImbalances = Imbalances.fromMap(tx.imbalances(false));
       const feesNeeded = tx.fees(costParams.ledgerParams);
+
+      const guaranteedImbalances = TransactionTrait.shared.getGuaranteedImbalances(tx, feesNeeded);
+      const fallibleImbalances = TransactionTrait.shared.getFallibleImbalances(tx);
+
       return pipe(
         {
           guaranteed: guaranteedImbalances,
@@ -98,6 +80,34 @@ export const TransactionTrait = new (class {
         },
         TransactionImbalances.addFeesOverhead(feesNeeded),
       );
+    },
+    getGuaranteedImbalances: (
+      tx: FinalizedTransaction | UnprovenTransaction | ProofErasedTransaction,
+      feesNeeded: bigint,
+    ): Imbalances => {
+      const rawGuaranteedImbalances = tx
+        .imbalances(0, feesNeeded)
+        .entries()
+        .filter(([token]) => token.tag === 'shielded')
+        .map(([token, value]) => {
+          return [(token as { tag: 'shielded'; raw: string }).raw.toString(), value] as [string, bigint];
+        });
+
+      return Imbalances.fromEntries(rawGuaranteedImbalances);
+    },
+    getFallibleImbalances: (tx: FinalizedTransaction | UnprovenTransaction | ProofErasedTransaction): Imbalances => {
+      try {
+        const rawFallibleImbalances = tx
+          .imbalances(1)
+          .entries()
+          .filter(([token]) => token.tag === 'shielded')
+          .map(([token, value]) => {
+            return [(token as { tag: 'shielded'; raw: string }).raw.toString(), value] as [string, bigint];
+          });
+        return Imbalances.fromEntries(rawFallibleImbalances);
+      } catch {
+        return Imbalances.empty();
+      }
     },
     estimateFeeOverhead(params: {
       numberOfInputs: number;

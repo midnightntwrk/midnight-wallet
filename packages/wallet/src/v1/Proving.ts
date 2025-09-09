@@ -1,10 +1,10 @@
-import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-prover-client-ts/effect';
-import { InvalidProtocolSchemeError, SerializedUnprovenTransaction } from '@midnight-ntwrk/abstractions';
-import { ProofErasedTransaction } from '@midnight-ntwrk/zswap';
-import * as zswap from '@midnight-ntwrk/zswap';
+import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { InvalidProtocolSchemeError, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe';
 import { ProvingError, WalletError } from './WalletError';
+import { UnprovenTransaction, ProofErasedTransaction, FinalizedTransaction } from './types/ledger';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;
@@ -12,30 +12,36 @@ export interface ProvingService<TTransaction> {
 
 export type DefaultProvingConfiguration = {
   provingServerUrl: URL;
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
 };
 
 export const httpProveTx = (
-  networkId: zswap.NetworkId,
-  unproven: zswap.UnprovenTransaction,
-): Effect.Effect<zswap.Transaction, WalletError, ProverClient.ProverClient> => {
+  networkId: ledger.NetworkId,
+  unproven: UnprovenTransaction,
+): Effect.Effect<FinalizedTransaction, WalletError, ProverClient.ProverClient> => {
   return Effect.gen(function* () {
     const client = yield* ProverClient.ProverClient;
     const unprovenSerialized = SerializedUnprovenTransaction(unproven.serialize(networkId));
     const provenSerialized = yield* client.proveTransaction(unprovenSerialized);
-    return zswap.Transaction.deserialize(provenSerialized, networkId);
+    return ledger.Transaction.deserialize(
+      'signature',
+      'proof',
+      'pre-binding',
+      provenSerialized,
+      networkId,
+    ) as FinalizedTransaction; // @TODO double check the cast is correct
   }).pipe(Effect.mapError((err) => WalletError.proving(err)));
 };
 
 export const makeDefaultProvingService = (
   configuration: DefaultProvingConfiguration,
-): ProvingService<zswap.Transaction> => {
+): ProvingService<FinalizedTransaction> => {
   const clientLayer = HttpProverClient.layer({
     url: configuration.provingServerUrl,
   });
 
   return {
-    prove(recipe: ProvingRecipe<zswap.Transaction>): Effect.Effect<zswap.Transaction, WalletError> {
+    prove(recipe: ProvingRecipe<FinalizedTransaction>): Effect.Effect<FinalizedTransaction, WalletError> {
       switch (recipe.type) {
         case 'BalanceTransactionToProve':
           return pipe(
@@ -71,7 +77,7 @@ export const makeDefaultProvingService = (
   };
 };
 
-export const makeSimulatorProvingService = (): ProvingService<zswap.ProofErasedTransaction> => {
+export const makeSimulatorProvingService = (): ProvingService<ProofErasedTransaction> => {
   return {
     prove(recipe: ProvingRecipe<ProofErasedTransaction>): Effect.Effect<ProofErasedTransaction, WalletError> {
       switch (recipe.type) {

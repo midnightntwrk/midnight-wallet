@@ -1,3 +1,5 @@
+/* temporarily disable eslint until we upgrade to ledger 6 */
+/* eslint-disable */
 import { Effect, Layer, Context, Data, HashSet, pipe, Option, Either } from 'effect';
 import { ParseError } from 'effect/ParseResult';
 import { UnshieldedStateAPI, Utxo, UtxoNotFoundError } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
@@ -19,12 +21,18 @@ import {
   type UtxoOutput,
   type UserAddress,
 } from '@midnight-ntwrk/ledger';
-import { type OutputRecipe, type SerializedTransaction } from '@midnight-ntwrk/wallet-api';
+import { SignatureVerifyingKey } from '@midnight-ntwrk/ledger';
 
 interface UnshieldedToken {
   tag: 'unshielded';
   raw: RawTokenType;
 }
+
+export type TokenTransfer = {
+  readonly amount: bigint;
+  readonly type: string;
+  readonly receiverAddress: string;
+};
 
 export class DeserializationError extends Data.TaggedError('DeserializationError')<{
   readonly error?: unknown;
@@ -37,7 +45,7 @@ export class TransactionServiceError extends Data.TaggedError('TransactionServic
 
 export interface TransactionServiceLive {
   readonly transferTransaction: (
-    outputs: OutputRecipe[],
+    outputs: TokenTransfer[],
     ttl: Date,
   ) => Effect.Effect<Transaction<SignatureEnabled, PreProof, PreBinding>, TransactionServiceError>;
 
@@ -45,19 +53,20 @@ export interface TransactionServiceLive {
     markerS: S['instance'],
     markerP: P['instance'],
     markerB: B['instance'],
-    tx: SerializedTransaction,
+    tx: string,
     networkId: NetworkId,
   ) => Effect.Effect<Transaction<S, P, B>, DeserializationError>;
 
   readonly serializeTransaction: (
     transaction: Transaction<Signaturish, Proofish, Bindingish>,
     networkId: NetworkId,
-  ) => Effect.Effect<SerializedTransaction, TransactionServiceError>;
+  ) => Effect.Effect<string, TransactionServiceError>;
 
   readonly balanceTransaction: (
     transaction: Transaction<SignatureEnabled, PreProof, PreBinding>,
     state: UnshieldedStateAPI,
     myAddress: UserAddress,
+    publicKey: SignatureVerifyingKey,
   ) => Effect.Effect<
     Transaction<SignatureEnabled, PreProof, PreBinding>,
     TransactionServiceError | ParseError | UtxoNotFoundError
@@ -126,7 +135,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
     TransactionService,
     (() => {
       const transferTransaction = (
-        desiredOutputs: OutputRecipe[],
+        desiredOutputs: TokenTransfer[],
         ttl: Date,
       ): Effect.Effect<Transaction<SignatureEnabled, PreProof, PreBinding>, TransactionServiceError> =>
         Effect.gen(function* () {
@@ -135,11 +144,13 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
             return yield* Effect.fail(new TransactionServiceError({ error: 'The amount needs to be positive' }));
           }
 
-          const ledgerOutputs = desiredOutputs.map((output) => ({
-            value: output.amount,
-            owner: output.recipient,
-            type: output.tokenType,
-          }));
+          const ledgerOutputs = desiredOutputs.map((output) => {
+            return {
+              value: output.amount,
+              owner: output.receiverAddress,
+              type: output.type,
+            };
+          });
 
           return yield* ledgerTry(() => {
             const intent = Intent.new(ttl);
@@ -152,7 +163,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         markerS: S['instance'],
         markerP: P['instance'],
         markerB: B['instance'],
-        tx: SerializedTransaction,
+        tx: string,
         networkId: NetworkId,
       ): Effect.Effect<Transaction<S, P, B>, DeserializationError> =>
         // NOTE: ledger's deserialization error is too of a low-level and doesn't tell us what exactly was wrong
@@ -167,7 +178,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
       const serializeTransaction = (
         transaction: Transaction<Signaturish, Proofish, Bindingish>,
         networkId: NetworkId,
-      ): Effect.Effect<SerializedTransaction, TransactionServiceError> =>
+      ): Effect.Effect<string, TransactionServiceError> =>
         Effect.map(
           ledgerTry(() => transaction.serialize(networkId)),
           (res) => Buffer.from(res).toString('hex'),
@@ -177,6 +188,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         transaction: Transaction<SignatureEnabled, PreProof, PreBinding>,
         state: UnshieldedStateAPI,
         myAddress: UserAddress,
+        publicKey: SignatureVerifyingKey,
       ): Effect.Effect<
         Transaction<SignatureEnabled, PreProof, PreBinding>,
         TransactionServiceError | ParseError | UtxoNotFoundError
@@ -237,13 +249,19 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
               yield* state.spend(input);
             }
 
-            const counterOffer = yield* ledgerTry(() => UnshieldedOffer.new(inputs, changeOutputs, []));
+            const ledgerInputs = inputs.map((input) => ({
+              ...input,
+              intentHash: input.intentHash.startsWith('0100') ? input.intentHash : `0100${input.intentHash}`,
+              owner: publicKey,
+            }));
+
+            const counterOffer = yield* ledgerTry(() => UnshieldedOffer.new(ledgerInputs, changeOutputs, []));
 
             // NOTE: for the segment === 0 we insert the counter-offer into any intent's guaranteed section
             if (segment !== GUARANTEED_SEGMENT) {
               const intent: Intent<SignatureEnabled, PreProof, PreBinding> = transaction.intents.get(segment)!;
               const isBound = yield* isIntentBound(intent);
-              if (!isBound) {
+              if (!isBound && intent.fallibleUnshieldedOffer) {
                 const mergedOffer = yield* mergeCounterOffer(counterOffer, intent.fallibleUnshieldedOffer);
                 yield* ledgerTry(() => {
                   intent.fallibleUnshieldedOffer = mergedOffer;
@@ -259,7 +277,8 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
                 });
               }
             } else {
-              let ttl = new Date();
+              const highestTransactionId = latestState.syncProgress?.highestTransactionId || 1;
+              let ttl = new Date(Date.now() + highestTransactionId * 60 * 3600);
               let updated = false;
 
               // try to find and modify any unbound intent first

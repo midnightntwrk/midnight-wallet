@@ -1,12 +1,12 @@
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/abstractions';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilder } from '@midnight-ntwrk/wallet-ts';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-ts/abstractions';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
 import {
   CoinsAndBalances,
   DefaultRunningV1,
@@ -16,8 +16,8 @@ import {
   V1Builder,
   V1State,
   V1Tag,
-} from '@midnight-ntwrk/wallet-ts/v1';
-import * as zswap from '@midnight-ntwrk/zswap';
+} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
@@ -28,6 +28,7 @@ import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries';
+import { getShieldedSeed } from './utils';
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 30_000 });
 
@@ -35,6 +36,8 @@ const random = new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() 
 const sampleValue = <T>(arbitrary: fc.Arbitrary<T>): T => {
   return arbitrary.generate(random, undefined).value;
 };
+
+const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
 
 const assertCloseTo = (actual: bigint, expected: bigint, delta: bigint, message: string = ''): void => {
   assert.isTrue(actual >= expected - delta, `Expected ${actual} to be within ${delta} from ${expected}: ${message}`);
@@ -70,9 +73,9 @@ describe('Wallet transacting', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: zswap.NetworkId.Undeployed,
+      networkId: ledger.NetworkId.Undeployed,
       costParameters: {
-        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        ledgerParams: ledger.LedgerParameters.dummyParameters(),
         additionalFeeOverhead: 50_000n,
       },
     };
@@ -89,9 +92,9 @@ describe('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<V1State>;
   let keys: Keys.KeysCapability<V1State>;
 
-  const getShieldedAddress = (state: V1State | zswap.SecretKeys): string => {
+  const getShieldedAddress = (state: V1State | ledger.ZswapSecretKeys): string => {
     const address =
-      state instanceof zswap.SecretKeys
+      state instanceof ledger.ZswapSecretKeys
         ? new ShieldedAddress(
             ShieldedCoinPublicKey.fromHexString(state.coinPublicKey),
             ShieldedEncryptionPublicKey.fromHexString(state.encryptionPublicKey),
@@ -121,7 +124,7 @@ describe('Wallet transacting', () => {
   const getBalanceChange = (
     before: { balances: CoinsAndBalances.Balances },
     after: { balances: CoinsAndBalances.Balances },
-    tokenType: zswap.TokenType,
+    tokenType: ledger.RawTokenType,
   ): bigint => {
     const balanceBefore = before.balances[tokenType] ?? 0n;
     const balanceAfter = after.balances[tokenType] ?? 0n;
@@ -134,15 +137,18 @@ describe('Wallet transacting', () => {
       .build(configuration);
     coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     keys = Wallet.allVariantsRecord()[V1Tag].variant.keys;
-    wallet = Wallet.startEmpty(Wallet);
+    const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001');
+
+    wallet = Wallet.startFirst(
+      Wallet,
+      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), Wallet.configuration.networkId),
+    );
+
+    const shieldedSeed2 = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
+
     wallet2 = Wallet.startFirst(
       Wallet,
-      V1State.initEmpty(
-        zswap.SecretKeys.fromSeed(
-          Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'),
-        ),
-        Wallet.configuration.networkId,
-      ),
+      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed2), Wallet.configuration.networkId),
     );
   });
 
@@ -194,13 +200,13 @@ describe('Wallet transacting', () => {
       .pipe(Effect.runPromise);
 
     const transaction = result.transaction;
-    expect(transaction.guaranteedCoins!.outputs.length).toBeGreaterThanOrEqual(rawOutputs.length);
+    expect(transaction.guaranteedOffer!.outputs.length).toBeGreaterThanOrEqual(rawOutputs.length);
     usedTokenTypes.forEach((tokenType) => {
-      const delta = transaction.guaranteedCoins!.deltas.get(tokenType);
+      const delta = transaction.guaranteedOffer!.deltas.get(tokenType);
       expect(delta == undefined || delta >= 0n).toBe(true);
     });
     rawOutputs.forEach((rawOutput) => {
-      const appliedState = new zswap.LocalState().applyTx(rawOutput.receiverAddress, transaction, 'success');
+      const appliedState = new ledger.ZswapLocalState().applyTx(rawOutput.receiverAddress, transaction, 'success');
       expect(Array.from(appliedState.coins)).toMatchObject([{ value: rawOutput.amount, type: rawOutput.type }]);
     });
     expect(result.submissionResult._tag).toBe('Finalized');
@@ -222,7 +228,7 @@ describe('Wallet transacting', () => {
           v1
             .transferTransaction([
               {
-                type: zswap.nativeToken(),
+                type: (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw,
                 amount: 42n,
                 receiverAddress: getShieldedAddress(receiverState),
               },
@@ -239,7 +245,7 @@ describe('Wallet transacting', () => {
       rx.skip(1),
       rx.map(ProtocolState.state),
       rx.filter((state) => state.progress.isStrictlyComplete()),
-      rx.map((state) => coinsAndBalances.getAvailableBalances(state)[zswap.nativeToken()]),
+      rx.map((state) => coinsAndBalances.getAvailableBalances(state)[shieldedTokenType]),
       (a) => rx.firstValueFrom(a),
     );
 
@@ -280,11 +286,11 @@ describe('Wallet transacting', () => {
     // adding overhead for each output because balancing won't create a change output if it does not make sense
     const dustReserve =
       finalTx.fees(Wallet.configuration.costParameters.ledgerParams) +
-      BigInt(finalTx.guaranteedCoins!.inputs.length) *
+      BigInt(finalTx.guaranteedOffer!.inputs.length) *
         (Wallet.configuration.costParameters.additionalFeeOverhead +
           Wallet.configuration.costParameters.ledgerParams.transactionCostModel.inputFeeOverhead) +
       BigInt(
-        finalTx.guaranteedCoins!.outputs.length +
+        finalTx.guaranteedOffer!.outputs.length +
           (swapParams.outputs.length + Object.keys(swapParams.inputs).length) * 2,
       ) *
         (Wallet.configuration.costParameters.additionalFeeOverhead +
@@ -301,7 +307,7 @@ describe('Wallet transacting', () => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, type);
 
-      const acceptedDelta = type == zswap.nativeToken() ? dustReserve : 0n;
+      const acceptedDelta = type == shieldedTokenType ? dustReserve : 0n;
 
       assertCloseTo(change1, value * -1n, acceptedDelta, `Expected wallet 1 to provide ${value}`);
       assertCloseTo(change2, value, acceptedDelta, `Expected wallet 2 to receive ${value}`);
@@ -311,15 +317,15 @@ describe('Wallet transacting', () => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, output.type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, output.type);
 
-      const acceptedDelta = output.type == zswap.nativeToken() ? dustReserve : 0n;
+      const acceptedDelta = output.type == shieldedTokenType ? dustReserve : 0n;
 
       assertCloseTo(change1, output.amount, acceptedDelta, `Expected wallet 1 to receive ${output.amount}`);
       assertCloseTo(change2, output.amount * -1n, acceptedDelta, `Expected wallet 2 to provide ${output.amount}`);
     });
 
-    expect(finalTx.guaranteedCoins!.deltas.get(zswap.nativeToken())).toBeGreaterThanOrEqual(
+    expect(finalTx.guaranteedOffer!.deltas.get(shieldedTokenType)).toBeGreaterThanOrEqual(
       finalTx.fees(Wallet.configuration.costParameters.ledgerParams),
     );
-    expect(finalTx.guaranteedCoins!.deltas.get(zswap.nativeToken())).toBeLessThanOrEqual(dustReserve);
+    expect(finalTx.guaranteedOffer!.deltas.get(shieldedTokenType)).toBeLessThanOrEqual(dustReserve);
   });
 });

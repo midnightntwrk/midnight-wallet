@@ -3,8 +3,8 @@ import { Scope } from 'effect';
 import { Observable } from 'rxjs';
 import { Runtime } from '../Runtime';
 import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant';
-import { HList, Poly } from '@midnight-ntwrk/abstractions';
-import { ProtocolState } from '@midnight-ntwrk/abstractions';
+import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * Defines the static portion of base wallet class definition

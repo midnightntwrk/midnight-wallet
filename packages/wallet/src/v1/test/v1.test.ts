@@ -1,18 +1,19 @@
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultV1Variant, V1Builder } from '../V1Builder';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { WalletError } from '../WalletError';
 import { Effect, Either, Encoding, Option, pipe, Ref, SubscriptionRef } from 'effect';
 import { SubmissionService } from '../Submission';
 import { makeDefaultTransactingCapability } from '../Transacting';
-import { TestTransactions } from '@midnight-ntwrk/wallet-node-client-ts/testing';
 import { NodeContext } from '@effect/platform-node';
-import { WalletSeed } from '@midnight-ntwrk/abstractions';
+import { WalletSeed } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { makeDefaultKeysCapability } from '../Keys';
 import { V1State } from '../RunningV1Variant';
 import { CoreWallet } from '../CoreWallet';
+import { FinalizedTransaction } from '../types/ledger';
+import { makeFakeTx } from '../../test/genTxs';
 
 describe('V1 Variant', () => {
   it('gracefully stops submission service', async () => {
@@ -31,7 +32,7 @@ describe('V1 Variant', () => {
         .withDefaults()
         .withSubmission(() => fakeSubmission)
         .build({
-          networkId: zswap.NetworkId.Undeployed,
+          networkId: ledger.NetworkId.Undeployed,
           relayURL: new URL('http://localhost:9944'),
           indexerClientConnection: {
             indexerHttpUrl: 'http://localhost:8080',
@@ -39,14 +40,14 @@ describe('V1 Variant', () => {
           provingServerUrl: new URL('http://localhost:6300'),
           costParameters: {
             additionalFeeOverhead: 1n,
-            ledgerParams: zswap.LedgerParameters.dummyParameters(),
+            ledgerParams: ledger.LedgerParameters.dummyParameters(),
           },
         });
       const initialState = V1State.initEmpty(
-        zswap.SecretKeys.fromSeed(
+        ledger.ZswapSecretKeys.fromSeed(
           WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
         ),
-        zswap.NetworkId.Undeployed,
+        ledger.NetworkId.Undeployed,
       );
       yield* variant.start({ stateRef: yield* SubscriptionRef.make(initialState) }, initialState);
       return fakeSubmission.wasClosedRef;
@@ -63,7 +64,7 @@ describe('V1 Variant', () => {
 
   it('reverts transaction, which failed submission', async () => {
     const config = {
-      networkId: zswap.NetworkId.Undeployed,
+      networkId: ledger.NetworkId.Undeployed,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
@@ -71,13 +72,16 @@ describe('V1 Variant', () => {
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
         additionalFeeOverhead: 1n,
-        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        ledgerParams: ledger.LedgerParameters.dummyParameters(),
       },
     };
-    const expectedState = V1State.initEmpty(zswap.SecretKeys.fromSeed(Buffer.alloc(32, 1)), zswap.NetworkId.Undeployed);
+    const expectedState = V1State.initEmpty(
+      ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
+      ledger.NetworkId.Undeployed,
+    );
     const testProgram = Effect.gen(function* () {
-      const theTransaction = yield* TestTransactions.load.pipe(Effect.map((t) => t.initial_tx));
-      const failingSubmission: SubmissionService<zswap.Transaction> = {
+      const theTransaction = makeFakeTx(100n) as unknown as FinalizedTransaction; // @TODO optimize
+      const failingSubmission: SubmissionService<FinalizedTransaction> = {
         submitTransaction: () => Effect.fail(WalletError.submission(new Error('boo!'))),
         close: () => Effect.void,
       };
@@ -89,8 +93,8 @@ describe('V1 Variant', () => {
       const spiedRevert = vi.spyOn(transacting, 'revert');
       spiedRevert.mockImplementation((state, transaction) => {
         if (
-          Encoding.encodeHex(transaction.serialize(zswap.NetworkId.Undeployed)) ===
-          Encoding.encodeHex(theTransaction.serialize(zswap.NetworkId.Undeployed))
+          Encoding.encodeHex(transaction.serialize(ledger.NetworkId.Undeployed)) ===
+          Encoding.encodeHex(theTransaction.serialize(ledger.NetworkId.Undeployed))
         ) {
           // Returning a completely different state allows to later test that it is properly connected, without invoking the actual logic
           return Either.right(expectedState);
@@ -105,11 +109,11 @@ describe('V1 Variant', () => {
         .withTransacting(() => transacting)
         .build(config);
       const initialState = CoreWallet.empty(
-        new zswap.LocalState(),
-        zswap.SecretKeys.fromSeed(
+        new ledger.ZswapLocalState(),
+        ledger.ZswapSecretKeys.fromSeed(
           WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
         ),
-        zswap.NetworkId.Undeployed,
+        ledger.NetworkId.Undeployed,
       );
       const stateRef = yield* SubscriptionRef.make(initialState);
       const running = yield* variant.start({ stateRef: stateRef }, initialState);

@@ -4,7 +4,7 @@ import {
   ServerError,
   SerializedTransaction,
   SerializedUnprovenTransaction,
-} from '@midnight-ntwrk/abstractions';
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * A client that provides proof services for unproven transactions.

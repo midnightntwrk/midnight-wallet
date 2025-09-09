@@ -1,4 +1,4 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import { UnprovenTransaction } from './types/ledger';
 
 export const TRANSACTION_TO_PROVE = 'TransactionToProve';
 export const BALANCE_TRANSACTION_TO_PROVE = 'BalanceTransactionToProve';
@@ -6,12 +6,12 @@ export const NOTHING_TO_PROVE = 'NothingToProve';
 
 export type TransactionToProve = {
   readonly type: typeof TRANSACTION_TO_PROVE;
-  readonly transaction: zswap.UnprovenTransaction;
+  readonly transaction: UnprovenTransaction;
 };
 
 export type BalanceTransactionToProve<Transaction> = {
   readonly type: typeof BALANCE_TRANSACTION_TO_PROVE;
-  readonly transactionToProve: zswap.UnprovenTransaction;
+  readonly transactionToProve: UnprovenTransaction;
   readonly transactionToBalance: Transaction;
 };
 

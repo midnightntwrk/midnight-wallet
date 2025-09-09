@@ -3,16 +3,16 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import * as fc from 'fast-check';
 import { Record } from 'effect';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 
 export const recipientArbitrary = fc
   .uint8Array({ minLength: 32, maxLength: 32 })
-  .map((bytes) => zswap.SecretKeys.fromSeed(bytes));
+  .map((bytes) => ledger.ZswapSecretKeys.fromSeed(bytes));
 
-export const shieldedAddressArbitrary = (whoArb: fc.Arbitrary<zswap.SecretKeys>): fc.Arbitrary<ShieldedAddress> =>
+export const shieldedAddressArbitrary = (whoArb: fc.Arbitrary<ledger.ZswapSecretKeys>): fc.Arbitrary<ShieldedAddress> =>
   whoArb.map(
     (who) =>
       new ShieldedAddress(
@@ -22,17 +22,17 @@ export const shieldedAddressArbitrary = (whoArb: fc.Arbitrary<zswap.SecretKeys>)
   );
 
 export const outputsArbitrary = <TRecipient>(
-  balances: Record<zswap.TokenType, bigint>,
-  networkId: zswap.NetworkId,
+  balances: Record<ledger.RawTokenType, bigint>,
+  networkId: ledger.NetworkId,
   recipientArb: fc.Arbitrary<TRecipient>,
 ): fc.Arbitrary<
   ReadonlyArray<{
     readonly amount: bigint;
-    readonly type: zswap.TokenType;
+    readonly type: ledger.RawTokenType;
     readonly receiverAddress: TRecipient;
   }>
 > => {
-  const coinTypeArbitrary: fc.Arbitrary<zswap.TokenType> = fc.constantFrom(...Object.keys(balances));
+  const coinTypeArbitrary: fc.Arbitrary<ledger.RawTokenType> = fc.constantFrom(...Object.keys(balances));
   const outputArbitrary = coinTypeArbitrary.chain((coinType) =>
     fc.record({
       type: fc.constant(coinType),
@@ -57,15 +57,15 @@ export const outputsArbitrary = <TRecipient>(
 };
 
 export const swapParamsArbitrary = (
-  balances: Record<zswap.TokenType, bigint>,
+  balances: Record<ledger.RawTokenType, bigint>,
   selfAddress: string,
 ): fc.Arbitrary<{
-  inputs: Record<zswap.TokenType, bigint>;
+  inputs: Record<ledger.RawTokenType, bigint>;
   outputs: TokenTransfer[];
 }> => {
   const availableTypes = Record.keys(balances);
-  const valueAssignments: fc.Arbitrary<Record<zswap.TokenType, bigint>> = availableTypes.reduce(
-    (accArbitrary: fc.Arbitrary<Record<zswap.TokenType, bigint>>, tokenType) => {
+  const valueAssignments: fc.Arbitrary<Record<ledger.RawTokenType, bigint>> = availableTypes.reduce(
+    (accArbitrary: fc.Arbitrary<Record<ledger.RawTokenType, bigint>>, tokenType) => {
       return accArbitrary.chain((acc) => {
         return fc.bigInt({ min: 1n, max: balances[tokenType] - 1_000_000n }).map((value) => ({
           ...acc,
@@ -97,7 +97,7 @@ export const swapParamsArbitrary = (
       inputOutputTypeAssignments: inputOutputTypeAssignments,
     })
     .map((params) => {
-      const inputs: Record<zswap.TokenType, bigint> = params.inputOutputTypeAssignments.inputTypes.reduce(
+      const inputs: Record<ledger.RawTokenType, bigint> = params.inputOutputTypeAssignments.inputTypes.reduce(
         (acc, type) => ({
           ...acc,
           [type]: params.valueAssignments[type],

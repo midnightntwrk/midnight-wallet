@@ -1,10 +1,21 @@
 {
-  "name": "@midnight-ntwrk/wallet-node-client-ts",
-  "version": "5.0.0",
+  "name": "@midnight-ntwrk/wallet-sdk-node-client",
+  "version": "1.0.0-beta.1",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
-  "private": true,
+  "author": "IOHK",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",
@@ -45,17 +56,17 @@
     "@effect/rpc": "^0.68.0",
     "@effect/sql": "^0.44.0",
     "@effect/workflow": "^0.8.1",
-    "@midnight-ntwrk/abstractions": "workspace:*",
-    "@midnight-ntwrk/ledger": "^4.0.0",
-    "@midnight-ntwrk/wallet-prover-client-ts": "workspace:*",
+    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*",
     "@polkadot/typegen": "^16.3.1",
     "@types/yargs": "^17.0.33",
+    "tsx": "^4.20.4",
     "yargs": "^18.0.0"
   },
   "scripts": {
     "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",
-    "polkadot-typegen": "node --experimental-strip-types ./scripts/generate-types.ts",
-    "gen-test-tx": "node --experimental-strip-types ./scripts/generate-test-tx.ts",
+    "polkadot-typegen": "tsx ./scripts/generate-types.ts",
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",

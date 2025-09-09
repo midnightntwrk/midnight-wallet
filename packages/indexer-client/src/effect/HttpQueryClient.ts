@@ -1,5 +1,5 @@
 import { Effect, Context, Layer, Scope } from 'effect';
-import { HttpURL, ClientError, ServerError, InvalidProtocolSchemeError } from '@midnight-ntwrk/abstractions';
+import { HttpURL, ClientError, ServerError, InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { print, ExecutionResult } from 'graphql';
 import { createClient, Client, type RequestParams, NetworkError } from 'graphql-http';
 import { QueryClient } from './QueryClient';

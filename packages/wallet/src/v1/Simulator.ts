@@ -2,12 +2,12 @@
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
 import { ArrayOps, EitherOps } from '../effect';
-import * as zswap from '@midnight-ntwrk/zswap';
 import * as crypto from 'crypto';
+import { ProofErasedTransaction } from './types/ledger';
 
 export type SimulatorState = Readonly<{
   ledger: ledger.LedgerState;
-  lastTx: ledger.ProofErasedTransaction;
+  lastTx: ProofErasedTransaction;
   lastTxResult: ledger.TransactionResult;
   lastTxNumber: bigint;
 }>;
@@ -28,30 +28,32 @@ export class Simulator {
       (str) => (str.length % 2 == 0 ? str : str.padStart(str.length + 1, '0')),
       simpleHash,
       Effect.map((hash) => ({
-        blockHash: hash,
+        parentBlockHash: hash,
         secondsSinceEpoch: number,
         secondsSinceEpochErr: 1,
       })),
     );
 
   static init(
-    genesisMints: Readonly<Arr.NonEmptyArray<{ amount: bigint; type: ledger.TokenType; recipient: zswap.SecretKeys }>>,
+    genesisMints: Readonly<
+      Arr.NonEmptyArray<{ amount: bigint; type: ledger.RawTokenType; recipient: ledger.ZswapSecretKeys }>
+    >,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
     const makeTransactions = (context: ledger.BlockContext) => {
       const tx = pipe(
         genesisMints,
         Arr.map((transfer) => {
-          const coin: ledger.CoinInfo = ledger.createCoinInfo(transfer.type, transfer.amount);
-          const output = ledger.UnprovenOutput.new(
+          const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
+          const output = ledger.ZswapOutput.new(
             coin,
             0,
             transfer.recipient.coinPublicKey,
             transfer.recipient.encryptionPublicKey,
           );
-          return ledger.UnprovenOffer.fromOutput(output, transfer.type, transfer.amount);
+          return ledger.ZswapOffer.fromOutput<ledger.PreProof>(output, transfer.type, transfer.amount);
         }),
-        ArrayOps.fold((acc: ledger.UnprovenOffer, offer: ledger.UnprovenOffer) => acc.merge(offer)),
-        (offer) => new ledger.UnprovenTransaction(offer).eraseProofs(),
+        ArrayOps.fold((acc, offer) => acc.merge(offer)),
+        (offer) => ledger.Transaction.fromParts(offer).eraseProofs(),
       );
       const emptyState = ledger.LedgerState.blank();
       const [initialState, initialResult] = emptyState.apply(tx, new ledger.TransactionContext(emptyState, context));
@@ -90,7 +92,7 @@ export class Simulator {
     this.state$ = state$;
   }
 
-  submitRegularTx(tx: ledger.ProofErasedTransaction): Effect.Effect<{ blockNumber: bigint; blockHash: string }> {
+  submitRegularTx(tx: ProofErasedTransaction): Effect.Effect<{ blockNumber: bigint; blockHash: string }> {
     return pipe(
       this.#stateRef,
       SubscriptionRef.modifyEffect((simulatorState) =>
@@ -110,7 +112,7 @@ export class Simulator {
           };
           const output = {
             blockNumber: nextNumber,
-            blockHash: context.blockHash,
+            blockHash: context.parentBlockHash,
           };
 
           return [output, newSimulatorState];

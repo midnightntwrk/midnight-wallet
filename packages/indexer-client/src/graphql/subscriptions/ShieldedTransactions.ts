@@ -21,10 +21,15 @@ export const ShieldedTransactions = Subscription.make(
             }
             ... on RelevantTransaction {
               transaction {
+                raw
                 hash
                 protocolVersion
                 transactionResult {
                   status
+                  segments {
+                    id
+                    success
+                  }
                 }
               }
             }

@@ -1,19 +1,22 @@
-import { ShieldedWallet, ShieldedWalletClass, ShieldedWalletState } from '@midnight-ntwrk/wallet-ts';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-ts/v1';
-import * as zswap from '@midnight-ntwrk/zswap';
+import { ShieldedWallet, ShieldedWalletClass, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterAll, beforeAll, describe, it, vi } from 'vitest';
+import { getShieldedSeed } from './utils';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
-  const seed = Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex');
-  let environment: StartedDockerComposeEnvironment | null = null;
-  let configuration: DefaultV1Configuration | null = null;
+
+  const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
+
+  let environment: StartedDockerComposeEnvironment;
+  let configuration: DefaultV1Configuration;
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
@@ -34,9 +37,9 @@ describe('Wallet serialization and restoration', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: zswap.NetworkId.Undeployed,
+      networkId: ledger.NetworkId.Undeployed,
       costParameters: {
-        ledgerParams: zswap.LedgerParameters.dummyParameters(),
+        ledgerParams: ledger.LedgerParameters.dummyParameters(),
         additionalFeeOverhead: 50_000n,
       },
     };
@@ -49,8 +52,8 @@ describe('Wallet serialization and restoration', () => {
   let Wallet: ShieldedWalletClass;
   let wallet: ShieldedWallet;
   beforeEach(() => {
-    Wallet = ShieldedWallet(configuration!);
-    wallet = Wallet.startWithShieldedSeed(seed);
+    Wallet = ShieldedWallet(configuration);
+    wallet = Wallet.startWithShieldedSeed(shieldedSeed);
   });
 
   afterEach(async () => {
@@ -64,7 +67,7 @@ describe('Wallet serialization and restoration', () => {
     const originalBalances = syncedState.balances;
 
     const serializedState = await wallet.serializeState();
-    const restored = Wallet.restore(seed, serializedState);
+    const restored = Wallet.restore(shieldedSeed, serializedState);
     try {
       const state = await restored.waitForSyncedState();
       const restoredBalances = state.balances;

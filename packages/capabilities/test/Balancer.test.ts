@@ -1,9 +1,16 @@
-import { CoinInfo, createCoinInfo, QualifiedCoinInfo, sampleTokenType, TokenType } from '@midnight-ntwrk/zswap';
+import {
+  ShieldedCoinInfo,
+  createShieldedCoinInfo,
+  QualifiedShieldedCoinInfo,
+  sampleRawTokenType,
+  shieldedToken,
+  RawTokenType,
+} from '@midnight-ntwrk/ledger';
 import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index';
 import * as fc from 'fast-check';
 
 const createQualifiedCoin = (tokenType: string, value: bigint) => ({
-  ...createCoinInfo(tokenType, value),
+  ...createShieldedCoinInfo(tokenType, value),
   mt_index: 0n,
 });
 
@@ -14,9 +21,9 @@ const transactionCostModel = {
   outputFeeOverhead: 19708n,
 };
 
-const nativeTokenType = '02000000000000000000000000000000000000000000000000000000000000000000';
+const nativeTokenType = (shieldedToken() as { tag: 'shielded'; raw: string }).raw;
 
-const qualifiedCoinArbitrary = (typeArbitrary: fc.Arbitrary<TokenType>): fc.Arbitrary<QualifiedCoinInfo> => {
+const qualifiedCoinArbitrary = (typeArbitrary: fc.Arbitrary<RawTokenType>): fc.Arbitrary<QualifiedShieldedCoinInfo> => {
   return fc.record({
     nonce: fc.uint8Array({ maxLength: 32, minLength: 32 }).map((bytes) => Buffer.from(bytes).toString('hex')),
     value: fc.bigInt({ min: 1n, max: BigInt(Number.MAX_SAFE_INTEGER) }),
@@ -38,12 +45,12 @@ const costModelArbitrary: fc.Arbitrary<TransactionCostModel> = fc.oneof(
 
 describe('Balancer', () => {
   test('Nothing to balance', () => {
-    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+    const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
       coins: [],
       initialImbalances: Imbalances.empty(),
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (c) => createCoinInfo(c.type, c.value),
+      createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -54,12 +61,12 @@ describe('Balancer', () => {
   test('Use exactly one coin', () => {
     const coin = createQualifiedCoin(nativeTokenType, 1_000n + transactionCostModel.inputFeeOverhead);
 
-    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+    const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
       coins: [coin],
       initialImbalances: Imbalances.fromEntry(nativeTokenType, -1_000n),
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (c) => createCoinInfo(c.type, c.value),
+      createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -75,12 +82,12 @@ describe('Balancer', () => {
       createQualifiedCoin(nativeTokenType, dust(10)),
     ];
 
-    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+    const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
       coins,
       initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(1)),
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (c) => createCoinInfo(c.type, c.value),
+      createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -89,7 +96,7 @@ describe('Balancer', () => {
   });
 
   test('Balance custom native token', () => {
-    const customTokenType = '02000000000000000000000000000000000000000000000000000000000000000002';
+    const customTokenType = sampleRawTokenType();
     const coins = [
       createQualifiedCoin(nativeTokenType, dust(100)),
       createQualifiedCoin(customTokenType, 1n),
@@ -97,12 +104,12 @@ describe('Balancer', () => {
       createQualifiedCoin(customTokenType, 3n),
     ];
 
-    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+    const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
       coins,
       initialImbalances: Imbalances.fromEntry(customTokenType, -1n),
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (c) => createCoinInfo(c.type, c.value),
+      createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -111,7 +118,7 @@ describe('Balancer', () => {
   });
 
   test('Balance multiple token types', () => {
-    const customTokenType = '02000000000000000000000000000000000000000000000000000000000000000001';
+    const customTokenType = sampleRawTokenType();
     const coins = [
       createQualifiedCoin(nativeTokenType, dust(10)),
       createQualifiedCoin(nativeTokenType, dust(20)),
@@ -128,12 +135,12 @@ describe('Balancer', () => {
       [customTokenType, -1n],
     ]);
 
-    const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+    const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
       coins,
       initialImbalances: targetImbalances,
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (coin) => createCoinInfo(coin.type, coin.value),
+      createOutput: (coin) => createShieldedCoinInfo(coin.type, coin.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -148,7 +155,7 @@ describe('Balancer', () => {
       initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(3)),
       transactionCostModel,
       feeTokenType: nativeTokenType,
-      createOutput: (c) => createCoinInfo(c.type, c.value),
+      createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
       isCoinEqual: (a, b) => a.nonce === b.nonce,
     });
 
@@ -165,7 +172,7 @@ describe('Balancer', () => {
         initialImbalances: Imbalances.fromEntry(nativeTokenType, -dust(1)),
         transactionCostModel,
         feeTokenType: nativeTokenType,
-        createOutput: (c) => createCoinInfo(c.type, c.value),
+        createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
         isCoinEqual: (a, b) => a.nonce === b.nonce,
       });
     }).toThrow(nativeTokenType);
@@ -182,14 +189,14 @@ describe('Balancer', () => {
         initialImbalances: Imbalances.fromEntry(nativeTokenType, imbalanceValue),
         transactionCostModel,
         feeTokenType: nativeTokenType,
-        createOutput: (c) => createCoinInfo(c.type, c.value),
+        createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
         isCoinEqual: (a, b) => a.nonce === b.nonce,
       });
     }).toThrow(nativeTokenType);
   });
 
   test('Uses provided coin selection', () => {
-    const nonceBasedSelection: CoinSelection<QualifiedCoinInfo> = (coins, type) => {
+    const nonceBasedSelection: CoinSelection<QualifiedShieldedCoinInfo> = (coins, type) => {
       return coins
         .filter((c) => c.type === type)
         .toSorted((a, b) => a.nonce.localeCompare(b.nonce))
@@ -211,12 +218,12 @@ describe('Balancer', () => {
     fc.assert(
       fc.property(coinsWithATargetValue, ({ coins, valueToBalance }) => {
         const nonceSortedCoins = coins.toSorted((a, b) => a.nonce.localeCompare(b.nonce));
-        const counterOffer = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+        const counterOffer = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
           coins,
           initialImbalances: Imbalances.fromEntry(nativeTokenType, -1n * valueToBalance),
           transactionCostModel,
           feeTokenType: nativeTokenType,
-          createOutput: (c) => createCoinInfo(c.type, c.value),
+          createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
           coinSelection: nonceBasedSelection,
           isCoinEqual: (a, b) => a.nonce === b.nonce,
         });
@@ -232,14 +239,14 @@ describe('Balancer', () => {
   test('Reaches target imbalances', () => {
     const tokenTypeArbitrary = fc.constantFrom(
       nativeTokenType,
-      sampleTokenType(),
-      sampleTokenType(),
-      sampleTokenType(),
-      sampleTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
     );
     const coinArbitrary = qualifiedCoinArbitrary(tokenTypeArbitrary);
     const coinWithDesiredInputValueArbitrary: fc.Arbitrary<{
-      coin: QualifiedCoinInfo;
+      coin: QualifiedShieldedCoinInfo;
       maybeInputValue: bigint | null;
     }> = coinArbitrary.chain((coin) =>
       fc
@@ -276,12 +283,12 @@ describe('Balancer', () => {
           );
           const initialDesiredDustImbalance = (desiredImbalances.get(nativeTokenType) ?? 0n) + existingFeesToCover;
 
-          const result = getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+          const result = getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
             coins: availableCoins,
             initialImbalances: new Map([[nativeTokenType, -1n * existingFeesToCover]]),
             transactionCostModel: costModel,
             feeTokenType: nativeTokenType,
-            createOutput: (c) => createCoinInfo(c.type, c.value),
+            createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
             coinSelection: chooseCoin,
             targetImbalances: desiredImbalances,
             isCoinEqual: (a, b) => a.nonce === b.nonce,
@@ -321,12 +328,12 @@ describe('Balancer', () => {
   test('Errors if there are no tokens to meet target imbalances', () => {
     const tokenTypeArbitrary = fc.constantFrom(
       nativeTokenType,
-      sampleTokenType(),
-      sampleTokenType(),
-      sampleTokenType(),
-      sampleTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
+      sampleRawTokenType(),
     );
-    const otherTokenType = sampleTokenType();
+    const otherTokenType = sampleRawTokenType();
     const coinArbitrary = qualifiedCoinArbitrary(tokenTypeArbitrary);
     const testCoinsArbitrary = fc.array(coinArbitrary);
     const desiredInputsArbitrary = fc
@@ -336,12 +343,12 @@ describe('Balancer', () => {
     fc.assert(
       fc.property(testCoinsArbitrary, desiredInputsArbitrary, costModelArbitrary, (coins, inputs, costModel) => {
         expect(() =>
-          getBalanceRecipe<QualifiedCoinInfo, CoinInfo>({
+          getBalanceRecipe<QualifiedShieldedCoinInfo, ShieldedCoinInfo>({
             coins,
             initialImbalances: new Map(),
             transactionCostModel: costModel,
             feeTokenType: nativeTokenType,
-            createOutput: (c) => createCoinInfo(c.type, c.value),
+            createOutput: (c) => createShieldedCoinInfo(c.type, c.value),
             coinSelection: chooseCoin,
             targetImbalances: inputs,
             isCoinEqual: (a, b) => a.nonce === b.nonce,

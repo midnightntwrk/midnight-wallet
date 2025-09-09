@@ -1,6 +1,6 @@
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Console, Effect, Either, Scope, Sink, Stream, Types } from 'effect';
-import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/abstractions';
+import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
 import { RunningV1Variant, V1State, V1Tag } from './RunningV1Variant';
@@ -26,10 +26,11 @@ import { KeysCapability, makeDefaultKeysCapability } from './Keys';
 import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission';
 import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet';
+import { FinalizedTransaction } from './types/ledger';
 import { makeDefaultTransactionHistoryCapability, TransactionHistoryCapability } from './TransactionHistory';
 
 export type BaseV1Configuration = {
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
 };
 
 export type DefaultV1Configuration = BaseV1Configuration &
@@ -44,26 +45,26 @@ const V1BuilderSymbol: {
   typeId: Symbol('@midnight-ntwrk/wallet#V1Builder') as (typeof V1BuilderSymbol)['typeId'],
 } as const;
 
-export type DefaultV1Variant = V1Variant<string, WalletSyncSubscription, zswap.Transaction>;
+export type DefaultV1Variant = V1Variant<string, WalletSyncSubscription, FinalizedTransaction>;
 export type V1Variant<TSerialized, TSyncUpdate, TTransaction> = Variant.Variant<
   typeof V1Tag,
   V1State,
   null,
   RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
 > & {
-  deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized) => Either.Either<V1State, WalletError>;
+  deserializeState: (keys: ledger.ZswapSecretKeys, serialized: TSerialized) => Either.Either<V1State, WalletError>;
   coinsAndBalances: CoinsAndBalancesCapability<V1State>;
   keys: KeysCapability<V1State>;
-  serialization: SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+  serialization: SerializationCapability<V1State, ledger.ZswapSecretKeys, TSerialized>;
   transactionHistory: TransactionHistoryCapability<V1State, TTransaction>;
 };
 
 export type DefaultV1Builder = V1Builder<
   DefaultV1Configuration,
-  RunningV1Variant.Context<string, WalletSyncSubscription, zswap.Transaction>,
+  RunningV1Variant.Context<string, WalletSyncSubscription, FinalizedTransaction>,
   string,
   WalletSyncSubscription,
-  zswap.Transaction
+  FinalizedTransaction
 >;
 
 export class V1Builder<
@@ -88,8 +89,8 @@ export class V1Builder<
       .withCoinsAndBalancesDefaults()
       .withTransactionHistoryDefaults()
       .withKeysDefaults()
-      .withSubmissionDefaults()
       .withProvingDefaults()
+      .withSubmissionDefaults()
       .withCoinSelectionDefaults() as DefaultV1Builder;
   }
 
@@ -103,8 +104,8 @@ export class V1Builder<
     });
   }
 
-  withDefaultTransactionType(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction> {
-    return this.withTransactionType<zswap.Transaction>();
+  withDefaultTransactionType(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction> {
+    return this.withTransactionType<FinalizedTransaction>();
   }
 
   withSyncDefaults(): V1Builder<
@@ -143,7 +144,7 @@ export class V1Builder<
     serializationCapability: (
       configuration: TSerializationConfig,
       getContext: () => TSerializationContext,
-    ) => SerializationCapability<V1State, zswap.SecretKeys, TSerialized>,
+    ) => SerializationCapability<V1State, ledger.ZswapSecretKeys, TSerialized>,
   ): V1Builder<
     TConfig & TSerializationConfig,
     TContext & TSerializationContext,
@@ -164,13 +165,13 @@ export class V1Builder<
   }
 
   withTransactingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction>,
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction>,
   ): V1Builder<
     TConfig & DefaultTransactingConfiguration,
     TContext & DefaultTransactingContext,
     TSerialized,
     TSyncUpdate,
-    zswap.Transaction
+    FinalizedTransaction
   > {
     return this.withTransacting(makeDefaultTransactingCapability);
   }
@@ -197,7 +198,7 @@ export class V1Builder<
     coinSelection: (
       config: TCoinSelectionConfig,
       getContext: () => TCoinSelectionContext,
-    ) => CoinSelection<zswap.QualifiedCoinInfo>,
+    ) => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
   ): V1Builder<
     TConfig & TCoinSelectionConfig,
     TContext & TCoinSelectionContext,
@@ -231,8 +232,8 @@ export class V1Builder<
   }
 
   withProvingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction>,
-  ): V1Builder<TConfig & DefaultProvingConfiguration, TContext, TSerialized, TSyncUpdate, zswap.Transaction> {
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction>,
+  ): V1Builder<TConfig & DefaultProvingConfiguration, TContext, TSerialized, TSyncUpdate, FinalizedTransaction> {
     return this.withProving(makeDefaultProvingService);
   }
 
@@ -259,8 +260,8 @@ export class V1Builder<
   }
 
   withTransactionHistoryDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction>,
-  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction> {
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction>,
+  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction> {
     return this.withTransactionHistory(makeDefaultTransactionHistoryCapability);
   }
 
@@ -323,8 +324,8 @@ export class V1Builder<
   }
 
   withSubmissionDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, zswap.Transaction>,
-  ): V1Builder<TConfig & DefaultSubmissionConfiguration, TContext, TSerialized, TSyncUpdate, zswap.Transaction> {
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction>,
+  ): V1Builder<TConfig & DefaultSubmissionConfiguration, TContext, TSerialized, TSyncUpdate, FinalizedTransaction> {
     return this.withSubmission(makeDefaultSubmissionService);
   }
 
@@ -363,10 +364,14 @@ export class V1Builder<
       migrateState() {
         const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
 
-        return Effect.succeed(CoreWallet.empty(new zswap.LocalState(), zswap.SecretKeys.fromSeed(seed), networkId));
+        return Effect.succeed(
+          CoreWallet.empty(new ledger.ZswapLocalState(), ledger.ZswapSecretKeys.fromSeed(seed), networkId),
+        );
       },
-
-      deserializeState: (keys: zswap.SecretKeys, serialized: TSerialized): Either.Either<V1State, WalletError> => {
+      deserializeState: (
+        keys: ledger.ZswapSecretKeys,
+        serialized: TSerialized,
+      ): Either.Either<V1State, WalletError> => {
         return v1Context.serializationCapability.deserialize(keys, serialized);
       },
     };
@@ -439,14 +444,14 @@ declare namespace V1Builder {
     readonly coinSelection: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => CoinSelection<zswap.QualifiedCoinInfo>;
+    ) => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   };
 
   type HasSerialization<TConfig, TContext, TSerialized> = {
     readonly serializationCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SerializationCapability<V1State, zswap.SecretKeys, TSerialized>;
+    ) => SerializationCapability<V1State, ledger.ZswapSecretKeys, TSerialized>;
   };
 
   type HasProving<TConfig, TContext, TTransaction> = {

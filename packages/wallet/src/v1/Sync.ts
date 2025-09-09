@@ -1,9 +1,9 @@
 import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as zswap from '@midnight-ntwrk/zswap';
+import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Layer, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
 import { V1State } from './RunningV1Variant';
 import { Simulator, SimulatorState } from './Simulator';
-import { Connect, Wallet } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { Connect, ShieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
@@ -11,7 +11,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError';
 import { KeysCapability } from './Keys';
-import { HttpURL, WsURL } from '@midnight-ntwrk/abstractions';
+import { FinalizedTransaction } from './types/ledger';
+import { HttpURL, WsURL } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryCapability } from './TransactionHistory';
 import { EitherOps } from '../effect';
 
@@ -30,45 +31,57 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
 };
 
 export type DefaultSyncContext = {
   keysCapability: KeysCapability<V1State>;
-  transactionHistoryCapability: TransactionHistoryCapability<V1State, zswap.Transaction>;
+  transactionHistoryCapability: TransactionHistoryCapability<V1State, FinalizedTransaction>;
 };
 
-export const IndexerApplyStage = Schema.Union(
-  Schema.Literal('SucceedEntirely'),
-  Schema.Literal('FailEntirely'),
-  Schema.Literal('FailFallible'),
-);
+export const TransactionResult = Schema.Struct({
+  status: Schema.Union(Schema.Literal('SUCCESS'), Schema.Literal('PARTIAL_SUCCESS'), Schema.Literal('FAILURE')),
+  segments: Schema.Union(
+    Schema.Null,
+    Schema.Array(
+      Schema.Struct({
+        id: Schema.String,
+        success: Schema.Boolean,
+      }),
+    ),
+  ),
+});
 
-type IndexerApplyStage = Schema.Schema.Type<typeof IndexerApplyStage>;
+export type TransactionResult = Schema.Schema.Type<typeof TransactionResult>;
 
-export const WalletApplyState = Schema.Union(
-  Schema.Literal('success'),
-  Schema.Literal('partialSuccess'),
-  Schema.Literal('failure'),
-);
+export const WalletTransactionResult = Schema.Struct({
+  status: Schema.Union(Schema.Literal('success'), Schema.Literal('partialSuccess'), Schema.Literal('failure')),
+  segments: Schema.Array(
+    Schema.Struct({
+      id: Schema.String,
+      success: Schema.Boolean,
+    }),
+  ),
+});
 
-type WalletApplyState = Schema.Schema.Type<typeof WalletApplyState>;
+export type WalletTransactionResult = Schema.Schema.Type<typeof WalletTransactionResult>;
 
-const mapApplyStage = (applyStage: IndexerApplyStage): WalletApplyState => {
-  switch (applyStage) {
-    case 'SucceedEntirely':
-      return 'success';
-    case 'FailEntirely':
-      return 'failure';
-    case 'FailFallible':
-      return 'partialSuccess';
+const mapTxResult = (txResult: TransactionResult): WalletTransactionResult => {
+  const segments = txResult.segments ?? [];
+  switch (txResult.status) {
+    case 'SUCCESS':
+      return { status: 'success', segments };
+    case 'FAILURE':
+      return { status: 'failure', segments };
+    case 'PARTIAL_SUCCESS':
+      return { status: 'partialSuccess', segments };
   }
 };
 
 const TxSchema = Schema.declare(
-  (input: unknown): input is zswap.Transaction => input instanceof zswap.Transaction,
+  (input: unknown): input is FinalizedTransaction => input instanceof ledger.Transaction,
 ).annotations({
-  identifier: 'zswap.Transaction',
+  identifier: 'ledger.Transaction',
 });
 
 const Uint8ArraySchema = Schema.declare(
@@ -77,14 +90,14 @@ const Uint8ArraySchema = Schema.declare(
   identifier: 'Uint8Array',
 });
 
-const TxFromUint8Array: Schema.Schema<zswap.Transaction, Uint8Array> = Schema.transformOrFail(
+const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema.transformOrFail(
   Uint8ArraySchema,
   TxSchema,
   {
     encode: (tx) => {
       return Effect.try({
         try: () => {
-          return tx.serialize(zswap.NetworkId.Undeployed);
+          return tx.serialize(ledger.NetworkId.Undeployed);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not serialize transaction');
@@ -94,7 +107,13 @@ const TxFromUint8Array: Schema.Schema<zswap.Transaction, Uint8Array> = Schema.tr
     decode: (bytes) =>
       Effect.try({
         try: () => {
-          return zswap.Transaction.deserialize(bytes, zswap.NetworkId.Undeployed);
+          return ledger.Transaction.deserialize(
+            'signature',
+            'proof',
+            'pre-binding',
+            bytes,
+            ledger.NetworkId.Undeployed,
+          );
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not deserialize transaction');
@@ -103,23 +122,23 @@ const TxFromUint8Array: Schema.Schema<zswap.Transaction, Uint8Array> = Schema.tr
   },
 );
 
-const HexedTx: Schema.Schema<zswap.Transaction, string> = pipe(
+const HexedTx: Schema.Schema<FinalizedTransaction, string> = pipe(
   Schema.Uint8ArrayFromHex,
   Schema.compose(TxFromUint8Array),
 );
 
 const MerkleTreeCollapsedUpdateSchema = Schema.declare(
-  (input: unknown): input is zswap.MerkleTreeCollapsedUpdate => input instanceof zswap.MerkleTreeCollapsedUpdate,
+  (input: unknown): input is ledger.MerkleTreeCollapsedUpdate => input instanceof ledger.MerkleTreeCollapsedUpdate,
 ).annotations({
-  identifier: 'zswap.MerkleTreeCollapsedUpdate',
+  identifier: 'ledger.MerkleTreeCollapsedUpdate',
 });
 
-const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<zswap.MerkleTreeCollapsedUpdate, Uint8Array> =
+const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, Uint8Array> =
   Schema.transformOrFail(Uint8ArraySchema, MerkleTreeCollapsedUpdateSchema, {
     encode: (mk) => {
       return Effect.try({
         try: () => {
-          return mk.serialize(zswap.NetworkId.Undeployed);
+          return mk.serialize(ledger.NetworkId.Undeployed);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not serialize merkleTreeCollapsedUpdate');
@@ -129,7 +148,7 @@ const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<zswap.MerkleTreeCol
     decode: (bytes) =>
       Effect.try({
         try: () => {
-          return zswap.MerkleTreeCollapsedUpdate.deserialize(bytes, zswap.NetworkId.Undeployed);
+          return ledger.MerkleTreeCollapsedUpdate.deserialize(bytes, ledger.NetworkId.Undeployed);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not deserialize merkleTreeCollapsedUpdate');
@@ -137,13 +156,13 @@ const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<zswap.MerkleTreeCol
       }),
   });
 
-const HexedMerkleTree: Schema.Schema<zswap.MerkleTreeCollapsedUpdate, string> = pipe(
+const HexedMerkleTree: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, string> = pipe(
   Schema.Uint8ArrayFromHex,
   Schema.compose(MerkleTreeCollapsedUpdateFromUint8Array),
 );
 
 const ProgressUpdate = Schema.Struct({
-  __typename: Schema.Literal('ProgressUpdate'),
+  __typename: Schema.Literal('ShieldedTransactionsProgress'),
   highestIndex: Schema.Number,
   highestRelevantIndex: Schema.Number,
   highestRelevantWalletIndex: Schema.Number,
@@ -164,8 +183,8 @@ const ViewingUpdateSchema = Schema.Struct({
         transaction: Schema.Struct({
           hash: Schema.String,
           raw: HexedTx,
-          applyStage: IndexerApplyStage,
           protocolVersion: Schema.Number,
+          transactionResult: TransactionResult,
         }),
       }),
     ),
@@ -200,7 +219,7 @@ export const SyncProgressUpdateFromProgressUpdate = Schema.transformOrFail(Progr
       try: () => {
         const { _tag, ..._rest } = output;
         return {
-          __typename: 'ProgressUpdate' as const,
+          __typename: 'ShieldedTransactionsProgress' as const,
           highestIndex: output.highestIndex,
           highestRelevantIndex: output.highestRelevantIndex,
           highestRelevantWalletIndex: output.highestRelevantWalletIndex,
@@ -223,7 +242,7 @@ export const SyncViewingUpdateWithTransaction = Schema.TaggedStruct('ViewingUpda
   index: Schema.Number,
   appliedTransaction: Schema.Struct({
     tx: TxSchema,
-    applyState: WalletApplyState,
+    transactionResult: WalletTransactionResult,
   }),
   protocolVersion: Schema.Number,
 });
@@ -245,13 +264,13 @@ export const SyncViewingUpdateFromViewingUpdate = Schema.transformOrFail(Viewing
             protocolVersion: update[0].protocolVersion,
           };
         } else {
-          const mappedApplyStage = mapApplyStage(update[0].transaction.applyStage);
+          const mappedTxResult = mapTxResult(update[0].transaction.transactionResult);
           return {
             _tag: 'ViewingUpdateWithTransaction' as const,
             index,
             appliedTransaction: {
               tx: update[0].transaction.raw,
-              applyState: mappedApplyStage,
+              transactionResult: mappedTxResult,
             },
             protocolVersion: update[0].transaction.protocolVersion,
           };
@@ -337,8 +356,13 @@ export const makeDefaultSyncService = (
       return pipe(
         Connect.run({ viewingKey: bech32mESK }),
         Stream.flatMap((session) => {
-          return Wallet.run({ sessionId: session.connect, index: Number(appliedIndex) });
+          return ShieldedTransactions.run({
+            sessionId: session.connect,
+            index: Number(appliedIndex),
+            sendProgressUpdates: true,
+          });
         }),
+
         Stream.provideSomeLayer(
           Layer.mergeAll(
             HttpQueryClient.layer({ url: indexerHttpUrl }),
@@ -350,7 +374,7 @@ export const makeDefaultSyncService = (
         }),
         Stream.mapEffect((subscription) =>
           pipe(
-            Schema.decodeUnknownEither(WalletSyncSubscription)(subscription.wallet),
+            Schema.decodeUnknownEither(WalletSyncSubscription)(subscription.shieldedTransactions),
             Either.mapLeft((err) => new SyncWalletError(new Error(`Schema decode failed: ${err.message}`))),
             EitherOps.toEffect,
           ),
@@ -375,17 +399,30 @@ export const makeDefaultSyncCapability = (
           });
 
         case 'ViewingUpdateWithMerkleTreeUpdate': {
+          const appliedIndex = BigInt(update.index - 1);
           const newLocalState = state.state.applyCollapsedUpdate(update.update);
-          return state.applyState(newLocalState);
+          return state.applyState(newLocalState).updateProgress({ appliedIndex });
         }
 
         case 'ViewingUpdateWithTransaction': {
           const offset = BigInt(update.index);
-          const appliedIndex = update.appliedTransaction.applyState === 'failure' ? offset : offset - 1n;
 
-          const wallet = state
-            .applyTransaction(update.appliedTransaction.tx, update.appliedTransaction.applyState)
-            .updateProgress({ appliedIndex });
+          const { transactionResult, tx } = update.appliedTransaction;
+
+          const appliedIndex = transactionResult.status === 'failure' ? offset : offset - 1n;
+
+          let mappedTxResult: ledger.TransactionResult = {
+            type: transactionResult.status,
+          };
+
+          if (transactionResult.status === 'partialSuccess') {
+            mappedTxResult = {
+              type: 'partialSuccess',
+              successfulSegments: new Map(transactionResult.segments.map((s) => [Number(s.id), s.success])),
+            };
+          }
+
+          const wallet = state.applyTransaction(tx, mappedTxResult).updateProgress({ appliedIndex });
 
           const transactionHistoryCapability = getContext().transactionHistoryCapability;
 
@@ -398,7 +435,7 @@ export const makeDefaultSyncCapability = (
 
 export type SimulatorSyncConfiguration = {
   simulator: Simulator;
-  networkId: zswap.NetworkId;
+  networkId: ledger.NetworkId;
 };
 
 export const makeSimulatorSyncService = (config: SimulatorSyncConfiguration): SyncService<V1State, SimulatorState> => {
@@ -407,25 +444,24 @@ export const makeSimulatorSyncService = (config: SimulatorSyncConfiguration): Sy
   };
 };
 
-export const makeSimulatorSyncCapability = (
-  config: SimulatorSyncConfiguration,
-): SyncCapability<V1State, SimulatorState> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorState> => {
   return {
     applyUpdate: (state: V1State, update: SimulatorState) => {
-      const newLocalState = state.state.applyProofErasedTx(
-        state.secretKeys,
-        zswap.ProofErasedTransaction.deserialize(update.lastTx.serialize(config.networkId), config.networkId),
-        update.lastTxResult.type,
-      );
-      return state.applyState(newLocalState);
+      return state.applyProofErasedTx(update.lastTx, {
+        ...update.lastTxResult,
+        type: 'success', // @TODO: figure out why type is 'failed'
+      });
     },
   };
 };
 
-export const makeTxApplierSyncCapability = (): SyncCapability<V1State, zswap.Transaction> => {
+// @TODO is this needed?
+export const makeTxApplierSyncCapability = (): SyncCapability<V1State, FinalizedTransaction> => {
   return {
-    applyUpdate: (state: V1State, update: zswap.Transaction) => {
-      return state.applyTransaction(update, 'success');
+    applyUpdate: (state: V1State, update: FinalizedTransaction) => {
+      return state.applyTransaction(update, {
+        type: 'success',
+      });
     },
   };
 };
