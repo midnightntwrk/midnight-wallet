@@ -400,8 +400,7 @@ export const makeDefaultSyncCapability = (
 
         case 'ViewingUpdateWithMerkleTreeUpdate': {
           const appliedIndex = BigInt(update.index - 1);
-          const newLocalState = state.state.applyCollapsedUpdate(update.update);
-          return state.applyState(newLocalState).updateProgress({ appliedIndex });
+          return state.applyCollapsedUpdate(update.update).updateProgress({ appliedIndex });
         }
 
         case 'ViewingUpdateWithTransaction': {

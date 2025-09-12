@@ -91,7 +91,10 @@ export const makeSimulatorTransactingCapability = (
 
 class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 
-export class TransactingCapabilityImplementation<TTransaction> implements TransactingCapability<V1State, TTransaction> {
+export class TransactingCapabilityImplementation<
+  TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+> implements TransactingCapability<V1State, TTransaction>
+{
   public readonly networkId: ledger.NetworkId;
   public readonly costParams: TotalCostParameters;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
@@ -227,8 +230,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
   revert(state: V1State, tx: TTransaction): Either.Either<V1State, WalletError> {
     return Either.try({
       try: () => {
-        const newLocalState = this.txTrait.getRevertedFromLocalState(tx, state);
-        return state.applyState(newLocalState.state); // @TODO is this needed?
+        return state.revertTransaction(tx);
       },
       catch: (err) => {
         return new OtherWalletError({
@@ -243,8 +245,7 @@ export class TransactingCapabilityImplementation<TTransaction> implements Transa
     const doRevert = (tx: UnprovenTransaction) => {
       return Either.try({
         try: () => {
-          const newLocalState = TransactionTrait.unproven.getRevertedFromLocalState(tx, state);
-          return state.applyState(newLocalState.state); // @TODO is this needed?
+          return state.revertTransaction(tx);
         },
         catch: (err) => {
           return new OtherWalletError({

@@ -45,22 +45,6 @@ const protocolVersionChange = (previous: V1State, current: V1State): StateChange
 
 export type V1State = CoreWallet;
 export const V1State = new (class {
-  readonly #modifyLocalState = <A>(
-    state: V1State,
-    modifier: (s: ledger.ZswapLocalState) => [A, ledger.ZswapLocalState],
-  ): [A, V1State] => {
-    const [output, newState] = modifier(state.state);
-    const updatedState = state.applyState(newState);
-    return [output, updatedState];
-  };
-
-  readonly #updateLocalState = (
-    state: V1State,
-    updater: (s: ledger.ZswapLocalState) => ledger.ZswapLocalState,
-  ): V1State => {
-    return state.applyState(updater(state.state));
-  };
-
   initEmpty = (keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): V1State => {
     return CoreWallet.empty(new ledger.ZswapLocalState(), keys, networkId);
   };
@@ -74,31 +58,48 @@ export const V1State = new (class {
     coins: ReadonlyArray<ledger.QualifiedShieldedCoinInfo>,
     segment: 0 | 1,
   ): [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, V1State] => {
-    return this.#modifyLocalState(state, (localState) => {
-      return pipe(
-        coins,
-        Arr.reduce(
-          [[], localState],
-          (
-            [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
-            coinToSpend,
-          ) => {
-            const [newState, newInput] = localState.spend(state.secretKeys, coinToSpend, segment);
-            const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
-            return [Arr.append(offers, inputOffer), newState];
-          },
-        ),
-      );
-    });
+    const [output, newLocalState] = pipe(
+      coins,
+      Arr.reduce(
+        [[], state.state] as [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+        (
+          [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+          coinToSpend,
+        ) => {
+          const [newState, newInput] = localState.spend(state.secretKeys, coinToSpend, segment);
+          const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
+          return [offers.concat([inputOffer]), newState] as [
+            ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>,
+            ledger.ZswapLocalState,
+          ];
+        },
+      ),
+    );
+    const updatedState = new CoreWallet(
+      newLocalState,
+      state.secretKeys,
+      state.networkId,
+      state.txHistoryArray,
+      state.progress,
+      state.protocolVersion,
+    );
+    return [output, updatedState];
   };
 
   watchCoins = (state: V1State, coins: ReadonlyArray<ledger.ShieldedCoinInfo>): V1State => {
-    return this.#updateLocalState(state, (localState) => {
-      return coins.reduce(
-        (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.secretKeys.coinPublicKey, coin),
-        localState,
-      );
-    });
+    const newLocalState = coins.reduce(
+      (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.secretKeys.coinPublicKey, coin),
+      state.state,
+    );
+
+    return new CoreWallet(
+      newLocalState,
+      state.secretKeys,
+      state.networkId,
+      state.txHistoryArray,
+      state.progress,
+      state.protocolVersion,
+    );
   };
 })();
 

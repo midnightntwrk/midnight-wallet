@@ -114,9 +114,9 @@ describe('V1 Wallet serialization', () => {
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
     const wallet = V1State.initEmpty(keys, ledger.NetworkId.Undeployed);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
-      const newState = wallet.state.applyTx(keys, tx, 'success');
+      const newState = wallet.applyProofErasedTx(tx as unknown as ProofErasedTransaction, { type: 'success' });
 
-      return wallet.applyState(newState).updateProgress({ appliedIndex: newState.firstFree });
+      return newState.updateProgress({ appliedIndex: newState.state.firstFree });
     });
 
     const firstIteration = capability.serialize(preparedWallet);

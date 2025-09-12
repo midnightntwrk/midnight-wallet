@@ -1,4 +1,5 @@
 import * as ledger from '@midnight-ntwrk/ledger';
+import { Iterable, Option, pipe } from 'effect';
 import { createSyncProgress, SyncProgressData, SyncProgress } from './SyncProgress';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { FinalizedTransaction } from './types/ledger';
@@ -41,10 +42,6 @@ export class CoreWallet {
     return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
-  applyState(state: ledger.ZswapLocalState): CoreWallet {
-    return new CoreWallet(state, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
-  }
-
   applyProofErasedTx(
     tx: ledger.Transaction<ledger.Signaturish, ledger.NoProof, ledger.NoBinding>,
     result: ledger.TransactionResult,
@@ -53,8 +50,14 @@ export class CoreWallet {
     return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
-  applyFailed(offer: ledger.ZswapOffer<ledger.Proof>): CoreWallet {
-    const newState = this.state.applyFailed(offer);
+  applyFailed(tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>): CoreWallet {
+    const newState = pipe(
+      tx.fallibleOffer?.entries() ?? ([] as Array<[number, ledger.ZswapOffer<ledger.Proofish>]>),
+      Iterable.map(([, offer]) => offer),
+      Iterable.prependAll(pipe(tx.guaranteedOffer, Option.fromNullable, Option.toArray)),
+      Iterable.reduce(this.state, (previousState, offer) => previousState.applyFailed(offer)),
+    );
+
     return new CoreWallet(newState, this.secretKeys, this.networkId, this.txHistoryArray, this.progress);
   }
 
@@ -81,6 +84,12 @@ export class CoreWallet {
 
   addTransaction(tx: FinalizedTransaction): CoreWallet {
     return new CoreWallet(this.state, this.secretKeys, this.networkId, [...this.txHistoryArray, tx], this.progress);
+  }
+
+  revertTransaction<TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
+    tx: TTransaction,
+  ): CoreWallet {
+    return this.applyFailed(tx);
   }
 
   updateTxHistory(newTxs: readonly FinalizedTransaction[]): CoreWallet {

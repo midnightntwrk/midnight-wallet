@@ -1,34 +1,16 @@
-import { Array as Arr, Option, pipe } from 'effect';
+import { pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { TotalCostParameters, TransactionImbalances } from './TransactionImbalances';
 import { FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './types/ledger';
-import { V1State } from './RunningV1Variant';
 
 export type TransactionTrait<Tx> = {
   getImbalancesWithFeesOverhead(tx: Tx, costParams: TotalCostParameters): TransactionImbalances;
-  /**
-   * A subject-reversed function, allows to implement reversal once in the capability itself
-   */
-  getRevertedFromLocalState(tx: Tx, state: V1State): V1State;
-
   id(tx: Tx): string;
 };
 export const TransactionTrait = new (class {
   default: TransactionTrait<FinalizedTransaction> = {
     getImbalancesWithFeesOverhead(tx: FinalizedTransaction, costParams): TransactionImbalances {
       return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
-    },
-    getRevertedFromLocalState(tx: FinalizedTransaction, state: V1State): V1State {
-      //This might seem as an overcomplicated, but:
-      // - reduces amount of handling "what-if-not" cases
-      // - handles each concern exactly once (applying failed offer, handling possible non-existence of offer in tx)
-      const fallibleOffers = tx.fallibleOffer?.entries().map(([_, offer]) => offer) || [];
-
-      return pipe(
-        [Option.fromNullable(tx.guaranteedOffer), Option.fromIterable(fallibleOffers)],
-        Arr.flatMap((maybeOffer) => Option.toArray(maybeOffer)),
-        Arr.reduce(state, (previousState, offer) => previousState.applyFailed(offer)),
-      );
     },
     id(tx) {
       return tx.identifiers().at(0)!;
@@ -38,14 +20,6 @@ export const TransactionTrait = new (class {
     getImbalancesWithFeesOverhead(tx, costParams): TransactionImbalances {
       return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
     },
-    getRevertedFromLocalState(tx: ProofErasedTransaction, state: V1State): V1State {
-      const fallibleOffers = tx.fallibleOffer?.entries().map(([_, offer]) => offer) || [];
-      return pipe(
-        [Option.fromNullable(tx.guaranteedOffer), Option.fromIterable(fallibleOffers)],
-        Arr.flatMap((maybeOffer) => Option.toArray(maybeOffer)),
-        Arr.reduce(state, (previousState, offer) => previousState.applyFailedProofErased(offer)),
-      );
-    },
     id(tx) {
       return tx.identifiers().at(0)!;
     },
@@ -53,9 +27,6 @@ export const TransactionTrait = new (class {
   unproven: TransactionTrait<UnprovenTransaction> = {
     getImbalancesWithFeesOverhead(tx: UnprovenTransaction, costParams: TotalCostParameters): TransactionImbalances {
       return TransactionTrait.shared.getImbalancesWithFeesOverhead(tx, costParams);
-    },
-    getRevertedFromLocalState(tx: UnprovenTransaction, state: V1State): V1State {
-      return TransactionTrait.proofErased.getRevertedFromLocalState(tx.eraseProofs(), state);
     },
     id(tx) {
       return tx.identifiers().at(0)!;
