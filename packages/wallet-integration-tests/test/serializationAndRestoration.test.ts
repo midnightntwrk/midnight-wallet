@@ -13,8 +13,6 @@ vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
 
-  const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-
   let environment: StartedDockerComposeEnvironment;
   let configuration: DefaultV1Configuration;
 
@@ -50,32 +48,55 @@ describe('Wallet serialization and restoration', () => {
   });
 
   let Wallet: ShieldedWalletClass;
-  let wallet: ShieldedWallet;
-  beforeEach(() => {
-    Wallet = ShieldedWallet(configuration);
-    wallet = Wallet.startWithShieldedSeed(shieldedSeed);
+
+  beforeAll(() => {
+    Wallet = ShieldedWallet(configuration!);
   });
 
-  afterEach(async () => {
-    if (wallet != null) {
+  it('allows to restore an non-empty wallet from the serialized state', async () => {
+    const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
+    const wallet = Wallet.startWithShieldedSeed(seed);
+    try {
+      const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
+      const originalBalances = syncedState.balances;
+
+      const serializedState = await wallet.serializeState();
+      const restored = Wallet.restore(seed, serializedState);
+      try {
+        const state = await restored.waitForSyncedState();
+        const restoredBalances = state.balances;
+
+        expect(originalBalances).not.toEqual({});
+        expect(restoredBalances).toEqual(originalBalances);
+      } finally {
+        await restored.stop();
+      }
+    } finally {
       await wallet.stop();
     }
   });
 
-  it('allows to restart wallet from the serialized state', async () => {
-    const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
-    const originalBalances = syncedState.balances;
+  it('allows to restore an empty wallet from the serialized state', async () => {
+    const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
+    const wallet = Wallet.startWithShieldedSeed(seed);
 
-    const serializedState = await wallet.serializeState();
-    const restored = Wallet.restore(shieldedSeed, serializedState);
     try {
-      const state = await restored.waitForSyncedState();
-      const restoredBalances = state.balances;
+      const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
+      const originalBalances = syncedState.balances;
 
-      expect(originalBalances).not.toEqual({});
-      expect(restoredBalances).toEqual(originalBalances);
+      const serializedState = await wallet.serializeState();
+      const restored = Wallet.restore(seed, serializedState);
+      try {
+        const state = await restored.waitForSyncedState();
+        const restoredBalances = state.balances;
+
+        expect(originalBalances).toEqual({});
+        expect(restoredBalances).toEqual(originalBalances);
+      } finally {
+        await restored.stop();
+      }
     } finally {
-      await restored.stop();
+      await wallet.stop();
     }
   });
 });

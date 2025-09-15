@@ -90,14 +90,12 @@ const Uint8ArraySchema = Schema.declare(
   identifier: 'Uint8Array',
 });
 
-const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema.transformOrFail(
-  Uint8ArraySchema,
-  TxSchema,
-  {
+const TxFromUint8Array = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, Uint8Array> =>
+  Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
     encode: (tx) => {
       return Effect.try({
         try: () => {
-          return tx.serialize(ledger.NetworkId.Undeployed);
+          return tx.serialize(networkId);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not serialize transaction');
@@ -107,25 +105,16 @@ const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema
     decode: (bytes) =>
       Effect.try({
         try: () => {
-          return ledger.Transaction.deserialize(
-            'signature',
-            'proof',
-            'pre-binding',
-            bytes,
-            ledger.NetworkId.Undeployed,
-          );
+          return ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, networkId);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not deserialize transaction');
         },
       }),
-  },
-);
+  });
 
-const HexedTx: Schema.Schema<FinalizedTransaction, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(TxFromUint8Array),
-);
+const HexedTx = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, string> =>
+  pipe(Schema.Uint8ArrayFromHex, Schema.compose(TxFromUint8Array(networkId)));
 
 const MerkleTreeCollapsedUpdateSchema = Schema.declare(
   (input: unknown): input is ledger.MerkleTreeCollapsedUpdate => input instanceof ledger.MerkleTreeCollapsedUpdate,
@@ -133,12 +122,14 @@ const MerkleTreeCollapsedUpdateSchema = Schema.declare(
   identifier: 'ledger.MerkleTreeCollapsedUpdate',
 });
 
-const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, Uint8Array> =
+const MerkleTreeCollapsedUpdateFromUint8Array = (
+  networkId: ledger.NetworkId,
+): Schema.Schema<ledger.MerkleTreeCollapsedUpdate, Uint8Array> =>
   Schema.transformOrFail(Uint8ArraySchema, MerkleTreeCollapsedUpdateSchema, {
     encode: (mk) => {
       return Effect.try({
         try: () => {
-          return mk.serialize(ledger.NetworkId.Undeployed);
+          return mk.serialize(networkId);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not serialize merkleTreeCollapsedUpdate');
@@ -148,7 +139,7 @@ const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<ledger.MerkleTreeCo
     decode: (bytes) =>
       Effect.try({
         try: () => {
-          return ledger.MerkleTreeCollapsedUpdate.deserialize(bytes, ledger.NetworkId.Undeployed);
+          return ledger.MerkleTreeCollapsedUpdate.deserialize(bytes, networkId);
         },
         catch: (err) => {
           return new ParseResult.Unexpected(err, 'Could not deserialize merkleTreeCollapsedUpdate');
@@ -156,10 +147,8 @@ const MerkleTreeCollapsedUpdateFromUint8Array: Schema.Schema<ledger.MerkleTreeCo
       }),
   });
 
-const HexedMerkleTree: Schema.Schema<ledger.MerkleTreeCollapsedUpdate, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(MerkleTreeCollapsedUpdateFromUint8Array),
-);
+const HexedMerkleTree = (networkId: ledger.NetworkId): Schema.Schema<ledger.MerkleTreeCollapsedUpdate, string> =>
+  pipe(Schema.Uint8ArrayFromHex, Schema.compose(MerkleTreeCollapsedUpdateFromUint8Array(networkId)));
 
 const ProgressUpdate = Schema.Struct({
   __typename: Schema.Literal('ShieldedTransactionsProgress'),
@@ -170,26 +159,27 @@ const ProgressUpdate = Schema.Struct({
 
 type ProgressUpdate = Schema.Schema.Type<typeof ProgressUpdate>;
 
-const ViewingUpdateSchema = Schema.Struct({
-  __typename: Schema.Literal('ViewingUpdate'),
-  index: Schema.Number,
-  update: Schema.Array(
-    Schema.Union(
-      Schema.Struct({
-        update: HexedMerkleTree,
-        protocolVersion: Schema.Number,
-      }),
-      Schema.Struct({
-        transaction: Schema.Struct({
-          hash: Schema.String,
-          raw: HexedTx,
+const ViewingUpdateSchema = (networkId: ledger.NetworkId) =>
+  Schema.Struct({
+    __typename: Schema.Literal('ViewingUpdate'),
+    index: Schema.Number,
+    update: Schema.Array(
+      Schema.Union(
+        Schema.Struct({
+          update: HexedMerkleTree(networkId),
           protocolVersion: Schema.Number,
-          transactionResult: TransactionResult,
         }),
-      }),
+        Schema.Struct({
+          transaction: Schema.Struct({
+            hash: Schema.String,
+            raw: HexedTx(networkId),
+            protocolVersion: Schema.Number,
+            transactionResult: TransactionResult,
+          }),
+        }),
+      ),
     ),
-  ),
-});
+  });
 
 export const SyncProgressUpdate = Schema.TaggedStruct('ProgressUpdate', {
   highestIndex: Schema.Number,
@@ -251,65 +241,70 @@ type SyncViewingUpdateWithTransaction = Schema.Schema.Type<typeof SyncViewingUpd
 
 const SyncViewingUpdateUnion = Schema.Union(SyncViewingUpdateWithMerkleTreeUpdate, SyncViewingUpdateWithTransaction);
 
-export const SyncViewingUpdateFromViewingUpdate = Schema.transformOrFail(ViewingUpdateSchema, SyncViewingUpdateUnion, {
-  decode: (input) => {
-    return Effect.try({
-      try: () => {
-        const { __typename, index, update } = input;
-        if ('update' in update[0]) {
-          return {
-            _tag: 'ViewingUpdateWithMerkleTreeUpdate' as const,
-            index,
-            update: update[0].update,
-            protocolVersion: update[0].protocolVersion,
-          };
-        } else {
-          const mappedTxResult = mapTxResult(update[0].transaction.transactionResult);
-          return {
-            _tag: 'ViewingUpdateWithTransaction' as const,
-            index,
-            appliedTransaction: {
-              tx: update[0].transaction.raw,
-              transactionResult: mappedTxResult,
+const SyncViewingUpdateFromViewingUpdate = (networkId: ledger.NetworkId) =>
+  Schema.asSchema(
+    Schema.transformOrFail(ViewingUpdateSchema(networkId), SyncViewingUpdateUnion, {
+      decode: (input) => {
+        return Effect.try({
+          try: () => {
+            const { __typename, index, update } = input;
+            if ('update' in update[0]) {
+              return {
+                _tag: 'ViewingUpdateWithMerkleTreeUpdate' as const,
+                index,
+                update: update[0].update,
+                protocolVersion: update[0].protocolVersion,
+              };
+            } else {
+              const mappedTxResult = mapTxResult(update[0].transaction.transactionResult);
+
+              return {
+                _tag: 'ViewingUpdateWithTransaction' as const,
+                index,
+                appliedTransaction: {
+                  tx: update[0].transaction.raw,
+                  transactionResult: mappedTxResult,
+                },
+                protocolVersion: update[0].transaction.protocolVersion,
+              };
+            }
+          },
+          catch: (error) => new ParseResult.Unexpected(error, 'Failed to decode viewing update'),
+        });
+      },
+      encode: (output) => {
+        if (output._tag === 'ViewingUpdateWithMerkleTreeUpdate') {
+          return Effect.try({
+            try: () => {
+              return {
+                __typename: 'ViewingUpdate' as const,
+                index: output.index,
+                update: [
+                  {
+                    update: output.update,
+                    protocolVersion: output.protocolVersion,
+                  },
+                ],
+              };
             },
-            protocolVersion: update[0].transaction.protocolVersion,
-          };
+            catch: (error) => new ParseResult.Unexpected(error, 'Failed to encode update type'),
+          });
+        } else {
+          return Effect.try({
+            try: () => {
+              throw new Error('Transaction type cannot be encoded back');
+            },
+            catch: (error) => new ParseResult.Unexpected(error, 'not encodable'),
+          });
         }
       },
-      catch: (error) => new ParseResult.Unexpected(error, 'Failed to decode viewing update'),
-    });
-  },
-  encode: (output) => {
-    if (output._tag === 'ViewingUpdateWithMerkleTreeUpdate') {
-      return Effect.try({
-        try: () => {
-          return {
-            __typename: 'ViewingUpdate' as const,
-            index: output.index,
-            update: [
-              {
-                update: output.update,
-                protocolVersion: output.protocolVersion,
-              },
-            ],
-          };
-        },
-        catch: (error) => new ParseResult.Unexpected(error, 'Failed to encode update type'),
-      });
-    } else {
-      return Effect.try({
-        try: () => {
-          throw new Error('Transaction type cannot be encoded back');
-        },
-        catch: (error) => new ParseResult.Unexpected(error, 'not encodable'),
-      });
-    }
-  },
-});
+    }),
+  );
 
-const WalletSyncSubscription = Schema.Union(SyncProgressUpdateFromProgressUpdate, SyncViewingUpdateFromViewingUpdate);
+const WalletSyncSubscription = (networkId: ledger.NetworkId) =>
+  Schema.Union(SyncProgressUpdateFromProgressUpdate, SyncViewingUpdateFromViewingUpdate(networkId));
 
-export type WalletSyncSubscription = Schema.Schema.Type<typeof WalletSyncSubscription>;
+export type WalletSyncSubscription = Schema.Schema.Type<ReturnType<typeof WalletSyncSubscription>>;
 
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
@@ -374,11 +369,19 @@ export const makeDefaultSyncService = (
         }),
         Stream.mapEffect((subscription) =>
           pipe(
-            Schema.decodeUnknownEither(WalletSyncSubscription)(subscription.shieldedTransactions),
+            Schema.decodeUnknownEither(WalletSyncSubscription(networkId))(subscription.shieldedTransactions),
             Either.mapLeft((err) => new SyncWalletError(new Error(`Schema decode failed: ${err.message}`))),
             EitherOps.toEffect,
           ),
         ),
+        Stream.mapAccum({ isFirstProgressUpdate: true }, (acc, update: WalletSyncSubscription) => {
+          if (acc.isFirstProgressUpdate && update._tag === 'ProgressUpdate') {
+            return [{ isFirstProgressUpdate: false }, null];
+          }
+
+          return [{ isFirstProgressUpdate: false }, update];
+        }),
+        Stream.filter((update): update is WalletSyncSubscription => update !== null),
       );
     },
   };
@@ -396,6 +399,7 @@ export const makeDefaultSyncCapability = (
             highestRelevantWalletIndex: BigInt(update.highestRelevantWalletIndex),
             highestIndex: BigInt(update.highestIndex),
             highestRelevantIndex: BigInt(update.highestRelevantIndex),
+            isConnected: true,
           });
 
         case 'ViewingUpdateWithMerkleTreeUpdate': {

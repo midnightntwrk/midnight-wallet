@@ -109,10 +109,11 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
   ])('maintains serialize ◦ deserialize, including transaction history', ({ seed }) => {
-    const capability = makeDefaultV1SerializationCapability();
+    const networkId = ledger.NetworkId.Undeployed;
+    const capability = makeDefaultV1SerializationCapability({ networkId });
     const testTxs = Chunk.fromIterable([makeFakeTx(10n), makeFakeTx(20n), makeFakeTx(30n)]);
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
-    const wallet = V1State.initEmpty(keys, ledger.NetworkId.Undeployed);
+    const wallet = V1State.initEmpty(keys, networkId);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
       const newState = wallet.applyProofErasedTx(tx as unknown as ProofErasedTransaction, { type: 'success' });
 
@@ -127,7 +128,8 @@ describe('V1 Wallet serialization', () => {
     expect(firstIteration).toEqual(secondIteration);
   });
   it('maintains serialize ◦ deserialize', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const networkId = ledger.NetworkId.Undeployed;
+    const capability = makeDefaultV1SerializationCapability({ networkId });
     fc.assert(
       fc.property(walletArbitrary(10), ({ wallet }) => {
         const firstIteration = capability.serialize(wallet);
@@ -144,7 +146,8 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles invalid JSON strings gracefully', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const networkId = ledger.NetworkId.Undeployed;
+    const capability = makeDefaultV1SerializationCapability({ networkId });
     const keys = ledger.ZswapSecretKeys.fromSeed(
       Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
     );
@@ -162,7 +165,8 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles random valid JSON strings gracefully', () => {
-    const capability = makeDefaultV1SerializationCapability();
+    const networkId = ledger.NetworkId.Undeployed;
+    const capability = makeDefaultV1SerializationCapability({ networkId });
     const keys = ledger.ZswapSecretKeys.fromSeed(
       Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
     );

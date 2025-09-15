@@ -118,7 +118,7 @@ export interface ShieldedWallet extends WalletLike.WalletLike<[VersionedVariant<
 
   serializeState(): Promise<string>;
 
-  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState>;
+  waitForSyncedState(maxGap?: bigint): Promise<ShieldedWalletState>;
 }
 
 export interface ShieldedWalletClass extends WalletLike.BaseWalletClass<[VersionedVariant<DefaultV1Variant>]> {
@@ -201,10 +201,8 @@ export function ShieldedWallet(configuration: DefaultV1Configuration): ShieldedW
         .pipe(Effect.runPromise);
     }) as SubmitTransactionMethod<FinalizedTransaction>;
 
-    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState> {
-      return rx.firstValueFrom(
-        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
-      );
+    waitForSyncedState(maxGap?: bigint): Promise<ShieldedWalletState> {
+      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(maxGap))));
     }
 
     /**

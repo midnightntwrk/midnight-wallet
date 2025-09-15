@@ -10,6 +10,10 @@ export type SerializationCapability<TWallet, TAux, TSerialized> = {
   deserialize(aux: TAux, data: TSerialized): Either.Either<TWallet, WalletError>;
 };
 
+export type DefaultSerializationConfiguration = {
+  networkId: ledger.NetworkId;
+};
+
 const TxSchema = Schema.declare(
   (input: unknown): input is FinalizedTransaction => input instanceof ledger.Transaction,
 ).annotations({
@@ -28,78 +32,72 @@ const Uint8ArraySchema = Schema.declare(
   identifier: 'Uint8Array',
 });
 
-const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema.asSchema(
-  Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
-    encode: (tx) => {
-      return Effect.try({
-        try: () => {
-          return tx.serialize(ledger.NetworkId.Undeployed);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize transaction');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () =>
-          ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, ledger.NetworkId.Undeployed),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize transaction');
-        },
-      }),
-  }),
-);
+const TxFromUint8Array = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, Uint8Array> =>
+  Schema.asSchema(
+    Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
+      encode: (tx) => {
+        return Effect.try({
+          try: () => {
+            return tx.serialize(networkId);
+          },
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not serialize transaction');
+          },
+        });
+      },
+      decode: (bytes) =>
+        Effect.try({
+          try: () => ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, networkId),
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not deserialize transaction');
+          },
+        }),
+    }),
+  );
 
-const StateFromUInt8Array: Schema.Schema<ledger.ZswapLocalState, Uint8Array> = Schema.asSchema(
-  Schema.transformOrFail(Uint8ArraySchema, StateSchema, {
-    encode: (state) => {
-      return Effect.try({
-        try: () => {
-          return state.serialize(ledger.NetworkId.Undeployed);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize local state');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () => ledger.ZswapLocalState.deserialize(bytes, ledger.NetworkId.Undeployed),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize local state');
-        },
-      }),
-  }),
-);
+const StateFromUInt8Array = (networkId: ledger.NetworkId): Schema.Schema<ledger.ZswapLocalState, Uint8Array> =>
+  Schema.asSchema(
+    Schema.transformOrFail(Uint8ArraySchema, StateSchema, {
+      encode: (state) => {
+        return Effect.try({
+          try: () => {
+            return state.serialize(networkId);
+          },
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not serialize local state');
+          },
+        });
+      },
+      decode: (bytes) =>
+        Effect.try({
+          try: () => ledger.ZswapLocalState.deserialize(bytes, networkId),
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not deserialize local state');
+          },
+        }),
+    }),
+  );
 
-const HexedTx: Schema.Schema<FinalizedTransaction, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(TxFromUint8Array),
-);
+const HexedTx = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, string> =>
+  pipe(Schema.Uint8ArrayFromHex, Schema.compose(TxFromUint8Array(networkId)));
 
-const HexedState: Schema.Schema<ledger.ZswapLocalState, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(StateFromUInt8Array),
-);
+const HexedState = (networkId: ledger.NetworkId): Schema.Schema<ledger.ZswapLocalState, string> =>
+  pipe(Schema.Uint8ArrayFromHex, Schema.compose(StateFromUInt8Array(networkId)));
 
-type TxSchema = Schema.Schema.Type<typeof HexedTx>;
+type TxSchema = Schema.Schema.Type<ReturnType<typeof HexedTx>>;
 
-const SnapshotSchema = Schema.Struct({
-  txHistory: Schema.Array(HexedTx),
-  state: HexedState,
-  protocolVersion: Schema.BigInt,
-  offset: Schema.optional(Schema.BigInt),
-  networkId: Schema.Enums(ledger.NetworkId),
-});
+export const makeDefaultV1SerializationCapability = (
+  config: DefaultSerializationConfiguration,
+): SerializationCapability<V1State, ledger.ZswapSecretKeys, string> => {
+  const SnapshotSchema = Schema.Struct({
+    txHistory: Schema.Array(HexedTx(config.networkId)),
+    state: HexedState(config.networkId),
+    protocolVersion: Schema.BigInt,
+    offset: Schema.optional(Schema.BigInt),
+    networkId: Schema.Enums(ledger.NetworkId),
+  });
 
-type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
-
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<
-  V1State,
-  ledger.ZswapSecretKeys,
-  string
-> => {
+  type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: V1State): Snapshot => ({

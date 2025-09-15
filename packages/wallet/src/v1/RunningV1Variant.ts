@@ -18,8 +18,6 @@ import { TransactionHistoryCapability } from './TransactionHistory';
 import { FinalizedTransaction } from './types/ledger';
 
 const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
-  if (!state.isConnected) return [];
-
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
   const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
   const highestIndex = state.progress?.highestIndex ?? 0n;

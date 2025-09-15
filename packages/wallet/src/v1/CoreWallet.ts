@@ -9,7 +9,6 @@ export class CoreWallet {
   readonly secretKeys: ledger.ZswapSecretKeys;
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
 
-  readonly isConnected: boolean;
   readonly progress: SyncProgress;
   readonly networkId: ledger.NetworkId;
   readonly txHistoryArray: readonly FinalizedTransaction[];
@@ -19,14 +18,13 @@ export class CoreWallet {
     secretKeys: ledger.ZswapSecretKeys,
     networkId: ledger.NetworkId,
     txHistory: readonly FinalizedTransaction[] = [],
-    syncProgress?: SyncProgressData,
+    syncProgress?: Omit<SyncProgressData, 'isConnected'>,
     protocolVersion?: ProtocolVersion.ProtocolVersion,
   ) {
     this.state = state;
     this.secretKeys = secretKeys;
     this.networkId = networkId;
     this.protocolVersion = protocolVersion || ProtocolVersion.MinSupportedVersion;
-    this.isConnected = true;
     this.txHistoryArray = txHistory;
     this.progress = syncProgress ? createSyncProgress(syncProgress) : createSyncProgress();
   }
@@ -71,12 +69,14 @@ export class CoreWallet {
     highestRelevantWalletIndex,
     highestIndex,
     highestRelevantIndex,
+    isConnected,
   }: Partial<SyncProgressData>): CoreWallet {
     const updatedProgress = createSyncProgress({
       appliedIndex: appliedIndex ?? this.progress.appliedIndex,
       highestRelevantWalletIndex: highestRelevantWalletIndex ?? this.progress.highestRelevantWalletIndex,
       highestIndex: highestIndex ?? this.progress.highestIndex,
       highestRelevantIndex: highestRelevantIndex ?? this.progress.highestRelevantIndex,
+      isConnected: isConnected ?? this.progress.isConnected,
     });
 
     return new CoreWallet(this.state, this.secretKeys, this.networkId, this.txHistoryArray, updatedProgress);
@@ -114,7 +114,7 @@ export class CoreWallet {
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
     txHistory: readonly FinalizedTransaction[],
-    syncProgress: SyncProgressData,
+    syncProgress: Omit<SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: ledger.NetworkId,
   ): CoreWallet {

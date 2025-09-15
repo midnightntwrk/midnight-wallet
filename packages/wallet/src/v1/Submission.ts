@@ -87,6 +87,7 @@ export const makeDefaultSubmissionService = (
 
 export type SimulatorSubmissionConfiguration = {
   simulator: Simulator;
+  networkId: ledger.NetworkId;
 };
 export const makeSimulatorSubmissionService =
   (waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock') =>
