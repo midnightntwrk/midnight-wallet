@@ -95,7 +95,7 @@ export const genUnbalancedTx = (): Effect.Effect<
     }),
     Effect.flatMap(({ unprovenTx }) =>
       Effect.gen(function* () {
-        const serializedTx = SerializedUnprovenTransaction(unprovenTx.serialize(ledger.NetworkId.Undeployed));
+        const serializedTx = SerializedUnprovenTransaction(unprovenTx.bind().serialize(ledger.NetworkId.Undeployed));
         const proverClient = yield* ProverClient.ProverClient;
         return yield* proverClient.proveTransaction(serializedTx);
       }),

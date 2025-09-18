@@ -46,8 +46,8 @@ const proofServerContainerResource = Effect.acquireRelease(
 describe('Default Proving Service', () => {
   const adHocProve = (
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
-  ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>> => {
-    const res = pipe(
+  ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> => {
+    return pipe(
       Proving.httpProveTx(ledger.NetworkId.Undeployed, tx),
       Effect.provide(
         proofServerContainerResource.pipe(
@@ -62,10 +62,6 @@ describe('Default Proving Service', () => {
       Effect.scoped,
       Effect.orDie,
     );
-
-    // ¯\_(ツ)_/¯ jest's TS integration argues some environment type is not `never` at this point
-
-    return res as Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>;
   };
 
   const testProvenTxEffect = pipe(makeTransaction(), adHocProve, Effect.cached, Effect.flatten);
@@ -73,7 +69,7 @@ describe('Default Proving Service', () => {
 
   const recipes: ReadonlyArray<{
     recipe: Effect.Effect<
-      ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>
+      ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>
     >;
     expectedImbalance: bigint;
   }> = [

@@ -1,12 +1,12 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletBuilder } from './WalletBuilder';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder, V1State, V1Tag } from './v1';
+import { BuildArguments, WalletBuilder } from './WalletBuilder';
+import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1State, V1Tag, V1Variant } from './v1';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { Runtime } from './Runtime';
 import { VersionedVariant } from './abstractions/Variant';
-import { WalletLike } from './abstractions';
+import { VariantBuilder, WalletLike } from './abstractions';
 import { ProvingRecipe } from './v1/ProvingRecipe';
 import { SerializationCapability } from './v1/Serialization';
 import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory';
@@ -18,26 +18,29 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { SubmissionEvent, SubmissionEventCases } from './v1/Submission';
-import { FinalizedTransaction } from './v1/types/ledger';
+import { FinalizedTransaction } from './v1/Transaction';
 import { TokenTransfer } from './v1/Transacting';
+import { WalletSyncUpdate } from './v1/Sync';
 
-export type ShieldedWalletCapabilities = {
-  serialization: SerializationCapability<V1State, ledger.ZswapSecretKeys, string>;
+export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = FinalizedTransaction> = {
+  serialization: SerializationCapability<V1State, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<V1State>;
   keys: KeysCapability<V1State>;
-  transactionHistory: TransactionHistoryCapability<V1State, FinalizedTransaction>;
+  transactionHistory: TransactionHistoryCapability<V1State, TTransaction>;
 };
 
-export class ShieldedWalletState {
+export class ShieldedWalletState<TSerialized = string, TTransaction = FinalizedTransaction> {
   static readonly mapState =
-    (capabilities: ShieldedWalletCapabilities) =>
-    (state: ProtocolState.ProtocolState<V1State>): ShieldedWalletState => {
+    <TSerialized = string, TTransaction = FinalizedTransaction>(
+      capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
+    ) =>
+    (state: ProtocolState.ProtocolState<V1State>): ShieldedWalletState<TSerialized, TTransaction> => {
       return new ShieldedWalletState(state, capabilities);
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: V1State;
-  readonly capabilities: ShieldedWalletCapabilities;
+  readonly capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
@@ -51,8 +54,8 @@ export class ShieldedWalletState {
     return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
   }
 
-  get pendingCoins(): readonly AvailableCoin[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
+  get pendingCoins(): readonly PendingCoin[] {
+    return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
   }
 
   get coinPublicKey(): ShieldedCoinPublicKey {
@@ -71,17 +74,20 @@ export class ShieldedWalletState {
     return this.capabilities.transactionHistory.progress(this.state);
   }
 
-  get transactionHistory(): readonly FinalizedTransaction[] {
+  get transactionHistory(): readonly TTransaction[] {
     return this.capabilities.transactionHistory.transactionHistory(this.state);
   }
 
-  constructor(state: ProtocolState.ProtocolState<V1State>, capabilities: ShieldedWalletCapabilities) {
+  constructor(
+    state: ProtocolState.ProtocolState<V1State>,
+    capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
+  ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
   }
 
-  serialize(): string {
+  serialize(): TSerialized {
     return this.capabilities.serialization.serialize(this.state);
   }
 }
@@ -94,97 +100,180 @@ export type SubmitTransactionMethod<TTransaction> = {
   (transaction: TTransaction, waitForStatus?: 'Submitted' | 'InBlock' | 'Finalized'): Promise<SubmissionEvent>;
 };
 
-export interface ShieldedWallet extends WalletLike.WalletLike<[VersionedVariant<DefaultV1Variant>]> {
-  readonly state: rx.Observable<ShieldedWalletState>;
+export type ShieldedWallet = CustomizedShieldedWallet<
+  ledger.ZswapSecretKeys,
+  FinalizedTransaction,
+  WalletSyncUpdate,
+  string
+>;
+
+export type ShieldedWalletClass = CustomizedShieldedWalletClass<
+  ledger.ZswapSecretKeys,
+  FinalizedTransaction,
+  WalletSyncUpdate,
+  string
+>;
+
+export interface CustomizedShieldedWallet<
+  TStartAux = ledger.ZswapSecretKeys,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
+  TSerialized = string,
+> extends WalletLike.WalletLike<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]> {
+  readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+
+  start(secretKeys: TStartAux): Promise<void>;
 
   // we can balance bound and unbound txs
   balanceTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    secretKeys: ledger.ZswapSecretKeys,
+    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
     newCoins: readonly ledger.ShieldedCoinInfo[],
-  ): Promise<ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>>;
+  ): Promise<ProvingRecipe<TTransaction>>;
 
-  transferTransaction(outputs: readonly TokenTransfer[]): Promise<ProvingRecipe<FinalizedTransaction>>;
+  transferTransaction(
+    secretKeys: ledger.ZswapSecretKeys,
+    outputs: readonly TokenTransfer[],
+  ): Promise<ProvingRecipe<TTransaction>>;
 
   initSwap(
+    secretKeys: ledger.ZswapSecretKeys,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
-  ): Promise<ProvingRecipe<FinalizedTransaction>>;
+  ): Promise<ProvingRecipe<TTransaction>>;
 
-  finalizeTransaction(
-    recipe: ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>,
-  ): Promise<FinalizedTransaction>;
+  finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Promise<TTransaction>;
 
-  readonly submitTransaction: SubmitTransactionMethod<FinalizedTransaction>;
+  readonly submitTransaction: SubmitTransactionMethod<TTransaction>;
 
-  serializeState(): Promise<string>;
+  serializeState(): Promise<TSerialized>;
 
-  waitForSyncedState(maxGap?: bigint): Promise<ShieldedWalletState>;
+  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
+
+  getAddress(): Promise<ShieldedAddress>;
 }
 
-export interface ShieldedWalletClass extends WalletLike.BaseWalletClass<[VersionedVariant<DefaultV1Variant>]> {
-  startWithShieldedSeed(seed: Uint8Array): ShieldedWallet;
-  restore(seed: Uint8Array, serializedState: string): ShieldedWallet;
+export interface CustomizedShieldedWalletClass<
+  TStartAux = ledger.ZswapSecretKeys,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
+  TSerialized = string,
+  TConfig extends BaseV1Configuration = DefaultV1Configuration,
+> extends WalletLike.BaseWalletClass<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]> {
+  configuration: TConfig;
+  startWithShieldedSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
+  startWithSecretKeys(
+    secretKeys: ledger.ZswapSecretKeys,
+  ): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
+  restore(serializedState: TSerialized): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
 
 export function ShieldedWallet(configuration: DefaultV1Configuration): ShieldedWalletClass {
-  const BaseWallet = WalletBuilder.init()
-    .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
-    .build(configuration);
+  return CustomShieldedWallet(configuration, new V1Builder().withDefaults());
+}
 
-  return class ShieldedWalletImplementation extends BaseWallet implements ShieldedWallet {
-    static startWithShieldedSeed(seed: Uint8Array): ShieldedWalletImplementation {
-      return ShieldedWalletImplementation.startFirst(
-        ShieldedWalletImplementation,
-        V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), ShieldedWalletImplementation.configuration.networkId),
+export function CustomShieldedWallet<
+  TConfig extends BaseV1Configuration = DefaultV1Configuration,
+  TStartAux = ledger.ZswapSecretKeys,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
+  TSerialized = string,
+>(
+  configuration: TConfig,
+  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
+): CustomizedShieldedWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
+  const buildArgs = [configuration] as BuildArguments<
+    [
+      VariantBuilder.VersionedVariantBuilder<
+        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
+      >,
+    ]
+  >;
+  const BaseWallet = WalletBuilder.init()
+    .withVariant(ProtocolVersion.MinSupportedVersion, builder)
+    .build(...buildArgs) as WalletLike.BaseWalletClass<
+    [VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
+    TConfig
+  >;
+
+  return class CustomShieldedWalletImplementation
+    extends BaseWallet
+    implements CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>
+  {
+    static startWithSecretKeys(secretKeys: ledger.ZswapSecretKeys): CustomShieldedWalletImplementation {
+      return CustomShieldedWalletImplementation.startFirst(
+        CustomShieldedWalletImplementation,
+        V1State.initEmpty(secretKeys, CustomShieldedWalletImplementation.configuration.networkId),
       );
     }
 
-    static restore(seed: Uint8Array, serializedState: string): ShieldedWalletImplementation {
-      const deserialized: V1State = ShieldedWalletImplementation.allVariantsRecord()
-        [V1Tag].variant.deserializeState(ledger.ZswapSecretKeys.fromSeed(seed), serializedState)
-        .pipe(Either.getOrThrow);
-      return ShieldedWalletImplementation.startFirst(ShieldedWalletImplementation, deserialized);
+    static startWithShieldedSeed(seed: Uint8Array): CustomShieldedWalletImplementation {
+      const secretKeys: ledger.ZswapSecretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
+      return CustomShieldedWalletImplementation.startWithSecretKeys(secretKeys);
     }
 
-    readonly state: rx.Observable<ShieldedWalletState>;
+    static restore(serializedState: TSerialized): CustomShieldedWalletImplementation {
+      const deserialized: V1State = CustomShieldedWalletImplementation.allVariantsRecord()
+        [V1Tag].variant.deserializeState(serializedState)
+        .pipe(Either.getOrThrow);
+      return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);
+    }
 
-    constructor(runtime: Runtime<[VersionedVariant<DefaultV1Variant>]>, scope: Scope.CloseableScope) {
+    readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+
+    constructor(
+      runtime: Runtime<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>,
+      scope: Scope.CloseableScope,
+    ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
-        rx.map(ShieldedWalletState.mapState(ShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant)),
+        rx.map(
+          ShieldedWalletState.mapState<TSerialized, TTransaction>(
+            CustomShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant,
+          ),
+        ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
       );
     }
 
+    start(secretKeys: TStartAux): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKeys) }).pipe(Effect.runPromise);
+    }
+
     balanceTransaction(
-      tx: FinalizedTransaction,
+      secretKeys: ledger.ZswapSecretKeys,
+      tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
       newCoins: readonly ledger.ShieldedCoinInfo[],
-    ): Promise<ProvingRecipe<FinalizedTransaction>> {
+    ): Promise<ProvingRecipe<TTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceTransaction(tx, newCoins),
+          [V1Tag]: (v1) => v1.balanceTransaction(secretKeys, tx, newCoins),
         })
         .pipe(Effect.runPromise);
     }
 
-    transferTransaction(outputs: readonly TokenTransfer[]): Promise<ProvingRecipe<FinalizedTransaction>> {
+    transferTransaction(
+      secretKeys: ledger.ZswapSecretKeys,
+      outputs: readonly TokenTransfer[],
+    ): Promise<ProvingRecipe<TTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.transferTransaction(outputs),
+          [V1Tag]: (v1) => v1.transferTransaction(secretKeys, outputs),
         })
         .pipe(Effect.runPromise);
     }
 
     initSwap(
+      secretKeys: ledger.ZswapSecretKeys,
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
-    ): Promise<ProvingRecipe<FinalizedTransaction>> {
+    ): Promise<ProvingRecipe<TTransaction>> {
       return this.runtime
-        .dispatch({ [V1Tag]: (v1) => v1.initSwap(desiredInputs, desiredOutputs) })
+        .dispatch({ [V1Tag]: (v1) => v1.initSwap(secretKeys, desiredInputs, desiredOutputs) })
         .pipe(Effect.runPromise);
     }
 
-    finalizeTransaction(recipe: ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction> {
+    finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Promise<TTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.finalizeTransaction(recipe),
@@ -192,25 +281,31 @@ export function ShieldedWallet(configuration: DefaultV1Configuration): ShieldedW
         .pipe(Effect.runPromise);
     }
 
-    submitTransaction: SubmitTransactionMethod<FinalizedTransaction> = ((
-      tx: FinalizedTransaction,
+    submitTransaction: SubmitTransactionMethod<TTransaction> = ((
+      tx: TTransaction,
       waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
     ) => {
       return this.runtime
         .dispatch({ [V1Tag]: (v1) => v1.submitTransaction(tx, waitForStatus) })
         .pipe(Effect.runPromise);
-    }) as SubmitTransactionMethod<FinalizedTransaction>;
+    }) as SubmitTransactionMethod<TTransaction>;
 
-    waitForSyncedState(maxGap?: bigint): Promise<ShieldedWalletState> {
-      return rx.firstValueFrom(this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(maxGap))));
+    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized, TTransaction>> {
+      return rx.firstValueFrom(
+        this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
+      );
     }
 
     /**
      * Serializes the most recent state
      * It's preferable to use [[ShieldedWalletState.serialize]] instead, to know exactly, which state is serialized
      */
-    serializeState(): Promise<string> {
+    serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
+    }
+
+    getAddress(): Promise<ShieldedAddress> {
+      return rx.firstValueFrom(this.state).then((state) => state.address);
     }
   };
 }

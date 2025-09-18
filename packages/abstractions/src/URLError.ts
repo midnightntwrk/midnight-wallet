@@ -11,5 +11,16 @@ export class InvalidProtocolSchemeError extends Data.TaggedError('InvalidProtoco
   /** The scheme that caused the error. */
   readonly invalidScheme: string;
 }> {
-  static tag = 'InvalidProtocolSchemeError' as const;
+  static readonly tag = 'InvalidProtocolSchemeError' as const;
 }
+
+export class FailedToDeriveWebSocketUrlError extends Data.TaggedError('FailedToDeriveWebSocketUrlError')<{
+  /** A message describing the error. */
+  readonly message: string;
+
+  readonly cause?: unknown;
+}> {
+  static readonly tag = 'FailedToDeriveWebSocketUrlError' as const;
+}
+
+export type URLError = InvalidProtocolSchemeError | FailedToDeriveWebSocketUrlError;

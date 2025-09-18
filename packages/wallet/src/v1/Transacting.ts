@@ -14,10 +14,9 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { TotalCostParameters, TransactionImbalances } from './TransactionImbalances';
-import { TransactionTrait } from './Transaction';
+import { TransactionTrait, FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './Transaction';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
-import { FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './types/ledger';
 
 export interface TokenTransfer {
   readonly amount: bigint;
@@ -25,19 +24,23 @@ export interface TokenTransfer {
   readonly receiverAddress: string;
 }
 
-export interface TransactingCapability<TState, TTransaction> {
+export interface TransactingCapability<TSecrets, TState, TTransaction> {
   balanceTransaction(
+    secrets: TSecrets,
     state: TState,
-    tx: TTransaction,
+    // That's definitely fine for now, question is whether it is worth bastracting over in general case
+    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
     newCoins: readonly ledger.ShieldedCoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   makeTransfer(
+    secrets: TSecrets,
     state: TState,
     outputs: ReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   initSwap(
+    secrets: TSecrets,
     state: TState,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
@@ -64,7 +67,7 @@ export type DefaultTransactingContext = {
 export const makeDefaultTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<V1State, FinalizedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, V1State, FinalizedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -78,7 +81,7 @@ export const makeDefaultTransactingCapability = (
 export const makeSimulatorTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<V1State, ProofErasedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, V1State, ProofErasedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -93,7 +96,7 @@ class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 
 export class TransactingCapabilityImplementation<
   TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-> implements TransactingCapability<V1State, TTransaction>
+> implements TransactingCapability<ledger.ZswapSecretKeys, V1State, TTransaction>
 {
   public readonly networkId: ledger.NetworkId;
   public readonly costParams: TotalCostParameters;
@@ -119,6 +122,7 @@ export class TransactingCapabilityImplementation<
   }
 
   balanceTransaction(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     tx: TTransaction,
     newCoins: ledger.ShieldedCoinInfo[],
@@ -141,15 +145,16 @@ export class TransactingCapabilityImplementation<
         newState: afterFallible,
         offer: maybeFallible,
         newImbalances,
-      } = yield* this.balanceFallibleSection(state, initialImbalances, coinSelection);
+      } = yield* this.balanceFallibleSection(secretKeys, state, initialImbalances, coinSelection);
       const { newState: afterGuaranteed, offer: guaranteed } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
         afterFallible,
         newImbalances,
         coinSelection,
         newCoins.length,
         Imbalances.empty(),
       );
-      const finalState = V1State.watchCoins(afterGuaranteed, newCoins);
+      const finalState = V1State.watchCoins(secretKeys, afterGuaranteed, newCoins);
 
       return {
         newState: finalState,
@@ -163,6 +168,7 @@ export class TransactingCapabilityImplementation<
   }
 
   makeTransfer(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
@@ -176,13 +182,14 @@ export class TransactingCapabilityImplementation<
       const unprovenTxToBalance = ledger.Transaction.fromParts(offerToBalance);
       const imbalances = TransactionTrait.unproven.getImbalancesWithFeesOverhead(unprovenTxToBalance, this.costParams);
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
         state,
         imbalances,
         this.getCoinSelection(),
         selfCoins.length,
         Imbalances.empty(),
       );
-      const finalState = V1State.watchCoins(newState, selfCoins);
+      const finalState = V1State.watchCoins(secretKeys, newState, selfCoins);
       const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(offer));
 
       return {
@@ -196,6 +203,7 @@ export class TransactingCapabilityImplementation<
   }
 
   initSwap(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
@@ -205,13 +213,14 @@ export class TransactingCapabilityImplementation<
       const inputsParseResult = Imbalances.fromEntries(Record.toEntries(desiredInputs));
 
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
+        secretKeys,
         state,
         TransactionImbalances.feesOnly(outputsParseResult.imbalances),
         this.getCoinSelection(),
         outputsParseResult.selfCoins.length,
         inputsParseResult,
       );
-      const finalState = V1State.watchCoins(newState, outputsParseResult.selfCoins);
+      const finalState = V1State.watchCoins(secretKeys, newState, outputsParseResult.selfCoins);
       const balancingTx = ledger.Transaction.fromParts(offer);
       const finalTx = outputsParseResult.unprovenTxToBalance
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
@@ -267,12 +276,13 @@ export class TransactingCapabilityImplementation<
   }
 
   #prepareOffer(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
     segment: 0 | 1,
   ): Option.Option<{ newState: V1State; offer: ledger.ZswapOffer<ledger.PreProof> }> {
-    const [inputOffers, stateAfterSpends] = V1State.spendCoins(state, recipe.inputs, segment);
-    const stateAfterWatches = V1State.watchCoins(stateAfterSpends, recipe.outputs);
+    const [inputOffers, stateAfterSpends] = V1State.spendCoins(secretKeys, state, recipe.inputs, segment);
+    const stateAfterWatches = V1State.watchCoins(secretKeys, stateAfterSpends, recipe.outputs);
     const outputOffers = recipe.outputs.map((coin) => {
       const output = ledger.ZswapOutput.new(
         coin,
@@ -299,6 +309,7 @@ export class TransactingCapabilityImplementation<
   }
 
   balanceFallibleSection(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
@@ -328,7 +339,7 @@ export class TransactingCapabilityImplementation<
         });
         const updatedImbalances = TransactionImbalances.addFeesOverhead(fallibleCounterOfferFeeOverhead)(imbalances);
         return pipe(
-          this.#prepareOffer(state, fallibleBalanceRecipe, 1),
+          this.#prepareOffer(secretKeys, state, fallibleBalanceRecipe, 1),
           Option.match({
             onNone: () => ({
               newState: state,
@@ -360,6 +371,7 @@ export class TransactingCapabilityImplementation<
   }
 
   #balanceGuaranteedSection(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
@@ -403,7 +415,7 @@ export class TransactingCapabilityImplementation<
       }
 
       return yield* pipe(
-        this.#prepareOffer(state, balanceRecipe, 0),
+        this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
         Either.fromOption(() => {
           return new OtherWalletError({
             message: 'Could not create a valid guaranteed offer',
@@ -414,6 +426,7 @@ export class TransactingCapabilityImplementation<
       EitherOps.flatMapLeft((err: NoSelfOutputsError | WalletError) => {
         if (err instanceof NoSelfOutputsError) {
           return this.#balanceGuaranteedWithSelfOutput(
+            secretKeys,
             state,
             imbalances,
             coinSelection,
@@ -428,6 +441,7 @@ export class TransactingCapabilityImplementation<
   }
 
   #balanceGuaranteedWithSelfOutput(
+    secretKeys: ledger.ZswapSecretKeys,
     state: V1State,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
@@ -490,10 +504,10 @@ export class TransactingCapabilityImplementation<
       );
 
       return yield* pipe(
-        this.#prepareOffer(state, balanceRecipe, 0),
+        this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
         Option.map(({ newState, offer }) => {
           return {
-            newState: V1State.watchCoins(newState, [additionalCoin]),
+            newState: V1State.watchCoins(secretKeys, newState, [additionalCoin]),
             offer: offer.merge(additionalOffer),
           };
         }),

@@ -36,7 +36,8 @@ export type WalletError =
   | InsufficientFundsError
   | SubmissionError
   | AddressError
-  | SyncWalletError;
+  | SyncWalletError
+  | InvalidCoinHashesError;
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
   message: string;
@@ -68,4 +69,9 @@ export class AddressError extends Data.TaggedError('Wallet.Address')<{
   message: string;
   originalAddress: string;
   cause?: unknown;
+}> {}
+
+export class InvalidCoinHashesError extends Data.TaggedError('Wallet.InvalidCoinHashes')<{
+  message: string;
+  missingNonces: Set<ledger.Nonce>;
 }> {}

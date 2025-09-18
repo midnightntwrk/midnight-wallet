@@ -15,7 +15,7 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testc
 
 import os from 'node:os';
 import * as ledger from '@midnight-ntwrk/ledger';
-import { pipe } from 'effect';
+import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 30_000 });
@@ -70,16 +70,15 @@ describe('Wallet Sync', () => {
     );
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
-
-    const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001');
-    wallet = Wallet.startFirst(
-      Wallet,
-      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), configuration.networkId),
+    const walletKeys = ledger.ZswapSecretKeys.fromSeed(
+      getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     );
+    wallet = Wallet.startEmpty(Wallet);
+    await wallet.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
   });
 
   afterEach(async () => {

@@ -17,14 +17,13 @@ export interface VariantContext<TState> {
  * @typeParam TPreviousState The type of state that the variant can migrate from.
  * @typeParam TDomain The variant-specific functionality
  */
-// TODO: de-effectify Variant interface?
 export type Variant<
   TTag extends string | symbol,
   TState,
   TPreviousState,
   TRunning extends RunningVariant<TTag, TState>,
 > = Poly.WithTag<TTag> & {
-  start(context: VariantContext<TState>, state: TState): Effect<TRunning, WalletRuntimeError, Scope.Scope>;
+  start(context: VariantContext<TState>): Effect<TRunning, WalletRuntimeError, Scope.Scope>;
 
   migrateState(previousState: TPreviousState): Effect<TState>;
 };

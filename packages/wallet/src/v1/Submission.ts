@@ -8,7 +8,7 @@ import {
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger';
-import { FinalizedTransaction, ProofErasedTransaction } from './types/ledger';
+import { FinalizedTransaction, ProofErasedTransaction } from './Transaction';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;

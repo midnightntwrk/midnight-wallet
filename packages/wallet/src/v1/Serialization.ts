@@ -3,7 +3,7 @@ import { V1State } from './RunningV1Variant';
 import { WalletError } from './WalletError';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { CoreWallet } from './CoreWallet';
-import { FinalizedTransaction } from './types/ledger';
+import { FinalizedTransaction } from './Transaction';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -88,24 +88,34 @@ type TxSchema = Schema.Schema.Type<ReturnType<typeof HexedTx>>;
 
 export const makeDefaultV1SerializationCapability = (
   config: DefaultSerializationConfiguration,
-): SerializationCapability<V1State, ledger.ZswapSecretKeys, string> => {
+): SerializationCapability<V1State, null, string> => {
   const SnapshotSchema = Schema.Struct({
+    publicKeys: Schema.Struct({
+      coinPublicKey: Schema.String,
+      encryptionPublicKey: Schema.String,
+    }),
     txHistory: Schema.Array(HexedTx(config.networkId)),
     state: HexedState(config.networkId),
     protocolVersion: Schema.BigInt,
     offset: Schema.optional(Schema.BigInt),
     networkId: Schema.Enums(ledger.NetworkId),
+    coinHashes: Schema.Record({
+      key: Schema.String,
+      value: Schema.Struct({ nullifier: Schema.String, commitment: Schema.String }),
+    }),
   });
 
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: V1State): Snapshot => ({
+        publicKeys: w.publicKeys,
         txHistory: w.txHistoryArray,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
         offset: w.progress?.appliedIndex,
+        coinHashes: w.coinHashes,
       });
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
@@ -116,23 +126,21 @@ export const makeDefaultV1SerializationCapability = (
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
         Either.mapLeft((err) => WalletError.other(err)),
         Either.flatMap((snapshot: Snapshot) =>
-          Either.try({
-            try: () =>
-              CoreWallet.restore(
-                snapshot.state,
-                aux,
-                snapshot.txHistory,
-                {
-                  appliedIndex: snapshot.offset ?? 0n,
-                  highestRelevantWalletIndex: 0n,
-                  highestIndex: 0n,
-                  highestRelevantIndex: 0n,
-                },
-                snapshot.protocolVersion,
-                snapshot.networkId,
-              ),
-            catch: (err) => WalletError.other(err),
-          }),
+          CoreWallet.restoreWithCoinHashes(
+            snapshot.publicKeys,
+            snapshot.state,
+            snapshot.txHistory,
+            snapshot.coinHashes,
+            {
+              appliedIndex: snapshot.offset ?? 0n,
+              highestRelevantWalletIndex: 0n,
+              highestIndex: 0n,
+              highestRelevantIndex: 0n,
+              isConnected: false,
+            },
+            snapshot.protocolVersion,
+            snapshot.networkId,
+          ),
         ),
       );
     },

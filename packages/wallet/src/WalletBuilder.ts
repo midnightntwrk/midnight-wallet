@@ -1,6 +1,6 @@
 import { Effect, Exit, Scope, Types } from 'effect';
 import * as rx from 'rxjs';
-import { Fluent, HList, Poly, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { HList, Poly, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions';
 import { StateOf } from './abstractions/Variant';
 import { ObservableOps } from './effect/index';
@@ -26,18 +26,6 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
   readonly #buildState: WalletBuilder.BuildState<TBuilders>;
 
   /**
-   * Ensures that the built wallet uses the default variants.
-   *
-   * @returns A new {@link WalletBuilder} that uses the current default variants.
-   */
-  withDefaultVariants(): Fluent.ExcludeMethod<
-    WalletBuilder<TBuilders>,
-    WalletBuilderMethods.WithDefaultVariantsMethod
-  > {
-    return this;
-  }
-
-  /**
    * Ensures that the built wallet uses a given variant.
    *
    * @param sinceVersion The Midnight protocol version that the variant should operate from.
@@ -47,10 +35,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
   withVariant<TBuilder extends VariantBuilder.AnyVariantBuilder>(
     sinceVersion: ProtocolVersion.ProtocolVersion,
     variantBuilder: TBuilder,
-  ): Fluent.ExcludeMethod<
-    WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>>,
-    WalletBuilderMethods.WithDefaultVariantsMethod
-  > {
+  ): WalletBuilder<HList.Append<TBuilders, VariantBuilder.VersionedVariantBuilder<TBuilder>>> {
     const { sinceVersion: previousVersion } = this.#buildState.variants.at(-1) ?? {
       sinceVersion: ProtocolVersion.ProtocolVersion(-1n),
     };
@@ -173,14 +158,6 @@ declare namespace WalletBuilder {
   type BuildState<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> = {
     readonly variants: TBuilders;
   };
-}
-
-/** @internal */
-declare namespace WalletBuilderMethods {
-  type WithDefaultVariantsMethod = 'withDefaultVariants';
-  type WithVariantMethod = 'withVariant';
-  type AllVariantMethods = WithDefaultVariantsMethod | WithVariantMethod;
-  type AllMethods = AllVariantMethods;
 }
 
 /**

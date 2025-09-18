@@ -9,6 +9,6 @@ export * as VersionChangeType from './VersionChangeType';
 export * as StateChange from './StateChange';
 export * from './utils';
 export * from './ClientServerErrors';
-export * from './InvalidProtocolSchemeError';
+export * from './URLError';
 export * as HttpURL from './HttpURL';
 export * as WsURL from './WsURL';

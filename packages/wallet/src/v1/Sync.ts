@@ -8,16 +8,17 @@ import {
   WsSubscriptionClient,
   HttpQueryClient,
   ConnectionHelper,
+  QueryClient,
+  SubscriptionClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError';
-import { KeysCapability } from './Keys';
-import { FinalizedTransaction } from './types/ledger';
-import { HttpURL, WsURL } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { FinalizedTransaction } from './Transaction';
+import { HttpURL, InvalidProtocolSchemeError, URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { TransactionHistoryCapability } from './TransactionHistory';
 import { EitherOps } from '../effect';
 
-export interface SyncService<TState, TUpdate> {
-  updates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+export interface SyncService<TState, TStartAux, TUpdate> {
+  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
 }
 
 export interface SyncCapability<TState, TUpdate> {
@@ -35,7 +36,6 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  keysCapability: KeysCapability<V1State>;
   transactionHistoryCapability: TransactionHistoryCapability<V1State, FinalizedTransaction>;
 };
 
@@ -306,64 +306,126 @@ const WalletSyncSubscription = (networkId: ledger.NetworkId) =>
 
 export type WalletSyncSubscription = Schema.Schema.Type<ReturnType<typeof WalletSyncSubscription>>;
 
+type SecretKeysResource = <A>(cb: (keys: ledger.ZswapSecretKeys) => A) => A;
+export const SecretKeysResource = {
+  create: (secretKeys: ledger.ZswapSecretKeys): SecretKeysResource => {
+    /**
+     * TODO: future Ledger version will include `clear` function to clear the secret keys,
+     * it is intentend to be used here instead of `null`
+     */
+    let sk: ledger.ZswapSecretKeys | null = secretKeys;
+    return (cb) => {
+      if (sk === null) {
+        throw new Error('Secret keys have been consumed');
+      }
+      const result = cb(sk);
+      sk = null;
+      return result;
+    };
+  },
+};
+
+export type WalletSyncUpdate = {
+  update: WalletSyncSubscription;
+  secretKeys: SecretKeysResource;
+};
+export const WalletSyncUpdate = {
+  create: (update: WalletSyncSubscription, secretKeys: ledger.ZswapSecretKeys): WalletSyncUpdate => {
+    return {
+      update,
+      secretKeys: SecretKeysResource.create(secretKeys),
+    };
+  },
+};
+
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
-  getContext: () => DefaultSyncContext,
-): SyncService<V1State, WalletSyncSubscription> => {
+): SyncService<V1State, ledger.ZswapSecretKeys, WalletSyncUpdate> => {
+  const indexerSyncService = makeIndexerSyncService(config);
   return {
-    updates: (state: V1State): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope> => {
-      const { indexerClientConnection, networkId } = config;
-
-      const indexerHttpUrlResult = HttpURL.make(indexerClientConnection.indexerHttpUrl);
-      if (Either.isLeft(indexerHttpUrlResult)) {
-        return Stream.fail(
-          new SyncWalletError(new Error(`Invalid indexer HTTP URL: ${indexerHttpUrlResult.left.message}`)),
-        );
-      }
-      const indexerHttpUrl = indexerHttpUrlResult.right;
-
-      const webSocketUrlResult = ConnectionHelper.createWebSocketUrl(
-        indexerClientConnection.indexerHttpUrl,
-        indexerClientConnection.indexerWsUrl,
+    updates: (
+      state: V1State,
+      secretKeys: ledger.ZswapSecretKeys,
+    ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
+      return Stream.fromEffect(indexerSyncService.connectWallet(secretKeys)).pipe(
+        Stream.flatMap((session) => indexerSyncService.subscribeWallet(state, session, config.networkId)),
+        Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
+        Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
-      if (Either.isLeft(webSocketUrlResult)) {
-        return Stream.fail(
-          new SyncWalletError(
-            new Error(`Could not derive WebSocket URL from indexer HTTP URL: ${webSocketUrlResult.left.message}`),
-          ),
-        );
-      }
+    },
+  };
+};
 
-      const indexerWsUrlResult = WsURL.make(webSocketUrlResult.right);
-      if (Either.isLeft(indexerWsUrlResult)) {
-        return Stream.fail(
-          new SyncWalletError(new Error(`Invalid indexer WS URL: ${indexerWsUrlResult.left.message}`)),
-        );
-      }
-      const indexerWsUrl = indexerWsUrlResult.right;
+export type IndexerSyncService = {
+  connectionLayer: () => Layer.Layer<QueryClient | SubscriptionClient, WalletError, Scope.Scope>;
+  connectWallet: (secretKeys: ledger.ZswapSecretKeys) => Effect.Effect<string, WalletError, QueryClient>;
+  subscribeWallet: (
+    state: V1State,
+    connectionId: string,
+    networkId: ledger.NetworkId,
+  ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+};
 
-      const keysCapability = getContext().keysCapability;
-      const { appliedIndex } = state.progress;
-      const encryptionSecretKey = keysCapability.getEncryptionSecretKey(state);
+export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
+  return {
+    connectionLayer(): Layer.Layer<QueryClient | SubscriptionClient, WalletError, Scope.Scope> {
+      const { indexerClientConnection } = config;
 
-      const bech32mESK = ShieldedEncryptionSecretKey.codec.encode(networkId, encryptionSecretKey).asString();
-
-      return pipe(
-        Connect.run({ viewingKey: bech32mESK }),
-        Stream.flatMap((session) => {
-          return ShieldedTransactions.run({
-            sessionId: session.connect,
-            index: Number(appliedIndex),
-            sendProgressUpdates: true,
-          });
+      const indexerHttpLayer: Layer.Layer<QueryClient, WalletError, Scope.Scope> = HttpURL.make(
+        indexerClientConnection.indexerHttpUrl,
+      ).pipe(
+        Either.match({
+          onLeft: (error: InvalidProtocolSchemeError) => Layer.fail(error),
+          onRight: (url: HttpURL.HttpUrl) => HttpQueryClient.layer({ url }),
         }),
+        Layer.mapError((e) => new SyncWalletError({ message: 'Invalid indexer HTTP URL', cause: e })),
+      );
 
-        Stream.provideSomeLayer(
-          Layer.mergeAll(
-            HttpQueryClient.layer({ url: indexerHttpUrl }),
-            WsSubscriptionClient.layer({ url: indexerWsUrl }),
+      const indexerWsLayer: Layer.Layer<SubscriptionClient, WalletError, Scope.Scope> =
+        ConnectionHelper.createWebSocketUrl(
+          indexerClientConnection.indexerHttpUrl,
+          indexerClientConnection.indexerWsUrl,
+        ).pipe(
+          Either.flatMap((url) => WsURL.make(url)),
+          Either.match({
+            onLeft: (error) => Layer.fail(error),
+            onRight: (url: WsURL.WsURL) => WsSubscriptionClient.layer({ url }),
+          }),
+          Layer.mapError(
+            (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
           ),
+        );
+
+      return Layer.mergeAll(indexerHttpLayer, indexerWsLayer);
+    },
+    connectWallet(secretKeys: ledger.ZswapSecretKeys): Effect.Effect<string, WalletError, QueryClient> {
+      return Effect.try({
+        try: () => {
+          const encryptionSecretKey = new ShieldedEncryptionSecretKey(secretKeys.encryptionSecretKey);
+
+          return ShieldedEncryptionSecretKey.codec.encode(config.networkId, encryptionSecretKey).asString();
+        },
+        catch: (error) => new SyncWalletError({ message: 'Failed to connect wallet to indexer', cause: error }),
+      }).pipe(
+        Effect.flatMap((bech32mESK) => Connect.run({ viewingKey: bech32mESK })),
+        Effect.map((session) => session.connect),
+        Effect.mapError(
+          (error) => new SyncWalletError({ message: 'Failed to connect wallet to indexer', cause: error }),
         ),
+      );
+    },
+    subscribeWallet(
+      state: V1State,
+      connectionId: string,
+      networkId: ledger.NetworkId,
+    ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      const { appliedIndex } = state.progress;
+
+      return ShieldedTransactions.run({
+        sessionId: connectionId,
+        index: Number(appliedIndex),
+        sendProgressUpdates: true,
+      }).pipe(
         Stream.mapError((error) => {
           return new SyncWalletError(error);
         }),
@@ -390,9 +452,10 @@ export const makeDefaultSyncService = (
 export const makeDefaultSyncCapability = (
   config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
-): SyncCapability<V1State, WalletSyncSubscription> => {
+): SyncCapability<V1State, WalletSyncUpdate> => {
   return {
-    applyUpdate(state: V1State, update: WalletSyncSubscription): V1State {
+    applyUpdate(state: V1State, wrappedUpdate: WalletSyncUpdate): V1State {
+      const { update, secretKeys } = wrappedUpdate;
       switch (update._tag) {
         case 'ProgressUpdate':
           return state.updateProgress({
@@ -410,7 +473,7 @@ export const makeDefaultSyncCapability = (
         case 'ViewingUpdateWithTransaction': {
           const offset = BigInt(update.index);
 
-          const { transactionResult, tx } = update.appliedTransaction;
+          const { transactionResult } = update.appliedTransaction;
 
           const appliedIndex = transactionResult.status === 'failure' ? offset : offset - 1n;
 
@@ -425,7 +488,11 @@ export const makeDefaultSyncCapability = (
             };
           }
 
-          const wallet = state.applyTransaction(tx, mappedTxResult).updateProgress({ appliedIndex });
+          const wallet = secretKeys((keys) => {
+            return state
+              .applyTransaction(keys, update.appliedTransaction.tx, mappedTxResult)
+              .updateProgress({ appliedIndex });
+          });
 
           const transactionHistoryCapability = getContext().transactionHistoryCapability;
 
@@ -441,30 +508,40 @@ export type SimulatorSyncConfiguration = {
   networkId: ledger.NetworkId;
 };
 
-export const makeSimulatorSyncService = (config: SimulatorSyncConfiguration): SyncService<V1State, SimulatorState> => {
+export type SimulatorSyncUpdate = {
+  update: SimulatorState;
+  secretKeys: ledger.ZswapSecretKeys;
+};
+
+export const makeSimulatorSyncService = (
+  config: SimulatorSyncConfiguration,
+): SyncService<V1State, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
   return {
-    updates: () => config.simulator.state$,
+    updates: (_state: V1State, secretKeys: ledger.ZswapSecretKeys) =>
+      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKeys: secretKeys }))),
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorState> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorSyncUpdate> => {
   return {
-    applyUpdate: (state: V1State, update: SimulatorState) => {
-      return state.applyProofErasedTx(update.lastTx, {
-        ...update.lastTxResult,
-        type: 'success', // @TODO: figure out why type is 'failed'
-      });
+    applyUpdate: (state: V1State, update: SimulatorSyncUpdate) => {
+      return state.applyTransaction(update.secretKeys, update.update.lastTx, update.update.lastTxResult);
     },
   };
 };
 
-// @TODO is this needed?
-export const makeTxApplierSyncCapability = (): SyncCapability<V1State, FinalizedTransaction> => {
+export type TxApplierSyncUpdate = {
+  tx: FinalizedTransaction;
+  secretKeys: ledger.ZswapSecretKeys;
+};
+/**
+ * Skeleton of a "full-node" sync capability.
+ * It is how the simulator one could look like (differenes are tiny) and how syncing tx by tx should look like
+ */
+export const makeTxApplierSyncCapability = (): SyncCapability<V1State, TxApplierSyncUpdate> => {
   return {
-    applyUpdate: (state: V1State, update: FinalizedTransaction) => {
-      return state.applyTransaction(update, {
-        type: 'success',
-      });
+    applyUpdate: (state: V1State, update: TxApplierSyncUpdate) => {
+      return state.applyTransaction(update.secretKeys, update.tx, { type: 'success' });
     },
   };
 };

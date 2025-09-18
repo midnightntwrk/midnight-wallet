@@ -3,14 +3,20 @@ import * as ledger from '@midnight-ntwrk/ledger';
 import { pipe, Array } from 'effect';
 import * as RecordOps from '../effect/RecordOps';
 
-export type Coin<T extends ledger.QualifiedShieldedCoinInfo | ledger.ShieldedCoinInfo> = {
-  coin: T;
-  ttl: Date | undefined;
+export type AvailableCoin = {
+  coin: ledger.QualifiedShieldedCoinInfo;
+  commitment: ledger.CoinCommitment;
+  nullifier: ledger.Nullifier;
 };
 
-export type AvailableCoin = Coin<ledger.QualifiedShieldedCoinInfo>;
+export type PendingCoin = {
+  coin: ledger.ShieldedCoinInfo;
+  ttl: Date | undefined;
+  commitment: ledger.CoinCommitment;
+  nullifier: ledger.Nullifier;
+};
 
-export type PendingCoin = Coin<ledger.ShieldedCoinInfo>;
+export type Coin = AvailableCoin | PendingCoin;
 
 export type Balances = Record<ledger.RawTokenType, bigint>;
 
@@ -62,7 +68,8 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
       Array.filter((coin) => !pendingSpends.has(coin.nonce)),
       Array.map((coin) => ({
         coin,
-        ttl: undefined,
+        commitment: state.coinHashes[coin.nonce].commitment,
+        nullifier: state.coinHashes[coin.nonce].nullifier,
       })),
     );
   };
@@ -73,14 +80,12 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
       Array.map(([coin, ttl]) => ({
         coin,
         ttl,
+        commitment: state.coinHashes[coin.nonce].commitment,
+        nullifier: state.coinHashes[coin.nonce].nullifier,
       })),
     );
 
-  const getTotalCoins = (state: V1State): Array<PendingCoin | AvailableCoin> =>
-    pipe(
-      [...getAvailableCoins(state), ...getPendingCoins(state)],
-      Array.map(({ coin, ttl }) => ({ coin, ttl })),
-    );
+  const getTotalCoins = (state: V1State): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
 
   return {
     getAvailableBalances,

@@ -5,7 +5,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger';
-import { Array as Arr, Effect, Either, Iterable, Order, pipe, Record } from 'effect';
+import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '../../effect/index';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
@@ -19,8 +19,9 @@ import {
   makeSimulatorTransactingCapability,
   TokenTransfer,
 } from '../Transacting';
-import { ProofErasedTransaction, shieldedToken } from '../types/ledger';
+import { ProofErasedTransaction } from '../Transaction';
 import { getNonDustImbalance } from '../../test/testUtils';
+import { shieldedToken } from '../ledger';
 
 const dust = (value: number): bigint => BigInt(value * 10 ** 6);
 
@@ -45,11 +46,16 @@ const getAvailableCoins = (state: V1State): readonly ledger.QualifiedShieldedCoi
   return coinsAndBalances.getAvailableCoins(state).map((c) => c.coin);
 };
 
-type WalletEntry = {
-  keys: ledger.ZswapSecretKeys;
-  coins: ReadonlyArray<bigint | { tokenType: ledger.RawTokenType; value: bigint }>;
+type TestWallet = {
+  readonly keys: ledger.ZswapSecretKeys;
+  readonly wallet: V1State;
 };
-const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry>): Record<Names, V1State> => {
+
+type WalletEntry = {
+  readonly keys: ledger.ZswapSecretKeys;
+  readonly coins: ReadonlyArray<bigint | { tokenType: ledger.RawTokenType; value: bigint }>;
+};
+const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry>): Record<Names, TestWallet> => {
   const tx = pipe(
     Record.values(desired),
     Arr.flatMap((aWalletEntry: WalletEntry) =>
@@ -70,22 +76,24 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
 
   return pipe(
     desired,
-    Record.map((entry) => {
-      const state = new ledger.ZswapLocalState().applyTx(entry.keys, tx, 'success');
-      return V1State.init(state, entry.keys, ledger.NetworkId.Undeployed);
-    }),
+    Record.map((entry) => ({
+      keys: entry.keys,
+      wallet: V1State.initEmpty(entry.keys, ledger.NetworkId.Undeployed).applyTransaction(entry.keys, tx, {
+        type: 'success',
+      }),
+    })),
   );
 };
 
 const orderCoinByValue = Order.mapInput(Order.bigint, (coin: { value: bigint }) => coin.value);
 
 const makeOutputOffer = (args: {
-  recipient: ledger.ZswapSecretKeys | V1State;
+  recipient: ledger.ZswapSecretKeys | TestWallet;
   coin: ledger.ShieldedCoinInfo | bigint;
   segment?: 0 | 1;
 }): ledger.ZswapOffer<ledger.PreProof> => {
   const keys: ledger.ZswapSecretKeys =
-    args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.secretKeys;
+    args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.keys;
   const coinToUse =
     typeof args.coin === 'bigint' ? ledger.createShieldedCoinInfo(rawShieldedTokenType, args.coin) : args.coin;
   const output = ledger.ZswapOutput.new(coinToUse, args.segment ?? 0, keys.coinPublicKey, keys.encryptionPublicKey);
@@ -105,11 +113,11 @@ const encodeAddress = (keys: ledger.ZswapSecretKeys): string => {
 };
 
 const makeTransferOutput = (args: {
-  recipient: ledger.ZswapSecretKeys | V1State;
+  recipient: ledger.ZswapSecretKeys | TestWallet;
   coin: bigint | { tokenType: ledger.RawTokenType; value: bigint };
 }): TokenTransfer => {
   const typeAndValue = typeof args.coin == 'bigint' ? { tokenType: rawShieldedTokenType, value: args.coin } : args.coin;
-  const keys = args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.secretKeys;
+  const keys = args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.keys;
   return {
     type: typeAndValue.tokenType,
     amount: typeAndValue.value,
@@ -137,7 +145,9 @@ describe('V1 Wallet Transacting', () => {
       });
 
       return Effect.gen(function* () {
-        const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
+        const result = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []),
+        );
         const recipe = result.recipe as BalanceTransactionToProve<
           ledger.Transaction<ledger.SignatureEnabled, ledger.NoProof, ledger.NoBinding>
         >;
@@ -149,9 +159,7 @@ describe('V1 Wallet Transacting', () => {
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           proven.fees(defaultConfig.costParameters.ledgerParams),
         );
-        const BAfterApply = wallets.B.applyProofErasedTx(proven, {
-          type: 'success',
-        });
+        const BAfterApply = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
         expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([transactionValue]);
       }).pipe(Effect.runPromise);
     });
@@ -170,7 +178,9 @@ describe('V1 Wallet Transacting', () => {
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
       return Effect.gen(function* () {
-        const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
+        const result = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []),
+        );
         const recipe = result.recipe as BalanceTransactionToProve<ProofErasedTransaction>;
         const proven = yield* proving.prove(recipe);
         expect(
@@ -185,9 +195,7 @@ describe('V1 Wallet Transacting', () => {
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           proven.fees(ledger.LedgerParameters.dummyParameters()),
         );
-        const BAfterApply = wallets.B.applyProofErasedTx(proven, {
-          type: 'success',
-        });
+        const BAfterApply = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
         expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([
           transactionValueGuaranteed,
           transactionValueFallible,
@@ -207,7 +215,7 @@ describe('V1 Wallet Transacting', () => {
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
 
       expect(getAvailableCoins(result.newState).length).toBe(0);
       expect(
@@ -215,7 +223,7 @@ describe('V1 Wallet Transacting', () => {
           result.newState.state.pendingSpends.values().map(([coin]) => coin),
           orderCoinByValue,
         ),
-      ).toEqual(Arr.sort(wallets.A.state.coins, orderCoinByValue));
+      ).toEqual(Arr.sort(wallets.A.wallet.state.coins, orderCoinByValue));
     });
 
     it('watches for change coins from balancing', () => {
@@ -230,7 +238,7 @@ describe('V1 Wallet Transacting', () => {
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
 
       const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
       expect(pendingOutputs.length).toEqual(2);
@@ -254,7 +262,9 @@ describe('V1 Wallet Transacting', () => {
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, [changeCoin]));
+      const result = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, [changeCoin]),
+      );
 
       const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
       expect(pendingOutputs).toContainEqual([changeCoin, undefined]);
@@ -276,9 +286,9 @@ describe('V1 Wallet Transacting', () => {
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const result = transacting.balanceTransaction(wallets.A, tx, [changeCoin]);
+      const result = transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, [changeCoin]);
 
-      expect(() => Either.getOrThrow(result)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(result)).toThrow();
     });
 
     it('does not try to spend booked coins for balancing', () => {
@@ -293,14 +303,14 @@ describe('V1 Wallet Transacting', () => {
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
       const tx = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const result = Either.getOrThrow(transacting.balanceTransaction(wallets.A, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
       const anotherTx = pipe(makeOutputOffer({ recipient: wallets.B, coin: dust(1) }), (offer) =>
         ledger.Transaction.fromParts(offer).eraseProofs(),
       );
 
-      const secondResult = transacting.balanceTransaction(result.newState, anotherTx, []);
+      const secondResult = transacting.balanceTransaction(wallets.A.keys, result.newState, anotherTx, []);
 
-      expect(() => Either.getOrThrow(secondResult)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
   });
 
@@ -315,13 +325,13 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+          transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+            makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+          ]),
         );
         const proven = yield* proving.prove(result.recipe);
 
-        const walletBApplied = wallets.B.applyProofErasedTx(proven, {
-          type: 'success',
-        });
+        const walletBApplied = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
         expect(Array.from(walletBApplied.state.coins).map((c) => c.value)).toEqual([dust(2)]);
       }).pipe(Effect.runPromise);
     });
@@ -338,7 +348,9 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: transferValue })]),
+          transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+            makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
+          ]),
         );
         const proven = yield* proving.prove(result.recipe);
 
@@ -367,8 +379,10 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: transferValue })]),
+      const result = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
+        ]),
       );
 
       const availableCoinValues = getAvailableCoins(result.newState).map((c) => c.value);
@@ -395,11 +409,11 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = transacting.makeTransfer(wallets.A, [
+      const result = transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
         makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
       ]);
 
-      expect(() => Either.getOrThrow(result)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(result)).toThrow();
     });
 
     it('does not try to spend booked coins for a transfer', () => {
@@ -410,14 +424,16 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const result = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: transferValue })]),
+      const result = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
+        ]),
       );
-      const secondResult = transacting.makeTransfer(result.newState, [
+      const secondResult = transacting.makeTransfer(wallets.A.keys, result.newState, [
         makeTransferOutput({ recipient: wallets.B, coin: dust(1) }),
       ]);
 
-      expect(() => Either.getOrThrow(secondResult)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
   });
 
@@ -435,7 +451,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dust(1) }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dust(1) }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -473,7 +489,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [theOtherTokenType]: theOtherTokenAmount }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [theOtherTokenType]: theOtherTokenAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: dust(1),
@@ -514,7 +530,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [theOtherTokenType1]: theOtherTokenAmount1 }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [theOtherTokenType1]: theOtherTokenAmount1 }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType2, value: theOtherTokenAmount2 },
@@ -556,7 +572,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -564,13 +580,15 @@ describe('V1 Wallet Transacting', () => {
           ]),
         );
         const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
+        const balancedResult = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+        );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const aAfterApply = result.newState.applyProofErasedTx(balancedProven, {
+        const aAfterApply: V1State = result.newState.applyTransaction(wallets.A.keys, balancedProven, {
           type: 'success',
         });
-        const bAfterApply = balancedResult.newState.applyProofErasedTx(balancedProven, {
+        const bAfterApply: V1State = balancedResult.newState.applyTransaction(wallets.B.keys, balancedProven, {
           type: 'success',
         });
 
@@ -609,8 +627,8 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dust(1) }, [
+      const result = EitherOps.getOrThrowLeft(
+        transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dust(1) }, [
           makeTransferOutput({
             recipient: wallets.A,
             coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -640,8 +658,8 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
+      const result = EitherOps.getOrThrowLeft(
+        transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
           makeTransferOutput({
             recipient: wallets.A,
             coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -673,19 +691,22 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const resultA = transacting.initSwap(wallets.A, { [theOtherTokenType]: theOtherTokenAmount }, [
-        makeTransferOutput({ recipient: wallets.A, coin: dustAmount }),
-      ]);
+      const resultA = transacting.initSwap(
+        wallets.A.keys,
+        wallets.A.wallet,
+        { [theOtherTokenType]: theOtherTokenAmount },
+        [makeTransferOutput({ recipient: wallets.A, coin: dustAmount })],
+      );
 
-      const resultB = transacting.initSwap(wallets.B, { [rawShieldedTokenType]: dustAmount }, [
+      const resultB = transacting.initSwap(wallets.B.keys, wallets.B.wallet, { [rawShieldedTokenType]: dustAmount }, [
         makeTransferOutput({
           recipient: wallets.B,
           coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
         }),
       ]);
 
-      expect(() => Either.getOrThrow(resultA)).toThrow();
-      expect(() => Either.getOrThrow(resultB)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(resultA)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(resultB)).toThrow();
     });
 
     it('does not try to use booked coins for a swap', () => {
@@ -702,17 +723,24 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const firstResult = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dustAmount })]),
+      const firstResult = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: dustAmount }),
+        ]),
       );
-      const secondResult = transacting.initSwap(firstResult.newState, { [rawShieldedTokenType]: dustAmount }, [
-        makeTransferOutput({
-          recipient: wallets.A,
-          coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
-        }),
-      ]);
+      const secondResult = transacting.initSwap(
+        wallets.A.keys,
+        firstResult.newState,
+        { [rawShieldedTokenType]: dustAmount },
+        [
+          makeTransferOutput({
+            recipient: wallets.A,
+            coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
+          }),
+        ],
+      );
 
-      expect(() => Either.getOrThrow(secondResult)).toThrow();
+      expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
   });
 
@@ -727,10 +755,12 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+          transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+            makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+          ]),
         );
         const proven = yield* proving.prove(result.recipe);
-        const afterRevert: V1State = Either.getOrThrow(transacting.revert(result.newState, proven));
+        const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
 
         expect(getAvailableCoins(afterRevert).map((coin) => ({ type: coin.type, value: coin.value }))).toEqual([
           { type: rawShieldedTokenType, value: dust(3) },
@@ -749,10 +779,12 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+          transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+            makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+          ]),
         );
         const proven = yield* proving.prove(result.recipe);
-        const afterRevert: V1State = Either.getOrThrow(transacting.revert(result.newState, proven));
+        const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
 
         expect(afterRevert.state.pendingOutputs.size).toEqual(0);
       }).pipe(Effect.runPromise);
@@ -775,7 +807,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -783,11 +815,15 @@ describe('V1 Wallet Transacting', () => {
           ]),
         );
         const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
+        const balancedResult = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+        );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const afterRevertA: V1State = Either.getOrThrow(transacting.revert(result.newState, balancedProven));
-        const afterRevertB: V1State = Either.getOrThrow(transacting.revert(balancedResult.newState, balancedProven));
+        const afterRevertA: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const afterRevertB: V1State = EitherOps.getOrThrowLeft(
+          transacting.revert(balancedResult.newState, balancedProven),
+        );
 
         expect(afterRevertA.state.pendingSpends.size).toEqual(0);
         expect(afterRevertB.state.pendingSpends.size).toEqual(0);
@@ -811,7 +847,7 @@ describe('V1 Wallet Transacting', () => {
 
       return Effect.gen(function* () {
         const result = yield* EitherOps.toEffect(
-          transacting.initSwap(wallets.A, { [rawShieldedTokenType]: dustAmount }, [
+          transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
               coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
@@ -819,11 +855,15 @@ describe('V1 Wallet Transacting', () => {
           ]),
         );
         const proven: ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.B, proven, []));
+        const balancedResult = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+        );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const afterRevertA: V1State = Either.getOrThrow(transacting.revert(result.newState, balancedProven));
-        const afterRevertB: V1State = Either.getOrThrow(transacting.revert(balancedResult.newState, balancedProven));
+        const afterRevertA: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const afterRevertB: V1State = EitherOps.getOrThrowLeft(
+          transacting.revert(balancedResult.newState, balancedProven),
+        );
 
         expect(afterRevertA.state.pendingOutputs.size).toEqual(0);
         expect(afterRevertB.state.pendingOutputs.size).toEqual(0);
@@ -854,10 +894,14 @@ describe('V1 Wallet Transacting', () => {
         });
         const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-        const balanceResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.A, txToBalance, []));
+        const balanceResult = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+        );
         const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
-        const afterRevert: V1State = Either.getOrThrow(transacting.revert(balanceResult.newState, balancedProven));
+        const afterRevert: V1State = EitherOps.getOrThrowLeft(
+          transacting.revert(balanceResult.newState, balancedProven),
+        );
 
         expect(
           Arr.sort(
@@ -899,10 +943,14 @@ describe('V1 Wallet Transacting', () => {
         });
         const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-        const balanceResult = yield* EitherOps.toEffect(transacting.balanceTransaction(wallets.A, txToBalance, []));
+        const balanceResult = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+        );
         const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
-        const afterRevert: V1State = Either.getOrThrow(transacting.revert(balanceResult.newState, balancedProven));
+        const afterRevert: V1State = EitherOps.getOrThrowLeft(
+          transacting.revert(balanceResult.newState, balancedProven),
+        );
 
         expect(afterRevert.state.pendingOutputs.size).toEqual(0);
       }).pipe(Effect.runPromise);
@@ -930,9 +978,11 @@ describe('V1 Wallet Transacting', () => {
       });
       const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const balanceResult = Either.getOrThrow(transacting.balanceTransaction(wallets.A, txToBalance, []));
+      const balanceResult = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+      );
 
-      const afterRevert: V1State = Either.getOrThrow(
+      const afterRevert: V1State = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
       );
 
@@ -973,9 +1023,11 @@ describe('V1 Wallet Transacting', () => {
       });
       const txToBalance = ledger.Transaction.fromParts(guaranteedOffer, fallibleOffer).eraseProofs();
 
-      const balanceResult = Either.getOrThrow(transacting.balanceTransaction(wallets.A, txToBalance, []));
+      const balanceResult = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+      );
 
-      const afterRevert: V1State = Either.getOrThrow(
+      const afterRevert: V1State = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
       );
 
@@ -989,10 +1041,12 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+      const result = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+        ]),
       );
-      const afterRevert: V1State = Either.getOrThrow(transacting.revertRecipe(result.newState, result.recipe));
+      const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revertRecipe(result.newState, result.recipe));
 
       expect(
         afterRevert.state.coins
@@ -1010,10 +1064,12 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+      const result = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+        ]),
       );
-      const afterRevert: V1State = Either.getOrThrow(transacting.revertRecipe(result.newState, result.recipe));
+      const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revertRecipe(result.newState, result.recipe));
 
       expect(afterRevert.state.pendingOutputs.size).toEqual(0);
     });
@@ -1025,11 +1081,13 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = Either.getOrThrow(
-        transacting.makeTransfer(wallets.A, [makeTransferOutput({ recipient: wallets.B, coin: dust(2) })]),
+      const result = EitherOps.getOrThrowLeft(
+        transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+          makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
+        ]),
       );
 
-      const afterRevert: V1State = Either.getOrThrow(
+      const afterRevert: V1State = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(result.newState, {
           type: NOTHING_TO_PROVE,
           transaction: pipe(

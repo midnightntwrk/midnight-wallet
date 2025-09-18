@@ -1,4 +1,4 @@
-import { UnprovenTransaction } from './types/ledger';
+import { UnprovenTransaction } from './Transaction';
 
 export const TRANSACTION_TO_PROVE = 'TransactionToProve';
 export const BALANCE_TRANSACTION_TO_PROVE = 'BalanceTransactionToProve';

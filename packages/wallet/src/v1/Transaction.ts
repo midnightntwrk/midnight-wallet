@@ -1,7 +1,13 @@
 import { pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { TotalCostParameters, TransactionImbalances } from './TransactionImbalances';
-import { FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './types/ledger';
+import * as ledger from '@midnight-ntwrk/ledger';
+
+export type UnprovenTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>;
+// TODO: It cannot stay with PreBinding, it needs to be Binding; to be fixed with upgrade to Ledger v6
+export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+// @TODO: figure out if ledger.Signaturish is the right type
+export type ProofErasedTransaction = ledger.Transaction<ledger.Signaturish, ledger.NoProof, ledger.NoBinding>;
 
 export type TransactionTrait<Tx> = {
   getImbalancesWithFeesOverhead(tx: Tx, costParams: TotalCostParameters): TransactionImbalances;

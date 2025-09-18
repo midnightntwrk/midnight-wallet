@@ -6,7 +6,8 @@ import { makeDefaultV1SerializationCapability } from '../Serialization';
 import { Either } from 'effect';
 import { V1State } from '../RunningV1Variant';
 import { CoreWallet } from '../CoreWallet';
-import { ProofErasedTransaction } from '../types/ledger';
+import { EitherOps } from '../../effect';
+import { ProofErasedTransaction } from '../Transaction';
 import { makeFakeTx } from '../../test/genTxs';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
@@ -92,9 +93,10 @@ const walletArbitrary = (txDepth: number) => {
         },
         new ledger.ZswapLocalState(),
       );
-      const wallet = CoreWallet.empty(state, keys, networkId);
+      const wallet = CoreWallet.init(state, keys, networkId);
 
       return {
+        keys,
         transactions,
         wallet,
         networkId,
@@ -108,32 +110,32 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000002' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
-  ])('maintains serialize ◦ deserialize, including transaction history', ({ seed }) => {
+  ])('maintains serialize ◦ deserialize == id property, including transaction history', ({ seed }) => {
     const networkId = ledger.NetworkId.Undeployed;
     const capability = makeDefaultV1SerializationCapability({ networkId });
     const testTxs = Chunk.fromIterable([makeFakeTx(10n), makeFakeTx(20n), makeFakeTx(30n)]);
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
     const wallet = V1State.initEmpty(keys, networkId);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
-      const newState = wallet.applyProofErasedTx(tx as unknown as ProofErasedTransaction, { type: 'success' });
+      const newState = wallet.applyTransaction(keys, tx, { type: 'success' });
 
       return newState.updateProgress({ appliedIndex: newState.state.firstFree });
     });
 
     const firstIteration = capability.serialize(preparedWallet);
 
-    const restored = pipe(capability.deserialize(preparedWallet.secretKeys, firstIteration), Either.getOrThrow);
+    const restored = pipe(capability.deserialize(null, firstIteration), EitherOps.getOrThrowLeft);
     const secondIteration = capability.serialize(restored);
 
     expect(firstIteration).toEqual(secondIteration);
   });
-  it('maintains serialize ◦ deserialize', () => {
+  it('maintains serialize ◦ deserialize == id property', () => {
     const networkId = ledger.NetworkId.Undeployed;
     const capability = makeDefaultV1SerializationCapability({ networkId });
     fc.assert(
       fc.property(walletArbitrary(10), ({ wallet }) => {
         const firstIteration = capability.serialize(wallet);
-        const restored = pipe(capability.deserialize(wallet.secretKeys, firstIteration), Either.getOrThrow);
+        const restored = pipe(capability.deserialize(null, firstIteration), EitherOps.getOrThrowLeft);
         const secondIteration = capability.serialize(restored);
 
         //We can't meaningfully compare equality, so we compare the result of second serialization
@@ -148,13 +150,10 @@ describe('V1 Wallet serialization', () => {
   it('handles invalid JSON strings gracefully', () => {
     const networkId = ledger.NetworkId.Undeployed;
     const capability = makeDefaultV1SerializationCapability({ networkId });
-    const keys = ledger.ZswapSecretKeys.fromSeed(
-      Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
-    );
 
     fc.assert(
       fc.property(fc.string(), (invalidJson) => {
-        const result = capability.deserialize(keys, invalidJson);
+        const result = capability.deserialize(null, invalidJson);
 
         expect(Either.isLeft(result)).toBe(true);
         if (Either.isLeft(result)) {
@@ -167,13 +166,10 @@ describe('V1 Wallet serialization', () => {
   it('handles random valid JSON strings gracefully', () => {
     const networkId = ledger.NetworkId.Undeployed;
     const capability = makeDefaultV1SerializationCapability({ networkId });
-    const keys = ledger.ZswapSecretKeys.fromSeed(
-      Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
-    );
 
     fc.assert(
       fc.property(fc.json(), (randomJsonValue) => {
-        const result = capability.deserialize(keys, randomJsonValue);
+        const result = capability.deserialize(null, randomJsonValue);
 
         expect(Either.isLeft(result)).toBe(true);
         if (Either.isLeft(result)) {

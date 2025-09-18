@@ -1,5 +1,5 @@
 import { V1State } from './RunningV1Variant';
-import { FinalizedTransaction, ProofErasedTransaction } from './types/ledger';
+import { FinalizedTransaction, ProofErasedTransaction } from './Transaction';
 
 export type ProgressUpdate = {
   appliedIndex: bigint | undefined;

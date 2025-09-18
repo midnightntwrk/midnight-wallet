@@ -3,7 +3,7 @@ import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
 import { ArrayOps, EitherOps } from '../effect';
 import * as crypto from 'crypto';
-import { ProofErasedTransaction } from './types/ledger';
+import { ProofErasedTransaction } from './Transaction';
 
 export type SimulatorState = Readonly<{
   ledger: ledger.LedgerState;
@@ -99,6 +99,7 @@ export class Simulator {
         Effect.gen(function* () {
           const nextNumber = simulatorState.lastTxNumber + 1n;
           const context = yield* Simulator.nextBlockContext(nextNumber);
+
           const [newState, result] = simulatorState.ledger.apply(
             tx,
             new ledger.TransactionContext(simulatorState.ledger, context),

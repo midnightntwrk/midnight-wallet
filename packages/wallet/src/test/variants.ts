@@ -28,34 +28,37 @@ export class NumericRange
     return this.#state;
   }
 
-  start(
-    _context: Variant.VariantContext<number>,
-    state: number,
-  ): Effect.Effect<Variant.RunningVariant<typeof Numeric, number>> {
+  start(context: Variant.VariantContext<number>): Effect.Effect<Variant.RunningVariant<typeof Numeric, number>> {
     const max = this.configuration.max ?? 10;
-    this.#state = state ?? this.configuration.min ?? 0;
 
-    return Effect.succeed({
-      __polyTag__: Numeric,
-      state: Stream.fromAsyncIterable<StateChange.StateChange<number>, WalletRuntimeError>(
-        // eslint-disable-next-line @typescript-eslint/require-await
-        (async function* (self: NumericRange) {
-          for (let value = self.#state; value <= max; value++) {
-            self.#state = value;
-            yield StateChange.State({ state: value });
+    return context.stateRef.get.pipe(
+      Effect.flatMap((state) => {
+        return Effect.sync(() => {
+          this.#state = state;
+        });
+      }),
+      Effect.map(() => ({
+        __polyTag__: Numeric,
+        state: Stream.fromAsyncIterable<StateChange.StateChange<number>, WalletRuntimeError>(
+          // eslint-disable-next-line @typescript-eslint/require-await
+          (async function* (self: NumericRange) {
+            for (let value = self.#state; value <= max; value++) {
+              self.#state = value;
+              yield StateChange.State({ state: value });
 
-            if (--self.yieldCount === 0) {
-              if (self.throwError) {
-                throw new Error('NumericRange: forced break');
+              if (--self.yieldCount === 0) {
+                if (self.throwError) {
+                  throw new Error('NumericRange: forced break');
+                }
+
+                yield StateChange.VersionChange({ change: VersionChangeType.Next() });
               }
-
-              yield StateChange.VersionChange({ change: VersionChangeType.Next() });
             }
-          }
-        })(this),
-        (e) => new WalletRuntimeError({ message: 'NumericRange error', cause: e }),
-      ),
-    });
+          })(this),
+          (e) => new WalletRuntimeError({ message: 'NumericRange error', cause: e }),
+        ),
+      })),
+    );
   }
 
   migrateState(): Effect.Effect<number> {
@@ -64,8 +67,8 @@ export class NumericRange
 }
 
 export class NumericRangeBuilder implements VariantBuilder.VariantBuilder<NumericRange, RangeConfig> {
-  private yieldCount: number;
-  private throwError: boolean;
+  private readonly yieldCount: number;
+  private readonly throwError: boolean;
 
   constructor(yieldCount: number = 10, throwError: boolean = false) {
     this.throwError = throwError;
@@ -97,26 +100,31 @@ export class NumericRangeMultiplier
   }
 
   start(
-    _context: Variant.VariantContext<number>,
-    state: number,
+    context: Variant.VariantContext<number>,
   ): Effect.Effect<Variant.RunningVariant<typeof NumericMultiplier, number>> {
-    return Effect.sync(() => {
-      const max = this.configuration.max ?? 10;
-      this.#state = state ?? this.configuration.min ?? 0;
+    return context.stateRef.get.pipe(
+      Effect.flatMap((state) => {
+        return Effect.sync(() => {
+          this.#state = state;
+        });
+      }),
+      Effect.map(() => {
+        const max = this.configuration.max ?? 10;
 
-      return {
-        __polyTag__: NumericMultiplier,
-        state: Stream.fromIterable(
-          (function* (self: NumericRangeMultiplier) {
-            for (let value = self.#state; value <= max; value++) {
-              self.#state = value;
-              yield StateChange.State({ state: value * self.configuration.multiplier });
-            }
-            return Option.none();
-          })(this),
-        ),
-      };
-    });
+        return {
+          __polyTag__: NumericMultiplier,
+          state: Stream.fromIterable(
+            (function* (self: NumericRangeMultiplier) {
+              for (let value = self.#state; value <= max; value++) {
+                self.#state = value;
+                yield StateChange.State({ state: value * self.configuration.multiplier });
+              }
+              return Option.none();
+            })(this),
+          ),
+        };
+      }),
+    );
   }
 
   migrateState(state: number): Effect.Effect<number> {
@@ -148,7 +156,6 @@ export class InterceptingVariant<TTag extends string | symbol, TState>
   }
   start(
     context: Variant.VariantContext<TState>,
-    state: TState,
   ): Effect.Effect<InterceptingRunningVariant<TTag, TState>, WalletRuntimeError, Scope.Scope> {
     const tag = this.__polyTag__;
     return Effect.gen(this, function* () {
@@ -156,6 +163,7 @@ export class InterceptingVariant<TTag extends string | symbol, TState>
         capacity: 1,
         replay: 1,
       });
+      const state = yield* context.stateRef.get;
       yield* PubSub.publish(pubsub, StateChange.State({ state }));
       return {
         __polyTag__: tag,

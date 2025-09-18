@@ -34,7 +34,7 @@ export class WalletFacade {
   }
 
   async submitTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>,
+    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
   ): Promise<string> {
     const submittedTransaction = await this.shielded.submitTransaction(tx, 'Finalized');
 
@@ -42,31 +42,27 @@ export class WalletFacade {
   }
 
   async balanceTransaction(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
   ): Promise<
-    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>
+    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>>
   > {
     const unshieldedBalancedTx = await this.unshielded.balanceTransaction(tx);
 
-    return await this.shielded.balanceTransaction(unshieldedBalancedTx, []);
+    return await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedBalancedTx, []);
   }
 
   async finalizeTransaction(
-    recipe: ProvingRecipe.ProvingRecipe<
-      ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>
-    >,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>> {
-    return (await this.shielded.finalizeTransaction(recipe)) as ledger.Transaction<
-      ledger.SignatureEnabled,
-      ledger.Proof,
-      ledger.Binding
-    >;
+    recipe: ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>,
+  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> {
+    return await this.shielded.finalizeTransaction(recipe);
   }
 
   async transferTransaction(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
     outputs: CombinedTokenTransfer[],
   ): Promise<
-    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>
+    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>
   > {
     const unshieldedOutputs = outputs
       .filter((output) => output.type === 'unshielded')
@@ -86,7 +82,7 @@ export class WalletFacade {
     }
 
     if (shieldedOutputs.length > 0) {
-      shieldedTxRecipe = await this.shielded.transferTransaction(shieldedOutputs);
+      shieldedTxRecipe = await this.shielded.transferTransaction(zswapSecretKeys, shieldedOutputs);
     }
 
     // if there's a shielded tx only, return it as it's already balanced
@@ -96,40 +92,28 @@ export class WalletFacade {
 
     // if there's an unshielded tx only, pay fees (balance) with shielded wallet
     if (shieldedTxRecipe === undefined && unshieldedTx !== undefined) {
-      const result = await this.shielded.balanceTransaction(unshieldedTx, []);
-
-      if (result.type !== 'BalanceTransactionToProve') {
-        throw new Error('Unexpected transaction type.');
-      }
-
-      return {
+      const unshieldedTxFinalized = await this.shielded.finalizeTransaction({
         type: 'TransactionToProve',
-        transaction: result.transactionToBalance.merge(result.transactionToProve) as ledger.Transaction<
-          ledger.SignatureEnabled,
-          ledger.PreProof,
-          ledger.PreBinding
-        >,
-      };
+        transaction: unshieldedTx,
+      });
+      return await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedTxFinalized, []);
     }
 
     // if there's a shielded and unshielded tx, pay fees for unshielded and merge them
     if (shieldedTxRecipe !== undefined && unshieldedTx !== undefined) {
-      const balancedShieldedTx = await this.shielded.balanceTransaction(unshieldedTx, []);
-
-      if (balancedShieldedTx.type !== 'TransactionToProve' || shieldedTxRecipe.type !== 'TransactionToProve') {
+      if (shieldedTxRecipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type.');
       }
+      const txToBalance = shieldedTxRecipe.transaction.merge(unshieldedTx);
 
-      return {
-        type: 'TransactionToProve',
-        transaction: balancedShieldedTx.transaction.merge(shieldedTxRecipe.transaction),
-      };
+      return await this.shielded.balanceTransaction(zswapSecretKeys, txToBalance, []);
     }
 
     throw Error('Unexpected transaction state.');
   }
 
-  start(): void {
+  async start(zswapSecretKeys: ledger.ZswapSecretKeys): Promise<void> {
+    await this.shielded.start(zswapSecretKeys);
     this.unshielded.start();
   }
 

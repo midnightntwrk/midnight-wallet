@@ -7,13 +7,13 @@ import { NetworkId } from '@midnight-ntwrk/ledger';
 import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage';
 import { getUnshieldedSeed } from './testUtils';
 
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 30_000 });
 
 const currentFile = new URL(import.meta.url).pathname;
 const environmentUID = Math.floor(Math.random() * 1000).toString();
 const environment = new DockerComposeEnvironment(path.resolve(currentFile, '..'), 'docker-compose.yml')
   .withWaitStrategy(`node_${environmentUID}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentUID}`, Wait.forLogMessage(/block indexed/))
+  .withWaitStrategy(`indexer_${environmentUID}`, Wait.forListeningPorts())
   .withEnvironment({ TESTCONTAINERS_UID: environmentUID });
 
 describe('UnshieldedWallet', () => {

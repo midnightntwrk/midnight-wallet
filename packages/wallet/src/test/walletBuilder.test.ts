@@ -91,11 +91,14 @@ describe('Wallet Builder', () => {
       build: () => {
         return {
           __polyTag__: 'pubsub',
-          start(_context, state: number) {
-            return Stream.unfold(state, (previous: number) => {
-              const next = previous + 1;
-              return Option.some([next, next] as const);
-            }).pipe(
+          start(context) {
+            return Stream.fromEffect(context.stateRef.get).pipe(
+              Stream.flatMap((state) => {
+                return Stream.unfold(state, (previous: number) => {
+                  const next = previous + 1;
+                  return Option.some([next, next] as const);
+                });
+              }),
               Stream.mapEffect((value) => PubSub.publish(pubsub, value).pipe(Effect.delay(1))),
               Stream.takeUntilEffect(() => PubSub.isShutdown(pubsub)),
               Stream.runDrain,

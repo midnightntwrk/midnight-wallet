@@ -4,7 +4,7 @@ import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe';
 import { ProvingError, WalletError } from './WalletError';
-import { UnprovenTransaction, ProofErasedTransaction, FinalizedTransaction } from './types/ledger';
+import { UnprovenTransaction, ProofErasedTransaction, FinalizedTransaction } from './Transaction';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;
@@ -23,13 +23,13 @@ export const httpProveTx = (
     const client = yield* ProverClient.ProverClient;
     const unprovenSerialized = SerializedUnprovenTransaction(unproven.serialize(networkId));
     const provenSerialized = yield* client.proveTransaction(unprovenSerialized);
-    return ledger.Transaction.deserialize(
+    return ledger.Transaction.deserialize<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>(
       'signature',
       'proof',
       'pre-binding',
       provenSerialized,
       networkId,
-    ) as FinalizedTransaction; // @TODO double check the cast is correct
+    );
   }).pipe(Effect.mapError((err) => WalletError.proving(err)));
 };
 

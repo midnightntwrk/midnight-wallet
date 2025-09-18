@@ -16,19 +16,22 @@ const coinArbitrary = fc.record({
   tokenType: tokenTypeArbitrary,
 });
 
-const toAvailableCoin = (c: ShieldedTokenType, _secretKeys: ledger.ZswapSecretKeys): AvailableCoin => {
+const toAvailableCoin = (c: ShieldedTokenType, secretKeys: ledger.ZswapSecretKeys): AvailableCoin => {
   const coin = ledger.createShieldedCoinInfo(c.tokenType.raw, BigInt(c.value));
   return {
     coin: { ...coin, mt_index: 0n },
-    ttl: undefined,
+    commitment: ledger.coin_commitment(coin, secretKeys.coinPublicKey),
+    nullifier: ledger.coinNullifier(coin, secretKeys.coinSecretKey),
   };
 };
 
-const toPendingCoin = (c: ShieldedTokenType, _secretKeys: ledger.ZswapSecretKeys): PendingCoin => {
+const toPendingCoin = (c: ShieldedTokenType, secretKeys: ledger.ZswapSecretKeys): PendingCoin => {
   const coin = ledger.createShieldedCoinInfo(c.tokenType.raw, BigInt(c.value));
   return {
     coin,
-    ttl: undefined,
+    ttl: new Date(0),
+    commitment: ledger.coin_commitment(coin, secretKeys.coinPublicKey),
+    nullifier: ledger.coinNullifier(coin, secretKeys.coinSecretKey),
   };
 };
 
@@ -102,7 +105,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const localState = createInitialState(secretKeys, setupAvailableCoins);
-        const state = CoreWallet.empty(localState, secretKeys, networkId);
+        const state = CoreWallet.init(localState, secretKeys, networkId);
         const pendingBalances = capability.getPendingBalances(state);
         const availableBalances = capability.getAvailableBalances(state);
         const totalBalances = capability.getTotalBalances(state);
@@ -141,7 +144,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
 
         let localState = createInitialState(secretKeys, setupAvailableCoins);
         localState = applyPendingCoinValues(localState, secretKeys, setupPendingCoins);
-        const state = CoreWallet.empty(localState, secretKeys, networkId);
+        const state = CoreWallet.init(localState, secretKeys, networkId);
         const availableBalances = capability.getAvailableBalances(state);
         const pendingBalances = capability.getPendingBalances(state);
         const totalBalances = capability.getTotalBalances(state);
@@ -217,11 +220,11 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const initialState = createInitialState(secretKeys, setupAvailableCoins);
 
         // Get initial balances before spending
-        const stateBeforeSpends = CoreWallet.empty(initialState, secretKeys, networkId);
+        const stateBeforeSpends = CoreWallet.init(initialState, secretKeys, networkId);
         const initialAvailableBalances = capability.getAvailableBalances(stateBeforeSpends);
 
         const localState = issueSpendingOfCoins(initialState, secretKeys, spends);
-        const state = CoreWallet.empty(localState, secretKeys, networkId);
+        const state = CoreWallet.init(localState, secretKeys, networkId);
         const pendingBalances = capability.getPendingBalances(state);
         const availableBalances = capability.getAvailableBalances(state);
         const totalBalances = capability.getTotalBalances(state);

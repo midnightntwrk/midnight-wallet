@@ -1,4 +1,4 @@
-import { Effect, Either } from 'effect';
+import { Effect, Either, Data } from 'effect';
 import { dual } from 'effect/Function';
 
 export const toEffect = <L, R>(either: Either.Either<R, L>): Effect.Effect<R, L> => {
@@ -17,3 +17,18 @@ export const flatMapLeft: {
     onLeft: cb,
   });
 });
+
+export class LeftError<L> extends Data.TaggedError('LeftError')<{ message: string; cause: L }> {
+  constructor({ cause }: { cause: L }) {
+    super({ message: 'Unexpected left value', cause });
+  }
+}
+
+export const getOrThrowLeft = <L, R>(either: Either.Either<R, L>): R => {
+  return Either.match(either, {
+    onRight: (r) => r,
+    onLeft: (l) => {
+      throw new LeftError({ cause: l });
+    },
+  });
+};

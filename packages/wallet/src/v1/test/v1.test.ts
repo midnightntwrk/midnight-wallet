@@ -12,7 +12,7 @@ import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { makeDefaultKeysCapability } from '../Keys';
 import { V1State } from '../RunningV1Variant';
 import { CoreWallet } from '../CoreWallet';
-import { FinalizedTransaction } from '../types/ledger';
+import { FinalizedTransaction } from '../Transaction';
 import { makeFakeTx } from '../../test/genTxs';
 
 describe('V1 Variant', () => {
@@ -43,13 +43,11 @@ describe('V1 Variant', () => {
             ledgerParams: ledger.LedgerParameters.dummyParameters(),
           },
         });
-      const initialState = V1State.initEmpty(
-        ledger.ZswapSecretKeys.fromSeed(
-          WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
-        ),
-        ledger.NetworkId.Undeployed,
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(
+        WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
       );
-      yield* variant.start({ stateRef: yield* SubscriptionRef.make(initialState) }, initialState);
+      const initialState = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
+      yield* variant.start({ stateRef: yield* SubscriptionRef.make(initialState) });
       return fakeSubmission.wasClosedRef;
     }).pipe(
       Effect.scoped,
@@ -108,15 +106,12 @@ describe('V1 Variant', () => {
         .withSubmission(() => failingSubmission)
         .withTransacting(() => transacting)
         .build(config);
-      const initialState = CoreWallet.empty(
-        new ledger.ZswapLocalState(),
-        ledger.ZswapSecretKeys.fromSeed(
-          WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
-        ),
-        ledger.NetworkId.Undeployed,
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(
+        WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
       );
+      const initialState = CoreWallet.empty(new ledger.ZswapLocalState(), secretKeys, ledger.NetworkId.Undeployed);
       const stateRef = yield* SubscriptionRef.make(initialState);
-      const running = yield* variant.start({ stateRef: stateRef }, initialState);
+      const running = yield* variant.start({ stateRef: stateRef });
       const submissionResult = yield* running.submitTransaction(theTransaction).pipe(Effect.either);
       const lastState = yield* SubscriptionRef.get(stateRef);
 

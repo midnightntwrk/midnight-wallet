@@ -62,7 +62,11 @@ export const initHead = <Variants extends Variant.AnyVersionedVariantArray>(
   initArgs: InitRuntimeHeadArgs<Variants>,
 ): Effect.Effect<Runtime<Variants>, WalletRuntimeError, Scope.Scope> => {
   const headVariant: HList.Head<Variants> = HList.head(initArgs.variants);
-  return init({ variants: initArgs.variants, tag: Poly.getTag(headVariant.variant), state: initArgs.state });
+  return init({
+    variants: initArgs.variants,
+    tag: Poly.getTag(headVariant.variant),
+    state: initArgs.state,
+  });
 };
 
 export type InitRuntimeArgs<Variants extends Variant.AnyVersionedVariantArray, InitTag extends string | symbol> = {
@@ -91,7 +95,6 @@ export const init = <Variants extends Variant.AnyVersionedVariantArray, InitTag 
         Effect.gen(function* () {
           // This is needed to properly close variant scope when whole runtime closes
           // Otherwise variant would be running in the background
-          // TODO: For somewhat unclear reason the existing test case does not cover this scenario
           const runningVariant = yield* SynchronizedRef.get(ref);
           yield* Scope.close(runningVariant.variantScope, exit);
         }),
@@ -181,6 +184,7 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
     return yield* initHeadVariant({
       variants: theRest as Variants,
       state: init.state as unknown as Variant.StateOf<HList.Head<Variants>>,
+      initProtocolVersion: undefined,
     });
   });
 };
@@ -188,7 +192,7 @@ const initVariant = <Variants extends Variant.AnyVersionedVariantArray, TTag ext
 type InitHeadArgs<Variants extends Variant.AnyVersionedVariantArray> = {
   variants: Variants;
   state: Variant.StateOf<HList.Head<Variants>>;
-  initProtocolVersion?: ProtocolVersion.ProtocolVersion | undefined;
+  initProtocolVersion: ProtocolVersion.ProtocolVersion | undefined;
 };
 // Following pattern from `initVariant` for consistency
 const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
@@ -210,7 +214,7 @@ const initHeadVariant = <Variants extends Variant.AnyVersionedVariantArray>(
     const stateRef = yield* SubscriptionRef.make(init.state);
     const variantScope = yield* Scope.make();
     const runningVariant = yield* headVersionedVariant.variant
-      .start({ stateRef }, init.state)
+      .start({ stateRef })
       .pipe(Effect.provideService(Scope.Scope, variantScope)) as Effect.Effect<
       Variant.RunningVariantOf<HList.Head<Variants>>,
       WalletRuntimeError

@@ -2,8 +2,9 @@ import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect } from 'effect';
 import { makeSimulatorProvingService } from '../Proving';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe';
-import { ProofErasedTransaction, shieldedToken } from '../types/ledger';
+import { ProofErasedTransaction } from '../Transaction';
 import { getNonDustImbalance } from '../../test/testUtils';
+import { shieldedToken } from '../ledger';
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);

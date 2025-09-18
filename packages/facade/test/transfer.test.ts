@@ -88,8 +88,8 @@ describe('Wallet Facade Transfer', () => {
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender);
     receiverFacade = new WalletFacade(shieldedReceiver, unshieldedReceiver);
 
-    senderFacade.start();
-    receiverFacade.start();
+    await senderFacade.start(ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed));
+    await receiverFacade.start(ledger.ZswapSecretKeys.fromSeed(shieldedReceiverSeed));
   });
 
   afterEach(async () => {
@@ -109,7 +109,7 @@ describe('Wallet Facade Transfer', () => {
       .encode(ledger.NetworkId.Undeployed, receiverState.shielded.address)
       .asString();
 
-    const transfer = await senderFacade.transferTransaction([
+    const transfer = await senderFacade.transferTransaction(ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed), [
       {
         type: 'shielded',
         outputs: [
@@ -164,7 +164,10 @@ describe('Wallet Facade Transfer', () => {
         ),
     );
 
-    const recipe = await senderFacade.transferTransaction(tokenTransfer);
+    const recipe = await senderFacade.transferTransaction(
+      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+      tokenTransfer,
+    );
 
     const finalizedTx = await senderFacade.finalizeTransaction(recipe);
 

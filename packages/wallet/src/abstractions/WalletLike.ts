@@ -52,16 +52,6 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   readonly rawState: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
 
   /**
-   * Returns an indicator whether the underlying state of the wallet is fully synchronized.
-   *
-   * @remarks
-   * This property is `true` when the lag is zero, indicating that the wall has processed all
-   * updates; otherwise it is `false`. This indicator changes as lag processing the underlying state changes
-   * over time.
-   */
-  readonly syncComplete: boolean;
-
-  /**
    * Stops the wallet
    */
   stop(): Promise<void>;

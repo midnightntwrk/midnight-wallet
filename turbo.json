@@ -23,6 +23,7 @@
         "$TURBO_ROOT$/tsconfig.base.json",
         "vitest.config.mjs"
       ],
+      "env": ["DEBUG"],
       "outputLogs": "new-only",
       "dependsOn": ["typecheck", "^dist"]
     },

@@ -87,6 +87,8 @@ describe('Wallet transacting', () => {
 
   let Wallet: WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>], DefaultV1Configuration>;
   type Wallet = WalletLike.WalletOf<typeof Wallet>;
+  let walletKeys: ledger.ZswapSecretKeys;
+  let wallet2Keys: ledger.ZswapSecretKeys;
   let wallet: Wallet;
   let wallet2: Wallet;
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<V1State>;
@@ -131,25 +133,23 @@ describe('Wallet transacting', () => {
     return balanceAfter - balanceBefore;
   };
 
-  beforeEach(() => {
+  beforeEach(async () => {
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
     coinsAndBalances = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     keys = Wallet.allVariantsRecord()[V1Tag].variant.keys;
-    const shieldedSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001');
-
-    wallet = Wallet.startFirst(
-      Wallet,
-      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), Wallet.configuration.networkId),
+    walletKeys = ledger.ZswapSecretKeys.fromSeed(
+      getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     );
-
-    const shieldedSeed2 = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-
-    wallet2 = Wallet.startFirst(
-      Wallet,
-      V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(shieldedSeed2), Wallet.configuration.networkId),
+    wallet = Wallet.startFirst(Wallet, V1State.initEmpty(walletKeys, Wallet.configuration.networkId));
+    wallet2Keys = ledger.ZswapSecretKeys.fromSeed(
+      getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002'),
     );
+    wallet2 = Wallet.startFirst(Wallet, V1State.initEmpty(wallet2Keys, Wallet.configuration.networkId));
+
+    await wallet.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
+    await wallet2.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(wallet2Keys) }).pipe(Effect.runPromise);
   });
 
   afterEach(async () => {
@@ -186,7 +186,7 @@ describe('Wallet transacting', () => {
               receiverAddress: getShieldedAddress(receiverAddress),
             };
           });
-          return v1.transferTransaction(transferOutputs).pipe(
+          return v1.transferTransaction(walletKeys, transferOutputs).pipe(
             Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
             Effect.flatMap((tx) =>
               Effect.all({
@@ -226,7 +226,7 @@ describe('Wallet transacting', () => {
       .dispatch({
         [V1Tag]: (v1) =>
           v1
-            .transferTransaction([
+            .transferTransaction(walletKeys, [
               {
                 type: (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw,
                 amount: 42n,
@@ -263,7 +263,7 @@ describe('Wallet transacting', () => {
       .dispatch({
         [V1Tag]: (v1) =>
           pipe(
-            v1.initSwap(swapParams.inputs, swapParams.outputs),
+            v1.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
             Effect.andThen((recipe) => v1.finalizeTransaction(recipe)),
           ),
       })
@@ -272,7 +272,7 @@ describe('Wallet transacting', () => {
           return wallet2.runtime.dispatch({
             [V1Tag]: (v1) =>
               pipe(
-                v1.balanceTransaction(tx, []),
+                v1.balanceTransaction(wallet2Keys, tx, []),
                 Effect.andThen((recipe) => v1.finalizeTransaction(recipe)),
                 Effect.tap((tx) => v1.submitTransaction(tx, 'Finalized')),
               ),

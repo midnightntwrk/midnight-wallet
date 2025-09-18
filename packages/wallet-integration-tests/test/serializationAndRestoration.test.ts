@@ -8,7 +8,7 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testc
 import { afterAll, beforeAll, describe, it, vi } from 'vitest';
 import { getShieldedSeed } from './utils';
 
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
@@ -48,20 +48,21 @@ describe('Wallet serialization and restoration', () => {
   });
 
   let Wallet: ShieldedWalletClass;
-
-  beforeAll(() => {
-    Wallet = ShieldedWallet(configuration!);
+  beforeEach(() => {
+    Wallet = ShieldedWallet(configuration);
   });
 
   it('allows to restore an non-empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
     const wallet = Wallet.startWithShieldedSeed(seed);
+    await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
       const originalBalances = syncedState.balances;
 
       const serializedState = await wallet.serializeState();
-      const restored = Wallet.restore(seed, serializedState);
+      const restored = Wallet.restore(serializedState);
+      await restored.start(ledger.ZswapSecretKeys.fromSeed(seed));
       try {
         const state = await restored.waitForSyncedState();
         const restoredBalances = state.balances;
@@ -79,13 +80,14 @@ describe('Wallet serialization and restoration', () => {
   it('allows to restore an empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
     const wallet = Wallet.startWithShieldedSeed(seed);
-
+    await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
       const originalBalances = syncedState.balances;
 
       const serializedState = await wallet.serializeState();
-      const restored = Wallet.restore(seed, serializedState);
+      const restored = Wallet.restore(serializedState);
+      await restored.start(ledger.ZswapSecretKeys.fromSeed(seed));
       try {
         const state = await restored.waitForSyncedState();
         const restoredBalances = state.balances;

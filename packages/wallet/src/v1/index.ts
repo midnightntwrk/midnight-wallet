@@ -11,3 +11,5 @@ export * from './RunningV1Variant';
 export * as Simulator from './Simulator';
 export * as Submission from './Submission';
 export * as WalletError from './WalletError';
+export * from './CoreWallet';
+export * from './Transaction';
