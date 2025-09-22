@@ -41,6 +41,7 @@ export class DeserializationError extends Data.TaggedError('DeserializationError
 
 export class TransactionServiceError extends Data.TaggedError('TransactionServiceError')<{
   readonly error?: unknown;
+  readonly cause?: unknown;
 }> {}
 
 export interface TransactionServiceLive {
@@ -96,8 +97,9 @@ const ledgerTry = <A>(fn: () => A): Either.Either<A, TransactionServiceError> =>
   return Either.try({
     try: fn,
     catch: (error) => {
+      console.error(error);
       const message = error instanceof Error ? error.message : `${error?.toString()}`;
-      return new TransactionServiceError({ error: `Error from ledger: ${message}` });
+      return new TransactionServiceError({ error: `Error from ledger: ${message}`, cause: error });
     },
   });
 };

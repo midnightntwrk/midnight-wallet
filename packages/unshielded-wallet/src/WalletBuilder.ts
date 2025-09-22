@@ -1,10 +1,10 @@
-import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either } from 'effect';
+import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either, Scope } from 'effect';
 import { UnshieldedStateDecoder, UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { SyncService, UnshieldedUpdate } from './SyncService';
 import { TransactionService, TokenTransfer } from './TransactionService';
 import { fromStream } from './Observable';
-import { createKeystore } from './KeyStore';
+import { PublicKey } from './KeyStore';
 import { TransactionHistoryChange, TransactionHistoryService } from './TransactionHistoryService';
 import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage';
 import { State, StateImpl } from './State';
@@ -13,14 +13,14 @@ import { Observable } from 'rxjs';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 interface WalletConfig {
-  seed: Uint8Array<ArrayBufferLike>;
+  publicKey: PublicKey;
   networkId: ledger.NetworkId;
   indexerUrl: string;
   txHistoryStorage?: TransactionHistoryStorage | undefined;
 }
 
 export interface UnshieldedWallet {
-  start(): void;
+  start(): Promise<void>;
   stop(): Promise<void>;
   serializeState(): Promise<string>;
   state: () => Observable<State>;
@@ -32,6 +32,7 @@ export interface UnshieldedWallet {
   ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>>;
   signTransaction(
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
+    signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
   ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>;
   transactionHistory:
     | undefined
@@ -46,17 +47,26 @@ interface RestorableWalletConfig extends WalletConfig {
   serializedState: string;
 }
 
-type MakeWalletConfig = Pick<WalletConfig, 'seed' | 'networkId' | 'txHistoryStorage'>;
+type MakeWalletConfig = Pick<WalletConfig, 'publicKey' | 'networkId' | 'txHistoryStorage'>;
 
-const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
+const makeWallet = ({
+  publicKey,
+  networkId,
+  txHistoryStorage,
+}: MakeWalletConfig): Effect.Effect<
+  UnshieldedWallet,
+  never,
+  SyncService | TransactionHistoryService | UnshieldedStateService | TransactionService
+> =>
   Effect.gen(function* () {
     const syncService = yield* SyncService;
     const transactionHistoryService = yield* TransactionHistoryService;
     const unshieldedState = yield* UnshieldedStateService;
     const transactionService = yield* TransactionService;
+
+    // TODO: Scope would be a preferred way to handle controlled stop
     const stopLatch = yield* Deferred.make<void>();
-    const keyStore = createKeystore(seed, networkId);
-    const bech32mAddress = keyStore.getBech32Address();
+    const bech32mAddress = UnshieldedAddress.codec.encode(networkId, publicKey.address);
 
     const state = new StateImpl(unshieldedState, bech32mAddress.asString());
 
@@ -92,7 +102,8 @@ const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
           syncService.startSync(bech32mAddress.asString(), latestState.syncProgress?.highestTransactionId ?? 0),
           Stream.tapError((error) =>
             Effect.gen(function* () {
-              yield* Effect.logError(error);
+              // eslint-disable-next-line no-console
+              yield* Effect.sync(() => console.error(error));
               yield* Deferred.die(stopLatch, error);
             }),
           ),
@@ -100,13 +111,10 @@ const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
           Effect.fork,
         );
 
-        yield* Deferred.await(stopLatch).pipe(Effect.tap(() => Fiber.interrupt(fiber)));
+        yield* Deferred.await(stopLatch).pipe(Effect.andThen(Fiber.interrupt(fiber)));
       });
 
-    const stop = () =>
-      Effect.gen(function* () {
-        yield* Deferred.succeed(stopLatch, undefined);
-      });
+    const stop = () => Deferred.succeed(stopLatch, undefined).pipe(Effect.asVoid);
 
     const transferTransaction = (outputs: TokenTransfer[]) =>
       Effect.gen(function* () {
@@ -125,20 +133,27 @@ const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
         // TODO: make it configurable
         const ttl = new Date(Date.now() + latestState.syncProgress.highestTransactionId + 60 * 3600);
         const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl);
-        const ledgerAddress = keyStore.getAddress();
-        const publicKey = keyStore.getPublicKey();
 
-        return yield* transactionService.balanceTransaction(transaction, unshieldedState, ledgerAddress, publicKey);
+        return yield* transactionService.balanceTransaction(
+          transaction,
+          unshieldedState,
+          publicKey.address.hexStringVersioned,
+          publicKey.publicKey,
+        );
       });
 
     const balanceTransaction = (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>) =>
-      Effect.gen(function* () {
-        const myAddress = keyStore.getAddress();
-        const publicKey = keyStore.getPublicKey();
-        return yield* transactionService.balanceTransaction(tx, unshieldedState, myAddress, publicKey);
-      });
+      transactionService.balanceTransaction(
+        tx,
+        unshieldedState,
+        publicKey.address.hexStringVersioned,
+        publicKey.publicKey,
+      );
 
-    const signTransaction = (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>) =>
+    const signTransaction = (
+      tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
+      signSegment: (data: Uint8Array) => Effect.Effect<ledger.Signature, Error>,
+    ) =>
       Effect.gen(function* () {
         const segments = transactionService.getSegments(tx);
         if (!segments.length) {
@@ -147,7 +162,7 @@ const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
 
         for (const segment of segments) {
           const data = yield* transactionService.getOfferSignatureData(tx, segment);
-          const signature = keyStore.signData(data);
+          const signature = yield* signSegment(data);
           tx = yield* transactionService.addOfferSignature(tx, signature, segment);
         }
 
@@ -162,24 +177,31 @@ const makeWallet = ({ seed, networkId, txHistoryStorage }: MakeWalletConfig) =>
         }
       : undefined;
 
-    return {
+    const result: UnshieldedWallet = {
       state: () => fromStream(state.updates()),
       start: () => {
-        void Effect.runPromise(Effect.scoped(start()));
+        return new Promise((resolve) => {
+          Effect.runFork(Effect.scoped(start()));
+          resolve(void 0);
+        });
       },
       stop: () => Effect.runPromise(stop()),
       transferTransaction: (outputs: TokenTransfer[]) => Effect.runPromise(transferTransaction(outputs)),
       balanceTransaction: (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>) =>
         Effect.runPromise(balanceTransaction(tx)),
-      signTransaction: (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>) =>
-        Effect.runPromise(signTransaction(tx)),
+      signTransaction: (
+        tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
+        signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
+      ) => Effect.runPromise(signTransaction(tx, (data) => Effect.tryPromise(() => signSegment(data)))),
       serializeState: () => Effect.runPromise(state.serialize()),
       transactionHistory,
     };
+
+    return result;
   });
 
 export class WalletBuilder {
-  static async build({ seed, networkId, indexerUrl, txHistoryStorage }: WalletConfig): Promise<UnshieldedWallet> {
+  static async build({ publicKey, networkId, indexerUrl, txHistoryStorage }: WalletConfig): Promise<UnshieldedWallet> {
     const txHistoryService = TransactionHistoryService.Live(
       txHistoryStorage ? txHistoryStorage : new NoOpTransactionHistoryStorage(),
     );
@@ -191,7 +213,7 @@ export class WalletBuilder {
       txHistoryService,
     );
 
-    const walletService = makeWallet({ seed, networkId, txHistoryStorage });
+    const walletService = makeWallet({ publicKey, networkId, txHistoryStorage });
 
     const wallet = walletService.pipe(Effect.provide(layers));
 
@@ -199,7 +221,7 @@ export class WalletBuilder {
   }
 
   static async restore({
-    seed,
+    publicKey,
     networkId,
     indexerUrl,
     serializedState,
@@ -224,7 +246,7 @@ export class WalletBuilder {
       txHistoryService,
     );
 
-    const walletService = makeWallet({ seed, networkId, txHistoryStorage });
+    const walletService = makeWallet({ publicKey, networkId, txHistoryStorage });
 
     const wallet = walletService.pipe(Effect.provide(layer));
 

@@ -8,6 +8,25 @@ import {
   UserAddress,
   signatureVerifyingKey,
 } from '@midnight-ntwrk/ledger';
+import { pipe } from 'effect';
+
+export type PublicKey = {
+  publicKey: SignatureVerifyingKey;
+  address: UnshieldedAddress;
+};
+export const PublicKey = {
+  fromKeyStore: (keystore: UnshieldedKeystore): PublicKey => {
+    return {
+      publicKey: keystore.getPublicKey(),
+      address: pipe(
+        keystore.getAddress(false),
+        (str) => Buffer.from(str, 'hex'),
+        (bytes) => new UnshieldedAddress(bytes),
+      ),
+    };
+  },
+};
+
 export interface UnshieldedKeystore {
   getSecretKey(): Buffer;
   getBech32Address(): MidnightBech32m;

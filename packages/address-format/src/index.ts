@@ -1,4 +1,4 @@
-import { NetworkId, EncryptionSecretKey } from '@midnight-ntwrk/ledger';
+import { NetworkId, EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger';
 import { bech32m } from '@scure/base';
 
 export type FormatContext = {
@@ -105,7 +105,7 @@ export class Bech32mCodec<T> {
 }
 
 export class ShieldedAddress {
-  static codec = new Bech32mCodec<ShieldedAddress>(
+  static readonly codec = new Bech32mCodec<ShieldedAddress>(
     'shield-addr',
     (addr) => Buffer.concat([addr.coinPublicKey.data, addr.encryptionPublicKey.data]),
     (bytes) => {
@@ -133,7 +133,7 @@ export class ShieldedAddress {
 }
 
 export class ShieldedEncryptionSecretKey {
-  static codec = new Bech32mCodec<ShieldedEncryptionSecretKey>(
+  static readonly codec = new Bech32mCodec<ShieldedEncryptionSecretKey>(
     'shield-esk',
     (esk) => Buffer.from(esk.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(NetworkId.Undeployed)),
     (repr) => new ShieldedEncryptionSecretKey(EncryptionSecretKey.deserialize(repr, NetworkId.Undeployed)),
@@ -151,7 +151,7 @@ export class ShieldedEncryptionSecretKey {
 export class ShieldedCoinPublicKey {
   static readonly keyLength = 32;
 
-  static codec: Bech32mCodec<ShieldedCoinPublicKey> = new Bech32mCodec(
+  static readonly codec: Bech32mCodec<ShieldedCoinPublicKey> = new Bech32mCodec(
     'shield-cpk',
     (cpk) => cpk.data,
     (repr) => new ShieldedCoinPublicKey(repr),
@@ -184,7 +184,7 @@ export class ShieldedCoinPublicKey {
 export class ShieldedEncryptionPublicKey {
   static readonly keyLength = 32;
 
-  static codec: Bech32mCodec<ShieldedEncryptionPublicKey> = new Bech32mCodec(
+  static readonly codec: Bech32mCodec<ShieldedEncryptionPublicKey> = new Bech32mCodec(
     'shield-epk',
     (cpk) => cpk.data,
     (repr) => new ShieldedEncryptionPublicKey(repr),
@@ -215,7 +215,7 @@ export class ShieldedEncryptionPublicKey {
 export class UnshieldedAddress {
   readonly data: Buffer;
   static readonly keyLength = 32;
-  static codec: Bech32mCodec<UnshieldedAddress> = new Bech32mCodec(
+  static readonly codec: Bech32mCodec<UnshieldedAddress> = new Bech32mCodec(
     'addr',
     (addr) => addr.data,
     (repr) => new UnshieldedAddress(repr),
@@ -227,5 +227,13 @@ export class UnshieldedAddress {
     }
 
     this.data = data;
+  }
+
+  get hexString(): UserAddress {
+    return this.data.toString('hex');
+  }
+
+  get hexStringVersioned(): UserAddress {
+    return `0200${this.data.toString('hex')}`;
   }
 }

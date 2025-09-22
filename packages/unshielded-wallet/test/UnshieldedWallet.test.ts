@@ -6,6 +6,7 @@ import { WalletBuilder } from '../src';
 import { NetworkId } from '@midnight-ntwrk/ledger';
 import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage';
 import { getUnshieldedSeed } from './testUtils';
+import { createKeystore, PublicKey } from '../src/KeyStore';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 30_000 });
 
@@ -28,15 +29,16 @@ describe('UnshieldedWallet', () => {
 
   it('should build', async () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage();
+    const keystore = createKeystore(unshieldedSeed, NetworkId.Undeployed);
 
     const wallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
       txHistoryStorage,
     });
 
-    wallet.start();
+    await wallet.start();
 
     const state = await firstValueFrom(
       wallet
@@ -58,15 +60,16 @@ describe('UnshieldedWallet', () => {
 
   it('should restore from serialized state', async () => {
     const txHistoryStorage = new InMemoryTransactionHistoryStorage();
+    const keystore = createKeystore(unshieldedSeed, NetworkId.Undeployed);
 
     const initialWallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
       txHistoryStorage,
     });
 
-    initialWallet.start();
+    await initialWallet.start();
 
     const initialState = await firstValueFrom(
       initialWallet
@@ -91,7 +94,7 @@ describe('UnshieldedWallet', () => {
 
     const restoredWallet = await WalletBuilder.restore({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
       serializedState,
       txHistoryStorage: restoredTxHistoryStorage,
@@ -110,13 +113,14 @@ describe('UnshieldedWallet', () => {
   });
 
   it('should instantiate without transaction history service', async () => {
+    const keystore = createKeystore(unshieldedSeed, NetworkId.Undeployed);
     const wallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
     });
 
-    wallet.start();
+    await wallet.start();
 
     await firstValueFrom(
       wallet
@@ -133,13 +137,14 @@ describe('UnshieldedWallet', () => {
   });
 
   it('should restore from serialized state', async () => {
+    const keystore = createKeystore(unshieldedSeed, NetworkId.Undeployed);
     const initialWallet = await WalletBuilder.build({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
     });
 
-    initialWallet.start();
+    await initialWallet.start();
 
     const initialState = await firstValueFrom(
       initialWallet
@@ -160,7 +165,7 @@ describe('UnshieldedWallet', () => {
 
     const restoredWallet = await WalletBuilder.restore({
       indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
-      seed: unshieldedSeed,
+      publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.Undeployed,
       serializedState,
     });

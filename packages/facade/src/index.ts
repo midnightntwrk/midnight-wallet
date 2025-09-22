@@ -1,4 +1,4 @@
-import { map, Observable, zip } from 'rxjs';
+import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -28,7 +28,7 @@ export class WalletFacade {
     shielded: ShieldedWalletState;
     unshielded: UnshieldedWalletState;
   }> {
-    return zip(this.shielded.state, this.unshielded.state()).pipe(
+    return combineLatest([this.shielded.state, this.unshielded.state()]).pipe(
       map(([shieldedState, unshieldedState]) => ({ shielded: shieldedState, unshielded: unshieldedState })),
     );
   }
@@ -113,12 +113,11 @@ export class WalletFacade {
   }
 
   async start(zswapSecretKeys: ledger.ZswapSecretKeys): Promise<void> {
-    await this.shielded.start(zswapSecretKeys);
-    this.unshielded.start();
+    await Promise.all([this.shielded.start(zswapSecretKeys), this.unshielded.start()]);
   }
 
   async stop(): Promise<void> {
-    await this.shielded.stop();
+    await Promise.all([this.shielded.stop(), this.unshielded.stop()]);
     await this.unshielded.stop();
   }
 }
