@@ -1,4 +1,4 @@
-import { V1State } from './RunningV1Variant';
+import { CoreWallet } from './CoreWallet';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -11,15 +11,15 @@ export type KeysCapability<TState> = {
   getAddress(state: TState): ShieldedAddress;
 };
 
-export const makeDefaultKeysCapability = (): KeysCapability<V1State> => {
+export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
   return {
-    getCoinPublicKey: (state: V1State): ShieldedCoinPublicKey => {
+    getCoinPublicKey: (state: CoreWallet): ShieldedCoinPublicKey => {
       return new ShieldedCoinPublicKey(Buffer.from(state.publicKeys.coinPublicKey, 'hex'));
     },
-    getEncryptionPublicKey: (state: V1State): ShieldedEncryptionPublicKey => {
+    getEncryptionPublicKey: (state: CoreWallet): ShieldedEncryptionPublicKey => {
       return new ShieldedEncryptionPublicKey(Buffer.from(state.publicKeys.encryptionPublicKey, 'hex'));
     },
-    getAddress: (state: V1State): ShieldedAddress => {
+    getAddress: (state: CoreWallet): ShieldedAddress => {
       const coinPublicKey = new ShieldedCoinPublicKey(Buffer.from(state.publicKeys.coinPublicKey, 'hex'));
       const encryptionPublicKey = new ShieldedEncryptionPublicKey(
         Buffer.from(state.publicKeys.encryptionPublicKey, 'hex'),

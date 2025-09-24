@@ -12,7 +12,7 @@ import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { makeDefaultKeysCapability } from '../Keys';
 import { makeSimulatorProvingService } from '../Proving';
 import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe';
-import { V1State } from '../RunningV1Variant';
+import { CoreWallet } from '../CoreWallet';
 import {
   DefaultTransactingConfiguration,
   DefaultTransactingContext,
@@ -42,13 +42,13 @@ const defaultContext: DefaultTransactingContext = {
 };
 
 const coinsAndBalances = makeDefaultCoinsAndBalancesCapability();
-const getAvailableCoins = (state: V1State): readonly ledger.QualifiedShieldedCoinInfo[] => {
+const getAvailableCoins = (state: CoreWallet): readonly ledger.QualifiedShieldedCoinInfo[] => {
   return coinsAndBalances.getAvailableCoins(state).map((c) => c.coin);
 };
 
 type TestWallet = {
   readonly keys: ledger.ZswapSecretKeys;
-  readonly wallet: V1State;
+  readonly wallet: CoreWallet;
 };
 
 type WalletEntry = {
@@ -78,7 +78,7 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
     desired,
     Record.map((entry) => ({
       keys: entry.keys,
-      wallet: V1State.initEmpty(entry.keys, ledger.NetworkId.Undeployed).applyTransaction(entry.keys, tx, {
+      wallet: CoreWallet.initEmpty(entry.keys, ledger.NetworkId.Undeployed).applyTransaction(entry.keys, tx, {
         type: 'success',
       }),
     })),
@@ -585,10 +585,10 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const aAfterApply: V1State = result.newState.applyTransaction(wallets.A.keys, balancedProven, {
+        const aAfterApply: CoreWallet = result.newState.applyTransaction(wallets.A.keys, balancedProven, {
           type: 'success',
         });
-        const bAfterApply: V1State = balancedResult.newState.applyTransaction(wallets.B.keys, balancedProven, {
+        const bAfterApply: CoreWallet = balancedResult.newState.applyTransaction(wallets.B.keys, balancedProven, {
           type: 'success',
         });
 
@@ -760,7 +760,7 @@ describe('V1 Wallet Transacting', () => {
           ]),
         );
         const proven = yield* proving.prove(result.recipe);
-        const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
 
         expect(getAvailableCoins(afterRevert).map((coin) => ({ type: coin.type, value: coin.value }))).toEqual([
           { type: rawShieldedTokenType, value: dust(3) },
@@ -784,7 +784,7 @@ describe('V1 Wallet Transacting', () => {
           ]),
         );
         const proven = yield* proving.prove(result.recipe);
-        const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
 
         expect(afterRevert.state.pendingOutputs.size).toEqual(0);
       }).pipe(Effect.runPromise);
@@ -820,8 +820,8 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const afterRevertA: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
-        const afterRevertB: V1State = EitherOps.getOrThrowLeft(
+        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const afterRevertB: CoreWallet = EitherOps.getOrThrowLeft(
           transacting.revert(balancedResult.newState, balancedProven),
         );
 
@@ -860,8 +860,8 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const afterRevertA: V1State = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
-        const afterRevertB: V1State = EitherOps.getOrThrowLeft(
+        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const afterRevertB: CoreWallet = EitherOps.getOrThrowLeft(
           transacting.revert(balancedResult.newState, balancedProven),
         );
 
@@ -899,7 +899,7 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
-        const afterRevert: V1State = EitherOps.getOrThrowLeft(
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
           transacting.revert(balanceResult.newState, balancedProven),
         );
 
@@ -948,7 +948,7 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven: ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
-        const afterRevert: V1State = EitherOps.getOrThrowLeft(
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
           transacting.revert(balanceResult.newState, balancedProven),
         );
 
@@ -982,7 +982,7 @@ describe('V1 Wallet Transacting', () => {
         transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
       );
 
-      const afterRevert: V1State = EitherOps.getOrThrowLeft(
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
       );
 
@@ -1027,7 +1027,7 @@ describe('V1 Wallet Transacting', () => {
         transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
       );
 
-      const afterRevert: V1State = EitherOps.getOrThrowLeft(
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
       );
 
@@ -1046,7 +1046,9 @@ describe('V1 Wallet Transacting', () => {
           makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
         ]),
       );
-      const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revertRecipe(result.newState, result.recipe));
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
+        transacting.revertRecipe(result.newState, result.recipe),
+      );
 
       expect(
         afterRevert.state.coins
@@ -1069,7 +1071,9 @@ describe('V1 Wallet Transacting', () => {
           makeTransferOutput({ recipient: wallets.B, coin: dust(2) }),
         ]),
       );
-      const afterRevert: V1State = EitherOps.getOrThrowLeft(transacting.revertRecipe(result.newState, result.recipe));
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
+        transacting.revertRecipe(result.newState, result.recipe),
+      );
 
       expect(afterRevert.state.pendingOutputs.size).toEqual(0);
     });
@@ -1087,7 +1091,7 @@ describe('V1 Wallet Transacting', () => {
         ]),
       );
 
-      const afterRevert: V1State = EitherOps.getOrThrowLeft(
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
         transacting.revertRecipe(result.newState, {
           type: NOTHING_TO_PROVE,
           transaction: pipe(

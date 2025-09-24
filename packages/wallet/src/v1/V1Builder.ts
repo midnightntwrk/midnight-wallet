@@ -3,7 +3,7 @@ import { Effect, Either, Scope, Types } from 'effect';
 import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
-import { RunningV1Variant, V1State, V1Tag } from './RunningV1Variant';
+import { RunningV1Variant, V1Tag } from './RunningV1Variant';
 import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization';
 import {
   DefaultSyncContext,
@@ -47,15 +47,15 @@ const V1BuilderSymbol: {
 
 export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Variant.Variant<
   typeof V1Tag,
-  V1State,
+  CoreWallet,
   null,
   RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData>
 > & {
-  deserializeState: (serialized: TSerialized) => Either.Either<V1State, WalletError>;
-  coinsAndBalances: CoinsAndBalancesCapability<V1State>;
-  keys: KeysCapability<V1State>;
-  serialization: SerializationCapability<V1State, null, TSerialized>;
-  transactionHistory: TransactionHistoryCapability<V1State, TTransaction>;
+  deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError>;
+  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
+  keys: KeysCapability<CoreWallet>;
+  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
+  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -158,11 +158,11 @@ export class V1Builder<
     syncService: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
-    ) => SyncService<V1State, TStartAux, TSyncUpdate>,
+    ) => SyncService<CoreWallet, TStartAux, TSyncUpdate>,
     syncCapability: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
-    ) => SyncCapability<V1State, TSyncUpdate>,
+    ) => SyncCapability<CoreWallet, TSyncUpdate>,
   ): V1Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return new V1Builder<
       TConfig & TSyncConfig,
@@ -190,7 +190,7 @@ export class V1Builder<
     serializationCapability: (
       configuration: TSerializationConfig,
       getContext: () => TSerializationContext,
-    ) => SerializationCapability<V1State, null, TSerialized>,
+    ) => SerializationCapability<CoreWallet, null, TSerialized>,
   ): V1Builder<
     TConfig & TSerializationConfig,
     TContext & TSerializationContext,
@@ -229,7 +229,7 @@ export class V1Builder<
     transactingCapability: (
       config: TTransactingConfig,
       getContext: () => TTransactingContext,
-    ) => TransactingCapability<ledger.ZswapSecretKeys, V1State, TTransaction>,
+    ) => TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>,
   ): V1Builder<
     TConfig & TTransactingConfig,
     TContext & TTransactingContext,
@@ -325,7 +325,7 @@ export class V1Builder<
     coinsAndBalancesCapability: (
       configuration: TBalancesConfig,
       getContext: () => TBalancesContext,
-    ) => CoinsAndBalancesCapability<V1State>,
+    ) => CoinsAndBalancesCapability<CoreWallet>,
   ): V1Builder<
     TConfig & TBalancesConfig,
     TContext & TBalancesContext,
@@ -360,7 +360,7 @@ export class V1Builder<
     transactionHistoryCapability: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryCapability<V1State, TTransaction>,
+    ) => TransactionHistoryCapability<CoreWallet, TTransaction>,
   ): V1Builder<
     TConfig & TTransactionHistoryConfig,
     TContext & TTransactionHistoryContext,
@@ -387,7 +387,7 @@ export class V1Builder<
   }
 
   withKeys<TKeysConfig, TKeysContext extends Partial<RunningV1Variant.AnyContext>>(
-    keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<V1State>,
+    keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<CoreWallet>,
   ): V1Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return new V1Builder<
       TConfig & TKeysConfig,
@@ -462,7 +462,7 @@ export class V1Builder<
       serialization: v1Context.serializationCapability,
       transactionHistory: v1Context.transactionHistoryCapability,
       start(
-        context: Variant.VariantContext<V1State>,
+        context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<
         RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
         WalletRuntimeError,
@@ -478,15 +478,11 @@ export class V1Builder<
         const seed = WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001');
 
         return Effect.succeed(
-          CoreWallet.empty(
-            new ledger.ZswapLocalState(),
-            PublicKeys.fromSecretKeys(ledger.ZswapSecretKeys.fromSeed(seed)),
-            networkId,
-          ),
+          CoreWallet.empty(PublicKeys.fromSecretKeys(ledger.ZswapSecretKeys.fromSeed(seed)), networkId),
         );
       },
 
-      deserializeState: (serialized: TSerialized): Either.Either<V1State, WalletError> => {
+      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
         return v1Context.serializationCapability.deserialize(null, serialized);
       },
     };
@@ -545,18 +541,18 @@ declare namespace V1Builder {
     readonly syncService: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SyncService<V1State, TStartAux, TSyncUpdate>;
+    ) => SyncService<CoreWallet, TStartAux, TSyncUpdate>;
     readonly syncCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SyncCapability<V1State, TSyncUpdate>;
+    ) => SyncCapability<CoreWallet, TSyncUpdate>;
   };
 
   type HasTransacting<TConfig, TContext, TTransaction> = {
     readonly transactingCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactingCapability<ledger.ZswapSecretKeys, V1State, TTransaction>;
+    ) => TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
   };
 
   type HasCoinSelection<TConfig, TContext> = {
@@ -570,7 +566,7 @@ declare namespace V1Builder {
     readonly serializationCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SerializationCapability<V1State, null, TSerialized>;
+    ) => SerializationCapability<CoreWallet, null, TSerialized>;
   };
 
   type HasProving<TConfig, TContext, TTransaction> = {
@@ -581,18 +577,18 @@ declare namespace V1Builder {
     readonly coinsAndBalancesCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => CoinsAndBalancesCapability<V1State>;
+    ) => CoinsAndBalancesCapability<CoreWallet>;
   };
 
   type HasTransactionHistory<TConfig, TContext, TTransaction> = {
     readonly transactionHistoryCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactionHistoryCapability<V1State, TTransaction>;
+    ) => TransactionHistoryCapability<CoreWallet, TTransaction>;
   };
 
   type HasKeys<TConfig, TContext> = {
-    readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<V1State>;
+    readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
   type HasSubmission<TConfig, TContext, TTransaction> = {

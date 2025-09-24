@@ -1,17 +1,5 @@
 import * as ledger from '@midnight-ntwrk/ledger';
-import {
-  Array as Arr,
-  Effect,
-  pipe,
-  Record,
-  Scope,
-  Stream,
-  SubscriptionRef,
-  Schedule,
-  Duration,
-  Sink,
-  Console,
-} from 'effect';
+import { Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
 import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletRuntimeError, Variant } from '../abstractions/index';
 import { EitherOps } from '../effect/index';
@@ -25,11 +13,11 @@ import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
 import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { CoinHashesMap, CoreWallet } from './CoreWallet';
+import { CoreWallet } from './CoreWallet';
 import { TransactionHistoryCapability } from './TransactionHistory';
 import { FinalizedTransaction } from './Transaction';
 
-const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
+const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
   const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
   const highestIndex = state.progress?.highestIndex ?? 0n;
@@ -41,7 +29,7 @@ const progress = (state: V1State): StateChange.StateChange<V1State>[] => {
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (previous: V1State, current: V1State): StateChange.StateChange<V1State>[] => {
+const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return previous.protocolVersion != current.protocolVersion
     ? [
         StateChange.VersionChange({
@@ -53,87 +41,18 @@ const protocolVersionChange = (previous: V1State, current: V1State): StateChange
     : [];
 };
 
-export type V1State = CoreWallet;
-export const V1State = new (class {
-  initEmpty = (keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): V1State => {
-    return CoreWallet.empty(new ledger.ZswapLocalState(), keys, networkId);
-  };
-
-  init = (state: ledger.ZswapLocalState, keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): V1State => {
-    return CoreWallet.init(state, keys, networkId);
-  };
-
-  spendCoins = (
-    secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
-    coins: ReadonlyArray<ledger.QualifiedShieldedCoinInfo>,
-    // TODO: Introduce proper type for segment
-    segment: number,
-  ): [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, V1State] => {
-    const [output, newLocalState] = pipe(
-      coins,
-      Arr.reduce(
-        [[], state.state] as [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
-        (
-          [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
-          coinToSpend,
-        ) => {
-          const [newState, newInput] = localState.spend(secretKeys, coinToSpend, segment);
-          const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
-          return [offers.concat([inputOffer]), newState] as [
-            ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>,
-            ledger.ZswapLocalState,
-          ];
-        },
-      ),
-    );
-    const updatedState = new CoreWallet(
-      newLocalState,
-      state.publicKeys,
-      state.networkId,
-      state.coinHashes,
-      state.txHistoryArray,
-      state.progress,
-      state.protocolVersion,
-    );
-    return [output, updatedState];
-  };
-
-  watchCoins = (
-    secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
-    coins: ReadonlyArray<ledger.ShieldedCoinInfo>,
-  ): V1State => {
-    const newLocalState = coins.reduce(
-      (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.publicKeys.coinPublicKey, coin),
-      state.state,
-    );
-    const newCoinHashes = CoinHashesMap.updateWithNewCoins(secretKeys, state.coinHashes, coins);
-
-    return new CoreWallet(
-      newLocalState,
-      state.publicKeys,
-      state.networkId,
-      newCoinHashes,
-      state.txHistoryArray,
-      state.progress,
-      state.protocolVersion,
-    );
-  };
-})();
-
 export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
-    serializationCapability: SerializationCapability<V1State, null, TSerialized>;
-    syncService: SyncService<V1State, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<V1State, TSyncUpdate>;
-    transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, V1State, TTransaction>;
+    serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
+    syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
     provingService: ProvingService<TTransaction>;
-    coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
-    keysCapability: KeysCapability<V1State>;
+    coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+    keysCapability: KeysCapability<CoreWallet>;
     submissionService: SubmissionService<TTransaction>;
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-    transactionHistoryCapability: TransactionHistoryCapability<V1State, TTransaction>;
+    transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, TTransaction>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;
@@ -149,18 +68,18 @@ export type DefaultRunningV1 = RunningV1Variant<
 >;
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
-  implements Variant.RunningVariant<typeof V1Tag, V1State>
+  implements Variant.RunningVariant<typeof V1Tag, CoreWallet>
 {
   readonly __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
-  readonly #context: Variant.VariantContext<V1State>;
+  readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
-  readonly state: Stream.Stream<StateChange.StateChange<V1State>, WalletRuntimeError>;
+  readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
   constructor(
     scope: Scope.Scope,
-    context: Variant.VariantContext<V1State>,
+    context: Variant.VariantContext<CoreWallet>,
     v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
   ) {
     this.#scope = scope;
@@ -169,19 +88,21 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: V1State, current: V1State) => {
+          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
             return [current, [previous, current]] as const;
           }),
         ),
       ),
-      Stream.mapConcat(([previous, current]: readonly [V1State, V1State]): StateChange.StateChange<V1State>[] => {
-        // TODO: emit progress only upon actual change
-        return [
-          StateChange.State({ state: current }),
-          ...progress(current),
-          ...protocolVersionChange(previous, current),
-        ];
-      }),
+      Stream.mapConcat(
+        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
+          // TODO: emit progress only upon actual change
+          return [
+            StateChange.State({ state: current }),
+            ...progress(current),
+            ...protocolVersionChange(previous, current),
+          ];
+        },
+      ),
     );
   }
 
@@ -294,7 +215,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       );
   }) as SubmitTransactionMethod<TTransaction>;
 
-  serializeState(state: V1State): TSerialized {
+  serializeState(state: CoreWallet): TSerialized {
     return this.#v1Context.serializationCapability.serialize(state);
   }
 }

@@ -1,5 +1,4 @@
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
-import { V1State } from './RunningV1Variant';
 import { WalletError } from './WalletError';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { CoreWallet } from './CoreWallet';
@@ -88,7 +87,7 @@ type TxSchema = Schema.Schema.Type<ReturnType<typeof HexedTx>>;
 
 export const makeDefaultV1SerializationCapability = (
   config: DefaultSerializationConfiguration,
-): SerializationCapability<V1State, null, string> => {
+): SerializationCapability<CoreWallet, null, string> => {
   const SnapshotSchema = Schema.Struct({
     publicKeys: Schema.Struct({
       coinPublicKey: Schema.String,
@@ -108,7 +107,7 @@ export const makeDefaultV1SerializationCapability = (
   type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
   return {
     serialize: (wallet) => {
-      const buildSnapshot = (w: V1State): Snapshot => ({
+      const buildSnapshot = (w: CoreWallet): Snapshot => ({
         publicKeys: w.publicKeys,
         txHistory: w.txHistoryArray,
         state: w.state,
@@ -120,7 +119,7 @@ export const makeDefaultV1SerializationCapability = (
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
     },
-    deserialize: (aux, serialized): Either.Either<V1State, WalletError> => {
+    deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),

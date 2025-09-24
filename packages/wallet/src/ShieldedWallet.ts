@@ -1,6 +1,6 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { BuildArguments, WalletBuilder } from './WalletBuilder';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1State, V1Tag, V1Variant } from './v1';
+import { BaseV1Configuration, DefaultV1Configuration, V1Builder, CoreWallet, V1Tag, V1Variant } from './v1';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -23,10 +23,10 @@ import { TokenTransfer } from './v1/Transacting';
 import { WalletSyncUpdate } from './v1/Sync';
 
 export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = FinalizedTransaction> = {
-  serialization: SerializationCapability<V1State, null, TSerialized>;
-  coinsAndBalances: CoinsAndBalancesCapability<V1State>;
-  keys: KeysCapability<V1State>;
-  transactionHistory: TransactionHistoryCapability<V1State, TTransaction>;
+  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
+  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
+  keys: KeysCapability<CoreWallet>;
+  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
 };
 
 export class ShieldedWalletState<TSerialized = string, TTransaction = FinalizedTransaction> {
@@ -34,12 +34,12 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = FinalizedT
     <TSerialized = string, TTransaction = FinalizedTransaction>(
       capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
     ) =>
-    (state: ProtocolState.ProtocolState<V1State>): ShieldedWalletState<TSerialized, TTransaction> => {
+    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized, TTransaction> => {
       return new ShieldedWalletState(state, capabilities);
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
-  readonly state: V1State;
+  readonly state: CoreWallet;
   readonly capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
@@ -79,7 +79,7 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = FinalizedT
   }
 
   constructor(
-    state: ProtocolState.ProtocolState<V1State>,
+    state: ProtocolState.ProtocolState<CoreWallet>,
     capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
   ) {
     this.protocolVersion = state.version;
@@ -203,7 +203,7 @@ export function CustomShieldedWallet<
     static startWithSecretKeys(secretKeys: ledger.ZswapSecretKeys): CustomShieldedWalletImplementation {
       return CustomShieldedWalletImplementation.startFirst(
         CustomShieldedWalletImplementation,
-        V1State.initEmpty(secretKeys, CustomShieldedWalletImplementation.configuration.networkId),
+        CoreWallet.initEmpty(secretKeys, CustomShieldedWalletImplementation.configuration.networkId),
       );
     }
 
@@ -213,7 +213,7 @@ export function CustomShieldedWallet<
     }
 
     static restore(serializedState: TSerialized): CustomShieldedWalletImplementation {
-      const deserialized: V1State = CustomShieldedWalletImplementation.allVariantsRecord()
+      const deserialized: CoreWallet = CustomShieldedWalletImplementation.allVariantsRecord()
         [V1Tag].variant.deserializeState(serializedState)
         .pipe(Either.getOrThrow);
       return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);

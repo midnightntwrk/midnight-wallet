@@ -14,7 +14,7 @@ import {
   DefaultV1Variant,
   Keys,
   V1Builder,
-  V1State,
+  CoreWallet,
   V1Tag,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger';
@@ -91,10 +91,10 @@ describe('Wallet transacting', () => {
   let wallet2Keys: ledger.ZswapSecretKeys;
   let wallet: Wallet;
   let wallet2: Wallet;
-  let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<V1State>;
-  let keys: Keys.KeysCapability<V1State>;
+  let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
+  let keys: Keys.KeysCapability<CoreWallet>;
 
-  const getShieldedAddress = (state: V1State | ledger.ZswapSecretKeys): string => {
+  const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): string => {
     const address =
       state instanceof ledger.ZswapSecretKeys
         ? new ShieldedAddress(
@@ -106,17 +106,17 @@ describe('Wallet transacting', () => {
     return ShieldedAddress.codec.encode(Wallet.configuration.networkId, address).asString();
   };
 
-  const waitForSync = (wallet: Wallet): Promise<V1State> => {
+  const waitForSync = (wallet: Wallet): Promise<CoreWallet> => {
     return pipe(
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
+      rx.filter((state: CoreWallet) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
   };
 
-  const getCoinsAndBalances = (state: V1State) => {
+  const getCoinsAndBalances = (state: CoreWallet) => {
     return {
       coins: coinsAndBalances.getAvailableCoins(state),
       balances: coinsAndBalances.getAvailableBalances(state),
@@ -142,11 +142,11 @@ describe('Wallet transacting', () => {
     walletKeys = ledger.ZswapSecretKeys.fromSeed(
       getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     );
-    wallet = Wallet.startFirst(Wallet, V1State.initEmpty(walletKeys, Wallet.configuration.networkId));
+    wallet = Wallet.startFirst(Wallet, CoreWallet.initEmpty(walletKeys, Wallet.configuration.networkId));
     wallet2Keys = ledger.ZswapSecretKeys.fromSeed(
       getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002'),
     );
-    wallet2 = Wallet.startFirst(Wallet, V1State.initEmpty(wallet2Keys, Wallet.configuration.networkId));
+    wallet2 = Wallet.startFirst(Wallet, CoreWallet.initEmpty(wallet2Keys, Wallet.configuration.networkId));
 
     await wallet.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(walletKeys) }).pipe(Effect.runPromise);
     await wallet2.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(wallet2Keys) }).pipe(Effect.runPromise);
@@ -163,11 +163,11 @@ describe('Wallet transacting', () => {
   });
 
   it('should create & submit successful transfers transactions', async () => {
-    const syncedState: V1State = await pipe(
+    const syncedState: CoreWallet = await pipe(
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
+      rx.filter((state: CoreWallet) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
 
@@ -217,7 +217,7 @@ describe('Wallet transacting', () => {
       wallet.rawState.pipe(
         rx.map(ProtocolState.state),
         rx.skip(1),
-        rx.filter((state: V1State) => state.state.coins.size > 0),
+        rx.filter((state: CoreWallet) => state.state.coins.size > 0),
       ),
     );
     const receiverState = await pipe(wallet2.rawState, rx.map(ProtocolState.state), (s) => rx.firstValueFrom(s));
@@ -253,7 +253,7 @@ describe('Wallet transacting', () => {
   });
 
   it('should init a swap, which could be successfully balanced with other wallet and submitted', async () => {
-    const syncedState1: V1State = await waitForSync(wallet);
+    const syncedState1: CoreWallet = await waitForSync(wallet);
     const syncedState2 = await waitForSync(wallet2);
     const balances = coinsAndBalances.getAvailableBalances(syncedState1);
 

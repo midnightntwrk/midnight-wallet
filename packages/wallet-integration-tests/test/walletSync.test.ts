@@ -5,7 +5,7 @@ import {
   DefaultV1Configuration,
   DefaultV1Variant,
   V1Builder,
-  V1State,
+  CoreWallet,
   V1Tag,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
@@ -60,12 +60,12 @@ describe('Wallet Sync', () => {
   let wallet: WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
   type Wallet = WalletLike.WalletOf<typeof Wallet>;
 
-  const waitForSync = (wallet: Wallet): Promise<V1State> => {
+  const waitForSync = (wallet: Wallet): Promise<CoreWallet> => {
     return pipe(
       wallet.rawState,
       rx.map(ProtocolState.state),
       rx.skip(1),
-      rx.filter((state: V1State) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
+      rx.filter((state: CoreWallet) => state.progress.isStrictlyComplete() && state.state.coins.size > 0),
       (a) => rx.firstValueFrom(a),
     );
   };

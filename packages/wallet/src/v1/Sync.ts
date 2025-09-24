@@ -1,7 +1,7 @@
 import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Layer, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
-import { V1State } from './RunningV1Variant';
+import { CoreWallet } from './CoreWallet';
 import { Simulator, SimulatorState } from './Simulator';
 import { Connect, ShieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
@@ -36,7 +36,7 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<V1State, FinalizedTransaction>;
+  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, FinalizedTransaction>;
 };
 
 export const TransactionResult = Schema.Struct({
@@ -340,11 +340,11 @@ export const WalletSyncUpdate = {
 
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
-): SyncService<V1State, ledger.ZswapSecretKeys, WalletSyncUpdate> => {
+): SyncService<CoreWallet, ledger.ZswapSecretKeys, WalletSyncUpdate> => {
   const indexerSyncService = makeIndexerSyncService(config);
   return {
     updates: (
-      state: V1State,
+      state: CoreWallet,
       secretKeys: ledger.ZswapSecretKeys,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
       return Stream.fromEffect(indexerSyncService.connectWallet(secretKeys)).pipe(
@@ -360,7 +360,7 @@ export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<QueryClient | SubscriptionClient, WalletError, Scope.Scope>;
   connectWallet: (secretKeys: ledger.ZswapSecretKeys) => Effect.Effect<string, WalletError, QueryClient>;
   subscribeWallet: (
-    state: V1State,
+    state: CoreWallet,
     connectionId: string,
     networkId: ledger.NetworkId,
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
@@ -415,7 +415,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       );
     },
     subscribeWallet(
-      state: V1State,
+      state: CoreWallet,
       connectionId: string,
       networkId: ledger.NetworkId,
     ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
@@ -452,9 +452,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
 export const makeDefaultSyncCapability = (
   config: DefaultSyncConfiguration,
   getContext: () => DefaultSyncContext,
-): SyncCapability<V1State, WalletSyncUpdate> => {
+): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
-    applyUpdate(state: V1State, wrappedUpdate: WalletSyncUpdate): V1State {
+    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
       const { update, secretKeys } = wrappedUpdate;
       switch (update._tag) {
         case 'ProgressUpdate':
@@ -515,16 +515,16 @@ export type SimulatorSyncUpdate = {
 
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
-): SyncService<V1State, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
+): SyncService<CoreWallet, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: V1State, secretKeys: ledger.ZswapSecretKeys) =>
+    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) =>
       config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKeys: secretKeys }))),
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<V1State, SimulatorSyncUpdate> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   return {
-    applyUpdate: (state: V1State, update: SimulatorSyncUpdate) => {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
       return state.applyTransaction(update.secretKeys, update.update.lastTx, update.update.lastTxResult);
     },
   };
@@ -538,9 +538,9 @@ export type TxApplierSyncUpdate = {
  * Skeleton of a "full-node" sync capability.
  * It is how the simulator one could look like (differenes are tiny) and how syncing tx by tx should look like
  */
-export const makeTxApplierSyncCapability = (): SyncCapability<V1State, TxApplierSyncUpdate> => {
+export const makeTxApplierSyncCapability = (): SyncCapability<CoreWallet, TxApplierSyncUpdate> => {
   return {
-    applyUpdate: (state: V1State, update: TxApplierSyncUpdate) => {
+    applyUpdate: (state: CoreWallet, update: TxApplierSyncUpdate) => {
       return state.applyTransaction(update.secretKeys, update.tx, { type: 'success' });
     },
   };

@@ -4,7 +4,6 @@ import { Array as Arr, Chunk, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultV1SerializationCapability } from '../Serialization';
 import { Either } from 'effect';
-import { V1State } from '../RunningV1Variant';
 import { CoreWallet } from '../CoreWallet';
 import { EitherOps } from '../../effect';
 import { ProofErasedTransaction } from '../Transaction';
@@ -115,7 +114,7 @@ describe('V1 Wallet serialization', () => {
     const capability = makeDefaultV1SerializationCapability({ networkId });
     const testTxs = Chunk.fromIterable([makeFakeTx(10n), makeFakeTx(20n), makeFakeTx(30n)]);
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
-    const wallet = V1State.initEmpty(keys, networkId);
+    const wallet = CoreWallet.initEmpty(keys, networkId);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
       const newState = wallet.applyTransaction(keys, tx, { type: 'success' });
 

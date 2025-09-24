@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { makeDefaultKeysCapability } from '../Keys';
-import { V1State } from '../RunningV1Variant';
+import { CoreWallet } from '../CoreWallet';
 import * as fc from 'fast-check';
 
 const seedArbitrary = fc.uint8Array({ minLength: 32, maxLength: 32 });
@@ -15,8 +15,8 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const networkId = ledger.NetworkId.Undeployed;
-          const state1 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
-          const state2 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state1 = CoreWallet.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state2 = CoreWallet.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -31,8 +31,8 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const networkId = ledger.NetworkId.Undeployed;
-          const state1 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
-          const state2 = V1State.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state1 = CoreWallet.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
+          const state2 = CoreWallet.initEmpty(ledger.ZswapSecretKeys.fromSeed(seed), networkId);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -47,7 +47,7 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const secretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
-          const state = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
+          const state = CoreWallet.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);
@@ -65,8 +65,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
           const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
+          const state1 = CoreWallet.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = CoreWallet.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey1 = capability.getCoinPublicKey(state1);
@@ -82,8 +82,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
           const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
+          const state1 = CoreWallet.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = CoreWallet.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const encryptionPublicKey1 = capability.getEncryptionPublicKey(state1);
@@ -99,8 +99,8 @@ describe('DefaultKeysCapability', () => {
         fc.property(differentSeedsArbitrary, ([seed1, seed2]) => {
           const secretKeys1 = ledger.ZswapSecretKeys.fromSeed(seed1);
           const secretKeys2 = ledger.ZswapSecretKeys.fromSeed(seed2);
-          const state1 = V1State.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
-          const state2 = V1State.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
+          const state1 = CoreWallet.initEmpty(secretKeys1, ledger.NetworkId.Undeployed);
+          const state2 = CoreWallet.initEmpty(secretKeys2, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const address1 = capability.getAddress(state1);
@@ -118,7 +118,7 @@ describe('DefaultKeysCapability', () => {
       fc.assert(
         fc.property(seedArbitrary, (seed) => {
           const secretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
-          const state = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
+          const state = CoreWallet.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
           const capability = makeDefaultKeysCapability();
 
           const coinPublicKey = capability.getCoinPublicKey(state);

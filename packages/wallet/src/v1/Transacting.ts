@@ -2,7 +2,7 @@ import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps, EitherOps } from '../effect/index';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe';
-import { V1State } from './RunningV1Variant';
+import { CoreWallet } from './CoreWallet';
 import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError';
 import {
   BalanceRecipe,
@@ -60,14 +60,14 @@ export type DefaultTransactingConfiguration = {
 
 export type DefaultTransactingContext = {
   coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-  coinsAndBalancesCapability: CoinsAndBalancesCapability<V1State>;
-  keysCapability: KeysCapability<V1State>;
+  coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+  keysCapability: KeysCapability<CoreWallet>;
 };
 
 export const makeDefaultTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<ledger.ZswapSecretKeys, V1State, FinalizedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, FinalizedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -81,7 +81,7 @@ export const makeDefaultTransactingCapability = (
 export const makeSimulatorTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<ledger.ZswapSecretKeys, V1State, ProofErasedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ProofErasedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -96,21 +96,21 @@ class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 
 export class TransactingCapabilityImplementation<
   TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-> implements TransactingCapability<ledger.ZswapSecretKeys, V1State, TTransaction>
+> implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>
 {
   public readonly networkId: ledger.NetworkId;
   public readonly costParams: TotalCostParameters;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   public readonly txTrait: TransactionTrait<TTransaction>;
-  readonly getCoins: () => CoinsAndBalancesCapability<V1State>;
-  readonly getKeys: () => KeysCapability<V1State>;
+  readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
+  readonly getKeys: () => KeysCapability<CoreWallet>;
 
   constructor(
     networkId: ledger.NetworkId,
     costParams: TotalCostParameters,
     getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
-    getCoins: () => CoinsAndBalancesCapability<V1State>,
-    getKeys: () => KeysCapability<V1State>,
+    getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
+    getKeys: () => KeysCapability<CoreWallet>,
     txTrait: TransactionTrait<TTransaction>,
   ) {
     this.getCoins = getCoins;
@@ -123,10 +123,10 @@ export class TransactingCapabilityImplementation<
 
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     tx: TTransaction,
     newCoins: ledger.ShieldedCoinInfo[],
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
+  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
       const initialImbalances = this.txTrait.getImbalancesWithFeesOverhead(tx, this.costParams);
@@ -154,7 +154,7 @@ export class TransactingCapabilityImplementation<
         newCoins.length,
         Imbalances.empty(),
       );
-      const finalState = V1State.watchCoins(secretKeys, afterGuaranteed, newCoins);
+      const finalState = CoreWallet.watchCoins(secretKeys, afterGuaranteed, newCoins);
 
       return {
         newState: finalState,
@@ -169,9 +169,9 @@ export class TransactingCapabilityImplementation<
 
   makeTransfer(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
+  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const { initialOffersAndCoins, selfCoins } = yield* this.#processDesiredOutputs(state, transfers);
       const offerToBalance = pipe(
@@ -189,7 +189,7 @@ export class TransactingCapabilityImplementation<
         selfCoins.length,
         Imbalances.empty(),
       );
-      const finalState = V1State.watchCoins(secretKeys, newState, selfCoins);
+      const finalState = CoreWallet.watchCoins(secretKeys, newState, selfCoins);
       const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(offer));
 
       return {
@@ -204,10 +204,10 @@ export class TransactingCapabilityImplementation<
 
   initSwap(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: V1State }, WalletError> {
+  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const outputsParseResult = yield* this.#processDesiredOutputsPossiblyEmpty(state, desiredOutputs);
       const inputsParseResult = Imbalances.fromEntries(Record.toEntries(desiredInputs));
@@ -220,7 +220,7 @@ export class TransactingCapabilityImplementation<
         outputsParseResult.selfCoins.length,
         inputsParseResult,
       );
-      const finalState = V1State.watchCoins(secretKeys, newState, outputsParseResult.selfCoins);
+      const finalState = CoreWallet.watchCoins(secretKeys, newState, outputsParseResult.selfCoins);
       const balancingTx = ledger.Transaction.fromParts(offer);
       const finalTx = outputsParseResult.unprovenTxToBalance
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
@@ -236,7 +236,7 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  revert(state: V1State, tx: TTransaction): Either.Either<V1State, WalletError> {
+  revert(state: CoreWallet, tx: TTransaction): Either.Either<CoreWallet, WalletError> {
     return Either.try({
       try: () => {
         return state.revertTransaction(tx);
@@ -250,7 +250,7 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  revertRecipe(state: V1State, recipe: ProvingRecipe<TTransaction>): Either.Either<V1State, WalletError> {
+  revertRecipe(state: CoreWallet, recipe: ProvingRecipe<TTransaction>): Either.Either<CoreWallet, WalletError> {
     const doRevert = (tx: UnprovenTransaction) => {
       return Either.try({
         try: () => {
@@ -277,12 +277,12 @@ export class TransactingCapabilityImplementation<
 
   #prepareOffer(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
     segment: 0 | 1,
-  ): Option.Option<{ newState: V1State; offer: ledger.ZswapOffer<ledger.PreProof> }> {
-    const [inputOffers, stateAfterSpends] = V1State.spendCoins(secretKeys, state, recipe.inputs, segment);
-    const stateAfterWatches = V1State.watchCoins(secretKeys, stateAfterSpends, recipe.outputs);
+  ): Option.Option<{ newState: CoreWallet; offer: ledger.ZswapOffer<ledger.PreProof> }> {
+    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(secretKeys, state, recipe.inputs, segment);
+    const stateAfterWatches = CoreWallet.watchCoins(secretKeys, stateAfterSpends, recipe.outputs);
     const outputOffers = recipe.outputs.map((coin) => {
       const output = ledger.ZswapOutput.new(
         coin,
@@ -310,11 +310,15 @@ export class TransactingCapabilityImplementation<
 
   balanceFallibleSection(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
   ): Either.Either<
-    { offer: ledger.ZswapOffer<ledger.PreProof> | undefined; newState: V1State; newImbalances: TransactionImbalances },
+    {
+      offer: ledger.ZswapOffer<ledger.PreProof> | undefined;
+      newState: CoreWallet;
+      newImbalances: TransactionImbalances;
+    },
     WalletError
   > {
     return Either.try({
@@ -372,12 +376,12 @@ export class TransactingCapabilityImplementation<
 
   #balanceGuaranteedSection(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     knownSelfOutputs: number,
     targetImbalances: Imbalances,
-  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: V1State }, WalletError> {
+  ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: CoreWallet }, WalletError> {
     const correctedCostModel = TotalCostParameters.getCorrectedCostModel(this.costParams);
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
@@ -442,7 +446,7 @@ export class TransactingCapabilityImplementation<
 
   #balanceGuaranteedWithSelfOutput(
     secretKeys: ledger.ZswapSecretKeys,
-    state: V1State,
+    state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     correctedCostModel: TransactionCostModel,
@@ -507,7 +511,7 @@ export class TransactingCapabilityImplementation<
         this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
         Option.map(({ newState, offer }) => {
           return {
-            newState: V1State.watchCoins(secretKeys, newState, [additionalCoin]),
+            newState: CoreWallet.watchCoins(secretKeys, newState, [additionalCoin]),
             offer: offer.merge(additionalOffer),
           };
         }),
@@ -536,7 +540,7 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  #processDesiredOutputs(state: V1State, transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>) {
+  #processDesiredOutputs(state: CoreWallet, transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>) {
     return Either.gen(this, function* () {
       const initialOffersAndCoins = yield* pipe(
         transfers,
@@ -578,7 +582,7 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  #processDesiredOutputsPossiblyEmpty(state: V1State, desiredOutputs: ReadonlyArray<TokenTransfer>) {
+  #processDesiredOutputsPossiblyEmpty(state: CoreWallet, desiredOutputs: ReadonlyArray<TokenTransfer>) {
     return pipe(
       desiredOutputs,
       Arr.match({

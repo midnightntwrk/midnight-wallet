@@ -1,4 +1,4 @@
-import { V1State } from './RunningV1Variant';
+import { CoreWallet } from './CoreWallet';
 import { FinalizedTransaction, ProofErasedTransaction } from './Transaction';
 
 export type ProgressUpdate = {
@@ -15,17 +15,17 @@ export type TransactionHistoryCapability<TState, TTransaction> = {
 };
 
 export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCapability<
-  V1State,
+  CoreWallet,
   FinalizedTransaction
 > => {
   return {
-    updateTxHistory: (state: V1State, newTxs: FinalizedTransaction[]): V1State => {
+    updateTxHistory: (state: CoreWallet, newTxs: FinalizedTransaction[]): CoreWallet => {
       return newTxs.reduce((acc, tx) => acc.addTransaction(tx), state);
     },
-    transactionHistory: (state: V1State): readonly FinalizedTransaction[] => {
+    transactionHistory: (state: CoreWallet): readonly FinalizedTransaction[] => {
       return state.txHistoryArray;
     },
-    progress: (state: V1State): ProgressUpdate => {
+    progress: (state: CoreWallet): ProgressUpdate => {
       return {
         appliedIndex: state.progress.appliedIndex,
         highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
@@ -37,17 +37,17 @@ export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCap
 };
 
 export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryCapability<
-  V1State,
+  CoreWallet,
   ProofErasedTransaction
 > => {
   return {
-    updateTxHistory: (state: V1State, newTxs: ProofErasedTransaction[]): V1State => {
+    updateTxHistory: (state: CoreWallet, newTxs: ProofErasedTransaction[]): CoreWallet => {
       return state.updateTxHistory(newTxs as unknown as readonly FinalizedTransaction[]); // @TODO fix this cast
     },
-    transactionHistory: (state: V1State): readonly ProofErasedTransaction[] => {
+    transactionHistory: (state: CoreWallet): readonly ProofErasedTransaction[] => {
       return state.txHistoryArray as unknown as readonly ProofErasedTransaction[]; // @TODO fix this cast
     },
-    progress: (state: V1State): ProgressUpdate => {
+    progress: (state: CoreWallet): ProgressUpdate => {
       return {
         appliedIndex: state.progress.appliedIndex,
         highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
@@ -59,17 +59,17 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
 };
 
 export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCapability<
-  V1State,
+  CoreWallet,
   FinalizedTransaction
 > => {
   return {
-    updateTxHistory: (state: V1State): V1State => {
+    updateTxHistory: (state: CoreWallet): CoreWallet => {
       return state;
     },
-    transactionHistory: (state: V1State): readonly FinalizedTransaction[] => {
+    transactionHistory: (state: CoreWallet): readonly FinalizedTransaction[] => {
       return state.txHistoryArray;
     },
-    progress: (state: V1State): ProgressUpdate => {
+    progress: (state: CoreWallet): ProgressUpdate => {
       return {
         appliedIndex: state.progress.appliedIndex,
         highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,

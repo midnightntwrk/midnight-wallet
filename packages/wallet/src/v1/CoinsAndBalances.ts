@@ -1,4 +1,4 @@
-import { V1State } from './RunningV1Variant';
+import { CoreWallet } from './CoreWallet';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { pipe, Array } from 'effect';
 import * as RecordOps from '../effect/RecordOps';
@@ -38,20 +38,20 @@ const calculateBalances = <T extends AvailableCoin | PendingCoin>(coins: T[]): B
     {},
   );
 
-export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapability<V1State> => {
-  const getAvailableBalances = (state: V1State): Balances => {
+export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapability<CoreWallet> => {
+  const getAvailableBalances = (state: CoreWallet): Balances => {
     const availableCoins = getAvailableCoins(state);
 
     return calculateBalances(availableCoins);
   };
 
-  const getPendingBalances = (state: V1State): Balances => {
+  const getPendingBalances = (state: CoreWallet): Balances => {
     const pendingCoins = getPendingCoins(state);
 
     return calculateBalances(pendingCoins);
   };
 
-  const getTotalBalances = (state: V1State): Balances => {
+  const getTotalBalances = (state: CoreWallet): Balances => {
     const availableBalances = getAvailableBalances(state);
     const pendingBalances = getPendingBalances(state);
 
@@ -61,7 +61,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     );
   };
 
-  const getAvailableCoins = (state: V1State): AvailableCoin[] => {
+  const getAvailableCoins = (state: CoreWallet): AvailableCoin[] => {
     const pendingSpends = new Set([...state.state.pendingSpends.values()].map(([coin]) => coin.nonce));
     return pipe(
       [...state.state.coins],
@@ -74,7 +74,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     );
   };
 
-  const getPendingCoins = (state: V1State): PendingCoin[] =>
+  const getPendingCoins = (state: CoreWallet): PendingCoin[] =>
     pipe(
       [...state.state.pendingOutputs.values()],
       Array.map(([coin, ttl]) => ({
@@ -85,7 +85,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
       })),
     );
 
-  const getTotalCoins = (state: V1State): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
+  const getTotalCoins = (state: CoreWallet): Array<Coin> => [...getAvailableCoins(state), ...getPendingCoins(state)];
 
   return {
     getAvailableBalances,

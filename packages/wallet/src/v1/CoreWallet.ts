@@ -1,6 +1,6 @@
 import * as ledger from '@midnight-ntwrk/ledger';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Either, Iterable, Option, pipe, Record } from 'effect';
+import { Either, Iterable, Option, pipe, Record, Array as Arr } from 'effect';
 import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress';
 import { FinalizedTransaction } from './Transaction';
 import { InvalidCoinHashesError, WalletError } from './WalletError';
@@ -59,6 +59,8 @@ export const CoinHashesMap = {
   },
 };
 
+// TODO Upcoming refactor for CoreWallet to convert to an object from a class
+// PM-19583 Refactor CoreWallet
 export class CoreWallet {
   readonly state: ledger.ZswapLocalState;
   readonly publicKeys: PublicKeys;
@@ -194,8 +196,12 @@ export class CoreWallet {
     return new CoreWallet(localState, PublicKeys.fromSecretKeys(secretKeys), networkId, coinHashes);
   }
 
-  static empty(localState: ledger.ZswapLocalState, publicKeys: PublicKeys, networkId: ledger.NetworkId): CoreWallet {
-    return new CoreWallet(localState, publicKeys, networkId, CoinHashesMap.empty);
+  static readonly initEmpty = (keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): CoreWallet => {
+    return CoreWallet.empty(keys, networkId);
+  };
+
+  static empty(publicKeys: PublicKeys, networkId: ledger.NetworkId): CoreWallet {
+    return new CoreWallet(new ledger.ZswapLocalState(), publicKeys, networkId, CoinHashesMap.empty);
   }
 
   static restore(
@@ -241,6 +247,66 @@ export class CoreWallet {
             ProtocolVersion.ProtocolVersion(protocolVersion),
           ),
       }),
+    );
+  }
+
+  // TODO Upcoming refactor for CoreWallet, this will be part of the CoreWallet object.
+  static spendCoins(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    coins: ReadonlyArray<ledger.QualifiedShieldedCoinInfo>,
+    // TODO: Introduce proper type for segment
+    segment: number,
+  ): [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, CoreWallet] {
+    const [output, newLocalState] = pipe(
+      coins,
+      Arr.reduce(
+        [[], state.state] as [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+        (
+          [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+          coinToSpend,
+        ) => {
+          const [newState, newInput] = localState.spend(secretKeys, coinToSpend, segment);
+          const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
+          return [offers.concat([inputOffer]), newState] as [
+            ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>,
+            ledger.ZswapLocalState,
+          ];
+        },
+      ),
+    );
+    const updatedState = new CoreWallet(
+      newLocalState,
+      state.publicKeys,
+      state.networkId,
+      state.coinHashes,
+      state.txHistoryArray,
+      state.progress,
+      state.protocolVersion,
+    );
+    return [output, updatedState];
+  }
+
+  // TODO Upcoming refactor for CoreWallet, this will be part of the CoreWallet object.
+  static watchCoins(
+    secretKeys: ledger.ZswapSecretKeys,
+    state: CoreWallet,
+    coins: ReadonlyArray<ledger.ShieldedCoinInfo>,
+  ): CoreWallet {
+    const newLocalState = coins.reduce(
+      (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.publicKeys.coinPublicKey, coin),
+      state.state,
+    );
+    const newCoinHashes = CoinHashesMap.updateWithNewCoins(secretKeys, state.coinHashes, coins);
+
+    return new CoreWallet(
+      newLocalState,
+      state.publicKeys,
+      state.networkId,
+      newCoinHashes,
+      state.txHistoryArray,
+      state.progress,
+      state.protocolVersion,
     );
   }
 }

@@ -10,7 +10,6 @@ import { WalletSeed } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { makeDefaultKeysCapability } from '../Keys';
-import { V1State } from '../RunningV1Variant';
 import { CoreWallet } from '../CoreWallet';
 import { FinalizedTransaction } from '../Transaction';
 import { makeFakeTx } from '../../test/genTxs';
@@ -46,7 +45,7 @@ describe('V1 Variant', () => {
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(
         WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
       );
-      const initialState = V1State.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
+      const initialState = CoreWallet.initEmpty(secretKeys, ledger.NetworkId.Undeployed);
       yield* variant.start({ stateRef: yield* SubscriptionRef.make(initialState) });
       return fakeSubmission.wasClosedRef;
     }).pipe(
@@ -73,7 +72,7 @@ describe('V1 Variant', () => {
         ledgerParams: ledger.LedgerParameters.dummyParameters(),
       },
     };
-    const expectedState = V1State.initEmpty(
+    const expectedState = CoreWallet.initEmpty(
       ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
       ledger.NetworkId.Undeployed,
     );
@@ -109,7 +108,7 @@ describe('V1 Variant', () => {
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(
         WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
       );
-      const initialState = CoreWallet.empty(new ledger.ZswapLocalState(), secretKeys, ledger.NetworkId.Undeployed);
+      const initialState = CoreWallet.empty(secretKeys, ledger.NetworkId.Undeployed);
       const stateRef = yield* SubscriptionRef.make(initialState);
       const running = yield* variant.start({ stateRef: stateRef });
       const submissionResult = yield* running.submitTransaction(theTransaction).pipe(Effect.either);
