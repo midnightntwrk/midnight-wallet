@@ -20,7 +20,7 @@ export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCap
 > => {
   return {
     updateTxHistory: (state: CoreWallet, newTxs: FinalizedTransaction[]): CoreWallet => {
-      return newTxs.reduce((acc, tx) => acc.addTransaction(tx), state);
+      return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);
     },
     transactionHistory: (state: CoreWallet): readonly FinalizedTransaction[] => {
       return state.txHistoryArray;
@@ -42,7 +42,7 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
 > => {
   return {
     updateTxHistory: (state: CoreWallet, newTxs: ProofErasedTransaction[]): CoreWallet => {
-      return state.updateTxHistory(newTxs as unknown as readonly FinalizedTransaction[]); // @TODO fix this cast
+      return CoreWallet.updateTxHistory(state, newTxs as unknown as readonly FinalizedTransaction[]); // @TODO fix this cast
     },
     transactionHistory: (state: CoreWallet): readonly ProofErasedTransaction[] => {
       return state.txHistoryArray as unknown as readonly ProofErasedTransaction[]; // @TODO fix this cast

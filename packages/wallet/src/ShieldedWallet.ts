@@ -1,6 +1,6 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { BuildArguments, WalletBuilder } from './WalletBuilder';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, CoreWallet, V1Tag, V1Variant } from './v1';
+import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';

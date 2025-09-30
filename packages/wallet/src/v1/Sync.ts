@@ -458,7 +458,7 @@ export const makeDefaultSyncCapability = (
       const { update, secretKeys } = wrappedUpdate;
       switch (update._tag) {
         case 'ProgressUpdate':
-          return state.updateProgress({
+          return CoreWallet.updateProgress(state, {
             highestRelevantWalletIndex: BigInt(update.highestRelevantWalletIndex),
             highestIndex: BigInt(update.highestIndex),
             highestRelevantIndex: BigInt(update.highestRelevantIndex),
@@ -467,7 +467,7 @@ export const makeDefaultSyncCapability = (
 
         case 'ViewingUpdateWithMerkleTreeUpdate': {
           const appliedIndex = BigInt(update.index - 1);
-          return state.applyCollapsedUpdate(update.update).updateProgress({ appliedIndex });
+          return CoreWallet.updateProgress(CoreWallet.applyCollapsedUpdate(state, update.update), { appliedIndex });
         }
 
         case 'ViewingUpdateWithTransaction': {
@@ -489,9 +489,10 @@ export const makeDefaultSyncCapability = (
           }
 
           const wallet = secretKeys((keys) => {
-            return state
-              .applyTransaction(keys, update.appliedTransaction.tx, mappedTxResult)
-              .updateProgress({ appliedIndex });
+            return CoreWallet.updateProgress(
+              CoreWallet.applyTransaction(state, keys, update.appliedTransaction.tx, mappedTxResult),
+              { appliedIndex },
+            );
           });
 
           const transactionHistoryCapability = getContext().transactionHistoryCapability;
@@ -525,7 +526,7 @@ export const makeSimulatorSyncService = (
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
-      return state.applyTransaction(update.secretKeys, update.update.lastTx, update.update.lastTxResult);
+      return CoreWallet.applyTransaction(state, update.secretKeys, update.update.lastTx, update.update.lastTxResult);
     },
   };
 };
@@ -541,7 +542,7 @@ export type TxApplierSyncUpdate = {
 export const makeTxApplierSyncCapability = (): SyncCapability<CoreWallet, TxApplierSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: TxApplierSyncUpdate) => {
-      return state.applyTransaction(update.secretKeys, update.tx, { type: 'success' });
+      return CoreWallet.applyTransaction(state, update.secretKeys, update.tx, { type: 'success' });
     },
   };
 };

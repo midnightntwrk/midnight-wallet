@@ -116,9 +116,9 @@ describe('V1 Wallet serialization', () => {
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
     const wallet = CoreWallet.initEmpty(keys, networkId);
     const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
-      const newState = wallet.applyTransaction(keys, tx, { type: 'success' });
+      const newState = CoreWallet.applyTransaction(wallet, keys, tx, { type: 'success' });
 
-      return newState.updateProgress({ appliedIndex: newState.state.firstFree });
+      return CoreWallet.updateProgress(newState, { appliedIndex: newState.state.firstFree });
     });
 
     const firstIteration = capability.serialize(preparedWallet);

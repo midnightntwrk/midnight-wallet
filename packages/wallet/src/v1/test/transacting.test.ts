@@ -78,9 +78,14 @@ const prepareWallets = <Names extends string>(desired: Record<Names, WalletEntry
     desired,
     Record.map((entry) => ({
       keys: entry.keys,
-      wallet: CoreWallet.initEmpty(entry.keys, ledger.NetworkId.Undeployed).applyTransaction(entry.keys, tx, {
-        type: 'success',
-      }),
+      wallet: CoreWallet.applyTransaction(
+        CoreWallet.initEmpty(entry.keys, ledger.NetworkId.Undeployed),
+        entry.keys,
+        tx,
+        {
+          type: 'success',
+        },
+      ),
     })),
   );
 };
@@ -159,7 +164,7 @@ describe('V1 Wallet Transacting', () => {
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           proven.fees(defaultConfig.costParameters.ledgerParams),
         );
-        const BAfterApply = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
+        const BAfterApply = CoreWallet.applyTransaction(wallets.B.wallet, wallets.B.keys, proven, { type: 'success' });
         expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([transactionValue]);
       }).pipe(Effect.runPromise);
     });
@@ -195,7 +200,7 @@ describe('V1 Wallet Transacting', () => {
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           proven.fees(ledger.LedgerParameters.dummyParameters()),
         );
-        const BAfterApply = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
+        const BAfterApply = CoreWallet.applyTransaction(wallets.B.wallet, wallets.B.keys, proven, { type: 'success' });
         expect(Array.from(BAfterApply.state.coins).map((c) => c.value)).toEqual([
           transactionValueGuaranteed,
           transactionValueFallible,
@@ -331,7 +336,9 @@ describe('V1 Wallet Transacting', () => {
         );
         const proven = yield* proving.prove(result.recipe);
 
-        const walletBApplied = wallets.B.wallet.applyTransaction(wallets.B.keys, proven, { type: 'success' });
+        const walletBApplied = CoreWallet.applyTransaction(wallets.B.wallet, wallets.B.keys, proven, {
+          type: 'success',
+        });
         expect(Array.from(walletBApplied.state.coins).map((c) => c.value)).toEqual([dust(2)]);
       }).pipe(Effect.runPromise);
     });
@@ -585,12 +592,17 @@ describe('V1 Wallet Transacting', () => {
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const aAfterApply: CoreWallet = result.newState.applyTransaction(wallets.A.keys, balancedProven, {
+        const aAfterApply: CoreWallet = CoreWallet.applyTransaction(result.newState, wallets.A.keys, balancedProven, {
           type: 'success',
         });
-        const bAfterApply: CoreWallet = balancedResult.newState.applyTransaction(wallets.B.keys, balancedProven, {
-          type: 'success',
-        });
+        const bAfterApply: CoreWallet = CoreWallet.applyTransaction(
+          balancedResult.newState,
+          wallets.B.keys,
+          balancedProven,
+          {
+            type: 'success',
+          },
+        );
 
         const imbalances = balancedProven.imbalances(0, proven.fees(ledger.LedgerParameters.dummyParameters()));
 

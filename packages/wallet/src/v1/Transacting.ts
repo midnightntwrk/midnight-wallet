@@ -154,7 +154,7 @@ export class TransactingCapabilityImplementation<
         newCoins.length,
         Imbalances.empty(),
       );
-      const finalState = CoreWallet.watchCoins(secretKeys, afterGuaranteed, newCoins);
+      const finalState = CoreWallet.watchCoins(afterGuaranteed, secretKeys, newCoins);
 
       return {
         newState: finalState,
@@ -189,7 +189,7 @@ export class TransactingCapabilityImplementation<
         selfCoins.length,
         Imbalances.empty(),
       );
-      const finalState = CoreWallet.watchCoins(secretKeys, newState, selfCoins);
+      const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
       const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(offer));
 
       return {
@@ -220,7 +220,7 @@ export class TransactingCapabilityImplementation<
         outputsParseResult.selfCoins.length,
         inputsParseResult,
       );
-      const finalState = CoreWallet.watchCoins(secretKeys, newState, outputsParseResult.selfCoins);
+      const finalState = CoreWallet.watchCoins(newState, secretKeys, outputsParseResult.selfCoins);
       const balancingTx = ledger.Transaction.fromParts(offer);
       const finalTx = outputsParseResult.unprovenTxToBalance
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
@@ -239,7 +239,7 @@ export class TransactingCapabilityImplementation<
   revert(state: CoreWallet, tx: TTransaction): Either.Either<CoreWallet, WalletError> {
     return Either.try({
       try: () => {
-        return state.revertTransaction(tx);
+        return CoreWallet.revertTransaction(state, tx);
       },
       catch: (err) => {
         return new OtherWalletError({
@@ -254,7 +254,7 @@ export class TransactingCapabilityImplementation<
     const doRevert = (tx: UnprovenTransaction) => {
       return Either.try({
         try: () => {
-          return state.revertTransaction(tx);
+          return CoreWallet.revertTransaction(state, tx);
         },
         catch: (err) => {
           return new OtherWalletError({
@@ -281,8 +281,8 @@ export class TransactingCapabilityImplementation<
     recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
     segment: 0 | 1,
   ): Option.Option<{ newState: CoreWallet; offer: ledger.ZswapOffer<ledger.PreProof> }> {
-    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(secretKeys, state, recipe.inputs, segment);
-    const stateAfterWatches = CoreWallet.watchCoins(secretKeys, stateAfterSpends, recipe.outputs);
+    const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(state, secretKeys, recipe.inputs, segment);
+    const stateAfterWatches = CoreWallet.watchCoins(stateAfterSpends, secretKeys, recipe.outputs);
     const outputOffers = recipe.outputs.map((coin) => {
       const output = ledger.ZswapOutput.new(
         coin,
@@ -511,7 +511,7 @@ export class TransactingCapabilityImplementation<
         this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
         Option.map(({ newState, offer }) => {
           return {
-            newState: CoreWallet.watchCoins(secretKeys, newState, [additionalCoin]),
+            newState: CoreWallet.watchCoins(newState, secretKeys, [additionalCoin]),
             offer: offer.merge(additionalOffer),
           };
         }),

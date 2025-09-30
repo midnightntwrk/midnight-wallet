@@ -59,152 +59,42 @@ export const CoinHashesMap = {
   },
 };
 
-// TODO Upcoming refactor for CoreWallet to convert to an object from a class
-// PM-19583 Refactor CoreWallet
-export class CoreWallet {
-  readonly state: ledger.ZswapLocalState;
-  readonly publicKeys: PublicKeys;
-  readonly protocolVersion: ProtocolVersion.ProtocolVersion;
+export type CoreWallet = Readonly<{
+  state: ledger.ZswapLocalState;
+  publicKeys: PublicKeys;
+  protocolVersion: ProtocolVersion.ProtocolVersion;
+  progress: SyncProgress;
+  networkId: ledger.NetworkId;
+  txHistoryArray: readonly FinalizedTransaction[];
+  coinHashes: CoinHashesMap;
+}>;
 
-  readonly progress: SyncProgress;
-  readonly networkId: ledger.NetworkId;
-  readonly txHistoryArray: readonly FinalizedTransaction[];
-  readonly coinHashes: CoinHashesMap;
-
-  constructor(
-    state: ledger.ZswapLocalState,
-    publicKeys: PublicKeys,
-    networkId: ledger.NetworkId,
-    coinHashes: CoinHashesMap,
-    txHistory: readonly FinalizedTransaction[] = [],
-    syncProgress?: Omit<SyncProgressData, 'isConnected'>,
-    protocolVersion?: ProtocolVersion.ProtocolVersion,
-  ) {
-    this.state = state;
-    this.networkId = networkId;
-    this.protocolVersion = protocolVersion || ProtocolVersion.MinSupportedVersion;
-    this.txHistoryArray = txHistory;
-    this.progress = syncProgress ? createSyncProgress(syncProgress) : createSyncProgress();
-    this.publicKeys = publicKeys;
-    this.coinHashes = coinHashes;
-  }
-
-  applyCollapsedUpdate(collapsedUpdate: ledger.MerkleTreeCollapsedUpdate): CoreWallet {
-    const newState = this.state.applyCollapsedUpdate(collapsedUpdate);
-    return new CoreWallet(
-      newState,
-      this.publicKeys,
-      this.networkId,
-      this.coinHashes,
-      this.txHistoryArray,
-      this.progress,
-    );
-  }
-
-  applyTransaction(
-    secretKeys: ledger.ZswapSecretKeys,
-    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    res: ledger.TransactionResult,
-  ): CoreWallet {
-    const newState = this.state.applyTx(secretKeys, tx, res.type);
-    const newCoinHashes = CoinHashesMap.updateWithCoins(
-      secretKeys,
-      this.coinHashes,
-      CoinHashesMap.pickAllCoins(newState),
-    );
-
-    return new CoreWallet(newState, this.publicKeys, this.networkId, newCoinHashes, this.txHistoryArray, this.progress);
-  }
-
-  applyFailed(tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>): CoreWallet {
-    const newState = pipe(
-      tx.fallibleOffer?.entries() ?? ([] as Array<[number, ledger.ZswapOffer<ledger.Proofish>]>),
-      Iterable.map(([, offer]) => offer),
-      Iterable.prependAll(pipe(tx.guaranteedOffer, Option.fromNullable, Option.toArray)),
-      Iterable.reduce(this.state, (previousState, offer) => previousState.applyFailed(offer)),
-    );
-
-    return new CoreWallet(
-      newState,
-      this.publicKeys,
-      this.networkId,
-      this.coinHashes,
-      this.txHistoryArray,
-      this.progress,
-    );
-  }
-
-  updateProgress({
-    appliedIndex,
-    highestRelevantWalletIndex,
-    highestIndex,
-    highestRelevantIndex,
-    isConnected,
-  }: Partial<SyncProgressData>): CoreWallet {
-    const updatedProgress = createSyncProgress({
-      appliedIndex: appliedIndex ?? this.progress.appliedIndex,
-      highestRelevantWalletIndex: highestRelevantWalletIndex ?? this.progress.highestRelevantWalletIndex,
-      highestIndex: highestIndex ?? this.progress.highestIndex,
-      highestRelevantIndex: highestRelevantIndex ?? this.progress.highestRelevantIndex,
-      isConnected: isConnected ?? this.progress.isConnected,
-    });
-
-    return new CoreWallet(
-      this.state,
-      this.publicKeys,
-      this.networkId,
-      this.coinHashes,
-      this.txHistoryArray,
-      updatedProgress,
-    );
-  }
-
-  addTransaction(tx: FinalizedTransaction): CoreWallet {
-    return new CoreWallet(
-      this.state,
-      this.publicKeys,
-      this.networkId,
-      this.coinHashes,
-      [...this.txHistoryArray, tx],
-      this.progress,
-    );
-  }
-
-  revertTransaction<TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
-    tx: TTransaction,
-  ): CoreWallet {
-    return this.applyFailed(tx);
-  }
-
-  updateTxHistory(newTxs: readonly FinalizedTransaction[]): CoreWallet {
-    return new CoreWallet(
-      this.state,
-      this.publicKeys,
-      this.networkId,
-      this.coinHashes,
-      [...this.txHistoryArray, ...newTxs],
-      this.progress,
-    );
-  }
-
-  static init(
+export const CoreWallet = {
+  init(
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
     networkId: ledger.NetworkId,
   ): CoreWallet {
+    const publicKeys = PublicKeys.fromSecretKeys(secretKeys);
     const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
-    return new CoreWallet(localState, PublicKeys.fromSecretKeys(secretKeys), networkId, coinHashes);
-  }
+    const progress = createSyncProgress();
+    const protocolVersion = ProtocolVersion.MinSupportedVersion;
+    return { state: localState, publicKeys, networkId, coinHashes, txHistoryArray: [], progress, protocolVersion };
+  },
 
-  static readonly initEmpty = (keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): CoreWallet => {
-    return CoreWallet.empty(keys, networkId);
-  };
+  empty(publicKeys: PublicKeys, networkId: ledger.NetworkId): CoreWallet {
+    return {
+      state: new ledger.ZswapLocalState(),
+      publicKeys,
+      networkId,
+      coinHashes: CoinHashesMap.empty,
+      txHistoryArray: [],
+      progress: createSyncProgress(),
+      protocolVersion: ProtocolVersion.MinSupportedVersion,
+    };
+  },
 
-  static empty(publicKeys: PublicKeys, networkId: ledger.NetworkId): CoreWallet {
-    return new CoreWallet(new ledger.ZswapLocalState(), publicKeys, networkId, CoinHashesMap.empty);
-  }
-
-  static restore(
+  restore(
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
     txHistory: readonly FinalizedTransaction[],
@@ -212,18 +102,20 @@ export class CoreWallet {
     protocolVersion: bigint,
     networkId: ledger.NetworkId,
   ): CoreWallet {
-    return new CoreWallet(
-      localState,
-      PublicKeys.fromSecretKeys(secretKeys),
+    const publicKeys = PublicKeys.fromSecretKeys(secretKeys);
+    const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
+    return {
+      state: localState,
+      publicKeys,
       networkId,
-      CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState)),
-      txHistory,
-      syncProgress,
-      ProtocolVersion.ProtocolVersion(protocolVersion),
-    );
-  }
+      coinHashes,
+      txHistoryArray: txHistory,
+      progress: createSyncProgress(syncProgress),
+      protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
+    };
+  },
 
-  static restoreWithCoinHashes(
+  restoreWithCoinHashes(
     publicKeys: PublicKeys,
     localState: ledger.ZswapLocalState,
     txHistory: readonly FinalizedTransaction[],
@@ -236,77 +128,125 @@ export class CoreWallet {
       Either.mapBoth({
         onLeft: (missingNonces) =>
           new InvalidCoinHashesError({ message: 'Missing coin hashes for coins present in the state', missingNonces }),
-        onRight: () =>
-          new CoreWallet(
-            localState,
-            publicKeys,
-            networkId,
-            coinHashes,
-            txHistory,
-            syncProgress,
-            ProtocolVersion.ProtocolVersion(protocolVersion),
-          ),
+        onRight: () => ({
+          state: localState,
+          publicKeys,
+          networkId,
+          coinHashes,
+          txHistoryArray: txHistory,
+          progress: createSyncProgress(syncProgress),
+          protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
+        }),
       }),
     );
-  }
+  },
 
-  // TODO Upcoming refactor for CoreWallet, this will be part of the CoreWallet object.
-  static spendCoins(
+  initEmpty(keys: ledger.ZswapSecretKeys, networkId: ledger.NetworkId): CoreWallet {
+    return this.empty(PublicKeys.fromSecretKeys(keys), networkId);
+  },
+
+  applyCollapsedUpdate(wallet: CoreWallet, collapsed: ledger.MerkleTreeCollapsedUpdate): CoreWallet {
+    const newState = wallet.state.applyCollapsedUpdate(collapsed);
+    return { ...wallet, state: newState };
+  },
+
+  applyTransaction(
+    wallet: CoreWallet,
     secretKeys: ledger.ZswapSecretKeys,
-    state: CoreWallet,
+    tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    res: ledger.TransactionResult,
+  ): CoreWallet {
+    const newState = wallet.state.applyTx(secretKeys, tx, res.type);
+    const newCoinHashes = CoinHashesMap.updateWithCoins(
+      secretKeys,
+      wallet.coinHashes,
+      CoinHashesMap.pickAllCoins(newState),
+    );
+    return { ...wallet, state: newState, coinHashes: newCoinHashes };
+  },
+
+  applyFailed<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
+    wallet: CoreWallet,
+    tx: TTx,
+  ): CoreWallet {
+    const newState = pipe(
+      tx.fallibleOffer?.entries() ?? ([] as Array<[number, ledger.ZswapOffer<ledger.Proofish>]>),
+      Iterable.map(([, offer]) => offer),
+      Iterable.prependAll(pipe(tx.guaranteedOffer, Option.fromNullable, Option.toArray)),
+      Iterable.reduce(wallet.state, (previousState, offer) => previousState.applyFailed(offer)),
+    );
+    return { ...wallet, state: newState };
+  },
+
+  updateProgress(
+    wallet: CoreWallet,
+    {
+      appliedIndex,
+      highestRelevantWalletIndex,
+      highestIndex,
+      highestRelevantIndex,
+      isConnected,
+    }: Partial<SyncProgressData>,
+  ): CoreWallet {
+    const updatedProgress = createSyncProgress({
+      appliedIndex: appliedIndex ?? wallet.progress.appliedIndex,
+      highestRelevantWalletIndex: highestRelevantWalletIndex ?? wallet.progress.highestRelevantWalletIndex,
+      highestIndex: highestIndex ?? wallet.progress.highestIndex,
+      highestRelevantIndex: highestRelevantIndex ?? wallet.progress.highestRelevantIndex,
+      isConnected: isConnected ?? wallet.progress.isConnected,
+    });
+    return { ...wallet, progress: updatedProgress };
+  },
+
+  addTransaction(wallet: CoreWallet, tx: FinalizedTransaction): CoreWallet {
+    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, tx] };
+  },
+
+  revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
+    wallet: CoreWallet,
+    tx: TTx,
+  ): CoreWallet {
+    return CoreWallet.applyFailed(wallet, tx);
+  },
+
+  updateTxHistory(wallet: CoreWallet, newTxs: readonly FinalizedTransaction[]): CoreWallet {
+    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, ...newTxs] };
+  },
+
+  spendCoins(
+    wallet: CoreWallet,
+    secretKeys: ledger.ZswapSecretKeys,
     coins: ReadonlyArray<ledger.QualifiedShieldedCoinInfo>,
-    // TODO: Introduce proper type for segment
     segment: number,
   ): [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, CoreWallet] {
-    const [output, newLocalState] = pipe(
+    const [offers, newLocalState] = pipe(
       coins,
       Arr.reduce(
-        [[], state.state] as [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
-        (
-          [offers, localState]: [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
-          coinToSpend,
-        ) => {
-          const [newState, newInput] = localState.spend(secretKeys, coinToSpend, segment);
+        [[], wallet.state] as [ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>, ledger.ZswapLocalState],
+        ([accOffers, localState], coinToSpend) => {
+          const [nextState, newInput] = localState.spend(secretKeys, coinToSpend, segment);
           const inputOffer = ledger.ZswapOffer.fromInput(newInput, coinToSpend.type, coinToSpend.value);
-          return [offers.concat([inputOffer]), newState] as [
+          return [accOffers.concat([inputOffer]), nextState] as [
             ReadonlyArray<ledger.ZswapOffer<ledger.PreProof>>,
             ledger.ZswapLocalState,
           ];
         },
       ),
     );
-    const updatedState = new CoreWallet(
-      newLocalState,
-      state.publicKeys,
-      state.networkId,
-      state.coinHashes,
-      state.txHistoryArray,
-      state.progress,
-      state.protocolVersion,
-    );
-    return [output, updatedState];
-  }
+    const updated: CoreWallet = { ...wallet, state: newLocalState };
+    return [offers, updated];
+  },
 
-  // TODO Upcoming refactor for CoreWallet, this will be part of the CoreWallet object.
-  static watchCoins(
+  watchCoins(
+    wallet: CoreWallet,
     secretKeys: ledger.ZswapSecretKeys,
-    state: CoreWallet,
     coins: ReadonlyArray<ledger.ShieldedCoinInfo>,
   ): CoreWallet {
     const newLocalState = coins.reduce(
-      (localState: ledger.ZswapLocalState, coin) => localState.watchFor(state.publicKeys.coinPublicKey, coin),
-      state.state,
+      (localState: ledger.ZswapLocalState, coin) => localState.watchFor(wallet.publicKeys.coinPublicKey, coin),
+      wallet.state,
     );
-    const newCoinHashes = CoinHashesMap.updateWithNewCoins(secretKeys, state.coinHashes, coins);
-
-    return new CoreWallet(
-      newLocalState,
-      state.publicKeys,
-      state.networkId,
-      newCoinHashes,
-      state.txHistoryArray,
-      state.progress,
-      state.protocolVersion,
-    );
-  }
-}
+    const newCoinHashes = CoinHashesMap.updateWithNewCoins(secretKeys, wallet.coinHashes, coins);
+    return { ...wallet, state: newLocalState, coinHashes: newCoinHashes };
+  },
+};

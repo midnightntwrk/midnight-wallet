@@ -1,4 +1,4 @@
-import { CoreWallet } from './CoreWallet';
+import type { CoreWallet } from './CoreWallet';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
