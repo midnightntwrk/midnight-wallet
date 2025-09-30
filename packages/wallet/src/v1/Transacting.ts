@@ -1,6 +1,6 @@
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
-import { ArrayOps, EitherOps } from '../effect/index';
+import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe';
 import { CoreWallet } from './CoreWallet';
 import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError';

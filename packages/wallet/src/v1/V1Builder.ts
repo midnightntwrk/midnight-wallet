@@ -1,6 +1,6 @@
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, Either, Scope, Types } from 'effect';
-import { WalletSeed, Expect, ItemType } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletSeed } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant';
@@ -28,6 +28,7 @@ import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabiliti
 import { CoreWallet, PublicKeys } from './CoreWallet';
 import { FinalizedTransaction } from './Transaction';
 import { makeDefaultTransactionHistoryCapability, TransactionHistoryCapability } from './TransactionHistory';
+import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
   networkId: ledger.NetworkId;
@@ -651,10 +652,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
    */
   type _1 = Expect<
-    Types.Equals<
-      keyof V1Builder.FullBuildState<never, never, never, never, never, never>,
-      ItemType<typeof allBuildStateKeys>
-    >
+    Equal<keyof V1Builder.FullBuildState<never, never, never, never, never, never>, ItemType<typeof allBuildStateKeys>>
   >;
   return allBuildStateKeys.every((key) => typeof buildState[key] == 'function');
 };

@@ -44,7 +44,6 @@
     "@types/bn.js": "^5.2.0",
     "bn.js": "^5.2.2",
     "effect": "^3.17.3",
-    "portfinder": "^1.0.37",
     "rxjs": "^7.5",
     "testcontainers": "^11.4.0"
   },
@@ -59,6 +58,7 @@
     "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*",
     "@polkadot/typegen": "^16.3.1",
     "@types/yargs": "^17.0.33",
     "tsx": "^4.20.4",

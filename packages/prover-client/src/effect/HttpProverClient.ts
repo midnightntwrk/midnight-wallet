@@ -1,14 +1,13 @@
 import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
 import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
-import {
-  ClientError,
-  HttpURL,
-  InvalidProtocolSchemeError,
-  SerializedTransaction,
-  SerializedUnprovenTransaction,
-  ServerError,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ProverClient } from './ProverClient';
+import {
+  InvalidProtocolSchemeError,
+  ClientError,
+  ServerError,
+  HttpURL,
+} from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 const PROVE_TX_PATH = '/prove-tx';
 

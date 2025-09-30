@@ -1,7 +1,6 @@
-import type { Expect, Equal } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { CanAssign, Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { VariantBuilder } from '../abstractions/index';
-import { FullConfiguration, BuildArguments } from '../WalletBuilder';
-import { CanAssign } from './testUtils';
+import { BuildArguments, FullConfiguration } from '../WalletBuilder';
 import {
   InterceptingVariantBuilder,
   NumericRangeBuilder,

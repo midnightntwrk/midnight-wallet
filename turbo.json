@@ -13,7 +13,7 @@
         "$TURBO_ROOT$/eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "pre-build"]
+      "dependsOn": ["^dist", "pre-build", "typecheck"]
     },
     "test": {
       "inputs": [

@@ -1,7 +1,6 @@
-// TODO: once rewrite commences - rewire things to ledger package
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
-import { ArrayOps, EitherOps } from '../effect';
+import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { ProofErasedTransaction } from './Transaction';
 

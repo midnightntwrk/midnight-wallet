@@ -13,9 +13,9 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError';
 import { FinalizedTransaction } from './Transaction';
-import { HttpURL, InvalidProtocolSchemeError, URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { HttpURL, InvalidProtocolSchemeError, URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TransactionHistoryCapability } from './TransactionHistory';
-import { EitherOps } from '../effect';
+import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;

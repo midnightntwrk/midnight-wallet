@@ -1,5 +1,5 @@
 import { Stream, Effect, identity, Fiber } from 'effect';
-import { ObservableOps } from '../index';
+import * as ObservableOps from '../ObservableOps';
 import * as rx from 'rxjs';
 
 describe('Observable', () => {

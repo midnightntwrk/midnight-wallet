@@ -5,7 +5,8 @@ import * as NodeClient from '../NodeClient';
 import * as SubmissionEvent from '../SubmissionEvent';
 import { StartedTestContainer } from 'testcontainers';
 import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
-import { TestTransactions, TestContainers } from '../../testing/index';
+import { TestTransactions } from '../../testing/index';
+import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { NodeContext } from '@effect/platform-node';
 import { generateTxs, getTestTxsPath } from './gen-txs';
 

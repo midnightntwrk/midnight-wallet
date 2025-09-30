@@ -1,5 +1,6 @@
-import { CanAssign } from '../../test/testUtils';
-import { type Expect, type Equal, HList, Poly, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import type { Expect, Equal, CanAssign } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import {
   InterceptingRunningVariant,
   InterceptingVariant,

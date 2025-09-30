@@ -1,5 +1,6 @@
 import { describe, vi, it, expect } from 'vitest';
-import { TestContainers, TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
+import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
+import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Chunk, Effect, Option, pipe, Stream, Console, Exit, Scope } from 'effect';
 import { makeDefaultSubmissionService } from '../Submission';
 import * as ledger from '@midnight-ntwrk/ledger';

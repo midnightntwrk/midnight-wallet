@@ -3,7 +3,7 @@ import { Scope } from 'effect';
 import { Observable } from 'rxjs';
 import { Runtime } from '../Runtime';
 import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant';
-import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**

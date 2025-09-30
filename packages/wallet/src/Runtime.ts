@@ -4,11 +4,9 @@ import {
   ProtocolVersion,
   StateChange,
   VersionChangeType,
-  HList,
-  Poly,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, WalletRuntimeError } from './abstractions/index';
-import { EitherOps } from './effect';
+import { EitherOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 /**
  * The {@link Runtime} service type.

@@ -7,7 +7,7 @@ import {
 } from './effect/index';
 import { Effect, Exit, pipe, Scope } from 'effect';
 import { Observable } from '@polkadot/types/types';
-import { fromStream } from './ObservableOps';
+import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient';
 
@@ -34,7 +34,7 @@ export class PolkadotNodeClient {
   sendMidnightTransaction(
     serializedTransaction: NodeClient.SerializedMnTransaction,
   ): Observable<SubmissionEvent.SubmissionEvent> {
-    return fromStream(this.#effectClient.sendMidnightTransaction(serializedTransaction));
+    return ObservableOps.fromStream(this.#effectClient.sendMidnightTransaction(serializedTransaction));
   }
 
   sendMidnightTransactionAndWait(

@@ -1,9 +1,9 @@
-import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either, Scope } from 'effect';
+import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either } from 'effect';
 import { UnshieldedStateDecoder, UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { SyncService, UnshieldedUpdate } from './SyncService';
 import { TransactionService, TokenTransfer } from './TransactionService';
-import { fromStream } from './Observable';
+import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { PublicKey } from './KeyStore';
 import { TransactionHistoryChange, TransactionHistoryService } from './TransactionHistoryService';
 import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage';
@@ -172,13 +172,13 @@ const makeWallet = ({
     const transactionHistory = txHistoryStorage
       ? {
           get: (hash: string) => Effect.runPromise(transactionHistoryService.get(hash)),
-          getAll: () => fromStream(transactionHistoryService.getAll()),
-          changes: () => fromStream(transactionHistoryService.changes),
+          getAll: () => ObservableOps.fromStream(transactionHistoryService.getAll()),
+          changes: () => ObservableOps.fromStream(transactionHistoryService.changes),
         }
       : undefined;
 
     const result: UnshieldedWallet = {
-      state: () => fromStream(state.updates()),
+      state: () => ObservableOps.fromStream(state.updates()),
       start: () => {
         return new Promise((resolve) => {
           Effect.runFork(Effect.scoped(start()));

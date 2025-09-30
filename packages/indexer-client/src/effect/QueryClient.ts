@@ -1,5 +1,5 @@
 import { Effect, Context } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import type { Query } from './Query';
 
 export class QueryClient extends Context.Tag('@midnight-ntwrk/indexer-client#QueryClient')<

@@ -1,6 +1,7 @@
+import { ProtocolState, ProtocolVersion, StateChange } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolState, ProtocolVersion, StateChange, Expect, Equal } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletLike } from '../abstractions';
 import { WalletBuilder } from '../index';
 import { Runtime } from '../Runtime';

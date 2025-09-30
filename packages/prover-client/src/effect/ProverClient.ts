@@ -1,10 +1,6 @@
 import { Effect, Context } from 'effect';
-import {
-  ClientError,
-  ServerError,
-  SerializedTransaction,
-  SerializedUnprovenTransaction,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 /**
  * A client that provides proof services for unproven transactions.

@@ -1,10 +1,11 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { InvalidProtocolSchemeError, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe';
 import { ProvingError, WalletError } from './WalletError';
 import { UnprovenTransaction, ProofErasedTransaction, FinalizedTransaction } from './Transaction';
+import { InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;

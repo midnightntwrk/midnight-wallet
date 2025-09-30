@@ -1,5 +1,5 @@
 import { Effect, Stream, Context, Effectable, Option, identity } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { SubscriptionClient } from './SubscriptionClient';
 import type { Query } from './Query';
 

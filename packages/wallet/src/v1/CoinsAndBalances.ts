@@ -1,7 +1,7 @@
 import { CoreWallet } from './CoreWallet';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { pipe, Array } from 'effect';
-import * as RecordOps from '../effect/RecordOps';
+import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export type AvailableCoin = {
   coin: ledger.QualifiedShieldedCoinInfo;

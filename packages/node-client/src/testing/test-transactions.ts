@@ -1,17 +1,13 @@
-import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
+import { Error, FileSystem } from '@effect/platform';
 import * as ledger from '@midnight-ntwrk/ledger';
-import { FileSystem, Error } from '@effect/platform';
-import {
-  ClientError,
-  SerializedTransaction,
-  SerializedUnprovenTransaction,
-  ServerError,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { normalizeTxs } from './normalize-txs';
-import { StartedNetwork } from 'testcontainers';
-import { TestContainers } from '.';
+import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
 import { Scope } from 'effect/Scope';
+import { StartedNetwork } from 'testcontainers';
+import { normalizeTxs } from './normalize-txs';
 
 export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 

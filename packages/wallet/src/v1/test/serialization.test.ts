@@ -5,7 +5,7 @@ import * as fc from 'fast-check';
 import { makeDefaultV1SerializationCapability } from '../Serialization';
 import { Either } from 'effect';
 import { CoreWallet } from '../CoreWallet';
-import { EitherOps } from '../../effect';
+import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProofErasedTransaction } from '../Transaction';
 import { makeFakeTx } from '../../test/genTxs';
 

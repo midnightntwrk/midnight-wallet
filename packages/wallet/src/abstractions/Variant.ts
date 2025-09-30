@@ -2,7 +2,7 @@
 import { Scope, SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
-import { Poly } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import type { ProtocolVersion, StateChange } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletRuntimeError } from './WalletRuntimeError';
 

@@ -7,7 +7,7 @@ import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { ArrayOps, EitherOps } from '../../effect/index';
+import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
 import { makeDefaultKeysCapability } from '../Keys';
 import { makeSimulatorProvingService } from '../Proving';

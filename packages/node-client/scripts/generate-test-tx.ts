@@ -10,7 +10,7 @@ import { Effect } from 'effect';
 import { FileSystem } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import * as path from 'node:path';
-import * as TestContainers from '../src/testing/test-containers.ts';
+import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import * as process from 'process';

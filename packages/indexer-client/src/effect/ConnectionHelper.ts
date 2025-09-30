@@ -1,5 +1,5 @@
-import { FailedToDeriveWebSocketUrlError, URLError } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Either from 'effect/Either';
+import { URLError, FailedToDeriveWebSocketUrlError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export const deriveWebSocketUrl = (url: URL | string): Either.Either<string, URLError> => {
   const httpUrl = typeof url === 'string' ? new URL(url) : url;

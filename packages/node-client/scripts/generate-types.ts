@@ -14,7 +14,7 @@ import { Command, FileSystem } from '@effect/platform';
 import { NodeContext, NodeRuntime } from '@effect/platform-node';
 import * as path from 'node:path';
 import { gatherAndPrintCommandOutput, handleProcessExit } from './utils/command.ts';
-import { TestContainers } from '../src/testing/index.ts';
+import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 
 const paths = new (class {
   currentDir = path.dirname(new URL(import.meta.url).pathname);

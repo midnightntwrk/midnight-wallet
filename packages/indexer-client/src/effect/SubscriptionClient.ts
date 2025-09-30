@@ -1,6 +1,6 @@
 import { Stream, Context } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import type { Query } from './Query';
+import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export class SubscriptionClient extends Context.Tag('@midnight-ntwrk/indexer-client#SubscriptionClient')<
   SubscriptionClient,

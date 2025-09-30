@@ -26,10 +26,6 @@
       "import": "./dist/abstractions/index.js",
       "types": "./dist/abstractions/index.d.ts"
     },
-    "./effect": {
-      "import": "./dist/effect/index.js",
-      "types": "./dist/effect/index.d.ts"
-    },
     "./v1": {
       "import": "./dist/v1/index.js",
       "types": "./dist/v1/index.d.ts"
@@ -43,6 +39,7 @@
     "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*",
     "@scure/base": "^1.1.9",
     "effect": "^3.17.3",
     "isomorphic-ws": "^5.0.0",
