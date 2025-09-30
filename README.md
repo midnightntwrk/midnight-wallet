@@ -1,41 +1,28 @@
-# Midnight Wallet
+# Midnight Wallet SDK
 
-This is an implementation of the [Wallet API](https://github.com/midnightntwrk/midnight-wallet-api),
-used by dapp developers and [Midnight.js](https://github.com/midnightntwrk/midnight-js) to:
-
-- Build transactions
-- Submit transactions to a [node](https://github.com/midnightntwrk/midnight-substrate-prototype)
-- Sync state with an [indexer](https://github.com/midnightntwrk/midnight-indexer)
+Implementation of [Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md). It provides components for:
+- generating keys and addresses
+- formatting keys and addresses
+- building transactions
+- submitting transactions to a [node](https://github.com/midnightntwrk/midnight-node)
+- handling swaps
+- syncing state with [indexer](https://github.com/midnightntwrk/midnight-indexer)
+- testing without external infrastructure
 
 ## Modules structure
 
 This project is a yarn workspaces combined with Turborepo, with Scala pieces managed by [sbt](https://www.scala-sbt.org), meaning that their modules and
-dependencies are configured in the [`build.sbt`](build.sbt) file. In many of them `package.json` files can be found and they are registered as workspaces in yarn, so yarn can resolve the dependencies, and [ScalablyTyped](https://scalablytyped.org) can provide Scala type definitions for them. The modules are:
+dependencies are configured in the [`build.sbt`](build.sbt) file. In many of them `package.json` files can be found and they are registered as workspaces in yarn, so yarn can resolve the dependencies, and [ScalablyTyped](https://scalablytyped.org) can provide Scala type definitions for them. At this point, there is an ongoing rewrite of Scala code into TypeScript, so that soon whole repository will be uniformly TypeScript. Main packages/sub-projects are:
+- `wallet-core` (Scala) - domain definition of a shielded wallet and code surrounding it to enable transacting
+- `wallet/v1` (TS) - the rewritten shielded wallet variant, very close in scope to `wallet-core` Scala package 
+- `wallet` (TS) - wallet runtime and builder - allows orchestrating variants of a wallet across migration points (most importantly - hard-forks)
+- `abstractions` (TS) - common abstractions and definitions - variants need to implement specific interfaces to be used through wallet builder, but can't depend on the builder itself
+- `address-format` (TS) - implementation of Bech32m formatting for Midnight keys and addresses
+- `hd` (TS) - implementation of HD-wallet API for Midnight
+- `capabilities` (TS) - shared and universal definitions and implementations for capabilities. E.g. balancing or coin selection
+- `wallet-integration-tests` (TS) - tests examining public APIs
 
-- `wallet-core` - Implementation of the main business logic. This exposes interfaces of services that are
-  required to be instantiated, and that can be independently developed and reused
-
-- `wallet-engine` - Dependency injection and instantiation of the main `Wallet` class from `wallet-core`.
-  Translation layer to JavaScript types
-
-- `blockchain` - Blockchain model used by the wallet
-
-- `js-interop` - [Facade types](https://www.scala-js.org/doc/interoperability/facade-types.html) and
-  general utilities to work with JavaScript libraries such as [rxjs](rxjs.dev/)
-
-- `prover-client` - Implementation of proving server client
-
-- `substrate-client` - Implementation of substrate node client
-
-- `pubsub-indexer-client` - Implementation of PubSub Indexer client
-
-- `bloc` - Basic Scala implementation of the BLoC (Business Logic Component) pattern
-
-- `wallet-zswap` - A module that exposes ZSwap functionalities that is compatible
-  with Scala JS and JVM. This is achieved by using a WASM ledger package on JS
-  and JNR interfaces on JVM. The module hides the complexity of different
-  platforms and enables Scala clients work with idiomatic Scala.
-- `integration-tests` - All tests that require an external service to work
+For a reference about structure and internal rules to follow, consult [Design Doc](./docs//Design.md) and [IcePanel component diagram](https://app.icepanel.io/landscapes/yERCUolKk91aYF1pzsql/versions/latest/diagrams/editor?diagram=JwWBu6RYGg&model=onccvco5c4p&overlay_tab=tags&x1=-1463.3&y1=-888&x2=2295.3&y2=1072)
 
 ## Development setup
 
@@ -45,11 +32,11 @@ The tools with the corresponding versions used to build the code are listed in t
 
 You can use [asdf](https://asdf-vm.com) and just run `asdf install` to get the correct versions.
 
-Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell definition.
+As an alternative - one can use [nvm](https://github.com/nvm-sh/nvm), if only Scala-related tools are provided in a different way.
+
+Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell definition. In such case [direnv](https://direnv.net) is strongly recommended.
 
 Additionally, it is worth installing turborepo as a global npm package (`npm install -g turbo`), for easier access for turbo command.
-
-Finally, [direnv](https://direnv.net) is optional but strongly recommended.
 
 ### Internal private registry and credentials
 

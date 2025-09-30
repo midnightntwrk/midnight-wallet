@@ -1,10 +1,10 @@
 # Use [Effect](https://effect.website/)
 
-* Status: proposed
+* Status: accepted
 * Deciders: Tim Roberts, Andrzej Kopeć, Monika Jassove
 * Date: November 2024
 
-Technical Story: [description | ticket/issue URL] <!-- optional -->
+Technical Story: [Wallet Rewrite](https://shielded.atlassian.net/browse/PM-13769)
 
 ## Context and Problem Statement
 
