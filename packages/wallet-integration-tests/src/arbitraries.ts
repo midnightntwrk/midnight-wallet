@@ -3,7 +3,7 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import * as fc from 'fast-check';
 import { Record } from 'effect';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
@@ -23,7 +23,6 @@ export const shieldedAddressArbitrary = (whoArb: fc.Arbitrary<ledger.ZswapSecret
 
 export const outputsArbitrary = <TRecipient>(
   balances: Record<ledger.RawTokenType, bigint>,
-  networkId: ledger.NetworkId,
   recipientArb: fc.Arbitrary<TRecipient>,
 ): fc.Arbitrary<
   ReadonlyArray<{

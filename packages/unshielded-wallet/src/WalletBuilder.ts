@@ -1,6 +1,6 @@
 import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either } from 'effect';
 import { UnshieldedStateDecoder, UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { SyncService, UnshieldedUpdate } from './SyncService';
 import { TransactionService, TokenTransfer } from './TransactionService';
 import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -11,10 +11,11 @@ import { State, StateImpl } from './State';
 import { NoOpTransactionHistoryStorage } from './tx-history-storage/NoOpTransactionHistoryStorage';
 import { Observable } from 'rxjs';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 interface WalletConfig {
   publicKey: PublicKey;
-  networkId: ledger.NetworkId;
+  networkId: NetworkId.NetworkId;
   indexerUrl: string;
   txHistoryStorage?: TransactionHistoryStorage | undefined;
 }
@@ -126,13 +127,13 @@ const makeWallet = ({
         const mappedOutputs = outputs.map((output) => ({
           ...output,
           receiverAddress: `0200${UnshieldedAddress.codec
-            .decode(ledger.NetworkId.Undeployed, MidnightBech32m.parse(output.receiverAddress))
+            .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
             .data.toString('hex')}`,
         }));
 
         // TODO: make it configurable
         const ttl = new Date(Date.now() + latestState.syncProgress.highestTransactionId + 60 * 3600);
-        const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl);
+        const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl, networkId);
 
         return yield* transactionService.balanceTransaction(
           transaction,

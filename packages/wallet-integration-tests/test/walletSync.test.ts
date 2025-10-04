@@ -1,5 +1,5 @@
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
 import {
   DefaultV1Configuration,
@@ -14,11 +14,11 @@ import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 
 import os from 'node:os';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils';
 
-vi.setConfig({ testTimeout: 600_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 600_000, hookTimeout: 60_000 });
 
 describe('Wallet Sync', () => {
   const environmentId = randomUUID();
@@ -44,11 +44,7 @@ describe('Wallet Sync', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: ledger.NetworkId.Undeployed,
-      costParameters: {
-        ledgerParams: ledger.LedgerParameters.dummyParameters(),
-        additionalFeeOverhead: 50_000n,
-      },
+      networkId: NetworkId.NetworkId.Undeployed,
     };
   });
 
@@ -94,9 +90,9 @@ describe('Wallet Sync', () => {
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
     expect(balances).toStrictEqual({
-      '0000000000000000000000000000000000000000000000000000000000000000': 25000000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000001': 5000000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000002': 5000000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n,
     });
   });
 });

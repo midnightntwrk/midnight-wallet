@@ -3,15 +3,13 @@ import * as path from 'node:path';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
 import { WsSubscriptionClient } from '../../../effect';
-import { UnshieldedTransactions } from '../UnshieldedTransactions';
+import { ZswapEvents } from '../ZswapEvents';
 
 const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../');
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
-const ADDRESS = 'mn_addr_undeployed1rhqz8aq6t74ym2uq5gh53t9x02gducxnamtdvnjxfhelxwaf8ztqpmrwwj';
-
-describe('Wallet subscription', () => {
+describe('ZSwap events subscription', () => {
   describe('with available Indexer Server', () => {
     const environmentId = randomUUID();
     let environment: StartedDockerComposeEnvironment | undefined = undefined;
@@ -35,12 +33,11 @@ describe('Wallet subscription', () => {
       'should stream GraphQL subscription',
       async () => {
         await Effect.gen(function* () {
-          const events = yield* UnshieldedTransactions.run({
-            address: ADDRESS,
-            transactionId: 0,
+          const events = yield* ZswapEvents.run({
+            id: 0,
           }).pipe(
             Stream.take(2),
-            Stream.tap((data) => Effect.log(data.unshieldedTransactions.type)),
+            Stream.tap((data) => Effect.log(`ID=${data.zswapLedgerEvents.id}, MAX_ID=${data.zswapLedgerEvents.maxId}`)),
             Stream.runCollect,
           );
 

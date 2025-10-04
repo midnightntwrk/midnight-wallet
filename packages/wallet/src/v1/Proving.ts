@@ -1,11 +1,8 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe';
 import { ProvingError, WalletError } from './WalletError';
-import { UnprovenTransaction, ProofErasedTransaction, FinalizedTransaction } from './Transaction';
-import { InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;
@@ -13,63 +10,51 @@ export interface ProvingService<TTransaction> {
 
 export type DefaultProvingConfiguration = {
   provingServerUrl: URL;
-  networkId: ledger.NetworkId;
-};
-
-export const httpProveTx = (
-  networkId: ledger.NetworkId,
-  unproven: UnprovenTransaction,
-): Effect.Effect<FinalizedTransaction, WalletError, ProverClient.ProverClient> => {
-  return Effect.gen(function* () {
-    const client = yield* ProverClient.ProverClient;
-    const unprovenSerialized = SerializedUnprovenTransaction(unproven.serialize(networkId));
-    const provenSerialized = yield* client.proveTransaction(unprovenSerialized);
-    return ledger.Transaction.deserialize<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>(
-      'signature',
-      'proof',
-      'pre-binding',
-      provenSerialized,
-      networkId,
-    );
-  }).pipe(Effect.mapError((err) => WalletError.proving(err)));
 };
 
 export const makeDefaultProvingService = (
   configuration: DefaultProvingConfiguration,
-): ProvingService<FinalizedTransaction> => {
+): ProvingService<ledger.FinalizedTransaction> => {
   const clientLayer = HttpProverClient.layer({
     url: configuration.provingServerUrl,
   });
 
   return {
-    prove(recipe: ProvingRecipe<FinalizedTransaction>): Effect.Effect<FinalizedTransaction, WalletError> {
+    prove(recipe: ProvingRecipe<ledger.FinalizedTransaction>): Effect.Effect<ledger.FinalizedTransaction, WalletError> {
       switch (recipe.type) {
         case 'BalanceTransactionToProve':
           return pipe(
-            httpProveTx(configuration.networkId, recipe.transactionToProve),
-            Effect.map((proven) => recipe.transactionToBalance.merge(proven)),
+            ProverClient.ProverClient,
+            Effect.flatMap((client) =>
+              client.proveTransaction(recipe.transactionToProve, ledger.CostModel.initialCostModel()),
+            ),
+            Effect.map((provenTx) => recipe.transactionToBalance.merge(provenTx.bind())),
             Effect.provide(clientLayer),
-            Effect.catchTag(InvalidProtocolSchemeError.tag, (invalidProtocolScheme) => {
-              return Effect.fail(
+            Effect.catchAll((error) =>
+              Effect.fail(
                 new ProvingError({
-                  message: 'Invalid proving client configuration',
-                  cause: invalidProtocolScheme,
+                  message: error.message,
+                  cause: error,
                 }),
-              );
-            }),
+              ),
+            ),
           );
         case 'TransactionToProve':
           return pipe(
-            httpProveTx(configuration.networkId, recipe.transaction),
+            ProverClient.ProverClient,
+            Effect.flatMap((client) =>
+              client.proveTransaction(recipe.transaction, ledger.CostModel.initialCostModel()),
+            ),
+            Effect.map((proven) => proven.bind()),
             Effect.provide(clientLayer),
-            Effect.catchTag(InvalidProtocolSchemeError.tag, (invalidProtocolScheme) => {
-              return Effect.fail(
+            Effect.catchAll((error) =>
+              Effect.fail(
                 new ProvingError({
-                  message: 'Invalid proving client configuration',
-                  cause: invalidProtocolScheme,
+                  message: error.message,
+                  cause: error,
                 }),
-              );
-            }),
+              ),
+            ),
           );
         case 'NothingToProve':
           return Effect.succeed(recipe.transaction);
@@ -78,9 +63,11 @@ export const makeDefaultProvingService = (
   };
 };
 
-export const makeSimulatorProvingService = (): ProvingService<ProofErasedTransaction> => {
+export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> => {
   return {
-    prove(recipe: ProvingRecipe<ProofErasedTransaction>): Effect.Effect<ProofErasedTransaction, WalletError> {
+    prove(
+      recipe: ProvingRecipe<ledger.ProofErasedTransaction>,
+    ): Effect.Effect<ledger.ProofErasedTransaction, WalletError> {
       switch (recipe.type) {
         case 'BalanceTransactionToProve':
           return pipe(

@@ -3,7 +3,6 @@ import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Chunk, Effect, Option, pipe, Stream, Console, Exit, Scope } from 'effect';
 import { makeDefaultSubmissionService } from '../Submission';
-import * as ledger from '@midnight-ntwrk/ledger';
 import { PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { NodeContext } from '@effect/platform-node';
 import { generateTxs, getTestTxsPath } from '../../test/genTxs';
@@ -48,7 +47,6 @@ const initEnv = (proofServerUrl: string, TxsFileName: string) =>
     yield* generateTxs(`ws://midnight-node:9944`, proofServerUrl, network, TxsFileName);
     const nodeURL = new URL(`ws://127.0.0.1:${node.getMappedPort(9944)}`);
     const submission = makeDefaultSubmissionService({
-      networkId: ledger.NetworkId.Undeployed,
       relayURL: nodeURL,
     });
     yield* Effect.addFinalizer(() => submission.close().pipe(Effect.andThen(Console.log('Closed submission service'))));
@@ -76,7 +74,7 @@ describe.skip('Default Submission', () => {
     }
   });
 
-  it.skip('submits and exits cleanly', async () => {
+  it('submits and exits cleanly', async () => {
     const result = await pipe(
       Effect.gen(function* () {
         const { submission, testTx } = yield* initEnv(
@@ -93,7 +91,7 @@ describe.skip('Default Submission', () => {
     expect(Exit.isSuccess(result)).toBe(true);
   });
 
-  it.skip('submits transactions waiting for submission event', async () => {
+  it.only('submits transactions waiting for submission event', async () => {
     const { submissionResult, checkResult } = await pipe(
       Effect.gen(function* () {
         const { submission, nodeURL, testTx } = yield* initEnv(
@@ -116,7 +114,7 @@ describe.skip('Default Submission', () => {
     expect(checkResult).toContain(submissionResult.txHash);
   });
 
-  it.skip('submits transactions waiting for in-block event', async () => {
+  it('submits transactions waiting for in-block event', async () => {
     const { submissionResult, checkResult } = await pipe(
       Effect.gen(function* () {
         const { submission, nodeURL, testTx } = yield* initEnv(
@@ -170,7 +168,7 @@ describe.skip('Default Submission', () => {
     expect(checkResult.blockExtrinsicHashes).toContain(submissionResult.txHash);
   });
 
-  it.skip('exits cleanly', () => {
+  it('exits cleanly', () => {
     return Effect.gen(function* () {
       const { submission } = yield* initEnv(
         `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,

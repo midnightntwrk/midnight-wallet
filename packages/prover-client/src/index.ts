@@ -1,6 +1,6 @@
 import { Effect } from 'effect';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ProverClient, HttpProverClient as _HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 /**
  * Sends serialized unproven transactions to a Proof Server over HTTP.
@@ -25,9 +25,8 @@ export class HttpProverClient {
   /**
    * Proves an unproven transaction by submitting it over HTTP to an associated Proof Server.
    *
-   * @param transaction A serialized unproven transaction.
-   * @returns A `Promise` that resolves with a serialized transaction representing the proven version of
-   * `transaction`; or fails with a client or server side error.
+   * @param transaction An unproven ledger transaction.
+   * @returns A `Promise` that resolves with a proven transaction or fails with a client or server side error.
    * @throws {@link ClientError}
    * There was an issue with the provided `transaction`, or a connection with the configured Proof
    * Server could not be initiated.
@@ -35,9 +34,10 @@ export class HttpProverClient {
    * Unable to establish a connection with the configured Proof Server, or there was an internal error that
    * prevented the proof request from being executed.
    */
-  proveTransaction(transaction: Uint8Array): Promise<Uint8Array> {
-    const unprovenTx = SerializedUnprovenTransaction(transaction);
-
-    return this.#innerClient.proveTransaction(unprovenTx).pipe(Effect.runPromise);
+  proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
+    transaction: ledger.Transaction<S, ledger.PreProof, B>,
+    costModel?: ledger.CostModel,
+  ): Promise<ledger.Transaction<S, ledger.Proof, B>> {
+    return this.#innerClient.proveTransaction(transaction, costModel).pipe(Effect.runPromise);
   }
 }

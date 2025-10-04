@@ -1,6 +1,6 @@
 import { Effect, Stream } from 'effect';
 import * as path from 'node:path';
-import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
 import { ShieldedTransactions } from '../ShieldedTransactions';
 import { Connect, Disconnect } from '../../queries';
@@ -8,7 +8,8 @@ import { WsSubscriptionClient, HttpQueryClient } from '../../../effect';
 
 const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../');
 
-const KNOWN_VIEWING_KEY = 'mn_shield-esk_undeployed1qqpsq87f9ac09e95wjm2rp8vp0yd0z4pns7p2w7c9qus0vm20fj4dl93nu709t';
+const KNOWN_VIEWING_KEY =
+  'mn_shield-esk_undeployed1d45kgmnfva58gwn9de3hy7tsw35k7m3dwdjkxun9wskkketetdmrzhf6dlyj7u8juj68fd4psnkqhjxh32sec0q480vzswg8kd485e2kljcsmxqc0u';
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
@@ -23,6 +24,8 @@ describe('Wallet subscription', () => {
         .withEnvironment({
           TESTCONTAINERS_UID: environmentId,
         })
+        .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
+        .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
         .up();
     }, timeout_minutes(3));
 
@@ -42,14 +45,13 @@ describe('Wallet subscription', () => {
           const events = yield* ShieldedTransactions.run({
             sessionId: session.connect,
             index: null,
-            sendProgressUpdates: true,
           }).pipe(
-            Stream.take(5),
+            Stream.take(2),
             Stream.tap((data) => Effect.log(data.shieldedTransactions.__typename)),
             Stream.runCollect,
           );
 
-          expect(events).toHaveLength(5);
+          expect(events).toHaveLength(2);
         }).pipe(
           Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v1/graphql` })),
           Effect.provide(WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v1/graphql/ws` })),

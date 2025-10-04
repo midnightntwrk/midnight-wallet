@@ -1,4 +1,4 @@
-import { sampleIntentHash } from '@midnight-ntwrk/ledger';
+import { sampleIntentHash } from '@midnight-ntwrk/ledger-v6';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 

@@ -5,7 +5,8 @@ import { StartedNetwork } from 'testcontainers';
 import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
 import { PlatformError } from '@effect/platform/Error';
 import { NodeContext } from '@effect/platform-node';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const paths = new (class {
   currentDir = path.dirname(new URL(import.meta.url).pathname);
@@ -18,12 +19,12 @@ export const getTestTxsPath = (fileName: string = paths.fileName): string => `${
 export const makeFakeTx = (
   value: bigint,
 ): ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding> => {
-  const shieldedTokenType = ledger.shieldedToken() as unknown as { type: 'shielded'; raw: string };
+  const shieldedTokenType = ledger.shieldedToken();
   const recipient = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(0));
   const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, value);
   const unprovenOutput = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
   const unprovenOffer = ledger.ZswapOffer.fromOutput(unprovenOutput, shieldedTokenType.raw, value);
-  return ledger.Transaction.fromParts(unprovenOffer);
+  return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, unprovenOffer);
 };
 
 const cleanDir = () =>

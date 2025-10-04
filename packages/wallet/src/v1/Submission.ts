@@ -1,4 +1,5 @@
 import { Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { WalletError } from './WalletError';
 import { Simulator } from './Simulator';
 import {
@@ -7,8 +8,6 @@ import {
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
-import * as ledger from '@midnight-ntwrk/ledger';
-import { FinalizedTransaction, ProofErasedTransaction } from './Transaction';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;
@@ -36,11 +35,10 @@ export interface SubmissionService<TTransaction> {
 
 export type DefaultSubmissionConfiguration = {
   relayURL: URL;
-  networkId: ledger.NetworkId;
 };
 export const makeDefaultSubmissionService = (
   config: DefaultSubmissionConfiguration,
-): SubmissionService<FinalizedTransaction> => {
+): SubmissionService<ledger.FinalizedTransaction> => {
   //Using Deferred under the hood + allowing for "close" method in the service allows to keep resource usage in check and a synchronous API
   type ScopeAndClient = { scope: Scope.CloseableScope; client: NodeClient.Service };
 
@@ -57,9 +55,9 @@ export const makeDefaultSubmissionService = (
 
   void pipe(scopeAndClientDeferred, Deferred.complete(makeScopeAndClient), Effect.runPromise);
 
-  const submit = (transaction: FinalizedTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
+  const submit = (transaction: ledger.FinalizedTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
     return pipe(
-      NodeClient.sendMidnightTransactionAndWait(transaction.serialize(config.networkId), waitForStatus),
+      NodeClient.sendMidnightTransactionAndWait(transaction.serialize(), waitForStatus),
       Effect.provideServiceEffect(
         NodeClient.NodeClient,
         pipe(
@@ -73,7 +71,7 @@ export const makeDefaultSubmissionService = (
   };
 
   return {
-    submitTransaction: submit as SubmitTransactionMethod<FinalizedTransaction>,
+    submitTransaction: submit as SubmitTransactionMethod<ledger.FinalizedTransaction>,
     close(): Effect.Effect<void> {
       return pipe(
         scopeAndClientDeferred,
@@ -87,53 +85,42 @@ export const makeDefaultSubmissionService = (
 
 export type SimulatorSubmissionConfiguration = {
   simulator: Simulator;
-  networkId: ledger.NetworkId;
 };
 export const makeSimulatorSubmissionService =
   (waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock') =>
-  (config: SimulatorSubmissionConfiguration): SubmissionService<ProofErasedTransaction> => {
-    const submit = (transaction: ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
-      const serializedTx = transaction.serialize(ledger.NetworkId.Undeployed);
-      return config.simulator
-        .submitRegularTx(
-          ledger.Transaction.deserialize(
-            'signature-erased',
-            'no-proof',
-            'no-binding',
-            serializedTx,
-            ledger.NetworkId.Undeployed,
-          ),
-        )
-        .pipe(
-          Effect.map((output) => {
-            // Let's mimic node's client behavior here
-            switch (waitForStatus) {
-              case 'Submitted':
-                return SubmissionEvent.Submitted({
-                  tx: serializedTx,
-                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-                });
-              case 'InBlock':
-                return SubmissionEvent.InBlock({
-                  tx: serializedTx,
-                  blockHash: output.blockHash,
-                  blockHeight: output.blockNumber,
-                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-                });
-              case 'Finalized':
-                return SubmissionEvent.Finalized({
-                  tx: serializedTx,
-                  blockHash: output.blockHash,
-                  blockHeight: output.blockNumber,
-                  txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
-                });
-            }
-          }),
-        );
+  (config: SimulatorSubmissionConfiguration): SubmissionService<ledger.ProofErasedTransaction> => {
+    const submit = (transaction: ledger.ProofErasedTransaction): Effect.Effect<SubmissionEvent, WalletError> => {
+      const serializedTx = transaction.serialize();
+      return config.simulator.submitRegularTx(transaction).pipe(
+        Effect.map((output) => {
+          // Let's mimic node's client behavior here
+          switch (waitForStatus) {
+            case 'Submitted':
+              return SubmissionEvent.Submitted({
+                tx: serializedTx,
+                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+              });
+            case 'InBlock':
+              return SubmissionEvent.InBlock({
+                tx: serializedTx,
+                blockHash: output.blockHash,
+                blockHeight: output.blockNumber,
+                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+              });
+            case 'Finalized':
+              return SubmissionEvent.Finalized({
+                tx: serializedTx,
+                blockHash: output.blockHash,
+                blockHeight: output.blockNumber,
+                txHash: Encoding.encodeHex(serializedTx.subarray(0, 32)),
+              });
+          }
+        }),
+      );
     };
 
     return {
-      submitTransaction: submit as SubmitTransactionMethod<ProofErasedTransaction>,
+      submitTransaction: submit as SubmitTransactionMethod<ledger.ProofErasedTransaction>,
       close: (): Effect.Effect<void> => Effect.void,
     };
   };

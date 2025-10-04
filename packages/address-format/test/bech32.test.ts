@@ -1,17 +1,5 @@
 import addresses from './addresses.json';
 import { MidnightBech32m, ShieldedAddress, ShieldedCoinPublicKey, ShieldedEncryptionSecretKey } from '../src';
-import { NetworkId } from '@midnight-ntwrk/ledger';
-
-function mapNetworkId(networkId: string | null): NetworkId {
-  switch (networkId) {
-    case 'dev':
-      return NetworkId.DevNet;
-    case 'test':
-      return NetworkId.TestNet;
-    default:
-      return NetworkId.MainNet;
-  }
-}
 
 describe('Bech32 addresses', () => {
   it('ShieldedAddress - Bech32 representation should match its Hex representation', () => {
@@ -22,17 +10,19 @@ describe('Bech32 addresses', () => {
     });
   });
 
+  /**
+   * addresses.json needs to be updated with the correct format for this test to pass
+   */
   it.skip('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
     const zswapNetworkIds = ['dev', 'test', null];
     const filteredAddresses = addresses.filter((item) => zswapNetworkIds.includes(item.networkId));
     filteredAddresses.forEach((item, _) => {
-      const networkId = mapNetworkId(item.networkId);
       const shESK = ShieldedEncryptionSecretKey.codec.decode(
-        networkId,
+        'undeployed',
         MidnightBech32m.parse(item.shieldedESK.bech32m),
       );
 
-      const eskHEXRaw = shESK.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(networkId);
+      const eskHEXRaw = shESK.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize();
       const eskHEX = Buffer.from(eskHEXRaw.subarray(1)).toString('hex');
 
       expect(item.shieldedESK.hex).toEqual(eskHEX);

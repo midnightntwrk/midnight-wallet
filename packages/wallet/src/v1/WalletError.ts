@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 export const WalletError = {
   proving(err: Error): WalletError {

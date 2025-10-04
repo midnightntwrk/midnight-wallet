@@ -24,13 +24,12 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
     "@midnight-ntwrk/wallet-sdk-address-format": "2.0.0-beta.1",
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
     "effect": "^3.17.3"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger": "5.0.0-alpha.2",
+    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.3",
     "fast-check": "^4.2.0",
     "rimraf": "^6.0.1"
   },

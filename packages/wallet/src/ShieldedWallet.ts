@@ -1,7 +1,7 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { BuildArguments, WalletBuilder } from './WalletBuilder';
 import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { Runtime } from './Runtime';
@@ -18,20 +18,19 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { SubmissionEvent, SubmissionEventCases } from './v1/Submission';
-import { FinalizedTransaction } from './v1/Transaction';
 import { TokenTransfer } from './v1/Transacting';
 import { WalletSyncUpdate } from './v1/Sync';
 
-export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = FinalizedTransaction> = {
+export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
 };
 
-export class ShieldedWalletState<TSerialized = string, TTransaction = FinalizedTransaction> {
+export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.FinalizedTransaction> {
   static readonly mapState =
-    <TSerialized = string, TTransaction = FinalizedTransaction>(
+    <TSerialized = string, TTransaction = ledger.FinalizedTransaction>(
       capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
     ) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized, TTransaction> => {
@@ -102,21 +101,21 @@ export type SubmitTransactionMethod<TTransaction> = {
 
 export type ShieldedWallet = CustomizedShieldedWallet<
   ledger.ZswapSecretKeys,
-  FinalizedTransaction,
+  ledger.FinalizedTransaction,
   WalletSyncUpdate,
   string
 >;
 
 export type ShieldedWalletClass = CustomizedShieldedWalletClass<
   ledger.ZswapSecretKeys,
-  FinalizedTransaction,
+  ledger.FinalizedTransaction,
   WalletSyncUpdate,
   string
 >;
 
 export interface CustomizedShieldedWallet<
   TStartAux = ledger.ZswapSecretKeys,
-  TTransaction = FinalizedTransaction,
+  TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 > extends WalletLike.WalletLike<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]> {
@@ -155,7 +154,7 @@ export interface CustomizedShieldedWallet<
 
 export interface CustomizedShieldedWalletClass<
   TStartAux = ledger.ZswapSecretKeys,
-  TTransaction = FinalizedTransaction,
+  TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
@@ -175,7 +174,7 @@ export function ShieldedWallet(configuration: DefaultV1Configuration): ShieldedW
 export function CustomShieldedWallet<
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
   TStartAux = ledger.ZswapSecretKeys,
-  TTransaction = FinalizedTransaction,
+  TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 >(

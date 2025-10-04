@@ -1,4 +1,4 @@
-import { NetworkId, EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger';
+import { EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger-v6';
 import { bech32m } from '@scure/base';
 
 export type FormatContext = {
@@ -62,12 +62,12 @@ export class Bech32mCodec<T> {
     this.type = type;
   }
 
-  encode(networkId: NetworkId, data: T): MidnightBech32m {
+  encode(networkId: string | null, data: T): MidnightBech32m {
     const context = Bech32mCodec.createContext(networkId);
     return new MidnightBech32m(this.type, context.networkId, this.dataToBytes(data));
   }
 
-  decode(networkId: NetworkId | string | null, repr: MidnightBech32m): T {
+  decode(networkId: string | null, repr: MidnightBech32m): T {
     const context = Bech32mCodec.createContext(networkId);
     if (repr.type != this.type) {
       throw new Error(`Expected type ${this.type}, got ${repr.type}`);
@@ -78,29 +78,12 @@ export class Bech32mCodec<T> {
     return this.dataFromBytes(repr.data);
   }
 
-  static createContext(networkId: NetworkId | string | null): FormatContext {
+  static createContext(networkId: string | null): FormatContext {
     if (networkId === null) {
       return { networkId: null };
-    } else if (typeof networkId === 'string') {
-      return { networkId };
-    } else {
-      return Bech32mCodec.createContextFromZswap(networkId);
     }
-  }
 
-  static createContextFromZswap(networkId: NetworkId): FormatContext {
-    switch (networkId) {
-      case NetworkId.DevNet:
-        return { networkId: 'dev' };
-      case NetworkId.MainNet:
-        return { networkId: null };
-      case NetworkId.TestNet:
-        return { networkId: 'test' };
-      case NetworkId.Undeployed:
-        return { networkId: 'undeployed' };
-      default:
-        return { networkId: null };
-    }
+    return { networkId };
   }
 }
 
@@ -135,8 +118,8 @@ export class ShieldedAddress {
 export class ShieldedEncryptionSecretKey {
   static readonly codec = new Bech32mCodec<ShieldedEncryptionSecretKey>(
     'shield-esk',
-    (esk) => Buffer.from(esk.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize(NetworkId.Undeployed)),
-    (repr) => new ShieldedEncryptionSecretKey(EncryptionSecretKey.deserialize(repr, NetworkId.Undeployed)),
+    (esk) => Buffer.from(esk.zswap.yesIKnowTheSecurityImplicationsOfThis_serialize()),
+    (repr) => new ShieldedEncryptionSecretKey(EncryptionSecretKey.deserialize(repr)),
   );
 
   // There are some bits in serialization of field elements and elliptic curve points, that are hard to replicate

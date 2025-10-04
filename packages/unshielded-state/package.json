@@ -23,7 +23,6 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger": "5.0.0-alpha.3",
     "effect": "^3.17.3"
   },
   "scripts": {
@@ -35,6 +34,7 @@
     "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   },
   "devDependencies": {
+    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.3",
     "rimraf": "^6.0.1",
     "rollup": "^4.41.1"
   }

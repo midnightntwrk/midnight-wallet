@@ -1,12 +1,13 @@
 import { ShieldedWallet, ShieldedWalletClass, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterAll, beforeAll, describe, it, vi } from 'vitest';
 import { getShieldedSeed } from './utils';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
 
@@ -35,11 +36,7 @@ describe('Wallet serialization and restoration', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: ledger.NetworkId.Undeployed,
-      costParameters: {
-        ledgerParams: ledger.LedgerParameters.dummyParameters(),
-        additionalFeeOverhead: 50_000n,
-      },
+      networkId: NetworkId.NetworkId.Undeployed,
     };
   });
 

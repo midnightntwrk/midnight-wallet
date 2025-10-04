@@ -1,4 +1,4 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 
 /**

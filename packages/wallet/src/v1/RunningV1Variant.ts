@@ -1,4 +1,4 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
 import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletRuntimeError, Variant } from '../abstractions/index';
@@ -6,7 +6,7 @@ import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProvingService } from './Proving';
 import { ProvingRecipe } from './ProvingRecipe';
 import { SerializationCapability } from './Serialization';
-import { SyncCapability, SyncService, WalletSyncSubscription } from './Sync';
+import { EventsSyncUpdate, SyncCapability, SyncService } from './Sync';
 import { TransactingCapability, TokenTransfer } from './Transacting';
 import { OtherWalletError, WalletError } from './WalletError';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
@@ -15,7 +15,6 @@ import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet';
 import { TransactionHistoryCapability } from './TransactionHistory';
-import { FinalizedTransaction } from './Transaction';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -62,8 +61,8 @@ export const V1Tag: unique symbol = Symbol('V1');
 
 export type DefaultRunningV1 = RunningV1Variant<
   string,
-  WalletSyncSubscription,
-  FinalizedTransaction,
+  EventsSyncUpdate,
+  ledger.FinalizedTransaction,
   ledger.ZswapSecretKeys
 >;
 

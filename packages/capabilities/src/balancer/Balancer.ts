@@ -99,7 +99,6 @@ const doBalance = <TInput extends CoinRecipe, TOutput extends CoinRecipe>(
   isCoinEqual: (a: TInput, b: TInput) => boolean,
 ): TInput[] => {
   const [tokenType, imbalanceAmount] = imbalance;
-
   const shouldAddOutput =
     (tokenType === counterOffer.feeTokenType &&
       imbalanceAmount >=

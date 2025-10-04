@@ -4,35 +4,40 @@ import { gql } from '../generated';
 export const ShieldedTransactions = Subscription.make(
   'ShieldedTransactions',
   gql(`
-    subscription ShieldedTransactions($sessionId: HexEncoded!, $index: Int, $sendProgressUpdates: Boolean) {
-      shieldedTransactions(sessionId: $sessionId, index: $index, sendProgressUpdates: $sendProgressUpdates) {
+    subscription ShieldedTransactions($sessionId: HexEncoded!, $index: Int) {
+      shieldedTransactions(sessionId: $sessionId, index: $index) {
         __typename
         ... on ShieldedTransactionsProgress {
-          highestIndex
-          highestRelevantIndex
-          highestRelevantWalletIndex
+          highestEndIndex
+          highestCheckedEndIndex
+          highestRelevantEndIndex
         }
-        ... on ViewingUpdate {
-          index
-          update {
-            ... on MerkleTreeCollapsedUpdate {
-              update
-              protocolVersion
+        ... on RelevantTransaction {
+          transaction {
+            id
+            raw
+            hash
+            protocolVersion
+            identifiers
+            startIndex
+            endIndex
+            fees {
+              paidFees
+              estimatedFees
             }
-            ... on RelevantTransaction {
-              transaction {
-                raw
-                hash
-                protocolVersion
-                transactionResult {
-                  status
-                  segments {
-                    id
-                    success
-                  }
-                }
+            transactionResult {
+              status
+              segments {
+                id
+                success
               }
             }
+          }
+          collapsedMerkleTree {
+            startIndex
+            endIndex
+            update
+            protocolVersion
           }
         }
       }

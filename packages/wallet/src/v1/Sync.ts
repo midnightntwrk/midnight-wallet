@@ -1,19 +1,11 @@
-import { ShieldedEncryptionSecretKey } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger';
-import { Effect, Layer, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
 import { CoreWallet } from './CoreWallet';
 import { Simulator, SimulatorState } from './Simulator';
-import { Connect, ShieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import {
-  WsSubscriptionClient,
-  HttpQueryClient,
-  ConnectionHelper,
-  QueryClient,
-  SubscriptionClient,
-} from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError';
-import { FinalizedTransaction } from './Transaction';
-import { HttpURL, InvalidProtocolSchemeError, URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TransactionHistoryCapability } from './TransactionHistory';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
@@ -32,279 +24,17 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
-  networkId: ledger.NetworkId;
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, FinalizedTransaction>;
+  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction>;
 };
-
-export const TransactionResult = Schema.Struct({
-  status: Schema.Union(Schema.Literal('SUCCESS'), Schema.Literal('PARTIAL_SUCCESS'), Schema.Literal('FAILURE')),
-  segments: Schema.Union(
-    Schema.Null,
-    Schema.Array(
-      Schema.Struct({
-        id: Schema.String,
-        success: Schema.Boolean,
-      }),
-    ),
-  ),
-});
-
-export type TransactionResult = Schema.Schema.Type<typeof TransactionResult>;
-
-export const WalletTransactionResult = Schema.Struct({
-  status: Schema.Union(Schema.Literal('success'), Schema.Literal('partialSuccess'), Schema.Literal('failure')),
-  segments: Schema.Array(
-    Schema.Struct({
-      id: Schema.String,
-      success: Schema.Boolean,
-    }),
-  ),
-});
-
-export type WalletTransactionResult = Schema.Schema.Type<typeof WalletTransactionResult>;
-
-const mapTxResult = (txResult: TransactionResult): WalletTransactionResult => {
-  const segments = txResult.segments ?? [];
-  switch (txResult.status) {
-    case 'SUCCESS':
-      return { status: 'success', segments };
-    case 'FAILURE':
-      return { status: 'failure', segments };
-    case 'PARTIAL_SUCCESS':
-      return { status: 'partialSuccess', segments };
-  }
-};
-
-const TxSchema = Schema.declare(
-  (input: unknown): input is FinalizedTransaction => input instanceof ledger.Transaction,
-).annotations({
-  identifier: 'ledger.Transaction',
-});
 
 const Uint8ArraySchema = Schema.declare(
   (input: unknown): input is Uint8Array => input instanceof Uint8Array,
 ).annotations({
   identifier: 'Uint8Array',
 });
-
-const TxFromUint8Array = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, Uint8Array> =>
-  Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
-    encode: (tx) => {
-      return Effect.try({
-        try: () => {
-          return tx.serialize(networkId);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize transaction');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () => {
-          return ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, networkId);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize transaction');
-        },
-      }),
-  });
-
-const HexedTx = (networkId: ledger.NetworkId): Schema.Schema<FinalizedTransaction, string> =>
-  pipe(Schema.Uint8ArrayFromHex, Schema.compose(TxFromUint8Array(networkId)));
-
-const MerkleTreeCollapsedUpdateSchema = Schema.declare(
-  (input: unknown): input is ledger.MerkleTreeCollapsedUpdate => input instanceof ledger.MerkleTreeCollapsedUpdate,
-).annotations({
-  identifier: 'ledger.MerkleTreeCollapsedUpdate',
-});
-
-const MerkleTreeCollapsedUpdateFromUint8Array = (
-  networkId: ledger.NetworkId,
-): Schema.Schema<ledger.MerkleTreeCollapsedUpdate, Uint8Array> =>
-  Schema.transformOrFail(Uint8ArraySchema, MerkleTreeCollapsedUpdateSchema, {
-    encode: (mk) => {
-      return Effect.try({
-        try: () => {
-          return mk.serialize(networkId);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize merkleTreeCollapsedUpdate');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () => {
-          return ledger.MerkleTreeCollapsedUpdate.deserialize(bytes, networkId);
-        },
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize merkleTreeCollapsedUpdate');
-        },
-      }),
-  });
-
-const HexedMerkleTree = (networkId: ledger.NetworkId): Schema.Schema<ledger.MerkleTreeCollapsedUpdate, string> =>
-  pipe(Schema.Uint8ArrayFromHex, Schema.compose(MerkleTreeCollapsedUpdateFromUint8Array(networkId)));
-
-const ProgressUpdate = Schema.Struct({
-  __typename: Schema.Literal('ShieldedTransactionsProgress'),
-  highestIndex: Schema.Number,
-  highestRelevantIndex: Schema.Number,
-  highestRelevantWalletIndex: Schema.Number,
-});
-
-type ProgressUpdate = Schema.Schema.Type<typeof ProgressUpdate>;
-
-const ViewingUpdateSchema = (networkId: ledger.NetworkId) =>
-  Schema.Struct({
-    __typename: Schema.Literal('ViewingUpdate'),
-    index: Schema.Number,
-    update: Schema.Array(
-      Schema.Union(
-        Schema.Struct({
-          update: HexedMerkleTree(networkId),
-          protocolVersion: Schema.Number,
-        }),
-        Schema.Struct({
-          transaction: Schema.Struct({
-            hash: Schema.String,
-            raw: HexedTx(networkId),
-            protocolVersion: Schema.Number,
-            transactionResult: TransactionResult,
-          }),
-        }),
-      ),
-    ),
-  });
-
-export const SyncProgressUpdate = Schema.TaggedStruct('ProgressUpdate', {
-  highestIndex: Schema.Number,
-  highestRelevantIndex: Schema.Number,
-  highestRelevantWalletIndex: Schema.Number,
-});
-
-type SyncProgressUpdate = Schema.Schema.Type<typeof SyncProgressUpdate>;
-
-export const SyncProgressUpdateFromProgressUpdate = Schema.transformOrFail(ProgressUpdate, SyncProgressUpdate, {
-  decode: (input) => {
-    return Effect.try({
-      try: () => {
-        const { __typename, ..._rest } = input;
-        return {
-          _tag: 'ProgressUpdate' as const,
-          highestIndex: input.highestIndex,
-          highestRelevantIndex: input.highestRelevantIndex,
-          highestRelevantWalletIndex: input.highestRelevantWalletIndex,
-        };
-      },
-      catch: (error) => new ParseResult.Unexpected(error, 'Failed to decode progress update'),
-    });
-  },
-  encode: (output) => {
-    return Effect.try({
-      try: () => {
-        const { _tag, ..._rest } = output;
-        return {
-          __typename: 'ShieldedTransactionsProgress' as const,
-          highestIndex: output.highestIndex,
-          highestRelevantIndex: output.highestRelevantIndex,
-          highestRelevantWalletIndex: output.highestRelevantWalletIndex,
-        };
-      },
-      catch: (error) => new ParseResult.Unexpected(error, 'Failed to encode progress update'),
-    });
-  },
-});
-
-export const SyncViewingUpdateWithMerkleTreeUpdate = Schema.TaggedStruct('ViewingUpdateWithMerkleTreeUpdate', {
-  index: Schema.Number,
-  update: MerkleTreeCollapsedUpdateSchema,
-  protocolVersion: Schema.Number,
-});
-
-type SyncViewingUpdateWithMerkleTreeUpdate = Schema.Schema.Type<typeof SyncViewingUpdateWithMerkleTreeUpdate>;
-
-export const SyncViewingUpdateWithTransaction = Schema.TaggedStruct('ViewingUpdateWithTransaction', {
-  index: Schema.Number,
-  appliedTransaction: Schema.Struct({
-    tx: TxSchema,
-    transactionResult: WalletTransactionResult,
-  }),
-  protocolVersion: Schema.Number,
-});
-
-type SyncViewingUpdateWithTransaction = Schema.Schema.Type<typeof SyncViewingUpdateWithTransaction>;
-
-const SyncViewingUpdateUnion = Schema.Union(SyncViewingUpdateWithMerkleTreeUpdate, SyncViewingUpdateWithTransaction);
-
-const SyncViewingUpdateFromViewingUpdate = (networkId: ledger.NetworkId) =>
-  Schema.asSchema(
-    Schema.transformOrFail(ViewingUpdateSchema(networkId), SyncViewingUpdateUnion, {
-      decode: (input) => {
-        return Effect.try({
-          try: () => {
-            const { __typename, index, update } = input;
-            if ('update' in update[0]) {
-              return {
-                _tag: 'ViewingUpdateWithMerkleTreeUpdate' as const,
-                index,
-                update: update[0].update,
-                protocolVersion: update[0].protocolVersion,
-              };
-            } else {
-              const mappedTxResult = mapTxResult(update[0].transaction.transactionResult);
-
-              return {
-                _tag: 'ViewingUpdateWithTransaction' as const,
-                index,
-                appliedTransaction: {
-                  tx: update[0].transaction.raw,
-                  transactionResult: mappedTxResult,
-                },
-                protocolVersion: update[0].transaction.protocolVersion,
-              };
-            }
-          },
-          catch: (error) => new ParseResult.Unexpected(error, 'Failed to decode viewing update'),
-        });
-      },
-      encode: (output) => {
-        if (output._tag === 'ViewingUpdateWithMerkleTreeUpdate') {
-          return Effect.try({
-            try: () => {
-              return {
-                __typename: 'ViewingUpdate' as const,
-                index: output.index,
-                update: [
-                  {
-                    update: output.update,
-                    protocolVersion: output.protocolVersion,
-                  },
-                ],
-              };
-            },
-            catch: (error) => new ParseResult.Unexpected(error, 'Failed to encode update type'),
-          });
-        } else {
-          return Effect.try({
-            try: () => {
-              throw new Error('Transaction type cannot be encoded back');
-            },
-            catch: (error) => new ParseResult.Unexpected(error, 'not encodable'),
-          });
-        }
-      },
-    }),
-  );
-
-const WalletSyncSubscription = (networkId: ledger.NetworkId) =>
-  Schema.Union(SyncProgressUpdateFromProgressUpdate, SyncViewingUpdateFromViewingUpdate(networkId));
-
-export type WalletSyncSubscription = Schema.Schema.Type<ReturnType<typeof WalletSyncSubscription>>;
 
 type SecretKeysResource = <A>(cb: (keys: ledger.ZswapSecretKeys) => A) => A;
 export const SecretKeysResource = {
@@ -326,11 +56,11 @@ export const SecretKeysResource = {
 };
 
 export type WalletSyncUpdate = {
-  update: WalletSyncSubscription;
+  update: EventsSyncUpdate;
   secretKeys: SecretKeysResource;
 };
 export const WalletSyncUpdate = {
-  create: (update: WalletSyncSubscription, secretKeys: ledger.ZswapSecretKeys): WalletSyncUpdate => {
+  create: (update: EventsSyncUpdate, secretKeys: ledger.ZswapSecretKeys): WalletSyncUpdate => {
     return {
       update,
       secretKeys: SecretKeysResource.create(secretKeys),
@@ -338,175 +68,152 @@ export const WalletSyncUpdate = {
   },
 };
 
-export const makeDefaultSyncService = (
+const LedgerEventSchema = Schema.declare(
+  (input: unknown): input is ledger.Event => input instanceof ledger.Event,
+).annotations({
+  identifier: 'ledger.Event',
+});
+
+const LedgerEventFromUint8Array: Schema.Schema<ledger.Event, Uint8Array> = Schema.transformOrFail(
+  Uint8ArraySchema,
+  LedgerEventSchema,
+  {
+    encode: (event) =>
+      Effect.try({
+        try: () => event.serialize(),
+        catch: (error) => new ParseResult.Unexpected(error, 'Could not serialize ledger event'),
+      }),
+    decode: (bytes) =>
+      Effect.try({
+        try: () => ledger.Event.deserialize(bytes),
+        catch: (error) => new ParseResult.Unexpected(error, 'Could not deserialize ledger event'),
+      }),
+  },
+);
+
+const HexedLedgerEvent: Schema.Schema<ledger.Event, string> = pipe(
+  Schema.Uint8ArrayFromHex,
+  Schema.compose(LedgerEventFromUint8Array),
+);
+
+const EventsSyncUpdatePayload = Schema.Struct({
+  id: Schema.Number,
+  raw: Schema.String,
+  maxId: Schema.Number,
+});
+
+export const EventsSyncUpdate = Schema.TaggedStruct('EventsSyncUpdate', {
+  id: Schema.Number,
+  maxId: Schema.Number,
+  event: LedgerEventSchema,
+});
+
+export type EventsSyncUpdate = Schema.Schema.Type<typeof EventsSyncUpdate>;
+
+const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePayload, EventsSyncUpdate, {
+  decode: (input) =>
+    pipe(
+      Schema.decodeUnknownEither(HexedLedgerEvent)(input.raw),
+      Either.map((event) => ({
+        _tag: 'EventsSyncUpdate' as const,
+        id: input.id,
+        maxId: input.maxId,
+        event,
+      })),
+      Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to decode ledger event payload')),
+      EitherOps.toEffect,
+    ),
+  encode: (output) =>
+    pipe(
+      Schema.encodeEither(HexedLedgerEvent)(output.event),
+      Either.map((raw) => ({
+        id: output.id,
+        raw,
+        maxId: output.maxId,
+      })),
+      Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to encode ledger event payload')),
+      EitherOps.toEffect,
+    ),
+});
+
+export const makeEventsSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, ledger.ZswapSecretKeys, WalletSyncUpdate> => {
-  const indexerSyncService = makeIndexerSyncService(config);
   return {
     updates: (
       state: CoreWallet,
       secretKeys: ledger.ZswapSecretKeys,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
-      return Stream.fromEffect(indexerSyncService.connectWallet(secretKeys)).pipe(
-        Stream.flatMap((session) => indexerSyncService.subscribeWallet(state, session, config.networkId)),
-        Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
-        Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
-      );
-    },
-  };
-};
-
-export type IndexerSyncService = {
-  connectionLayer: () => Layer.Layer<QueryClient | SubscriptionClient, WalletError, Scope.Scope>;
-  connectWallet: (secretKeys: ledger.ZswapSecretKeys) => Effect.Effect<string, WalletError, QueryClient>;
-  subscribeWallet: (
-    state: CoreWallet,
-    connectionId: string,
-    networkId: ledger.NetworkId,
-  ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
-};
-
-export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
-  return {
-    connectionLayer(): Layer.Layer<QueryClient | SubscriptionClient, WalletError, Scope.Scope> {
       const { indexerClientConnection } = config;
 
-      const indexerHttpLayer: Layer.Layer<QueryClient, WalletError, Scope.Scope> = HttpURL.make(
+      const webSocketUrlResult = ConnectionHelper.createWebSocketUrl(
         indexerClientConnection.indexerHttpUrl,
-      ).pipe(
-        Either.match({
-          onLeft: (error: InvalidProtocolSchemeError) => Layer.fail(error),
-          onRight: (url: HttpURL.HttpUrl) => HttpQueryClient.layer({ url }),
-        }),
-        Layer.mapError((e) => new SyncWalletError({ message: 'Invalid indexer HTTP URL', cause: e })),
+        indexerClientConnection.indexerWsUrl,
       );
-
-      const indexerWsLayer: Layer.Layer<SubscriptionClient, WalletError, Scope.Scope> =
-        ConnectionHelper.createWebSocketUrl(
-          indexerClientConnection.indexerHttpUrl,
-          indexerClientConnection.indexerWsUrl,
-        ).pipe(
-          Either.flatMap((url) => WsURL.make(url)),
-          Either.match({
-            onLeft: (error) => Layer.fail(error),
-            onRight: (url: WsURL.WsURL) => WsSubscriptionClient.layer({ url }),
-          }),
-          Layer.mapError(
-            (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+      if (Either.isLeft(webSocketUrlResult)) {
+        return Stream.fail(
+          new SyncWalletError(
+            new Error(`Could not derive WebSocket URL from indexer HTTP URL: ${webSocketUrlResult.left.message}`),
           ),
         );
+      }
 
-      return Layer.mergeAll(indexerHttpLayer, indexerWsLayer);
-    },
-    connectWallet(secretKeys: ledger.ZswapSecretKeys): Effect.Effect<string, WalletError, QueryClient> {
-      return Effect.try({
-        try: () => {
-          const encryptionSecretKey = new ShieldedEncryptionSecretKey(secretKeys.encryptionSecretKey);
+      const indexerWsUrlResult = WsURL.make(webSocketUrlResult.right);
 
-          return ShieldedEncryptionSecretKey.codec.encode(config.networkId, encryptionSecretKey).asString();
-        },
-        catch: (error) => new SyncWalletError({ message: 'Failed to connect wallet to indexer', cause: error }),
-      }).pipe(
-        Effect.flatMap((bech32mESK) => Connect.run({ viewingKey: bech32mESK })),
-        Effect.map((session) => session.connect),
-        Effect.mapError(
-          (error) => new SyncWalletError({ message: 'Failed to connect wallet to indexer', cause: error }),
-        ),
-      );
-    },
-    subscribeWallet(
-      state: CoreWallet,
-      connectionId: string,
-      networkId: ledger.NetworkId,
-    ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const { appliedIndex } = state.progress;
+      if (Either.isLeft(indexerWsUrlResult)) {
+        return Stream.fail(
+          new SyncWalletError(new Error(`Invalid indexer WS URL: ${indexerWsUrlResult.left.message}`)),
+        );
+      }
 
-      return ShieldedTransactions.run({
-        sessionId: connectionId,
-        index: Number(appliedIndex),
-        sendProgressUpdates: true,
-      }).pipe(
-        Stream.mapError((error) => {
-          return new SyncWalletError(error);
-        }),
+      const indexerWsUrl = indexerWsUrlResult.right;
+      const appliedIndex = state.progress?.appliedIndex ?? 0n;
+
+      return pipe(
+        ZswapEvents.run({ id: Number(appliedIndex) }),
+        Stream.provideLayer(WsSubscriptionClient.layer({ url: indexerWsUrl })),
+        Stream.mapError((error) => new SyncWalletError(error)),
         Stream.mapEffect((subscription) =>
           pipe(
-            Schema.decodeUnknownEither(WalletSyncSubscription(networkId))(subscription.shieldedTransactions),
+            Schema.decodeUnknownEither(EventsSyncUpdateFromPayload)(subscription.zswapLedgerEvents),
             Either.mapLeft((err) => new SyncWalletError(new Error(`Schema decode failed: ${err.message}`))),
             EitherOps.toEffect,
           ),
         ),
-        Stream.mapAccum({ isFirstProgressUpdate: true }, (acc, update: WalletSyncSubscription) => {
-          if (acc.isFirstProgressUpdate && update._tag === 'ProgressUpdate') {
-            return [{ isFirstProgressUpdate: false }, null];
-          }
-
-          return [{ isFirstProgressUpdate: false }, update];
-        }),
-        Stream.filter((update): update is WalletSyncSubscription => update !== null),
+        Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
       );
     },
   };
 };
 
-export const makeDefaultSyncCapability = (
-  config: DefaultSyncConfiguration,
-  getContext: () => DefaultSyncContext,
-): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
-      const { update, secretKeys } = wrappedUpdate;
-      switch (update._tag) {
-        case 'ProgressUpdate':
-          return CoreWallet.updateProgress(state, {
-            highestRelevantWalletIndex: BigInt(update.highestRelevantWalletIndex),
-            highestIndex: BigInt(update.highestIndex),
-            highestRelevantIndex: BigInt(update.highestRelevantIndex),
-            isConnected: true,
-          });
-
-        case 'ViewingUpdateWithMerkleTreeUpdate': {
-          const appliedIndex = BigInt(update.index - 1);
-          return CoreWallet.updateProgress(CoreWallet.applyCollapsedUpdate(state, update.update), { appliedIndex });
-        }
-
-        case 'ViewingUpdateWithTransaction': {
-          const offset = BigInt(update.index);
-
-          const { transactionResult } = update.appliedTransaction;
-
-          const appliedIndex = transactionResult.status === 'failure' ? offset : offset - 1n;
-
-          let mappedTxResult: ledger.TransactionResult = {
-            type: transactionResult.status,
-          };
-
-          if (transactionResult.status === 'partialSuccess') {
-            mappedTxResult = {
-              type: 'partialSuccess',
-              successfulSegments: new Map(transactionResult.segments.map((s) => [Number(s.id), s.success])),
-            };
-          }
-
-          const wallet = secretKeys((keys) => {
-            return CoreWallet.updateProgress(
-              CoreWallet.applyTransaction(state, keys, update.appliedTransaction.tx, mappedTxResult),
-              { appliedIndex },
-            );
-          });
-
-          const transactionHistoryCapability = getContext().transactionHistoryCapability;
-
-          return transactionHistoryCapability.updateTxHistory(wallet, [update.appliedTransaction.tx]);
-        }
+    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
+      const nextAppliedIndex = BigInt(wrappedUpdate.update.id);
+      const highestRelevantWalletIndex = BigInt(wrappedUpdate.update.maxId);
+      // in case the nextAppliedIndex is less than or equal to the appliedIndex
+      // just update highestRelevantWalletIndex
+      if (nextAppliedIndex <= state.progress.appliedIndex) {
+        return CoreWallet.updateProgress(state, {
+          appliedIndex: nextAppliedIndex,
+          highestRelevantWalletIndex,
+          isConnected: true,
+        });
       }
+
+      return wrappedUpdate.secretKeys((keys) => {
+        return CoreWallet.updateProgress(CoreWallet.replayEvents(state, keys, [wrappedUpdate.update.event]), {
+          highestRelevantWalletIndex,
+          appliedIndex: nextAppliedIndex,
+          isConnected: true,
+        });
+      });
     },
   };
 };
 
 export type SimulatorSyncConfiguration = {
   simulator: Simulator;
-  networkId: ledger.NetworkId;
 };
 
 export type SimulatorSyncUpdate = {
@@ -526,23 +233,14 @@ export const makeSimulatorSyncService = (
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
-      return CoreWallet.applyTransaction(state, update.secretKeys, update.update.lastTx, update.update.lastTxResult);
-    },
-  };
-};
+      const {
+        update: {
+          lastTxResult: { events },
+        },
+        secretKeys,
+      } = update;
 
-export type TxApplierSyncUpdate = {
-  tx: FinalizedTransaction;
-  secretKeys: ledger.ZswapSecretKeys;
-};
-/**
- * Skeleton of a "full-node" sync capability.
- * It is how the simulator one could look like (differenes are tiny) and how syncing tx by tx should look like
- */
-export const makeTxApplierSyncCapability = (): SyncCapability<CoreWallet, TxApplierSyncUpdate> => {
-  return {
-    applyUpdate: (state: CoreWallet, update: TxApplierSyncUpdate) => {
-      return CoreWallet.applyTransaction(state, update.secretKeys, update.tx, { type: 'success' });
+      return CoreWallet.replayEvents(state, secretKeys, events);
     },
   };
 };

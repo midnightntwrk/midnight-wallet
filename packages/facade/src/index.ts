@@ -2,7 +2,7 @@ import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 export interface TokenTransfer {
   type: string;
@@ -33,9 +33,7 @@ export class WalletFacade {
     );
   }
 
-  async submitTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
-  ): Promise<string> {
+  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<string> {
     const submittedTransaction = await this.shielded.submitTransaction(tx, 'Finalized');
 
     return submittedTransaction.txHash;
@@ -43,27 +41,23 @@ export class WalletFacade {
 
   async balanceTransaction(
     zswapSecretKeys: ledger.ZswapSecretKeys,
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
-  ): Promise<
-    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>>
-  > {
+    tx: ledger.UnprovenTransaction,
+  ): Promise<ProvingRecipe.ProvingRecipe<ledger.UnprovenTransaction | ledger.FinalizedTransaction>> {
     const unshieldedBalancedTx = await this.unshielded.balanceTransaction(tx);
 
     return await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedBalancedTx, []);
   }
 
   async finalizeTransaction(
-    recipe: ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> {
+    recipe: ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>,
+  ): Promise<ledger.FinalizedTransaction> {
     return await this.shielded.finalizeTransaction(recipe);
   }
 
   async transferTransaction(
     zswapSecretKeys: ledger.ZswapSecretKeys,
     outputs: CombinedTokenTransfer[],
-  ): Promise<
-    ProvingRecipe.ProvingRecipe<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>
-  > {
+  ): Promise<ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>> {
     const unshieldedOutputs = outputs
       .filter((output) => output.type === 'unshielded')
       .flatMap((output) => output.outputs);

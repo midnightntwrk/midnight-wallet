@@ -1,7 +1,7 @@
 import { Chunk } from 'effect';
 import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Observable, reduce, OperatorFunction } from 'rxjs';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 /**
  * Utility function that takes state values from an RxJS observable until it completes or errors.

@@ -1,6 +1,6 @@
 import { Error, FileSystem } from '@effect/platform';
-import * as ledger from '@midnight-ntwrk/ledger';
-import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
@@ -9,13 +9,7 @@ import { Scope } from 'effect/Scope';
 import { StartedNetwork } from 'testcontainers';
 import { normalizeTxs } from './normalize-txs';
 
-export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
-
-// const paths = new (class {
-//   currentDir = path.dirname(new URL(import.meta.url).pathname);
-//   packageDir = path.resolve(this.currentDir, '..', '..');
-//   testTxs = path.resolve(this.packageDir, 'resources/test-txs.json');
-// })();
+export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>;
 
 const TxSchema = Schema.declare(
   (input: unknown): input is FinalizedTransaction => input instanceof ledger.Transaction,
@@ -30,11 +24,10 @@ const Uint8ArraySchema = Schema.declare(
 
 const TxFromUint8Array: Schema.Schema<FinalizedTransaction, Uint8Array> = Schema.asSchema(
   Schema.transformOrFail(Uint8ArraySchema, TxSchema, {
-    encode: (tx) => Effect.sync(() => tx.serialize(ledger.NetworkId.Undeployed)),
+    encode: (tx) => Effect.sync(() => tx.serialize()),
     decode: (bytes) =>
       Effect.try({
-        try: () =>
-          ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', bytes, ledger.NetworkId.Undeployed),
+        try: () => ledger.Transaction.deserialize('signature', 'proof', 'binding', bytes),
 
         catch: (err) => new ParseResult.Unexpected(err, 'Could not deserialize transaction'),
       }),
@@ -87,13 +80,14 @@ export const genUnbalancedTx = (): Effect.Effect<
       const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, value);
       const unprovenOutput = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
       const unprovenOffer = ledger.ZswapOffer.fromOutput(unprovenOutput, shieldedTokenType.raw, value);
-      return ledger.Transaction.fromParts(unprovenOffer);
+      return ledger.Transaction.fromParts('undeployed', unprovenOffer);
     }),
     Effect.flatMap(({ unprovenTx }) =>
       Effect.gen(function* () {
-        const serializedTx = SerializedUnprovenTransaction(unprovenTx.bind().serialize(ledger.NetworkId.Undeployed));
         const proverClient = yield* ProverClient.ProverClient;
-        return yield* proverClient.proveTransaction(serializedTx);
+        const provedTx = yield* proverClient.proveTransaction(unprovenTx, ledger.CostModel.initialCostModel());
+
+        return SerializedTransaction(provedTx.bind().serialize());
       }),
     ),
   );

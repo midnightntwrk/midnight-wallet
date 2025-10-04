@@ -1,20 +1,19 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect } from 'effect';
 import { makeSimulatorProvingService } from '../Proving';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe';
-import { ProofErasedTransaction } from '../Transaction';
 import { getNonDustImbalance } from '../../test/testUtils';
-import { shieldedToken } from '../ledger';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
   const recipient = ledger.ZswapSecretKeys.fromSeed(seed);
   const amount = 42n;
-  const shieldedTokenType = shieldedToken();
+  const shieldedTokenType = ledger.shieldedToken();
   const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, amount);
   const output = ledger.ZswapOutput.new(coin, 0, recipient.coinPublicKey, recipient.encryptionPublicKey);
   const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenType.raw, amount);
-  return ledger.Transaction.fromParts(offer);
+  return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
 };
 
 describe('Simulator proving service', () => {
@@ -38,10 +37,10 @@ describe('Simulator proving service', () => {
     'does transform proving recipe into final, proof-erased transaction',
     async ({ recipe, expectedImbalance }) => {
       const service = makeSimulatorProvingService();
-      const finalTx: ProofErasedTransaction = await service.prove(recipe).pipe(Effect.runPromise);
+      const finalTx: ledger.ProofErasedTransaction = await service.prove(recipe).pipe(Effect.runPromise);
 
       expect(finalTx).toBeInstanceOf(ledger.Transaction);
-      expect(getNonDustImbalance(finalTx.imbalances(0), shieldedToken().raw)).toEqual(expectedImbalance);
+      expect(getNonDustImbalance(finalTx.imbalances(0), ledger.shieldedToken().raw)).toEqual(expectedImbalance);
     },
   );
 });

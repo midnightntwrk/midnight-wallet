@@ -1,5 +1,3 @@
-/* temporarily disable eslint until we upgrade to ledger 6 */
-/* eslint-disable */
 import { UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import { blockTime, generateMockTransaction, seedHex } from './testUtils';
 import { TransactionService, TransactionServiceError } from '../src/TransactionService';
@@ -8,7 +6,6 @@ import {
   addressFromKey,
   Intent,
   LedgerState,
-  NetworkId,
   sampleRawTokenType,
   sampleSigningKey,
   sampleUserAddress,
@@ -17,8 +14,16 @@ import {
   Transaction,
   TransactionContext,
   UnshieldedOffer,
+  WellFormedStrictness,
   ZswapChainState,
-} from '@midnight-ntwrk/ledger';
+} from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+
+const strictness = new WellFormedStrictness();
+strictness.enforceBalancing = false;
+strictness.verifyContractProofs = false;
+strictness.verifyNativeProofs = false;
+strictness.enforceBalancing = false;
 
 describe('TransactionService', () => {
   it('should build a transfer transaction from one desired output', () =>
@@ -34,7 +39,11 @@ describe('TransactionService', () => {
         },
       ];
       const transactionService = yield* TransactionService;
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       expect(transferTransaction.intents?.size).toEqual(1);
       expect(transferTransaction.intents?.get(1)?.guaranteedUnshieldedOffer).toBeDefined();
 
@@ -65,7 +74,11 @@ describe('TransactionService', () => {
         },
       ];
       const transactionService = yield* TransactionService;
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       expect(transferTransaction.intents?.size).toEqual(1);
       expect(transferTransaction.intents?.get(1)?.guaranteedUnshieldedOffer).toBeDefined();
 
@@ -92,7 +105,9 @@ describe('TransactionService', () => {
           amount: amount1,
         },
       ];
-      const result1 = yield* Effect.either(transactionService.transferTransaction(desiredOutputs1, ttl));
+      const result1 = yield* Effect.either(
+        transactionService.transferTransaction(desiredOutputs1, ttl, NetworkId.NetworkId.Undeployed),
+      );
 
       expect(Either.isLeft(result1)).toBe(true);
       if (Either.isLeft(result1)) {
@@ -109,7 +124,9 @@ describe('TransactionService', () => {
         },
       ];
 
-      const result2 = yield* Effect.either(transactionService.transferTransaction(desiredOutputs2, ttl));
+      const result2 = yield* Effect.either(
+        transactionService.transferTransaction(desiredOutputs2, ttl, NetworkId.NetworkId.Undeployed),
+      );
 
       expect(Either.isLeft(result2)).toBe(true);
       if (Either.isLeft(result2)) {
@@ -142,7 +159,11 @@ describe('TransactionService', () => {
           amount,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       expect(transferTransaction.intents?.get(1)?.guaranteedUnshieldedOffer).toBeDefined();
 
       const balancedTx = yield* transactionService.balanceTransaction(
@@ -185,7 +206,11 @@ describe('TransactionService', () => {
           amount,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       expect(transferTransaction.intents?.size).toEqual(1);
       expect(transferTransaction.intents?.get(1)?.guaranteedUnshieldedOffer).toBeDefined();
 
@@ -228,7 +253,11 @@ describe('TransactionService', () => {
     const result = await Effect.gen(function* () {
       const transactionService = yield* TransactionService;
       const unshieldedState = yield* UnshieldedStateService;
-      const tx = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const tx = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       return yield* transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress(), owner);
     }).pipe(
       Effect.provide(TransactionService.Live),
@@ -270,7 +299,11 @@ describe('TransactionService', () => {
         },
       ];
 
-      const tx = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const tx = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       const result = yield* Effect.either(
         transactionService.balanceTransaction(tx, unshieldedState, sampleUserAddress(), owner),
       );
@@ -305,7 +338,11 @@ describe('TransactionService', () => {
           amount,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       const balancedTransaction = yield* transactionService.balanceTransaction(
         transferTransaction,
         unshieldedState,
@@ -342,7 +379,11 @@ describe('TransactionService', () => {
           amount,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       const _ = yield* transactionService.balanceTransaction(transferTransaction, unshieldedState, ownerAddress, owner);
 
       // validate the state got changed
@@ -361,7 +402,11 @@ describe('TransactionService', () => {
           amount: 1n,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       const segments = transactionService.getSegments(transferTransaction);
       expect(segments).toEqual([1]);
     }).pipe(Effect.provide(TransactionService.Live), Effect.runPromise));
@@ -377,7 +422,11 @@ describe('TransactionService', () => {
           amount,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
 
       // a positive case
       const signature = yield* transactionService.getOfferSignatureData(transferTransaction, 1);
@@ -404,7 +453,11 @@ describe('TransactionService', () => {
           amount: 3n,
         },
       ];
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
+      );
       const signatureData = yield* transactionService.getOfferSignatureData(transferTransaction, 1);
       const signature = signData(signingKey, signatureData);
 
@@ -436,18 +489,18 @@ describe('TransactionService', () => {
         },
       ];
       const transactionService = yield* TransactionService;
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date());
-      const serializedTransaction = yield* transactionService.serializeTransaction(
-        transferTransaction,
-        NetworkId.Undeployed,
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(),
+        NetworkId.NetworkId.Undeployed,
       );
+      const serializedTransaction = yield* transactionService.serializeTransaction(transferTransaction);
 
       const deserializeTransaction = yield* transactionService.deserializeTransaction(
         'signature',
         'pre-proof',
         'pre-binding',
         serializedTransaction,
-        NetworkId.Undeployed,
       );
 
       expect(deserializeTransaction.intents?.size).toEqual(1);
@@ -464,7 +517,7 @@ describe('TransactionService', () => {
     Effect.gen(function* () {
       const transactionService = yield* TransactionService;
       const unshieldedState = yield* UnshieldedStateService;
-      const ledgerState = new LedgerState(new ZswapChainState());
+      const ledgerState = new LedgerState(NetworkId.NetworkId.Undeployed, new ZswapChainState());
 
       const token = sampleRawTokenType();
       const signingKey = sampleSigningKey();
@@ -479,19 +532,22 @@ describe('TransactionService', () => {
           type: token,
         },
       ];
-      const intent1 = Intent.new(new Date(50 * 1000));
+      const intent1Date = new Date(Date.now() + 60 * 24 * 1000); // 1 hour in the future
+      const intent1 = Intent.new(intent1Date);
       intent1.guaranteedUnshieldedOffer = UnshieldedOffer.new([], outputs, []);
-      const tx1 = Transaction.fromParts(undefined, undefined, intent1);
+      const tx1 = Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent1);
       const proofErasedTx1 = tx1.eraseProofs();
 
+      const verifiedProofErasedTx1 = proofErasedTx1.wellFormed(ledgerState, strictness, new Date());
+
       const blockContext = {
-        secondsSinceEpoch: blockTime(new Date(1)),
+        secondsSinceEpoch: blockTime(new Date()),
         secondsSinceEpochErr: 0,
         parentBlockHash: seedHex(64, 2),
       };
 
       const [ledgerStateAfter1, result1] = ledgerState.apply(
-        proofErasedTx1,
+        verifiedProofErasedTx1,
         new TransactionContext(ledgerState, blockContext, new Set()),
       );
 
@@ -531,7 +587,11 @@ describe('TransactionService', () => {
       ];
       const withChange = createdUtxos[0].value !== 1n;
 
-      const transferTransaction = yield* transactionService.transferTransaction(desiredOutputs, new Date(50 * 1000));
+      const transferTransaction = yield* transactionService.transferTransaction(
+        desiredOutputs,
+        new Date(Date.now() + 60 * 24 * 1000), // 1 hour in the future
+        NetworkId.NetworkId.Undeployed,
+      );
       const balancedTx = yield* transactionService.balanceTransaction(
         transferTransaction,
         unshieldedState,
@@ -542,9 +602,10 @@ describe('TransactionService', () => {
       const signature = signData(signingKey, signatureData);
       const transactionWithSignatures = yield* transactionService.addOfferSignature(balancedTx, signature, 1);
       const proofErasedTx = transactionWithSignatures.eraseProofs();
+      const verifiedProofErasedTx = proofErasedTx.wellFormed(ledgerStateAfter1, strictness, new Date());
 
       const [ledgerStateAfter2, result2] = ledgerStateAfter1.apply(
-        proofErasedTx,
+        verifiedProofErasedTx,
         new TransactionContext(ledgerStateAfter1, blockContext, new Set()),
       );
 

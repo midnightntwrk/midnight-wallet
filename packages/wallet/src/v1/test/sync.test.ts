@@ -12,7 +12,8 @@ const KNOWN_VIEWING_KEY = 'mn_shield-esk_undeployed1qqpsq87f9ac09e95wjm2rp8vp0yd
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
-describe('Wallet subscription', () => {
+// TODO: This is replicating the tests from indexer client, it should be rewritten to use the wallet sync service instead
+describe.skip('Wallet subscription', () => {
   describe('with available Indexer Server', () => {
     const environmentId = randomUUID();
     let environment: StartedDockerComposeEnvironment | undefined = undefined;
@@ -47,7 +48,6 @@ describe('Wallet subscription', () => {
           const events = yield* ShieldedTransactions.run({
             sessionId: session.connect,
             index: null,
-            sendProgressUpdates: true,
           }).pipe(
             Stream.take(5),
             Stream.tap((data) => Effect.log(data.shieldedTransactions.__typename)),

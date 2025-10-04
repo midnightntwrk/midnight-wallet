@@ -1,5 +1,5 @@
 import { Effect, Context } from 'effect';
-import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 /**
@@ -27,8 +27,9 @@ export declare namespace ProverClient {
      * @returns An `Effect` that yields with a serialized transaction representing the proven version of `transaction`;
      * or fails with a client or server side error.
      */
-    proveTransaction(
-      transaction: SerializedUnprovenTransaction,
-    ): Effect.Effect<SerializedTransaction, ClientError | ServerError>;
+    proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
+      tx: ledger.Transaction<S, ledger.PreProof, B>,
+      costModel?: ledger.CostModel,
+    ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError>;
   }
 }

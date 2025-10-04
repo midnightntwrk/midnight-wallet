@@ -1,10 +1,11 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances';
 import { CoreWallet } from '../CoreWallet';
 
-type ShieldedTokenType = { tokenType: { raw: string; tag: 'shielded' }; value: bigint };
+type ShieldedTokenType = { tokenType: ledger.ShieldedTokenType; value: bigint };
 
 const amountArbitrary = fc.bigInt({ min: 1n, max: 1000n });
 const tokenTypeArbitrary = fc.constantFrom(ledger.shieldedToken(), {
@@ -20,7 +21,7 @@ const toAvailableCoin = (c: ShieldedTokenType, secretKeys: ledger.ZswapSecretKey
   const coin = ledger.createShieldedCoinInfo(c.tokenType.raw, BigInt(c.value));
   return {
     coin: { ...coin, mt_index: 0n },
-    commitment: ledger.coin_commitment(coin, secretKeys.coinPublicKey),
+    commitment: ledger.coinCommitment(coin, secretKeys.coinPublicKey),
     nullifier: ledger.coinNullifier(coin, secretKeys.coinSecretKey),
   };
 };
@@ -30,7 +31,7 @@ const toPendingCoin = (c: ShieldedTokenType, secretKeys: ledger.ZswapSecretKeys)
   return {
     coin,
     ttl: new Date(0),
-    commitment: ledger.coin_commitment(coin, secretKeys.coinPublicKey),
+    commitment: ledger.coinCommitment(coin, secretKeys.coinPublicKey),
     nullifier: ledger.coinNullifier(coin, secretKeys.coinSecretKey),
   };
 };
@@ -48,7 +49,7 @@ const createInitialState = (secretKeys: ledger.ZswapSecretKeys, coins: Available
     (offers) => (offers.length > 0 ? offers.reduce((acc, offer) => acc.merge(offer)) : undefined),
   );
 
-  const tx = ledger.Transaction.fromParts(finalOffer).eraseProofs();
+  const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, finalOffer).eraseProofs();
 
   return tx.guaranteedOffer
     ? new ledger.ZswapLocalState().apply(secretKeys, tx.guaranteedOffer)
@@ -101,7 +102,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const setupAvailableCoins: AvailableCoin[] = coinInputs.map((c) =>
           toAvailableCoin(c as { tokenType: { raw: string; tag: 'shielded' }; value: bigint }, secretKeys),
         );
-        const networkId = ledger.NetworkId.Undeployed;
+        const networkId = NetworkId.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const localState = createInitialState(secretKeys, setupAvailableCoins);
@@ -139,7 +140,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
         const setupPendingCoins: PendingCoin[] = fixturePendingCoins.map((c) =>
           toPendingCoin(c as ShieldedTokenType, secretKeys),
         );
-        const networkId = ledger.NetworkId.Undeployed;
+        const networkId = NetworkId.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         let localState = createInitialState(secretKeys, setupAvailableCoins);
@@ -214,7 +215,7 @@ describe('DefaultCoinsAndBalancesCapability', () => {
           seen.add(c.coin.nonce);
           return true;
         });
-        const networkId = ledger.NetworkId.Undeployed;
+        const networkId = NetworkId.NetworkId.Undeployed;
         const capability = makeDefaultCoinsAndBalancesCapability();
 
         const initialState = createInitialState(secretKeys, setupAvailableCoins);

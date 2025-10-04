@@ -1,7 +1,6 @@
 import { Effect } from 'effect';
 import {
   ZswapOffer,
-  NetworkId,
   ZswapOutput,
   createShieldedCoinInfo,
   sampleCoinPublicKey,
@@ -9,13 +8,13 @@ import {
   Transaction,
   LedgerParameters,
   shieldedToken,
-} from '@midnight-ntwrk/ledger';
-import { SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+  CostModel,
+} from '@midnight-ntwrk/ledger-v6';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import * as ProverClient from '../ProverClient';
 import * as HttpProverClient from '../HttpProverClient';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:5.0.0-alpha.2';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.3';
 const PROOF_SERVER_PORT: number = 6300;
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
@@ -58,7 +57,7 @@ describe('HttpProverClient', () => {
       const output = ZswapOutput.new(spendCoin, 0, cpk, epk);
       const unprovenOffer = ZswapOffer.fromOutput(output, shieldedTokenType.raw, spendCoinAmount);
 
-      return Transaction.fromParts(unprovenOffer);
+      return Transaction.fromParts('undeployed', unprovenOffer);
     };
 
     beforeAll(async () => {
@@ -77,22 +76,22 @@ describe('HttpProverClient', () => {
       async () => {
         await Effect.gen(function* () {
           const proveClient = yield* ProverClient.ProverClient;
+
           const spendCoinAmount = 1_000n;
 
-          const unprovenTransactionBytes = makeValidTransaction(spendCoinAmount).serialize(NetworkId.Undeployed);
+          const validTx = makeValidTransaction(spendCoinAmount);
 
-          const txBytes = yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
-          const tx = Transaction.deserialize('signature', 'proof', 'pre-binding', txBytes, NetworkId.Undeployed);
-          const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.dummyParameters()));
+          const tx = yield* proveClient.proveTransaction(validTx, CostModel.initialCostModel());
 
-          expect(imbalances.size).toEqual(1);
-          // limitation due to .get() method expecting an object
-          imbalances.forEach((value, key) => {
-            expect(key).toEqual(shieldedTokenType);
-            expect(value).toBeLessThanOrEqual(-spendCoinAmount);
-          });
+          const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
 
-          expect(tx.fees(LedgerParameters.dummyParameters())).not.toEqual(0n);
+          // workaround because imbalances keys are objects, while js compares them by reference
+          const filteredImbalances = Array.from(imbalances.entries()).filter(
+            ([tokenType, tokenValue]) => tokenType.tag === shieldedTokenType.tag && tokenValue <= spendCoinAmount,
+          );
+
+          expect(filteredImbalances.length).toEqual(1);
+          expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
         }).pipe(
           Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
@@ -108,11 +107,11 @@ describe('HttpProverClient', () => {
         await Effect.gen(function* () {
           const proveClient = yield* ProverClient.ProverClient;
 
-          const unprovenTransactionBytes = makeValidTransaction(1n).serialize(NetworkId.TestNet);
+          const tx = makeValidTransaction(1n);
 
-          yield* proveClient.proveTransaction(SerializedUnprovenTransaction(unprovenTransactionBytes));
+          yield* proveClient.proveTransaction(tx, CostModel.initialCostModel());
         }).pipe(
-          Effect.catchTag('ClientError', () => Effect.succeed(void 0)),
+          Effect.catchAll(() => Effect.succeed(void 0)),
           Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,

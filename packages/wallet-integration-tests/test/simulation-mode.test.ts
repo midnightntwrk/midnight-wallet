@@ -1,6 +1,7 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   Proving,
   Simulator,
@@ -9,7 +10,6 @@ import {
   Transacting,
   TransactionHistory,
   V1Builder,
-  ProofErasedTransaction,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
@@ -20,9 +20,7 @@ vi.setConfig({ testTimeout: 100_000 });
 const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
 
 describe('Working in simulation mode', () => {
-  // Tx issued in this test fails because there exists no API to populate `past_roots` of Ledger's Coin Commitment Merkle Tree.
-  // It's partially fixed in 6.1.0-alpha.2, an update is needed to fix it fully
-  it.skip('allows to make transactions', async () => {
+  it('allows to make transactions', async () => {
     return Effect.gen(function* () {
       const senderKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const receiverKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
@@ -39,14 +37,10 @@ describe('Working in simulation mode', () => {
       const Wallet = CustomShieldedWallet(
         {
           simulator,
-          networkId: ledger.NetworkId.Undeployed,
-          costParameters: {
-            ledgerParams: ledger.LedgerParameters.dummyParameters(),
-            additionalFeeOverhead: 0n,
-          },
+          networkId: NetworkId.NetworkId.Undeployed,
         },
         new V1Builder()
-          .withTransactionType<ProofErasedTransaction>()
+          .withTransactionType<ledger.ProofErasedTransaction>()
           .withProving(Proving.makeSimulatorProvingService)
           .withCoinSelectionDefaults()
           .withTransacting(Transacting.makeSimulatorTransactingCapability)

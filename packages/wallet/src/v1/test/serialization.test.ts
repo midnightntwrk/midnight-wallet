@@ -1,13 +1,12 @@
 import { OtherWalletError } from '../WalletError';
-import * as ledger from '@midnight-ntwrk/ledger';
-import { Array as Arr, Chunk, pipe } from 'effect';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { makeDefaultV1SerializationCapability } from '../Serialization';
 import { Either } from 'effect';
 import { CoreWallet } from '../CoreWallet';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { ProofErasedTransaction } from '../Transaction';
-import { makeFakeTx } from '../../test/genTxs';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;
 vi.setConfig({ testTimeout: minutes(1) });
@@ -43,12 +42,12 @@ const transactionArbitrary = (
   depth: number,
 ): fc.Arbitrary<{
   outputPreimages: OutputPreimage[];
-  transaction: ProofErasedTransaction;
+  offer: ledger.ZswapOffer<ledger.PreProof>;
 }> => {
   return fc.array(outputPreimageArbitrary, { maxLength: depth, minLength: 1 }).map((outputPreimages) => {
     return {
       outputPreimages,
-      transaction: pipe(
+      offer: pipe(
         outputPreimages,
         Arr.map((preimage) => {
           const output = ledger.ZswapOutput.new(
@@ -59,9 +58,7 @@ const transactionArbitrary = (
           );
           return ledger.ZswapOffer.fromOutput(output, preimage.coin.type, preimage.coin.value);
         }),
-        (arr) => arr.reduce((offerA, offerB) => offerA.merge(offerB)), // effect lacks equivalent "fold" definition for Array
-        (offer) => ledger.Transaction.fromParts(offer),
-        (tx) => tx.eraseProofs(),
+        (arr) => arr.reduce((offerA, offerB) => offerA.merge(offerB)), // effect lacks equivalent "fold" definition for Array,
       ),
     };
   });
@@ -76,19 +73,12 @@ const walletArbitrary = (txDepth: number) => {
         .map((transactions) => ({ transactions, keys }));
     })
     .chain((acc) => {
-      return fc
-        .constantFrom(
-          ledger.NetworkId.Undeployed,
-          ledger.NetworkId.DevNet,
-          ledger.NetworkId.TestNet,
-          ledger.NetworkId.MainNet,
-        )
-        .map((networkId) => ({ ...acc, networkId }));
+      return fc.string().map((networkId) => ({ ...acc, networkId }));
     })
     .map(({ transactions, keys, networkId }) => {
       const state: ledger.ZswapLocalState = transactions.reduce(
         (state: ledger.ZswapLocalState, tx): ledger.ZswapLocalState => {
-          return state.applyTx(keys, tx.transaction, 'success');
+          return state.apply(keys, tx.offer);
         },
         new ledger.ZswapLocalState(),
       );
@@ -110,18 +100,12 @@ describe('V1 Wallet serialization', () => {
     { seed: '0000000000000000000000000000000000000000000000000000000000000003' },
     { seed: '0000000000000000000000000000000000000000000000000000000000000004' },
   ])('maintains serialize ◦ deserialize == id property, including transaction history', ({ seed }) => {
-    const networkId = ledger.NetworkId.Undeployed;
-    const capability = makeDefaultV1SerializationCapability({ networkId });
-    const testTxs = Chunk.fromIterable([makeFakeTx(10n), makeFakeTx(20n), makeFakeTx(30n)]);
+    const networkId = NetworkId.NetworkId.Undeployed;
+    const capability = makeDefaultV1SerializationCapability();
     const keys = ledger.ZswapSecretKeys.fromSeed(Buffer.from(seed, 'hex'));
     const wallet = CoreWallet.initEmpty(keys, networkId);
-    const preparedWallet = Chunk.reduce(testTxs, wallet, (wallet, tx) => {
-      const newState = CoreWallet.applyTransaction(wallet, keys, tx, { type: 'success' });
 
-      return CoreWallet.updateProgress(newState, { appliedIndex: newState.state.firstFree });
-    });
-
-    const firstIteration = capability.serialize(preparedWallet);
+    const firstIteration = capability.serialize(wallet);
 
     const restored = pipe(capability.deserialize(null, firstIteration), EitherOps.getOrThrowLeft);
     const secondIteration = capability.serialize(restored);
@@ -129,8 +113,7 @@ describe('V1 Wallet serialization', () => {
     expect(firstIteration).toEqual(secondIteration);
   });
   it('maintains serialize ◦ deserialize == id property', () => {
-    const networkId = ledger.NetworkId.Undeployed;
-    const capability = makeDefaultV1SerializationCapability({ networkId });
+    const capability = makeDefaultV1SerializationCapability();
     fc.assert(
       fc.property(walletArbitrary(10), ({ wallet }) => {
         const firstIteration = capability.serialize(wallet);
@@ -147,8 +130,7 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles invalid JSON strings gracefully', () => {
-    const networkId = ledger.NetworkId.Undeployed;
-    const capability = makeDefaultV1SerializationCapability({ networkId });
+    const capability = makeDefaultV1SerializationCapability();
 
     fc.assert(
       fc.property(fc.string(), (invalidJson) => {
@@ -163,8 +145,7 @@ describe('V1 Wallet serialization', () => {
   });
 
   it('handles random valid JSON strings gracefully', () => {
-    const networkId = ledger.NetworkId.Undeployed;
-    const capability = makeDefaultV1SerializationCapability({ networkId });
+    const capability = makeDefaultV1SerializationCapability();
 
     fc.assert(
       fc.property(fc.json(), (randomJsonValue) => {

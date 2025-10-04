@@ -1,4 +1,4 @@
-import { sampleIntentHash } from '@midnight-ntwrk/ledger';
+import { sampleIntentHash } from '@midnight-ntwrk/ledger-v6';
 import { Chunk, Effect, Stream, Option } from 'effect';
 import { UnshieldedState, UnshieldedTransaction, Utxo } from '../src/model';
 

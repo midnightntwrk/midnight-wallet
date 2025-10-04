@@ -1,5 +1,4 @@
 import { describe, it, vi, expect, beforeAll, afterAll } from 'vitest';
-import * as ledger from '@midnight-ntwrk/ledger';
 import { PolkadotNodeClient } from '../PolkadotNodeClient';
 import * as NodeClient from '../NodeClient';
 import * as SubmissionEvent from '../SubmissionEvent';
@@ -55,10 +54,7 @@ describe.skip('PolkadotNodeClient', () => {
     const result = await pipe(
       Effect.gen(function* () {
         const transactions = yield* TestTransactions.load(getTestTxsPath());
-        return yield* NodeClient.sendMidnightTransactionAndWait(
-          transactions.unbalanced_tx.serialize(ledger.NetworkId.Undeployed),
-          'Submitted',
-        );
+        return yield* NodeClient.sendMidnightTransactionAndWait(transactions.unbalanced_tx.serialize(), 'Submitted');
       }),
       Effect.either,
       Effect.provide(clientLayer(node!.getMappedPort(9944))),
@@ -96,7 +92,7 @@ describe.skip('PolkadotNodeClient', () => {
     const allSubmissions = TestTransactions.load(getTestTxsPath()).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
-      Stream.mapEffect((tx) => modifyTx(tx.serialize(ledger.NetworkId.Undeployed))),
+      Stream.mapEffect((tx) => modifyTx(tx.serialize())),
       Stream.mapEffect((serializedTx) => NodeClient.sendMidnightTransactionAndWait(serializedTx, 'Submitted')),
       Stream.either,
       Stream.runCollect,
@@ -125,9 +121,7 @@ describe.skip('PolkadotNodeClient', () => {
     const submitAllTransactions = TestTransactions.load(getTestTxsPath()).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
-      Stream.mapEffect((tx) =>
-        NodeClient.sendMidnightTransactionAndWait(tx.serialize(ledger.NetworkId.Undeployed), 'InBlock'),
-      ),
+      Stream.mapEffect((tx) => NodeClient.sendMidnightTransactionAndWait(tx.serialize(), 'InBlock')),
       Stream.runDrain,
     );
 
@@ -147,7 +141,7 @@ describe.skip('PolkadotNodeClient', () => {
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
       Stream.take(1),
-      Stream.flatMap((tx) => NodeClient.sendMidnightTransaction(tx.serialize(ledger.NetworkId.Undeployed))),
+      Stream.flatMap((tx) => NodeClient.sendMidnightTransaction(tx.serialize())),
       Stream.runCollect,
       Effect.map(Chunk.toArray),
     );
@@ -183,13 +177,13 @@ describe.skip('PolkadotNodeClient', () => {
     const program = (node: StartedTestContainer) =>
       Effect.gen(function* () {
         const [tx1, tx2] = yield* first2Transactions;
-        yield* NodeClient.sendMidnightTransactionAndWait(tx1.serialize(ledger.NetworkId.Undeployed), 'InBlock');
+        yield* NodeClient.sendMidnightTransactionAndWait(tx1.serialize(), 'InBlock');
         yield* Effect.promise(() =>
           node.restart({
             timeout: 10_000,
           }),
         );
-        yield* NodeClient.sendMidnightTransactionAndWait(tx2.serialize(ledger.NetworkId.Undeployed), 'InBlock');
+        yield* NodeClient.sendMidnightTransactionAndWait(tx2.serialize(), 'InBlock');
       });
 
     const result = await pipe(

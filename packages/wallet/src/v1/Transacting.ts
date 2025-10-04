@@ -1,4 +1,5 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe';
@@ -10,11 +11,10 @@ import {
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
-  TransactionCostModel,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { TotalCostParameters, TransactionImbalances } from './TransactionImbalances';
-import { TransactionTrait, FinalizedTransaction, ProofErasedTransaction, UnprovenTransaction } from './Transaction';
+import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances';
+import { TransactionTrait } from './Transaction';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances';
 import { KeysCapability } from './Keys';
 
@@ -54,8 +54,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
 }
 
 export type DefaultTransactingConfiguration = {
-  networkId: ledger.NetworkId;
-  costParameters: TotalCostParameters;
+  networkId: NetworkId.NetworkId;
 };
 
 export type DefaultTransactingContext = {
@@ -67,10 +66,9 @@ export type DefaultTransactingContext = {
 export const makeDefaultTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, FinalizedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ledger.FinalizedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
-    config.costParameters,
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
@@ -81,10 +79,9 @@ export const makeDefaultTransactingCapability = (
 export const makeSimulatorTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ProofErasedTransaction> => {
+): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ledger.ProofErasedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
-    config.costParameters,
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
@@ -98,16 +95,14 @@ export class TransactingCapabilityImplementation<
   TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
 > implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>
 {
-  public readonly networkId: ledger.NetworkId;
-  public readonly costParams: TotalCostParameters;
+  public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   public readonly txTrait: TransactionTrait<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
   constructor(
-    networkId: ledger.NetworkId,
-    costParams: TotalCostParameters,
+    networkId: NetworkId.NetworkId,
     getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
@@ -115,7 +110,6 @@ export class TransactingCapabilityImplementation<
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
-    this.costParams = costParams;
     this.getCoinSelection = getCoinSelection;
     this.getKeys = getKeys;
     this.txTrait = txTrait;
@@ -129,9 +123,10 @@ export class TransactingCapabilityImplementation<
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
-      const initialImbalances = this.txTrait.getImbalancesWithFeesOverhead(tx, this.costParams);
+      const networkId = this.networkId;
+      const initialImbalances = this.txTrait.getImbalances(tx);
 
-      if (TransactionImbalances.areBalanced(this.costParams)(initialImbalances) && newCoins.length === 0) {
+      if (TransactionImbalances.areBalanced(initialImbalances) && newCoins.length === 0) {
         return {
           recipe: {
             type: NOTHING_TO_PROVE,
@@ -141,15 +136,16 @@ export class TransactingCapabilityImplementation<
         };
       }
 
-      const {
-        newState: afterFallible,
-        offer: maybeFallible,
-        newImbalances,
-      } = yield* this.balanceFallibleSection(secretKeys, state, initialImbalances, coinSelection);
+      const { newState: afterFallible, offer: maybeFallible } = yield* this.balanceFallibleSection(
+        secretKeys,
+        state,
+        initialImbalances,
+        coinSelection,
+      );
       const { newState: afterGuaranteed, offer: guaranteed } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         afterFallible,
-        newImbalances,
+        initialImbalances,
         coinSelection,
         newCoins.length,
         Imbalances.empty(),
@@ -161,7 +157,7 @@ export class TransactingCapabilityImplementation<
         recipe: {
           type: BALANCE_TRANSACTION_TO_PROVE,
           transactionToBalance: tx,
-          transactionToProve: ledger.Transaction.fromParts(guaranteed, maybeFallible),
+          transactionToProve: ledger.Transaction.fromParts(networkId, guaranteed, maybeFallible),
         },
       };
     });
@@ -173,14 +169,15 @@ export class TransactingCapabilityImplementation<
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
+      const networkId = this.networkId;
       const { initialOffersAndCoins, selfCoins } = yield* this.#processDesiredOutputs(state, transfers);
       const offerToBalance = pipe(
         initialOffersAndCoins,
         Arr.map((o) => o.outputOffer),
         ArrayOps.fold((a, b) => a.merge(b)),
       );
-      const unprovenTxToBalance = ledger.Transaction.fromParts(offerToBalance);
-      const imbalances = TransactionTrait.unproven.getImbalancesWithFeesOverhead(unprovenTxToBalance, this.costParams);
+      const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
+      const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         state,
@@ -190,7 +187,7 @@ export class TransactingCapabilityImplementation<
         Imbalances.empty(),
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
-      const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(offer));
+      const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(networkId, offer));
 
       return {
         newState: finalState,
@@ -211,17 +208,18 @@ export class TransactingCapabilityImplementation<
     return Either.gen(this, function* () {
       const outputsParseResult = yield* this.#processDesiredOutputsPossiblyEmpty(state, desiredOutputs);
       const inputsParseResult = Imbalances.fromEntries(Record.toEntries(desiredInputs));
+      const networkId = this.networkId;
 
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         state,
-        TransactionImbalances.feesOnly(outputsParseResult.imbalances),
+        TransactionImbalances.empty(),
         this.getCoinSelection(),
         outputsParseResult.selfCoins.length,
         inputsParseResult,
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, outputsParseResult.selfCoins);
-      const balancingTx = ledger.Transaction.fromParts(offer);
+      const balancingTx = ledger.Transaction.fromParts(networkId, offer);
       const finalTx = outputsParseResult.unprovenTxToBalance
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
         : balancingTx;
@@ -251,7 +249,7 @@ export class TransactingCapabilityImplementation<
   }
 
   revertRecipe(state: CoreWallet, recipe: ProvingRecipe<TTransaction>): Either.Either<CoreWallet, WalletError> {
-    const doRevert = (tx: UnprovenTransaction) => {
+    const doRevert = (tx: ledger.UnprovenTransaction) => {
       return Either.try({
         try: () => {
           return CoreWallet.revertTransaction(state, tx);
@@ -317,43 +315,30 @@ export class TransactingCapabilityImplementation<
     {
       offer: ledger.ZswapOffer<ledger.PreProof> | undefined;
       newState: CoreWallet;
-      newImbalances: TransactionImbalances;
     },
     WalletError
   > {
     return Either.try({
       try: () => {
-        // Fallible section does not pay fees, so we balance all tokens to zero
-        const fakeCostModel = { inputFeeOverhead: 0n, outputFeeOverhead: 0n };
         const fallibleBalanceRecipe = getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
           coins: this.getCoins()
             .getAvailableCoins(state)
             .map((c) => c.coin),
           initialImbalances: imbalances.fallible,
-          transactionCostModel: fakeCostModel,
-          feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
+          transactionCostModel: ShieldedCostModel,
+          feeTokenType: '',
           coinSelection,
           createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
           isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
         });
-        const fallibleCounterOfferFeeOverhead = TransactionTrait.shared.estimateFeeOverhead({
-          numberOfInputs: fallibleBalanceRecipe.inputs.length,
-          numberOfOutputs: fallibleBalanceRecipe.outputs.length,
-          costParams: this.costParams,
-        });
-        const updatedImbalances = TransactionImbalances.addFeesOverhead(fallibleCounterOfferFeeOverhead)(imbalances);
         return pipe(
           this.#prepareOffer(secretKeys, state, fallibleBalanceRecipe, 1),
           Option.match({
             onNone: () => ({
               newState: state,
               offer: undefined,
-              newImbalances: updatedImbalances,
             }),
-            onSome: (res) => ({
-              ...res,
-              newImbalances: updatedImbalances,
-            }),
+            onSome: (res) => res,
           }),
         );
       },
@@ -382,7 +367,6 @@ export class TransactingCapabilityImplementation<
     knownSelfOutputs: number,
     targetImbalances: Imbalances,
   ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: CoreWallet }, WalletError> {
-    const correctedCostModel = TotalCostParameters.getCorrectedCostModel(this.costParams);
     return Either.gen(this, function* () {
       const balanceRecipe = yield* Either.try({
         try: () =>
@@ -391,8 +375,8 @@ export class TransactingCapabilityImplementation<
               .getAvailableCoins(state)
               .map((c) => c.coin),
             initialImbalances: imbalances.guaranteed,
-            transactionCostModel: correctedCostModel,
-            feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
+            transactionCostModel: ShieldedCostModel,
+            feeTokenType: '',
             coinSelection,
             createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
             isCoinEqual: (a, b) => a.nonce === b.nonce,
@@ -429,14 +413,7 @@ export class TransactingCapabilityImplementation<
     }).pipe(
       EitherOps.flatMapLeft((err: NoSelfOutputsError | WalletError) => {
         if (err instanceof NoSelfOutputsError) {
-          return this.#balanceGuaranteedWithSelfOutput(
-            secretKeys,
-            state,
-            imbalances,
-            coinSelection,
-            correctedCostModel,
-            targetImbalances,
-          );
+          return this.#balanceGuaranteedWithSelfOutput(secretKeys, state, imbalances, coinSelection, targetImbalances);
         } else {
           return Either.left(err);
         }
@@ -449,7 +426,6 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
-    correctedCostModel: TransactionCostModel,
     targetImbalances: Imbalances,
   ) {
     return Either.gen(this, function* () {
@@ -462,13 +438,10 @@ export class TransactingCapabilityImplementation<
               .map((c) => c.coin),
             initialImbalances: Imbalances.merge(
               imbalances.guaranteed,
-              Imbalances.fromEntry(
-                (ledger.shieldedToken() as { raw: string }).raw,
-                -1n * (additionalOutputValue + correctedCostModel.outputFeeOverhead),
-              ),
+              Imbalances.fromEntry((ledger.shieldedToken() as { raw: string }).raw, -1n * additionalOutputValue),
             ),
-            transactionCostModel: this.costParams.ledgerParams.transactionCostModel,
-            feeTokenType: (ledger.shieldedToken() as { raw: string }).raw,
+            transactionCostModel: ShieldedCostModel,
+            feeTokenType: '',
             coinSelection,
             targetImbalances,
             createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
@@ -597,16 +570,14 @@ export class TransactingCapabilityImplementation<
           return pipe(
             this.#processDesiredOutputs(state, desiredOutputs),
             Either.map(({ initialOffersAndCoins, selfCoins }) => {
+              const networkId = this.networkId;
               const offerToBalance = pipe(
                 initialOffersAndCoins,
                 Arr.map((o) => o.outputOffer),
                 ArrayOps.fold((a, b) => a.merge(b)),
               );
-              const unprovenTxToBalance = ledger.Transaction.fromParts(offerToBalance);
-              const imbalances = TransactionTrait.unproven.getImbalancesWithFeesOverhead(
-                unprovenTxToBalance,
-                this.costParams,
-              );
+              const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
+              const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
 
               return {
                 imbalances,

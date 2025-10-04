@@ -8,8 +8,10 @@ import {
   ServerError,
   HttpURL,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 
-const PROVE_TX_PATH = '/prove-tx';
+const PROVE_TX_PATH = '/prove';
+const CHECK_TX_PATH = '/check';
 
 /**
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
@@ -23,8 +25,8 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
 ) =>
   Layer.effect(
     ProverClient,
-    HttpURL.make(new URL(PROVE_TX_PATH, config.url)).pipe(
-      Either.map((url) => new HttpProverClientImpl(url)),
+    HttpURL.make(new URL(config.url)).pipe(
+      Either.map((baseUrl) => new HttpProverClientImpl(baseUrl)),
       Either.match({
         onLeft: (l) => Effect.fail(l),
         onRight: (r) => Effect.succeed(r),
@@ -33,14 +35,16 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
   );
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
-  constructor(url: HttpURL.HttpUrl) {
-    this.url = url;
+  constructor(baseUrl: HttpURL.HttpUrl) {
+    this.baseUrl = baseUrl;
   }
 
-  protected readonly url: HttpURL.HttpUrl;
+  protected readonly baseUrl: HttpURL.HttpUrl;
 
-  proveTransaction(
-    transaction: SerializedUnprovenTransaction,
+  private request(
+    path: string,
+    transaction: SerializedUnprovenTransaction | SerializedTransaction,
+    failurePrefix: string,
   ): Effect.Effect<SerializedTransaction, ClientError | ServerError> {
     const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
       Effect.promise(() => new Blob(chunks).bytes());
@@ -52,22 +56,22 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         Effect.flatMap((chunks) => concatBytes(Chunk.toArray(chunks))),
       );
 
+    // Build endpoint URL from the already validated base URL
+    const url = HttpURL.HttpURL(new URL(path, this.baseUrl));
+
     const proveTxRequest = pipe(
-      //The 4 empty bytes is an encoding of additional parameters proof server expects, in this case - empty
-      concatBytes([transaction, new Uint8Array([0, 0, 0, 0])]),
-      Effect.map((requestBody) => HttpClientRequest.post(this.url).pipe(HttpClientRequest.bodyUint8Array(requestBody))),
+      Effect.succeed(transaction),
+      Effect.map((body) => HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(body))),
       Effect.flatMap(HttpClient.execute),
-      Effect.flatMap((response: HttpClientResponse.HttpClientResponse) => {
-        return Effect.gen(function* () {
-          // Simplistic, but so is the proof server
+      Effect.flatMap((response: HttpClientResponse.HttpClientResponse) =>
+        Effect.gen(function* () {
           if (response.status !== 200) {
             const text = yield* response.text;
-            return yield* new ClientError({ message: `Failed to prove: ${text}` });
+            return yield* new ClientError({ message: `${failurePrefix}: ${text}` });
           }
-
           return yield* receiveBody(response);
-        });
-      }),
+        }),
+      ),
       Effect.retry({
         times: 3,
         while: (error) =>
@@ -78,7 +82,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
 
     return proveTxRequest.pipe(
-      Effect.map((a) => SerializedTransaction(a)),
+      Effect.map(SerializedTransaction),
       Effect.catchTags({
         RequestError: (err) => new ClientError({ message: `Failed to connect to Proof Server: ${err.message}` }),
         ResponseError: (err) =>
@@ -87,6 +91,46 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
           ),
       }),
       Effect.provide(FetchHttpClient.layer),
+    );
+  }
+
+  private serverProverProvider = (): ledger.ProvingProvider => ({
+    check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
+      pipe(
+        Effect.succeed(ledger.createCheckPayload(serializedPreimage)),
+        Effect.map(SerializedTransaction),
+        Effect.flatMap((tx) => this.request(CHECK_TX_PATH, tx, 'Failed to check')),
+        Effect.map((response) => ledger.parseCheckResult(response)),
+        Effect.runPromise,
+      ),
+    prove: async (
+      serializedPreimage: Uint8Array,
+      _keyLocation: string,
+      overwriteBindingInput?: bigint,
+    ): Promise<Uint8Array> =>
+      pipe(
+        Effect.succeed(ledger.createProvingPayload(serializedPreimage, overwriteBindingInput)),
+        Effect.map(SerializedUnprovenTransaction),
+        Effect.flatMap((tx) => this.request(PROVE_TX_PATH, tx, 'Failed to prove')),
+        Effect.runPromise,
+      ),
+  });
+
+  proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
+    transaction: ledger.Transaction<S, ledger.PreProof, B>,
+    costModel: ledger.CostModel,
+  ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
+    return pipe(
+      Effect.succeed(this.serverProverProvider()),
+      Effect.flatMap((provider) =>
+        Effect.tryPromise({
+          try: () => transaction.prove(provider, costModel),
+          catch: (error) =>
+            error instanceof ClientError || error instanceof ServerError
+              ? error
+              : new ClientError({ message: 'Failed to prove transaction', cause: error }),
+        }),
+      ),
     );
   }
 }

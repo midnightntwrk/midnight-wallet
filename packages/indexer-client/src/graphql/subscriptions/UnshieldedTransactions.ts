@@ -12,14 +12,6 @@ export const UnshieldedTransactions = Subscription.make(
             id
             hash
             protocolVersion
-            identifiers
-            transactionResult {
-              status
-              segments {
-                id
-                success
-              }
-            }
           }
           createdUtxos {
             owner

@@ -1,5 +1,5 @@
 import { CoreWallet } from './CoreWallet';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { pipe, Array } from 'effect';
 import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
@@ -66,11 +66,13 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     return pipe(
       [...state.state.coins],
       Array.filter((coin) => !pendingSpends.has(coin.nonce)),
-      Array.map((coin) => ({
-        coin,
-        commitment: state.coinHashes[coin.nonce].commitment,
-        nullifier: state.coinHashes[coin.nonce].nullifier,
-      })),
+      Array.map((coin) => {
+        return {
+          coin,
+          commitment: state.coinHashes[coin.nonce].commitment,
+          nullifier: state.coinHashes[coin.nonce].nullifier,
+        };
+      }),
     );
   };
 

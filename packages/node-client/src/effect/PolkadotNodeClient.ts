@@ -5,7 +5,6 @@ import {
   Duration,
   Effect,
   Either,
-  Encoding,
   Layer,
   ParseResult,
   pipe,
@@ -98,7 +97,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
       (emit) => {
         const callUnsubscribe = () => unsubscribeP.then((thunk) => thunk());
         const unsubscribeP: Promise<() => void> = this.api.tx.midnight
-          .sendMnTransaction(Encoding.encodeHex(serializedTransaction))
+          .sendMnTransaction(serializedTransaction)
           .send(this.#handleSubmissionResult(serializedTransaction, emit, callUnsubscribe))
           .catch((err) => {
             return emit

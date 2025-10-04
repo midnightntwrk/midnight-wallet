@@ -5,7 +5,7 @@ import {
   sampleRawTokenType,
   shieldedToken,
   RawTokenType,
-} from '@midnight-ntwrk/ledger';
+} from '@midnight-ntwrk/ledger-v6';
 import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index';
 import * as fc from 'fast-check';
 

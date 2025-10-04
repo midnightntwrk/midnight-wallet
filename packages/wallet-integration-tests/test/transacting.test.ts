@@ -1,4 +1,4 @@
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
@@ -17,7 +17,7 @@ import {
   CoreWallet,
   V1Tag,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
@@ -26,7 +26,7 @@ import path from 'node:path';
 import prand from 'pure-rand';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
-import { afterEach, assert, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries';
 import { getShieldedSeed } from './utils';
 
@@ -39,17 +39,14 @@ const sampleValue = <T>(arbitrary: fc.Arbitrary<T>): T => {
 
 const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
 
-const assertCloseTo = (actual: bigint, expected: bigint, delta: bigint, message: string = ''): void => {
-  assert.isTrue(actual >= expected - delta, `Expected ${actual} to be within ${delta} from ${expected}: ${message}`);
-  assert.isTrue(actual <= expected + delta, `Expected ${actual} to be within ${delta} from ${expected}: ${message}`);
-};
-
 /**
  * These tests need to be fairly high-level to examine interfaces and observable behaviors given already built wallet.
  * For that reason - they mostly examine happy-path or well-known failure handling scenarios
  * It's the job of unit tests in various setups to perform quick and exhaustive testing
+ *
+ * NOTE: Shielded wallet cannot transact on its own anymore, so these tests are skipped for now
  */
-describe('Wallet transacting', () => {
+describe.skip('Wallet transacting', () => {
   let environment: StartedDockerComposeEnvironment;
   let configuration: DefaultV1Configuration;
 
@@ -73,11 +70,7 @@ describe('Wallet transacting', () => {
         `http://localhost:${environment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       relayURL: new URL(`ws://127.0.0.1:${environment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`),
-      networkId: ledger.NetworkId.Undeployed,
-      costParameters: {
-        ledgerParams: ledger.LedgerParameters.dummyParameters(),
-        additionalFeeOverhead: 50_000n,
-      },
+      networkId: NetworkId.NetworkId.Undeployed,
     };
   });
 
@@ -173,7 +166,7 @@ describe('Wallet transacting', () => {
 
     const balances: Record<string, bigint> = coinsAndBalances.getAvailableBalances(syncedState);
 
-    const rawOutputs = sampleValue(outputsArbitrary(balances, configuration!.networkId, recipientArbitrary));
+    const rawOutputs = sampleValue(outputsArbitrary(balances, recipientArbitrary));
     const usedTokenTypes = new Set(rawOutputs.map((o) => o.type));
 
     const result = await wallet.runtime
@@ -205,10 +198,10 @@ describe('Wallet transacting', () => {
       const delta = transaction.guaranteedOffer!.deltas.get(tokenType);
       expect(delta == undefined || delta >= 0n).toBe(true);
     });
-    rawOutputs.forEach((rawOutput) => {
-      const appliedState = new ledger.ZswapLocalState().applyTx(rawOutput.receiverAddress, transaction, 'success');
-      expect(Array.from(appliedState.coins)).toMatchObject([{ value: rawOutput.amount, type: rawOutput.type }]);
-    });
+    // rawOutputs.forEach((rawOutput) => {
+    //   const appliedState = new ledger.ZswapLocalState().applyTx(rawOutput.receiverAddress, transaction, 'success');
+    //   expect(Array.from(appliedState.coins)).toMatchObject([{ value: rawOutput.amount, type: rawOutput.type }]);
+    // });
     expect(result.submissionResult._tag).toBe('Finalized');
   });
 
@@ -284,17 +277,6 @@ describe('Wallet transacting', () => {
     // This is a bit of an overestimation, but given various decisions that can be made in the balancing process,
     // it's a good enough range to test against
     // adding overhead for each output because balancing won't create a change output if it does not make sense
-    const dustReserve =
-      finalTx.fees(Wallet.configuration.costParameters.ledgerParams) +
-      BigInt(finalTx.guaranteedOffer!.inputs.length) *
-        (Wallet.configuration.costParameters.additionalFeeOverhead +
-          Wallet.configuration.costParameters.ledgerParams.transactionCostModel.inputFeeOverhead) +
-      BigInt(
-        finalTx.guaranteedOffer!.outputs.length +
-          (swapParams.outputs.length + Object.keys(swapParams.inputs).length) * 2,
-      ) *
-        (Wallet.configuration.costParameters.additionalFeeOverhead +
-          Wallet.configuration.costParameters.ledgerParams.transactionCostModel.outputFeeOverhead);
     const stateAfter1 = await waitForSync(wallet);
     const stateAfter2 = await waitForSync(wallet2);
 
@@ -307,25 +289,18 @@ describe('Wallet transacting', () => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, type);
 
-      const acceptedDelta = type == shieldedTokenType ? dustReserve : 0n;
-
-      assertCloseTo(change1, value * -1n, acceptedDelta, `Expected wallet 1 to provide ${value}`);
-      assertCloseTo(change2, value, acceptedDelta, `Expected wallet 2 to receive ${value}`);
+      expect(change1).toEqual(value * -1n);
+      expect(change2).toEqual(value);
     });
 
     swapParams.outputs.forEach((output) => {
       const change1 = getBalanceChange(cABefore1, cAAfter1, output.type);
       const change2 = getBalanceChange(cABefore2, cAAfter2, output.type);
 
-      const acceptedDelta = output.type == shieldedTokenType ? dustReserve : 0n;
-
-      assertCloseTo(change1, output.amount, acceptedDelta, `Expected wallet 1 to receive ${output.amount}`);
-      assertCloseTo(change2, output.amount * -1n, acceptedDelta, `Expected wallet 2 to provide ${output.amount}`);
+      expect(change1).toEqual(output.amount);
+      expect(change2).toEqual(output.amount * -1n);
     });
 
-    expect(finalTx.guaranteedOffer!.deltas.get(shieldedTokenType)).toBeGreaterThanOrEqual(
-      finalTx.fees(Wallet.configuration.costParameters.ledgerParams),
-    );
-    expect(finalTx.guaranteedOffer!.deltas.get(shieldedTokenType)).toBeLessThanOrEqual(dustReserve);
+    expect(finalTx.guaranteedOffer!.deltas.get(shieldedTokenType)).toBeUndefined();
   });
 });

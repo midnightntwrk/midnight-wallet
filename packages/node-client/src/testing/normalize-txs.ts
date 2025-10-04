@@ -1,3 +1,5 @@
+import { Encoding } from 'effect';
+
 type TxContainer = {
   tx: string;
   [key: string]: unknown;
@@ -30,7 +32,7 @@ export function normalizeTxs(tx: string): {
   if (data.initial_tx) {
     try {
       const inner = JSON.parse(data.initial_tx) as TxContainer;
-      if (inner.tx) normalizedTxs.initial_tx = inner.tx;
+      if (inner.tx) normalizedTxs.initial_tx = Encoding.encodeHex(inner.tx);
     } catch {
       throw Error('Failed to parse initial_tx');
     }
@@ -39,10 +41,13 @@ export function normalizeTxs(tx: string): {
   }
 
   for (const batch of data.batches ?? []) {
-    for (const txStr of batch.txs ?? []) {
+    for (const bufferTx of batch.txs ?? []) {
       try {
-        const inner = JSON.parse(txStr) as TxContainer;
-        if (inner.tx) normalizedTxs.batches.push(inner.tx);
+        const inner = JSON.parse(bufferTx) as TxContainer;
+        if (inner.tx) {
+          const txHex = Encoding.encodeHex(inner.tx);
+          normalizedTxs.batches.push(txHex);
+        }
       } catch {
         throw Error('Failed to parse batch tx');
       }

@@ -51,7 +51,7 @@ export const createSyncProgress = (
     ...data,
 
     isStrictlyComplete(): boolean {
-      return SyncProgress.isCompleteWithin(this);
+      return SyncProgress.isCompleteWithin(this, 0n);
     },
 
     isCompleteWithin(maxGap?: bigint): boolean {

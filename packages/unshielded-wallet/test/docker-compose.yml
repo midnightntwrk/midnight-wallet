@@ -1,16 +1,12 @@
 services:
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-fc796db9'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-c12e9051'
     container_name: indexer_$TESTCONTAINERS_UID
     ports:
       - '8088'
     environment:
       RUST_LOG: 'indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info'
       APP__INFRA__NODE__URL: 'ws://node:9944'
-      APP__APPLICATION__NETWORK_ID: 'Undeployed'
-      APP__INFRA__STORAGE__PASSWORD: 'indexer'
-      APP__INFRA__PUB_SUB__PASSWORD: 'indexer'
-      APP__INFRA__LEDGER_STATE_STORAGE__PASSWORD: 'indexer'
       APP__INFRA__SECRET: '303132333435363738393031323334353637383930313233343536373839303132'
 
     healthcheck:
@@ -23,7 +19,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.13.0-alpha.2'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.16.3-3b7b8d7c'
     container_name: node_$TESTCONTAINERS_UID
     ports:
       - '9944'

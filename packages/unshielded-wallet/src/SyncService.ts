@@ -56,9 +56,12 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
                 transaction: {
                   id: transaction.id,
                   hash: transaction.hash,
-                  identifiers: transaction.identifiers,
-                  protocolVersion: transaction.protocolVersion,
-                  transactionResult: transaction.transactionResult,
+                  identifiers: [transaction.hash],
+                  protocolVersion: 0,
+                  transactionResult: {
+                    status: 'SUCCESS',
+                    segments: null,
+                  },
                   createdUtxos: createdUtxos.map((utxo) => ({
                     value: utxo.value,
                     owner: utxo.owner,

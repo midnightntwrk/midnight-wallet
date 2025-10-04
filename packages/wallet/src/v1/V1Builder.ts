@@ -1,6 +1,6 @@
-import * as ledger from '@midnight-ntwrk/ledger';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope, Types } from 'effect';
-import { WalletSeed } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant';
@@ -8,11 +8,11 @@ import { makeDefaultV1SerializationCapability, SerializationCapability } from '.
 import {
   DefaultSyncContext,
   DefaultSyncConfiguration,
-  makeDefaultSyncCapability,
-  makeDefaultSyncService,
   SyncCapability,
   SyncService,
   WalletSyncUpdate,
+  makeEventsSyncService,
+  makeEventsSyncCapability,
 } from './Sync';
 import {
   DefaultTransactingConfiguration,
@@ -26,12 +26,11 @@ import { KeysCapability, makeDefaultKeysCapability } from './Keys';
 import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission';
 import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet';
-import { FinalizedTransaction } from './Transaction';
 import { makeDefaultTransactionHistoryCapability, TransactionHistoryCapability } from './TransactionHistory';
 import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
-  networkId: ledger.NetworkId;
+  networkId: NetworkId.NetworkId;
 };
 
 export type DefaultV1Configuration = BaseV1Configuration &
@@ -61,7 +60,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Varian
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AnyV1Variant = V1Variant<any, any, any, any>;
-export type DefaultV1Variant = V1Variant<string, WalletSyncUpdate, FinalizedTransaction, ledger.ZswapSecretKeys>;
+export type DefaultV1Variant = V1Variant<string, WalletSyncUpdate, ledger.FinalizedTransaction, ledger.ZswapSecretKeys>;
 
 export type TransactionOf<T extends AnyV1Variant> =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,10 +73,10 @@ export type SerializedStateOf<T extends AnyV1Variant> =
 
 export type DefaultV1Builder = V1Builder<
   DefaultV1Configuration,
-  RunningV1Variant.Context<string, WalletSyncUpdate, FinalizedTransaction, ledger.ZswapSecretKeys>,
+  RunningV1Variant.Context<string, WalletSyncUpdate, ledger.FinalizedTransaction, ledger.ZswapSecretKeys>,
   string,
   WalletSyncUpdate,
-  FinalizedTransaction,
+  ledger.FinalizedTransaction,
   ledger.ZswapSecretKeys
 >;
 
@@ -133,10 +132,10 @@ export class V1Builder<
     TContext,
     TSerialized,
     TSyncUpdate,
-    FinalizedTransaction,
+    ledger.FinalizedTransaction,
     TStartAux
   > {
-    return this.withTransactionType<FinalizedTransaction>();
+    return this.withTransactionType<ledger.FinalizedTransaction>();
   }
 
   withSyncDefaults(): V1Builder<
@@ -147,7 +146,7 @@ export class V1Builder<
     TTransaction,
     ledger.ZswapSecretKeys
   > {
-    return this.withSync(makeDefaultSyncService, makeDefaultSyncCapability);
+    return this.withSync(makeEventsSyncService, makeEventsSyncCapability);
   }
 
   withSync<
@@ -214,13 +213,13 @@ export class V1Builder<
   }
 
   withTransactingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux>,
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
   ): V1Builder<
     TConfig & DefaultTransactingConfiguration,
     TContext & DefaultTransactingContext,
     TSerialized,
     TSyncUpdate,
-    FinalizedTransaction,
+    ledger.FinalizedTransaction,
     TStartAux
   > {
     return this.withTransacting(makeDefaultTransactingCapability);
@@ -306,13 +305,13 @@ export class V1Builder<
   }
 
   withProvingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux>,
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
   ): V1Builder<
     TConfig & DefaultProvingConfiguration,
     TContext,
     TSerialized,
     TSyncUpdate,
-    FinalizedTransaction,
+    ledger.FinalizedTransaction,
     TStartAux
   > {
     return this.withProving(makeDefaultProvingService);
@@ -349,8 +348,8 @@ export class V1Builder<
   }
 
   withTransactionHistoryDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux>,
-  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux> {
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
+  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux> {
     return this.withTransactionHistory(makeDefaultTransactionHistoryCapability);
   }
 
@@ -430,13 +429,13 @@ export class V1Builder<
   }
 
   withSubmissionDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux>,
+    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
   ): V1Builder<
     TConfig & DefaultSubmissionConfiguration,
     TContext,
     TSerialized,
     TSyncUpdate,
-    FinalizedTransaction,
+    ledger.FinalizedTransaction,
     TStartAux
   > {
     return this.withSubmission(makeDefaultSubmissionService);
