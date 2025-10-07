@@ -41,7 +41,11 @@
     "@graphql-codegen/client-preset": "^4.8.2",
     "@graphql-codegen/typescript": "^4.1.6",
     "@graphql-codegen/typescript-operations": "^4.6.1",
-    "testcontainers": "^11.4.0"
+    "eslint": "^9.37.0",
+    "rimraf": "^6.0.1",
+    "testcontainers": "^11.4.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen",

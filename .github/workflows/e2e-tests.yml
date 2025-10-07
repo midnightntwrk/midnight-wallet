@@ -16,7 +16,7 @@ on:
         type: choice
         description: Midnight network to use
         required: true
-        default: 'devnet'
+        default: "devnet"
         options:
           - devnet
           - testnet
@@ -25,7 +25,7 @@ on:
         type: choice
         description: Midnight deployment to use
         required: true
-        default: 'qanet'
+        default: "qanet"
         options:
           - local
           - qanet
@@ -60,12 +60,12 @@ on:
         type: string
         description: Midnight network to use (testnet/devnet/undeployed)
         required: true
-        default: 'devnet'
+        default: "devnet"
       deployment:
         type: string
         description: Midnight deployment to use (qanet/testnet/local)
         required: true
-        default: 'qanet'
+        default: "qanet"
       seed:
         type: string
         description: Seed of a funded wallet
@@ -129,23 +129,32 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version-file: '.tool-versions'
-          cache: 'sbt'
+          distribution: "temurin"
+          java-version-file: ".tool-versions"
+          cache: "sbt"
 
       - uses: sbt/setup-sbt@v1
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.tool-versions'
-          cache: 'yarn'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
-          registry: 'https://ghcr.io'
+          registry: "https://ghcr.io"
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 

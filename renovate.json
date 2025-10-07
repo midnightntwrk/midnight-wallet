@@ -3,11 +3,7 @@
   "nix": {
     "enabled": true
   },
-  "extends": [
-    "config:best-practices",
-    "schedule:weekly",
-    ":disableRateLimiting"
-  ],
+  "extends": ["config:best-practices", "schedule:weekly", ":disableRateLimiting"],
   "dependencyDashboard": true,
   "semanticCommits": "enabled",
   "rebaseWhen": "conflicted",
@@ -31,16 +27,6 @@
       "groupName": "devDependencies (non-major)",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["patch", "minor"]
-    },
-    {
-      "matchDatasources": ["sbt-package"],
-      "enabled": false,
-      "matchPackageNames": ["io.iohk{/,}**"]
-    },
-    {
-      "matchDatasources": ["sbt-package"],
-      "enabled": false,
-      "matchPackageNames": ["com.github.ghostdogpr{/,}**"]
     }
   ]
 }

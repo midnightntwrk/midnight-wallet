@@ -11,8 +11,8 @@ env:
   BUN_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
-  NETWORK: 'undeployed'
-  DEPLOYMENT: 'local'
+  NETWORK: "undeployed"
+  DEPLOYMENT: "local"
 
 jobs:
   test:
@@ -25,18 +25,27 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version-file: '.tool-versions'
-          cache: 'sbt'
+          distribution: "temurin"
+          java-version-file: ".tool-versions"
+          cache: "sbt"
 
       - uses: sbt/setup-sbt@v1
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.tool-versions'
-          cache: 'yarn'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -47,7 +56,7 @@ jobs:
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
-          registry: 'https://ghcr.io'
+          registry: "https://ghcr.io"
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 

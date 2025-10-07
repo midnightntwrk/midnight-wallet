@@ -13,7 +13,7 @@
         "$TURBO_ROOT$/eslint.config.mjs"
       ],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "pre-build", "typecheck"]
+      "dependsOn": ["^dist", "typecheck"]
     },
     "test": {
       "inputs": [
@@ -29,18 +29,6 @@
     },
     "typecheck": {
       "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
-      "outputLogs": "new-only",
-      "dependsOn": ["^dist", "pre-build"]
-    },
-    "pre-build": {
-      "inputs": [
-        "test/**/*.ts",
-        "src/**/*.ts",
-        "scripts/**/*.ts",
-        "tsconfig*.json",
-        "package.json",
-        "$TURBO_ROOT$/tsconfig.base.json"
-      ],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
@@ -63,7 +51,7 @@
       ],
       "outputs": ["dist/**"],
       "outputLogs": "new-only",
-      "dependsOn": ["clean", "typecheck", "pre-build", "^dist", "typecheck"]
+      "dependsOn": ["clean", "typecheck", "^dist"]
     },
     "clean": {
       "cache": false,
@@ -75,14 +63,6 @@
       "inputs": ["**/*.{ts,js,json,yaml,yml}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
       "outputLogs": "new-only"
-    },
-    "@midnight-ntwrk/wallet#dist": {
-      "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
-    },
-    "@midnight-ntwrk/wallet#typecheck": {
-      "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
     },
     "verify": {
       "dependsOn": ["typecheck", "lint", "test"]

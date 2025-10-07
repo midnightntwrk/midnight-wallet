@@ -10,9 +10,9 @@ env:
 
 on:
   pull_request:
-    branches: ['**']
+    branches: ["**"]
   push:
-    branches: ['main']
+    branches: ["main"]
 
 jobs:
   build:
@@ -23,15 +23,24 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@v3
         with:
-          registry: 'https://ghcr.io'
+          registry: "https://ghcr.io"
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -82,5 +91,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
         with:
-          name: 'test-results-junit'
+          name: "test-results-junit"
           path: ./packages/e2e-tests/reports/report.xml

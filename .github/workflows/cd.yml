@@ -7,7 +7,7 @@ env:
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    tags: ["v*"]
 
 jobs:
   publish:
@@ -16,27 +16,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version-file: '.tool-versions'
-          cache: 'sbt'
-
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.tool-versions'
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: "yarn.lock"
           # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@midnight-ntwrk"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
 
       - name: Configure yarn
         run: |
           yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
-
-      - uses: sbt/setup-sbt@v1
 
       - name: Install dependencies
         run: |
