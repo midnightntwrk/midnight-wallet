@@ -1,8 +1,33 @@
-import { EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger-v6';
+import { DustPublicKey, EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger-v6';
 import { bech32m } from '@scure/base';
+import * as subsquidScale from '@subsquid/scale-codec';
 
 export type FormatContext = {
   networkId: string | null;
+};
+
+export type Field = {
+  bytes: number;
+  modulus: bigint;
+};
+
+export const BLSScalar: Field = {
+  bytes: 32,
+  modulus: BigInt('0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001'),
+};
+
+export const ScaleBigInt = {
+  encode: (data: bigint): Buffer => {
+    const sink = new subsquidScale.ByteSink();
+    sink.compact(data);
+    return Buffer.from(sink.toBytes());
+  },
+  decode: (repr: Uint8Array): bigint => {
+    const src = new subsquidScale.Src(repr);
+    const res = src.compact();
+    src.assertEOF();
+    return BigInt(res);
+  },
 };
 
 export class MidnightBech32m {
@@ -218,5 +243,30 @@ export class UnshieldedAddress {
 
   get hexStringVersioned(): UserAddress {
     return `0200${this.data.toString('hex')}`;
+  }
+}
+
+export class DustAddress {
+  readonly data: bigint;
+
+  static readonly codec: Bech32mCodec<DustAddress> = new Bech32mCodec(
+    'dust',
+    (daddr) => daddr.serialize(),
+    (repr) => new DustAddress(ScaleBigInt.decode(repr)),
+  );
+
+  static readonly encodePublicKey = (networkId: string, publicKey: DustPublicKey): string => {
+    return DustAddress.codec.encode(networkId, new DustAddress(publicKey)).asString();
+  };
+
+  constructor(data: bigint) {
+    if (data >= BLSScalar.modulus) {
+      throw new Error('Dust address is too large');
+    }
+    this.data = data;
+  }
+
+  serialize(): Buffer {
+    return ScaleBigInt.encode(this.data);
   }
 }

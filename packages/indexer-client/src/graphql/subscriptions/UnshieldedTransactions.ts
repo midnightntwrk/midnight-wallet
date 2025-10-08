@@ -19,6 +19,7 @@ export const UnshieldedTransactions = Subscription.make(
             value
             outputIndex
             intentHash
+            registeredForDustGeneration
           }
           spentUtxos {
             owner
@@ -26,6 +27,7 @@ export const UnshieldedTransactions = Subscription.make(
             value
             outputIndex
             intentHash
+            registeredForDustGeneration
           }
         }
         ... on UnshieldedTransactionsProgress {

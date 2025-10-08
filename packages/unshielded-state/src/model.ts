@@ -21,6 +21,7 @@ export const UtxoSchema = Schema.Data(
     type: Schema.String,
     intentHash: Schema.String,
     outputNo: Schema.Number,
+    registeredForDustGeneration: Schema.Boolean,
   }),
 );
 

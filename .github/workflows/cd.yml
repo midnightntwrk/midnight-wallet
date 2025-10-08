@@ -60,3 +60,4 @@ jobs:
           yarn workspace @midnight-ntwrk/wallet-sdk-prover-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-prover-client failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-facade npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-facade failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-node-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-node-client failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-dust-wallet npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-dust-wallet failed"

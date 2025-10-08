@@ -1774,6 +1774,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/wallet-api@npm:6.0.0-pre.5665b1e":
+  version: 6.0.0-pre.5665b1e
+  resolution: "@midnight-ntwrk/wallet-api@npm:6.0.0-pre.5665b1e::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F6.0.0-pre.5665b1e%2Ffad66c2049bef872da2bc4d3882a7ccd55d811c2"
+  dependencies:
+    "@midnight-ntwrk/zswap": "npm:^4.0.0"
+  peerDependencies:
+    rxjs: 7.x
+  checksum: 10c0/cc97bc4685da2bc5d4cfdc21e3c06f1910f5206fef9bcf024fa64e58a9579c577ac0449ea08a5eb0e3522cd30433baec59920092334f1c95839e7ff7be848718
+  languageName: node
+  linkType: hard
+
 "@midnight-ntwrk/wallet-api@npm:^3.4.0, @midnight-ntwrk/wallet-api@npm:^3.5.0":
   version: 3.5.0
   resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
@@ -1872,6 +1883,7 @@ __metadata:
   dependencies:
     "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.3"
     "@scure/base": "npm:^1.2.6"
+    "@subsquid/scale-codec": "npm:^4.0.1"
     "@types/node": "npm:22.17.0"
     eslint: "npm:^9.37.0"
     rimraf: "npm:^6.0.1"
@@ -1903,6 +1915,29 @@ __metadata:
     rollup: "npm:^4.52.4"
     typescript: "npm:^5.9.3"
     vitest: "npm:^3.2.4"
+  languageName: unknown
+  linkType: soft
+
+"@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
+  dependencies:
+    "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.3"
+    "@midnight-ntwrk/wallet-api": "npm:6.0.0-pre.5665b1e"
+    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-node-client": "workspace:^"
+    "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:^"
+    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
+    "@types/node": "npm:22.17.0"
+    effect: "npm:^3.17.3"
+    rollup: "npm:^4.41.1"
+    rxjs: "npm:^7.5"
+    testcontainers: "npm:^11.0.3"
   languageName: unknown
   linkType: soft
 
@@ -1998,7 +2033,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-node-client@workspace:*, @midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client":
+"@midnight-ntwrk/wallet-sdk-node-client@workspace:*, @midnight-ntwrk/wallet-sdk-node-client@workspace:^, @midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client"
   dependencies:
@@ -2039,7 +2074,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-prover-client@workspace:*, @midnight-ntwrk/wallet-sdk-prover-client@workspace:packages/prover-client":
+"@midnight-ntwrk/wallet-sdk-prover-client@workspace:*, @midnight-ntwrk/wallet-sdk-prover-client@workspace:^, @midnight-ntwrk/wallet-sdk-prover-client@workspace:packages/prover-client":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-prover-client@workspace:packages/prover-client"
   dependencies:
@@ -3686,6 +3721,32 @@ __metadata:
   version: 1.0.0
   resolution: "@standard-schema/spec@npm:1.0.0"
   checksum: 10c0/a1ab9a8bdc09b5b47aa8365d0e0ec40cc2df6437be02853696a0e377321653b0d3ac6f079a8c67d5ddbe9821025584b1fb71d9cc041a6666a96f1fadf2ece15f
+  languageName: node
+  linkType: hard
+
+"@subsquid/scale-codec@npm:^4.0.1":
+  version: 4.0.1
+  resolution: "@subsquid/scale-codec@npm:4.0.1"
+  dependencies:
+    "@subsquid/util-internal-hex": "npm:^1.2.2"
+    "@subsquid/util-internal-json": "npm:^1.2.2"
+  checksum: 10c0/266651fe4b0049810532749f86d8565ffdcf7ce406cca1e3ed64ab8646355f020523bf3a58f885dc4c458420b839bd61ab39ad86de0278b297fc08c69acc5882
+  languageName: node
+  linkType: hard
+
+"@subsquid/util-internal-hex@npm:^1.2.2":
+  version: 1.2.2
+  resolution: "@subsquid/util-internal-hex@npm:1.2.2"
+  checksum: 10c0/aeb5fc60b2313053fd39d9b2ae593a2d921b2f25cb80d8dd94f3170d48cb62f9ed7d4460c378bc9c8e4a323c6b27900f01e7ca12b8e4e1491b624b32fe5c1caf
+  languageName: node
+  linkType: hard
+
+"@subsquid/util-internal-json@npm:^1.2.2":
+  version: 1.2.3
+  resolution: "@subsquid/util-internal-json@npm:1.2.3"
+  dependencies:
+    "@subsquid/util-internal-hex": "npm:^1.2.2"
+  checksum: 10c0/1ef7d0c63b20ab4cfa7fe4b29af1e59382d9e0cb1301cf2e3ef72bc132370281e3cf8c4d61435e000871957d2fff5fcfd69cd75f43023d530c78574b0b162674
   languageName: node
   linkType: hard
 

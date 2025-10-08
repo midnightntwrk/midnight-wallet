@@ -33,6 +33,7 @@ export const generateMockUtxo = (owner: string, type: string): Utxo => ({
   type,
   intentHash: sampleIntentHash(),
   outputNo: Math.floor(Math.random() * 100),
+  registeredForDustGeneration: true,
 });
 
 export const getLastStateValue = (

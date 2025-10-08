@@ -567,6 +567,7 @@ describe('TransactionService', () => {
           type,
           intentHash,
           outputNo,
+          registeredForDustGeneration: true,
         })),
         spentUtxos: [],
         protocolVersion: 1,

@@ -1,0 +1,156 @@
+import {
+  LedgerState,
+  BlockContext,
+  UserAddress,
+  ClaimRewardsTransaction,
+  SignatureErased,
+  SignatureVerifyingKey,
+  Transaction,
+  WellFormedStrictness,
+  TransactionResult,
+  TransactionContext,
+  ProofErasedTransaction,
+} from '@midnight-ntwrk/ledger-v6';
+import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Effect, Either, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
+import * as crypto from 'crypto';
+import { secondsToDate, dateToSeconds, ledgerTry, randomNonce } from './common';
+import { NetworkId } from './types/ledger';
+
+export type SimulatorState = Readonly<{
+  networkId: NetworkId;
+  ledger: LedgerState;
+  lastTx: ProofErasedTransaction | undefined;
+  lastTxResult: TransactionResult | undefined;
+  lastTxNumber: bigint;
+}>;
+
+const simpleHash = (input: string): Effect.Effect<string> => {
+  return Encoding.decodeHex(input).pipe(
+    EitherOps.toEffect,
+    Effect.andThen((parsed) => Effect.promise(() => crypto.subtle.digest('SHA-256', parsed))),
+    Effect.andThen((out) => Encoding.encodeHex(new Uint8Array(out))),
+    Effect.orDie,
+  );
+};
+
+export class Simulator {
+  static nextBlockContext = (blockTime: Date): Effect.Effect<BlockContext> =>
+    pipe(
+      dateToSeconds(blockTime).toString(16),
+      (str) => (str.length % 2 == 0 ? str : str.padStart(str.length + 1, '0')),
+      simpleHash,
+      Effect.map((hash) => ({
+        parentBlockHash: hash,
+        secondsSinceEpoch: dateToSeconds(blockTime),
+        secondsSinceEpochErr: 1,
+      })),
+    );
+
+  static init(networkId: NetworkId): Effect.Effect<Simulator, never, Scope.Scope> {
+    return Effect.gen(function* () {
+      const initialState = {
+        networkId,
+        ledger: LedgerState.blank(networkId),
+        lastTx: undefined,
+        lastTxResult: undefined,
+        lastTxNumber: 0n,
+      };
+      const ref = yield* SubscriptionRef.make<SimulatorState>(initialState);
+      const changesStream = yield* Stream.share(ref.changes, {
+        capacity: 'unbounded',
+        replay: Number.MAX_SAFE_INTEGER,
+      });
+      yield* pipe(changesStream, Stream.runDrain, Effect.forkScoped);
+      return new Simulator(ref, changesStream);
+    });
+  }
+
+  static apply(
+    simulatorState: SimulatorState,
+    tx: ProofErasedTransaction,
+    strictness: WellFormedStrictness,
+    blockContext: BlockContext,
+  ): Either.Either<[{ blockNumber: bigint; blockHash: string }, SimulatorState], WalletError.LedgerError> {
+    return ledgerTry(() => {
+      const blockNumber = blockContext.secondsSinceEpoch;
+      const blockTime = secondsToDate(blockNumber);
+      const verifiedTransaction = tx.wellFormed(simulatorState.ledger, strictness, blockTime);
+      const transactionContext = new TransactionContext(simulatorState.ledger, blockContext);
+      const [newLedgerState, txResult] = simulatorState.ledger.apply(verifiedTransaction, transactionContext);
+
+      const newSimulatorState = {
+        ...simulatorState,
+        ledger: newLedgerState.postBlockUpdate(blockTime),
+        lastTx: tx,
+        lastTxResult: txResult,
+        lastTxNumber: blockNumber,
+      };
+
+      const output = {
+        blockNumber,
+        blockHash: blockContext.parentBlockHash,
+      };
+
+      return [output, newSimulatorState];
+    });
+  }
+
+  readonly #stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>;
+
+  readonly state$: Stream.Stream<SimulatorState>;
+
+  constructor(stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>, state$: Stream.Stream<SimulatorState>) {
+    this.#stateRef = stateRef;
+    this.state$ = state$;
+  }
+
+  getLatestState(): Effect.Effect<SimulatorState> {
+    return SubscriptionRef.get(this.#stateRef);
+  }
+
+  rewardNight(
+    recipient: UserAddress,
+    amount: bigint,
+    verifyingKey: SignatureVerifyingKey,
+  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, WalletError.LedgerError> {
+    return SubscriptionRef.modifyEffect(this.#stateRef, (simulatorState) =>
+      Effect.gen(function* () {
+        const nextNumber = secondsToDate(simulatorState.lastTxNumber + 1n);
+        const newLedgerState = yield* ledgerTry(() =>
+          simulatorState.ledger.testingDistributeNight(recipient, amount, nextNumber),
+        );
+        const newSimulatorState = {
+          ...simulatorState,
+          ledger: newLedgerState,
+        };
+
+        const signature = new SignatureErased();
+        const claimRewardsTransaction = new ClaimRewardsTransaction(
+          signature.instance,
+          newSimulatorState.networkId,
+          amount,
+          verifyingKey,
+          randomNonce(),
+          signature,
+        );
+        const tx = Transaction.fromRewards(claimRewardsTransaction).eraseProofs();
+        const blockContext = yield* Simulator.nextBlockContext(nextNumber);
+        return yield* Simulator.apply(newSimulatorState, tx, new WellFormedStrictness(), blockContext);
+      }),
+    );
+  }
+
+  submitRegularTx(
+    tx: ProofErasedTransaction,
+  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, WalletError.LedgerError> {
+    return SubscriptionRef.modifyEffect(this.#stateRef, (simulatorState) =>
+      Effect.gen(function* () {
+        const nextNumber = secondsToDate(simulatorState.lastTxNumber + 1n);
+        const context = yield* Simulator.nextBlockContext(nextNumber);
+        return yield* Simulator.apply(simulatorState, tx, new WellFormedStrictness(), context);
+      }),
+    );
+  }
+}

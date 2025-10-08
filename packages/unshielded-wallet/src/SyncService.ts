@@ -68,6 +68,7 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
                     type: utxo.tokenType,
                     intentHash: utxo.intentHash,
                     outputNo: utxo.outputIndex,
+                    registeredForDustGeneration: utxo.registeredForDustGeneration,
                   })),
                   spentUtxos: spentUtxos.map((utxo) => ({
                     value: utxo.value,
@@ -75,6 +76,7 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
                     type: utxo.tokenType,
                     intentHash: utxo.intentHash,
                     outputNo: utxo.outputIndex,
+                    registeredForDustGeneration: utxo.registeredForDustGeneration,
                   })),
                 },
               });

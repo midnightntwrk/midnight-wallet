@@ -1,5 +1,6 @@
 export * from './V1Builder';
 export * as Sync from './Sync';
+export * as SyncProgress from './SyncProgress';
 export * as Transacting from './Transacting';
 export * as TransactionHistory from './TransactionHistory';
 export * as Serialization from './Serialization';
