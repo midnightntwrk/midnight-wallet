@@ -11,8 +11,8 @@ env:
   BUN_AUTH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
-  NETWORK: "undeployed"
-  DEPLOYMENT: "local"
+  NETWORK: 'undeployed'
+  DEPLOYMENT: 'local'
 
 jobs:
   test:
@@ -21,20 +21,12 @@ jobs:
     timeout-minutes: 80
     permissions: write-all
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  #v5.0.0
-
-      - uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version-file: ".tool-versions"
-          cache: "sbt"
-
-      - uses: sbt/setup-sbt@v1
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -50,13 +42,13 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-          registry-url: "https://npm.pkg.github.com/"
-          scope: "@midnight-ntwrk"
+          registry-url: 'https://npm.pkg.github.com/'
+          scope: '@midnight-ntwrk'
 
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
-          registry: "https://ghcr.io"
+          registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
