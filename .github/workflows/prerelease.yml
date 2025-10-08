@@ -76,3 +76,5 @@ jobs:
           yarn workspace @midnight-ntwrk/wallet-sdk-facade npm publish --tag alpha || echo "Publishing @midnight-ntwrk/wallet-sdk-facade failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-node-client npm publish --tag alpha || echo "Publishing @midnight-ntwrk/wallet-sdk-node-client failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-dust-wallet npm publish --tag alpha || echo "Publishing @midnight-ntwrk/wallet-sdk-dust-wallet failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-runtime npm publish --tag alpha || echo "Publishing @midnight-ntwrk/wallet-sdk-runtime failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-utilities npm publish --tag alpha || echo "Publishing @midnight-ntwrk/wallet-sdk-utilities failed"

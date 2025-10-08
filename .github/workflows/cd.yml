@@ -48,9 +48,9 @@ jobs:
 
       - name: Publish release
         run: |
-          # yarn workspace @midnight-ntwrk/wallet npm publish || echo "Publishing @midnight-ntwrk/wallet failed" ;
-          yarn workspace @midnight-ntwrk/wallet-sdk-hd npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-hd failed" ;
-          yarn workspace @midnight-ntwrk/wallet-sdk-capabilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-capabilities failed" ;
+          # yarn workspace @midnight-ntwrk/wallet npm publish || echo "Publishing @midnight-ntwrk/wallet failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-hd npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-hd failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-capabilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-capabilities failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-address-format npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-address-format failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-indexer-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-indexer-client failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-unshielded-state npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-unshielded-state failed"
