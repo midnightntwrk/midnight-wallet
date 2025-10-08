@@ -53,8 +53,13 @@ jobs:
           TIMESTAMP=$(date +%Y%m%d%H%M%S)
           
           yarn workspaces foreach --all --no-private exec sh -c '
-            CURRENT_VERSION=$(node -p "require(\"./package.json\").version")
-            yarn version "${CURRENT_VERSION}-alpha.'"${TIMESTAMP}"'.'"${COMMIT_SHA}"'"
+            CURRENT_VERSION=$(jq -r ".version // empty" package.json)
+            if [ -z "$CURRENT_VERSION" ]; then
+              echo "Skipping $(pwd) - no version field"
+              exit 0
+            fi
+            BASE_VERSION=$(echo "$CURRENT_VERSION" | sed "s/-.*//")
+            yarn version "${BASE_VERSION}-alpha.'"${TIMESTAMP}"'.'"${COMMIT_SHA}"'"
           '
 
       - name: Publish prerelease packages
