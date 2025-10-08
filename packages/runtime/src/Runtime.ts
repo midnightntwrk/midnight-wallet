@@ -1,11 +1,6 @@
 import { Effect, Either, Exit, Option, Scope, Stream, SubscriptionRef, SynchronizedRef } from 'effect';
-import {
-  ProtocolState,
-  ProtocolVersion,
-  StateChange,
-  VersionChangeType,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, WalletRuntimeError } from './abstractions/index';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { StateChange, Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index';
 import { EitherOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 /**

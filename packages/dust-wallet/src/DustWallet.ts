@@ -1,28 +1,27 @@
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Effect, Either, Scope } from 'effect';
-import * as rx from 'rxjs';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder';
-import { V1Tag } from './RunningV1Variant';
-import { DustCoreWallet } from './DustCoreWallet';
-import { Runtime } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { WalletLike, Variant } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
-import { KeysCapability } from './Keys';
 import {
   DustParameters,
   DustPublicKey,
   DustSecretKey,
+  FinalizedTransaction,
   Signature,
   SignatureVerifyingKey,
-  FinalizedTransaction,
   UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v6';
-import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { ProvingRecipe, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Effect, Either, Scope } from 'effect';
+import * as rx from 'rxjs';
 import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances';
-import { NetworkId } from './types/ledger';
-import { DustToken, UtxoWithMeta } from './types/Dust';
-import { SubmitTransactionMethod } from './Submission';
+import { DustCoreWallet } from './DustCoreWallet';
+import { KeysCapability } from './Keys';
+import { V1Tag } from './RunningV1Variant';
 import { SerializationCapability } from './Serialization';
+import { SubmitTransactionMethod } from './Submission';
+import { DustToken, UtxoWithMeta } from './types/Dust';
+import { NetworkId } from './types/ledger';
+import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder';
 
 export type DustWalletCapabilities = {
   serialization: SerializationCapability<DustCoreWallet, null, string>;

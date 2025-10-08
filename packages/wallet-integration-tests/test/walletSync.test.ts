@@ -1,6 +1,6 @@
-import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import {
   DefaultV1Configuration,
   DefaultV1Variant,

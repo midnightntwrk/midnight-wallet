@@ -1,8 +1,7 @@
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolVersion, VersionChangeType } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletBuilder } from '../index';
-import { toProtocolStateArray } from './testUtils';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { toProtocolStateArray } from '../testing/utils';
 import {
   InterceptingRunningVariant,
   InterceptingVariantBuilder,
@@ -10,7 +9,9 @@ import {
   NumericMultiplier,
   NumericRangeBuilder,
   NumericRangeMultiplierBuilder,
-} from './variants';
+} from '../testing/variants';
+import { WalletBuilder } from '../WalletBuilder';
+import { VersionChangeType } from '../abstractions/index';
 
 describe('Wallet runtime', () => {
   it('allows to dispatch a poly function on a running variant', async () => {

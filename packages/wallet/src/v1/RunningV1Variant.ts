@@ -1,7 +1,12 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
-import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletRuntimeError, Variant } from '../abstractions/index';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  WalletRuntimeError,
+  Variant,
+  StateChange,
+  VersionChangeType,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProvingService } from './Proving';
 import { ProvingRecipe } from './ProvingRecipe';

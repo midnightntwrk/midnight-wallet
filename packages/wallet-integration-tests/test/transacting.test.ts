@@ -5,8 +5,8 @@ import {
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
+import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import {
   CoinsAndBalances,
   DefaultRunningV1,

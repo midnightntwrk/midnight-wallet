@@ -7,7 +7,7 @@ env:
 on:
   workflow_dispatch:
   push:
-    tags: ["v*"]
+    tags: ['v*']
 
 jobs:
   publish:
@@ -18,13 +18,13 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
-          cache-dependency-path: "yarn.lock"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
           # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@midnight-ntwrk"
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
 
       - name: Enable corepack
         run: corepack enable
@@ -61,3 +61,5 @@ jobs:
           yarn workspace @midnight-ntwrk/wallet-sdk-facade npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-facade failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-node-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-node-client failed"
           yarn workspace @midnight-ntwrk/wallet-sdk-dust-wallet npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-dust-wallet failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-runtime npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-runtime failed"
+          yarn workspace @midnight-ntwrk/wallet-sdk-utilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-utilities failed"

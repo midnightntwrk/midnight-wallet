@@ -1,18 +1,18 @@
-import { ProtocolState, ProtocolVersion, StateChange } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
-import { Variant, VariantBuilder, WalletLike } from '../abstractions';
-import { WalletBuilder } from '../index';
+import { Variant, VariantBuilder, WalletLike, StateChange } from '../abstractions/index';
+import { WalletBuilder } from '../WalletBuilder';
 import { Runtime } from '../Runtime';
-import { isRange, reduceToChunk, toProtocolStateArray } from './testUtils';
+import { isRange, reduceToChunk, toProtocolStateArray } from '../testing/utils';
 import {
   NumericRange,
   NumericRangeBuilder,
   NumericRangeMultiplier,
   NumericRangeMultiplierBuilder,
   RangeConfig,
-} from './variants';
+} from '../testing/variants';
 
 describe('Wallet Builder', () => {
   describe('without variants', () => {

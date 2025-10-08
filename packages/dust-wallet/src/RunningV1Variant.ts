@@ -7,10 +7,15 @@ import {
   FinalizedTransaction,
   UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v6';
-import { StateChange, VersionChangeType, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { WalletRuntimeError, Variant } from '@midnight-ntwrk/wallet-sdk-shielded/abstractions';
+import {
+  WalletRuntimeError,
+  Variant,
+  StateChange,
+  VersionChangeType,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule } from 'effect';
 import { ledgerTry, randomNonce } from './common';
 import { DustToken, UtxoWithMeta } from './types/Dust';

@@ -1,12 +1,8 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { BuildArguments, WalletBuilder } from './WalletBuilder';
 import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { Runtime } from './Runtime';
-import { VersionedVariant } from './abstractions/Variant';
-import { VariantBuilder, WalletLike } from './abstractions';
 import { ProvingRecipe } from './v1/ProvingRecipe';
 import { SerializationCapability } from './v1/Serialization';
 import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory';
@@ -20,6 +16,8 @@ import {
 import { SubmissionEvent, SubmissionEventCases } from './v1/Submission';
 import { TokenTransfer } from './v1/Transacting';
 import { WalletSyncUpdate } from './v1/Sync';
+import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
 export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -118,7 +116,9 @@ export interface CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> extends WalletLike.WalletLike<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]> {
+> extends WalletLike.WalletLike<
+    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+  > {
   readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
   start(secretKeys: TStartAux): Promise<void>;
@@ -158,7 +158,9 @@ export interface CustomizedShieldedWalletClass<
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
-> extends WalletLike.BaseWalletClass<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]> {
+> extends WalletLike.BaseWalletClass<
+    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+  > {
   configuration: TConfig;
   startWithShieldedSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   startWithSecretKeys(
@@ -181,7 +183,7 @@ export function CustomShieldedWallet<
   configuration: TConfig,
   builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
 ): CustomizedShieldedWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
-  const buildArgs = [configuration] as BuildArguments<
+  const buildArgs = [configuration] as WalletBuilder.BuildArguments<
     [
       VariantBuilder.VersionedVariantBuilder<
         VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
@@ -191,7 +193,7 @@ export function CustomShieldedWallet<
   const BaseWallet = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, builder)
     .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
+    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
     TConfig
   >;
 
@@ -221,7 +223,9 @@ export function CustomShieldedWallet<
     readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
     constructor(
-      runtime: Runtime<[VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>,
+      runtime: Runtime.Runtime<
+        [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+      >,
       scope: Scope.CloseableScope,
     ) {
       super(runtime, scope);

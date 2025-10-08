@@ -8,7 +8,7 @@ import {
   NumericMultiplier,
   NumericRange,
   NumericRangeMultiplier,
-} from '../../test/variants';
+} from '../../testing/variants';
 import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
 
 describe('Variant', () => {

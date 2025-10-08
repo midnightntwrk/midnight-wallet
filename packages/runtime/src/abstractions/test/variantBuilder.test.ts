@@ -9,7 +9,7 @@ import {
   NumericRangeMultiplierBuilder,
   RangeConfig,
   RangeMultiplierConfig,
-} from '../../test/variants';
+} from '../../testing/variants';
 import { VersionedVariant } from '../Variant';
 import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder';
 

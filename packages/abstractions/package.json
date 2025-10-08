@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-abstractions",
-  "description": "Domain-specific abstractions and utilities for the wallet SDK",
+  "description": "Domain-specific abstractions for the wallet SDK",
   "version": "1.0.0-beta.1",
   "type": "module",
   "module": "dist/index.js",

@@ -1,7 +1,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope, Types } from 'effect';
 import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletRuntimeError } from '../abstractions/index';
+import { Variant, VariantBuilder, WalletRuntimeError } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant';
 import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization';

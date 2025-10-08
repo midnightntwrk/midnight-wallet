@@ -1,5 +1,6 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-shielded",
+  "name": "@midnight-ntwrk/wallet-sdk-runtime",
+  "description": "Runtime for the wallet variants",
   "version": "1.0.0-beta.1",
   "type": "module",
   "main": "./dist/index.js",
@@ -22,28 +23,16 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
-    "./v1": {
-      "import": "./dist/v1/index.js",
-      "types": "./dist/v1/index.d.ts"
+    "./abstractions": {
+      "import": "./dist/abstractions/index.js",
+      "types": "./dist/abstractions/index.d.ts"
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.3",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-runtime": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*",
-    "@scure/base": "^1.1.9",
     "effect": "^3.17.3",
-    "isomorphic-ws": "^5.0.0",
-    "node-fetch": "3.3.2",
-    "rxjs": "^7.5",
-    "scale-ts": "^1.1.0",
-    "ws": "^8.18.3"
+    "rxjs": "^7.5"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
@@ -54,19 +43,9 @@
     "clean": "rimraf dist tsconfig.build.tsbuildinfo"
   },
   "devDependencies": {
-    "@effect/cluster": "^0.46.2",
-    "@effect/experimental": "^0.54.2",
-    "@effect/platform": "^0.90.0",
-    "@effect/platform-node": "^0.94.0",
-    "@effect/rpc": "^0.68.0",
-    "@effect/sql": "^0.44.0",
-    "@effect/workflow": "^0.8.1",
-    "@polkadot/types": "^16.4.1",
-    "eslint": "^9.37.0",
+    "eslint": "^9.32.0",
     "fast-check": "^4.2.0",
     "rimraf": "^6.0.1",
-    "testcontainers": "^11.4.0",
-    "to-words": "^4.5.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

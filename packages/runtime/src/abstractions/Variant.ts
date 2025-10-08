@@ -3,8 +3,9 @@ import { Scope, SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
 import { Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import type { ProtocolVersion, StateChange } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import type { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletRuntimeError } from './WalletRuntimeError';
+import * as StateChange from './StateChange';
 
 export interface VariantContext<TState> {
   stateRef: SubscriptionRef.SubscriptionRef<TState>;

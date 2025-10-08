@@ -1,4 +1,4 @@
-import * as ProtocolVersion from '../ProtocolVersion';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as VersionChangeType from '../VersionChangeType';
 
 describe('VersionChangeType', () => {

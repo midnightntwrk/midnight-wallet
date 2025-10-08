@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import { ProtocolVersion } from './ProtocolVersion';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * A tagged enum data type that represents a change in Midnight protocol versions.
@@ -12,7 +12,7 @@ import { ProtocolVersion } from './ProtocolVersion';
  */
 export type VersionChangeType = Data.TaggedEnum<{
   /** A change to a particular protocol version. */
-  Version: { readonly version: ProtocolVersion };
+  Version: { readonly version: ProtocolVersion.ProtocolVersion };
 
   /** A change to the 'next' protocol version. Particularly useful in testing */
   Next: {}; // eslint-disable-line @typescript-eslint/no-empty-object-type

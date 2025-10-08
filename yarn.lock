@@ -1828,6 +1828,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-runtime": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*"
     "@types/node": "npm:^22.17.0"
     effect: "npm:^3.17.3"
@@ -1935,9 +1936,12 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
     "@types/node": "npm:22.17.0"
     effect: "npm:^3.17.3"
+    eslint: "npm:^9.37.0"
     rollup: "npm:^4.41.1"
     rxjs: "npm:^7.5"
     testcontainers: "npm:^11.0.3"
+    typescript: "npm:^5.9.3"
+    vitest: "npm:^3.2.4"
   languageName: unknown
   linkType: soft
 
@@ -2091,6 +2095,22 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@midnight-ntwrk/wallet-sdk-runtime@workspace:*, @midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime"
+  dependencies:
+    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
+    effect: "npm:^3.17.3"
+    eslint: "npm:^9.32.0"
+    fast-check: "npm:^4.2.0"
+    rimraf: "npm:^6.0.1"
+    rxjs: "npm:^7.5"
+    typescript: "npm:^5.9.3"
+    vitest: "npm:^3.2.4"
+  languageName: unknown
+  linkType: soft
+
 "@midnight-ntwrk/wallet-sdk-shielded@workspace:*, @midnight-ntwrk/wallet-sdk-shielded@workspace:^, @midnight-ntwrk/wallet-sdk-shielded@workspace:packages/wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-shielded@workspace:packages/wallet"
@@ -2109,6 +2129,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-indexer-client": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-prover-client": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-runtime": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
     "@polkadot/types": "npm:^16.4.1"
     "@scure/base": "npm:^1.1.9"
