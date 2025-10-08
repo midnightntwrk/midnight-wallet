@@ -14,7 +14,7 @@ on:
         type: choice
         description: Midnight network to use
         required: true
-        default: "devnet"
+        default: 'devnet'
         options:
           - devnet
           - testnet
@@ -22,7 +22,7 @@ on:
         type: choice
         description: Midnight deployment to use
         required: true
-        default: "qanet"
+        default: 'qanet'
         options:
           - qanet
           - devnet
@@ -33,12 +33,12 @@ jobs:
     name: Run funding script
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -54,7 +54,7 @@ jobs:
       - name: Log in to GitHub Container registry
         uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
         with:
-          registry: "https://ghcr.io"
+          registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 

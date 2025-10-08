@@ -105,7 +105,7 @@ jobs:
     timeout-minutes: 120
     permissions: write-all
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  #v5.0.0
 
       # - name: Determine the latest successful run ID with appropriate artifact
       #   continue-on-error: true
