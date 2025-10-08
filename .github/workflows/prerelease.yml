@@ -59,7 +59,7 @@ jobs:
               exit 0
             fi
             BASE_VERSION=$(echo "$CURRENT_VERSION" | sed "s/-.*//")
-            yarn version "${BASE_VERSION}-alpha.'"${TIMESTAMP}"'.'"${COMMIT_SHA}"'"
+            yarn version "${BASE_VERSION}-alpha.'"${TIMESTAMP}"'-'"${COMMIT_SHA}"'"
           '
 
       - name: Publish prerelease packages
