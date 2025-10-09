@@ -12,18 +12,18 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, pipe } from 'effect';
 import { DustToken, DustTokenWithNullifier } from './types/Dust';
 import { CoinWithValue } from './CoinsAndBalances';
 import { NetworkId, UnprovenDustSpend } from './types/ledger';
-import { dateToSeconds, secondsToDate } from './common';
 
-export type PublicKeys = {
+export type PublicKey = {
   publicKey: DustPublicKey;
 };
 
-export const PublicKeys = {
-  fromSecretKey: (secretKey: DustSecretKey): PublicKeys => {
+export const PublicKey = {
+  fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
     };
@@ -32,7 +32,7 @@ export const PublicKeys = {
 
 export class DustCoreWallet {
   readonly state: DustLocalState;
-  readonly publicKeys: PublicKeys;
+  readonly publicKey: PublicKey;
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
 
   readonly isConnected: boolean;
@@ -42,14 +42,14 @@ export class DustCoreWallet {
 
   constructor(
     state: DustLocalState,
-    publicKeys: PublicKeys,
+    publicKey: PublicKey,
     networkId: NetworkId,
     pendingDustTokens: Array<DustTokenWithNullifier> = [],
     syncProgress?: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
   ) {
     this.state = state;
-    this.publicKeys = publicKeys;
+    this.publicKey = publicKey;
     this.networkId = networkId;
     this.pendingDustTokens = pendingDustTokens;
     this.isConnected = true;
@@ -58,7 +58,7 @@ export class DustCoreWallet {
   }
 
   static init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): DustCoreWallet {
-    return new DustCoreWallet(localState, PublicKeys.fromSecretKey(secretKey), networkId);
+    return new DustCoreWallet(localState, PublicKey.fromSecretKey(secretKey), networkId);
   }
 
   static readonly initEmpty = (
@@ -66,16 +66,16 @@ export class DustCoreWallet {
     secretKey: DustSecretKey,
     networkId: NetworkId,
   ): DustCoreWallet => {
-    return DustCoreWallet.empty(new DustLocalState(dustParameters), PublicKeys.fromSecretKey(secretKey), networkId);
+    return DustCoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
   };
 
-  static empty(localState: DustLocalState, publicKeys: PublicKeys, networkId: NetworkId): DustCoreWallet {
-    return new DustCoreWallet(localState, publicKeys, networkId);
+  static empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): DustCoreWallet {
+    return new DustCoreWallet(localState, publicKey, networkId);
   }
 
   static restore(
     localState: DustLocalState,
-    publicKeys: PublicKeys,
+    publicKey: PublicKey,
     pendingTokens: Array<DustTokenWithNullifier>,
     syncProgress: SyncProgress.SyncProgressData,
     protocolVersion: bigint,
@@ -83,7 +83,7 @@ export class DustCoreWallet {
   ): DustCoreWallet {
     return new DustCoreWallet(
       localState,
-      publicKeys,
+      publicKey,
       networkId,
       pendingTokens,
       syncProgress,
@@ -94,7 +94,7 @@ export class DustCoreWallet {
   applyEvents(secretKey: DustSecretKey, events: Event[], blockNumber: bigint): DustCoreWallet {
     if (!events.length) return this;
 
-    const updatedState = this.state.replayEvents(secretKey, events).processTtls(secondsToDate(blockNumber));
+    const updatedState = this.state.replayEvents(secretKey, events).processTtls(DateOps.secondsToDate(blockNumber));
 
     let updatedPending = this.pendingDustTokens;
     if (updatedPending.length) {
@@ -102,7 +102,7 @@ export class DustCoreWallet {
       updatedPending = updatedPending.filter((pendingToken) => newAvailable.includes(pendingToken.nonce));
     }
 
-    return new DustCoreWallet(updatedState, this.publicKeys, this.networkId, updatedPending, this.progress);
+    return new DustCoreWallet(updatedState, this.publicKey, this.networkId, updatedPending, this.progress);
   }
 
   applyFailed(tx: Transaction<Signaturish, Proofish, Bindingish>): DustCoreWallet {
@@ -117,14 +117,14 @@ export class DustCoreWallet {
             if (pending === undefined) continue;
             removedPending.push(spend.oldNullifier);
             updatedState = updatedState.processTtls(
-              secondsToDate(dateToSeconds(pending.ctime) + this.state.params.dustGracePeriodSeconds),
+              DateOps.addSeconds(pending.ctime, this.state.params.dustGracePeriodSeconds),
             );
           }
         }
       }
     }
     const pendingLeft = this.pendingDustTokens.filter((token) => !removedPending.includes(token.nullifier));
-    return new DustCoreWallet(updatedState, this.publicKeys, this.networkId, pendingLeft, this.progress);
+    return new DustCoreWallet(updatedState, this.publicKey, this.networkId, pendingLeft, this.progress);
   }
 
   revertTransaction<TTransaction extends Transaction<Signaturish, Proofish, Bindingish>>(
@@ -148,7 +148,7 @@ export class DustCoreWallet {
       isConnected: isConnected ?? this.progress.isConnected,
     });
 
-    return new DustCoreWallet(this.state, this.publicKeys, this.networkId, this.pendingDustTokens, updatedProgress);
+    return new DustCoreWallet(this.state, this.publicKey, this.networkId, this.pendingDustTokens, updatedProgress);
   }
 
   spendCoins(
@@ -170,7 +170,7 @@ export class DustCoreWallet {
         },
       ),
     );
-    const updatedState = new DustCoreWallet(newState, this.publicKeys, this.networkId, newPending, this.progress);
+    const updatedState = new DustCoreWallet(newState, this.publicKey, this.networkId, newPending, this.progress);
     return [output, updatedState];
   }
 

@@ -176,7 +176,7 @@ export const makeEventsSyncService = (
         Stream.mapEffect((subscription) =>
           pipe(
             Schema.decodeUnknownEither(EventsSyncUpdateFromPayload)(subscription.zswapLedgerEvents),
-            Either.mapLeft((err) => new SyncWalletError(new Error(`Schema decode failed: ${err.message}`))),
+            Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),
         ),

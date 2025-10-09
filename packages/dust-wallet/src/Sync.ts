@@ -165,7 +165,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Stream.mapEffect((subscription) =>
           pipe(
             Schema.decodeUnknownEither(SyncEventsUpdateSchema)(subscription),
-            Either.mapLeft((err) => new WalletError.SyncWalletError(new Error(`Schema decode failed: ${err.message}`))),
+            Either.mapLeft((err) => new WalletError.SyncWalletError(err)),
             EitherOps.toEffect,
           ),
         ),

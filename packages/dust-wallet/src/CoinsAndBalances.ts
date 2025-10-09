@@ -1,8 +1,8 @@
 import { Array, pipe } from 'effect';
+import { updatedValue } from '@midnight-ntwrk/ledger-v6';
+import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet';
 import { DustGenerationInfo, DustToken, DustTokenFullInfo } from './types/Dust';
-import { updatedValue } from '@midnight-ntwrk/ledger-v6';
-import { secondsToDate, dateToSeconds } from './common';
 
 export type Balance = bigint;
 
@@ -100,7 +100,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
           token: coin,
           dtime: genInfo.dtime,
           maxCap: genInfo.value * state.state.params.nightDustRatio,
-          maxCapReachedAt: secondsToDate(dateToSeconds(coin.ctime) + state.state.params.timeToCapSeconds),
+          maxCapReachedAt: DateOps.addSeconds(coin.ctime, state.state.params.timeToCapSeconds),
           generatedNow: generatedValue,
           rate: genInfo.value * state.state.params.generationDecayRate,
         });

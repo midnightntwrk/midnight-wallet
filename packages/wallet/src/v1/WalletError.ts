@@ -1,5 +1,6 @@
 import { Data } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export const WalletError = {
   proving(err: Error): WalletError {
@@ -39,7 +40,7 @@ export type WalletError =
   | SyncWalletError
   | InvalidCoinHashesError
   | TransactingError
-  | LedgerError;
+  | LedgerOps.LedgerError;
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
   message: string;
@@ -80,8 +81,4 @@ export class InvalidCoinHashesError extends Data.TaggedError('Wallet.InvalidCoin
 
 export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
   readonly error?: unknown;
-}> {}
-
-export class LedgerError extends Data.TaggedError('Wallet.LedgerError')<{
-  readonly error: string;
 }> {}

@@ -21,8 +21,8 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet';
-import { ledgerTry } from './common';
 import { DustToken } from './types/Dust';
 import { TotalCostParameters } from './types/transaction';
 import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances';
@@ -52,7 +52,6 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     transaction: UnprovenTransaction,
     nextBlock: Date,
     ttl: Date,
-    fee: bigint,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: TState },
     WalletError.WalletError
@@ -136,7 +135,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     return Either.gen(this, function* () {
       const receiver = dustReceiverAddress ? yield* this.#parseAddress(dustReceiverAddress) : undefined;
 
-      return yield* ledgerTry(() => {
+      return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
         const intent = Intent.new(ttl);
         const nightOwner = nightUtxos.at(0)!.token.owner;
@@ -196,7 +195,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         return yield* Either.left(new WalletError.TransactingError({ error: 'No registrations found in dustActions' }));
       }
 
-      return yield* ledgerTry(() => {
+      return yield* LedgerOps.ledgerTry(() => {
         const signature = new SignatureEnabled(signatureData);
         const registrationWithSignature = new DustRegistration(
           signature.instance,
@@ -243,12 +242,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     transaction: UnprovenTransaction,
     nextBlock: Date,
     ttl: Date,
-    fee: bigint,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: DustCoreWallet },
     WalletError.WalletError
   > {
     const network = this.networkId;
+    const feeTotal = transaction.fees(this.costParams.ledgerParams) + this.costParams.additionalFeeOverhead;
+    const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
+    const fee = dustImbalance ? -dustImbalance[1] : feeTotal;
+
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, nextBlock);
     const selectedTokens = this.getCoinSelection()(dustTokens, fee);
     if (!selectedTokens.length) {
@@ -271,7 +273,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         token: highestByValue.token,
       };
     }
-    return ledgerTry(() => {
+    return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
       const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, nextBlock);
 

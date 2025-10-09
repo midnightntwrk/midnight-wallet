@@ -1,28 +1,27 @@
+import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule } from 'effect';
 import {
   DustSecretKey,
+  nativeToken,
   Signature,
   SignatureVerifyingKey,
   updatedValue,
-  Utxo,
   FinalizedTransaction,
   UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v6';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   WalletRuntimeError,
   Variant,
   StateChange,
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule } from 'effect';
-import { ledgerTry, randomNonce } from './common';
 import { DustToken, UtxoWithMeta } from './types/Dust';
 import { KeysCapability } from './Keys';
 import { SyncCapability, SyncService } from './Sync';
 import { SimulatorState } from './Simulator';
-import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances';
+import { CoinsAndBalancesCapability, CoinSelection } from './CoinsAndBalances';
 import { TransactingCapability } from './Transacting';
 import { SubmissionService, SubmitTransactionMethod } from './Submission';
 import { DustCoreWallet } from './DustCoreWallet';
@@ -162,24 +161,24 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
-    // TODO: shall we validate the provided tokens are of the Night type?
+    if (nightUtxos.some(({ utxo }) => utxo.type !== nativeToken().raw)) {
+      return Effect.fail(WalletError.WalletError.other('Token of a non-Night type received'));
+    }
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
       Effect.bind('utxosWithDustValue', ({ currentState }) =>
-        ledgerTry(() => {
+        LedgerOps.ledgerTry(() => {
           const dustPublicKey = this.#v1Context.keysCapability.getDustPublicKey(currentState);
-          const utxosWithDustValue: Array<CoinWithValue<Utxo>> = [];
-          for (const { utxo, meta } of nightUtxos) {
+          return nightUtxos.map(({ utxo, meta }) => {
             const genInfo = {
               value: utxo.value,
               owner: dustPublicKey,
-              nonce: randomNonce(),
+              nonce: LedgerOps.randomNonce(),
               dtime: undefined,
             };
             const dustValue = updatedValue(meta.ctime, 0n, genInfo, nextBlock, currentState.state.params);
-            utxosWithDustValue.push({ token: utxo, value: dustValue });
-          }
-          return utxosWithDustValue;
+            return { token: utxo, value: dustValue };
+          });
         }),
       ),
       Effect.flatMap(({ utxosWithDustValue }) => {
@@ -204,11 +203,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transaction: UnprovenTransaction,
     nextBlock: Date,
     ttl: Date,
-    fee: bigint,
   ): Effect.Effect<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, nextBlock, ttl, fee),
+        this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, nextBlock, ttl),
         EitherOps.toEffect,
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );

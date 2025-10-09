@@ -1,3 +1,4 @@
+import { Effect, Either, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
 import {
   LedgerState,
   BlockContext,
@@ -11,11 +12,8 @@ import {
   TransactionContext,
   ProofErasedTransaction,
 } from '@midnight-ntwrk/ledger-v6';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { Effect, Either, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
+import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
-import { secondsToDate, dateToSeconds, ledgerTry, randomNonce } from './common';
 import { NetworkId } from './types/ledger';
 
 export type SimulatorState = Readonly<{
@@ -38,12 +36,12 @@ const simpleHash = (input: string): Effect.Effect<string> => {
 export class Simulator {
   static nextBlockContext = (blockTime: Date): Effect.Effect<BlockContext> =>
     pipe(
-      dateToSeconds(blockTime).toString(16),
+      DateOps.dateToSeconds(blockTime).toString(16),
       (str) => (str.length % 2 == 0 ? str : str.padStart(str.length + 1, '0')),
       simpleHash,
       Effect.map((hash) => ({
         parentBlockHash: hash,
-        secondsSinceEpoch: dateToSeconds(blockTime),
+        secondsSinceEpoch: DateOps.dateToSeconds(blockTime),
         secondsSinceEpochErr: 1,
       })),
     );
@@ -72,10 +70,10 @@ export class Simulator {
     tx: ProofErasedTransaction,
     strictness: WellFormedStrictness,
     blockContext: BlockContext,
-  ): Either.Either<[{ blockNumber: bigint; blockHash: string }, SimulatorState], WalletError.LedgerError> {
-    return ledgerTry(() => {
+  ): Either.Either<[{ blockNumber: bigint; blockHash: string }, SimulatorState], LedgerOps.LedgerError> {
+    return LedgerOps.ledgerTry(() => {
       const blockNumber = blockContext.secondsSinceEpoch;
-      const blockTime = secondsToDate(blockNumber);
+      const blockTime = DateOps.secondsToDate(blockNumber);
       const verifiedTransaction = tx.wellFormed(simulatorState.ledger, strictness, blockTime);
       const transactionContext = new TransactionContext(simulatorState.ledger, blockContext);
       const [newLedgerState, txResult] = simulatorState.ledger.apply(verifiedTransaction, transactionContext);
@@ -114,11 +112,11 @@ export class Simulator {
     recipient: UserAddress,
     amount: bigint,
     verifyingKey: SignatureVerifyingKey,
-  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, WalletError.LedgerError> {
+  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, LedgerOps.LedgerError> {
     return SubscriptionRef.modifyEffect(this.#stateRef, (simulatorState) =>
       Effect.gen(function* () {
-        const nextNumber = secondsToDate(simulatorState.lastTxNumber + 1n);
-        const newLedgerState = yield* ledgerTry(() =>
+        const nextNumber = DateOps.secondsToDate(simulatorState.lastTxNumber + 1n);
+        const newLedgerState = yield* LedgerOps.ledgerTry(() =>
           simulatorState.ledger.testingDistributeNight(recipient, amount, nextNumber),
         );
         const newSimulatorState = {
@@ -132,7 +130,7 @@ export class Simulator {
           newSimulatorState.networkId,
           amount,
           verifyingKey,
-          randomNonce(),
+          LedgerOps.randomNonce(),
           signature,
         );
         const tx = Transaction.fromRewards(claimRewardsTransaction).eraseProofs();
@@ -144,10 +142,10 @@ export class Simulator {
 
   submitRegularTx(
     tx: ProofErasedTransaction,
-  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, WalletError.LedgerError> {
+  ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, LedgerOps.LedgerError> {
     return SubscriptionRef.modifyEffect(this.#stateRef, (simulatorState) =>
       Effect.gen(function* () {
-        const nextNumber = secondsToDate(simulatorState.lastTxNumber + 1n);
+        const nextNumber = DateOps.secondsToDate(simulatorState.lastTxNumber + 1n);
         const context = yield* Simulator.nextBlockContext(nextNumber);
         return yield* Simulator.apply(simulatorState, tx, new WellFormedStrictness(), context);
       }),

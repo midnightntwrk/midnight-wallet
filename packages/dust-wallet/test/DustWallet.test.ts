@@ -10,21 +10,22 @@ import {
   UnshieldedOffer,
   UserAddress,
   ProofErasedTransaction,
+  nativeToken,
 } from '@midnight-ntwrk/ledger-v6';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Proving, ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore';
 import { getDustSeed } from './utils';
 import { V1Builder, Transacting, DustCoreWallet, V1Variant, RunningV1Variant } from '../src';
 import { Simulator, SimulatorState } from '../src/Simulator';
-import { secondsToDate, dateToSeconds } from '../src/common';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, SimulatorSyncUpdate } from '../src/Sync';
-import { Proving, ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as Submission from '../src/Submission';
 import { UtxoWithMeta } from '../src/types/Dust';
 
 vi.setConfig({ testTimeout: 1 * 1000 });
 
-const NIGHT_TOKEN_TYPE = Buffer.from(new Uint8Array(32)).toString('hex');
+const NIGHT_TOKEN_TYPE = nativeToken().raw;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
 const SEED_BOB = '0000000000000000000000000000000000000000000000000000000000000002';
 const NETWORK = 'undeployed';
@@ -81,7 +82,7 @@ describe('DustWallet', () => {
         nextBlock,
         nightTokens,
         nightVerifyingKey,
-        DustAddress.encodePublicKey(NETWORK, lastState.publicKeys.publicKey),
+        DustAddress.encodePublicKey(NETWORK, lastState.publicKey.publicKey),
       );
 
       const intent = registerForDustTransaction.intents!.get(1);
@@ -217,7 +218,7 @@ describe('DustWallet', () => {
 
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
       expect(availableCoins.length).toBe(1);
-      expect(dateToSeconds(availableCoins.at(0)!.ctime)).toBe(2n);
+      expect(DateOps.dateToSeconds(availableCoins.at(0)!.ctime)).toBe(2n);
 
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
       expect(pendingCoins.length).toBe(0);
@@ -284,7 +285,6 @@ describe('DustWallet', () => {
       const intent = Intent.new(ttl);
       intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
-      const fee = transferTransaction.fees(costParameters.ledgerParams) + costParameters.additionalFeeOverhead;
 
       // cover fees with dust
       const transactionWithFee = (yield* wallet.addFeePayment(
@@ -292,7 +292,6 @@ describe('DustWallet', () => {
         transferTransaction,
         toTxTime(4),
         ttl,
-        fee,
       )) as ProvingRecipe.TransactionToProve;
 
       const transaction = yield* wallet.finalizeTransaction({
@@ -313,8 +312,8 @@ describe('DustWallet', () => {
         availableCoins.find((c) => c.mtIndex === 0n)!,
       );
       expect(newAvailableCoins.length).toBe(2);
-      expect(newAvailableCoins.some((coin) => dateToSeconds(coin.ctime) === 4n)).toBe(true);
-      expect(generationInfo?.dtime).toStrictEqual(secondsToDate(4n));
+      expect(newAvailableCoins.some((coin) => DateOps.dateToSeconds(coin.ctime) === 4n)).toBe(true);
+      expect(generationInfo?.dtime).toStrictEqual(DateOps.secondsToDate(4n));
 
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
       expect(pendingCoins.length).toBe(0);

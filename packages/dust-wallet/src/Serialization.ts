@@ -48,7 +48,7 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 );
 
 const SnapshotSchema = Schema.Struct({
-  publicKeys: Schema.Struct({
+  publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
   }),
   state: HexedState,
@@ -63,7 +63,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
   return {
     serialize: (wallet) => {
       const buildSnapshot = (w: DustCoreWallet): Snapshot => ({
-        publicKeys: w.publicKeys,
+        publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
@@ -82,7 +82,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
             try: () =>
               DustCoreWallet.restore(
                 snapshot.state,
-                snapshot.publicKeys,
+                snapshot.publicKey,
                 [],
                 {
                   appliedIndex: snapshot.offset ?? 0n,

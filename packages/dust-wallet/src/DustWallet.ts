@@ -101,7 +101,6 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
     transaction: UnprovenTransaction,
     nextBlock: Date,
     ttl: Date,
-    fee: bigint,
   ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>>;
 
   finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction>;
@@ -184,11 +183,10 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
       transaction: UnprovenTransaction,
       nextBlock: Date,
       ttl: Date,
-      fee: bigint,
     ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, nextBlock, ttl, fee),
+          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, nextBlock, ttl),
         })
         .pipe(Effect.runPromise);
     }
