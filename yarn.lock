@@ -482,12 +482,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/language-service@npm:^0.34.0":
-  version: 0.34.0
-  resolution: "@effect/language-service@npm:0.34.0"
+"@effect/language-service@npm:^0.43.2":
+  version: 0.43.2
+  resolution: "@effect/language-service@npm:0.43.2"
   bin:
     effect-language-service: cli.js
-  checksum: 10c0/ece443c5c767a99d12ed2101a2623eeab2175766511fb60133dec09ad51e7416c6a8ab2dc599948f600611169fb799c9b307e2af99ebdae28ad064993e92694f
+  checksum: 10c0/a5069fbad1151ed7615a356877a3aa58b7564e62a7fd2305a8c7ce90d1741d1f7c7f3a4492fd99ced309448ffb8d7f56bb7048fd524bcad3c0213783fc3057af
   languageName: node
   linkType: hard
 
@@ -527,15 +527,15 @@ __metadata:
   linkType: hard
 
 "@effect/platform@npm:^0.90.0":
-  version: 0.90.6
-  resolution: "@effect/platform@npm:0.90.6"
+  version: 0.90.10
+  resolution: "@effect/platform@npm:0.90.10"
   dependencies:
     find-my-way-ts: "npm:^0.1.6"
     msgpackr: "npm:^1.11.4"
     multipasta: "npm:^0.2.7"
   peerDependencies:
-    effect: ^3.17.8
-  checksum: 10c0/89fa204548aac80b0b696a483efbb25525155d3bd3f6e8f130705a2b8ccae2021b53e519a4704256db54643a8965456f86116c37cf3f36a12e118d3913d312cc
+    effect: ^3.17.13
+  checksum: 10c0/0f61a0f458c732a04adb802e86083ecb9aee5551c121c83d8fd22fd254239a4b52124b87933918be16c9c3f7a02a643d0bf441ce5e0c4927f993465d73c7192c
   languageName: node
   linkType: hard
 
@@ -1856,17 +1856,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-address-format@npm:2.0.0-beta.1":
-  version: 2.0.0-beta.1
-  resolution: "@midnight-ntwrk/wallet-sdk-address-format@npm:2.0.0-beta.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-address-format%2F2.0.0-beta.1%2F04a982b1e24df584e930f7b15ff9fb3b50ffdf00"
-  dependencies:
-    "@scure/base": "npm:^1.2.6"
-  peerDependencies:
-    "@midnight-ntwrk/zswap": ^4.0.0
-  checksum: 10c0/2e56084ad0447c9287c4a0724aa3b111d802b0d9a96a309f35209ffec21ca99da8ae56c2abbdadf31c9766712f52f69e9ec1d6516436836886f805dd19a845cc
-  languageName: node
-  linkType: hard
-
 "@midnight-ntwrk/wallet-sdk-address-format@npm:^2.0.0":
   version: 2.0.0
   resolution: "@midnight-ntwrk/wallet-sdk-address-format@npm:2.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-address-format%2F2.0.0%2F655a703be8e7281b08cfe84c0478026f5212d240"
@@ -1907,7 +1896,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
     "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.3"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:2.0.0-beta.1"
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*"
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:*"
     effect: "npm:^3.17.3"
     eslint: "npm:^9.37.0"
@@ -2008,7 +1997,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
-    "@effect/language-service": "npm:^0.34.0"
+    "@effect/language-service": "npm:^0.43.2"
     "@eslint/compat": "npm:^1.3.1"
     "@eslint/js": "npm:^9.21.0"
     "@rollup/plugin-node-resolve": "npm:^16.0.0"
@@ -11425,11 +11414,11 @@ __metadata:
 
 "typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>, typescript@patch:typescript@npm%3A~5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
-  resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=379a07"
+  resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/6f7e53bf0d9702350deeb6f35e08b69cbc8b958c33e0ec77bdc0ad6a6c8e280f3959dcbfde6f5b0848bece57810696489deaaa53d75de3578ff255d168c1efbd
+  checksum: 10c0/ad09fdf7a756814dce65bc60c1657b40d44451346858eea230e10f2e95a289d9183b6e32e5c11e95acc0ccc214b4f36289dcad4bf1886b0adb84d711d336a430
   languageName: node
   linkType: hard
 

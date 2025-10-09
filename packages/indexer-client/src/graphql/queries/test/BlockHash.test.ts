@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Effect, Option } from 'effect';
 import * as path from 'node:path';
-import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
 import { BlockHash } from '../BlockHash';
 import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql';
@@ -23,6 +23,10 @@ describe('BlockHash query', () => {
         .withEnvironment({
           TESTCONTAINERS_UID: environmentId,
         })
+        // The test below assumes indexer is able to serve blocks, so we wait for it to index at least one block
+        // Otherwise the test below would be flakey or not precise enough to be useful
+        // Inspecting logs is not the best idea, but here it's the only way
+        .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed/))
         .up();
     }, timeout_minutes(3));
 
@@ -59,17 +63,6 @@ describe('BlockHash query', () => {
         await Effect.gen(function* () {
           const query = yield* BlockHash;
           const result = yield* query({ offset: null });
-
-          expect(result).toEqual(blockExpectation);
-        }).pipe(
-          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v1/graphql` })),
-          Effect.scoped,
-          Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
-          Effect.runPromise,
-        );
-
-        await Effect.gen(function* () {
-          const result = yield* BlockHash.run({ offset: null });
 
           expect(result).toEqual(blockExpectation);
         }).pipe(
