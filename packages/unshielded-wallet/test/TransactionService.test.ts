@@ -560,6 +560,7 @@ describe('TransactionService', () => {
       yield* unshieldedState.applyTx({
         id: 123,
         hash: crypto.randomUUID(),
+        type: 'RegularTransaction',
         identifiers: proofErasedTx1.identifiers(),
         createdUtxos: createdUtxos.map(({ value, type, intentHash, outputNo }) => ({
           value,

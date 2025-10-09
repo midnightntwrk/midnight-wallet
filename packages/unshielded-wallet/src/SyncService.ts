@@ -50,18 +50,27 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
               });
             } else {
               const { transaction, createdUtxos, spentUtxos } = message.unshieldedTransactions;
+              const isRegularTransaction = transaction.type === 'RegularTransaction';
+              const transactionResult = isRegularTransaction
+                ? {
+                    status: transaction.transactionResult.status,
+                    segments:
+                      transaction.transactionResult.segments?.map((segment) => ({
+                        id: segment.id.toString(),
+                        success: segment.success,
+                      })) ?? null,
+                  }
+                : null;
 
               return UnshieldedUpdateDecoder({
                 type,
                 transaction: {
+                  type: transaction.type,
                   id: transaction.id,
                   hash: transaction.hash,
-                  identifiers: [transaction.hash],
-                  protocolVersion: 0,
-                  transactionResult: {
-                    status: 'SUCCESS',
-                    segments: null,
-                  },
+                  identifiers: isRegularTransaction ? transaction.identifiers : [],
+                  protocolVersion: transaction.protocolVersion,
+                  transactionResult,
                   createdUtxos: createdUtxos.map((utxo) => ({
                     value: utxo.value,
                     owner: utxo.owner,

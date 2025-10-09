@@ -16,6 +16,7 @@ export const generateMockTransaction = (
   return {
     id: Math.floor(Math.random() * 1000),
     hash: crypto.randomUUID(),
+    type: 'RegularTransaction',
     identifiers: createdOutputs.map((output) => output.intentHash),
     createdUtxos: createdOutputs,
     spentUtxos: spentOutputs,

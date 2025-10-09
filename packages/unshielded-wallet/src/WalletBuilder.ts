@@ -76,17 +76,20 @@ const makeWallet = ({
         const { type } = update;
 
         if (type === 'UnshieldedTransaction') {
+          const { transaction } = update;
           yield* unshieldedState.applyTx(update.transaction);
 
           yield* transactionHistoryService.create({
-            id: update.transaction.id,
-            hash: update.transaction.hash,
-            protocolVersion: update.transaction.protocolVersion,
-            identifiers: [...update.transaction.identifiers],
-            transactionResult: {
-              status: update.transaction.transactionResult.status as 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS',
-              segments: [...(update.transaction.transactionResult.segments ?? [])],
-            },
+            id: transaction.id,
+            hash: transaction.hash,
+            protocolVersion: transaction.protocolVersion,
+            identifiers: transaction.identifiers ?? [],
+            transactionResult: transaction.transactionResult
+              ? {
+                  status: transaction.transactionResult.status as 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS',
+                  segments: transaction.transactionResult.segments ?? [],
+                }
+              : null,
           });
         }
 

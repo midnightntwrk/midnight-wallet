@@ -214,6 +214,7 @@ describe('UnshieldedStateService', () => {
         transactionResult: {
           ...mockTx.transactionResult,
           status: 'FailedEntirely',
+          segments: [],
         },
         createdUtxos: [],
         spentUtxos: [mockTx.createdUtxos[0]],

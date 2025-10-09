@@ -20,11 +20,11 @@ export class UnshieldedStateService extends Context.Tag('@midnight-ntwrk/wallet-
         Effect.gen(function* () {
           const { createdUtxos, spentUtxos, transactionResult, id } = tx;
 
-          if (transactionResult.status === 'FailedEntirely') {
+          if (transactionResult?.status === 'FailedEntirely') {
             return yield* Effect.fail(
               new ApplyTransactionError({
                 tx: tx,
-                message: `Cannot apply failed a transaction with status: ${transactionResult.status}`,
+                message: `Cannot apply failed a transaction with status: ${transactionResult?.status ?? 'Unknown'}`,
               }),
             );
           }
@@ -46,11 +46,11 @@ export class UnshieldedStateService extends Context.Tag('@midnight-ntwrk/wallet-
         Effect.gen(function* () {
           const { spentUtxos, transactionResult } = tx;
 
-          if (transactionResult.status !== 'FailedEntirely') {
+          if (transactionResult?.status !== 'FailedEntirely') {
             return yield* Effect.fail(
               new ApplyTransactionError({
                 tx: tx,
-                message: `Cannot apply failed a transaction with status: ${transactionResult.status}`,
+                message: `Cannot apply failed a transaction with status: ${transactionResult?.status ?? 'Unknown'}`,
               }),
             );
           }

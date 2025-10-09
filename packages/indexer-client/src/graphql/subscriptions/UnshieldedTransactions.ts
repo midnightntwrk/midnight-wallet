@@ -9,9 +9,20 @@ export const UnshieldedTransactions = Subscription.make(
         ... on UnshieldedTransaction {
           type: __typename
           transaction {
+            type: __typename
             id
             hash
             protocolVersion
+            ... on RegularTransaction {
+              identifiers
+              transactionResult {
+                status
+                segments {
+                  id
+                  success
+                }
+              }
+            }
           }
           createdUtxos {
             owner

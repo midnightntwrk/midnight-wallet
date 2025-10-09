@@ -52,19 +52,22 @@ export const UnshieldedTransactionSchema = Schema.Data(
   Schema.Struct({
     id: Schema.Number,
     hash: Schema.String,
+    type: Schema.Literal('RegularTransaction', 'SystemTransaction'),
     protocolVersion: Schema.Number,
     identifiers: Schema.Array(Schema.String),
-    transactionResult: Schema.Struct({
-      status: Schema.String, // TODO: change to literal
-      segments: Schema.NullOr(
-        Schema.Array(
-          Schema.Struct({
-            id: Schema.String,
-            success: Schema.Boolean,
-          }),
+    transactionResult: Schema.NullOr(
+      Schema.Struct({
+        status: Schema.String, // TODO: change to literal
+        segments: Schema.NullOr(
+          Schema.Array(
+            Schema.Struct({
+              id: Schema.String,
+              success: Schema.Boolean,
+            }),
+          ),
         ),
-      ),
-    }),
+      }),
+    ),
     createdUtxos: Schema.Array(UtxoSchema),
     spentUtxos: Schema.Array(UtxoSchema),
   }),
