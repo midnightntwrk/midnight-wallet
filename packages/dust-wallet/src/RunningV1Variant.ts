@@ -10,7 +10,7 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   WalletRuntimeError,
   Variant,
@@ -155,7 +155,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   createDustGenerationTransaction(
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -176,14 +176,16 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               nonce: LedgerOps.randomNonce(),
               dtime: undefined,
             };
-            const dustValue = updatedValue(meta.ctime, 0n, genInfo, nextBlock, currentState.state.params);
+
+            const futureTime = DateOps.addSeconds(currentTime, 1);
+            const dustValue = updatedValue(meta.ctime, 0n, genInfo, futureTime, currentState.state.params);
             return { token: utxo, value: dustValue };
           });
         }),
       ),
       Effect.flatMap(({ utxosWithDustValue }) => {
         return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(nextBlock, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
+          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
           .pipe(EitherOps.toEffect);
       }),
     );
@@ -201,12 +203,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
   ): Effect.Effect<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, nextBlock, ttl),
+        this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, currentTime, ttl),
         EitherOps.toEffect,
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );

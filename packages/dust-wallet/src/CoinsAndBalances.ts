@@ -36,7 +36,7 @@ export type CoinsAndBalancesCapability<TState> = {
   getAvailableCoins(state: TState): readonly DustToken[];
   getPendingCoins(state: TState): readonly DustToken[];
   getTotalCoins(state: TState): ReadonlyArray<DustToken>;
-  getAvailableCoinsWithGeneratedDust(state: TState, nextBlock: Date): ReadonlyArray<CoinWithValue<DustToken>>;
+  getAvailableCoinsWithGeneratedDust(state: TState, currentTime: Date): ReadonlyArray<CoinWithValue<DustToken>>;
   getAvailableCoinsWithFullInfo(state: TState, blockTime: Date): readonly DustTokenFullInfo[];
   getGenerationInfo(state: TState, token: DustToken): DustGenerationInfo | undefined;
 };
@@ -73,7 +73,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
 
   const getAvailableCoinsWithGeneratedDust = (
     state: DustCoreWallet,
-    nextBlock: Date,
+    currentTime: Date,
   ): Array<CoinWithValue<DustToken>> => {
     const result: Array<CoinWithValue<DustToken>> = [];
     const available = getAvailableCoins(state);
@@ -81,7 +81,8 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     for (const coin of available) {
       const genInfo = getGenerationInfo(state, coin);
       if (genInfo) {
-        const generatedValue = updatedValue(coin.ctime, coin.initialValue, genInfo, nextBlock, state.state.params);
+        const futureTime = DateOps.addSeconds(currentTime, 1);
+        const generatedValue = updatedValue(coin.ctime, coin.initialValue, genInfo, futureTime, state.state.params);
         result.push({ token: coin, value: generatedValue });
       }
     }

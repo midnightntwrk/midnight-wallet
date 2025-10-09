@@ -21,7 +21,7 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet';
 import { DustToken } from './types/Dust';
 import { TotalCostParameters } from './types/transaction';
@@ -34,7 +34,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   readonly networkId: NetworkId;
   readonly costParams: TotalCostParameters;
   createDustGenerationTransaction(
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -50,7 +50,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     secretKey: TSecrets,
     state: TState,
     transaction: UnprovenTransaction,
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: TState },
@@ -126,7 +126,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   createDustGenerationTransaction(
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
     nightUtxos: Arr.NonEmptyReadonlyArray<CoinWithValue<Utxo>>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -160,10 +160,11 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           totalDustValue,
         );
 
+        const futureTime = DateOps.addSeconds(currentTime, 1);
         intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
           ProofMarker.preProof,
-          nextBlock,
+          futureTime,
           [],
           [dustRegistration],
         );
@@ -240,7 +241,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     secretKey: DustSecretKey,
     state: DustCoreWallet,
     transaction: UnprovenTransaction,
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: DustCoreWallet },
@@ -251,7 +252,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
     const fee = dustImbalance ? -dustImbalance[1] : feeTotal;
 
-    const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, nextBlock);
+    const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
     const selectedTokens = this.getCoinSelection()(dustTokens, fee);
     if (!selectedTokens.length) {
       return Either.left(new WalletError.TransactingError({ error: 'No dust tokens found in dustActions' }));
@@ -275,12 +276,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     }
     return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
-      const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, nextBlock);
+      const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
 
+      const futureTime = DateOps.addSeconds(currentTime, 1);
       intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
         SignatureMarker.signature,
         ProofMarker.preProof,
-        nextBlock,
+        futureTime,
         spends as UnprovenDustSpend[],
         [],
       );

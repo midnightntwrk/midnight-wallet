@@ -27,6 +27,7 @@ export interface UnshieldedWallet {
   state: () => Observable<State>;
   transferTransaction(
     outputs: TokenTransfer[],
+    ttl: Date,
   ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>>;
   balanceTransaction(
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
@@ -120,7 +121,7 @@ const makeWallet = ({
 
     const stop = () => Deferred.succeed(stopLatch, undefined).pipe(Effect.asVoid);
 
-    const transferTransaction = (outputs: TokenTransfer[]) =>
+    const transferTransaction = (outputs: TokenTransfer[], ttl: Date) =>
       Effect.gen(function* () {
         const latestState = yield* unshieldedState.getLatestState();
         if (!latestState.syncProgress) {
@@ -134,8 +135,6 @@ const makeWallet = ({
             .data.toString('hex')}`,
         }));
 
-        // TODO: make it configurable
-        const ttl = new Date(Date.now() + latestState.syncProgress.highestTransactionId + 60 * 3600);
         const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl, networkId);
 
         return yield* transactionService.balanceTransaction(
@@ -190,7 +189,8 @@ const makeWallet = ({
         });
       },
       stop: () => Effect.runPromise(stop()),
-      transferTransaction: (outputs: TokenTransfer[]) => Effect.runPromise(transferTransaction(outputs)),
+      transferTransaction: (outputs: TokenTransfer[], ttl: Date) =>
+        Effect.runPromise(transferTransaction(outputs, ttl)),
       balanceTransaction: (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>) =>
         Effect.runPromise(balanceTransaction(tx)),
       signTransaction: (

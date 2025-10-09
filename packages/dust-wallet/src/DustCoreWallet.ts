@@ -154,7 +154,7 @@ export class DustCoreWallet {
   spendCoins(
     secretKey: DustSecretKey,
     coins: ReadonlyArray<CoinWithValue<DustToken>>,
-    nextBlock: Date,
+    currentTime: Date,
   ): [ReadonlyArray<UnprovenDustSpend>, DustCoreWallet] {
     const [output, newState, newPending] = pipe(
       coins,
@@ -164,7 +164,8 @@ export class DustCoreWallet {
           [spends, localState]: [ReadonlyArray<UnprovenDustSpend>, DustLocalState, Array<DustTokenWithNullifier>],
           { token: coinToSpend, value: takeFee },
         ) => {
-          const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, nextBlock);
+          const futureTime = DateOps.addSeconds(currentTime, 1);
+          const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, futureTime);
           const newPending = [...this.pendingDustTokens, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
           return [Arr.append(spends, dustSpend), newState, newPending];
         },

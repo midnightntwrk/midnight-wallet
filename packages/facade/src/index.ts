@@ -57,6 +57,7 @@ export class WalletFacade {
   async transferTransaction(
     zswapSecretKeys: ledger.ZswapSecretKeys,
     outputs: CombinedTokenTransfer[],
+    ttl: Date,
   ): Promise<ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>> {
     const unshieldedOutputs = outputs
       .filter((output) => output.type === 'unshielded')
@@ -72,7 +73,7 @@ export class WalletFacade {
     let unshieldedTx = undefined;
 
     if (unshieldedOutputs.length > 0) {
-      unshieldedTx = await this.unshielded.transferTransaction(unshieldedOutputs);
+      unshieldedTx = await this.unshielded.transferTransaction(unshieldedOutputs, ttl);
     }
 
     if (shieldedOutputs.length > 0) {

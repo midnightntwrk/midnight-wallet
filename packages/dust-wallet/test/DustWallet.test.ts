@@ -49,7 +49,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
   return result;
 };
 
-const toTxTime = (id: number): Date => new Date(id * 1000);
+const toTxTime = (id: number | bigint): Date => new Date(Number(id) * 1000);
 
 const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>, txId: number) => {
   const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txId)));
@@ -75,11 +75,12 @@ describe('DustWallet', () => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
       const simulatorState = yield* simulator.getLatestState();
-      const nextBlock = toTxTime(Number(simulatorState.lastTxNumber + 1n));
+      const currentTime = toTxTime(simulatorState.lastTxNumber);
+      const ttl = DateOps.addSeconds(currentTime, 1);
 
       const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
-        nextBlock,
-        nextBlock,
+        currentTime,
+        ttl,
         nightTokens,
         nightVerifyingKey,
         DustAddress.encodePublicKey(NETWORK, lastState.publicKey.publicKey),
@@ -290,7 +291,7 @@ describe('DustWallet', () => {
       const transactionWithFee = (yield* wallet.addFeePayment(
         dustSecretKey,
         transferTransaction,
-        toTxTime(4),
+        toTxTime(3),
         ttl,
       )) as ProvingRecipe.TransactionToProve;
 

@@ -84,7 +84,7 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   readonly state: rx.Observable<DustWalletState>;
 
   createDustGenerationTransaction(
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -99,7 +99,7 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    nextBlock: Date,
+    currentTime: Date,
     ttl: Date,
   ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>>;
 
@@ -153,7 +153,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     }
 
     createDustGenerationTransaction(
-      nextBlock: Date,
+      currentTime: Date,
       ttl: Date,
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: SignatureVerifyingKey,
@@ -162,7 +162,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) =>
-            v1.createDustGenerationTransaction(nextBlock, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+            v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
         })
         .pipe(Effect.runPromise);
     }
@@ -181,12 +181,12 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     addFeePayment(
       secretKey: DustSecretKey,
       transaction: UnprovenTransaction,
-      nextBlock: Date,
+      currentTime: Date,
       ttl: Date,
     ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, nextBlock, ttl),
+          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, currentTime, ttl),
         })
         .pipe(Effect.runPromise);
     }

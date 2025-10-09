@@ -276,8 +276,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
                 });
               }
             } else {
-              const highestTransactionId = latestState.syncProgress?.highestTransactionId || 1;
-              let ttl = new Date(Date.now() + highestTransactionId * 60 * 3600);
+              let ttl: Date;
               let updated = false;
 
               // try to find and modify any unbound intent first

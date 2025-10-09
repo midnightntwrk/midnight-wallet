@@ -111,18 +111,23 @@ describe.skip('Wallet Facade Transfer', () => {
       .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
       .asString();
 
-    const transfer = await senderFacade.transferTransaction(ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed), [
-      {
-        type: 'shielded',
-        outputs: [
-          {
-            type: (ledger.shieldedToken() as { tag: string; raw: string }).raw,
-            receiverAddress: ledgerReceiverAddress,
-            amount: 1n,
-          },
-        ],
-      },
-    ]);
+    const ttl = new Date();
+    const transfer = await senderFacade.transferTransaction(
+      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+      [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: ledger.shieldedToken().raw,
+              receiverAddress: ledgerReceiverAddress,
+              amount: 1n,
+            },
+          ],
+        },
+      ],
+      ttl,
+    );
 
     const finalizedTx = await senderFacade.finalizeTransaction(transfer);
 
@@ -147,7 +152,7 @@ describe.skip('Wallet Facade Transfer', () => {
           {
             amount: 1n,
             receiverAddress: unshieldedReceiverState.address,
-            type: (ledger.unshieldedToken() as { tag: string; raw: string }).raw,
+            type: ledger.unshieldedToken().raw,
           },
         ],
       },
@@ -166,9 +171,11 @@ describe.skip('Wallet Facade Transfer', () => {
         ),
     );
 
+    const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const recipe = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       tokenTransfer,
+      ttl,
     );
 
     const finalizedTx = await senderFacade.finalizeTransaction(recipe);
