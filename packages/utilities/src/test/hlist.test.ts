@@ -1,4 +1,4 @@
-import type { Equal, Expect } from '../testUtils';
+import { describe, expect, it } from 'vitest';
 import {
   Append,
   append,
@@ -19,7 +19,8 @@ import {
   Reverse,
   Tail,
   Tails,
-} from '../hlist';
+} from '../hlist.js';
+import type { Equal, Expect } from '../testUtils.js';
 
 describe('HList', () => {
   it('properly prepends to the list', () => {

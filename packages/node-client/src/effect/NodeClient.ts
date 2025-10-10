@@ -1,6 +1,6 @@
 import { Context, Effect, Option, Stream } from 'effect';
-import * as SubmissionEvent from './SubmissionEvent';
-import * as NodeClientError from './NodeClientError';
+import * as SubmissionEvent from './SubmissionEvent.js';
+import * as NodeClientError from './NodeClientError.js';
 
 export type SerializedMnTransaction = Uint8Array;
 

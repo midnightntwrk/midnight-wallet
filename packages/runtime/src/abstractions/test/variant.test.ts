@@ -1,6 +1,7 @@
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import type { Expect, Equal, CanAssign } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { describe, expect, it } from 'vitest';
 import {
   InterceptingRunningVariant,
   InterceptingVariant,
@@ -8,8 +9,8 @@ import {
   NumericMultiplier,
   NumericRange,
   NumericRangeMultiplier,
-} from '../../testing/variants';
-import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant';
+} from '../../testing/variants.js';
+import { makeVersionedRecord, RunningVariant, RunningVariantOf, StateOf, VersionedVariant } from '../Variant.js';
 
 describe('Variant', () => {
   it('infers its state correctly', () => {

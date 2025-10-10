@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SyncProgress, type SyncProgressData } from '../SyncProgress';
+import { SyncProgress, type SyncProgressData } from '../SyncProgress.js';
 
 describe('SyncProgress', () => {
   describe('isCompleteWithin', () => {

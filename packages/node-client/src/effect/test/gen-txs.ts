@@ -2,7 +2,7 @@ import { FileSystem } from '@effect/platform';
 import { Effect, Scope } from 'effect';
 import path from 'path';
 import { StartedNetwork } from 'testcontainers';
-import { generateTestTransactions } from '../../testing/test-transactions';
+import { generateTestTransactions } from '../../testing/test-transactions.js';
 import { PlatformError } from '@effect/platform/Error';
 import { NodeContext } from '@effect/platform-node';
 

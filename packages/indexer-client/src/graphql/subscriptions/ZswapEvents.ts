@@ -1,5 +1,5 @@
-import { Subscription } from '../../effect';
-import { gql } from '../generated';
+import { Subscription } from '../../effect/index.js';
+import { gql } from '../generated/index.js';
 
 export const ZswapEvents = Subscription.make(
   'ZswapEvents',

@@ -1,2 +1,2 @@
-export * from './WalletBuilder';
-export * as Runtime from './Runtime';
+export * from './WalletBuilder.js';
+export * as Runtime from './Runtime.js';

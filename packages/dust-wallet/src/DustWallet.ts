@@ -13,15 +13,15 @@ import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstract
 import { ProvingRecipe, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances';
-import { DustCoreWallet } from './DustCoreWallet';
-import { KeysCapability } from './Keys';
-import { V1Tag } from './RunningV1Variant';
-import { SerializationCapability } from './Serialization';
-import { SubmitTransactionMethod } from './Submission';
-import { DustToken, UtxoWithMeta } from './types/Dust';
-import { NetworkId } from './types/ledger';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder';
+import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { KeysCapability } from './Keys.js';
+import { V1Tag } from './RunningV1Variant.js';
+import { SerializationCapability } from './Serialization.js';
+import { SubmitTransactionMethod } from './Submission.js';
+import { DustToken, UtxoWithMeta } from './types/Dust.js';
+import { NetworkId } from './types/ledger.js';
+import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder.js';
 
 export type DustWalletCapabilities = {
   serialization: SerializationCapability<DustCoreWallet, null, string>;

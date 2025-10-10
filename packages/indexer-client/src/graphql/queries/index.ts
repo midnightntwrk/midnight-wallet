@@ -1,3 +1,3 @@
-export * from './Connect';
-export * from './Disconnect';
-export * from './BlockHash';
+export * from './Connect.js';
+export * from './Disconnect.js';
+export * from './BlockHash.js';

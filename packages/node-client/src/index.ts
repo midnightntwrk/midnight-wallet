@@ -4,12 +4,12 @@ import {
   SubmissionEvent,
   NodeClientError,
   Config,
-} from './effect/index';
+} from './effect/index.js';
 import { Effect, Exit, pipe, Scope } from 'effect';
 import { Observable } from '@polkadot/types/types';
 import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
-export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient';
+export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient.js';
 
 export class PolkadotNodeClient {
   static init(config: Config): Promise<PolkadotNodeClient> {

@@ -1,4 +1,4 @@
-import * as ProtocolVersion from './ProtocolVersion';
+import * as ProtocolVersion from './ProtocolVersion.js';
 
 /**
  * A type that associates some state with a given version of the Midnight protocol.

@@ -5,11 +5,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
-import * as OriginalFunctions from './utils';
+import * as OriginalFunctions from './utils.js';
 import { Resource } from '@midnight-ntwrk/wallet_pre_hf';
 import { TransactionHistoryEntry, WalletState, type Wallet } from '@midnight-ntwrk/wallet-api_hf';
 import { Readable } from 'node:stream';
-import { logger } from './logger';
+import { logger } from './logger.js';
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { nativeToken } from '@midnight-ntwrk/zswap_v2';
 

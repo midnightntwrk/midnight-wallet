@@ -1,7 +1,7 @@
 import { Effect, Context, Effectable, Option, identity } from 'effect';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import { QueryClient } from './QueryClient';
+import { QueryClient } from './QueryClient.js';
 
 /**
  * Describes an invocable GraphQL query.

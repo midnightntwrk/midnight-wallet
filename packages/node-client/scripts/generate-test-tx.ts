@@ -14,7 +14,7 @@ import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
 import * as process from 'process';
-import { generateTestTransactions } from '../src/testing/test-transactions';
+import { generateTestTransactions } from '../src/testing/test-transactions.js';
 
 const paths = new (class {
   currentDir = path.dirname(new URL(import.meta.url).pathname);

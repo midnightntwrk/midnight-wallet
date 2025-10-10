@@ -1,6 +1,6 @@
 import { Either } from 'effect';
 import * as Brand from 'effect/Brand';
-import { InvalidProtocolSchemeError } from './URLError';
+import { InvalidProtocolSchemeError } from './URLError.js';
 
 /**
  * A 'HTTP' URL.

@@ -1,1 +1,1 @@
-export * as TestTransactions from './test-transactions';
+export * as TestTransactions from './test-transactions.js';

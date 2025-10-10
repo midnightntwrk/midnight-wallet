@@ -8,18 +8,18 @@ import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
-import { makeDefaultKeysCapability } from '../Keys';
-import { makeSimulatorProvingService } from '../Proving';
-import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe';
-import { CoreWallet } from '../CoreWallet';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
+import { makeDefaultKeysCapability } from '../Keys.js';
+import { makeSimulatorProvingService } from '../Proving.js';
+import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe.js';
+import { CoreWallet } from '../CoreWallet.js';
 import {
   DefaultTransactingConfiguration,
   DefaultTransactingContext,
   makeSimulatorTransactingCapability,
   TokenTransfer,
-} from '../Transacting';
-import { getNonDustImbalance } from '../../test/testUtils';
+} from '../Transacting.js';
+import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const shieldedValue = (value: number): bigint => BigInt(value * 10 ** 6);

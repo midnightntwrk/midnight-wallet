@@ -1,8 +1,9 @@
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { NumericRangeBuilder } from '../testing/variants';
-import { toProtocolStateArray } from '../testing/utils';
 import * as rx from 'rxjs';
-import { WalletBuilder } from '../WalletBuilder';
+import { describe, expect, it, vi } from 'vitest';
+import { toProtocolStateArray } from '../testing/utils.js';
+import { NumericRangeBuilder } from '../testing/variants.js';
+import { WalletBuilder } from '../WalletBuilder.js';
 
 describe('Wallet', () => {
   describe('state', () => {

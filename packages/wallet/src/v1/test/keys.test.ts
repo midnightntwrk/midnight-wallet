@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { makeDefaultKeysCapability } from '../Keys';
+import { makeDefaultKeysCapability } from '../Keys.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { CoreWallet } from '../CoreWallet';
+import { CoreWallet } from '../CoreWallet.js';
 import * as fc from 'fast-check';
 
 const seedArbitrary = fc.uint8Array({ minLength: 32, maxLength: 32 });

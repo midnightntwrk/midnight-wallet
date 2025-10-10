@@ -2,9 +2,14 @@ import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe';
-import { CoreWallet } from './CoreWallet';
-import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError';
+import {
+  BALANCE_TRANSACTION_TO_PROVE,
+  NOTHING_TO_PROVE,
+  ProvingRecipe,
+  TRANSACTION_TO_PROVE,
+} from './ProvingRecipe.js';
+import { CoreWallet } from './CoreWallet.js';
+import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
 import {
   BalanceRecipe,
   CoinSelection,
@@ -13,10 +18,10 @@ import {
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances';
-import { TransactionTrait } from './Transaction';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances';
-import { KeysCapability } from './Keys';
+import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
+import { TransactionTrait } from './Transaction.js';
+import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { KeysCapability } from './Keys.js';
 
 export interface TokenTransfer {
   readonly amount: bigint;

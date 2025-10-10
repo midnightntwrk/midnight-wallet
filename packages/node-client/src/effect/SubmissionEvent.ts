@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import { SerializedMnTransaction } from './NodeClient';
+import { SerializedMnTransaction } from './NodeClient.js';
 
 export type HexString = string;
 

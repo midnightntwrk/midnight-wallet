@@ -1,7 +1,7 @@
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { DustCoreWallet } from './DustCoreWallet';
+import { DustCoreWallet } from './DustCoreWallet.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;

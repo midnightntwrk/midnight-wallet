@@ -1,6 +1,7 @@
-import { Stream, Effect, identity, Fiber } from 'effect';
-import * as ObservableOps from '../ObservableOps';
+import { Effect, Fiber, identity, Stream } from 'effect';
 import * as rx from 'rxjs';
+import { describe, expect, it, vi } from 'vitest';
+import * as ObservableOps from '../ObservableOps.js';
 
 describe('Observable', () => {
   const makeGenerator = (iterations: number) => {

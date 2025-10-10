@@ -1,8 +1,8 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
-import { ProvingRecipe } from './ProvingRecipe';
-import { ProvingError, WalletError } from './WalletError';
+import { ProvingRecipe } from './ProvingRecipe.js';
+import { ProvingError, WalletError } from './WalletError.js';
 
 export interface ProvingService<TTransaction> {
   prove(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError>;

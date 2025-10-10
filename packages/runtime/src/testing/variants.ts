@@ -1,4 +1,4 @@
-import { StateChange, Variant, VariantBuilder, VersionChangeType, WalletRuntimeError } from '../abstractions/index';
+import { StateChange, Variant, VariantBuilder, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 
 export type RangeConfig = {

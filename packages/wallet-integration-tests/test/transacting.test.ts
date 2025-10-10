@@ -1,5 +1,4 @@
 import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -16,6 +15,7 @@ import {
   V1Builder,
   CoreWallet,
   V1Tag,
+  Transacting,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
@@ -27,8 +27,10 @@ import prand from 'pure-rand';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries';
-import { getShieldedSeed } from './utils';
+import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
+import { getShieldedSeed } from './utils.js';
+
+type TokenTransfer = Transacting.TokenTransfer;
 
 vi.setConfig({ testTimeout: 180_000, hookTimeout: 30_000 });
 

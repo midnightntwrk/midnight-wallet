@@ -1,4 +1,4 @@
-import { CoreWallet } from './CoreWallet';
+import { CoreWallet } from './CoreWallet.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { pipe, Array } from 'effect';
 import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';

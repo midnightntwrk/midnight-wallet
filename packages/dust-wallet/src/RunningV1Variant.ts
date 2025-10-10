@@ -17,15 +17,15 @@ import {
   StateChange,
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { DustToken, UtxoWithMeta } from './types/Dust';
-import { KeysCapability } from './Keys';
-import { SyncCapability, SyncService } from './Sync';
-import { SimulatorState } from './Simulator';
-import { CoinsAndBalancesCapability, CoinSelection } from './CoinsAndBalances';
-import { TransactingCapability } from './Transacting';
-import { SubmissionService, SubmitTransactionMethod } from './Submission';
-import { DustCoreWallet } from './DustCoreWallet';
-import { SerializationCapability } from './Serialization';
+import { DustToken, UtxoWithMeta } from './types/Dust.js';
+import { KeysCapability } from './Keys.js';
+import { SyncCapability, SyncService } from './Sync.js';
+import { SimulatorState } from './Simulator.js';
+import { CoinsAndBalancesCapability, CoinSelection } from './CoinsAndBalances.js';
+import { TransactingCapability } from './Transacting.js';
+import { SubmissionService, SubmitTransactionMethod } from './Submission.js';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { SerializationCapability } from './Serialization.js';
 
 const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;

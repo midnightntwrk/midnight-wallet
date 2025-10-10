@@ -1,5 +1,6 @@
-import type { Equal, Expect } from '../testUtils';
-import { dispatch, PolyFunction, TagOf } from '../polyFunction';
+import type { Equal, Expect } from '../testUtils.js';
+import { dispatch, PolyFunction, TagOf } from '../polyFunction.js';
+import { describe, expect, it } from 'vitest';
 
 describe('PolyFunction', () => {
   type NumberVariant = {

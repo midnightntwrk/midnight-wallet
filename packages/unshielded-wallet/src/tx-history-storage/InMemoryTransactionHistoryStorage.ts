@@ -4,7 +4,7 @@ import {
   TransactionHistoryEntrySchema,
   TransactionHistoryEntry,
   TransactionHash,
-} from './TransactionHistoryStorage';
+} from './TransactionHistoryStorage.js';
 
 const TransactionHistorySchema = Schema.Map({
   key: Schema.String,

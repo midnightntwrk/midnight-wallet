@@ -1,1 +1,1 @@
-export * from './ShieldedWallet';
+export * from './ShieldedWallet.js';

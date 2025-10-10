@@ -1,12 +1,12 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
-import { CoreWallet } from './CoreWallet';
-import { Simulator, SimulatorState } from './Simulator';
+import { CoreWallet } from './CoreWallet.js';
+import { Simulator, SimulatorState } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, WalletError } from './WalletError';
+import { SyncWalletError, WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryCapability } from './TransactionHistory';
+import { TransactionHistoryCapability } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {

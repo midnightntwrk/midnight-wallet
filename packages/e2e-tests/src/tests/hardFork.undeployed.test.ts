@@ -2,10 +2,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
+import { describe, test, expect, beforeAll } from 'vitest';
 // allows submitting transactions using ledger v3 = v1 (only post-rollback, not post-HF1)
 import { Resource, WalletBuilder as WalletBuilderPostHF } from '@midnight-ntwrk/wallet_post_hf';
 import { WalletBuilder as WalletBuilderPreHF } from '@midnight-ntwrk/wallet_pre_hf';
-import { useHardForkFixture } from './test-fixture';
+import { useHardForkFixture } from './test-fixture.js';
 import { NetworkId, TokenType, nativeToken } from '@midnight-ntwrk/zswap_v2';
 import { NetworkId as NetworkIdPreHf, nativeToken as nativeTokenPreHf } from '@midnight-ntwrk/zswap_v1';
 import {
@@ -16,9 +17,9 @@ import {
   waitForSync,
   waitForTxInHistory,
   walletStateTrimmed,
-} from './utilsHf';
+} from './utilsHf.js';
 import { Wallet } from '@midnight-ntwrk/wallet-api_hf';
-import { logger } from './logger';
+import { logger } from './logger.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { GenericContainer } from 'testcontainers/build/generic-container/generic-container';
 import * as allure from 'allure-js-commons';

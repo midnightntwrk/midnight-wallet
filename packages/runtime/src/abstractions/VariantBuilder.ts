@@ -1,5 +1,5 @@
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { AnyVariant, VersionedVariant } from './Variant';
+import { AnyVariant, VersionedVariant } from './Variant.js';
 
 /**
  * Builds a target {@link Variant} object from internal build state.

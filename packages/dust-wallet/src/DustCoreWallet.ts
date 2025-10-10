@@ -14,9 +14,9 @@ import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, pipe } from 'effect';
-import { DustToken, DustTokenWithNullifier } from './types/Dust';
-import { CoinWithValue } from './CoinsAndBalances';
-import { NetworkId, UnprovenDustSpend } from './types/ledger';
+import { DustToken, DustTokenWithNullifier } from './types/Dust.js';
+import { CoinWithValue } from './CoinsAndBalances.js';
+import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;

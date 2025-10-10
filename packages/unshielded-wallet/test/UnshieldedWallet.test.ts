@@ -1,12 +1,12 @@
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import path from 'path';
 import { filter, firstValueFrom } from 'rxjs';
-import { vi } from 'vitest';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { WalletBuilder } from '../src';
-import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage';
-import { getUnshieldedSeed } from './testUtils';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { createKeystore, PublicKey } from '../src/KeyStore';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { WalletBuilder } from '../src/index.js';
+import { createKeystore, PublicKey } from '../src/KeyStore.js';
+import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage/InMemoryTransactionHistoryStorage.js';
+import { getUnshieldedSeed } from './testUtils.js';
 
 vi.setConfig({ testTimeout: 60_000, hookTimeout: 30_000 });
 

@@ -1,5 +1,5 @@
 import { Effect, Layer, Context, Data, SubscriptionRef, Stream } from 'effect';
-import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage';
+import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage/index.js';
 
 export class TransactionHistoryServiceError extends Data.TaggedError('TransactionHistoryServiceError')<{
   readonly error?: unknown;

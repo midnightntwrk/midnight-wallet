@@ -16,24 +16,24 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./networking": {
-      "import": "./dist/networking/index.js",
-      "types": "./dist/networking/index.d.ts"
+      "types": "./dist/networking/index.d.ts",
+      "import": "./dist/networking/index.js"
     },
     "./types": {
-      "import": "./dist/types.js",
-      "types": "./dist/types.d.ts"
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
     },
     "./testing": {
-      "import": "./dist/testing/index.js",
-      "types": "./dist/testing/index.d.ts"
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js"
     }
   },
   "dependencies": {
@@ -48,11 +48,13 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
     "dist": "tsc -b ./tsconfig.build.json",
-    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo",
+    "publint": "publint --strict"
   },
   "devDependencies": {
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
+    "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"

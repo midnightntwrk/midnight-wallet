@@ -6,7 +6,9 @@ import {
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import * as fc from 'fast-check';
 import { Record } from 'effect';
-import { TokenTransfer } from '@midnight-ntwrk/wallet-api';
+
+import { Transacting } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+type TokenTransfer = Transacting.TokenTransfer;
 
 export const recipientArbitrary = fc
   .uint8Array({ minLength: 32, maxLength: 32 })

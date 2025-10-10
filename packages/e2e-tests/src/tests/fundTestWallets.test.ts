@@ -1,6 +1,7 @@
+import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import {
   closeWallet,
@@ -9,9 +10,9 @@ import {
   waitForSync,
   waitForTxInHistory,
   walletStateTrimmed,
-} from './utils';
+} from './utils.js';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
-import { logger } from './logger';
+import { logger } from './logger.js';
 import { exit } from 'node:process';
 
 /**

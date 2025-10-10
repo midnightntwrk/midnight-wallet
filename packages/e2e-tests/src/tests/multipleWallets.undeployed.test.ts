@@ -1,10 +1,11 @@
+import { describe, test, expect } from 'vitest';
 import { WalletBuilder, Resource } from '@midnight-ntwrk/wallet';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
 import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
 import { firstValueFrom } from 'rxjs';
-import { logger } from './logger';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { closeWallet, waitForSync } from './utils';
+import { logger } from './logger.js';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { closeWallet, waitForSync } from './utils.js';
 import * as allure from 'allure-js-commons';
 
 /**

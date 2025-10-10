@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import { ProverClient, HttpProverClient as _HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { ProverClient, HttpProverClient as _HttpProverClient } from './effect/index.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 /**

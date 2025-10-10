@@ -14,7 +14,7 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
-import { NetworkId } from './types/ledger';
+import { NetworkId } from './types/ledger.js';
 
 export type SimulatorState = Readonly<{
   networkId: NetworkId;

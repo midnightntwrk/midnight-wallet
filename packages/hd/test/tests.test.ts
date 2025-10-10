@@ -1,16 +1,17 @@
-import {
-  generateMnemonicWords,
-  validateMnemonic,
-  joinMnemonicWords,
-  HDWallet,
-  generateRandomSeed,
-  Roles,
-} from '../src';
-import { HDKey } from '@scure/bip32';
-import * as fc from 'fast-check';
 import { hdkey } from '@ethereumjs/wallet';
+import { HDKey } from '@scure/bip32';
 import * as bip39 from '@scure/bip39';
 import { wordlist as english } from '@scure/bip39/wordlists/english';
+import * as fc from 'fast-check';
+import { describe, expect, it } from 'vitest';
+import {
+  generateMnemonicWords,
+  generateRandomSeed,
+  HDWallet,
+  joinMnemonicWords,
+  Roles,
+  validateMnemonic,
+} from '../src/index.js';
 
 const MASTER_KEY_MIN_LENGTH = 16;
 const MASTER_KEY_MAX_LENGTH = 64;

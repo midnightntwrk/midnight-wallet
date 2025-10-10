@@ -1,12 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Effect, Option } from 'effect';
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
-import { randomUUID } from 'node:crypto';
-import { BlockHash } from '../BlockHash';
-import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql';
-import { HttpQueryClient } from '../../../effect';
-import { Mock } from 'vitest';
+import { Mock, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { HttpQueryClient } from '../../../effect/index.js';
+import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql.js';
+import { BlockHash } from '../BlockHash.js';
 
 const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../');
 

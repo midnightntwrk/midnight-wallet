@@ -1,1 +1,1 @@
-export * as TestContainers from './test-containers';
+export * as TestContainers from './test-containers.js';

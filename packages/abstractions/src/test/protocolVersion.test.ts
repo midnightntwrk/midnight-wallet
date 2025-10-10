@@ -1,5 +1,6 @@
-import * as ProtocolVersion from '../ProtocolVersion';
 import { Schema } from 'effect';
+import { describe, expect, it } from 'vitest';
+import * as ProtocolVersion from '../ProtocolVersion.js';
 
 describe('ProtocolVersion', () => {
   describe('is', () => {

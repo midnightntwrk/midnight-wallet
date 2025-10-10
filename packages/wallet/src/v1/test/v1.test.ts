@@ -1,17 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
-import { DefaultV1Variant, V1Builder } from '../V1Builder';
+import { DefaultV1Variant, V1Builder } from '../V1Builder.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { WalletError } from '../WalletError';
+import { WalletError } from '../WalletError.js';
 import { Effect, Either, Encoding, Option, pipe, Ref, SubscriptionRef } from 'effect';
-import { SubmissionService } from '../Submission';
-import { makeDefaultTransactingCapability } from '../Transacting';
+import { SubmissionService } from '../Submission.js';
+import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { NodeContext } from '@effect/platform-node';
 import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances';
+import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { makeDefaultKeysCapability } from '../Keys';
-import { CoreWallet } from '../CoreWallet';
-import { makeFakeTx } from '../../test/genTxs';
+import { makeDefaultKeysCapability } from '../Keys.js';
+import { CoreWallet } from '../CoreWallet.js';
+import { makeFakeTx } from '../../test/genTxs.js';
 
 describe('V1 Variant', () => {
   it('gracefully stops submission service', async () => {

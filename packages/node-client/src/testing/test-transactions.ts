@@ -7,7 +7,7 @@ import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
 import { Scope } from 'effect/Scope';
 import { StartedNetwork } from 'testcontainers';
-import { normalizeTxs } from './normalize-txs';
+import { normalizeTxs } from './normalize-txs.js';
 
 export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>;
 

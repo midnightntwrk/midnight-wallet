@@ -1,7 +1,7 @@
-export * as Query from './Query';
-export * as Subscription from './Subscription';
-export * from './QueryClient';
-export * as HttpQueryClient from './HttpQueryClient';
-export * from './SubscriptionClient';
-export * as WsSubscriptionClient from './WsSubscriptionClient';
-export * as ConnectionHelper from './ConnectionHelper';
+export * as Query from './Query.js';
+export * as Subscription from './Subscription.js';
+export * from './QueryClient.js';
+export * as HttpQueryClient from './HttpQueryClient.js';
+export * from './SubscriptionClient.js';
+export * as WsSubscriptionClient from './WsSubscriptionClient.js';
+export * as ConnectionHelper from './ConnectionHelper.js';

@@ -1,5 +1,5 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { CoreWallet } from './CoreWallet';
+import { CoreWallet } from './CoreWallet.js';
 
 export type ProgressUpdate = {
   appliedIndex: bigint | undefined;

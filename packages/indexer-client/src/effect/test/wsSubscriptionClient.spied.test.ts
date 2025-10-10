@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
-import * as SubscriptionClient from '../SubscriptionClient';
+import { describe, expect, it, vi } from 'vitest';
+import * as SubscriptionClient from '../SubscriptionClient.js';
 
 vi.mock('graphql-ws', () => ({
   createClient: vi.fn(),
@@ -9,7 +10,7 @@ describe('WsSubscriptionClient', () => {
   describe('layer', () => {
     it('disposes of underlying scoped client', async () => {
       const graphqlWS = await import('graphql-ws');
-      const SpiedWsSubscriptionClient = await import('../WsSubscriptionClient');
+      const SpiedWsSubscriptionClient = await import('../WsSubscriptionClient.js');
 
       const dispose = vi.fn();
       const spiedCreateClient = vi

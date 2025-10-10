@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
-import * as SubscriptionClient from '../SubscriptionClient';
-import * as WsSubscriptionClient from '../WsSubscriptionClient';
+import { describe, it } from 'vitest';
+import * as SubscriptionClient from '../SubscriptionClient.js';
+import * as WsSubscriptionClient from '../WsSubscriptionClient.js';
 
 describe('WsSubscriptionClient', () => {
   describe('layer', () => {

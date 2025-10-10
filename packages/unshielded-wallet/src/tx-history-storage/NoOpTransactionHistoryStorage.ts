@@ -1,4 +1,4 @@
-import { TransactionHistoryStorage, TransactionHash, TransactionHistoryEntry } from './TransactionHistoryStorage';
+import { TransactionHistoryStorage, TransactionHash, TransactionHistoryEntry } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
   create(_entry: TransactionHistoryEntry): Promise<void> {

@@ -2,8 +2,8 @@
 import { exit } from 'process';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { MidnightDeployment, MidnightNetwork } from './utils';
-import { logger } from './logger';
+import { MidnightDeployment, MidnightNetwork } from './utils.js';
+import { logger } from './logger.js';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;

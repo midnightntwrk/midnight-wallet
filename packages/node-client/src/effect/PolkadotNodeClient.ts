@@ -14,9 +14,9 @@ import {
   Stream,
   StreamEmit,
 } from 'effect';
-import * as NodeClient from './NodeClient';
-import * as SubmissionEvent from './SubmissionEvent';
-import * as NodeClientError from './NodeClientError';
+import * as NodeClient from './NodeClient.js';
+import * as SubmissionEvent from './SubmissionEvent.js';
+import * as NodeClientError from './NodeClientError.js';
 import BN from 'bn.js';
 
 export type Config = {

@@ -5,9 +5,9 @@
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { TransactionHistoryEntry } from '@midnight-ntwrk/wallet-api';
-import { logger } from './logger';
+import { logger } from './logger.js';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
-import { TestContainersFixture } from './test-fixture';
+import { TestContainersFixture } from './test-fixture.js';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';

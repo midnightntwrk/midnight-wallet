@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import * as KeyManagement from '@cardano-sdk/key-management';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
-import { MidnightNetwork, closeWallet, compareStates, validateNetworkInAddress, waitForSync } from './utils';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { MidnightNetwork, closeWallet, compareStates, validateNetworkInAddress, waitForSync } from './utils.js';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/zswap';
 import { Wallet } from '@midnight-ntwrk/wallet-api';

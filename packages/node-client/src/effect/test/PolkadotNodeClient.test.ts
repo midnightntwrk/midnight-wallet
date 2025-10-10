@@ -1,13 +1,13 @@
 import { describe, it, vi, expect, beforeAll, afterAll } from 'vitest';
-import { PolkadotNodeClient } from '../PolkadotNodeClient';
-import * as NodeClient from '../NodeClient';
-import * as SubmissionEvent from '../SubmissionEvent';
+import { PolkadotNodeClient } from '../PolkadotNodeClient.js';
+import * as NodeClient from '../NodeClient.js';
+import * as SubmissionEvent from '../SubmissionEvent.js';
 import { StartedTestContainer } from 'testcontainers';
 import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
-import { TestTransactions } from '../../testing/index';
+import { TestTransactions } from '../../testing/index.js';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { NodeContext } from '@effect/platform-node';
-import { generateTxs, getTestTxsPath } from './gen-txs';
+import { generateTxs, getTestTxsPath } from './gen-txs.js';
 
 const clientLayer = (nodePort: number) =>
   PolkadotNodeClient.layer({

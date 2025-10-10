@@ -1,9 +1,10 @@
 import { Effect, Stream } from 'effect';
+import { randomUUID } from 'node:crypto';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
-import { randomUUID } from 'node:crypto';
-import { WsSubscriptionClient } from '../../../effect';
-import { ZswapEvents } from '../ZswapEvents';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WsSubscriptionClient } from '../../../effect/index.js';
+import { ZswapEvents } from '../ZswapEvents.js';
 
 const COMPOSE_PATH = path.resolve(new URL(import.meta.url).pathname, '../../../../../');
 

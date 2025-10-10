@@ -1,6 +1,6 @@
 import { DustPublicKey } from '@midnight-ntwrk/ledger-v6';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { DustCoreWallet } from './DustCoreWallet';
+import { DustCoreWallet } from './DustCoreWallet.js';
 
 export type KeysCapability<TState> = {
   getDustPublicKey(state: TState): DustPublicKey;

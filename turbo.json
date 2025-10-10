@@ -53,6 +53,19 @@
       "outputLogs": "new-only",
       "dependsOn": ["clean", "typecheck", "^dist"]
     },
+    "publint": {
+      "inputs": [
+        "src/**/*.ts",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        "rollup.config.mjs",
+        "$TURBO_ROOT$/rollup.config.mjs"
+      ],
+      "outputs": [],
+      "outputLogs": "new-only",
+      "dependsOn": ["dist"]
+    },
     "clean": {
       "cache": false,
       "inputs": [],
@@ -65,7 +78,7 @@
       "outputLogs": "new-only"
     },
     "verify": {
-      "dependsOn": ["typecheck", "lint", "test"]
+      "dependsOn": ["typecheck", "lint", "test", "publint"]
     }
   }
 }

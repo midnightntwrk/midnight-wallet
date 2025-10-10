@@ -1,7 +1,8 @@
 import { Effect, Either, HashSet, Option } from 'effect';
-import { UnshieldedStateService } from '../src/UnshieldedState';
-import { UnshieldedTransaction, UtxoNotFoundError } from '../src/model';
-import { generateMockTransaction, getLastStateValue, generateMockUtxo } from './testUtils';
+import { describe, expect, it } from 'vitest';
+import { UnshieldedStateService } from '../src/UnshieldedState.js';
+import { UnshieldedTransaction, UtxoNotFoundError } from '../src/model.js';
+import { generateMockTransaction, generateMockUtxo, getLastStateValue } from './testUtils.js';
 
 /**
  * @TODO: Add tests for:

@@ -1,11 +1,11 @@
-import { describe, vi, it, expect } from 'vitest';
+import { describe, vi, it, expect, afterAll, beforeAll } from 'vitest';
 import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Chunk, Effect, Option, pipe, Stream, Console, Exit, Scope } from 'effect';
-import { makeDefaultSubmissionService } from '../Submission';
+import { makeDefaultSubmissionService } from '../Submission.js';
 import { PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { NodeContext } from '@effect/platform-node';
-import { generateTxs, getTestTxsPath } from '../../test/genTxs';
+import { generateTxs, getTestTxsPath } from '../../test/genTxs.js';
 import { StartedTestContainer } from 'testcontainers';
 import { randomUUID } from 'crypto';
 

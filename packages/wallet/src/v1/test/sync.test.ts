@@ -3,6 +3,7 @@ import * as path from 'node:path';
 import { existsSync } from 'node:fs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { HttpQueryClient, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Connect, Disconnect, ShieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 

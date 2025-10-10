@@ -1,8 +1,8 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
-import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress';
-import { InvalidCoinHashesError, WalletError } from './WalletError';
+import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
+import { InvalidCoinHashesError, WalletError } from './WalletError.js';
 
 export type PublicKeys = {
   coinPublicKey: ledger.CoinPublicKey;

@@ -6,7 +6,7 @@ import { Effect, Either, Layer, pipe } from 'effect';
 import * as os from 'node:os';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
-import { getNonDustImbalance } from './utils';
+import { getNonDustImbalance } from './utils.js';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.3';
 const PROOF_SERVER_PORT: number = 6300;

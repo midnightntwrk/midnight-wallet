@@ -8,18 +8,18 @@ import {
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { ProvingService } from './Proving';
-import { ProvingRecipe } from './ProvingRecipe';
-import { SerializationCapability } from './Serialization';
-import { EventsSyncUpdate, SyncCapability, SyncService } from './Sync';
-import { TransactingCapability, TokenTransfer } from './Transacting';
-import { OtherWalletError, WalletError } from './WalletError';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances';
-import { KeysCapability } from './Keys';
-import { SubmissionService, SubmitTransactionMethod } from './Submission';
+import { ProvingService } from './Proving.js';
+import { ProvingRecipe } from './ProvingRecipe.js';
+import { SerializationCapability } from './Serialization.js';
+import { EventsSyncUpdate, SyncCapability, SyncService } from './Sync.js';
+import { TransactingCapability, TokenTransfer } from './Transacting.js';
+import { OtherWalletError, WalletError } from './WalletError.js';
+import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { KeysCapability } from './Keys.js';
+import { SubmissionService, SubmitTransactionMethod } from './Submission.js';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { CoreWallet } from './CoreWallet';
-import { TransactionHistoryCapability } from './TransactionHistory';
+import { CoreWallet } from './CoreWallet.js';
+import { TransactionHistoryCapability } from './TransactionHistory.js';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;

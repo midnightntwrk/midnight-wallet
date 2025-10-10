@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { dispatch, PolyFunction, WithTag } from './polyFunction';
+import { dispatch, PolyFunction, WithTag } from './polyFunction.js';
 
 /**
  * Heterogeneous list - as in - list, where elements have different types

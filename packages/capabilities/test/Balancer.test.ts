@@ -1,13 +1,14 @@
 import {
-  ShieldedCoinInfo,
   createShieldedCoinInfo,
   QualifiedShieldedCoinInfo,
-  sampleRawTokenType,
-  shieldedToken,
   RawTokenType,
+  sampleRawTokenType,
+  ShieldedCoinInfo,
+  shieldedToken,
 } from '@midnight-ntwrk/ledger-v6';
-import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index';
 import * as fc from 'fast-check';
+import { describe, expect, test } from 'vitest';
+import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index.js';
 
 const createQualifiedCoin = (tokenType: string, value: bigint) => ({
   ...createShieldedCoinInfo(tokenType, value),

@@ -1,18 +1,19 @@
-import { Effect } from 'effect';
 import {
-  ZswapOffer,
-  ZswapOutput,
+  CostModel,
   createShieldedCoinInfo,
+  LedgerParameters,
   sampleCoinPublicKey,
   sampleEncryptionPublicKey,
-  Transaction,
-  LedgerParameters,
   shieldedToken,
-  CostModel,
+  Transaction,
+  ZswapOffer,
+  ZswapOutput,
 } from '@midnight-ntwrk/ledger-v6';
+import { Effect } from 'effect';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
-import * as ProverClient from '../ProverClient';
-import * as HttpProverClient from '../HttpProverClient';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import * as HttpProverClient from '../HttpProverClient.js';
+import * as ProverClient from '../ProverClient.js';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.3';
 const PROOF_SERVER_PORT: number = 6300;

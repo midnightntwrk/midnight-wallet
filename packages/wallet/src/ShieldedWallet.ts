@@ -1,21 +1,21 @@
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1';
+import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1/index.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { ProvingRecipe } from './v1/ProvingRecipe';
-import { SerializationCapability } from './v1/Serialization';
-import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory';
-import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances';
-import { KeysCapability } from './v1/Keys';
+import { ProvingRecipe } from './v1/ProvingRecipe.js';
+import { SerializationCapability } from './v1/Serialization.js';
+import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances.js';
+import { KeysCapability } from './v1/Keys.js';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { SubmissionEvent, SubmissionEventCases } from './v1/Submission';
-import { TokenTransfer } from './v1/Transacting';
-import { WalletSyncUpdate } from './v1/Sync';
+import { SubmissionEvent, SubmissionEventCases } from './v1/Submission.js';
+import { TokenTransfer } from './v1/Transacting.js';
+import { WalletSyncUpdate } from './v1/Sync.js';
 import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 

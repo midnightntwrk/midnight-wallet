@@ -1,2 +1,2 @@
-export * from './InMemoryTransactionHistoryStorage';
-export * from './TransactionHistoryStorage';
+export * from './InMemoryTransactionHistoryStorage.js';
+export * from './TransactionHistoryStorage.js';

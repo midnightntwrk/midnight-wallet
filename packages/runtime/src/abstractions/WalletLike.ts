@@ -1,8 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { Scope } from 'effect';
 import { Observable } from 'rxjs';
-import { Runtime } from '../Runtime';
-import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant';
+import { Runtime } from '../Runtime.js';
+import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant.js';
 import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 

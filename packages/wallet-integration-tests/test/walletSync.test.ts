@@ -1,6 +1,7 @@
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   DefaultV1Configuration,
   DefaultV1Variant,
@@ -16,7 +17,7 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testc
 import os from 'node:os';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
-import { getShieldedSeed } from './utils';
+import { getShieldedSeed } from './utils.js';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 60_000 });
 

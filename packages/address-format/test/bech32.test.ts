@@ -1,5 +1,6 @@
-import addresses from './addresses.json';
-import { MidnightBech32m, ShieldedAddress, ShieldedCoinPublicKey, ShieldedEncryptionSecretKey } from '../src';
+import { describe, expect, it } from 'vitest';
+import { MidnightBech32m, ShieldedAddress, ShieldedCoinPublicKey, ShieldedEncryptionSecretKey } from '../src/index.js';
+import addresses from './addresses.json' with { type: 'json' };
 
 describe('Bech32 addresses', () => {
   it('ShieldedAddress - Bech32 representation should match its Hex representation', () => {

@@ -1,8 +1,8 @@
 import { Effect, Context, Layer, Scope } from 'effect';
 import { print, ExecutionResult } from 'graphql';
 import { createClient, Client, type RequestParams, NetworkError } from 'graphql-http';
-import { QueryClient } from './QueryClient';
-import type { Query } from './Query';
+import { QueryClient } from './QueryClient.js';
+import type { Query } from './Query.js';
 import {
   InvalidProtocolSchemeError,
   ClientError,

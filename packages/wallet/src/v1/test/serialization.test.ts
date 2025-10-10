@@ -1,11 +1,12 @@
-import { OtherWalletError } from '../WalletError';
+import { OtherWalletError } from '../WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, pipe } from 'effect';
 import * as fc from 'fast-check';
-import { makeDefaultV1SerializationCapability } from '../Serialization';
+import { describe, expect, it, vi } from 'vitest';
+import { makeDefaultV1SerializationCapability } from '../Serialization.js';
 import { Either } from 'effect';
-import { CoreWallet } from '../CoreWallet';
+import { CoreWallet } from '../CoreWallet.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 const minutes = (mins: number) => 1_000 * 60 * mins;

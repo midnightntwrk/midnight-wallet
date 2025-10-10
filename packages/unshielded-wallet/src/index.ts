@@ -1,3 +1,3 @@
-export * from './WalletBuilder';
-export { State as UnshieldedWalletState } from './State';
-export { PublicKey, createKeystore, UnshieldedKeystore, Keystore } from './KeyStore';
+export * from './WalletBuilder.js';
+export { State as UnshieldedWalletState } from './State.js';
+export { PublicKey, createKeystore, UnshieldedKeystore, Keystore } from './KeyStore.js';

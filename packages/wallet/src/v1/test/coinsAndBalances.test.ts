@@ -2,8 +2,9 @@ import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Record, Array, pipe } from 'effect';
 import * as fc from 'fast-check';
-import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances';
-import { CoreWallet } from '../CoreWallet';
+import { describe, expect, it } from 'vitest';
+import { makeDefaultCoinsAndBalancesCapability, AvailableCoin, PendingCoin } from '../CoinsAndBalances.js';
+import { CoreWallet } from '../CoreWallet.js';
 
 type ShieldedTokenType = { tokenType: ledger.ShieldedTokenType; value: bigint };
 

@@ -1,10 +1,10 @@
 import { Effect, Exit, Scope, Types } from 'effect';
 import * as rx from 'rxjs';
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions';
-import { StateOf } from './abstractions/Variant';
+import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions/index.js';
+import { StateOf } from './abstractions/Variant.js';
 import { ObservableOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import * as Runtime from './Runtime';
+import * as Runtime from './Runtime.js';
 
 /**
  * Builds a wallet-like implementation from a collection of wallet-like variants, each specific

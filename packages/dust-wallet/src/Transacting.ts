@@ -22,13 +22,13 @@ import {
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { DustCoreWallet } from './DustCoreWallet';
-import { DustToken } from './types/Dust';
-import { TotalCostParameters } from './types/transaction';
-import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances';
-import { KeysCapability } from './Keys';
-import { BindingMarker, ProofMarker, SignatureMarker } from './Utils';
-import { AnyTransaction, NetworkId, UnprovenDustSpend } from './types/ledger';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { DustToken } from './types/Dust.js';
+import { TotalCostParameters } from './types/transaction.js';
+import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
+import { KeysCapability } from './Keys.js';
+import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
+import { AnyTransaction, NetworkId, UnprovenDustSpend } from './types/ledger.js';
 
 export interface TransactingCapability<TSecrets, TState, TTransaction> {
   readonly networkId: NetworkId;

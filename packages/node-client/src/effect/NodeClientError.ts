@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import { SubmissionEvent } from './SubmissionEvent';
+import { SubmissionEvent } from './SubmissionEvent.js';
 
 export class SubmissionError extends Data.TaggedError('SubmissionError')<{
   message: string;

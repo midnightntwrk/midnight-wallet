@@ -9,10 +9,10 @@ import {
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { Simulator, SimulatorState } from './Simulator';
-import { DustCoreWallet } from './DustCoreWallet';
-import { NetworkId } from './types/ledger';
-import { Uint8ArraySchema } from './Serialization';
+import { Simulator, SimulatorState } from './Simulator.js';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { NetworkId } from './types/ledger.js';
+import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError.WalletError, Scope.Scope>;

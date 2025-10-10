@@ -1,13 +1,14 @@
 import { CanAssign, Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
-import { VariantBuilder } from '../abstractions/index';
-import { WalletBuilder } from '../WalletBuilder';
+import { VariantBuilder } from '../abstractions/index.js';
+import { WalletBuilder } from '../WalletBuilder.js';
 import {
   InterceptingVariantBuilder,
   NumericRangeBuilder,
   NumericRangeMultiplierBuilder,
   RangeConfig,
   RangeMultiplierConfig,
-} from '../testing/variants';
+} from '../testing/variants.js';
+import { describe, it } from 'vitest';
 
 describe('WalletBuilder', () => {
   describe('inferring configuration type', () => {

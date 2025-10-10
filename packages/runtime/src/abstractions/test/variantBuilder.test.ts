@@ -1,5 +1,6 @@
 import { HList } from '@midnight-ntwrk/wallet-sdk-utilities';
-import type { Expect, Equal } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import type { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { describe, it } from 'vitest';
 import {
   InterceptingVariant,
   InterceptingVariantBuilder,
@@ -9,9 +10,9 @@ import {
   NumericRangeMultiplierBuilder,
   RangeConfig,
   RangeMultiplierConfig,
-} from '../../testing/variants';
-import { VersionedVariant } from '../Variant';
-import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder';
+} from '../../testing/variants.js';
+import { VersionedVariant } from '../Variant.js';
+import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder.js';
 
 describe('VariantBuilder', () => {
   type Builders = [NumericRangeBuilder, InterceptingVariantBuilder<string, string>, NumericRangeMultiplierBuilder];

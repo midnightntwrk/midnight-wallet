@@ -5,8 +5,8 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
-import { afterAll, beforeAll, describe, it, vi } from 'vitest';
-import { getShieldedSeed } from './utils';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getShieldedSeed } from './utils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });

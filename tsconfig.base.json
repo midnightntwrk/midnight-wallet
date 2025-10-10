@@ -1,8 +1,10 @@
 {
   "extends": "@tsconfig/node20/tsconfig.json",
   "compilerOptions": {
-    "types": ["vitest/globals"],
-    "module": "ESNext",
+    "module": "nodenext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "moduleResolution": "NodeNext",
     "strict": true,
     "declaration": true,
     "declarationMap": true,
@@ -11,8 +13,6 @@
     "noEmit": true,
     "composite": true,
     "resolveJsonModule": true,
-    "target": "ESNext",
-    "moduleResolution": "Bundler",
     "plugins": [
       {
         "name": "@effect/language-service"
@@ -25,7 +25,6 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "ignoreDeprecations": "5.0",
-    "erasableSyntaxOnly": true,
-    "lib": ["ESNext"]
+    "erasableSyntaxOnly": true
   }
 }

@@ -1,4 +1,4 @@
-import type { CoreWallet } from './CoreWallet';
+import type { CoreWallet } from './CoreWallet.js';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,

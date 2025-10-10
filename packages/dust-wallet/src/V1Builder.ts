@@ -10,26 +10,26 @@ import {
   makeDefaultSyncCapability,
   makeDefaultSyncService,
   WalletSyncUpdate,
-} from './Sync';
-import { RunningV1Variant, V1Tag } from './RunningV1Variant';
-import { DustCoreWallet } from './DustCoreWallet';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys';
+} from './Sync.js';
+import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import {
   chooseCoin,
   CoinsAndBalancesCapability,
   CoinSelection,
   makeDefaultCoinsAndBalancesCapability,
-} from './CoinsAndBalances';
+} from './CoinsAndBalances.js';
 import {
   DefaultTransactingConfiguration,
   DefaultTransactingContext,
   makeDefaultTransactingCapability,
   TransactingCapability,
-} from './Transacting';
-import { NetworkId } from './types/ledger';
-import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission';
-import { DustToken } from './types/Dust';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization';
+} from './Transacting.js';
+import { NetworkId } from './types/ledger.js';
+import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission.js';
+import { DustToken } from './types/Dust.js';
+import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
 
 export type BaseV1Configuration = {
   networkId: NetworkId;

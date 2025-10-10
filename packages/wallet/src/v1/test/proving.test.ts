@@ -1,8 +1,9 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect } from 'effect';
-import { makeSimulatorProvingService } from '../Proving';
-import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe';
-import { getNonDustImbalance } from '../../test/testUtils';
+import { describe, expect, it } from 'vitest';
+import { makeSimulatorProvingService } from '../Proving.js';
+import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe.js';
+import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const makeTransaction = () => {

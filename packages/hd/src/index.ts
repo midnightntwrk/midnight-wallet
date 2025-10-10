@@ -1,2 +1,2 @@
-export * from './HDWallet';
-export * from './MnemonicUtils';
+export * from './HDWallet.js';
+export * from './MnemonicUtils.js';

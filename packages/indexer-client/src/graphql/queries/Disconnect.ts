@@ -1,5 +1,5 @@
-import { Query } from '../../effect';
-import { gql } from '../generated';
+import { Query } from '../../effect/index.js';
+import { gql } from '../generated/index.js';
 
 export const Disconnect = Query.make(
   'Disconnect',

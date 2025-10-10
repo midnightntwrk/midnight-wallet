@@ -1,5 +1,5 @@
 import { Data } from 'effect';
-import { VersionChangeType } from './VersionChangeType';
+import { VersionChangeType } from './VersionChangeType.js';
 
 /**
  * A tagged enum data type that represents the state changes across wallet implementation variants.

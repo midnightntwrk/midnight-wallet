@@ -1,17 +1,17 @@
-import { Effect, pipe, Stream, Layer, Deferred, Fiber, Either } from 'effect';
-import { UnshieldedStateDecoder, UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { SyncService, UnshieldedUpdate } from './SyncService';
-import { TransactionService, TokenTransfer } from './TransactionService';
-import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { PublicKey } from './KeyStore';
-import { TransactionHistoryChange, TransactionHistoryService } from './TransactionHistoryService';
-import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage';
-import { State, StateImpl } from './State';
-import { NoOpTransactionHistoryStorage } from './tx-history-storage/NoOpTransactionHistoryStorage';
-import { Observable } from 'rxjs';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedStateDecoder, UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Deferred, Effect, Either, Fiber, Layer, pipe, Stream } from 'effect';
+import { Observable } from 'rxjs';
+import { PublicKey } from './KeyStore.js';
+import { State, StateImpl } from './State.js';
+import { SyncService, UnshieldedUpdate } from './SyncService.js';
+import { TransactionHistoryChange, TransactionHistoryService } from './TransactionHistoryService.js';
+import { TokenTransfer, TransactionService } from './TransactionService.js';
+import { TransactionHash, TransactionHistoryEntry, TransactionHistoryStorage } from './tx-history-storage/index.js';
+import { NoOpTransactionHistoryStorage } from './tx-history-storage/NoOpTransactionHistoryStorage.js';
 
 interface WalletConfig {
   publicKey: PublicKey;

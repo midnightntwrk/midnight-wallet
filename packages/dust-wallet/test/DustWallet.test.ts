@@ -1,5 +1,5 @@
-import { vi } from 'vitest';
-import { beforeEach } from '@vitest/runner';
+import { expect, vi } from 'vitest';
+import { beforeEach, describe, it } from '@vitest/runner';
 import { Effect, Scope, SubscriptionRef, Stream } from 'effect';
 import {
   DustParameters,
@@ -15,13 +15,13 @@ import {
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Proving, ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore';
-import { getDustSeed } from './utils';
-import { V1Builder, Transacting, DustCoreWallet, V1Variant, RunningV1Variant } from '../src';
-import { Simulator, SimulatorState } from '../src/Simulator';
-import { makeSimulatorSyncCapability, makeSimulatorSyncService, SimulatorSyncUpdate } from '../src/Sync';
-import * as Submission from '../src/Submission';
-import { UtxoWithMeta } from '../src/types/Dust';
+import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore.js';
+import { getDustSeed } from './utils.js';
+import { V1Builder, Transacting, DustCoreWallet, V1Variant, RunningV1Variant } from '../src/index.js';
+import { Simulator, SimulatorState } from '../src/Simulator.js';
+import { makeSimulatorSyncCapability, makeSimulatorSyncService, SimulatorSyncUpdate } from '../src/Sync.js';
+import * as Submission from '../src/Submission.js';
+import { UtxoWithMeta } from '../src/types/Dust.js';
 
 vi.setConfig({ testTimeout: 1 * 1000 });
 

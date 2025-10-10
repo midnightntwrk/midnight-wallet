@@ -1,5 +1,6 @@
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as VersionChangeType from '../VersionChangeType';
+import { describe, expect, it } from 'vitest';
+import * as VersionChangeType from '../VersionChangeType.js';
 
 describe('VersionChangeType', () => {
   it('should create a version change with a given protocol version number', () => {

@@ -8,7 +8,7 @@ import {
   UnshieldedTransaction,
   Utxo,
   UtxoNotFoundError,
-} from './model';
+} from './model.js';
 
 export class UnshieldedStateService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshielded-state')<
   UnshieldedStateService,

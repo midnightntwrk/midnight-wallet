@@ -1,5 +1,5 @@
-import { CounterOffer, TransactionCostModel } from './CounterOffer';
-import { CoinRecipe, Imbalance, Imbalances, TokenType, TokenValue } from './Imbalances';
+import { CounterOffer, TransactionCostModel } from './CounterOffer.js';
+import { CoinRecipe, Imbalance, Imbalances, TokenType, TokenValue } from './Imbalances.js';
 
 export class InsufficientFundsError extends Error {
   readonly tokenType: TokenType;

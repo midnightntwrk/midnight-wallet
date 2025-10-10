@@ -1,8 +1,8 @@
 import { Effect, Stream, Context, Layer, Scope } from 'effect';
 import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
-import { SubscriptionClient } from './SubscriptionClient';
-import { Query } from './Query';
+import { SubscriptionClient } from './SubscriptionClient.js';
+import { Query } from './Query.js';
 import {
   InvalidProtocolSchemeError,
   WsURL,

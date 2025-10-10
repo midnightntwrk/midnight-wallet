@@ -1,6 +1,6 @@
 import { pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactionImbalances } from './TransactionImbalances';
+import { TransactionImbalances } from './TransactionImbalances.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 export type TransactionTrait<Tx> = {

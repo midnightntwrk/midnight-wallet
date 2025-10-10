@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
-import * as QueryClient from '../QueryClient';
-import * as HttpQueryClient from '../HttpQueryClient';
+import { describe, it } from 'vitest';
+import * as QueryClient from '../QueryClient.js';
+import * as HttpQueryClient from '../HttpQueryClient.js';
 
 describe('HttpQueryClient', () => {
   describe('layer', () => {

@@ -15,12 +15,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/midnight-ntwrk/artifacts.git"
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
   },
   "exports": {
     ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
   },
   "dependencies": {
@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "eslint": "^9.37.0",
+    "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "testcontainers": "^11.4.0",
     "typescript": "^5.9.3",
@@ -45,6 +46,7 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
     "dist": "tsc -b ./tsconfig.build.json",
-    "clean": "rimraf dist tsconfig.build.tsbuildinfo"
+    "clean": "rimraf dist tsconfig.build.tsbuildinfo",
+    "publint": "publint --strict"
   }
 }

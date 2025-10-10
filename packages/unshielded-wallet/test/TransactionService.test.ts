@@ -1,7 +1,3 @@
-import { UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
-import { blockTime, generateMockTransaction, seedHex } from './testUtils';
-import { TransactionService, TransactionServiceError } from '../src/TransactionService';
-import { Effect, Either, HashSet } from 'effect';
 import {
   addressFromKey,
   Intent,
@@ -18,6 +14,11 @@ import {
   ZswapChainState,
 } from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+import { Effect, Either, HashSet } from 'effect';
+import { describe, expect, it } from 'vitest';
+import { TransactionService, TransactionServiceError } from '../src/TransactionService.js';
+import { blockTime, generateMockTransaction, seedHex } from './testUtils.js';
 
 const strictness = new WellFormedStrictness();
 strictness.enforceBalancing = false;

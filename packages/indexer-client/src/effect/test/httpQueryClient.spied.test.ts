@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
-import * as QueryClient from '../QueryClient';
+import { describe, expect, it, vi } from 'vitest';
+import * as QueryClient from '../QueryClient.js';
 
 vi.mock('graphql-http', () => ({
   createClient: vi.fn(),
@@ -9,7 +10,7 @@ describe('HttpQueryClient', () => {
   describe('layer', () => {
     it('disposes of underlying scoped client', async () => {
       const graphqlHTTP = await import('graphql-http');
-      const SpiedHttpQueryClient = await import('../HttpQueryClient');
+      const SpiedHttpQueryClient = await import('../HttpQueryClient.js');
 
       const dispose = vi.fn();
       const spiedCreateClient = vi

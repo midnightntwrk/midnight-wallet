@@ -1,6 +1,7 @@
+import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { Resource } from '@midnight-ntwrk/wallet';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import {
   createCoinInfo,
   nativeToken,
@@ -19,9 +20,9 @@ import {
   waitForSync,
   waitForTxInHistory,
   walletStateTrimmed,
-} from './utils';
+} from './utils.js';
 import { Wallet } from '@midnight-ntwrk/wallet-api';
-import { logger } from './logger';
+import { logger } from './logger.js';
 import { exit } from 'node:process';
 import * as allure from 'allure-js-commons';
 

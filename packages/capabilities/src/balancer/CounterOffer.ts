@@ -1,4 +1,4 @@
-import { CoinRecipe, Imbalance, Imbalances, TokenType } from './Imbalances';
+import { CoinRecipe, Imbalance, Imbalances, TokenType } from './Imbalances.js';
 
 export interface TransactionCostModel {
   inputFeeOverhead: bigint;

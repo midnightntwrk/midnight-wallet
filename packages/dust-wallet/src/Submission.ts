@@ -7,8 +7,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { FinalizedTransaction, ProofErasedTransaction } from '@midnight-ntwrk/ledger-v6';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { Simulator } from './Simulator';
-import { NetworkId } from './types/ledger';
+import { Simulator } from './Simulator.js';
+import { NetworkId } from './types/ledger.js';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;

@@ -5,11 +5,11 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as path from 'node:path';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { afterAll, beforeAll, describe, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed } from './utils';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { CombinedTokenTransfer, WalletFacade } from '../src';
+import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
