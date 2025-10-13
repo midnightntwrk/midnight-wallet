@@ -47,4 +47,4 @@ jobs:
         run: yarn dist
 
       - name: Publish release
-        run: yarn workspaces foreach --all --topological-dev --no-private npm publish
+        run: yarn workspaces foreach --all --topological-dev --no-private npm publish --tolerate-republish
