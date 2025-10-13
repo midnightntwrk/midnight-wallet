@@ -78,6 +78,7 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
                     intentHash: utxo.intentHash,
                     outputNo: utxo.outputIndex,
                     registeredForDustGeneration: utxo.registeredForDustGeneration,
+                    ctime: utxo.ctime ? utxo.ctime * 1000 : undefined,
                   })),
                   spentUtxos: spentUtxos.map((utxo) => ({
                     value: utxo.value,

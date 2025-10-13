@@ -569,6 +569,7 @@ describe('TransactionService', () => {
           type,
           intentHash,
           outputNo,
+          ctime: Date.now(),
           registeredForDustGeneration: true,
         })),
         spentUtxos: [],

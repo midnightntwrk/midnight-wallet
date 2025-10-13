@@ -83,6 +83,8 @@ export class DustWalletState {
 export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]> {
   readonly state: rx.Observable<DustWalletState>;
 
+  start(secretKey: DustSecretKey): Promise<void>;
+
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
@@ -94,14 +96,14 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>>;
+  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
 
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
     currentTime: Date,
     ttl: Date,
-  ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>>;
+  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
 
   finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction>;
 
@@ -152,6 +154,10 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
       );
     }
 
+    start(secretKey: DustSecretKey): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
+    }
+
     createDustGenerationTransaction(
       currentTime: Date,
       ttl: Date,
@@ -170,7 +176,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     addDustGenerationSignature(
       transaction: UnprovenTransaction,
       signature: Signature,
-    ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>> {
+    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
@@ -183,7 +189,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
       transaction: UnprovenTransaction,
       currentTime: Date,
       ttl: Date,
-    ): Promise<ProvingRecipe.ProvingRecipe<UnprovenTransaction>> {
+    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, currentTime, ttl),

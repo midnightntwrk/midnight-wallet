@@ -41,7 +41,7 @@ describe('BlockHash query', () => {
           Effect.catchSome((err) => (err._tag === 'ClientError' ? Option.some(Effect.succeed(void 0)) : Option.none())),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.flatMap((data) => (data ? Effect.fail('Unexpectedly received data') : Effect.succeed(void 0))),
-          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/a__p__i/v1/graphql` })),
+          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/a__p__i/v3/graphql` })),
           Effect.scoped,
           Effect.runPromise,
         );
@@ -66,7 +66,7 @@ describe('BlockHash query', () => {
 
           expect(result).toEqual(blockExpectation);
         }).pipe(
-          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v1/graphql` })),
+          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v3/graphql` })),
           Effect.scoped,
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
           Effect.runPromise,
@@ -95,7 +95,7 @@ describe('BlockHash query', () => {
       expect(result).toEqual(blockExpectation);
     }).pipe(
       Effect.provideService(BlockHash.tag, mockedQueryFn),
-      Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v1/graphql' })),
+      Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v3/graphql' })),
       Effect.scoped,
       Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
       Effect.runPromise,
@@ -107,7 +107,7 @@ describe('BlockHash query', () => {
       expect(result).toEqual(blockExpectation);
     }).pipe(
       Effect.provideService(BlockHash.tag, mockedQueryFn),
-      Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v1/graphql' })),
+      Effect.provide(HttpQueryClient.layer({ url: 'http://127.0.0.1:8088/a__p__i/v3/graphql' })),
       Effect.scoped,
       Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
       Effect.runPromise,

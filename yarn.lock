@@ -1911,7 +1911,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
+"@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
@@ -1946,6 +1946,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.3"
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:^"
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:^"
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:^"
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:^"
     "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^"
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^"

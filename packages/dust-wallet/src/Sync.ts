@@ -45,13 +45,13 @@ export type SimulatorSyncUpdate = {
 type SecretKeysResource = <A>(cb: (key: DustSecretKey) => A) => A;
 export const SecretKeysResource = {
   create: (secretKey: DustSecretKey): SecretKeysResource => {
-    const sk: DustSecretKey | null = secretKey;
+    let sk: DustSecretKey | null = secretKey;
     return (cb) => {
       if (sk === null || sk === undefined) {
         throw new Error('Secret key has been consumed');
       }
       const result = cb(sk);
-      sk.clear();
+      sk = null;
       return result;
     };
   },
@@ -164,7 +164,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         }),
         Stream.mapEffect((subscription) =>
           pipe(
-            Schema.decodeUnknownEither(SyncEventsUpdateSchema)(subscription),
+            Schema.decodeUnknownEither(SyncEventsUpdateSchema)(subscription.dustLedgerEvents),
             Either.mapLeft((err) => new WalletError.SyncWalletError(err)),
             EitherOps.toEffect,
           ),
@@ -185,15 +185,15 @@ export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, Wall
       // in case the appliedIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
       if (appliedIndex <= state.progress.appliedIndex) {
-        return state.updateProgress({ appliedIndex, highestRelevantWalletIndex });
+        return state.updateProgress({ appliedIndex, highestRelevantWalletIndex, isConnected: true });
       }
 
       const events = [update.raw].filter((event) => event !== null);
-      return secretKeys((keys) => {
-        return state
+      return secretKeys((keys) =>
+        state
           .applyEvents(keys, events, appliedIndex)
-          .updateProgress({ appliedIndex, highestRelevantWalletIndex });
-      });
+          .updateProgress({ appliedIndex, highestRelevantWalletIndex, isConnected: true }),
+      );
     },
   };
 };
@@ -207,12 +207,9 @@ export const makeSimulatorSyncService = (
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<DustCoreWallet, SimulatorSyncUpdate> => {
-  return {
-    applyUpdate: (state: DustCoreWallet, update: SimulatorSyncUpdate) => {
-      return state
-        .applyEvents(update.secretKey, update.update.lastTxResult?.events || [], update.update.lastTxNumber)
-        .updateProgress({ appliedIndex: update.update.lastTxNumber });
-    },
-  };
-};
+export const makeSimulatorSyncCapability = (): SyncCapability<DustCoreWallet, SimulatorSyncUpdate> => ({
+  applyUpdate: (state: DustCoreWallet, update: SimulatorSyncUpdate) =>
+    state
+      .applyEvents(update.secretKey, update.update.lastTxResult?.events || [], update.update.lastTxNumber)
+      .updateProgress({ appliedIndex: update.update.lastTxNumber }),
+});

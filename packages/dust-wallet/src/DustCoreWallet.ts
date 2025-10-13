@@ -35,7 +35,6 @@ export class DustCoreWallet {
   readonly publicKey: PublicKey;
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
 
-  readonly isConnected: boolean;
   readonly progress: SyncProgress.SyncProgress;
   readonly networkId: NetworkId;
   readonly pendingDustTokens: Array<DustTokenWithNullifier>;
@@ -52,7 +51,6 @@ export class DustCoreWallet {
     this.publicKey = publicKey;
     this.networkId = networkId;
     this.pendingDustTokens = pendingDustTokens;
-    this.isConnected = true;
     this.protocolVersion = protocolVersion;
     this.progress = syncProgress ? SyncProgress.createSyncProgress(syncProgress) : SyncProgress.createSyncProgress();
   }

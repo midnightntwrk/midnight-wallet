@@ -96,6 +96,8 @@ const ledgerTry = <A>(fn: () => A): Either.Either<A, TransactionServiceError> =>
   return Either.try({
     try: fn,
     catch: (error) => {
+      // eslint-disable-next-line no-console
+      console.log('Error from ledger', error);
       const message = error instanceof Error ? error.message : `${error?.toString()}`;
       return new TransactionServiceError({ error: `Error from ledger: ${message}`, cause: error });
     },
@@ -324,7 +326,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         }
 
         return pipe(
-          ledgerTry(() => intent.bind(segment)),
+          ledgerTry(() => (isIntentBound(intent) ? intent : intent.bind(segment))),
           Effect.andThen((boundIntent) => ledgerTry(() => boundIntent.signatureData(segment))),
         );
       };

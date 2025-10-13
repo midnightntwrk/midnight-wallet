@@ -161,7 +161,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
-    if (nightUtxos.some(({ utxo }) => utxo.type !== nativeToken().raw)) {
+    if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(WalletError.WalletError.other('Token of a non-Night type received'));
     }
     return Effect.Do.pipe(
@@ -169,7 +169,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       Effect.bind('utxosWithDustValue', ({ currentState }) =>
         LedgerOps.ledgerTry(() => {
           const dustPublicKey = this.#v1Context.keysCapability.getDustPublicKey(currentState);
-          return nightUtxos.map(({ utxo, meta }) => {
+          return nightUtxos.map((utxo) => {
             const genInfo = {
               value: utxo.value,
               owner: dustPublicKey,
@@ -178,7 +178,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             };
 
             const futureTime = DateOps.addSeconds(currentTime, 1);
-            const dustValue = updatedValue(meta.ctime, 0n, genInfo, futureTime, currentState.state.params);
+            const dustValue = updatedValue(utxo.ctime, 0n, genInfo, futureTime, currentState.state.params);
             return { token: utxo, value: dustValue };
           });
         }),
@@ -194,7 +194,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
@@ -205,7 +205,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transaction: UnprovenTransaction,
     currentTime: Date,
     ttl: Date,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, currentTime, ttl),

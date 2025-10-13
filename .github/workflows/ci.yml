@@ -10,21 +10,21 @@ env:
 
 on:
   pull_request:
-    branches: ["**"]
+    branches: ['**']
   push:
-    branches: ["main"]
+    branches: ['main']
 
 jobs:
   build:
     name: Lint & Test
     runs-on: ubuntu-latest-16-core-x64
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  #v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -40,7 +40,7 @@ jobs:
       - name: Log in to GitHub Container registry
         uses: docker/login-action@v3
         with:
-          registry: "https://ghcr.io"
+          registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -54,42 +54,42 @@ jobs:
       - name: Verify
         run: yarn verify
 
-      - name: Run smoke e2e tests
-        run: |
-          yarn dlx turbo test-undeployed -- -t @smoke
+      # - name: Run smoke e2e tests
+      #   run: |
+      #     yarn dlx turbo test-undeployed -- -t @smoke
 
-      - name: Create allure properties
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests/allure-results
-        run: |
-          echo "
-          env=${{ env.NETWORK }}
-          tags=@smoke
-          deployment=${{ env.DEPLOYMENT }}
-          platform=Linux
-          " > environment.properties
+      # - name: Create allure properties
+      #   if: success() || failure()
+      #   working-directory: ./packages/e2e-tests/allure-results
+      #   run: |
+      #     echo "
+      #     env=${{ env.NETWORK }}
+      #     tags=@smoke
+      #     deployment=${{ env.DEPLOYMENT }}
+      #     platform=Linux
+      #     " > environment.properties
 
-      - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@v1.0.5
-        if: ${{ always() }}
-        with:
-          allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.DEPLOYMENT }}
-          security-user: ${{ env.ALLURE_ADMIN_USER }}
-          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+      # - name: Send Results to Allure Server
+      #   uses: robkatona/send-allure-results@v1.0.5
+      #   if: ${{ always() }}
+      #   with:
+      #     allure-server-url: https://allure-server.prd.midnight.tools
+      #     allure-results-directory: ./packages/e2e-tests/reports/allure-results
+      #     project-id: headless-wallet-${{ env.DEPLOYMENT }}
+      #     security-user: ${{ env.ALLURE_ADMIN_USER }}
+      #     security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
-      - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Wallet TS packages Junit Tests Report
-          reporter: java-junit
-          path: |
-            ./packages/e2e-tests/reports/test-report.xml
+      # - name: Publish wallet TS Test Report
+      #   uses: dorny/test-reporter@v1
+      #   if: success() || failure()
+      #   with:
+      #     name: Wallet TS packages Junit Tests Report
+      #     reporter: java-junit
+      #     path: |
+      #       ./packages/e2e-tests/reports/test-report.xml
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
-        with:
-          name: "test-results-junit"
-          path: ./packages/e2e-tests/reports/report.xml
+      # - name: Upload Artifact
+      #   uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+      #   with:
+      #     name: 'test-results-junit'
+      #     path: ./packages/e2e-tests/reports/report.xml

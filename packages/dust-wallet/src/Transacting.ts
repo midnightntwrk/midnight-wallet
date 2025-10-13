@@ -18,6 +18,7 @@ import {
   FinalizedTransaction,
   ProofErasedTransaction,
   UnprovenTransaction,
+  addressFromKey,
 } from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -44,7 +45,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError>;
+  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError>;
 
   addFeePayment(
     secretKey: TSecrets,
@@ -53,7 +54,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     currentTime: Date,
     ttl: Date,
   ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: TState },
+    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
     WalletError.WalletError
   >;
 
@@ -138,7 +139,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
         const intent = Intent.new(ttl);
-        const nightOwner = nightUtxos.at(0)!.token.owner;
+        // const nightOwner = nightUtxos.at(0)!.token.owner;
         const totalDustValue = nightUtxos.reduce((total, { value }) => total + value, 0n);
         const inputs: UtxoSpend[] = nightUtxos.map(({ token: utxo }) => ({
           ...utxo,
@@ -146,7 +147,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         }));
 
         const outputs: UtxoOutput[] = inputs.map((input) => ({
-          owner: nightOwner,
+          owner: addressFromKey(nightVerifyingKey),
           type: input.type,
           value: input.value,
         }));
@@ -177,7 +178,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signatureData: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<UnprovenTransaction>, WalletError.WalletError> {
+  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return Either.gen(this, function* () {
       const intent = transaction.intents?.get(1);
       if (!intent) {
@@ -186,9 +187,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
       }
 
-      const { dustActions } = intent;
+      const { dustActions, guaranteedUnshieldedOffer } = intent;
       if (!dustActions) {
         return yield* Either.left(new WalletError.TransactingError({ error: 'No dustActions found in intent' }));
+      }
+
+      if (!guaranteedUnshieldedOffer) {
+        return yield* Either.left(
+          new WalletError.TransactingError({ error: 'No guaranteedUnshieldedOffer found in intent' }),
+        );
       }
 
       const [registration, ...restRegistrations] = dustActions.registrations;
@@ -221,6 +228,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
         newIntent.dustActions = newDustActions;
 
+        const inputsLen = guaranteedUnshieldedOffer.inputs.length;
+        const signatures: Signature[] = [];
+        for (let i = 0; i < inputsLen; ++i) {
+          signatures.push(guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData);
+        }
+        newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
+
         const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
           signature.instance,
           ProofMarker.preProof,
@@ -244,7 +258,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     currentTime: Date,
     ttl: Date,
   ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<UnprovenTransaction>; newState: DustCoreWallet },
+    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
     WalletError.WalletError
   > {
     const network = this.networkId;

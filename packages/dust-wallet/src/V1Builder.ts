@@ -30,9 +30,11 @@ import { NetworkId } from './types/ledger.js';
 import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission.js';
 import { DustToken } from './types/Dust.js';
 import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
+import { TotalCostParameters } from './types/transaction.js';
 
 export type BaseV1Configuration = {
   networkId: NetworkId;
+  costParameters: TotalCostParameters;
 };
 
 export type DefaultV1Configuration = BaseV1Configuration;

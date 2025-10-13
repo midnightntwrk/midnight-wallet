@@ -59,8 +59,8 @@ describe.skip('Wallet subscription', () => {
         }).pipe(
           Effect.provide(
             Layer.mergeAll(
-              HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v1/graphql` }),
-              WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v1/graphql/ws` }),
+              HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v3/graphql` }),
+              WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v3/graphql/ws` }),
             ),
           ),
           Effect.scoped,

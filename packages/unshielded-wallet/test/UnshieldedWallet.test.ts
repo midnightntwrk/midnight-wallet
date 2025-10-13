@@ -32,7 +32,7 @@ describe('UnshieldedWallet', () => {
     const keystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
 
     const wallet = await WalletBuilder.build({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
       txHistoryStorage,
@@ -63,7 +63,7 @@ describe('UnshieldedWallet', () => {
     const keystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
 
     const initialWallet = await WalletBuilder.build({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
       txHistoryStorage,
@@ -93,7 +93,7 @@ describe('UnshieldedWallet', () => {
     const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.fromSerialized(serializedTxHistory);
 
     const restoredWallet = await WalletBuilder.restore({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
       serializedState,
@@ -115,7 +115,7 @@ describe('UnshieldedWallet', () => {
   it('should instantiate without transaction history service', async () => {
     const keystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
     const wallet = await WalletBuilder.build({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
     });
@@ -143,7 +143,7 @@ describe('UnshieldedWallet', () => {
   it('should restore from serialized state', async () => {
     const keystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
     const initialWallet = await WalletBuilder.build({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
     });
@@ -168,7 +168,7 @@ describe('UnshieldedWallet', () => {
     await initialWallet.stop();
 
     const restoredWallet = await WalletBuilder.restore({
-      indexerUrl: `ws://localhost:${indexerPort}/api/v1/graphql/ws`,
+      indexerUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
       publicKey: PublicKey.fromKeyStore(keystore),
       networkId: NetworkId.NetworkId.Undeployed,
       serializedState,

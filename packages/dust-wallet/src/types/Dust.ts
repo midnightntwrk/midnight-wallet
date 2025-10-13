@@ -1,4 +1,4 @@
-import { DustInitialNonce, DustNullifier, DustNonce, DustPublicKey, Utxo, UtxoMeta } from '@midnight-ntwrk/ledger-v6';
+import { DustInitialNonce, DustNullifier, DustNonce, DustPublicKey, Utxo } from '@midnight-ntwrk/ledger-v6';
 
 export type DustToken = {
   initialValue: bigint;
@@ -30,7 +30,4 @@ export type DustGenerationInfo = {
   dtime: Date | undefined;
 };
 
-export type UtxoWithMeta = {
-  utxo: Utxo;
-  meta: UtxoMeta;
-};
+export type UtxoWithMeta = Utxo & { ctime: Date };

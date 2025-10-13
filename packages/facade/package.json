@@ -27,6 +27,7 @@
     "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.3",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:^",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^",
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^",

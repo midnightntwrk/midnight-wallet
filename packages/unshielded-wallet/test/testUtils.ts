@@ -37,6 +37,7 @@ export const generateMockUtxo = (owner: string, type: string): Utxo => ({
   type: type,
   intentHash: sampleIntentHash(),
   outputNo: Math.floor(Math.random() * 100),
+  ctime: Date.now(),
   registeredForDustGeneration: true,
 });
 

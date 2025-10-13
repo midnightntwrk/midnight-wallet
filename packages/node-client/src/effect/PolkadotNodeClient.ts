@@ -18,6 +18,7 @@ import * as NodeClient from './NodeClient.js';
 import * as SubmissionEvent from './SubmissionEvent.js';
 import * as NodeClientError from './NodeClientError.js';
 import BN from 'bn.js';
+import { u8aToHex } from '@polkadot/util';
 
 export type Config = {
   nodeURL: URL;
@@ -97,7 +98,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
       (emit) => {
         const callUnsubscribe = () => unsubscribeP.then((thunk) => thunk());
         const unsubscribeP: Promise<() => void> = this.api.tx.midnight
-          .sendMnTransaction(serializedTransaction)
+          .sendMnTransaction(u8aToHex(serializedTransaction))
           .send(this.#handleSubmissionResult(serializedTransaction, emit, callUnsubscribe))
           .catch((err) => {
             return emit

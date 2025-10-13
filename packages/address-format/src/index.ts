@@ -240,10 +240,6 @@ export class UnshieldedAddress {
   get hexString(): UserAddress {
     return this.data.toString('hex');
   }
-
-  get hexStringVersioned(): UserAddress {
-    return `0200${this.data.toString('hex')}`;
-  }
 }
 
 export class DustAddress {

@@ -42,7 +42,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
     if (utxo.type === NIGHT_TOKEN_TYPE) {
       const meta = state.ledger.utxo.lookupMeta(utxo);
       if (meta) {
-        result.push({ utxo, meta });
+        result.push({ ...utxo, ctime: meta.ctime });
       }
     }
   }
@@ -143,7 +143,7 @@ describe('DustWallet', () => {
   it('should build', async () => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
-      expect(lastState.isConnected).toBe(true);
+      expect(lastState).toBeTruthy();
     }).pipe(Effect.runPromise);
   });
 
@@ -294,7 +294,6 @@ describe('DustWallet', () => {
         toTxTime(3),
         ttl,
       )) as ProvingRecipe.TransactionToProve;
-
       const transaction = yield* wallet.finalizeTransaction({
         type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
         transaction: transactionWithFee.transaction.eraseProofs(),

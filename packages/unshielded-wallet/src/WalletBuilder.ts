@@ -25,17 +25,12 @@ export interface UnshieldedWallet {
   stop(): Promise<void>;
   serializeState(): Promise<string>;
   state: () => Observable<State>;
-  transferTransaction(
-    outputs: TokenTransfer[],
-    ttl: Date,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>>;
-  balanceTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>>;
+  transferTransaction(outputs: TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
+  balanceTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.UnprovenTransaction>;
   signTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
+    tx: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>>;
+  ): Promise<ledger.UnprovenTransaction>;
   transactionHistory:
     | undefined
     | {
@@ -130,9 +125,9 @@ const makeWallet = ({
 
         const mappedOutputs = outputs.map((output) => ({
           ...output,
-          receiverAddress: `0200${UnshieldedAddress.codec
+          receiverAddress: UnshieldedAddress.codec
             .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
-            .data.toString('hex')}`,
+            .data.toString('hex'),
         }));
 
         const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl, networkId);
@@ -140,21 +135,16 @@ const makeWallet = ({
         return yield* transactionService.balanceTransaction(
           transaction,
           unshieldedState,
-          publicKey.address.hexStringVersioned,
+          publicKey.address.hexString,
           publicKey.publicKey,
         );
       });
 
-    const balanceTransaction = (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>) =>
-      transactionService.balanceTransaction(
-        tx,
-        unshieldedState,
-        publicKey.address.hexStringVersioned,
-        publicKey.publicKey,
-      );
+    const balanceTransaction = (tx: ledger.UnprovenTransaction) =>
+      transactionService.balanceTransaction(tx, unshieldedState, publicKey.address.hexString, publicKey.publicKey);
 
     const signTransaction = (
-      tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
+      tx: ledger.UnprovenTransaction,
       signSegment: (data: Uint8Array) => Effect.Effect<ledger.Signature, Error>,
     ) =>
       Effect.gen(function* () {
@@ -169,7 +159,8 @@ const makeWallet = ({
           tx = yield* transactionService.addOfferSignature(tx, signature, segment);
         }
 
-        return yield* transactionService.bindTransaction(tx);
+        // return yield* transactionService.bindTransaction(tx);
+        return tx;
       });
 
     const transactionHistory = txHistoryStorage
@@ -191,12 +182,9 @@ const makeWallet = ({
       stop: () => Effect.runPromise(stop()),
       transferTransaction: (outputs: TokenTransfer[], ttl: Date) =>
         Effect.runPromise(transferTransaction(outputs, ttl)),
-      balanceTransaction: (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>) =>
-        Effect.runPromise(balanceTransaction(tx)),
-      signTransaction: (
-        tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>,
-        signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
-      ) => Effect.runPromise(signTransaction(tx, (data) => Effect.tryPromise(() => signSegment(data)))),
+      balanceTransaction: (tx: ledger.UnprovenTransaction) => Effect.runPromise(balanceTransaction(tx)),
+      signTransaction: (tx: ledger.UnprovenTransaction, signSegment: (data: Uint8Array) => Promise<ledger.Signature>) =>
+        Effect.runPromise(signTransaction(tx, (data) => Effect.tryPromise(() => signSegment(data)))),
       serializeState: () => Effect.runPromise(state.serialize()),
       transactionHistory,
     };

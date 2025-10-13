@@ -119,14 +119,14 @@ export class TestContainersFixture {
   public getIndexerUri(): string {
     switch (TestContainersFixture.deployment) {
       case 'testnet': {
-        return 'https://indexer.testnet-02.midnight.network/api/v1/graphql';
+        return 'https://indexer.testnet-02.midnight.network/api/v3/graphql';
       }
       case 'qanet': {
-        return 'https://indexer-rs.qanet.dev.midnight.network/api/v1/graphql';
+        return 'https://indexer-rs.qanet.dev.midnight.network/api/v3/graphql';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
-        return `http://localhost:${indexerPort}/api/v1/graphql`;
+        return `http://localhost:${indexerPort}/api/v3/graphql`;
       }
     }
   }
@@ -134,14 +134,14 @@ export class TestContainersFixture {
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.deployment) {
       case 'testnet': {
-        return 'wss://indexer.testnet-02.midnight.network/api/v1/graphql/ws';
+        return 'wss://indexer.testnet-02.midnight.network/api/v3/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer-rs.qanet.dev.midnight.network/api/v1/graphql/ws';
+        return 'wss://indexer-rs.qanet.dev.midnight.network/api/v3/graphql/ws';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
-        return `ws://localhost:${indexerPort}/api/v1/graphql/ws`;
+        return `ws://localhost:${indexerPort}/api/v3/graphql/ws`;
       }
     }
   }
