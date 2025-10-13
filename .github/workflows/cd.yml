@@ -14,7 +14,7 @@ jobs:
     name: Build & Publish
     runs-on: ubuntu-latest-8-core-x64
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  #v5.0.0
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
       - uses: actions/setup-node@v4
         with:
@@ -47,19 +47,4 @@ jobs:
         run: yarn dist
 
       - name: Publish release
-        run: |
-          # yarn workspace @midnight-ntwrk/wallet npm publish || echo "Publishing @midnight-ntwrk/wallet failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-hd npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-hd failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-capabilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-capabilities failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-address-format npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-address-format failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-indexer-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-indexer-client failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-unshielded-state npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-unshielded-state failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-unshielded-wallet npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-unshielded-wallet failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-shielded npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-shielded failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-abstractions npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-abstractions failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-prover-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-prover-client failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-facade npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-facade failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-node-client npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-node-client failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-dust-wallet npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-dust-wallet failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-runtime npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-runtime failed"
-          yarn workspace @midnight-ntwrk/wallet-sdk-utilities npm publish || echo "Publishing @midnight-ntwrk/wallet-sdk-utilities failed"
+        run: yarn workspaces foreach --all --topological-dev --no-private npm publish

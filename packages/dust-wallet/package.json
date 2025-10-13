@@ -9,13 +9,13 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
+  "files": [
+    "dist/"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
   },
-  "files": [
-    "dist/"
-  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
