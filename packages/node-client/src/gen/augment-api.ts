@@ -4,6 +4,6 @@
  * Then manually modified to only expose types and endpoints of interest
  */
 
-import './augment-api-errors';
-import './augment-api-query';
-import './augment-api-tx';
+import './augment-api-errors.js';
+import './augment-api-query.js';
+import './augment-api-tx.js';

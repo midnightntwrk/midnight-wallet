@@ -1,4 +1,4 @@
-import '../gen/augment-api';
+import '../gen/augment-api.js';
 
 import { ApiPromise, SubmittableResult, WsProvider } from '@polkadot/api';
 import {

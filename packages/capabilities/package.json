@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "2.0.0-beta.4",
+  "version": "3.0.0-beta.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
