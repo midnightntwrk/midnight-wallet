@@ -2,7 +2,6 @@ import { expect, vi } from 'vitest';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { Effect, Scope, SubscriptionRef, Stream } from 'effect';
 import {
-  DustParameters,
   DustSecretKey,
   Intent,
   LedgerParameters,
@@ -60,11 +59,11 @@ type WalletVariant = V1Variant<string, SimulatorSyncUpdate, ProofErasedTransacti
 type RunningWallet = RunningV1Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
 
 describe('DustWallet', () => {
-  const dustParameters = new DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
   const costParameters = {
-    ledgerParams: LedgerParameters.initialParameters(),
     additionalFeeOverhead: 300_000_000_000_000n,
+    feeBlocksMargin: 5,
   };
+  const dustParameters = LedgerParameters.initialParameters().dust;
   let walletVariant: WalletVariant;
   let wallet: RunningWallet;
   let stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>;

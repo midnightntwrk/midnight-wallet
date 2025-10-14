@@ -8,6 +8,7 @@ export const BlockHash = Query.make(
       block(offset: $offset) {
         height
         hash
+        ledgerParameters
       }
     }
   `),

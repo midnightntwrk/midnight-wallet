@@ -11,10 +11,17 @@ import {
   TransactionResult,
   TransactionContext,
   ProofErasedTransaction,
+  SyntheticCost,
+  LedgerParameters,
 } from '@midnight-ntwrk/ledger-v6';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { NetworkId } from './types/ledger.js';
+
+// TODO: remove on the next ledger release
+interface LedgerStateWithParameters extends LedgerState {
+  parameters: LedgerParameters;
+}
 
 export type SimulatorState = Readonly<{
   networkId: NetworkId;
@@ -65,13 +72,19 @@ export class Simulator {
     });
   }
 
+  static ledgerParameters(simulatorState: SimulatorState): LedgerParameters {
+    return (simulatorState.ledger as LedgerStateWithParameters).parameters;
+  }
+
   static apply(
     simulatorState: SimulatorState,
     tx: ProofErasedTransaction,
     strictness: WellFormedStrictness,
     blockContext: BlockContext,
+    blockFullness?: SyntheticCost,
   ): Either.Either<[{ blockNumber: bigint; blockHash: string }, SimulatorState], LedgerOps.LedgerError> {
     return LedgerOps.ledgerTry(() => {
+      blockFullness = blockFullness ?? tx.cost(Simulator.ledgerParameters(simulatorState));
       const blockNumber = blockContext.secondsSinceEpoch;
       const blockTime = DateOps.secondsToDate(blockNumber);
       const verifiedTransaction = tx.wellFormed(simulatorState.ledger, strictness, blockTime);
@@ -80,7 +93,7 @@ export class Simulator {
 
       const newSimulatorState = {
         ...simulatorState,
-        ledger: newLedgerState.postBlockUpdate(blockTime),
+        ledger: newLedgerState.postBlockUpdate(blockTime, blockFullness),
         lastTx: tx,
         lastTxResult: txResult,
         lastTxNumber: blockNumber,
@@ -142,12 +155,13 @@ export class Simulator {
 
   submitRegularTx(
     tx: ProofErasedTransaction,
+    blockFullness?: SyntheticCost,
   ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, LedgerOps.LedgerError> {
     return SubscriptionRef.modifyEffect(this.#stateRef, (simulatorState) =>
       Effect.gen(function* () {
         const nextNumber = DateOps.secondsToDate(simulatorState.lastTxNumber + 1n);
         const context = yield* Simulator.nextBlockContext(nextNumber);
-        return yield* Simulator.apply(simulatorState, tx, new WellFormedStrictness(), context);
+        return yield* Simulator.apply(simulatorState, tx, new WellFormedStrictness(), context, blockFullness);
       }),
     );
   }

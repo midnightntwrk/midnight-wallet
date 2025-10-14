@@ -14,7 +14,7 @@ import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-
  * Learn more about it here: https://the-guild.dev/graphql/codegen/plugins/presets/preset-client#reducing-bundle-size
  */
 type Documents = {
-  '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  ': typeof types.BlockHashDocument;
+  '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n      }\n    }\n  ': typeof types.BlockHashDocument;
   '\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ': typeof types.ConnectDocument;
   '\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  ': typeof types.DisconnectDocument;
   '\n    subscription DustLedgerEvents($id: Int) {\n      dustLedgerEvents(id: $id) {\n        type: __typename\n        id\n        raw\n        maxId\n      }\n    }\n  ': typeof types.DustLedgerEventsDocument;
@@ -23,7 +23,7 @@ type Documents = {
   '\n    subscription ZswapEvents($id: Int) {\n      zswapLedgerEvents(id: $id) {\n        id\n        raw\n        maxId\n      }\n    }\n  ': typeof types.ZswapEventsDocument;
 };
 const documents: Documents = {
-  '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  ':
+  '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n      }\n    }\n  ':
     types.BlockHashDocument,
   '\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ':
     types.ConnectDocument,
@@ -57,8 +57,8 @@ export function gql(source: string): unknown;
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(
-  source: '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  ',
-): (typeof documents)['\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n      }\n    }\n  '];
+  source: '\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n      }\n    }\n  ',
+): (typeof documents)['\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n      }\n    }\n  '];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

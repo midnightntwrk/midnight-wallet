@@ -1,12 +1,14 @@
 import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream } from 'effect';
-import { DustSecretKey, Event as LedgerEvent } from '@midnight-ntwrk/ledger-v6';
-import { DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v6';
+import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
+  HttpQueryClient,
   ConnectionHelper,
   SubscriptionClient,
+  QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Simulator, SimulatorState } from './Simulator.js';
@@ -16,6 +18,7 @@ import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError.WalletError, Scope.Scope>;
+  ledgerParameters: () => Effect.Effect<LedgerParameters, WalletError.WalletError>;
 }
 
 export interface SyncCapability<TState, TUpdate> {
@@ -123,6 +126,25 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
+    ledgerParameters: (): Effect.Effect<LedgerParameters, WalletError.WalletError> => {
+      return Effect.gen(function* () {
+        const query = yield* BlockHash;
+        const result = yield* query({ offset: null });
+        return result.block?.ledgerParameters;
+      }).pipe(
+        Effect.provide(indexerSyncService.queryClient()),
+        Effect.scoped,
+        Effect.catchAll((err) =>
+          Effect.fail(WalletError.WalletError.other(`Encountered unexpected error: ${err.message}`)),
+        ),
+        Effect.flatMap((ledgerParameters) => {
+          if (ledgerParameters === undefined) {
+            return Effect.fail(WalletError.WalletError.other('Unable to fetch ledger parameters'));
+          }
+          return LedgerOps.ledgerTry(() => LedgerParameters.deserialize(Buffer.from(ledgerParameters, 'hex')));
+        }),
+      );
+    },
   };
 };
 
@@ -131,10 +153,17 @@ export type IndexerSyncService = {
   subscribeWallet: (
     state: DustCoreWallet,
   ) => Stream.Stream<WalletSyncSubscription, WalletError.WalletError, Scope.Scope | SubscriptionClient>;
+  queryClient: () => Layer.Layer<QueryClient, WalletError.WalletError, Scope.Scope>;
 };
 
 export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
   return {
+    queryClient(): Layer.Layer<QueryClient, WalletError.WalletError, Scope.Scope> {
+      return pipe(
+        HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl }),
+        Layer.mapError((error) => WalletError.WalletError.other(error)),
+      );
+    },
     connectionLayer(): Layer.Layer<SubscriptionClient, WalletError.WalletError, Scope.Scope> {
       const { indexerClientConnection } = config;
 
@@ -204,6 +233,11 @@ export const makeSimulatorSyncService = (
   return {
     updates: (_state: DustCoreWallet, secretKey: DustSecretKey) =>
       config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
+    ledgerParameters: (): Effect.Effect<LedgerParameters> =>
+      pipe(
+        config.simulator.getLatestState(),
+        Effect.map((state) => Simulator.ledgerParameters(state)),
+      ),
   };
 };
 

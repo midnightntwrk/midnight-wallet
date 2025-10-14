@@ -208,8 +208,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, currentTime, ttl),
-        EitherOps.toEffect,
+        this.#v1Context.syncService.ledgerParameters(),
+        Effect.flatMap((params) =>
+          this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, currentTime, ttl, params),
+        ),
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );
     });

@@ -1,6 +1,5 @@
-import { LedgerParameters } from '@midnight-ntwrk/ledger-v6';
-
 export type TotalCostParameters = {
-  ledgerParams: LedgerParameters;
   additionalFeeOverhead: bigint;
+  // a number of blocks we expect for finalization.
+  feeBlocksMargin: number;
 };

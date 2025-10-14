@@ -82,11 +82,11 @@ describe('Wallet Facade Transfer', () => {
     const Dust = DustWallet({
       ...configuration,
       costParameters: {
-        ledgerParams: ledger.LedgerParameters.initialParameters(),
         additionalFeeOverhead: 300_000_000_000_000n,
+        feeBlocksMargin: 5,
       },
     });
-    const dustParameters = new ledger.DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
+    const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     const dustSender = Dust.startWithSeed(dustSenderSeed, dustParameters, NetworkId.NetworkId.Undeployed);
     const dustReceiver = Dust.startWithSeed(dustReceiverSeed, dustParameters, NetworkId.NetworkId.Undeployed);
 

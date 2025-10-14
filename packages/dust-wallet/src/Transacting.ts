@@ -19,6 +19,7 @@ import {
   ProofErasedTransaction,
   UnprovenTransaction,
   addressFromKey,
+  LedgerParameters,
 } from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -53,6 +54,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     transaction: UnprovenTransaction,
     currentTime: Date,
     ttl: Date,
+    ledgerParams: LedgerParameters,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
     WalletError.WalletError
@@ -257,12 +259,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     transaction: UnprovenTransaction,
     currentTime: Date,
     ttl: Date,
+    ledgerParams: LedgerParameters,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
     WalletError.WalletError
   > {
     const network = this.networkId;
-    const feeTotal = transaction.fees(this.costParams.ledgerParams) + this.costParams.additionalFeeOverhead;
+    const feeTotal =
+      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead;
     const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
     const fee = dustImbalance ? -dustImbalance[1] : feeTotal;
 
@@ -280,7 +284,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     }
 
     // reduce the largest token's value by `feeDiff`
-    const tokensWithFeeToTake = [...selectedTokens].sort((a, b) => Number(b.value - a.value));
+    const tokensWithFeeToTake = selectedTokens.toSorted((a, b) => Number(b.value - a.value));
     if (feeDiff > 0n) {
       const highestByValue = tokensWithFeeToTake[0];
       tokensWithFeeToTake[0] = {
