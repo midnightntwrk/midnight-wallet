@@ -179,20 +179,20 @@ export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, Wall
   return {
     applyUpdate(state: DustCoreWallet, wrappedUpdate: WalletSyncUpdate): DustCoreWallet {
       const { update, secretKeys } = wrappedUpdate;
-      const appliedIndex = BigInt(update.id);
+      const nextIndex = BigInt(update.id);
       const highestRelevantWalletIndex = BigInt(update.maxId);
 
-      // in case the appliedIndex is less than or equal to the current appliedIndex
+      // in case the nextIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
-      if (appliedIndex <= state.progress.appliedIndex) {
-        return state.updateProgress({ appliedIndex, highestRelevantWalletIndex, isConnected: true });
+      if (nextIndex <= state.progress.appliedIndex) {
+        return state.updateProgress({ highestRelevantWalletIndex, isConnected: true });
       }
 
       const events = [update.raw].filter((event) => event !== null);
       return secretKeys((keys) =>
         state
-          .applyEvents(keys, events, appliedIndex)
-          .updateProgress({ appliedIndex, highestRelevantWalletIndex, isConnected: true }),
+          .applyEvents(keys, events, nextIndex)
+          .updateProgress({ appliedIndex: nextIndex, highestRelevantWalletIndex, isConnected: true }),
       );
     },
   };

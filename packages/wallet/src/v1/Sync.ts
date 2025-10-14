@@ -189,13 +189,12 @@ export const makeEventsSyncService = (
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
-      const nextAppliedIndex = BigInt(wrappedUpdate.update.id);
+      const nextIndex = BigInt(wrappedUpdate.update.id);
       const highestRelevantWalletIndex = BigInt(wrappedUpdate.update.maxId);
-      // in case the nextAppliedIndex is less than or equal to the appliedIndex
+      // in case the nextIndex is less than or equal to the appliedIndex
       // just update highestRelevantWalletIndex
-      if (nextAppliedIndex <= state.progress.appliedIndex) {
+      if (nextIndex <= state.progress.appliedIndex) {
         return CoreWallet.updateProgress(state, {
-          appliedIndex: nextAppliedIndex,
           highestRelevantWalletIndex,
           isConnected: true,
         });
@@ -204,7 +203,7 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       return wrappedUpdate.secretKeys((keys) => {
         return CoreWallet.updateProgress(CoreWallet.replayEvents(state, keys, [wrappedUpdate.update.event]), {
           highestRelevantWalletIndex,
-          appliedIndex: nextAppliedIndex,
+          appliedIndex: nextIndex,
           isConnected: true,
         });
       });
