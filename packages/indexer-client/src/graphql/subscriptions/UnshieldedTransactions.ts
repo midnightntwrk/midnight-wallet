@@ -39,6 +39,7 @@ export const UnshieldedTransactions = Subscription.make(
             value
             outputIndex
             intentHash
+            ctime
             registeredForDustGeneration
           }
         }

@@ -89,10 +89,10 @@ export class DustCoreWallet {
     );
   }
 
-  applyEvents(secretKey: DustSecretKey, events: Event[], blockNumber: bigint): DustCoreWallet {
+  applyEvents(secretKey: DustSecretKey, events: Event[], currentTime: Date): DustCoreWallet {
     if (!events.length) return this;
 
-    const updatedState = this.state.replayEvents(secretKey, events).processTtls(DateOps.secondsToDate(blockNumber));
+    const updatedState = this.state.replayEvents(secretKey, events).processTtls(currentTime);
 
     let updatedPending = this.pendingDustTokens;
     if (updatedPending.length) {

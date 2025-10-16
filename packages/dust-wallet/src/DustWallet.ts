@@ -49,7 +49,7 @@ export class DustWalletState {
   }
 
   get pendingCoins(): readonly DustToken[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
+    return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
   }
 
   get dustPublicKey(): DustPublicKey {
