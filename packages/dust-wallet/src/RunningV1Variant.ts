@@ -10,7 +10,7 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   WalletRuntimeError,
   Variant,
@@ -176,9 +176,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               nonce: LedgerOps.randomNonce(),
               dtime: undefined,
             };
-
-            const futureTime = DateOps.addSeconds(currentTime, 1);
-            const dustValue = updatedValue(utxo.ctime, 0n, genInfo, futureTime, currentState.state.params);
+            const dustValue = updatedValue(utxo.ctime, 0n, genInfo, currentTime, currentState.state.params);
             return { token: utxo, value: dustValue };
           });
         }),

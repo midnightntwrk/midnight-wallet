@@ -81,8 +81,7 @@ export const makeDefaultCoinsAndBalancesCapability = (): CoinsAndBalancesCapabil
     for (const coin of available) {
       const genInfo = getGenerationInfo(state, coin);
       if (genInfo) {
-        const futureTime = DateOps.addSeconds(currentTime, 1);
-        const generatedValue = updatedValue(coin.ctime, coin.initialValue, genInfo, futureTime, state.state.params);
+        const generatedValue = updatedValue(coin.ctime, coin.initialValue, genInfo, currentTime, state.state.params);
         result.push({ token: coin, value: generatedValue });
       }
     }

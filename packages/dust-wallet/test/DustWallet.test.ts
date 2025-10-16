@@ -48,10 +48,12 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
   return result;
 };
 
-const toTxTime = (id: number | bigint): Date => new Date(Number(id) * 1000);
+const toTxTime = (secs: number | bigint): Date => new Date(Number(secs) * 1000);
 
-const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>, txId: number) => {
-  const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txId)));
+const getCurrentTime = (simulatorState: SimulatorState) => DateOps.addSeconds(toTxTime(simulatorState.lastTxNumber), 1);
+
+const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>, txTime: number) => {
+  const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txTime)));
   return Stream.runLast(stream);
 };
 
@@ -74,7 +76,7 @@ describe('DustWallet', () => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
       const simulatorState = yield* simulator.getLatestState();
-      const currentTime = toTxTime(simulatorState.lastTxNumber);
+      const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
       const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
@@ -281,7 +283,8 @@ describe('DustWallet', () => {
           value: sendToken!.value,
         },
       ];
-      const ttl = toTxTime(4);
+      const currentTime = getCurrentTime(simulatorState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
       const intent = Intent.new(ttl);
       intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
@@ -290,7 +293,7 @@ describe('DustWallet', () => {
       const transactionWithFee = (yield* wallet.addFeePayment(
         dustSecretKey,
         transferTransaction,
-        toTxTime(3),
+        currentTime,
         ttl,
       )) as ProvingRecipe.TransactionToProve;
       const transaction = yield* wallet.finalizeTransaction({
@@ -301,14 +304,14 @@ describe('DustWallet', () => {
       yield* wallet.submitTransaction(transaction);
       yield* waitForTx(stateRef, 4);
 
-      const latestSimulatorState = yield* simulator.getLatestState();
-      expect(latestSimulatorState.lastTxResult?.type).toBe('success');
+      simulatorState = yield* simulator.getLatestState();
+      expect(simulatorState.lastTxResult?.type).toBe('success');
 
       const latestState = yield* SubscriptionRef.get(stateRef);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
       const generationInfo = walletVariant.coinsAndBalances.getGenerationInfo(
         latestState,
-        availableCoins.find((c) => c.mtIndex === 0n)!,
+        newAvailableCoins.find((c) => c.seq === 0)!,
       );
       expect(newAvailableCoins.length).toBe(2);
       expect(newAvailableCoins.some((coin) => DateOps.dateToSeconds(coin.ctime) === 4n)).toBe(true);
@@ -316,6 +319,93 @@ describe('DustWallet', () => {
 
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
       expect(pendingCoins.length).toBe(0);
+    }).pipe(Effect.runPromise);
+  });
+
+  it('spend the only Dust token', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000n;
+
+      // reward & claim Night tokens
+      const rewardNight = yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      expect(rewardNight.blockNumber).toBe(1n);
+      yield* waitForTx(stateRef, 1);
+
+      let simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(1);
+
+      // register Night tokens
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 2);
+
+      const walletState = yield* SubscriptionRef.get(stateRef);
+      const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState);
+      expect(availableCoins.length).toBe(1);
+
+      // send one token to Bob
+      simulatorState = yield* simulator.getLatestState();
+      const nightTokens = getNightTokens(simulatorState, walletAddress);
+      const sendToken = nightTokens.find((val) => val.value === awardTokens);
+      expect(sendToken).toBeDefined();
+
+      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobAddress = bobKeyStore.getAddress();
+
+      const inputs = [
+        {
+          ...sendToken!,
+          owner: nightVerifyingKey,
+        },
+      ];
+      const outputs = [
+        {
+          type: NIGHT_TOKEN_TYPE,
+          owner: bobAddress,
+          value: sendToken!.value,
+        },
+      ];
+      const currentTime = getCurrentTime(simulatorState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+      const intent = Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+      const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
+
+      // cover fees with dust
+      const transactionWithFee = (yield* wallet.addFeePayment(
+        dustSecretKey,
+        transferTransaction,
+        currentTime,
+        ttl,
+      )) as ProvingRecipe.TransactionToProve;
+      const transaction = yield* wallet.finalizeTransaction({
+        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
+        transaction: transactionWithFee.transaction.eraseProofs(),
+      });
+
+      yield* wallet.submitTransaction(transaction);
+      yield* waitForTx(stateRef, 3);
+
+      simulatorState = yield* simulator.getLatestState();
+      expect(simulatorState.lastTxResult?.type).toBe('success');
+
+      const latestState = yield* SubscriptionRef.get(stateRef);
+      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
+      expect(newAvailableCoins.length).toBe(1);
+
+      const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
+      expect(pendingCoins.length).toBe(0);
+
+      const generationInfo = walletVariant.coinsAndBalances.getGenerationInfo(latestState, newAvailableCoins[0]);
+      expect(generationInfo?.dtime).toStrictEqual(DateOps.secondsToDate(3n));
+
+      // validate wallet balances
+      expect(walletVariant.coinsAndBalances.getWalletBalance(latestState, getCurrentTime(simulatorState))).toBe(0n);
+      const futureTime = DateOps.addSeconds(currentTime, 1);
+      expect(walletVariant.coinsAndBalances.getWalletBalance(latestState, futureTime)).toBe(0n);
     }).pipe(Effect.runPromise);
   });
 });

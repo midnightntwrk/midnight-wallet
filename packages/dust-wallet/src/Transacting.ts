@@ -23,7 +23,7 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { DustToken } from './types/Dust.js';
 import { TotalCostParameters } from './types/transaction.js';
@@ -163,11 +163,10 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           totalDustValue,
         );
 
-        const futureTime = DateOps.addSeconds(currentTime, 1);
         intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
           ProofMarker.preProof,
-          futureTime,
+          currentTime,
           [],
           [dustRegistration],
         );
@@ -185,7 +184,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       const intent = transaction.intents?.get(1);
       if (!intent) {
         return yield* Either.left(
-          new WalletError.TransactingError({ error: 'No intent found in intent with segment = 1' }),
+          new WalletError.TransactingError({ error: 'No intent found in the transaction intents with segment = 1' }),
         );
       }
 
@@ -221,6 +220,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           dustActions.spends,
           [registrationWithSignature, ...restRegistrations],
         );
+
         // make a copy of intent to avoid mutation
         const newIntent = Intent.deserialize<SignatureEnabled, PreProof, PreBinding>(
           signature.instance,
@@ -237,6 +237,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         }
         newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
 
+        // make a copy of transaction to avoid mutation
         const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
           signature.instance,
           ProofMarker.preProof,
@@ -296,16 +297,16 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       const intent = Intent.new(ttl);
       const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
 
-      const futureTime = DateOps.addSeconds(currentTime, 1);
       intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
         SignatureMarker.signature,
         ProofMarker.preProof,
-        futureTime,
+        currentTime,
         spends as UnprovenDustSpend[],
         [],
       );
 
       const feeTransaction = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
+
       return {
         newState: updatedState,
         recipe: {
