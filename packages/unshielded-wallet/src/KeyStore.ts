@@ -19,7 +19,7 @@ export const PublicKey = {
     return {
       publicKey: keystore.getPublicKey(),
       address: pipe(
-        keystore.getAddress(false),
+        keystore.getAddress(),
         (str) => Buffer.from(str, 'hex'),
         (bytes) => new UnshieldedAddress(bytes),
       ),
@@ -31,7 +31,7 @@ export interface UnshieldedKeystore {
   getSecretKey(): Buffer;
   getBech32Address(): MidnightBech32m;
   getPublicKey(): SignatureVerifyingKey;
-  getAddress(includeVersion?: boolean): UserAddress;
+  getAddress(): UserAddress;
   signData(data: Uint8Array): Signature;
 }
 
@@ -49,7 +49,7 @@ export const createKeystore = (
     getSecretKey: () => Buffer.from(secretKey),
 
     getBech32Address: () => {
-      const address = keystore.getAddress(false);
+      const address = keystore.getAddress();
       const addressBuffer = Buffer.from(address, 'hex');
       return UnshieldedAddress.codec.encode(networkId, new UnshieldedAddress(addressBuffer));
     },

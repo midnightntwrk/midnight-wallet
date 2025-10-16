@@ -26,7 +26,9 @@ export interface UnshieldedWallet {
   serializeState(): Promise<string>;
   state: () => Observable<State>;
   transferTransaction(outputs: TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
-  balanceTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.UnprovenTransaction>;
+  balanceTransaction(
+    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>;
   signTransaction(
     tx: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
@@ -132,15 +134,15 @@ const makeWallet = ({
 
         const transaction = yield* transactionService.transferTransaction(mappedOutputs, ttl, networkId);
 
-        return yield* transactionService.balanceTransaction(
+        return (yield* transactionService.balanceTransaction(
           transaction,
           unshieldedState,
           publicKey.address.hexString,
           publicKey.publicKey,
-        );
+        )) as unknown as ledger.UnprovenTransaction;
       });
 
-    const balanceTransaction = (tx: ledger.UnprovenTransaction) =>
+    const balanceTransaction = (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>) =>
       transactionService.balanceTransaction(tx, unshieldedState, publicKey.address.hexString, publicKey.publicKey);
 
     const signTransaction = (

@@ -63,12 +63,12 @@ export interface TransactionServiceLive {
   ) => Effect.Effect<string, TransactionServiceError>;
 
   readonly balanceTransaction: (
-    transaction: Transaction<SignatureEnabled, PreProof, PreBinding>,
+    transaction: Transaction<SignatureEnabled, Proofish, Bindingish>,
     state: UnshieldedStateAPI,
     myAddress: UserAddress,
     publicKey: SignatureVerifyingKey,
   ) => Effect.Effect<
-    Transaction<SignatureEnabled, PreProof, PreBinding>,
+    Transaction<SignatureEnabled, Proofish, Bindingish>,
     TransactionServiceError | ParseError | UtxoNotFoundError
   >;
 
@@ -186,20 +186,18 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         );
 
       const balanceTransaction = (
-        transaction: Transaction<SignatureEnabled, PreProof, PreBinding>,
+        transaction: Transaction<SignatureEnabled, Proofish, Bindingish>,
         state: UnshieldedStateAPI,
         myAddress: UserAddress,
         publicKey: SignatureVerifyingKey,
       ): Effect.Effect<
-        Transaction<SignatureEnabled, PreProof, PreBinding>,
+        Transaction<SignatureEnabled, Proofish, Bindingish>,
         TransactionServiceError | ParseError | UtxoNotFoundError
       > =>
         Effect.gen(function* () {
           const segments = getSegments(transaction);
           if (!transaction.intents || !transaction.intents.size || !segments.length) {
-            return yield* Effect.fail(
-              new TransactionServiceError({ error: 'No intents found in the provided transaction' }),
-            );
+            return transaction;
           }
 
           for (const segment of [...segments, GUARANTEED_SEGMENT]) {
@@ -260,7 +258,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
 
             // NOTE: for the segment === 0 we insert the counter-offer into any intent's guaranteed section
             if (segment !== GUARANTEED_SEGMENT) {
-              const intent: Intent<SignatureEnabled, PreProof, PreBinding> = transaction.intents.get(segment)!;
+              const intent: Intent<SignatureEnabled, Proofish, Bindingish> = transaction.intents.get(segment)!;
               const isBound = yield* isIntentBound(intent);
               if (!isBound && intent.fallibleUnshieldedOffer) {
                 const mergedOffer = yield* mergeCounterOffer(counterOffer, intent.fallibleUnshieldedOffer);

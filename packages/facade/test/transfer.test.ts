@@ -185,7 +185,7 @@ describe('Wallet Facade Transfer', () => {
     expect(isValid).toBeTruthy();
   });
 
-  it('allows transfer unshielded tokens', async () => {
+  it('allows to transfer unshielded tokens', async () => {
     await Promise.all([
       rx.firstValueFrom(
         senderFacade
@@ -249,6 +249,130 @@ describe('Wallet Facade Transfer', () => {
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
     expect(submittedTxHash).toBeTruthy();
+
+    const isValid = await rx.firstValueFrom(
+      receiverFacade
+        .state()
+        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === 1n))),
+    );
+
+    expect(isValid).toBeTruthy();
+  });
+
+  it('allows to balance and submit an arbitrary shielded transaction', async () => {
+    await Promise.all([
+      rx.firstValueFrom(
+        senderFacade
+          .state()
+          .pipe(
+            rx.filter(
+              (s) =>
+                s.shielded.state.progress.isStrictlyComplete() &&
+                s.dust.state.progress.isStrictlyComplete() &&
+                s.unshielded.syncProgress?.synced === true,
+            ),
+          ),
+      ),
+    ]);
+
+    const shieldedReceiverState = await rx.firstValueFrom(receiverFacade.shielded.state);
+
+    const transfer = {
+      type: ledger.shieldedToken().raw,
+      amount: 1n,
+    };
+
+    const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
+
+    const output = ledger.ZswapOutput.new(
+      coin,
+      0,
+      shieldedReceiverState.address.coinPublicKey.toHexString(),
+      shieldedReceiverState.address.encryptionPublicKey.toHexString(),
+    );
+
+    const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
+
+    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, outputOffer);
+
+    const provenArbitrayTx = await senderFacade.shielded.finalizeTransaction({
+      type: 'TransactionToProve',
+      transaction: arbitraryTx,
+    });
+
+    const balancedTx = await senderFacade.balanceTransaction(
+      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+      ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      provenArbitrayTx,
+      new Date(Date.now() + 30 * 60 * 1000),
+    );
+
+    const finalizedTx = await senderFacade.finalizeTransaction(balancedTx);
+
+    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+
+    expect(submittedTxHash).toBeTypeOf('string');
+
+    const isValid = await rx.firstValueFrom(
+      receiverFacade.state().pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === 1n))),
+    );
+
+    expect(isValid).toBeTruthy();
+  });
+
+  it('allows to balance and submit an arbitrary unshielded transaction', async () => {
+    await Promise.all([
+      rx.firstValueFrom(
+        senderFacade
+          .state()
+          .pipe(
+            rx.filter(
+              (s) =>
+                s.shielded.state.progress.isStrictlyComplete() &&
+                s.dust.state.progress.isStrictlyComplete() &&
+                s.unshielded.syncProgress?.synced === true,
+            ),
+          ),
+      ),
+    ]);
+
+    const outputs = [
+      {
+        type: ledger.unshieldedToken().raw,
+        value: 1n,
+        owner: unshieldedReceiverKeystore.getAddress(),
+      },
+    ];
+
+    const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
+    intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new([], outputs, []);
+
+    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
+
+    const recipe = await senderFacade.balanceTransaction(
+      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+      ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      arbitraryTx,
+      new Date(Date.now() + 30 * 60 * 1000),
+    );
+
+    if (recipe.type !== 'TransactionToProve') {
+      throw new Error('Expected a transaction to prove');
+    }
+
+    const signedTx = await senderFacade.signTransaction(
+      recipe.transaction,
+      async (payload) => await Promise.resolve(unshieldedSenderKeystore.signData(payload)),
+    );
+
+    const finalizedTx = await senderFacade.finalizeTransaction({
+      ...recipe,
+      transaction: signedTx,
+    });
+
+    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+
+    expect(submittedTxHash).toBeTypeOf('string');
 
     const isValid = await rx.firstValueFrom(
       receiverFacade

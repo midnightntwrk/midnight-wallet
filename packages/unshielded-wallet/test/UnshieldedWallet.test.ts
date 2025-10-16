@@ -8,7 +8,7 @@ import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage/InMemoryTransactionHistoryStorage.js';
 import { getUnshieldedSeed } from './testUtils.js';
 
-vi.setConfig({ testTimeout: 60_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const currentFile = new URL(import.meta.url).pathname;
 const environmentUID = Math.floor(Math.random() * 1000).toString();
@@ -137,7 +137,9 @@ describe('UnshieldedWallet', () => {
   });
 
   afterAll(async () => {
-    await startedEnvironment.down();
+    if (startedEnvironment) {
+      await startedEnvironment.down();
+    }
   });
 
   it('should restore from serialized state', async () => {

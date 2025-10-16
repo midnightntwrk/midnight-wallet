@@ -52,11 +52,36 @@ export class WalletFacade {
 
   async balanceTransaction(
     zswapSecretKeys: ledger.ZswapSecretKeys,
-    tx: ledger.UnprovenTransaction,
-  ): Promise<ProvingRecipe.ProvingRecipe<ledger.UnprovenTransaction | ledger.FinalizedTransaction>> {
+    dustSecretKeys: ledger.DustSecretKey,
+    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    ttl: Date,
+  ): Promise<ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>> {
     const unshieldedBalancedTx = await this.unshielded.balanceTransaction(tx);
 
-    return await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedBalancedTx, []);
+    const recipe = await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedBalancedTx, []);
+
+    switch (recipe.type) {
+      case ProvingRecipe.TRANSACTION_TO_PROVE:
+        return await this.dust.addFeePayment(dustSecretKeys, recipe.transaction, new Date(), ttl);
+      case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE: {
+        // if the shielded wallet returned a proven transaction, we need to pay fees with the dust wallet
+        const balancedTx = await this.dust.addFeePayment(dustSecretKeys, recipe.transactionToProve, new Date(), ttl);
+
+        if (balancedTx.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
+          throw Error('Unexpected transaction type after adding fee payment.');
+        }
+
+        return {
+          ...recipe,
+          transactionToProve: balancedTx.transaction,
+        };
+      }
+      case ProvingRecipe.NOTHING_TO_PROVE: {
+        // @TODO fix casting
+        const txToBalance = recipe.transaction as unknown as ledger.UnprovenTransaction;
+        return await this.dust.addFeePayment(dustSecretKeys, txToBalance, new Date(), ttl);
+      }
+    }
   }
 
   async finalizeTransaction(
