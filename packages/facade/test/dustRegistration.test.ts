@@ -9,8 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { CombinedTokenTransfer, NightUtxoWithMeta, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -19,7 +18,7 @@ vi.setConfig({ testTimeout: 200_000, hookTimeout: 60_000 });
 /**
  * We need the dust wallet to transact
  */
-describe('Wallet Facade Transfer', () => {
+describe('Dust Registration', () => {
   const environmentId = randomUUID();
 
   const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
@@ -121,48 +120,7 @@ describe('Wallet Facade Transfer', () => {
     await Promise.all([senderFacade.stop(), receiverFacade.stop()]);
   });
 
-  it('allows to transfer shielded tokens only', async () => {
-    await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
-
-    const ledgerReceiverAddress = ShieldedAddress.codec
-      .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
-      .asString();
-
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
-    const transfer = await senderFacade.transferTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: ledger.shieldedToken().raw,
-              receiverAddress: ledgerReceiverAddress,
-              amount: tokenValue(1n),
-            },
-          ],
-        },
-      ],
-      ttl,
-    );
-
-    const finalizedTx = await senderFacade.finalizeTransaction(transfer);
-
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
-
-    expect(submittedTxHash).toBeTypeOf('string');
-
-    const isValid = await rx.firstValueFrom(
-      receiverFacade
-        .state()
-        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tokenValue(1n)))),
-    );
-
-    expect(isValid).toBeTruthy();
-  });
-
-  it('allows to transfer unshielded tokens', async () => {
+  it('registers dust generation after receiving unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
     const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
@@ -172,7 +130,7 @@ describe('Wallet Facade Transfer', () => {
         type: 'unshielded',
         outputs: [
           {
-            amount: tokenValue(1n),
+            amount: tokenValue(150000n),
             receiverAddress: unshieldedReceiverState.address,
             type: ledger.unshieldedToken().raw,
           },
@@ -181,131 +139,61 @@ describe('Wallet Facade Transfer', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const recipe = await senderFacade.transferTransaction(
+    const transferRecipe = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
       ttl,
     );
 
-    const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
+    const signedTransferTx = await senderFacade.signTransaction(transferRecipe.transaction, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction({
-      ...recipe,
-      transaction: signedTx,
+    const finalizedTransferTx = await senderFacade.finalizeTransaction({
+      ...transferRecipe,
+      transaction: signedTransferTx,
     });
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    const transferTxHash = await senderFacade.submitTransaction(finalizedTransferTx);
+    expect(transferTxHash).toBeTypeOf('string');
 
-    expect(submittedTxHash).toBeTruthy();
-
-    const isValid = await rx.firstValueFrom(
+    const receiverStateWithNight = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.unshielded.availableCoins.length > 0 &&
+              s.unshielded.availableCoins.some((coin) => coin.registeredForDustGeneration === false),
+          ),
+        ),
     );
 
-    expect(isValid).toBeTruthy();
-  });
-
-  it('allows to balance and submit an arbitrary shielded transaction', async () => {
-    await waitForFullySynced(senderFacade);
-
-    const shieldedReceiverState = await rx.firstValueFrom(receiverFacade.shielded.state);
-
-    const transfer = {
-      type: ledger.shieldedToken().raw,
-      amount: tokenValue(1n),
-    };
-
-    const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
-
-    const output = ledger.ZswapOutput.new(
-      coin,
-      0,
-      shieldedReceiverState.address.coinPublicKey.toHexString(),
-      shieldedReceiverState.address.encryptionPublicKey.toHexString(),
+    const nightUtxos: NightUtxoWithMeta[] = receiverStateWithNight.unshielded.availableCoins.filter(
+      (coin) => coin.registeredForDustGeneration === false,
     );
 
-    const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
+    expect(nightUtxos.length).toBeGreaterThan(0);
 
-    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, outputOffer);
-
-    const provenArbitrayTx = await senderFacade.shielded.finalizeTransaction({
-      type: 'TransactionToProve',
-      transaction: arbitraryTx,
-    });
-
-    const balancedTx = await senderFacade.balanceTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      provenArbitrayTx,
-      new Date(Date.now() + 30 * 60 * 1000),
+    const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
+      nightUtxos,
+      unshieldedReceiverKeystore.getPublicKey(),
+      (payload) => unshieldedReceiverKeystore.signData(payload),
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction(balancedTx);
+    const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
+    const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    expect(dustRegistrationTxHash).toBeTypeOf('string');
 
-    expect(submittedTxHash).toBeTypeOf('string');
-
-    const isValid = await rx.firstValueFrom(
-      receiverFacade
-        .state()
-        .pipe(rx.filter((s) => s.shielded.availableCoins.some((c) => c.coin.value === tokenValue(1n)))),
+    const receiverDustBalance = await rx.firstValueFrom(
+      receiverFacade.state().pipe(
+        rx.filter((s) => s.dust.walletBalance(new Date()) > 0n),
+        rx.map((s) => s.dust.walletBalance(new Date())),
+      ),
     );
 
-    expect(isValid).toBeTruthy();
-  });
-
-  it('allows to balance and submit an arbitrary unshielded transaction', async () => {
-    await waitForFullySynced(senderFacade);
-
-    const outputs = [
-      {
-        type: ledger.unshieldedToken().raw,
-        value: tokenValue(1n),
-        owner: unshieldedReceiverKeystore.getAddress(),
-      },
-    ];
-
-    const intent = ledger.Intent.new(new Date(Date.now() + 30 * 60 * 1000));
-    intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new([], outputs, []);
-
-    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
-
-    const recipe = await senderFacade.balanceTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      arbitraryTx,
-      new Date(Date.now() + 30 * 60 * 1000),
-    );
-
-    if (recipe.type !== 'TransactionToProve') {
-      throw new Error('Expected a transaction to prove');
-    }
-
-    const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
-      unshieldedSenderKeystore.signData(payload),
-    );
-
-    const finalizedTx = await senderFacade.finalizeTransaction({
-      ...recipe,
-      transaction: signedTx,
-    });
-
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
-
-    expect(submittedTxHash).toBeTypeOf('string');
-
-    const isValid = await rx.firstValueFrom(
-      receiverFacade
-        .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
-    );
-
-    expect(isValid).toBeTruthy();
+    expect(receiverDustBalance).toBeGreaterThan(0n);
   });
 });

@@ -31,7 +31,7 @@ export interface UnshieldedWallet {
   ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>;
   signTransaction(
     tx: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
+    signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction>;
   transactionHistory:
     | undefined
@@ -185,8 +185,8 @@ const makeWallet = ({
       transferTransaction: (outputs: TokenTransfer[], ttl: Date) =>
         Effect.runPromise(transferTransaction(outputs, ttl)),
       balanceTransaction: (tx: ledger.UnprovenTransaction) => Effect.runPromise(balanceTransaction(tx)),
-      signTransaction: (tx: ledger.UnprovenTransaction, signSegment: (data: Uint8Array) => Promise<ledger.Signature>) =>
-        Effect.runPromise(signTransaction(tx, (data) => Effect.tryPromise(() => signSegment(data)))),
+      signTransaction: (tx: ledger.UnprovenTransaction, signSegment: (data: Uint8Array) => ledger.Signature) =>
+        Effect.runPromise(signTransaction(tx, (data) => Effect.try(() => signSegment(data)))),
       serializeState: () => Effect.runPromise(state.serialize()),
       transactionHistory,
     };

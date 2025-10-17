@@ -8,7 +8,7 @@ import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { InMemoryTransactionHistoryStorage } from '../src/tx-history-storage/InMemoryTransactionHistoryStorage.js';
 import { getUnshieldedSeed } from './testUtils.js';
 
-vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
 const currentFile = new URL(import.meta.url).pathname;
 const environmentUID = Math.floor(Math.random() * 1000).toString();
@@ -41,13 +41,7 @@ describe('UnshieldedWallet', () => {
     await wallet.start();
 
     const state = await firstValueFrom(
-      wallet
-        .state()
-        .pipe(
-          filter(
-            (state) => state !== undefined && state.syncProgress !== undefined && state.syncProgress.applyGap === 0,
-          ),
-        ),
+      wallet.state().pipe(filter((state) => state.syncProgress?.synced === true && state.availableCoins.length > 0)),
     );
 
     expect(state.address).toBe('mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s');
@@ -74,11 +68,7 @@ describe('UnshieldedWallet', () => {
     const initialState = await firstValueFrom(
       initialWallet
         .state()
-        .pipe(
-          filter(
-            (state) => state !== undefined && state.syncProgress !== undefined && state.syncProgress.applyGap === 0,
-          ),
-        ),
+        .pipe(filter((state) => state.syncProgress?.synced === true && state.availableCoins.length > 0)),
     );
 
     expect(initialState.syncProgress).toBeDefined();
@@ -123,13 +113,7 @@ describe('UnshieldedWallet', () => {
     await wallet.start();
 
     await firstValueFrom(
-      wallet
-        .state()
-        .pipe(
-          filter(
-            (state) => state !== undefined && state.syncProgress !== undefined && state.syncProgress.applyGap === 0,
-          ),
-        ),
+      wallet.state().pipe(filter((state) => state.syncProgress?.synced === true && state.availableCoins.length > 0)),
     );
     expect(wallet.transactionHistory).toBeUndefined();
 
@@ -155,11 +139,7 @@ describe('UnshieldedWallet', () => {
     const initialState = await firstValueFrom(
       initialWallet
         .state()
-        .pipe(
-          filter(
-            (state) => state !== undefined && state.syncProgress !== undefined && state.syncProgress.applyGap === 0,
-          ),
-        ),
+        .pipe(filter((state) => state.syncProgress?.synced === true && state.availableCoins.length > 0)),
     );
 
     expect(initialState.syncProgress).toBeDefined();

@@ -92,7 +92,7 @@ export class WalletFacade {
 
   async signTransaction(
     tx: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => Promise<ledger.Signature>,
+    signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     return await this.unshielded.signTransaction(tx, signSegment);
   }
@@ -130,12 +130,7 @@ export class WalletFacade {
         throw Error('Unexpected transaction type.');
       }
 
-      const recipe = await this.dust.addFeePayment(
-        dustSecretKey,
-        shieldedTxRecipe.transaction,
-        new Date(),
-        new Date(Date.now() + 3600 * 1000),
-      );
+      const recipe = await this.dust.addFeePayment(dustSecretKey, shieldedTxRecipe.transaction, new Date(), ttl);
 
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');
@@ -146,12 +141,7 @@ export class WalletFacade {
 
     // if there's an unshielded tx only, pay fees (balance) with shielded wallet
     if (shieldedTxRecipe === undefined && unshieldedTx !== undefined) {
-      const recipe = await this.dust.addFeePayment(
-        dustSecretKey,
-        unshieldedTx,
-        new Date(),
-        new Date(Date.now() + 3600 * 1000),
-      );
+      const recipe = await this.dust.addFeePayment(dustSecretKey, unshieldedTx, new Date(), ttl);
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');
       }
@@ -165,12 +155,7 @@ export class WalletFacade {
       }
       const txToBalance = shieldedTxRecipe.transaction.merge(unshieldedTx);
 
-      const recipe = await this.dust.addFeePayment(
-        dustSecretKey,
-        txToBalance,
-        new Date(),
-        new Date(Date.now() + 3600 * 1000),
-      );
+      const recipe = await this.dust.addFeePayment(dustSecretKey, txToBalance, new Date(), ttl);
 
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');

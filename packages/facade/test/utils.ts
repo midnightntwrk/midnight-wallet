@@ -1,4 +1,6 @@
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { WalletFacade } from '../src/index.js';
+import * as rx from 'rxjs';
 
 export const getShieldedSeed = (seed: string): Uint8Array => {
   const seedBuffer = Buffer.from(seed, 'hex');
@@ -52,4 +54,21 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   }
 
   return derivationResult.key;
+};
+
+export const tokenValue = (value: bigint): bigint => value * 10n ** 6n;
+
+export const waitForFullySynced = async (facade: WalletFacade): Promise<void> => {
+  await rx.firstValueFrom(
+    facade
+      .state()
+      .pipe(
+        rx.filter(
+          (s) =>
+            s.shielded.state.progress.isStrictlyComplete() &&
+            s.dust.state.progress.isStrictlyComplete() &&
+            s.unshielded.syncProgress?.synced === true,
+        ),
+      ),
+  );
 };

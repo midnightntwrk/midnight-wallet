@@ -4,6 +4,8 @@
     "noEmit": false,
     "rootDir": "./src",
     "outDir": "./dist",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "lib": [
       "ESNext",
       "dom"
