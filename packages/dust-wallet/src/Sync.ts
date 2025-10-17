@@ -236,7 +236,7 @@ export const makeSimulatorSyncService = (
     ledgerParameters: (): Effect.Effect<LedgerParameters> =>
       pipe(
         config.simulator.getLatestState(),
-        Effect.map((state) => Simulator.ledgerParameters(state)),
+        Effect.map((state) => state.ledger.parameters),
       ),
   };
 };
