@@ -1,7 +1,7 @@
 import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
@@ -95,6 +95,10 @@ export class WalletFacade {
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     return await this.unshielded.signTransaction(tx, signSegment);
+  }
+
+  async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
+    return await this.dust.calculateFee(tx);
   }
 
   async transferTransaction(

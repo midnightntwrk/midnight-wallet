@@ -20,7 +20,7 @@ import { V1Tag } from './RunningV1Variant.js';
 import { SerializationCapability } from './Serialization.js';
 import { SubmitTransactionMethod } from './Submission.js';
 import { DustToken, UtxoWithMeta } from './types/Dust.js';
-import { NetworkId } from './types/ledger.js';
+import { AnyTransaction, NetworkId } from './types/ledger.js';
 import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder.js';
 
 export type DustWalletCapabilities = {
@@ -97,6 +97,8 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
     transaction: UnprovenTransaction,
     signature: Signature,
   ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
+
+  calculateFee(transaction: AnyTransaction): Promise<bigint>;
 
   addFeePayment(
     secretKey: DustSecretKey,
@@ -180,6 +182,14 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    calculateFee(transaction: AnyTransaction): Promise<bigint> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.calculateFee(transaction),
         })
         .pipe(Effect.runPromise);
     }

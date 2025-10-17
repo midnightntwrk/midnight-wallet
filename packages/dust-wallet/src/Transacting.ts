@@ -48,6 +48,8 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     signature: Signature,
   ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError>;
 
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
+
   addFeePayment(
     secretKey: TSecrets,
     state: TState,
@@ -254,6 +256,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
+    const feeTotal =
+      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead;
+    const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
+    return dustImbalance ? -dustImbalance[1] : feeTotal;
+  }
+
   addFeePayment(
     secretKey: DustSecretKey,
     state: DustCoreWallet,
@@ -266,10 +275,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     WalletError.WalletError
   > {
     const network = this.networkId;
-    const feeTotal =
-      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead;
-    const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
-    const fee = dustImbalance ? -dustImbalance[1] : feeTotal;
+    const fee = this.calculateFee(transaction, ledgerParams);
 
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
     const selectedTokens = this.getCoinSelection()(dustTokens, fee);

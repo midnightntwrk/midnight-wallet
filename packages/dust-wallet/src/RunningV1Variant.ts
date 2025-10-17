@@ -26,6 +26,7 @@ import { TransactingCapability } from './Transacting.js';
 import { SubmissionService, SubmitTransactionMethod } from './Submission.js';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { SerializationCapability } from './Serialization.js';
+import { AnyTransaction } from './types/ledger.js';
 
 const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -196,6 +197,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
+  }
+
+  calculateFee(transaction: AnyTransaction): Effect.Effect<bigint, WalletError.WalletError> {
+    return pipe(
+      this.#v1Context.syncService.ledgerParameters(),
+      Effect.map((params) => this.#v1Context.transactingCapability.calculateFee(transaction, params)),
+    );
   }
 
   addFeePayment(
