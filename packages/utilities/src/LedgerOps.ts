@@ -1,7 +1,7 @@
 import { Either, Data } from 'effect';
 
 export class LedgerError extends Data.TaggedError('LedgerError')<{
-  readonly error: string;
+  readonly message: string;
   readonly cause?: unknown;
 }> {}
 
@@ -10,7 +10,7 @@ export const ledgerTry = <A>(fn: () => A): Either.Either<A, LedgerError> => {
     try: fn,
     catch: (error) => {
       const message = error instanceof Error ? error.message : `${error?.toString()}`;
-      return new LedgerError({ error: `Error from ledger: ${message}`, cause: error });
+      return new LedgerError({ message: `Error from ledger: ${message}`, cause: error });
     },
   });
 };

@@ -80,5 +80,6 @@ export class InvalidCoinHashesError extends Data.TaggedError('Wallet.InvalidCoin
 }> {}
 
 export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
-  readonly error?: unknown;
+  message: string;
+  cause?: unknown;
 }> {}

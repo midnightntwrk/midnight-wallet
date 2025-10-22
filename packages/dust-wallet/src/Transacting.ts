@@ -184,24 +184,26 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       const intent = transaction.intents?.get(1);
       if (!intent) {
         return yield* Either.left(
-          new WalletError.TransactingError({ error: 'No intent found in the transaction intents with segment = 1' }),
+          new WalletError.TransactingError({ message: 'No intent found in the transaction intents with segment = 1' }),
         );
       }
 
       const { dustActions, guaranteedUnshieldedOffer } = intent;
       if (!dustActions) {
-        return yield* Either.left(new WalletError.TransactingError({ error: 'No dustActions found in intent' }));
+        return yield* Either.left(new WalletError.TransactingError({ message: 'No dustActions found in intent' }));
       }
 
       if (!guaranteedUnshieldedOffer) {
         return yield* Either.left(
-          new WalletError.TransactingError({ error: 'No guaranteedUnshieldedOffer found in intent' }),
+          new WalletError.TransactingError({ message: 'No guaranteedUnshieldedOffer found in intent' }),
         );
       }
 
       const [registration, ...restRegistrations] = dustActions.registrations;
       if (!registration) {
-        return yield* Either.left(new WalletError.TransactingError({ error: 'No registrations found in dustActions' }));
+        return yield* Either.left(
+          new WalletError.TransactingError({ message: 'No registrations found in dustActions' }),
+        );
       }
 
       return yield* LedgerOps.ledgerTry(() => {
@@ -288,14 +290,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
     const selectedTokens = this.getCoinSelection()(dustTokens, feeLeft);
     if (!selectedTokens.length) {
-      return Either.left(new WalletError.TransactingError({ error: 'No dust tokens found in dustActions' }));
+      return Either.left(new WalletError.TransactingError({ message: 'No dust tokens found in the wallet state' }));
     }
 
     const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
     const feeDiff = totalFeeInSelected - feeLeft;
     if (feeDiff < 0n) {
       // A sanity-check, should never happen
-      return Either.left(new WalletError.TransactingError({ error: 'Error in tokens selection algorithm' }));
+      return Either.left(new WalletError.TransactingError({ message: 'Error in tokens selection algorithm' }));
     }
 
     // reduce the largest token's value by `feeDiff`
