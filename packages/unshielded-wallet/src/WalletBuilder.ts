@@ -26,6 +26,11 @@ export interface UnshieldedWallet {
   serializeState(): Promise<string>;
   state: () => Observable<State>;
   transferTransaction(outputs: TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
+  initSwap(
+    desiredInputs: Record<string, bigint>,
+    desiredOutputs: TokenTransfer[],
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction>;
   balanceTransaction(
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>;
@@ -142,6 +147,31 @@ const makeWallet = ({
         )) as unknown as ledger.UnprovenTransaction;
       });
 
+    const initSwap = (desiredInputs: Record<string, bigint>, outputs: TokenTransfer[], ttl: Date) =>
+      Effect.gen(function* () {
+        const latestState = yield* unshieldedState.getLatestState();
+        if (!latestState.syncProgress) {
+          return yield* Effect.fail('Unable to get the latest block number');
+        }
+
+        const mappedOutputs = outputs.map((output) => ({
+          ...output,
+          receiverAddress: UnshieldedAddress.codec
+            .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
+            .data.toString('hex'),
+        }));
+
+        return yield* transactionService.initSwap(
+          desiredInputs,
+          mappedOutputs,
+          ttl,
+          networkId,
+          unshieldedState,
+          publicKey.address.hexString,
+          publicKey.publicKey,
+        );
+      });
+
     const balanceTransaction = (tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>) =>
       transactionService.balanceTransaction(tx, unshieldedState, publicKey.address.hexString, publicKey.publicKey);
 
@@ -184,6 +214,8 @@ const makeWallet = ({
       stop: () => Effect.runPromise(stop()),
       transferTransaction: (outputs: TokenTransfer[], ttl: Date) =>
         Effect.runPromise(transferTransaction(outputs, ttl)),
+      initSwap: (desiredInputs: Record<string, bigint>, desiredOutputs: TokenTransfer[], ttl: Date) =>
+        Effect.runPromise(initSwap(desiredInputs, desiredOutputs, ttl)),
       balanceTransaction: (tx: ledger.UnprovenTransaction) => Effect.runPromise(balanceTransaction(tx)),
       signTransaction: (tx: ledger.UnprovenTransaction, signSegment: (data: Uint8Array) => ledger.Signature) =>
         Effect.runPromise(signTransaction(tx, (data) => Effect.try(() => signSegment(data)))),

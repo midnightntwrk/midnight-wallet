@@ -2,6 +2,7 @@ import {
   addressFromKey,
   Intent,
   LedgerState,
+  sampleIntentHash,
   sampleRawTokenType,
   sampleSigningKey,
   sampleUserAddress,
@@ -14,7 +15,7 @@ import {
   ZswapChainState,
 } from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { UnshieldedStateService } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+import { UnshieldedStateService, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import { Effect, Either, HashSet } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { TransactionService, TransactionServiceError } from '../src/TransactionService.js';
@@ -617,5 +618,114 @@ describe('TransactionService', () => {
       expect(ledgerStateAfter2.utxo.utxos.size).toEqual(withChange ? 2 : 1);
       expect(ledgerStateAfter2.utxo.filter(ownerAddress).size).toEqual(withChange ? 1 : 0);
       expect(ledgerStateAfter2.utxo.filter(receiverAddress).size).toEqual(1);
+    }).pipe(Effect.provide(TransactionService.Live), Effect.provide(UnshieldedStateService.Live()), Effect.runPromise));
+
+  it('should init a swap with expected imbalances', () =>
+    Effect.gen(function* () {
+      const transactionService = yield* TransactionService;
+      const unshieldedState = yield* UnshieldedStateService;
+
+      const tokenProvided = sampleRawTokenType();
+      const tokenDesired = sampleRawTokenType();
+
+      const signingKey = sampleSigningKey();
+      const owner = signatureVerifyingKey(signingKey);
+      const ownerAddress = addressFromKey(owner);
+
+      const providedValue = 100n;
+      const availableUtxo: Utxo = {
+        value: providedValue,
+        owner,
+        type: tokenProvided,
+        intentHash: sampleIntentHash(),
+        outputNo: 0,
+        ctime: Date.now(),
+        registeredForDustGeneration: true,
+      };
+
+      yield* unshieldedState.applyTx({
+        id: 1,
+        hash: 'tx-hash',
+        type: 'RegularTransaction',
+        identifiers: [availableUtxo.intentHash],
+        createdUtxos: [availableUtxo],
+        spentUtxos: [],
+        protocolVersion: 1,
+        transactionResult: {
+          status: 'SucceedEntirely',
+          segments: [{ id: '1', success: true }],
+        },
+      });
+
+      const desiredInputs = { [tokenProvided]: 70n };
+      const desiredOutputs = [
+        {
+          type: tokenDesired,
+          amount: 50n,
+          receiverAddress: ownerAddress,
+        },
+      ];
+
+      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+
+      const swapTx = yield* transactionService.initSwap(
+        desiredInputs,
+        desiredOutputs,
+        ttl,
+        NetworkId.NetworkId.Undeployed,
+        unshieldedState,
+        ownerAddress,
+        owner,
+      );
+
+      expect(swapTx.intents?.size).toEqual(1);
+      const offer = swapTx.intents?.get(1)?.guaranteedUnshieldedOffer;
+      expect(offer?.inputs.length).toBeGreaterThanOrEqual(1);
+
+      const imbalances = swapTx.imbalances(0);
+      const providedEntry = Array.from(imbalances.entries()).find(
+        ([token]) => token.tag === 'unshielded' && token.raw === tokenProvided,
+      );
+      const desiredEntry = Array.from(imbalances.entries()).find(
+        ([token]) => token.tag === 'unshielded' && token.raw === tokenDesired,
+      );
+
+      expect(providedEntry?.[1]).toEqual(desiredInputs[tokenProvided]);
+      expect(desiredEntry?.[1]).toEqual(-desiredOutputs[0].amount);
+
+      const latestState = yield* unshieldedState.getLatestState();
+      expect(HashSet.size(latestState.utxos)).toEqual(0);
+      expect(HashSet.size(latestState.pendingUtxos)).toEqual(1);
+    }).pipe(Effect.provide(TransactionService.Live), Effect.provide(UnshieldedStateService.Live()), Effect.runPromise));
+
+  it('should fail to init a swap when funds are insufficient', () =>
+    Effect.gen(function* () {
+      const transactionService = yield* TransactionService;
+      const unshieldedState = yield* UnshieldedStateService;
+
+      const tokenProvided = sampleRawTokenType();
+      const signingKey = sampleSigningKey();
+      const owner = signatureVerifyingKey(signingKey);
+      const ownerAddress = addressFromKey(owner);
+
+      const result = yield* Effect.either(
+        transactionService.initSwap(
+          { [tokenProvided]: 10n },
+          [],
+          new Date(),
+          NetworkId.NetworkId.Undeployed,
+          unshieldedState,
+          ownerAddress,
+          owner,
+        ),
+      );
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(TransactionServiceError);
+        expect((result.left as TransactionServiceError).error).toEqual(
+          `Insufficient Funds: could not balance ${tokenProvided}`,
+        );
+      }
     }).pipe(Effect.provide(TransactionService.Live), Effect.provide(UnshieldedStateService.Live()), Effect.runPromise));
 });

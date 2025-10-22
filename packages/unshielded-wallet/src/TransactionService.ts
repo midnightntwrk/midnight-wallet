@@ -19,6 +19,7 @@ import {
   type RawTokenType,
   type UtxoOutput,
   type UserAddress,
+  UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v6';
 import { SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -50,6 +51,18 @@ export interface TransactionServiceLive {
     ttl: Date,
     networkId: NetworkId.NetworkId,
   ) => Effect.Effect<Transaction<SignatureEnabled, PreProof, PreBinding>, TransactionServiceError>;
+  readonly initSwap: (
+    desiredInputs: Record<RawTokenType, bigint>,
+    desiredOutputs: TokenTransfer[],
+    ttl: Date,
+    networkId: NetworkId.NetworkId,
+    state: UnshieldedStateAPI,
+    myAddress: UserAddress,
+    publicKey: SignatureVerifyingKey,
+  ) => Effect.Effect<
+    Transaction<SignatureEnabled, PreProof, PreBinding>,
+    TransactionServiceError | ParseError | UtxoNotFoundError
+  >;
 
   readonly deserializeTransaction: <S extends Signaturish, P extends Proofish, B extends Bindingish>(
     markerS: S['instance'],
@@ -160,6 +173,78 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
             intent.guaranteedUnshieldedOffer = UnshieldedOffer.new([], ledgerOutputs, []);
             return Transaction.fromParts(networkId, undefined, undefined, intent);
           });
+        });
+
+      const initSwap = (
+        desiredInputs: Record<RawTokenType, bigint>,
+        desiredOutputs: TokenTransfer[],
+        ttl: Date,
+        networkId: NetworkId.NetworkId,
+        state: UnshieldedStateAPI,
+        myAddress: UserAddress,
+        publicKey: SignatureVerifyingKey,
+      ): Effect.Effect<UnprovenTransaction, TransactionServiceError | ParseError | UtxoNotFoundError> =>
+        Effect.gen(function* () {
+          const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
+          if (!outputsValid) {
+            return yield* Effect.fail(new TransactionServiceError({ error: 'The amount needs to be positive' }));
+          }
+
+          const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
+          if (!inputsValid) {
+            return yield* Effect.fail(new TransactionServiceError({ error: 'The input amounts need to be positive' }));
+          }
+
+          const ledgerOutputs = desiredOutputs.map((output) => ({
+            value: output.amount,
+            owner: output.receiverAddress,
+            type: output.type,
+          }));
+
+          const targetImbalances = Imbalances.fromEntries(Object.entries(desiredInputs));
+
+          const latestState = yield* state.getLatestState();
+          const availableCoins = HashSet.toValues(latestState.utxos);
+
+          const { inputs, outputs: changeOutputs } = yield* Effect.try({
+            try: () =>
+              getBalanceRecipe<Utxo, UtxoOutput>({
+                coins: availableCoins,
+                initialImbalances: Imbalances.empty(),
+                feeTokenType: '',
+                transactionCostModel: {
+                  inputFeeOverhead: 0n,
+                  outputFeeOverhead: 0n,
+                },
+                createOutput: (coin) => ({
+                  ...coin,
+                  owner: myAddress,
+                }),
+                isCoinEqual: (a, b) => a.intentHash === b.intentHash && a.outputNo === b.outputNo,
+                targetImbalances,
+              }),
+            catch: (error) => {
+              const message = error instanceof Error ? error.message : error?.toString();
+              return new TransactionServiceError({ error: message });
+            },
+          });
+
+          for (const input of inputs) {
+            yield* state.spend(input);
+          }
+
+          const ledgerInputs = inputs.map((input) => ({
+            ...input,
+            owner: publicKey,
+          }));
+
+          const offer = yield* ledgerTry(() =>
+            UnshieldedOffer.new(ledgerInputs, [...changeOutputs, ...ledgerOutputs], []),
+          );
+          const intent = Intent.new(ttl);
+          intent.guaranteedUnshieldedOffer = offer;
+
+          return yield* ledgerTry(() => Transaction.fromParts(networkId, undefined, undefined, intent));
         });
 
       const deserializeTransaction = <S extends Signaturish, P extends Proofish, B extends Bindingish>(
@@ -396,6 +481,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
 
       return TransactionService.of({
         transferTransaction,
+        initSwap,
         deserializeTransaction,
         serializeTransaction,
         balanceTransaction,
