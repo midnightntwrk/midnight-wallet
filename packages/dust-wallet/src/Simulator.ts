@@ -155,4 +155,18 @@ export class Simulator {
       }),
     );
   }
+
+  fastForward(lastTxNumber: bigint): Effect.Effect<undefined, LedgerOps.LedgerError> {
+    return SubscriptionRef.modify(this.#stateRef, (simulatorState) => {
+      return [
+        undefined,
+        {
+          ...simulatorState,
+          lastTxNumber,
+          lastTx: undefined,
+          lastTxResult: undefined,
+        },
+      ];
+    });
+  }
 }

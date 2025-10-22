@@ -25,12 +25,10 @@ import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
-import { DustToken } from './types/Dust.js';
-import { TotalCostParameters } from './types/transaction.js';
+import { AnyTransaction, DustToken, NetworkId, TotalCostParameters, UnprovenDustSpend } from './types/index.js';
 import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
-import { AnyTransaction, NetworkId, UnprovenDustSpend } from './types/ledger.js';
 
 export interface TransactingCapability<TSecrets, TState, TTransaction> {
   readonly networkId: NetworkId;
@@ -257,10 +255,17 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
-    const feeTotal =
-      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead;
-    const dustImbalance = [...transaction.imbalances(0, feeTotal).entries()].find(([tt, _]) => tt.tag === 'dust');
-    return dustImbalance ? -dustImbalance[1] : feeTotal;
+    return (
+      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead
+    );
+  }
+
+  static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
+    const dustImbalance = transaction
+      .imbalances(0, totalFee)
+      .entries()
+      .find(([tt, _]) => tt.tag === 'dust');
+    return dustImbalance ? -dustImbalance[1] : totalFee;
   }
 
   addFeePayment(
@@ -275,16 +280,19 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     WalletError.WalletError
   > {
     const network = this.networkId;
-    const fee = this.calculateFee(transaction, ledgerParams);
+    const feeLeft = TransactingCapabilityImplementation.feeImbalance(
+      transaction,
+      this.calculateFee(transaction, ledgerParams),
+    );
 
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
-    const selectedTokens = this.getCoinSelection()(dustTokens, fee);
+    const selectedTokens = this.getCoinSelection()(dustTokens, feeLeft);
     if (!selectedTokens.length) {
       return Either.left(new WalletError.TransactingError({ error: 'No dust tokens found in dustActions' }));
     }
 
     const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
-    const feeDiff = totalFeeInSelected - fee;
+    const feeDiff = totalFeeInSelected - feeLeft;
     if (feeDiff < 0n) {
       // A sanity-check, should never happen
       return Either.left(new WalletError.TransactingError({ error: 'Error in tokens selection algorithm' }));
