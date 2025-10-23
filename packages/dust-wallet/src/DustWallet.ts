@@ -11,6 +11,7 @@ import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstr
 import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { ProvingRecipe, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -54,6 +55,10 @@ export class DustWalletState {
 
   get dustPublicKey(): DustPublicKey {
     return this.capabilities.keys.getDustPublicKey(this.state);
+  }
+
+  get dustAddress(): string {
+    return DustAddress.encodePublicKey(this.state.networkId, this.dustPublicKey);
   }
 
   get progress(): TransactionHistory.ProgressUpdate {

@@ -2,7 +2,6 @@ import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
@@ -182,11 +181,9 @@ export class WalletFacade {
     }
 
     const dustState = await this.dust.waitForSyncedState();
+    const receiverAddress = dustReceiverAddress ?? dustState.dustAddress;
     const nextBlock = new Date();
     const ttl = new Date(nextBlock.getTime() + 60 * 60 * 1000);
-
-    const receiverAddress =
-      dustReceiverAddress ?? DustAddress.encodePublicKey(dustState.state.networkId, dustState.dustPublicKey);
 
     const transaction = await this.dust.createDustGenerationTransaction(
       nextBlock,
