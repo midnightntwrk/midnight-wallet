@@ -43,6 +43,7 @@ coverage
 packages/*/*.tgz
 .rollup.cache/
 packages/src/**/*.d.ts*
+.clean-timestamp
 
 # reports
 reports

@@ -54,7 +54,8 @@
     "test": "vitest run",
     "lint": "eslint",
     "dist": "tsc -b ./tsconfig.build.json",
-    "clean": "rimraf dist tsconfig.build.tsbuildinfo",
+    "dist:publish": "tsc -b ./tsconfig.publish.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
     "publint": "publint --strict"
   }
 }

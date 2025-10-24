@@ -31,7 +31,8 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
     "dist": "tsc -b ./tsconfig.build.json",
-    "clean": "rimraf dist tsconfig.build.tsbuildinfo",
+    "dist:publish": "tsc -b ./tsconfig.publish.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
     "publint": "publint --strict"
   },
   "devDependencies": {
@@ -39,7 +40,6 @@
     "eslint": "^9.37.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
-    "rollup": "^4.41.1",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }

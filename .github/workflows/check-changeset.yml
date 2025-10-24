@@ -1,0 +1,34 @@
+name: Check for Changeset
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-changeset:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Verify that a changeset exists
+        run: |
+          yarn changeset status --since=origin/main --verbose

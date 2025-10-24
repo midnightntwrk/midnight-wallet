@@ -6,16 +6,8 @@
     "outDir": "./dist",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "lib": [
-      "ESNext",
-      "dom"
-    ]
+    "lib": ["ESNext", "dom"]
   },
-  "include": [
-    "src/**/*.ts"
-  ],
-  "exclude": [
-    "src/**/test/**/*.ts",
-    "src/**/*.test.ts"
-  ]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/test/**/*.ts", "src/**/*.test.ts"]
 }

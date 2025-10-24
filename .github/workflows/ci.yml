@@ -10,9 +10,9 @@ env:
 
 on:
   pull_request:
-    branches: ['**']
+    branches: ["**"]
   push:
-    branches: ['main']
+    branches: ["main"]
 
 jobs:
   build:
@@ -23,8 +23,8 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -40,7 +40,7 @@ jobs:
       - name: Log in to GitHub Container registry
         uses: docker/login-action@v3
         with:
-          registry: 'https://ghcr.io'
+          registry: "https://ghcr.io"
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -53,6 +53,15 @@ jobs:
 
       - name: Verify
         run: yarn verify
+
+      - name: Clean
+        run: yarn clean
+
+      - name: Build for publishing
+        run: yarn dist:publish
+
+      - name: Run publint
+        run: yarn publint
 
       # - name: Run smoke e2e tests
       #   run: |

@@ -7,24 +7,32 @@ env:
 on:
   workflow_dispatch:
   push:
-    tags: ['v*']
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
 
 jobs:
-  publish:
-    name: Build & Publish
+  release:
+    name: Release
     runs-on: ubuntu-latest-8-core-x64
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
       - uses: actions/setup-node@v4
         with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
-          cache-dependency-path: 'yarn.lock'
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: "yarn.lock"
           # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
-          scope: '@midnight-ntwrk'
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@midnight-ntwrk"
 
       - name: Enable corepack
         run: corepack enable
@@ -43,8 +51,13 @@ jobs:
         run: |
           yarn install --immutable
 
-      - name: Build
-        run: yarn dist
+      - name: Create Release Pull Request / Publish
+        id: changesets
+        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba #v1.5.3
+        with:
+          title: "chore: release"
+          publish: yarn dist:publish && yarn changeset publish
 
-      - name: Publish release
-        run: yarn workspaces foreach --all --topological-dev --no-private npm publish --tolerate-republish
+        env:
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}

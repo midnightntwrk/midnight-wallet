@@ -46,25 +46,36 @@
         "tsconfig.json",
         "tsconfig.build.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        "rollup.config.mjs",
-        "$TURBO_ROOT$/rollup.config.mjs"
+        ".clean-timestamp"
       ],
-      "outputs": ["dist/**"],
+      "outputs": ["dist/**", "tsconfig.*.tsbuildinfo"],
       "outputLogs": "new-only",
-      "dependsOn": ["clean", "typecheck", "^dist"]
+      "dependsOn": ["^dist", "typecheck"]
+    },
+    "dist:publish": {
+      "inputs": [
+        "src/**/*.ts",
+        "tsconfig.json",
+        "tsconfig.build.json",
+        "tsconfig.publish.json",
+        "$TURBO_ROOT$/tsconfig.base.json",
+        ".clean-timestamp"
+      ],
+      "outputs": ["dist/**", "tsconfig.*.tsbuildinfo"],
+      "outputLogs": "new-only",
+      "dependsOn": ["^dist:publish"]
     },
     "publint": {
       "inputs": [
         "src/**/*.ts",
         "tsconfig.json",
         "tsconfig.build.json",
-        "$TURBO_ROOT$/tsconfig.base.json",
-        "rollup.config.mjs",
-        "$TURBO_ROOT$/rollup.config.mjs"
+        "tsconfig.publish.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
       ],
       "outputs": [],
       "outputLogs": "new-only",
-      "dependsOn": ["dist"]
+      "dependsOn": ["dist:publish"]
     },
     "clean": {
       "cache": false,
@@ -78,7 +89,7 @@
       "outputLogs": "new-only"
     },
     "verify": {
-      "dependsOn": ["typecheck", "lint", "test", "publint"]
+      "dependsOn": ["typecheck", "lint", "test"]
     }
   }
 }
