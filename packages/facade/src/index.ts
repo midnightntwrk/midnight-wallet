@@ -16,6 +16,8 @@ export type CombinedTokenTransfer = {
   outputs: TokenTransfer[];
 };
 
+export type TransactionIdentifier = string;
+
 export type NightUtxoWithMeta = ledger.Utxo & { ctime: number };
 
 export class WalletFacade {
@@ -43,10 +45,10 @@ export class WalletFacade {
     );
   }
 
-  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<string> {
-    const submittedTransaction = await this.shielded.submitTransaction(tx, 'Finalized');
+  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
+    await this.shielded.submitTransaction(tx, 'Finalized');
 
-    return submittedTransaction.txHash;
+    return tx.identifiers().at(-1)!;
   }
 
   async balanceTransaction(
