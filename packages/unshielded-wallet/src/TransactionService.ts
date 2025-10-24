@@ -36,12 +36,12 @@ export type TokenTransfer = {
 };
 
 export class DeserializationError extends Data.TaggedError('DeserializationError')<{
-  readonly error?: unknown;
+  readonly message: string;
   readonly internal?: unknown;
 }> {}
 
 export class TransactionServiceError extends Data.TaggedError('TransactionServiceError')<{
-  readonly error?: unknown;
+  readonly message: string;
   readonly cause?: unknown;
 }> {}
 
@@ -112,7 +112,7 @@ const ledgerTry = <A>(fn: () => A): Either.Either<A, TransactionServiceError> =>
       // eslint-disable-next-line no-console
       console.log('Error from ledger', error);
       const message = error instanceof Error ? error.message : `${error?.toString()}`;
-      return new TransactionServiceError({ error: `Error from ledger: ${message}`, cause: error });
+      return new TransactionServiceError({ message: `Error from ledger: ${message}`, cause: error });
     },
   });
 };
@@ -157,7 +157,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         Effect.gen(function* () {
           const isValid = desiredOutputs.every((output) => output.amount > 0n);
           if (!isValid) {
-            return yield* Effect.fail(new TransactionServiceError({ error: 'The amount needs to be positive' }));
+            return yield* Effect.fail(new TransactionServiceError({ message: 'The amount needs to be positive' }));
           }
 
           const ledgerOutputs = desiredOutputs.map((output) => {
@@ -187,12 +187,14 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         Effect.gen(function* () {
           const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
           if (!outputsValid) {
-            return yield* Effect.fail(new TransactionServiceError({ error: 'The amount needs to be positive' }));
+            return yield* Effect.fail(new TransactionServiceError({ message: 'The amount needs to be positive' }));
           }
 
           const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
           if (!inputsValid) {
-            return yield* Effect.fail(new TransactionServiceError({ error: 'The input amounts need to be positive' }));
+            return yield* Effect.fail(
+              new TransactionServiceError({ message: 'The input amounts need to be positive' }),
+            );
           }
 
           const ledgerOutputs = desiredOutputs.map((output) => ({
@@ -224,8 +226,8 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
                 targetImbalances,
               }),
             catch: (error) => {
-              const message = error instanceof Error ? error.message : error?.toString();
-              return new TransactionServiceError({ error: message });
+              const message = error instanceof Error ? error.message : error?.toString() || '';
+              return new TransactionServiceError({ message });
             },
           });
 
@@ -259,7 +261,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
             const data = Buffer.from(tx, 'hex');
             return Transaction.deserialize(markerS, markerP, markerB, data);
           }),
-          (e) => new DeserializationError({ error: 'Unable to deserialize transaction', internal: e.error }),
+          (e) => new DeserializationError({ message: 'Unable to deserialize transaction', internal: e.message }),
         );
 
       const serializeTransaction = (
@@ -319,13 +321,13 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
                   isCoinEqual: (a, b) => a.intentHash === b.intentHash && a.outputNo === b.outputNo,
                 }),
               catch: (error) => {
-                const message = error instanceof Error ? error.message : error?.toString();
-                return new TransactionServiceError({ error: message });
+                const message = error instanceof Error ? error.message : error?.toString() || '';
+                return new TransactionServiceError({ message });
               },
             });
 
             if (!inputs.length) {
-              return yield* Effect.fail(new TransactionServiceError({ error: 'No coins found to spend' }));
+              return yield* Effect.fail(new TransactionServiceError({ message: 'No coins found to spend' }));
             }
 
             // mark the coins as spent
@@ -400,12 +402,12 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         segment: number = 1,
       ): Effect.Effect<Uint8Array, TransactionServiceError> => {
         if (!transaction.intents) {
-          return Effect.fail(new TransactionServiceError({ error: 'No intents found in the provided transaction' }));
+          return Effect.fail(new TransactionServiceError({ message: 'No intents found in the provided transaction' }));
         }
 
         const intent = transaction.intents.get(segment);
         if (!intent) {
-          return Effect.fail(new TransactionServiceError({ error: 'Intent with a given segment was not found' }));
+          return Effect.fail(new TransactionServiceError({ message: 'Intent with a given segment was not found' }));
         }
 
         return pipe(
@@ -422,14 +424,14 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
         Effect.gen(function* () {
           if (!transaction.intents || !transaction.intents.size) {
             return yield* Effect.fail(
-              new TransactionServiceError({ error: 'No intents found in the provided transaction' }),
+              new TransactionServiceError({ message: 'No intents found in the provided transaction' }),
             );
           }
 
           const intent = transaction.intents.get(segment);
           if (!intent) {
             return yield* Effect.fail(
-              new TransactionServiceError({ error: 'Intent with a given segment was not found' }),
+              new TransactionServiceError({ message: 'Intent with a given segment was not found' }),
             );
           }
 

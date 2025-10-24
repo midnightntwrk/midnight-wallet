@@ -114,7 +114,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(result1)).toBe(true);
       if (Either.isLeft(result1)) {
         expect(result1.left).toBeInstanceOf(TransactionServiceError);
-        expect(result1.left.error).toEqual('The amount needs to be positive');
+        expect(result1.left.message).toEqual('The amount needs to be positive');
       }
 
       const amount2 = -10n;
@@ -133,7 +133,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(result2)).toBe(true);
       if (Either.isLeft(result2)) {
         expect(result2.left).toBeInstanceOf(TransactionServiceError);
-        expect(result2.left.error).toEqual('The amount needs to be positive');
+        expect(result2.left.message).toEqual('The amount needs to be positive');
       }
     }).pipe(Effect.provide(TransactionService.Live), Effect.runPromise));
 
@@ -274,7 +274,7 @@ describe('TransactionService', () => {
       },
       onLeft: (error) => {
         expect(error).toBeInstanceOf(TransactionServiceError);
-        expect((error as TransactionServiceError).error).toEqual(`Insufficient Funds: could not balance ${token}`);
+        expect((error as TransactionServiceError).message).toEqual(`Insufficient Funds: could not balance ${token}`);
       },
     });
   });
@@ -313,7 +313,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(result)).toBe(true);
       if (Either.isLeft(result)) {
         expect(result.left).toBeInstanceOf(TransactionServiceError);
-        expect((result.left as TransactionServiceError).error).toEqual(
+        expect((result.left as TransactionServiceError).message).toEqual(
           `Insufficient Funds: could not balance ${token2}`,
         );
       }
@@ -439,7 +439,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(fail)).toBe(true);
       if (Either.isLeft(fail)) {
         expect(fail.left).toBeInstanceOf(TransactionServiceError);
-        expect(fail.left.error).toEqual(`Intent with a given segment was not found`);
+        expect(fail.left.message).toEqual(`Intent with a given segment was not found`);
       }
     }).pipe(Effect.provide(TransactionService.Live), Effect.runPromise));
 
@@ -474,7 +474,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(fail)).toBe(true);
       if (Either.isLeft(fail)) {
         expect(fail.left).toBeInstanceOf(TransactionServiceError);
-        expect(fail.left.error).toEqual(`Intent with a given segment was not found`);
+        expect(fail.left.message).toEqual(`Intent with a given segment was not found`);
       }
     }).pipe(Effect.provide(TransactionService.Live), Effect.provide(UnshieldedStateService.Live()), Effect.runPromise));
 
@@ -723,7 +723,7 @@ describe('TransactionService', () => {
       expect(Either.isLeft(result)).toBe(true);
       if (Either.isLeft(result)) {
         expect(result.left).toBeInstanceOf(TransactionServiceError);
-        expect((result.left as TransactionServiceError).error).toEqual(
+        expect((result.left as TransactionServiceError).message).toEqual(
           `Insufficient Funds: could not balance ${tokenProvided}`,
         );
       }
