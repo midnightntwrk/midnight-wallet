@@ -1,4 +1,4 @@
-import { Array as Arr, Either } from 'effect';
+import { Either } from 'effect';
 import {
   DustActions,
   DustPublicKey,
@@ -131,7 +131,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
-    nightUtxos: Arr.NonEmptyReadonlyArray<CoinWithValue<Utxo>>,
+    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
@@ -141,7 +141,6 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
         const intent = Intent.new(ttl);
-        // const nightOwner = nightUtxos.at(0)!.token.owner;
         const totalDustValue = nightUtxos.reduce((total, { value }) => total + value, 0n);
         const inputs: UtxoSpend[] = nightUtxos.map(({ token: utxo }) => ({
           ...utxo,
@@ -160,7 +159,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           SignatureMarker.signature,
           nightVerifyingKey,
           receiver,
-          totalDustValue,
+          dustReceiverAddress !== undefined ? totalDustValue : 0n,
         );
 
         intent.dustActions = new DustActions<SignatureEnabled, PreProof>(

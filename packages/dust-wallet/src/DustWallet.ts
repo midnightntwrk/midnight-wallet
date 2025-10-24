@@ -20,7 +20,7 @@ import { KeysCapability } from './Keys.js';
 import { V1Tag } from './RunningV1Variant.js';
 import { SerializationCapability } from './Serialization.js';
 import { SubmitTransactionMethod } from './Submission.js';
-import { DustToken, UtxoWithMeta } from './types/Dust.js';
+import { DustToken, DustTokenFullInfo, UtxoWithMeta } from './types/Dust.js';
 import { AnyTransaction, NetworkId } from './types/ledger.js';
 import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder.js';
 
@@ -78,6 +78,10 @@ export class DustWalletState {
 
   walletBalance(time: Date): Balance {
     return this.capabilities.coinsAndBalances.getWalletBalance(this.state, time);
+  }
+
+  availableCoinsWithFullInfo(time: Date): readonly DustTokenFullInfo[] {
+    return this.capabilities.coinsAndBalances.getAvailableCoinsWithFullInfo(this.state, time);
   }
 
   serialize(): string {

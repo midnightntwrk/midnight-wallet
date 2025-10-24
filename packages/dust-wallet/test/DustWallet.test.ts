@@ -108,6 +108,54 @@ describe('DustWallet', () => {
     });
   };
 
+  const deregisterNightTokens = (
+    wallet: RunningWallet,
+    nightTokens: Array<UtxoWithMeta>,
+    nightVerifyingKey: string,
+    dustSecretKey: DustSecretKey,
+  ) => {
+    return Effect.gen(function* () {
+      const simulatorState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(simulatorState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+
+      const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
+        currentTime,
+        ttl,
+        nightTokens,
+        nightVerifyingKey,
+        undefined,
+      );
+
+      const feeRecipe = (yield* wallet.addFeePayment(
+        dustSecretKey,
+        registerForDustTransaction,
+        currentTime,
+        ttl,
+      )) as ProvingRecipe.TransactionToProve;
+
+      const intent = feeRecipe.transaction.intents!.get(1);
+      const intentSignatureData = intent!.signatureData(1);
+      const signature = keyStore.signData(intentSignatureData);
+      const recipeWithSignature = (yield* wallet.addDustGenerationSignature(
+        feeRecipe.transaction,
+        signature,
+      )) as ProvingRecipe.TransactionToProve;
+      expect(recipeWithSignature.type).toEqual(ProvingRecipe.TRANSACTION_TO_PROVE);
+
+      const signedTransaction = {
+        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
+        transaction: recipeWithSignature.transaction.eraseProofs(),
+      };
+      const transaction = yield* wallet.finalizeTransaction(signedTransaction);
+      const result = yield* wallet.submitTransaction(transaction);
+      const latestSimulatorState = yield* simulator.getLatestState();
+      expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
+      expect(latestSimulatorState.lastTxResult?.type).toBe('success');
+      return result;
+    });
+  };
+
   beforeEach(async () =>
     Effect.gen(function* () {
       const dustSeed = getDustSeed(SEED);
@@ -434,6 +482,62 @@ describe('DustWallet', () => {
       // check there are no pending tokens left
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(walletState);
       expect(pendingCoins.length).toBe(0);
+    }).pipe(Effect.runPromise);
+  });
+
+  it('deregister from Dust generation', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000_000n;
+
+      // reward & claim Night tokens
+      const rewardNight = yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      expect(rewardNight.blockNumber).toBe(1n);
+      yield* waitForTx(stateRef, 1);
+
+      let simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(1);
+
+      // register Night tokens
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 2);
+
+      let walletState = yield* SubscriptionRef.get(stateRef);
+      const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState);
+      expect(availableCoins.length).toBe(1);
+
+      // add more time to generate dust
+      yield* simulator.fastForward(10n);
+      simulatorState = yield* simulator.getLatestState();
+
+      // address_delegation should be not empty
+      expect(simulatorState.ledger.dust.toString().includes('address_delegation: {}')).toBeFalsy();
+
+      // deregister Night tokens from dust generation
+      // NOTE: to only unregister the address, set the night tokens param to []
+      yield* deregisterNightTokens(
+        wallet,
+        getNightTokensWithMeta(simulatorState, walletAddress),
+        nightVerifyingKey,
+        dustSecretKey,
+      );
+      yield* waitForTx(stateRef, 11);
+
+      walletState = yield* SubscriptionRef.get(stateRef);
+      simulatorState = yield* simulator.getLatestState();
+
+      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
+        walletState,
+        toTxTime(simulatorState.lastTxNumber),
+      );
+      expect(newAvailableCoins.length).toBe(1);
+      expect(newAvailableCoins[0].dtime).toStrictEqual(DateOps.secondsToDate(simulatorState.lastTxNumber));
+
+      // address_delegation should be empty
+      expect(simulatorState.ledger.dust.toString()).toMatch(/address_delegation: {},/);
     }).pipe(Effect.runPromise);
   });
 });

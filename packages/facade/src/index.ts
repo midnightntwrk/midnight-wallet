@@ -209,6 +209,38 @@ export class WalletFacade {
     return recipe;
   }
 
+  async deregisterFromDustGeneration(
+    nightUtxos: NightUtxoWithMeta[],
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
+  ): Promise<ProvingRecipe.TransactionToProve> {
+    const nextBlock = new Date();
+    const ttl = new Date(nextBlock.getTime() + 60 * 60 * 1000);
+
+    const transaction = await this.dust.createDustGenerationTransaction(
+      nextBlock,
+      ttl,
+      nightUtxos.map((utxo) => ({ ...utxo, ctime: new Date(utxo.ctime) })),
+      nightVerifyingKey,
+      undefined,
+    );
+
+    const intent = transaction.intents?.get(1);
+    if (!intent) {
+      throw Error('Dust generation transaction is missing intent segment 1.');
+    }
+
+    const signatureData = intent.signatureData(1);
+    const signature = await Promise.resolve(signDustRegistration(signatureData));
+
+    const recipe = await this.dust.addDustGenerationSignature(transaction, signature);
+    if (recipe.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
+      throw Error('Unexpected recipe type returned when registering Night UTXOs.');
+    }
+
+    return recipe;
+  }
+
   async start(zswapSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
     await Promise.all([this.shielded.start(zswapSecretKeys), this.unshielded.start(), this.dust.start(dustSecretKey)]);
   }

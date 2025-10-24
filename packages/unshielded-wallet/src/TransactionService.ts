@@ -291,7 +291,7 @@ export class TransactionService extends Context.Tag('@midnight-ntwrk/wallet-sdk-
             const allIntentImbalances = yield* ledgerTry(() => transaction.imbalances(segment));
             const imbalances = allIntentImbalances
               .entries()
-              .filter(([token, _]) => token.tag === 'unshielded')
+              .filter(([token, value]) => token.tag === 'unshielded' && value !== 0n)
               .map(([token, value]) => {
                 return [(token as UnshieldedToken).raw.toString(), value] as [string, bigint];
               })
