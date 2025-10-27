@@ -19,5 +19,12 @@
     "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.6",
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1"
   },
-  "changesets": []
+  "changesets": [
+    "honest-moose-knock",
+    "large-chicken-smash",
+    "lovely-parents-stop",
+    "orange-cycles-run",
+    "six-cooks-sink",
+    "true-states-accept"
+  ]
 }
