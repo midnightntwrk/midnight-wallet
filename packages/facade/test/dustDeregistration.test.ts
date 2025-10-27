@@ -9,7 +9,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils.js';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { NightUtxoWithMeta, WalletFacade } from '../src/index.js';
+import { WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -108,7 +108,7 @@ describe('Dust Deregistration', () => {
     const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
-    const nightUtxos: NightUtxoWithMeta[] = walletStateWithNight.unshielded.availableCoins.filter(
+    const nightUtxos = walletStateWithNight.unshielded.availableCoins.filter(
       (coin) => coin.registeredForDustGeneration === true,
     );
 

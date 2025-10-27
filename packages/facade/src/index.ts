@@ -1,12 +1,13 @@
 import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { type Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
 import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 export interface TokenTransfer {
-  type: string;
+  type: ledger.RawTokenType;
   receiverAddress: string;
   amount: bigint;
 }
@@ -16,9 +17,14 @@ export type CombinedTokenTransfer = {
   outputs: TokenTransfer[];
 };
 
-export type TransactionIdentifier = string;
+export type CombinedSwapInputs = {
+  shielded?: Record<ledger.RawTokenType, bigint>;
+  unshielded?: Record<ledger.RawTokenType, bigint>;
+};
 
-export type NightUtxoWithMeta = ledger.Utxo & { ctime: number };
+export type CombinedSwapOutputs = CombinedTokenTransfer;
+
+export type TransactionIdentifier = string;
 
 export class WalletFacade {
   shielded: ShieldedWallet;
@@ -173,7 +179,7 @@ export class WalletFacade {
   }
 
   async registerNightUtxosForDustGeneration(
-    nightUtxos: NightUtxoWithMeta[],
+    nightUtxos: Utxo[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
     dustReceiverAddress?: string,
@@ -211,8 +217,62 @@ export class WalletFacade {
     return recipe;
   }
 
+  async initSwap(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
+    desiredInputs: CombinedSwapInputs,
+    desiredOutputs: CombinedSwapOutputs[],
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction> {
+    const { shielded: shieldedInputs, unshielded: unshieldedInputs } = desiredInputs;
+
+    const shieldedOutputs = desiredOutputs
+      .filter((output) => output.type === 'shielded')
+      .flatMap((output) => output.outputs);
+
+    const unshieldedOutputs = desiredOutputs
+      .filter((output) => output.type === 'unshielded')
+      .flatMap((output) => output.outputs);
+
+    const hasShieldedPart = (shieldedInputs && Object.keys(shieldedInputs).length > 0) || shieldedOutputs.length > 0;
+
+    const hasUnshieldedPart =
+      (unshieldedInputs && Object.keys(unshieldedInputs).length > 0) || unshieldedOutputs.length > 0;
+
+    if (!hasShieldedPart && !hasUnshieldedPart) {
+      throw Error('At least one shielded or unshielded swap is required.');
+    }
+
+    const shieldedTxRecipe =
+      hasShieldedPart && shieldedInputs !== undefined
+        ? await this.shielded.initSwap(zswapSecretKeys, shieldedInputs, shieldedOutputs)
+        : undefined;
+
+    const unshieldedTx =
+      hasUnshieldedPart && unshieldedInputs !== undefined
+        ? await this.unshielded.initSwap(unshieldedInputs, unshieldedOutputs, ttl)
+        : undefined;
+
+    if (shieldedTxRecipe !== undefined && shieldedTxRecipe.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
+      throw Error('Unexpected transaction type.');
+    }
+
+    if (shieldedTxRecipe && unshieldedTx) {
+      return shieldedTxRecipe.transaction.merge(unshieldedTx);
+    }
+
+    if (shieldedTxRecipe) {
+      return shieldedTxRecipe.transaction;
+    }
+
+    if (unshieldedTx) {
+      return unshieldedTx;
+    }
+
+    throw Error('Unexpected transaction state.');
+  }
+
   async deregisterFromDustGeneration(
-    nightUtxos: NightUtxoWithMeta[],
+    nightUtxos: Utxo[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
   ): Promise<ProvingRecipe.TransactionToProve> {
