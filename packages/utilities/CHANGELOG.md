@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.0.0-beta.6
+
+### Patch Changes
+
+- 2a0d132: chore: force re-release after workspace failure
+
 ## 1.0.0-beta.5
 
 ### Patch Changes
