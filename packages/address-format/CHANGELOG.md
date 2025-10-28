@@ -4,4 +4,4 @@
 
 ### Patch Changes
 
-- ae22baf: Release v1.0.0-beta.9
+- ae22baf: chore: initialize baseline release after introducing Changesets

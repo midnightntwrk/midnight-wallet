@@ -15,4 +15,4 @@
 '@midnight-ntwrk/wallet-sdk-shielded': patch
 ---
 
-Release v1.0.0-beta.9
+chore: initialize baseline release after introducing Changesets

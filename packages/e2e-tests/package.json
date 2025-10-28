@@ -22,7 +22,7 @@
     "@midnight-ntwrk/wallet": "npm:@midnight-ntwrk/wallet@5.0.0",
     "@midnight-ntwrk/wallet-api": "^5.0.0",
     "@midnight-ntwrk/wallet-api_hf": "npm:@midnight-ntwrk/wallet-api@3.4.0",
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.5",
     "@midnight-ntwrk/wallet_post_hf": "npm:@midnight-ntwrk/wallet@3.7.1-hardfork-rc.2",
     "@midnight-ntwrk/wallet_pre_hf": "npm:@midnight-ntwrk/wallet@3.6.0",
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4",

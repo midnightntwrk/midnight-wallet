@@ -24,8 +24,8 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.5",
+    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.5",
     "effect": "^3.17.3"
   },
   "devDependencies": {

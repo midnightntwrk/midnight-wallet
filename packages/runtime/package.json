@@ -29,8 +29,8 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.6",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.5",
     "effect": "^3.17.3",
     "rxjs": "^7.5"
   },

@@ -1,4 +1,8 @@
 name: Check for Changeset
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
 on:
   pull_request:
     branches: [main]
@@ -17,6 +21,7 @@ jobs:
           node-version-file: ".nvmrc"
           cache: "yarn"
           cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Enable corepack
         run: corepack enable
@@ -26,6 +31,10 @@ jobs:
           node --version
           corepack --version
           yarn --version
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
       - name: Install dependencies
         run: yarn install --immutable
