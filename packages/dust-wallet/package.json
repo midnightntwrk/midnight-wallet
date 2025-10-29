@@ -24,7 +24,6 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.4",
-    "@midnight-ntwrk/wallet-api": "6.0.0-pre.5665b1e",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.7",
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.6",
     "@midnight-ntwrk/wallet-sdk-capabilities": "3.0.0-beta.6",

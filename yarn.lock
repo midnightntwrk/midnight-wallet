@@ -2041,17 +2041,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/wallet-api@npm:6.0.0-pre.5665b1e":
-  version: 6.0.0-pre.5665b1e
-  resolution: "@midnight-ntwrk/wallet-api@npm:6.0.0-pre.5665b1e::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F6.0.0-pre.5665b1e%2Ffad66c2049bef872da2bc4d3882a7ccd55d811c2"
-  dependencies:
-    "@midnight-ntwrk/zswap": "npm:^4.0.0"
-  peerDependencies:
-    rxjs: 7.x
-  checksum: 10c0/cc97bc4685da2bc5d4cfdc21e3c06f1910f5206fef9bcf024fa64e58a9579c577ac0449ea08a5eb0e3522cd30433baec59920092334f1c95839e7ff7be848718
-  languageName: node
-  linkType: hard
-
 "@midnight-ntwrk/wallet-api@npm:^3.4.0, @midnight-ntwrk/wallet-api@npm:^3.5.0":
   version: 3.5.0
   resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
@@ -2182,7 +2171,6 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
     "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.4"
-    "@midnight-ntwrk/wallet-api": "npm:6.0.0-pre.5665b1e"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0-beta.7"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.0.0-beta.6"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.0.0-beta.6"
