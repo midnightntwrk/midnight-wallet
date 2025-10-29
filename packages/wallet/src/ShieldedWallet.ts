@@ -246,11 +246,10 @@ export function CustomShieldedWallet<
     balanceTransaction(
       secretKeys: ledger.ZswapSecretKeys,
       tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-      newCoins: readonly ledger.ShieldedCoinInfo[],
     ): Promise<ProvingRecipe<TTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceTransaction(secretKeys, tx, newCoins),
+          [V1Tag]: (v1) => v1.balanceTransaction(secretKeys, tx),
         })
         .pipe(Effect.runPromise);
     }

@@ -154,11 +154,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    newCoins: readonly ledger.ShieldedCoinInfo[],
   ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx, newCoins),
+        this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx),
         EitherOps.toEffect,
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );

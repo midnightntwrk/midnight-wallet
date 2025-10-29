@@ -267,7 +267,7 @@ describe.skip('Wallet transacting', () => {
           return wallet2.runtime.dispatch({
             [V1Tag]: (v1) =>
               pipe(
-                v1.balanceTransaction(wallet2Keys, tx, []),
+                v1.balanceTransaction(wallet2Keys, tx),
                 Effect.andThen((recipe) => v1.finalizeTransaction(recipe)),
                 Effect.tap((tx) => v1.submitTransaction(tx, 'Finalized')),
               ),

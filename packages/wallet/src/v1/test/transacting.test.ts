@@ -140,9 +140,7 @@ describe('V1 Wallet Transacting', () => {
       });
 
       return Effect.gen(function* () {
-        const result = EitherOps.getOrThrowLeft(
-          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []),
-        );
+        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
         const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
         const proven = yield* proving.prove(recipe);
 
@@ -172,9 +170,7 @@ describe('V1 Wallet Transacting', () => {
       ).eraseProofs();
 
       return Effect.gen(function* () {
-        const result = EitherOps.getOrThrowLeft(
-          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []),
-        );
+        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
         const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
         const proven = yield* proving.prove(recipe);
         expect(
@@ -210,7 +206,7 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
 
       expect(getAvailableCoins(result.newState).length).toBe(0);
       expect(
@@ -240,7 +236,7 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
 
       const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
       expect(pendingOutputs.length).toEqual(2);
@@ -250,37 +246,6 @@ describe('V1 Wallet Transacting', () => {
         // and guaranteed of value 2 to be balanced with coin of value 3
         expect(output.value).toBeLessThanOrEqual(shieldedValue(1));
       });
-    });
-
-    it('watches for new coins from balancing', () => {
-      const wallets = prepareWallets({
-        A: {
-          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
-          coins: [shieldedValue(1), shieldedValue(2), shieldedValue(3)],
-        },
-        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
-      });
-      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const transactionValueFallible = shieldedValue(2);
-      const changeCoin = ledger.createShieldedCoinInfo(rawShieldedTokenType, shieldedValue(2));
-      const guaranteedOffer = makeOutputOffer({ recipient: wallets.A, coin: changeCoin });
-      const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = ledger.Transaction.fromParts(
-        NetworkId.NetworkId.Undeployed,
-        guaranteedOffer,
-        fallibleOffer,
-      ).eraseProofs();
-
-      const result = EitherOps.getOrThrowLeft(
-        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, [changeCoin]),
-      );
-
-      const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
-      expect(pendingOutputs).toContainEqual([changeCoin, undefined]);
-      expect(pendingOutputs.length).toEqual(3);
-      for (const [output] of pendingOutputs.filter(([c]) => c.nonce !== changeCoin.nonce)) {
-        expect(output.value).toBeLessThanOrEqual(shieldedValue(1));
-      }
     });
 
     it('raises an error if there are not enough tokens for balancing', () => {
@@ -302,7 +267,7 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, [changeCoin]);
+      const result = transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx);
 
       expect(() => EitherOps.getOrThrowLeft(result)).toThrow();
     });
@@ -326,12 +291,12 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx, []));
+      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
       const anotherTx = pipe(makeOutputOffer({ recipient: wallets.B, coin: shieldedValue(1) }), (offer) =>
         ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs(),
       );
 
-      const secondResult = transacting.balanceTransaction(wallets.A.keys, result.newState, anotherTx, []);
+      const secondResult = transacting.balanceTransaction(wallets.A.keys, result.newState, anotherTx);
 
       expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
@@ -598,7 +563,7 @@ describe('V1 Wallet Transacting', () => {
         );
         const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
@@ -807,7 +772,7 @@ describe('V1 Wallet Transacting', () => {
         );
         const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
@@ -847,7 +812,7 @@ describe('V1 Wallet Transacting', () => {
         );
         const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
         const balancedResult = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven, []),
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
         const balancedProven = yield* proving.prove(balancedResult.recipe);
 
@@ -890,7 +855,7 @@ describe('V1 Wallet Transacting', () => {
         ).eraseProofs();
 
         const balanceResult = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
         );
         const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
@@ -943,7 +908,7 @@ describe('V1 Wallet Transacting', () => {
         ).eraseProofs();
 
         const balanceResult = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
         );
         const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
 
@@ -982,7 +947,7 @@ describe('V1 Wallet Transacting', () => {
       ).eraseProofs();
 
       const balanceResult = EitherOps.getOrThrowLeft(
-        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
       );
 
       const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
@@ -1031,7 +996,7 @@ describe('V1 Wallet Transacting', () => {
       ).eraseProofs();
 
       const balanceResult = EitherOps.getOrThrowLeft(
-        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance, []),
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
       );
 
       const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(

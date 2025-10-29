@@ -35,7 +35,6 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     state: TState,
     // That's definitely fine for now, question is whether it is worth bastracting over in general case
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    newCoins: readonly ledger.ShieldedCoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
 
   makeTransfer(
@@ -124,14 +123,13 @@ export class TransactingCapabilityImplementation<
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     tx: TTransaction,
-    newCoins: ledger.ShieldedCoinInfo[],
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
       const networkId = this.networkId;
       const initialImbalances = this.txTrait.getImbalances(tx);
 
-      if (TransactionImbalances.areBalanced(initialImbalances) && newCoins.length === 0) {
+      if (TransactionImbalances.areBalanced(initialImbalances)) {
         return {
           recipe: {
             type: NOTHING_TO_PROVE,
@@ -152,13 +150,12 @@ export class TransactingCapabilityImplementation<
         afterFallible,
         initialImbalances,
         coinSelection,
-        newCoins.length,
+        0,
         Imbalances.empty(),
       );
-      const finalState = CoreWallet.watchCoins(afterGuaranteed, secretKeys, newCoins);
 
       return {
-        newState: finalState,
+        newState: afterGuaranteed,
         recipe: {
           type: BALANCE_TRANSACTION_TO_PROVE,
           transactionToBalance: tx,
