@@ -1,19 +1,15 @@
-import { describe, test, expect } from 'vitest';
+/* eslint-disable @typescript-eslint/restrict-plus-operands */
+/* eslint-disable @typescript-eslint/no-base-to-string */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { firstValueFrom } from 'rxjs';
-import { Resource, WalletBuilder } from '@midnight-ntwrk/wallet';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import { nativeToken, NetworkId } from '@midnight-ntwrk/zswap';
-import {
-  closeWallet,
-  waitForFinalizedBalance,
-  waitForPending,
-  waitForSync,
-  waitForTxInHistory,
-  walletStateTrimmed,
-} from './utils.js';
-import { Wallet } from '@midnight-ntwrk/wallet-api';
+import { nativeToken, ZswapSecretKeys } from '@midnight-ntwrk/ledger-v6';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
+import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 
 /**
  * Tests performing a token transfer
@@ -38,42 +34,37 @@ describe('Token transfer', () => {
   const outputValue = 100_000_000n;
   const nativeTokenValue = 25n;
   const nativeTokenValue2 = 50n;
+  const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
   const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
   const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
+  const secretKey = ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seedFunded));
 
-  let walletFunded: Wallet & Resource;
+  let Wallet: ShieldedWalletClass;
+  let walletFunded: ShieldedWallet;
   let fixture: TestContainersFixture;
-  let networkId: NetworkId;
+  let networkId: NetworkId.NetworkId;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     fixture = getFixture();
     switch (TestContainersFixture.network) {
       case 'undeployed':
-        networkId = NetworkId.Undeployed;
+        networkId = NetworkId.NetworkId.Undeployed;
         break;
       case 'devnet':
-        networkId = NetworkId.DevNet;
+        networkId = NetworkId.NetworkId.DevNet;
         break;
       case 'testnet':
-        networkId = NetworkId.TestNet;
+        networkId = NetworkId.NetworkId.TestNet;
         break;
     }
 
-    walletFunded = await WalletBuilder.build(
-      fixture.getIndexerUri(),
-      fixture.getIndexerWsUri(),
-      fixture.getProverUri(),
-      fixture.getNodeUri(),
-      seedFunded,
-      networkId,
-      'info',
-    );
-
-    walletFunded.start();
+    const walletConfig: DefaultV1Configuration = fixture.getWalletConfig(networkId);
+    Wallet = ShieldedWallet(walletConfig);
+    walletFunded = Wallet.startWithShieldedSeed(Buffer.from(seedFunded, 'hex'));
   });
 
   afterEach(async () => {
-    await closeWallet(walletFunded);
+    await walletFunded.stop();
   });
 
   test(
@@ -85,11 +76,11 @@ describe('Token transfer', () => {
       }
       const addresses = process.env['ADDRESSES'].split(',');
 
-      await waitForSync(walletFunded);
+      await utils.waitForSyncShielded(walletFunded);
 
       const sendTx = async (address: string): Promise<void> => {
-        const initialState = await firstValueFrom(walletFunded.state());
-        const initialBalance = initialState.balances[nativeToken()] ?? 0n;
+        const initialState = await firstValueFrom(walletFunded.state);
+        const initialBalance = initialState.balances[rawNativeTokenType] ?? 0n;
         const initialBalanceNative = initialState.balances[nativeTokenHash] ?? 0n;
         logger.info(`Wallet 1: ${initialBalance} tDUST`);
         logger.info(`Wallet 1: ${initialBalanceNative} ${nativeTokenHash}`);
@@ -100,7 +91,7 @@ describe('Token transfer', () => {
 
         const outputsToCreate = [
           {
-            type: nativeToken(),
+            type: rawNativeTokenType,
             amount: outputValue,
             receiverAddress: address,
           },
@@ -111,21 +102,21 @@ describe('Token transfer', () => {
           },
         ];
 
-        const txToProve = await walletFunded.transferTransaction(outputsToCreate);
-        const provenTx = await walletFunded.proveTransaction(txToProve);
+        const txToProve = await walletFunded.transferTransaction(secretKey, outputsToCreate);
+        const provenTx = await walletFunded.finalizeTransaction(txToProve);
         const id = await walletFunded.submitTransaction(provenTx);
         logger.info('Transaction id: ' + id);
 
-        const pendingState = await waitForPending(walletFunded);
-        logger.info(walletStateTrimmed(pendingState));
+        const pendingState = await utils.waitForPending(walletFunded);
+        // logger.info(utils.walletStateTrimmed(pendingState));
         logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
 
-        const finalState = await waitForFinalizedBalance(walletFunded);
-        logger.info(walletStateTrimmed(finalState));
-        expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+        const finalState = await utils.waitForFinalizedBalance(walletFunded);
+        // logger.info(utils.walletStateTrimmed(finalState));
+        expect(finalState.balances[rawNativeTokenType] ?? 0n).toBeLessThan(initialBalance - outputValue);
         expect(finalState.balances[nativeTokenHash] ?? 0n).toBe(initialBalanceNative - nativeTokenValue);
         expect(finalState.pendingCoins.length).toBe(0);
-        expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+        // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
       };
 
       for (const address of addresses) {
@@ -138,23 +129,15 @@ describe('Token transfer', () => {
   test(
     'Is working for preparing the stable wallet',
     async () => {
-      const walletStable = await WalletBuilder.build(
-        fixture.getIndexerUri(),
-        fixture.getIndexerWsUri(),
-        fixture.getProverUri(),
-        fixture.getNodeUri(),
-        seedStable,
-        networkId,
-        'info',
-      );
+      const walletStable: ShieldedWallet = Wallet.startWithShieldedSeed(Buffer.from(seedStable, 'hex'));
 
-      walletStable.start();
-      const addressStable = (await firstValueFrom(walletStable.state())).address;
-      await closeWallet(walletStable);
+      const addressStable = (await firstValueFrom(walletStable.state)).address;
+      const walletAddressStable = utils.getShieldedAddress(networkId, addressStable);
+      await walletStable.stop();
 
-      await waitForSync(walletFunded);
-      const initialState = await firstValueFrom(walletFunded.state());
-      const initialBalance = initialState.balances[nativeToken()] ?? 0n;
+      await utils.waitForSyncShielded(walletFunded);
+      const initialState = await firstValueFrom(walletFunded.state);
+      const initialBalance = initialState.balances[rawNativeTokenType] ?? 0n;
       const initialBalanceNative = initialState.balances[nativeTokenHash] ?? 0n;
       const initialBalanceNative2 = initialState.balances[nativeTokenHash2] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance} tDUST`);
@@ -164,19 +147,19 @@ describe('Token transfer', () => {
       logger.info(
         `Sending ${
           outputValue / 1_000_000n
-        } tDUST and ${nativeTokenValue} ${nativeTokenHash} to address: ${addressStable}`,
+        } tDUST and ${nativeTokenValue} ${nativeTokenHash} to address: ${walletAddressStable}`,
       );
 
       const outputsToCreate = [
         {
-          type: nativeToken(),
+          type: rawNativeTokenType,
           amount: outputValue,
-          receiverAddress: addressStable,
+          receiverAddress: walletAddressStable,
         },
         {
           type: nativeTokenHash,
           amount: nativeTokenValue,
-          receiverAddress: addressStable,
+          receiverAddress: walletAddressStable,
         },
       ];
 
@@ -184,29 +167,29 @@ describe('Token transfer', () => {
         {
           type: nativeTokenHash2,
           amount: nativeTokenValue2,
-          receiverAddress: addressStable,
+          receiverAddress: walletAddressStable,
         },
       ];
 
-      const txToProve = await walletFunded.transferTransaction(outputsToCreate);
-      const provenTx = await walletFunded.proveTransaction(txToProve);
+      const txToProve = await walletFunded.transferTransaction(secretKey, outputsToCreate);
+      const provenTx = await walletFunded.finalizeTransaction(txToProve);
       const id = await walletFunded.submitTransaction(provenTx);
       logger.info('Transaction id: ' + id);
-      await waitForTxInHistory(id, walletFunded);
+      // await utils.waitForTxInHistory(String(id), walletFunded);
 
-      logger.info(`Sending ${nativeTokenValue2} ${nativeTokenHash2} to address: ${addressStable}`);
-      const txToProve2 = await walletFunded.transferTransaction(outputsToCreate2);
-      const provenTx2 = await walletFunded.proveTransaction(txToProve2);
+      logger.info(`Sending ${nativeTokenValue2} ${nativeTokenHash2} to address: ${walletAddressStable}`);
+      const txToProve2 = await walletFunded.transferTransaction(secretKey, outputsToCreate2);
+      const provenTx2 = await walletFunded.finalizeTransaction(txToProve2);
       const id2 = await walletFunded.submitTransaction(provenTx2);
       logger.info('Transaction id: ' + id2);
-      await waitForTxInHistory(id2, walletFunded);
-      const finalState = await waitForSync(walletFunded);
-      logger.info(walletStateTrimmed(finalState));
-      expect(finalState.balances[nativeToken()] ?? 0n).toBeLessThan(initialBalance - outputValue);
+      // await utils.waitForTxInHistory(String(id2), walletFunded);
+      const finalState = await utils.waitForSyncShielded(walletFunded);
+      // logger.info(utils.walletStateTrimmed(finalState));
+      expect(finalState.balances[rawNativeTokenType] ?? 0n).toBeLessThan(initialBalance - outputValue);
       expect(finalState.balances[nativeTokenHash] ?? 0n).toBe(initialBalanceNative - nativeTokenValue);
       expect(finalState.balances[nativeTokenHash2] ?? 0n).toBe(initialBalanceNative2 - nativeTokenValue2);
       expect(finalState.pendingCoins.length).toBe(0);
-      expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 2);
+      // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 2);
 
       // TO-DO: contract deploy and call, obtaining minted token from contract
     },

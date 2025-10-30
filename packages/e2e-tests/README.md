@@ -1,17 +1,19 @@
 # Midnight Wallet E2E Tests in TypeScript
 
-This directory contains e2e wallet tests written using Vitest that run against a local docker compose environment or a hosted deployment of choice.
+This directory contains e2e wallet tests written using Vitest that run against a local docker compose environment or a
+hosted deployment of choice.
 
 ## Setup
 
 ### 1. Nix
 
-First install [Nix](https://nixos.org). Then [direnv](https://direnv.net) is optional but strongly recommended.
-This project provides a [flake](flake.nix) with a dev shell definition.
+First install [Nix](https://nixos.org). Then [direnv](https://direnv.net) is optional but strongly recommended. This
+project provides a [flake](flake.nix) with a dev shell definition.
 
 ### 2. Internal private registry and credentials
 
-Configure Yarn and Nix by following the [Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
+Configure Yarn and Nix by following the
+[Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
 
 ### 3. Install npm dependencies
 
@@ -23,7 +25,8 @@ from the root of the project
 
 ## Running e2e tests
 
-Tests require following environment variables set to define which networkId to use and against which deployment you want to run them. Based on these, an appropriate docker compose file will be spun up using testcontainers.
+Tests require following environment variables set to define which networkId to use and against which deployment you want
+to run them. Based on these, an appropriate docker compose file will be spun up using testcontainers.
 
 - for local:
 
@@ -41,7 +44,18 @@ export DEPLOYMENT=local; export NETWORK=undeployed
   export DEPLOYMENT=devnet; export NETWORK=devnet
   ```
 
-  - additional environment variables are needed to supply seeds of the test wallets on devnet networks: `SEED` and `SEED2`
+  - additional environment variables are needed to supply seeds of the test wallets on devnet networks: `SEED` and
+    `SEED2`
+
+You can also create a `.env` file in the root of this repository. For example :-
+
+```
+NETWORK=undeployed
+DEPLOYMENT=local
+```
+
+This file is automatically loaded, any environment variables are overriden with the contents of this file, when
+executing the e2e tests.
 
 Then to run all tests (all following commands in the root of the project):
 

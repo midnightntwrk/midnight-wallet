@@ -4,6 +4,11 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { MidnightDeployment, MidnightNetwork } from './utils.js';
 import { logger } from './logger.js';
+import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/dist/v1';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import path from 'path';
+
+const dockerPath = path.resolve(new URL(import.meta.url).pathname, '../../../');
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -14,8 +19,8 @@ export function useTestContainersFixture() {
     let composeEnvironment: StartedDockerComposeEnvironment;
     switch (process.env['NETWORK'] as MidnightNetwork) {
       case 'undeployed': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-dynamic-v4.yml')
-          .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
+        composeEnvironment = await new DockerComposeEnvironment(dockerPath, 'docker-compose-dynamic.yml')
+          .withWaitStrategy(`proof-server_${uid}`, Wait.forListeningPorts())
           .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
           .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())
           .withEnvironment({ TESTCONTAINERS_UID: uid })
@@ -23,14 +28,14 @@ export function useTestContainersFixture() {
         break;
       }
       case 'devnet': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-remote-dynamic.yml')
+        composeEnvironment = await new DockerComposeEnvironment(dockerPath, 'docker-compose-remote-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withEnvironment({ TESTCONTAINERS_UID: uid, NETWORK_ID: 'devnet' })
           .up();
         break;
       }
       case 'testnet': {
-        composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-remote-dynamic.yml')
+        composeEnvironment = await new DockerComposeEnvironment(dockerPath, 'docker-compose-remote-dynamic.yml')
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withEnvironment({ TESTCONTAINERS_UID: uid, NETWORK_ID: 'testnet' })
           .up();
@@ -59,7 +64,7 @@ export function useHardForkFixture() {
 
   beforeAll(async () => {
     logger.info(`Spinning up ${process.env.NETWORK} hard fork test environment...`);
-    const composeEnvironment = await new DockerComposeEnvironment('./', 'docker-compose-hfs.yml')
+    const composeEnvironment = await new DockerComposeEnvironment(dockerPath, 'docker-compose-hfs.yml')
       .withWaitStrategy(`proof-server`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
       .withWaitStrategy(`proof-server-dummy`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
       .withWaitStrategy(`node`, Wait.forListeningPorts())
@@ -124,6 +129,9 @@ export class TestContainersFixture {
       case 'qanet': {
         return 'https://indexer-rs.qanet.dev.midnight.network/api/v3/graphql';
       }
+      case 'preview': {
+        return 'https://indexer.preview.midnight.network/api/v3/graphql';
+      }
       case 'local': {
         const indexerPort = this.getIndexerPort();
         return `http://localhost:${indexerPort}/api/v3/graphql`;
@@ -138,6 +146,9 @@ export class TestContainersFixture {
       }
       case 'qanet': {
         return 'wss://indexer-rs.qanet.dev.midnight.network/api/v3/graphql/ws';
+      }
+      case 'preview': {
+        return 'wss://indexer.preview.midnight.network/api/v3/graphql/ws';
       }
       case 'local': {
         const indexerPort = this.getIndexerPort();
@@ -154,10 +165,38 @@ export class TestContainersFixture {
       case 'qanet': {
         return 'https://rpc.qanet.dev.midnight.network';
       }
+      case 'preview': {
+        return 'https://rpc.preview.midnight.network';
+      }
       case 'local': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);
-        return `http://localhost:${nodePortRpc}`;
+        return `ws://localhost:${nodePortRpc}`;
       }
     }
+  }
+
+  public getNetworkId(): NetworkId.NetworkId {
+    switch (TestContainersFixture.network) {
+      case 'undeployed':
+        return NetworkId.NetworkId.Undeployed;
+      case 'devnet':
+        return NetworkId.NetworkId.DevNet;
+      case 'testnet':
+        return NetworkId.NetworkId.TestNet;
+      default:
+        throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
+    }
+  }
+
+  public getWalletConfig(networkId: NetworkId.NetworkId): DefaultV1Configuration {
+    return {
+      indexerClientConnection: {
+        indexerHttpUrl: this.getIndexerUri(),
+        indexerWsUrl: this.getIndexerWsUri(),
+      },
+      provingServerUrl: new URL(this.getProverUri()),
+      relayURL: new URL(this.getNodeUri()),
+      networkId: networkId,
+    };
   }
 }

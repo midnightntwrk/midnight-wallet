@@ -25,7 +25,7 @@ export const createLogger = (): pino.Logger => {
     },
     pino.multistream([
       { stream: pretty, level: 'info' },
-      { stream: createWriteStream(`./src/logs/e2e-tests-${new Date().toISOString()}.log`), level },
+      { stream: createWriteStream(path.join(logDir, `e2e-tests-${new Date().toISOString()}.log`)), level },
     ]),
   );
 };
