@@ -11,7 +11,7 @@ import { getNonDustImbalance } from './utils.js';
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.3';
 const PROOF_SERVER_PORT: number = 6300;
 
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
 
 const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
 
