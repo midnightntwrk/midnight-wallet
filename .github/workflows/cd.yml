@@ -75,6 +75,7 @@ jobs:
           title: "chore: release"
           version: yarn changeset:version
           publish: yarn changeset:publish
+          setupGitUser: false
 
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
