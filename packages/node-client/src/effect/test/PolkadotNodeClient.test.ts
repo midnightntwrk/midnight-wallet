@@ -15,7 +15,7 @@ const clientLayer = (nodePort: number) =>
   });
 
 // It takes some time to pass through enough rounds of consensus, even in tests
-vi.setConfig({ testTimeout: 120_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
 describe.skip('PolkadotNodeClient', () => {
   let scope: Scope.CloseableScope | undefined = undefined;

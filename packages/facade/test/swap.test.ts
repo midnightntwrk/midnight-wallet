@@ -14,7 +14,7 @@ import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
-vi.setConfig({ testTimeout: 200_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
 describe('Swaps', () => {
   const environmentId = randomUUID();

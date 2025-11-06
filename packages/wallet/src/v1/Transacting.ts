@@ -171,8 +171,22 @@ export class TransactingCapabilityImplementation<
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
+      const positiveTransfers = yield* pipe(
+        transfers,
+        Arr.filter((t) => t.amount > 0n),
+        Arr.match({
+          onEmpty: () =>
+            Either.left(
+              new OtherWalletError({
+                message: 'The amount needs to be positive',
+              }),
+            ),
+          onNonEmpty: (nonEmpty) => Either.right(nonEmpty),
+        }),
+      );
+
       const networkId = this.networkId;
-      const { initialOffersAndCoins, selfCoins } = yield* this.#processDesiredOutputs(state, transfers);
+      const { initialOffersAndCoins, selfCoins } = yield* this.#processDesiredOutputs(state, positiveTransfers);
       const offerToBalance = pipe(
         initialOffersAndCoins,
         Arr.map((o) => o.outputOffer),
@@ -208,6 +222,24 @@ export class TransactingCapabilityImplementation<
     desiredOutputs: ReadonlyArray<TokenTransfer>,
   ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
+      const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
+      if (!outputsValid) {
+        return yield* Either.left(
+          new OtherWalletError({
+            message: 'The amount needs to be positive',
+          }),
+        );
+      }
+
+      const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
+      if (!inputsValid) {
+        return yield* Either.left(
+          new OtherWalletError({
+            message: 'The input amounts need to be positive',
+          }),
+        );
+      }
+
       const outputsParseResult = yield* this.#processDesiredOutputsPossiblyEmpty(state, desiredOutputs);
       const inputsParseResult = Imbalances.fromEntries(Record.toEntries(desiredInputs));
       const networkId = this.networkId;

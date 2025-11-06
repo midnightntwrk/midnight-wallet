@@ -532,7 +532,7 @@ describe('Token transfer', () => {
       ];
       await expect(
         sender.transferTransaction(senderShieldedSecretKey, senderDustKey, outputsToCreate, new Date()),
-      ).rejects.toThrow('List of token transfers is empty or there is no positive transfers');
+      ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
   );
@@ -564,7 +564,7 @@ describe('Token transfer', () => {
 
       await expect(
         sender.transferTransaction(senderShieldedSecretKey, senderDustKey, outputsToCreate, new Date()),
-      ).rejects.toThrow('List of token transfers is empty or there is no positive transfers');
+      ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
   );
@@ -581,7 +581,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(sender.transferTransaction(senderShieldedSecretKey, senderDustKey, [], new Date())).rejects.toThrow(
-        'List of token transfers is empty or there is no positive transfers',
+        'The amount needs to be positive',
       );
     },
     timeout,

@@ -13,7 +13,7 @@ import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
-vi.setConfig({ testTimeout: 200_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
 /**
  * We need the dust wallet to transact

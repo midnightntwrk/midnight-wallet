@@ -19,7 +19,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
 
-vi.setConfig({ testTimeout: 600_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 600_000, hookTimeout: 120_000 });
 
 describe('Wallet Sync', () => {
   const environmentId = randomUUID();

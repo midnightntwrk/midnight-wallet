@@ -70,7 +70,7 @@ describe('Token transfer', () => {
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
-          type: 'shielded',
+          type: 'shielded' as const,
           outputs: [
             {
               type: shieldedTokenRaw,
@@ -598,14 +598,9 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  // Bug logged: PM20041
-  test.skip(
-    'error message when attempting to send a zero amount',
+  test(
+    'error message when attempting shielded transfer to send a zero amount',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await utils.waitForSyncFacade(fundedFacade);
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -625,19 +620,85 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await fundedFacade.transferTransaction(
-        fundedShieldedSecretKey,
-        fundedDustSecretKey,
-        outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
-      );
-      logger.info('Sending transaction...');
-      const provenTx = await fundedFacade.finalizeTransaction(txToProve);
-      const txId = await fundedFacade.submitTransaction(provenTx);
-      logger.info('Transaction id: ' + txId);
-      await expect(fundedFacade.finalizeTransaction(txToProve)).rejects.toThrow(
-        'List of token transfers is empty or there is no positive transfers',
-      );
+
+      await expect(
+        fundedFacade.transferTransaction(
+          fundedShieldedSecretKey,
+          fundedDustSecretKey,
+          outputsToCreate,
+          new Date(Date.now() + 60 * 60 * 1000),
+        ),
+      ).rejects.toThrow('The amount needs to be positive');
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting shielded initSwap with non-positive outputs',
+    async () => {
+      const initialState2 = await firstValueFrom(walletFacade.state());
+
+      const desiredInputs = {
+        shielded: {},
+      };
+
+      const desiredOutputs = [
+        {
+          type: 'shielded' as const,
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: 0n,
+              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+            },
+          ],
+        },
+      ];
+
+      await expect(
+        fundedFacade.initSwap(
+          fundedShieldedSecretKey,
+          desiredInputs,
+          desiredOutputs,
+          new Date(Date.now() + 60 * 60 * 1000),
+        ),
+      ).rejects.toThrow('The amount needs to be positive');
+    },
+    timeout,
+  );
+
+  test(
+    'error message when attempting shielded initSwap with non-positive inputs',
+    async () => {
+      const initialState2 = await firstValueFrom(walletFacade.state());
+
+      const desiredInputs = {
+        shielded: {
+          [shieldedTokenRaw]: 0n,
+        },
+      };
+
+      const desiredOutputs = [
+        {
+          type: 'shielded' as const,
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: outputValue,
+              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+            },
+          ],
+        },
+      ];
+
+      await expect(
+        fundedFacade.initSwap(
+          fundedShieldedSecretKey,
+          desiredInputs,
+          desiredOutputs,
+          new Date(Date.now() + 60 * 60 * 1000),
+        ),
+      ).rejects.toThrow('The input amounts need to be positive');
     },
     timeout,
   );

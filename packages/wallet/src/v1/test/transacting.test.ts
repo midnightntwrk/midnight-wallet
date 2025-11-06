@@ -21,6 +21,8 @@ import {
 } from '../Transacting.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { OtherWalletError } from '../WalletError.js';
+import { Either } from 'effect';
 
 const shieldedValue = (value: number): bigint => BigInt(value * 10 ** 6);
 
@@ -404,6 +406,43 @@ describe('V1 Wallet Transacting', () => {
       expect(() => EitherOps.getOrThrowLeft(result)).toThrow();
     });
 
+    it('raises an error with correct message when transfer has zero amount', () => {
+      const wallets = prepareWallets({
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [shieldedValue(1)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const result = transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+        makeTransferOutput({ recipient: wallets.B, coin: 0n }),
+      ]);
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(OtherWalletError);
+        expect(result.left.message).toBe('The amount needs to be positive');
+      }
+    });
+
+    it('raises an error with correct message when transfer has no positive amounts', () => {
+      const wallets = prepareWallets({
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [shieldedValue(1)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const result = transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
+        makeTransferOutput({ recipient: wallets.B, coin: 0n }),
+        makeTransferOutput({ recipient: wallets.B, coin: 0n }),
+      ]);
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(OtherWalletError);
+        expect(result.left.message).toBe('The amount needs to be positive');
+      }
+    });
+
     it('does not try to spend booked coins for a transfer', () => {
       const initialCoinValues = [shieldedValue(1), shieldedValue(2), shieldedValue(3)];
       const transferValue = shieldedValue(5);
@@ -659,6 +698,42 @@ describe('V1 Wallet Transacting', () => {
 
       expect(() => EitherOps.getOrThrowLeft(resultA)).toThrow();
       expect(() => EitherOps.getOrThrowLeft(resultB)).toThrow();
+    });
+
+    it('raises an error with correct message when swap has non-positive outputs', () => {
+      const wallets = prepareWallets({
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [shieldedValue(1)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const result = transacting.initSwap(wallets.A.keys, wallets.A.wallet, {}, [
+        makeTransferOutput({ recipient: wallets.B, coin: 0n }),
+      ]);
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(OtherWalletError);
+        expect(result.left.message).toBe('The amount needs to be positive');
+      }
+    });
+
+    it('raises an error with correct message when swap has non-positive inputs', () => {
+      const wallets = prepareWallets({
+        A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: [shieldedValue(1)] },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+
+      const result = transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: 0n }, [
+        makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(1) }),
+      ]);
+
+      expect(Either.isLeft(result)).toBe(true);
+      if (Either.isLeft(result)) {
+        expect(result.left).toBeInstanceOf(OtherWalletError);
+        expect(result.left.message).toBe('The input amounts need to be positive');
+      }
     });
 
     it('does not try to use booked coins for a swap', () => {
