@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
 import * as ProverClient from '../ProverClient.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.3';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.5';
 const PROOF_SERVER_PORT: number = 6300;
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
@@ -66,7 +66,7 @@ describe('HttpProverClient', () => {
         .withExposedPorts(PROOF_SERVER_PORT)
         .withWaitStrategy(Wait.forListeningPorts())
         .start();
-    }, timeout_minutes(3));
+    }, timeout_minutes(5));
 
     afterAll(async () => {
       await proofServerContainer?.stop();
@@ -99,7 +99,7 @@ describe('HttpProverClient', () => {
           Effect.runPromise,
         );
       },
-      timeout_minutes(1),
+      timeout_minutes(5),
     );
 
     it(
@@ -118,7 +118,7 @@ describe('HttpProverClient', () => {
           Effect.runPromise,
         );
       },
-      timeout_minutes(1),
+      timeout_minutes(5),
     );
   });
 });

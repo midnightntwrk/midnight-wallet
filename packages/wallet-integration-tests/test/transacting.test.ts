@@ -32,7 +32,7 @@ import { getShieldedSeed } from './utils.js';
 
 type TokenTransfer = Transacting.TokenTransfer;
 
-vi.setConfig({ testTimeout: 180_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 180_000, hookTimeout: 60_000 });
 
 const random = new fc.Random(prand.xoroshiro128plus(Date.now() ^ (Math.random() * 0x100000000)));
 const sampleValue = <T>(arbitrary: fc.Arbitrary<T>): T => {

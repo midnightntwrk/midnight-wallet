@@ -39,7 +39,7 @@ describe('Swaps', () => {
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
-      path.resolve(new URL(import.meta.url).pathname, '../../../../packages/e2e-tests'),
+      path.dirname(new URL(import.meta.url).pathname),
       'docker-compose-dynamic.yml',
     )
       .withEnvironment({
@@ -52,6 +52,7 @@ describe('Swaps', () => {
       )
       .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
       .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+      .withStartupTimeout(100_000)
       .up();
 
     configuration = {

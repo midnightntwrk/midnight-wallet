@@ -14,7 +14,7 @@ import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
-vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
+vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
 /**
  * We need the dust wallet to transact
@@ -39,7 +39,7 @@ describe('Wallet Facade Transfer', () => {
 
   beforeAll(async () => {
     environment = await new DockerComposeEnvironment(
-      path.resolve(new URL(import.meta.url).pathname, '../../../../packages/e2e-tests'),
+      path.dirname(new URL(import.meta.url).pathname),
       'docker-compose-dynamic.yml',
     )
       .withEnvironment({
@@ -52,6 +52,7 @@ describe('Wallet Facade Transfer', () => {
       )
       .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
       .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+      .withStartupTimeout(100_000)
       .up();
 
     configuration = {

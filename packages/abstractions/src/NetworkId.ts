@@ -1,8 +1,10 @@
 export const NetworkId = {
-  MainNet: 'main',
-  TestNet: 'test',
-  DevNet: 'dev',
+  MainNet: 'mainnet',
+  TestNet: 'testnet',
+  DevNet: 'devnet',
   Undeployed: 'undeployed',
+  Preview: 'preview',
+  PreProd: 'preprod',
 } as const;
 
 export type NetworkId = (typeof NetworkId)[keyof typeof NetworkId];

@@ -9,7 +9,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import { getShieldedSeed } from './utils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
-vi.setConfig({ testTimeout: 30_000, hookTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 describe('Wallet serialization and restoration', () => {
   const environmentId = randomUUID();
