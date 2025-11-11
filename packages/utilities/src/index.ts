@@ -1,4 +1,5 @@
 export * as ArrayOps from './ArrayOps.js';
+export * as BlobOps from './BlobOps.js';
 export * as DateOps from './DateOps.js';
 export * as EitherOps from './EitherOps.js';
 export * as Fluent from './Fluent.js';

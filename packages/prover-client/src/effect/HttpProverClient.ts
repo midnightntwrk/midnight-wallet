@@ -8,6 +8,7 @@ import {
   ServerError,
   HttpURL,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { BlobOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
 const PROVE_TX_PATH = '/prove';
@@ -47,7 +48,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     failurePrefix: string,
   ): Effect.Effect<SerializedTransaction, ClientError | ServerError> {
     const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
-      Effect.promise(() => new Blob(chunks).bytes());
+      Effect.promise((): Promise<Uint8Array> => BlobOps.getBytes(new Blob(chunks)));
 
     const receiveBody = (response: HttpClientResponse.HttpClientResponse) =>
       pipe(

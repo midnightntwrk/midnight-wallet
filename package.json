@@ -30,6 +30,9 @@
     "typescript-eslint": "^8.38.0",
     "vitest": "^3.2.4"
   },
+  "resolutions": {
+    "vite": "^7.1.11"
+  },
   "scripts": {
     "verify": "turbo run verify",
     "publint": "turbo run publint",
