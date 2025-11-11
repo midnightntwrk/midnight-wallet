@@ -40,6 +40,7 @@
     "dist:publish": "turbo run dist:publish",
     "changeset:publish": "yarn dist:publish && yarn changeset publish",
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
+    "changeset:check": "yarn changeset status --since=origin/main --verbose",
     "clean": "turbo run clean"
   }
 }
