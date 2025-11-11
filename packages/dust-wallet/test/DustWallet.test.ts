@@ -205,7 +205,7 @@ describe('DustWallet', () => {
       const simulatorState = yield* simulator.getLatestState();
       expect(rewardNight.blockNumber).toBe(1n);
       expect(simulatorState.lastTxNumber).toBe(1n);
-      expect(simulatorState.lastTxResult!.type, 'success');
+      expect(simulatorState.lastTxResult!.type).toBe('success');
 
       const nightTokens = getNightTokens(yield* simulator.getLatestState(), walletAddress);
       yield* waitForTx(stateRef, 1);
@@ -302,7 +302,7 @@ describe('DustWallet', () => {
       const rewardNight2 = yield* simulator.rewardNight(walletAddress, newNightTokenAmount, nightVerifyingKey);
       expect(rewardNight2.blockNumber).toBe(3n);
       simulatorState = yield* simulator.getLatestState();
-      expect(simulatorState.lastTxResult!.type, 'success');
+      expect(simulatorState.lastTxResult!.type).toBe('success');
       yield* waitForTx(stateRef, 3);
 
       const walletState = yield* SubscriptionRef.get(stateRef);
