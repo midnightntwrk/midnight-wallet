@@ -593,7 +593,7 @@ describe('Token transfer', () => {
           outputsToCreate,
           new Date(Date.now() + 60 * 60 * 1000),
         ),
-      ).rejects.toThrow("Error: Couldn't deserialize u128 from a BigInt outside u128::MIN..u128::MAX bounds");
+      ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
   );

@@ -38,14 +38,15 @@ describe('Token transfer', () => {
   let receiver: WalletFacade;
   let wallet: WalletFacade;
   let wallet2: WalletFacade;
+  let senderSeed: string;
+  let receiverSeed: string;
   let senderShieldedSecretKey: ledger.ZswapSecretKeys;
   let senderDustKey: ledger.DustSecretKey;
+  let receiverShieldedSecretKey: ledger.ZswapSecretKeys;
+  let receiverDustKey: ledger.DustSecretKey;
   let senderKeyStore: UnshieldedKeystore;
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
-
-  const filenameWallet = `${seedFunded.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
-  const filenameWallet2 = `${seed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
 
   beforeAll(async () => {
     fixture = getFixture();
@@ -67,21 +68,32 @@ describe('Token transfer', () => {
       sender = wallet;
       senderShieldedSecretKey = initialFundedShieldedSecretKey;
       senderDustKey = initialFundedDustSecretKey;
+      receiverShieldedSecretKey = initialReceiverShieldedSecretKey;
+      receiverDustKey = initialReceiverDustSecretKey;
       receiver = wallet2;
       senderKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), networkId);
+      senderSeed = seedFunded;
+      receiverSeed = seed;
     } else {
       logger.info('Using SEED2 as sender');
       sender = wallet2;
       senderShieldedSecretKey = initialReceiverShieldedSecretKey;
       senderDustKey = initialReceiverDustSecretKey;
+      receiverShieldedSecretKey = initialFundedShieldedSecretKey;
+      receiverDustKey = initialFundedDustSecretKey;
       receiver = wallet;
       senderKeyStore = createKeystore(utils.getUnshieldedSeed(seed), networkId);
+      senderSeed = seed;
+      receiverSeed = seedFunded;
     }
   }, syncTimeout);
 
   afterAll(async () => {
-    await utils.saveState(sender.shielded, filenameWallet);
-    await utils.saveState(receiver.shielded, filenameWallet2);
+    const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+    const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+
+    await utils.saveState(sender, filenameWallet);
+    await utils.saveState(receiver, filenameWallet2);
     await utils.closeWallet(sender);
     await utils.closeWallet(receiver);
   }, timeout);
@@ -287,6 +299,64 @@ describe('Token transfer', () => {
     timeout,
   );
 
+  test('Able to swap shielded tokens', async () => {
+    const shieldedToken1 = '0000000000000000000000000000000000000000000000000000000000000001';
+    const shieldedToken2 = '0000000000000000000000000000000000000000000000000000000000000002';
+    const ttl = new Date(Date.now() + 30 * 60 * 1000);
+
+    const initialStateWallet1 = await utils.waitForSyncFacade(sender);
+    const initialStateWallet2 = await utils.waitForSyncFacade(receiver);
+
+    // Does walllet have shielded tokens to swap
+    const wallet1BalanceToken1 = initialStateWallet1.shielded.balances[shieldedToken1] ?? 0n;
+    const wallet1BalanceToken2 = initialStateWallet1.shielded.balances[shieldedToken2] ?? 0n;
+    const wallet2BalanceToken1 = initialStateWallet2.shielded.balances[shieldedToken1] ?? 0n;
+    const wallet2BalanceToken2 = initialStateWallet2.shielded.balances[shieldedToken2] ?? 0n;
+
+    if (wallet1BalanceToken1 < 1000000n || wallet2BalanceToken2 < 1000000n) {
+      logger.info('One of the wallets does not have enough shielded tokens to swap');
+      return;
+    }
+
+    const swapTx = await sender.initSwap(
+      senderShieldedSecretKey,
+      { shielded: { [shieldedToken1]: 1000000n } },
+      [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: shieldedToken2,
+              amount: 1000000n,
+              receiverAddress: utils.getShieldedAddress(networkId, initialStateWallet1.shielded.address),
+            },
+          ],
+        },
+      ],
+      ttl,
+    );
+    const provenTx = await sender.finalizeTransaction({ type: 'TransactionToProve', transaction: swapTx });
+    const wallet1TxId = await sender.submitTransaction(provenTx);
+    logger.info('Transaction id: ' + wallet1TxId);
+
+    const wallet2BalancedTx = await receiver.balanceTransaction(
+      receiverShieldedSecretKey,
+      receiverDustKey,
+      provenTx,
+      ttl,
+    );
+    const finalizedSwapTx = await receiver.finalizeTransaction(wallet2BalancedTx);
+    const wallet2TxId = await receiver.submitTransaction(finalizedSwapTx);
+    logger.info('Transaction id 2: ' + wallet2TxId);
+
+    const finalStateWallet1 = await utils.waitForFinalizedBalance(sender.shielded);
+    const finalStateWallet2 = await utils.waitForFinalizedBalance(receiver.shielded);
+    expect(finalStateWallet1.balances[shieldedToken1] ?? 0n).toBe(wallet1BalanceToken1 - 1000000n);
+    expect(finalStateWallet1.balances[shieldedToken2] ?? 0n).toBe(wallet1BalanceToken2 + 1000000n);
+    expect(finalStateWallet2.balances[shieldedToken2] ?? 0n).toBe(wallet2BalanceToken2 - 1000000n);
+    expect(finalStateWallet2.balances[shieldedToken1] ?? 0n).toBe(wallet2BalanceToken1 + 1000000n);
+  });
+
   // TO-DO: check why pending is not used
   test.skip(
     'coin becomes available when tx fails on node',
@@ -447,9 +517,7 @@ describe('Token transfer', () => {
       ];
       await expect(
         sender.transferTransaction(senderShieldedSecretKey, senderDustKey, outputsToCreate, new Date()),
-      ).rejects.toThrow(
-        `InvalidAddressError: Can't decode an address. Bech32m parse exception: Error: String must be lowercase or uppercase. Hex parse exception: Invalid HEX address format ${invalidAddress}`,
-      );
+      ).rejects.toThrow(`Address parsing error: invalidAddress`);
     },
     timeout,
   );
@@ -494,9 +562,7 @@ describe('Token transfer', () => {
         await sender.submitTransaction(provenTx);
       } catch (e: unknown) {
         if (e instanceof Error) {
-          expect(e.message).toContain(
-            'Insufficient Funds: could not balance 02000000000000000000000000000000000000000000000000000000000000000000',
-          );
+          expect(e.message).toContain('Insufficient funds');
         } else {
           logger.info(e);
         }
@@ -581,7 +647,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(sender.transferTransaction(senderShieldedSecretKey, senderDustKey, [], new Date())).rejects.toThrow(
-        'The amount needs to be positive',
+        'At least one shielded or unshielded output is required.',
       );
     },
     timeout,
@@ -605,7 +671,7 @@ describe('Token transfer', () => {
         outputs: [
           {
             type: shieldedTokenRaw,
-            amount: 0n,
+            amount: 1n,
             receiverAddress: bech32mAddress,
           },
         ],
@@ -615,7 +681,7 @@ describe('Token transfer', () => {
     await expect(
       sender.transferTransaction(senderShieldedSecretKey, senderDustKey, outputsToCreate, new Date()),
     ).rejects.toThrow(
-      "InvalidAddressError: Can't decode an address. Bech32m parse exception: Error: Expected dev address, got undeployed one. Hex parse exception: Invalid HEX address format mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043",
+      'Address parsing error: mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043',
     );
   });
 
@@ -636,7 +702,7 @@ describe('Token transfer', () => {
         outputs: [
           {
             type: shieldedTokenRaw,
-            amount: 0n,
+            amount: 1n,
             receiverAddress: bech32mAddress,
           },
         ],
@@ -645,8 +711,6 @@ describe('Token transfer', () => {
 
     await expect(
       sender.transferTransaction(senderShieldedSecretKey, senderDustKey, outputsToCreate, new Date()),
-    ).rejects.toThrow(
-      "InvalidAddressError: Can't decode an address. Bech32m parse exception: Error: Expected prefix mn. Hex parse exception: Invalid HEX address format",
-    );
+    ).rejects.toThrow('Address parsing error: bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297');
   });
 });

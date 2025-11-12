@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
@@ -22,7 +19,7 @@ import {
   UnshieldedWallet,
   WalletBuilder as unshieldedWalletBuilder,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
 // place this somewhere better?
 export const Segments = {
@@ -30,19 +27,19 @@ export const Segments = {
   fallible: 1,
 };
 
-export const waitForSyncProgress = async (wallet: Wallet) =>
+export const waitForSyncProgress = async (wallet: WalletFacade) =>
   await firstValueFrom(
     wallet.state().pipe(
-      throttleTime(5_000),
+      throttleTime(5000),
       tap((state) => {
-        const applyGap = state.syncProgress?.lag.applyGap ?? 0n;
-        const sourceGap = state.syncProgress?.lag.sourceGap ?? 0n;
-        logger.info(`Wallet behind by ${applyGap} indices, source behind by ${sourceGap} indices`);
+        const applyGap = state.unshielded.syncProgress?.applyGap ?? 0n;
+        logger.info(`Wallet facade behind by ${applyGap}`);
       }),
-      filter((state) => {
-        // Let's allow progress only if syncProgress is defined
-        return state.syncProgress !== undefined;
-      }),
+      filter(
+        (state) =>
+          // Let's allow progress only if syncProgress is defined
+          state.unshielded.syncProgress !== undefined && state.unshielded.syncProgress?.applyGap !== 0,
+      ),
     ),
   );
 
@@ -62,107 +59,184 @@ export const streamToString = async (stream: fs.ReadStream): Promise<string> => 
   });
 };
 
+const restoreShieldedWallet = async (
+  path: string,
+  Wallet: ShieldedWalletClass,
+  readIfExists: (path: string) => Promise<string | undefined>,
+) => {
+  try {
+    const serialized = await readIfExists(path);
+    if (serialized) {
+      const wallet = Wallet.restore(serialized);
+      logger.info(`Restored shielded wallet from ${path}`);
+      return wallet;
+    }
+    logger.warn('Unable to restore shielded wallet.');
+  } catch (err: unknown) {
+    logger.error(`Failed to restore shielded wallet: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return undefined;
+};
+
+const restoreUnshieldedWallet = async (
+  path: string,
+  seed: string,
+  fixture: TestContainersFixture,
+  readIfExists: (path: string) => Promise<string | undefined>,
+) => {
+  try {
+    const serialized = await readIfExists(path);
+    if (serialized) {
+      logger.info(`Unshielded serialize: ${serialized}`);
+      const keyStore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
+      const wallet = await unshieldedWalletBuilder.restore({
+        publicKey: PublicKey.fromKeyStore(keyStore),
+        networkId: fixture.getNetworkId(),
+        indexerUrl: fixture.getIndexerWsUri(),
+        serializedState: serialized,
+      });
+      logger.info(`Restored unshielded wallet from ${path}`);
+      return wallet;
+    }
+    logger.warn('Unable to restore unshielded wallet.');
+  } catch (err: unknown) {
+    logger.error(`Failed to restore unshielded wallet: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return undefined;
+};
+
+const restoreDustWallet = async (
+  path: string,
+  walletConfig: DefaultV1Configuration,
+  readIfExists: (path: string) => Promise<string | undefined>,
+) => {
+  try {
+    const serialized = await readIfExists(path);
+    if (serialized) {
+      logger.info(`Dust serialize: ${serialized}`);
+      const DustInstance = DustWallet({
+        ...walletConfig,
+        costParameters: walletConfig?.costParameters ?? {
+          ledgerParams: ledger.LedgerParameters.initialParameters(),
+          additionalFeeOverhead: 300_000_000_000_000n,
+        },
+      });
+      const wallet = DustInstance.restore(serialized);
+      logger.info(`Restored dust wallet from ${path}`);
+      return wallet;
+    }
+    logger.warn('Unable to restore dust wallet.');
+  } catch (err: unknown) {
+    logger.error(`Failed to restore dust wallet: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  return undefined;
+};
+
 export const provideWallet = async (
   filename: string,
   seed: string,
-  wallet: ShieldedWalletClass,
-): Promise<ShieldedWallet> => {
-  let restoredWallet: ShieldedWallet;
-  const walletSeed = getShieldedSeed(seed);
+  fixture: TestContainersFixture,
+): Promise<WalletFacade> => {
+  const walletConfig = fixture.getWalletConfig();
+  const Wallet = ShieldedWallet(walletConfig);
   const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
     exit(1);
   }
-  if (existsSync(`${directoryPath}/${filename}`)) {
-    logger.info(`Attempting to restore state from ${directoryPath}/${filename}`);
+
+  const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
-      const serializedStream = fs.createReadStream(`${directoryPath}/${filename}`, 'utf-8');
-      const serialized = await streamToString(serializedStream);
-      serializedStream.on('finish', () => serializedStream.close());
-
-      restoredWallet = wallet.restore(serialized);
-
-      const stateObject = JSON.parse(serialized);
-      if (await isAnotherChain(restoredWallet, stateObject.offset)) {
-        logger.warn('The chain was reset, building wallet from scratch');
-        restoredWallet = wallet.startWithShieldedSeed(walletSeed);
-      } else {
-        const newState = await restoredWallet.waitForSyncedState();
-        const applyGap = newState.state?.progress.highestRelevantIndex - newState.state?.progress.appliedIndex;
-        // allow for situations when there's no new index in the network between runs
-        if ((applyGap ?? 0n) >= stateObject.offset - 1) {
-          logger.info('Wallet was able to sync from restored state');
-        } else {
-          logger.info(`Offset: ${stateObject.offset}`);
-          logger.info(`SyncProgress Apply Gap: ${applyGap}`);
-          logger.warn('Wallet was not able to sync from restored state, building wallet from scratch');
-
-          restoredWallet = wallet.startWithShieldedSeed(walletSeed);
-        }
-      }
-    } catch (error: unknown) {
-      if (typeof error === 'string') {
-        logger.error(error);
-      } else if (error instanceof Error) {
-        logger.error(error.message);
-      }
-      logger.warn('Wallet was not able to restore using the stored state, building wallet from scratch');
-      restoredWallet = wallet.startWithShieldedSeed(walletSeed);
+      if (!existsSync(p)) return undefined;
+      return await fsAsync.readFile(p, 'utf-8');
+    } catch (err: unknown) {
+      logger.error(`Failed to read ${p}: ${err instanceof Error ? err.message : String(err)}`);
+      return undefined;
     }
+  };
+
+  const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
+    restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
+    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists),
+    restoreDustWallet(`${directoryPath}/dust-${filename}`, walletConfig, readIfExists),
+  ]);
+
+  if (!restoredShielded || !restoredUnshielded || !restoredDust) {
+    logger.info('Building wallet facade from scratch');
+    return buildWalletFacade(seed, fixture);
   } else {
-    logger.info(`${directoryPath}/${filename} not present, building a wallet from scratch`);
-    restoredWallet = wallet.startWithShieldedSeed(walletSeed);
+    const restoredWallet = new WalletFacade(restoredShielded, restoredUnshielded, restoredDust);
+    // check if wallet is syncing correctly
+    await waitForSyncProgress(restoredWallet);
+    const restoredWalletState = await firstValueFrom(restoredWallet.state());
+    const applyGap = restoredWalletState.unshielded.syncProgress?.applyGap;
+    logger.info(`Apply gap: ${applyGap}`);
+    if ((applyGap ?? 0) < 0) {
+      logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
+      return buildWalletFacade(seed, fixture);
+    } else {
+      logger.info('Successfully restored wallet facade.');
+      return restoredWallet;
+    }
   }
-  return restoredWallet;
 };
 
-export const saveState = async (wallet: ShieldedWallet, filename: string) => {
+export const saveState = async (wallet: WalletFacade, filename: string) => {
   const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
     exit(1);
   }
+
   logger.info(`Saving state in ${directoryPath}/${filename}`);
+
   try {
     await fsAsync.mkdir(directoryPath, { recursive: true });
-    const serializedState = await wallet.serializeState();
-    logger.info('State serialized');
-    const writer = fs.createWriteStream(`${directoryPath}/${filename}`);
-    writer.write(serializedState);
-    logger.info('State written to file');
-    writer.on('finish', function () {
-      logger.info(`File '${directoryPath}/${filename}' written successfully.`);
-    });
 
-    writer.on('error', function (err) {
-      logger.error(err);
-    });
-    await new Promise((resolve) => writer.end(resolve));
+    // Serialize all three states
+    const [shieldedSerializedState, unshieldedSerializedState, dustSerializedState] = await Promise.all([
+      wallet.shielded.serializeState(),
+      wallet.unshielded.serializeState(),
+      wallet.dust.serializeState(),
+    ]);
+
+    const files = [
+      { suffix: 'shielded-', data: shieldedSerializedState },
+      { suffix: 'unshielded-', data: unshieldedSerializedState },
+      { suffix: 'dust-', data: dustSerializedState },
+    ];
+
+    const results = await Promise.allSettled(
+      files.map((f) => fsAsync.writeFile(`${directoryPath}/${f.suffix}${filename}`, f.data, 'utf-8')),
+    );
+
+    for (const [i, res] of results.entries()) {
+      const pathWritten = `${directoryPath}/${files[i].suffix}${filename}`;
+      if (res.status === 'fulfilled') {
+        logger.info(`State written to file ${pathWritten}`);
+      } else {
+        logger.error(
+          `Failed to write ${pathWritten}: ${res.reason instanceof Error ? res.reason.message : String(res.reason)}`,
+        );
+      }
+    }
   } catch (e) {
     if (typeof e === 'string') {
       logger.warn(e);
     } else if (e instanceof Error) {
       logger.warn(e.message);
+    } else {
+      logger.warn('Unknown error while saving state');
     }
   }
 };
 
 export const buildWalletFacade = async (walletSeed: string, fixture: TestContainersFixture) => {
   const unshieldedKeyStore = createKeystore(getUnshieldedSeed(walletSeed), fixture.getNetworkId());
-  const filenameWallet = `${walletSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
-
-  const walletConfig = fixture.getWalletConfig(fixture.getNetworkId());
+  const walletConfig = fixture.getWalletConfig();
   const Wallet = ShieldedWallet(walletConfig);
-  let shieldedWallet: ShieldedWallet;
 
-  const directoryPath = process.env['SYNC_CACHE'];
-  if (directoryPath) {
-    // Attempt to restore shielded wallet from file, otherwise create a new one
-    shieldedWallet = await provideWallet(filenameWallet, walletSeed, Wallet);
-  } else {
-    shieldedWallet = Wallet.startWithShieldedSeed(getShieldedSeed(walletSeed));
-  }
+  const shieldedWallet = Wallet.startWithShieldedSeed(getShieldedSeed(walletSeed));
 
   const unshieldedWallet = await unshieldedWalletBuilder.build({
     publicKey: PublicKey.fromKeyStore(unshieldedKeyStore),
@@ -178,7 +252,7 @@ export const buildWalletFacade = async (walletSeed: string, fixture: TestContain
       additionalFeeOverhead: 300_000_000_000_000n,
     },
   });
-  const dustParameters = new ledger.DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
+  const dustParameters = new ledger.DustParameters(5_000_000_000n, 8267n, 3n * 60n * 60n);
   const dustWallet = Dust.startWithSeed(dustSeed, dustParameters, fixture.getNetworkId());
 
   return new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
@@ -509,6 +583,4 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type MidnightNetwork = 'undeployed' | 'devnet' | 'testnet';
-
-export type MidnightDeployment = 'preview' | 'qanet' | 'testnet' | 'local';
+export type MidnightNetwork = 'undeployed' | 'node-dev-01' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';
