@@ -10,6 +10,7 @@
     "test-e2e": "docker compose -f docker-compose-dynamic.yml pull && NODE_OPTIONS='--experimental-vm-modules --experimental-specifier-resolution=node --max-old-space-size=8192' vitest run",
     "test-undeployed": "yarn test-e2e --project undeployed",
     "test-remote": "yarn test-e2e --project remote",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "lint": "eslint --max-warnings 0",
     "allure-generate": "allure generate ./allure-results --clean -o ./reports/allure-report",
     "allure-history": "shx mkdir -p reports/allure-results/history && shx cp reports/allure-report/history/* reports/allure-results/history",

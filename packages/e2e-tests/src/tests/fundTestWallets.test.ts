@@ -57,7 +57,7 @@ describe('Token transfer', () => {
         break;
     }
 
-    const walletConfig: DefaultV1Configuration = fixture.getWalletConfig(networkId);
+    const walletConfig: DefaultV1Configuration = fixture.getWalletConfig();
     Wallet = ShieldedWallet(walletConfig);
     walletFunded = Wallet.startWithShieldedSeed(Buffer.from(seedFunded, 'hex'));
   });

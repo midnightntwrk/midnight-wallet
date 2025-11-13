@@ -29,8 +29,8 @@ describe('Balance constant', () => {
   const expectedTokenTwoBalance = 50n;
   const expectedUnshieldedBalance = 100_000_000n;
   const expectedDustBalance = expectedShieldedBalance;
-  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.deployment}.state`;
-  const syncTimeout = TestContainersFixture.deployment === 'testnet' ? 3_000_000 : 1_800_000;
+  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
+  const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
   const shieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seed));
 

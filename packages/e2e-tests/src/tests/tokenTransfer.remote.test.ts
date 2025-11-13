@@ -89,8 +89,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterAll(async () => {
-    const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
-    const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+    const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
+    const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
     await utils.saveState(sender, filenameWallet);
     await utils.saveState(receiver, filenameWallet2);

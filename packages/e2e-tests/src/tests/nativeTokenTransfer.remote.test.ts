@@ -48,8 +48,8 @@ describe('Token transfer', () => {
   const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
 
-  const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
-  const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.deployment}.state`;
+  const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
+  const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
   beforeAll(async () => {
     fixture = getFixture();
@@ -83,8 +83,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterAll(async () => {
-    await utils.saveState(sender.shielded, filenameWallet);
-    await utils.saveState(receiver.shielded, filenameWallet2);
+    await utils.saveState(sender, filenameWallet);
+    await utils.saveState(receiver, filenameWallet2);
     await utils.closeWallet(sender);
     await utils.closeWallet(receiver);
   }, timeout);

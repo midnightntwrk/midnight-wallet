@@ -1,4 +1,4 @@
-import { DustParameters, LedgerParameters, nativeToken } from '@midnight-ntwrk/ledger-v6';
+import { DustParameters, nativeToken } from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
@@ -44,15 +44,8 @@ describe('Syncing', () => {
   beforeEach(async () => {
     await allure.step('Start multiple wallets', async function () {
       fixture = getFixture();
-      const walletConfig = fixture.getWalletConfig(NetworkId.NetworkId.Undeployed);
-      Wallet = ShieldedWallet(walletConfig);
-      const Dust = DustWallet({
-        ...walletConfig,
-        costParameters: {
-          ledgerParams: LedgerParameters.initialParameters(),
-          additionalFeeOverhead: 300_000_000_000_000n,
-        },
-      });
+      Wallet = ShieldedWallet(fixture.getWalletConfig());
+      const Dust = DustWallet(fixture.getDustWalletConfig());
       const dustParameters = new DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
 
       async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {

@@ -48,15 +48,8 @@ describe('Fresh wallet with empty state', () => {
       expect(fixture).toBeDefined();
       walletKeystore = createKeystore(utils.getUnshieldedSeed(walletSeed), fixture.getNetworkId());
 
-      const walletConfig = fixture.getWalletConfig(networkId);
-      Dust = DustWallet({
-        ...walletConfig,
-        costParameters: {
-          ledgerParam: ledger.LedgerParameters.initialParameters(),
-          additionalFeeOverhead: 300_000_000_000_000n,
-        },
-      });
-      Wallet = ShieldedWallet(walletConfig);
+      Dust = DustWallet(fixture.getDustWalletConfig());
+      Wallet = ShieldedWallet(fixture.getWalletConfig());
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
       wallet = await utils.buildWalletFacade(walletSeed, fixture);
       await wallet.start(walletSecretKey, dustSecretKey);

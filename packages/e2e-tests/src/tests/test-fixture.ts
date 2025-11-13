@@ -7,6 +7,7 @@ import { logger } from './logger.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import path from 'node:path';
 import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
 const dockerPath = path.resolve(new URL(import.meta.url).pathname, '../../../');
 
@@ -253,6 +254,16 @@ export class TestContainersFixture {
       provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
+    };
+  }
+
+  public getDustWalletConfig(): DefaultDustV1Configuration {
+    return {
+      networkId: this.getNetworkId(),
+      costParameters: {
+        additionalFeeOverhead: 300_000_000_000_000n,
+        feeBlocksMargin: 5,
+      },
     };
   }
 }

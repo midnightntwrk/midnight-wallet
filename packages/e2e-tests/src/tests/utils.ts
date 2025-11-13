@@ -117,8 +117,8 @@ const restoreDustWallet = async (
       const DustInstance = DustWallet({
         ...walletConfig,
         costParameters: walletConfig?.costParameters ?? {
-          ledgerParams: ledger.LedgerParameters.initialParameters(),
           additionalFeeOverhead: 300_000_000_000_000n,
+          feeBlocksMargin: 5,
         },
       });
       const wallet = DustInstance.restore(serialized);
@@ -138,6 +138,7 @@ export const provideWallet = async (
   fixture: TestContainersFixture,
 ): Promise<WalletFacade> => {
   const walletConfig = fixture.getWalletConfig();
+  const dustWalletConfig = fixture.getDustWalletConfig();
   const Wallet = ShieldedWallet(walletConfig);
   const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
@@ -158,7 +159,7 @@ export const provideWallet = async (
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
     restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists),
-    restoreDustWallet(`${directoryPath}/dust-${filename}`, walletConfig, readIfExists),
+    restoreDustWallet(`${directoryPath}/dust-${filename}`, dustWalletConfig, readIfExists),
   ]);
 
   if (!restoredShielded || !restoredUnshielded || !restoredDust) {
@@ -233,8 +234,7 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 
 export const buildWalletFacade = async (walletSeed: string, fixture: TestContainersFixture) => {
   const unshieldedKeyStore = createKeystore(getUnshieldedSeed(walletSeed), fixture.getNetworkId());
-  const walletConfig = fixture.getWalletConfig();
-  const Wallet = ShieldedWallet(walletConfig);
+  const Wallet = ShieldedWallet(fixture.getWalletConfig());
 
   const shieldedWallet = Wallet.startWithShieldedSeed(getShieldedSeed(walletSeed));
 
@@ -245,13 +245,7 @@ export const buildWalletFacade = async (walletSeed: string, fixture: TestContain
   });
 
   const dustSeed = getDustSeed(walletSeed);
-  const Dust = DustWallet({
-    ...walletConfig,
-    costParameters: {
-      ledgerParams: ledger.LedgerParameters.initialParameters(),
-      additionalFeeOverhead: 300_000_000_000_000n,
-    },
-  });
+  const Dust = DustWallet(fixture.getDustWalletConfig());
   const dustParameters = new ledger.DustParameters(5_000_000_000n, 8267n, 3n * 60n * 60n);
   const dustWallet = Dust.startWithSeed(dustSeed, dustParameters, fixture.getNetworkId());
 
