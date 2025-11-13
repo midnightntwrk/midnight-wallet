@@ -1,6 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as KeyManagement from '@cardano-sdk/key-management';

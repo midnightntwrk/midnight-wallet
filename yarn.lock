@@ -2478,8 +2478,8 @@ __metadata:
     typescript: "npm:~5.9.3"
     typescript-eslint: "npm:^8.38.0"
     vitest: "npm:^3.2.4"
-    vitest-ctrf-json-reporter: "npm:^0.0.2"
     ws: "npm:^8.18.3"
+    xmlbuilder2: "npm:^3.1.1"
   languageName: unknown
   linkType: soft
 
@@ -2642,6 +2642,43 @@ __metadata:
   dependencies:
     semver: "npm:^7.3.5"
   checksum: 10c0/c90935d5ce670c87b6b14fab04a965a3b8137e585f8b2a6257263bd7f97756dd736cb165bb470e5156a9e718ecd99413dccc54b1138c1a46d6ec7cf325982fe5
+  languageName: node
+  linkType: hard
+
+"@oozcitak/dom@npm:1.15.10":
+  version: 1.15.10
+  resolution: "@oozcitak/dom@npm:1.15.10"
+  dependencies:
+    "@oozcitak/infra": "npm:1.0.8"
+    "@oozcitak/url": "npm:1.0.4"
+    "@oozcitak/util": "npm:8.3.8"
+  checksum: 10c0/128162dd35fd21976e7589a4b50e980d8fb72e1f90e5675a3baca70b23cfdd87c0df57bff1ec708e7927671247a7233f240a27a4546bb904e069be1b4d4d7a05
+  languageName: node
+  linkType: hard
+
+"@oozcitak/infra@npm:1.0.8":
+  version: 1.0.8
+  resolution: "@oozcitak/infra@npm:1.0.8"
+  dependencies:
+    "@oozcitak/util": "npm:8.3.8"
+  checksum: 10c0/5fa44f02abbad453f5b26b38e2934978c177ef3a1baf8bf53919991135268f55bc89e23f8f3edebf0973c6a7d72d98fededb666c04a8b22ee4ca3048d0d42d25
+  languageName: node
+  linkType: hard
+
+"@oozcitak/url@npm:1.0.4":
+  version: 1.0.4
+  resolution: "@oozcitak/url@npm:1.0.4"
+  dependencies:
+    "@oozcitak/infra": "npm:1.0.8"
+    "@oozcitak/util": "npm:8.3.8"
+  checksum: 10c0/49824e30219b1e3bd0133c7302e79ead18dbfff91bc1ebb2f05b3c2cd670ed07b36af0f933faba2bc3221f65ef068fb7fca7d6c3cb8053fbca45f8cdf5670147
+  languageName: node
+  linkType: hard
+
+"@oozcitak/util@npm:8.3.8":
+  version: 8.3.8
+  resolution: "@oozcitak/util@npm:8.3.8"
+  checksum: 10c0/1c492abcba79f5dd9bd7709331a614114706e6936a899cac6ac90b63bbe8e98da288e664c13c6acb2a38e3c5ffd47b93f824075ba81384d6192cc364bf126775
   languageName: node
   linkType: hard
 
@@ -7233,7 +7270,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"js-yaml@npm:^3.13.1, js-yaml@npm:^3.6.1":
+"js-yaml@npm:3.14.1, js-yaml@npm:^3.13.1, js-yaml@npm:^3.6.1":
   version: 3.14.1
   resolution: "js-yaml@npm:3.14.1"
   dependencies:
@@ -10598,13 +10635,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vitest-ctrf-json-reporter@npm:^0.0.2":
-  version: 0.0.2
-  resolution: "vitest-ctrf-json-reporter@npm:0.0.2"
-  checksum: 10c0/87239e59805b33cd7890d266b36d421c1b3ab60eddaf66e1a914aa7aef00c699862fc287306a8e39870a113dbacc78c39ca03adb8a9dbc3528ecdca1fd9315ff
-  languageName: node
-  linkType: hard
-
 "vitest@npm:^3.2.4":
   version: 3.2.4
   resolution: "vitest@npm:3.2.4"
@@ -10873,6 +10903,18 @@ __metadata:
     utf-8-validate:
       optional: true
   checksum: 10c0/eac918213de265ef7cb3d4ca348b891a51a520d839aa51cdb8ca93d4fa7ff9f6ccb339ccee89e4075324097f0a55157c89fa3f7147bde9d8d7e90335dc087b53
+  languageName: node
+  linkType: hard
+
+"xmlbuilder2@npm:^3.1.1":
+  version: 3.1.1
+  resolution: "xmlbuilder2@npm:3.1.1"
+  dependencies:
+    "@oozcitak/dom": "npm:1.15.10"
+    "@oozcitak/infra": "npm:1.0.8"
+    "@oozcitak/util": "npm:8.3.8"
+    js-yaml: "npm:3.14.1"
+  checksum: 10c0/a3e7dd5cbc052f6b53773a4a9d5efb26b0647aa8868bc1a597478d534e78184263b5b3e495e82613f21d0bf016a24145bb793f6e197e8911139dddba9cd831cc
   languageName: node
   linkType: hard
 

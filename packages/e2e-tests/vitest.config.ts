@@ -1,6 +1,7 @@
 /// <reference types="vitest" />
-import AllureReporter from 'allure-vitest/reporter';
 import { defineConfig } from 'vitest/config';
+import XRayJsonReporter from './src/reporters/custom-xray-json/xray-json-reporter.js';
+import CustomJUnitReporter from './src/reporters/custom-junit/custom-junit-reporter.js';
 
 export default defineConfig({
   test: {
@@ -20,8 +21,20 @@ export default defineConfig({
     },
     reporters: [
       'default',
-      ['junit', { outputFile: './reports/test-report.xml' }],
-      ['json', { outputFile: './reports/test-report.json' }],
+      new XRayJsonReporter(), // Add this entry
+      new CustomJUnitReporter(),
+      [
+        'junit',
+        {
+          outputFile: './reports/junit/test-results.xml',
+        },
+      ],
+      [
+        'json',
+        {
+          outputFile: './reports/json/test-results.json',
+        },
+      ],
       ['html', { outputFile: './reports/html/index.html' }],
       ['allure-vitest/reporter', { resultsDir: './reports/allure-results' }],
     ],

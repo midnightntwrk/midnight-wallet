@@ -7,6 +7,8 @@ import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { exit } from 'node:process';
+import { TestContext } from 'vitest';
 
 /**
  *
@@ -14,9 +16,14 @@ import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
  */
 
 describe('Dust tests', () => {
+  if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {
+    logger.info('SEED or SEED2 env vars not set');
+    exit(1);
+  }
+
   const getFixture = useTestContainersFixture();
-  const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
-  const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
+  const seed = process.env['SEED2'];
+  const seedFunded = process.env['SEED'];
   const fundedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seedFunded));
   const fundedDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seedFunded));
   const unshieldedFundedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), NetworkId.NetworkId.Undeployed);
@@ -25,7 +32,7 @@ describe('Dust tests', () => {
   const receiverKeystore = createKeystore(utils.getUnshieldedSeed(seed), NetworkId.NetworkId.Undeployed);
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const timeout = 240_000;
-  const outputValue = 10000n * 10n ** 6n;
+  const outputValue = 100n * 10n ** 6n;
 
   let fixture: TestContainersFixture;
   let walletFunded: WalletFacade;
@@ -38,6 +45,8 @@ describe('Dust tests', () => {
       receiverWallet = await utils.buildWalletFacade(seed, fixture);
       await walletFunded.start(fundedSecretKey, fundedDustSecretKey);
       await receiverWallet.start(receiverWalletSecretKey, receiverWalletDustSecretKey);
+      const fundedState = await rx.firstValueFrom(walletFunded.state());
+      logger.info(`Funded wallet address: ${fundedState.unshielded.address}`);
       logger.info('Two wallets started');
     });
   });
@@ -108,7 +117,11 @@ describe('Dust tests', () => {
 
   test(
     'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
-    async () => {
+    async (ctx: TestContext) => {
+      ctx.task.meta.custom = {
+        labels: ['Query', 'Block', 'ByHash', 'UnshieldedTokens'],
+        testKey: 'PM-17711',
+      };
       await sendAndRegisterNightUtxos();
       const initialWalletState = await utils.waitForSyncFacade(receiverWallet);
       const receiverDustBalance = await rx.firstValueFrom(
