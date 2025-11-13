@@ -23,7 +23,7 @@
     "fast-check": "^4.2.0",
     "pure-rand": "^7.0.1",
     "rxjs": "^7.5.5",
-    "testcontainers": "^11.4.0"
+    "testcontainers": "^11.8.1"
   },
   "devDependencies": {
     "eslint": "^9.32.0",

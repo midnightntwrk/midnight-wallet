@@ -17,7 +17,7 @@
     "allure-report": "yarn allure-generate && yarn allure-history && yarn allure-open"
   },
   "devDependencies": {
-    "@cardano-sdk/key-management": "0.24.8",
+    "@cardano-sdk/key-management": "0.29.11",
     "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.5",
     "@midnight-ntwrk/midnight-js-network-id": "0.2.5",
     "@midnight-ntwrk/wallet": "npm:@midnight-ntwrk/wallet@5.0.0",
@@ -34,7 +34,7 @@
     "@types/ws": "^8.5.4",
     "@vitest/coverage-v8": "3.2.4",
     "@vitest/runner": "^3.2.4",
-    "@vitest/ui": "3.2.4",
+    "@vitest/ui": "4.0.8",
     "allure-commandline": "^2.27.0",
     "allure-js-commons": "^3.3.0",
     "allure-vitest": "^3.3.0",
@@ -45,8 +45,8 @@
     "prettier": "^3.6.2",
     "rimraf": "^6.0.1",
     "rxjs": "^7.5",
-    "shx": "^0.3.4",
-    "testcontainers": "^11.4.0",
+    "shx": "^0.4.0",
+    "testcontainers": "^11.8.1",
     "tsc-watch": "^6.0.0",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.38.0",
