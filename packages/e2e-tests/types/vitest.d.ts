@@ -21,7 +21,7 @@ declare module 'vitest' {
 
   interface TestContext {
     skip?: (condition: boolean, reason?: string) => void;
-    task?: {
+    task: {
       meta: {
         done?: boolean;
         custom?: Record<string, unknown>;
