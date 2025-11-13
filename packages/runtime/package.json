@@ -1,7 +1,7 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-runtime",
   "description": "Runtime for the wallet variants",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,8 +29,8 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.7",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.6",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.8",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.7",
     "effect": "^3.17.3",
     "rxjs": "^7.5"
   },

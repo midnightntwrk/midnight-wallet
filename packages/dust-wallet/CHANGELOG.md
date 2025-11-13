@@ -1,5 +1,25 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 1.0.0-beta.8
+
+### Patch Changes
+
+- f967d17: chore: remove wallet api dep from dust wallet
+- 1db4280: chore: bump ledger to version 6.1.0-beta.5
+- Updated dependencies [976628a]
+- Updated dependencies [0838f04]
+- Updated dependencies [f6618f1]
+- Updated dependencies [1db4280]
+- Updated dependencies [646c8df]
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.7
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.7
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.7
+  - @midnight-ntwrk/wallet-sdk-node-client@1.0.0-beta.9
+
 ## 1.0.0-beta.7
 
 ### Patch Changes

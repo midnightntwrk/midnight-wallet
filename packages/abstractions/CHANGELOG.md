@@ -1,5 +1,15 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 1.0.0-beta.8
+
+### Minor Changes
+
+- 646c8df: chore: add network id for qanet
+
+### Patch Changes
+
+- 1db4280: chore: bump ledger to version 6.1.0-beta.5
+
 ## 1.0.0-beta.7
 
 ### Patch Changes

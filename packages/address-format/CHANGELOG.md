@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-address-format
 
+## 3.0.0-beta.7
+
+### Patch Changes
+
+- 1db4280: chore: bump ledger to version 6.1.0-beta.5
+
 ## 3.0.0-beta.6
 
 ### Patch Changes
