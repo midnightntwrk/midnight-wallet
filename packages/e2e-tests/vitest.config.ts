@@ -57,10 +57,5 @@ export default defineConfig({
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-      // '@': path.resolve(__dirname, './src'),
-      // '@infrastructure': path.resolve(__dirname, '../src/infrastructure'),
-      // '@e2e': path.resolve(__dirname, '../src/e2e')
-    },
   },
 });

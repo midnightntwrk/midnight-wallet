@@ -1,4 +1,9 @@
-// This file is part of midnightntwrk/midnight-indexer
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
+// This file is part of midnightntwrk/midnight-wallet
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +18,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import { RunnerTestSuite, RunnerTaskResult } from 'vitest';
 import { Reporter } from 'vitest/reporters';
 import { create } from 'xmlbuilder2';
@@ -42,13 +47,25 @@ function flattenTests(suite: RunnerTestSuite, parentNames: string[] = []) {
       // currentNames[1] -> This is the top level describe string
       // suite.name      -> This is the lower level describe string, just wrapping the test/it
       // task.name       -> This is the test/it string
-      results.push({
+      const tc: {
+        suiteName: string;
+        className: string;
+        testName: string;
+        time: number;
+        failureMessage?: string;
+      } = {
         suiteName: currentNames[0] || suite.name,
         className: currentNames[1] || '',
         testName: `${suite.name || ''} ${task.name}`,
         time: result?.duration ? result.duration / 1000 : 0,
-        failureMessage: result?.errors?.[0]?.message,
-      });
+      };
+
+      const failureMsg = result?.errors?.[0]?.message;
+      if (failureMsg !== undefined) {
+        tc.failureMessage = failureMsg;
+      }
+
+      results.push(tc);
     }
   }
 

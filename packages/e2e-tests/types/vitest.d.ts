@@ -1,4 +1,4 @@
-// This file is part of midnightntwrk/midnight-indexer
+// This file is part of midnightntwrk/midnight-wallet
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,7 +21,7 @@ declare module 'vitest' {
 
   interface TestContext {
     skip?: (condition: boolean, reason?: string) => void;
-    task: {
+    task?: {
       meta: {
         done?: boolean;
         custom?: Record<string, unknown>;

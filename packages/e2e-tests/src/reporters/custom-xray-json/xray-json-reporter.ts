@@ -1,4 +1,5 @@
-// This file is part of midnightntwrk/midnight-indexer.
+/* eslint-disable no-console */
+// This file is part of midnightntwrk/midnight-wallet.
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,8 +14,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import fs from 'fs';
-import path from 'path';
+import fs from 'node:fs';
+import path from 'node:path';
 import { Reporter } from 'vitest/reporters';
 import { RunnerTestSuite, RunnerTaskResult } from 'vitest';
 
@@ -79,18 +80,18 @@ function flattenTests(
   className: string;
   testName: string;
   time: number;
-  failureMessage?: string;
-  startTime?: number;
-  metadata?: Record<string, unknown>;
+  failureMessage?: string | undefined;
+  startTime?: number | undefined;
+  metadata?: Record<string, unknown> | undefined;
 }[] {
   const results: {
     suiteName: string;
     className: string;
     testName: string;
     time: number;
-    failureMessage?: string;
-    startTime?: number;
-    metadata?: Record<string, unknown>;
+    failureMessage?: string | undefined;
+    startTime?: number | undefined;
+    metadata?: Record<string, unknown> | undefined;
   }[] = [];
 
   const currentNames = [...parentNames, suite.name];
@@ -116,12 +117,6 @@ function flattenTests(
       const testSuiteName = suite.name;
       const testTaskName = task.name;
 
-      // console.debug('suiteName: ', suite.name);
-      // console.debug('currentNames[0]: ', currentNames[0]);
-      // console.debug('currentNames[1]: ', currentNames[1]);
-      // console.debug('suite.name: ', suite.name);
-      // console.debug('task.name: ', task.name);
-      // console.debug('--------------------------------');
       results.push({
         suiteName: testFileName,
         className: testSuiteName,
@@ -131,10 +126,6 @@ function flattenTests(
         startTime: startTime,
         metadata: (task as unknown as { meta: Record<string, unknown> }).meta, // Extract task metadata
       });
-
-      // console.debug('results.at(-1).suiteName: ', results.at(-1)?.suiteName);
-      // console.debug('results.at(-1).className: ', results.at(-1)?.className);
-      // console.debug('results.at(-1).testName: ', results.at(-1)?.testName);
     }
   }
 
@@ -148,23 +139,23 @@ export default class XRayJsonReporter implements Reporter {
     const testcases = files.flatMap((file) => flattenTests(file));
     const endTime = Date.now();
 
-    if (!process.env.XRAY_COMPONENT) {
+    if (!process.env['XRAY_COMPONENT']) {
       console.warn('WARNING: XRay JSON Reporter Error: XRAY_COMPONENT environment variable must be defined');
       console.warn('       Please set the XRAY_COMPONENT environment variable to specify the component being tested');
       console.warn('WARNING: Failed to create a Custom XRay JSON report');
       return;
     }
 
-    if (!process.env.XRAY_PROJECT_KEY) {
+    if (!process.env['XRAY_PROJECT_KEY']) {
       console.warn('WARNING: XRAY_PROJECT_KEY env variable not set, PM will be used as default');
     }
 
-    const targetEnv = process.env.TARGET_ENV || 'undeployed';
-    const xrayComponent = process.env.XRAY_COMPONENT;
-    const xrayReportEmptyMeta = process.env.XRAY_REPORT_TESTS_MISSING_METADATA || 'false';
-    const xrayTestExecKey = process.env.XRAY_TEST_EXEC_KEY;
-    const xrayTestPlanKey = process.env.XRAY_TEST_PLAN_KEY;
-    const xrayProjectKey = process.env.XRAY_PROJECT_KEY || 'PM';
+    const targetEnv = process.env['TARGET_ENV'] || 'undeployed';
+    const xrayComponent = process.env['XRAY_COMPONENT'];
+    const xrayReportEmptyMeta = process.env['XRAY_REPORT_TESTS_MISSING_METADATA'] || 'false';
+    const xrayTestExecKey = process.env['XRAY_TEST_EXEC_KEY'];
+    const xrayTestPlanKey = process.env['XRAY_TEST_PLAN_KEY'];
+    const xrayProjectKey = process.env['XRAY_PROJECT_KEY'] || 'PM';
 
     console.debug('XRay JSON Reporter info: ');
     console.debug(` TARGET_ENV: ${targetEnv}`);
@@ -173,16 +164,6 @@ export default class XRayJsonReporter implements Reporter {
     console.debug(` XRAY_TEST_EXEC_KEY: ${xrayTestExecKey}`);
     console.debug(` XRAY_TEST_PLAN_KEY: ${xrayTestPlanKey}`);
     console.debug(` XRAY_PROJECT_KEY: ${xrayProjectKey}`);
-
-    // Group tests by suite for better organization
-    // const grouped = testcases.reduce(
-    //   (acc, tc) => {
-    //     if (!acc[tc.suiteName]) acc[tc.suiteName] = [];
-    //     acc[tc.suiteName].push(tc);
-    //     return acc;
-    //   },
-    //   {} as Record<string, typeof testcases>,
-    // );
 
     // Convert test cases to XRay format
     const xrayTests: XRayTest[] = testcases.flatMap((test) => {
@@ -195,7 +176,7 @@ export default class XRayJsonReporter implements Reporter {
       };
 
       // Skip the test entirely if the metadata is not defined
-      if (xrayReportEmptyMeta === 'false' && test.metadata?.custom === undefined) {
+      if (xrayReportEmptyMeta === 'false' && test.metadata?.['custom'] === undefined) {
         return [];
       }
 
@@ -210,17 +191,17 @@ export default class XRayJsonReporter implements Reporter {
 
       // Managing labels as metadata
       testData.testInfo.labels = ['Xray']; // Default label
-      if (test.metadata?.custom) {
-        const custom = test.metadata.custom as { labels?: string[] };
+      if (test.metadata?.['custom']) {
+        const custom = test.metadata?.['custom'] as { labels?: string[] };
         if (custom.labels) {
           testData.testInfo.labels.push(...custom.labels);
         }
       }
 
       // Managing the test key if available
-      if (test.testName && test.metadata?.custom) {
-        const custom = test.metadata.custom as { testKey?: string };
-        if (custom.testKey) {
+      if (test.testName && test.metadata?.['custom']) {
+        const custom = test.metadata['custom'] as { testKey?: string };
+        if (custom?.testKey) {
           testData.testKey = custom.testKey;
         }
       }
@@ -270,7 +251,6 @@ export default class XRayJsonReporter implements Reporter {
       console.error('        - XRAY_TEST_PLAN_KEY: For linking to a test plan');
       console.error('ERROR: Failed to create a Custom XRay JSON report');
       return;
-      //throw new Error('Missing required XRay configuration: XRAY_TEST_EXEC_KEY or XRAY_TEST_PLAN_KEY must be defined');
     }
 
     if (xrayTestExecKey) {
