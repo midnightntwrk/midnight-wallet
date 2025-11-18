@@ -1,0 +1,19 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "typecheck-script": {
+      "inputs": ["scripts/**", "src/testing/**", "package.json"],
+      "dependsOn": ["^dist"]
+    },
+    "polkadot-typegen": {
+      "inputs": ["scripts/**", "src/testing/**", "package.json"],
+      "outputs": ["src/gen/**"],
+      "dependsOn": ["typecheck-script"]
+    },
+    "gen-test-tx": {
+      "inputs": ["scripts/**", "src/testing/**", "package.json"],
+      "outputs": ["src/resources"],
+      "dependsOn": ["typecheck-script"]
+    }
+  }
+}

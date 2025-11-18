@@ -1,0 +1,494 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`Snippet outputs > with network > should output the correct result for 'balancing' 1`] = `
+[
+  "Unshielded transfer by balancing completed
+Did sender send all its Night? true
+Did receiver receive all the Night? true
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'combined-transfer' 1`] = `
+[
+  "Transfer completed;
+  Night balance: 1000000n
+  shielded token balance: 1000000n
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'designation' 1`] = `
+[
+  "Generating dust before designation: false
+Generating dust after designation: true
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'initialization' 1`] = `
+[
+  "Synced state:
+{
+  shielded: {
+    balances: {
+      '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n
+    },
+    availableCoins: [
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+          value: 500000000000000n,
+          mt_index: 27n
+        },
+        commitment: 'ffec3ad9e58b3764608efdecfcb3fabeb981859e596544bb04e994449bc58d28',
+        nullifier: '111d3ae56d92966e7d39f25c087f735ee6a98d4688a12b66051bb1f59b51475f'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000001',
+          nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+          value: 500000000000000n,
+          mt_index: 1n
+        },
+        commitment: '091553393243a7279f6af3ab943448f0c8278bcccb7418519a2e99fd45d8da0d',
+        nullifier: '356a80e0b6ee6e2194320d796ae65aeadd241449cabc55c8fd7cd76d15ff814e'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+          value: 500000000000000n,
+          mt_index: 9n
+        },
+        commitment: '52d84fac4ad72f5878d919738cf437d0553b523b817d8f783cc32f5d592a8b60',
+        nullifier: '3ff4e009587042ec0ec68a2c700e6f6e636edbda2a972d0cba4a5d66032869ea'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+          value: 500000000000000n,
+          mt_index: 0n
+        },
+        commitment: '023e970a3813ab8fa4202d1159fe7068af63dc9b7d7106650c495655ab8726af',
+        nullifier: '595e34df4645095d4b4f23157ded89310d62b3b165cf6774b4f57e7f7fd153a3'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+          value: 500000000000000n,
+          mt_index: 23n
+        },
+        commitment: 'e4b0e7c9a9b36dae46ebed7322c5780e64eace60c1351eb85b671d1870620402',
+        nullifier: 'b4ef5c785e72c3420611cb1b617482284c134a71b1aaf57d228463d658eae00e'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+          value: 500000000000000n,
+          mt_index: 18n
+        },
+        commitment: '9f15cf932d1f31a7c9c8fbb030d1c7e11e6a36972dcccb9494032d470963a4bd',
+        nullifier: 'df667c741d2d74f8c11cd9f685fc95ed8aae235c0f7b75dfc69bbca10c8e9683'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000002',
+          nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+          value: 500000000000000n,
+          mt_index: 11n
+        },
+        commitment: '5a60840cc2465ecd227f128f2c9bc55072ef8a6c038b4d19935dbc173ac0b6d5',
+        nullifier: 'f5c6444c7ef771b2ded6f2b0bd5e47d87305e76b88c1534894b0615982e3d268'
+      }
+    ],
+    pendingCoins: [],
+    totalCoins: [
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+          value: 500000000000000n,
+          mt_index: 27n
+        },
+        commitment: 'ffec3ad9e58b3764608efdecfcb3fabeb981859e596544bb04e994449bc58d28',
+        nullifier: '111d3ae56d92966e7d39f25c087f735ee6a98d4688a12b66051bb1f59b51475f'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000001',
+          nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+          value: 500000000000000n,
+          mt_index: 1n
+        },
+        commitment: '091553393243a7279f6af3ab943448f0c8278bcccb7418519a2e99fd45d8da0d',
+        nullifier: '356a80e0b6ee6e2194320d796ae65aeadd241449cabc55c8fd7cd76d15ff814e'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+          value: 500000000000000n,
+          mt_index: 9n
+        },
+        commitment: '52d84fac4ad72f5878d919738cf437d0553b523b817d8f783cc32f5d592a8b60',
+        nullifier: '3ff4e009587042ec0ec68a2c700e6f6e636edbda2a972d0cba4a5d66032869ea'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+          value: 500000000000000n,
+          mt_index: 0n
+        },
+        commitment: '023e970a3813ab8fa4202d1159fe7068af63dc9b7d7106650c495655ab8726af',
+        nullifier: '595e34df4645095d4b4f23157ded89310d62b3b165cf6774b4f57e7f7fd153a3'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+          value: 500000000000000n,
+          mt_index: 23n
+        },
+        commitment: 'e4b0e7c9a9b36dae46ebed7322c5780e64eace60c1351eb85b671d1870620402',
+        nullifier: 'b4ef5c785e72c3420611cb1b617482284c134a71b1aaf57d228463d658eae00e'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+          value: 500000000000000n,
+          mt_index: 18n
+        },
+        commitment: '9f15cf932d1f31a7c9c8fbb030d1c7e11e6a36972dcccb9494032d470963a4bd',
+        nullifier: 'df667c741d2d74f8c11cd9f685fc95ed8aae235c0f7b75dfc69bbca10c8e9683'
+      },
+      {
+        coin: {
+          type: '0000000000000000000000000000000000000000000000000000000000000002',
+          nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+          value: 500000000000000n,
+          mt_index: 11n
+        },
+        commitment: '5a60840cc2465ecd227f128f2c9bc55072ef8a6c038b4d19935dbc173ac0b6d5',
+        nullifier: 'f5c6444c7ef771b2ded6f2b0bd5e47d87305e76b88c1534894b0615982e3d268'
+      }
+    ],
+    progress: {
+      appliedIndex: 29n,
+      highestRelevantWalletIndex: 29n,
+      highestIndex: 0n,
+      highestRelevantIndex: 0n
+    },
+    transactionHistory: [],
+    coinPublicKey: ShieldedCoinPublicKey {
+      data: Buffer(32) [Uint8Array] [
+        170,  13, 114, 187, 119, 234,  70, 249,
+        134, 168,   0, 198, 109, 117, 196, 228,
+         40, 169,  91, 215, 225,  36,  79,  30,
+        208,  89,  55,  78,  98, 102, 235, 152
+      ]
+    },
+    encryptionPublicKey: ShieldedEncryptionPublicKey {
+      data: Buffer(32) [Uint8Array] [
+        182,  46,  99,  10,   3,   1, 113, 181,
+        225,  26, 242,  72, 127,   1,   3, 230,
+         80, 204, 112,  63,  40,  77,  10,  71,
+        139,  42,  58, 189, 249, 113,  91, 112
+      ]
+    },
+    address: ShieldedAddress {
+      coinPublicKey: ShieldedCoinPublicKey {
+        data: Buffer(32) [Uint8Array] [
+          170,  13, 114, 187, 119, 234,  70, 249,
+          134, 168,   0, 198, 109, 117, 196, 228,
+           40, 169,  91, 215, 225,  36,  79,  30,
+          208,  89,  55,  78,  98, 102, 235, 152
+        ]
+      },
+      encryptionPublicKey: ShieldedEncryptionPublicKey {
+        data: Buffer(32) [Uint8Array] [
+          182,  46,  99,  10,   3,   1, 113, 181,
+          225,  26, 242,  72, 127,   1,   3, 230,
+           80, 204, 112,  63,  40,  77,  10,  71,
+          139,  42,  58, 189, 249, 113,  91, 112
+        ]
+      },
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
+        type: 'shield-addr',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
+    }
+  },
+  unshielded: {
+    address: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+    balances: Map(1) {
+      '0000000000000000000000000000000000000000000000000000000000000000' => 2500000000000000n
+    },
+    pendingCoins: [],
+    availableCoins: [
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      }
+    ],
+    totalCoins: [
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      },
+      {
+        value: 500000000000000n,
+        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+        type: '0000000000000000000000000000000000000000000000000000000000000000',
+        intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
+        outputNo: 0,
+        ctime: 1754395200000,
+        registeredForDustGeneration: true
+      }
+    ],
+    syncProgress: { applyGap: 0, synced: true }
+  },
+  dust: {
+    totalCoins: [
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 21244438981981165169535492398728640016197515410260931870373091119927574907692n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'c7b64d5aa64262705b14735aa8eba798d072aa962ac1cb7f9da9693421410552',
+        mtIndex: 0n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 10201937588921233514150480458058716854505989540471671208389698426511273575017n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'bcdd9308b7628d6ac16c4c2f24af8aa682efdd74ea7e7b916ff0e929c94673a5',
+        mtIndex: 3n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 51650264525838247949097738603662528505715289147975900086387689489660233750160n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'a0e20f7430cba8ff3d41df6b58afdc7f4469d665b06c34248198f94882f6b954',
+        mtIndex: 4n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 38928378401809425349843606453780343090755438120443610805949457881565929985374n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '368ac08998feed02b8f9f3556601040809a701b9be539df5ce0c34736a5d3da4',
+        mtIndex: 2n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 38503609416955855980699368356981187447552854849706744377315252397264307048452n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'ba356be982b6a8b77635cb5e8602d2889049c6f0080af6cd7403feab3b71eadf',
+        mtIndex: 1n
+      }
+    ],
+    availableCoins: [
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 21244438981981165169535492398728640016197515410260931870373091119927574907692n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'c7b64d5aa64262705b14735aa8eba798d072aa962ac1cb7f9da9693421410552',
+        mtIndex: 0n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 10201937588921233514150480458058716854505989540471671208389698426511273575017n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'bcdd9308b7628d6ac16c4c2f24af8aa682efdd74ea7e7b916ff0e929c94673a5',
+        mtIndex: 3n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 51650264525838247949097738603662528505715289147975900086387689489660233750160n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'a0e20f7430cba8ff3d41df6b58afdc7f4469d665b06c34248198f94882f6b954',
+        mtIndex: 4n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 38928378401809425349843606453780343090755438120443610805949457881565929985374n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: '368ac08998feed02b8f9f3556601040809a701b9be539df5ce0c34736a5d3da4',
+        mtIndex: 2n
+      },
+      {
+        initialValue: 0n,
+        owner: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+        nonce: 38503609416955855980699368356981187447552854849706744377315252397264307048452n,
+        seq: 0,
+        ctime: 2025-08-05T12:00:00.000Z,
+        backingNight: 'ba356be982b6a8b77635cb5e8602d2889049c6f0080af6cd7403feab3b71eadf',
+        mtIndex: 1n
+      }
+    ],
+    pendingCoins: [],
+    progress: {
+      appliedIndex: 50n,
+      highestRelevantWalletIndex: 50n,
+      highestIndex: 0n,
+      highestRelevantIndex: 0n
+    },
+    dustPublicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+    dustAddress: 'mn_dust_undeployed1w0l54txthpu8q05j9j9ttk3j5dyu5766dc9zkz2s435vdglzwdr35dw790y'
+  }
+}
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'shielded-transfer' 1`] = `
+[
+  "Shielded transfer completed; shielded balance: 1000000n
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'swap' 1`] = `
+[
+  "Does Alice have specific shielded coin before swap? false
+Does Bob have specific shielded coin before swap? false
+Does Alice have specific shielded coin after swap? true
+Does Bob have specific shielded coin after swap? true
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'unshielded-transfer' 1`] = `
+[
+  "Unshielded transfer completed; night balance: 1000000n
+",
+]
+`;
+
+exports[`Snippet outputs > without network > should output the correct result for 'addresses' 1`] = `
+[
+  "unshielded address mn_addr_undeployed13h0e3c2m7rcfem6wvjljnyjmxy5rkg9kkwcldzt73ya5pv7c4p8skzgqwj
+ are unshielded addresses equal? true
+mainnet unshielded address mn_addr13h0e3c2m7rcfem6wvjljnyjmxy5rkg9kkwcldzt73ya5pv7c4p8shdxvu5
+ are mainnet unshielded addresses equal? true
+shielded address mn_shield-addr_undeployed12p0cn6f9dtlw74r44pg8mwwjwkr74nuekt4xx560764703qeeuvqsjk0cyf658cmttf8m30tldatpacryugm70ql8n9j3400ge3v7ecjaqvru
+ are shielded addresses equal? true
+dust address mn_dust_undeployed1da40n96p3afrvs84zhuw354z755hhus5e3g49j0aw3c4gte3kmksnd5awz
+ are dust addresses equal? true
+",
+]
+`;
+
+exports[`Snippet outputs > without network > should output the correct result for 'hd' 1`] = `
+[
+  "seed 0000000000000000000000000000000000000000000000000000000000000000
+unshielded(Night) secret key 22b8e577b3f638b2b361f36fd62d7138ed489d9afe3da5f7c325e2d0a95ae043
+shielded:
+  seed 9690d4013e42e6739d9496f836b2cbd4339451c02a00624b86e9fb15cc4197a8
+  coin secret key 6d69646e696768743a7a737761702d636f696e2d7365637265742d6b65795b76315d3af9e01827aa841edfbf90bb11a207e0df140dbec913dca5025fd588b8ec102aab
+  encryption secret key 6fc92f70f2e4b474b6a184ec0bc8d78aa19c3c153bd8283907b36a7a6556fcb1
+dust:
+  seed b9b76cce66828aa6bd798abbb15b012331a6aa1e5f99e678724c37463b5775a1
+  public key 1a4773e2a3c668ac50092b0a6e5a7bca49a332dab58a2c923e7078b8cbac4aff
+",
+]
+`;

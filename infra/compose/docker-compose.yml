@@ -1,0 +1,49 @@
+services:
+  indexer:
+    image: "ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.8"
+    container_name: indexer_$TESTCONTAINERS_UID
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1::8088"
+    environment:
+      RUST_LOG: "indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info"
+      APP__INFRA__NODE__URL: "ws://node:9944"
+      APP__INFRA__SECRET: "${APP_INFRA_SECRET}"
+
+    healthcheck:
+      test: ["CMD-SHELL", "cat /var/run/indexer-standalone/running"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+    depends_on:
+      node:
+        condition: service_healthy
+  node:
+    image: "ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.4"
+    container_name: node_$TESTCONTAINERS_UID
+    cap_drop:
+      - ALL
+    # Required capabilities: SETGID and SETUID are minimal capabilities needed by the
+    # midnight-node image to execute runuser command for user switching. Without these,
+    # the container fails with "runuser: cannot set groups: Operation not permitted".
+    # We drop ALL capabilities first, then add back only these two minimal ones.
+    cap_add:
+      - SETGID
+      - SETUID
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "127.0.0.1::9944"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9944/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    environment:
+      CFG_PRESET: "dev"
+      SIDECHAIN_BLOCK_BENEFICIARY: "04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e"

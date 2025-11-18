@@ -1,0 +1,75 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) 2025 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { Effect, Stream } from 'effect';
+import { randomUUID } from 'node:crypto';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { WsSubscriptionClient } from '../../../effect/index.js';
+import { UnshieldedTransactions } from '../UnshieldedTransactions.js';
+
+const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
+
+const ADDRESS = 'mn_addr_undeployed1rhqz8aq6t74ym2uq5gh53t9x02gducxnamtdvnjxfhelxwaf8ztqpmrwwj';
+
+const environmentId = randomUUID();
+
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
+  },
+});
+
+const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose.yml')
+  .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed/))
+  .withEnvironment(environmentVars);
+
+describe('Wallet subscription', () => {
+  describe('with available Indexer Server', () => {
+    let startedEnvironment: StartedDockerComposeEnvironment | undefined = undefined;
+    const getIndexerPort = () =>
+      startedEnvironment?.getContainer(`indexer_${environmentId}`).getMappedPort(8088) ?? 8088;
+
+    beforeAll(async () => {
+      startedEnvironment = await environment.up();
+    }, timeout_minutes(3));
+
+    afterAll(async () => {
+      await startedEnvironment?.down();
+    }, timeout_minutes(1));
+
+    it(
+      'should stream GraphQL subscription',
+      async () => {
+        await Effect.gen(function* () {
+          const events = yield* UnshieldedTransactions.run({
+            address: ADDRESS,
+            transactionId: 0,
+          }).pipe(
+            Stream.take(2),
+            Stream.tap((data) => Effect.log(data.unshieldedTransactions.type)),
+            Stream.runCollect,
+          );
+
+          expect(events).toHaveLength(2);
+        }).pipe(
+          Effect.provide(WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v3/graphql/ws` })),
+          Effect.scoped,
+          Effect.runPromise,
+        );
+      },
+      timeout_minutes(1),
+    );
+  });
+});

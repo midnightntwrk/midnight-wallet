@@ -1,0 +1,83 @@
+name: Fund test wallets
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+  SEED_STABLE: ${{ secrets.SEED_STABLE }}
+  FAUCET_SEED_HALO2: ${{ secrets.FAUCET_SEED_HALO2 }}
+  FAUCET_SEED_TESTNET: ${{ secrets.FAUCET_SEED_TESTNET }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        type: choice
+        description: Midnight network to use
+        required: true
+        default: 'devnet'
+        options:
+          - devnet
+          - testnet
+      deployment:
+        type: choice
+        description: Midnight deployment to use
+        required: true
+        default: 'qanet'
+        options:
+          - qanet
+          - devnet
+          - testnet
+
+jobs:
+  runScript:
+    name: Run funding script
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Run funding script for devnet envs
+        if: env.NETWORK == 'devnet'
+        env:
+          NETWORK: ${{ inputs.network }}
+          DEPLOYMENT: ${{ inputs.deployment }}
+          SEED: ${{ env.FAUCET_SEED_HALO2 }}
+          SEED_STABLE: ${{ env.SEED_STABLE }}
+          ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
+        run: |
+          yarn install --immutable
+          yarn dlx turbo test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
+
+      - name: Run funding script for testnet envs
+        if: env.NETWORK == 'testnet'
+        env:
+          NETWORK: ${{ inputs.network }}
+          DEPLOYMENT: ${{ inputs.deployment }}
+          SEED: ${{ env.FAUCET_SEED_TESTNET }}
+          SEED_STABLE: ${{ env.SEED_STABLE }}
+          ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
+        run: |
+          yarn install --immutable
+          yarn dlx turbo test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts

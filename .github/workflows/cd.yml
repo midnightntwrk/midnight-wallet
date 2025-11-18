@@ -1,0 +1,82 @@
+name: CD
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
+  MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest-8-core-x64
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: "yarn.lock"
+          # This is required for the npm publish step
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          registry-url: "https://npm.pkg.github.com"
+          scope: "@midnight-ntwrk"
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Import GPG key
+        id: gpg
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec #v6.3.0
+        with:
+          gpg_private_key: ${{ env.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+          git_user_signingkey: true
+          git_commit_gpgsign: true
+
+      - name: Configure GIT signing
+        run: |
+          git config user.name  "MidnightCI"
+          git config user.email "midnight-automation+midnightci@iohk.io"
+          git config user.signingkey "${{ steps.gpg.outputs.fingerprint }}"
+          git config commit.gpgsign true
+          git config tag.gpgSign true
+
+      - name: Install dependencies
+        run: |
+          yarn install --immutable
+
+      - name: Create Release Pull Request / Publish
+        id: changesets
+        uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba #v1.5.3
+        with:
+          title: "chore: release"
+          version: yarn changeset:version
+          publish: yarn changeset:publish
+          setupGitUser: false
+
+        env:
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
