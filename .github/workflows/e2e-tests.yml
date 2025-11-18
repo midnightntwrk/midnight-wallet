@@ -1,0 +1,231 @@
+name: E2E tests
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
+  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
+  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
+  SEED_STABLE: ${{ secrets.SEED_STABLE }}
+  HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
+  SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
+
+  APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
+  APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
+  APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
+  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        type: choice
+        description: Midnight network to use
+        required: true
+        default: "devnet"
+        options:
+          - devnet
+          - testnet
+          - undeployed
+      deployment:
+        type: choice
+        description: Midnight deployment to use
+        required: true
+        default: "qanet"
+        options:
+          - local
+          - qanet
+          - testnet
+      seed:
+        type: string
+        description: Seed of a funded wallet
+        required: false
+        default: 72a64b0e55d6f9e60a042d5337c17ffc1ba5f3a704845bd875fc3ba75eb701ed
+      seed2:
+        type: string
+        description: Seed of another receiving wallet
+        required: false
+        default: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a
+      nt_seed:
+        type: string
+        description: Seed of a funded wallet with native tokens
+        required: false
+        default: aeb5e5d3d151cb4a76ae59a0cb013503daae4cb4ab2242ad10a1923c78ec0d83
+      nt_seed2:
+        type: string
+        description: Seed of another receiving wallet for native tokens
+        required: false
+        default: 05e5124a8a085facc863d689db4d0518604aa9d713557679fad00f69ee1daefe
+      modifier:
+        type: string
+        description: Suite or a testname to run (refer to Jest docs)
+        required: false
+  workflow_call:
+    inputs:
+      network:
+        type: string
+        description: Midnight network to use (testnet/devnet/undeployed)
+        required: true
+        default: "devnet"
+      deployment:
+        type: string
+        description: Midnight deployment to use (qanet/testnet/local)
+        required: true
+        default: "qanet"
+      seed:
+        type: string
+        description: Seed of a funded wallet
+        required: false
+      seed2:
+        type: string
+        description: Seed of another receiving wallet
+        required: false
+      nt_seed:
+        type: string
+        description: Seed of a funded wallet with native tokens
+        required: false
+      nt_seed2:
+        type: string
+        description: Seed of another receiving wallet for native tokens
+        required: false
+      modifier:
+        type: string
+        description: Suite or a testname to run (refer to Jest docs)
+        required: false
+    secrets:
+      GH_TOKEN:
+        required: true
+      GH_USERNAME:
+        required: true
+      MIDNIGHTBOT_PACKAGES_WRITE:
+        required: true
+      ALLURE_ADMIN_USER:
+        required: true
+      ALLURE_ADMIN_PASSWORD:
+        required: true
+
+jobs:
+  build:
+    name: E2E tests
+    runs-on: ubuntu-latest-8-core-x64
+    timeout-minutes: 120
+    permissions: write-all
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+
+      # - name: Determine the latest successful run ID with appropriate artifact
+      #   continue-on-error: true
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      #   run: |
+      #       LATEST_RUN_ID=$(./.github/scripts/find_run_id.sh ${{ github.repository }} "Healthcheck - ${{ inputs.deployment }}" ".sync_cache")
+      #       echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
+      #       mkdir -p ${{ env.SYNC_CACHE }}
+
+      # - uses: actions/download-artifact@v4
+      #   continue-on-error: true
+      #   with:
+      #     run-id: ${{ env.LATEST_RUN_ID }}
+      #     path: ${{ env.SYNC_CACHE }}
+      #     github-token: ${{ secrets.GH_TOKEN }}
+      #     name: .sync_cache
+
+      - name: Debug
+        run: ls -a -R ./packages/e2e-tests
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        with:
+          registry: "https://ghcr.io"
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Build wallet and install dependencies
+        run: |
+          yarn install
+          yarn turbo dist
+
+      - name: Run e2e tests
+        env:
+          NETWORK: ${{ inputs.network }}
+          DEPLOYMENT: ${{ inputs.deployment }}
+          SEED: ${{ inputs.seed }}
+          SEED2: ${{ inputs.seed2 }}
+          SEED_STABLE: ${{ env.SEED_STABLE }}
+          NT_SEED: ${{ inputs.nt_seed }}
+          NT_SEED2: ${{ inputs.nt_seed2 }}
+          SYNC_CACHE: ${{ env.SYNC_CACHE }}
+        run: |
+          yarn turbo test-remote -- ${{ inputs.modifier }}
+
+      - name: Upload sync cache
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: .sync_cache
+          path: ${{ env.SYNC_CACHE }}
+          include-hidden-files: true
+
+      - name: Create allure properties
+        if: success() || failure()
+        working-directory: ./packages/e2e-tests/allure-results
+        run: |
+          echo "
+          env=${{ inputs.network }}
+          tags=${{ inputs.modifier }}
+          deployment=${{ inputs.deployment }}
+          platform=Linux
+          " > environment.properties
+
+      - name: Send Results to Allure Server
+        uses: robkatona/send-allure-results@935714d2ab2c0de7b15a9d3e29a0cffe0fa64c59 #v1.0.5
+        if: ${{ always() }}
+        with:
+          allure-server-url: https://allure-server.prd.midnight.tools
+          allure-results-directory: ./packages/e2e-tests/reports/allure-results
+          project-id: headless-wallet-${{ inputs.deployment }}
+          security-user: ${{ env.ALLURE_ADMIN_USER }}
+          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+
+      - name: Generate allure report
+        if: success() || failure()
+        working-directory: ./packages/e2e-tests
+        run: |
+          yarn allure-generate
+
+      - name: Publish artifacts (test reports)
+        uses: actions/upload-artifact@v4
+        if: success() || failure()
+        with:
+          name: test-reports
+          path: |
+            ./packages/e2e-tests/reports/allure-report
+          retention-days: 30
+
+      - name: Publish wallet TS Test Report
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5 #v1
+        if: success() || failure()
+        with:
+          name: Wallet TS packages Junit Tests Report
+          reporter: java-junit
+          path: |
+            ./packages/e2e-tests/reports/test-report.xml

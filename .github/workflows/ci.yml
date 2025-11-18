@@ -1,0 +1,109 @@
+name: CI
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
+  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
+  NETWORK: undeployed
+  DEPLOYMENT: local
+
+  APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
+  APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
+  APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
+  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
+
+on:
+  pull_request:
+    branches: ["**"]
+  push:
+    branches: ["main"]
+
+jobs:
+  build:
+    name: Lint & Test
+    runs-on: ubuntu-latest-16-core-x64
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "yarn"
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        with:
+          registry: "https://ghcr.io"
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Verify
+        run: yarn verify
+
+      - name: Clean
+        run: yarn clean
+
+      - name: Build for publishing
+        run: yarn dist:publish
+
+      - name: Run publint
+        run: yarn publint
+
+      # - name: Run smoke e2e tests
+      #   run: |
+      #     yarn dlx turbo test-undeployed -- -t @smoke
+
+      # - name: Create allure properties
+      #   if: success() || failure()
+      #   working-directory: ./packages/e2e-tests/allure-results
+      #   run: |
+      #     echo "
+      #     env=${{ env.NETWORK }}
+      #     tags=@smoke
+      #     deployment=${{ env.DEPLOYMENT }}
+      #     platform=Linux
+      #     " > environment.properties
+
+      # - name: Send Results to Allure Server
+      #   uses: robkatona/send-allure-results@v1.0.5
+      #   if: ${{ always() }}
+      #   with:
+      #     allure-server-url: https://allure-server.prd.midnight.tools
+      #     allure-results-directory: ./packages/e2e-tests/reports/allure-results
+      #     project-id: headless-wallet-${{ env.DEPLOYMENT }}
+      #     security-user: ${{ env.ALLURE_ADMIN_USER }}
+      #     security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+
+      # - name: Publish wallet TS Test Report
+      #   uses: dorny/test-reporter@v1
+      #   if: success() || failure()
+      #   with:
+      #     name: Wallet TS packages Junit Tests Report
+      #     reporter: java-junit
+      #     path: |
+      #       ./packages/e2e-tests/reports/test-report.xml
+
+      # - name: Upload Artifact
+      #   uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+      #   with:
+      #     name: 'test-results-junit'
+      #     path: ./packages/e2e-tests/reports/report.xml

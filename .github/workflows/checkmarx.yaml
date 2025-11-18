@@ -4,14 +4,14 @@ name: Checkmarx One Scan
 permissions: {}
 
 on:
-  pull_request_target:  # Changed from pull_request to pull_request_target
+  pull_request_target: # Changed from pull_request to pull_request_target
     types: [opened, synchronize, reopened]
-    branches: [ '**' ]
+    branches: ["**"]
   push:
-    branches: [ 'main' ]
-  workflow_dispatch: {}   # so you can still run it manually
+    branches: ["main"]
+  workflow_dispatch: {} # so you can still run it manually
   schedule:
-    - cron: "0 0 * * *"   # run daily at midnight UTC
+    - cron: "0 0 * * *" # run daily at midnight UTC
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref }}
   cancel-in-progress: true
@@ -21,7 +21,7 @@ jobs:
       contents: read
       pull-requests: write
       security-events: write
-      actions: read              # to query workflows/runs
+      actions: read # to query workflows/runs
 
     runs-on: ubuntu-latest
 
@@ -30,10 +30,21 @@ jobs:
       # This is what makes it safe with pull_request_target
 
       - name: Checkmarx Full Scan
+        if: github.event.repository.private == true
+        uses: midnightntwrk/upload-sarif-github-action/checkmarx-scan@53cdf3148dbbd85518ecc5e8f1ec485852c99c36
+        with:
+          cx-client-id: ${{ secrets.CX_CLIENT_ID }}
+          cx-client-secret: ${{ secrets.CX_CLIENT_SECRET_EU }}
+          cx-tenant: ${{ secrets.CX_TENANT }}
+          scs-repo-token: ${{ secrets.MIDNIGHTCI_REPO }}
+          upload-to-github: "true"
+
+      - name: Checkmarx Full Scan
+        if: github.event.repository.private == false
         uses: midnightntwrk/upload-sarif-github-action/checkmarx-scan-public@53cdf3148dbbd85518ecc5e8f1ec485852c99c36
         with:
           cx-client-id: ${{ secrets.CX_CLIENT_ID }}
           cx-client-secret: ${{ secrets.CX_CLIENT_SECRET_EU }}
           cx-tenant: ${{ secrets.CX_TENANT }}
           scs-repo-token: ${{ secrets.MIDNIGHTCI_REPO }}
-          upload-to-github: 'true'
+          upload-to-github: "true"

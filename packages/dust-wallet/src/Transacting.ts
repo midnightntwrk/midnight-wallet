@@ -1,0 +1,400 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) 2025 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import { Either } from 'effect';
+import {
+  DustActions,
+  DustPublicKey,
+  DustRegistration,
+  DustSecretKey,
+  Intent,
+  PreBinding,
+  PreProof,
+  Signature,
+  SignatureEnabled,
+  SignatureVerifyingKey,
+  Transaction,
+  UnshieldedOffer,
+  Utxo,
+  UtxoOutput,
+  UtxoSpend,
+  FinalizedTransaction,
+  ProofErasedTransaction,
+  UnprovenTransaction,
+  addressFromKey,
+  LedgerParameters,
+} from '@midnight-ntwrk/ledger-v6';
+import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { DustCoreWallet } from './DustCoreWallet.js';
+import { AnyTransaction, DustToken, NetworkId, TotalCostParameters, UnprovenDustSpend } from './types/index.js';
+import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
+import { KeysCapability } from './Keys.js';
+import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
+
+export interface TransactingCapability<TSecrets, TState, TTransaction> {
+  readonly networkId: NetworkId;
+  readonly costParams: TotalCostParameters;
+  createDustGenerationTransaction(
+    currentTime: Date,
+    ttl: Date,
+    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightVerifyingKey: SignatureVerifyingKey,
+    dustReceiverAddress: string | undefined,
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
+
+  addDustGenerationSignature(
+    transaction: UnprovenTransaction,
+    signature: Signature,
+  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError>;
+
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
+
+  addFeePayment(
+    secretKey: TSecrets,
+    state: TState,
+    transaction: UnprovenTransaction,
+    currentTime: Date,
+    ttl: Date,
+    ledgerParams: LedgerParameters,
+  ): Either.Either<
+    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
+    WalletError.WalletError
+  >;
+
+  revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError.WalletError>;
+
+  revertRecipe(
+    state: TState,
+    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
+  ): Either.Either<TState, WalletError.WalletError>;
+}
+
+export type DefaultTransactingConfiguration = {
+  networkId: NetworkId;
+  costParameters: TotalCostParameters;
+};
+
+export type DefaultTransactingContext = {
+  coinSelection: CoinSelection<DustToken>;
+  coinsAndBalancesCapability: CoinsAndBalancesCapability<DustCoreWallet>;
+  keysCapability: KeysCapability<DustCoreWallet>;
+};
+
+export const makeDefaultTransactingCapability = (
+  config: DefaultTransactingConfiguration,
+  getContext: () => DefaultTransactingContext,
+): TransactingCapability<DustSecretKey, DustCoreWallet, FinalizedTransaction> => {
+  return new TransactingCapabilityImplementation(
+    config.networkId,
+    config.costParameters,
+    () => getContext().coinSelection,
+    () => getContext().coinsAndBalancesCapability,
+    () => getContext().keysCapability,
+  );
+};
+
+export const makeSimulatorTransactingCapability = (
+  config: DefaultTransactingConfiguration,
+  getContext: () => DefaultTransactingContext,
+): TransactingCapability<DustSecretKey, DustCoreWallet, ProofErasedTransaction> => {
+  return new TransactingCapabilityImplementation(
+    config.networkId,
+    config.costParameters,
+    () => getContext().coinSelection,
+    () => getContext().coinsAndBalancesCapability,
+    () => getContext().keysCapability,
+  );
+};
+
+export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction>
+  implements TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>
+{
+  public readonly networkId: string;
+  public readonly costParams: TotalCostParameters;
+  public readonly getCoinSelection: () => CoinSelection<DustToken>;
+  readonly getCoins: () => CoinsAndBalancesCapability<DustCoreWallet>;
+  readonly getKeys: () => KeysCapability<DustCoreWallet>;
+
+  constructor(
+    networkId: NetworkId,
+    costParams: TotalCostParameters,
+    getCoinSelection: () => CoinSelection<DustToken>,
+    getCoins: () => CoinsAndBalancesCapability<DustCoreWallet>,
+    getKeys: () => KeysCapability<DustCoreWallet>,
+  ) {
+    this.getCoins = getCoins;
+    this.networkId = networkId;
+    this.costParams = costParams;
+    this.getCoinSelection = getCoinSelection;
+    this.getKeys = getKeys;
+  }
+
+  createDustGenerationTransaction(
+    currentTime: Date,
+    ttl: Date,
+    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightVerifyingKey: SignatureVerifyingKey,
+    dustReceiverAddress: string | undefined,
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
+    return Either.gen(this, function* () {
+      const receiver = dustReceiverAddress ? yield* this.#parseAddress(dustReceiverAddress) : undefined;
+
+      return yield* LedgerOps.ledgerTry(() => {
+        const network = this.networkId;
+        const intent = Intent.new(ttl);
+        const totalDustValue = nightUtxos.reduce((total, { value }) => total + value, 0n);
+        const inputs: UtxoSpend[] = nightUtxos.map(({ token: utxo }) => ({
+          ...utxo,
+          owner: nightVerifyingKey,
+        }));
+
+        const outputs: UtxoOutput[] = inputs.map((input) => ({
+          owner: addressFromKey(nightVerifyingKey),
+          type: input.type,
+          value: input.value,
+        }));
+
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+
+        const dustRegistration: DustRegistration<SignatureEnabled> = new DustRegistration(
+          SignatureMarker.signature,
+          nightVerifyingKey,
+          receiver,
+          dustReceiverAddress !== undefined ? totalDustValue : 0n,
+        );
+
+        intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+          SignatureMarker.signature,
+          ProofMarker.preProof,
+          currentTime,
+          [],
+          [dustRegistration],
+        );
+
+        return Transaction.fromParts(network, undefined, undefined, intent);
+      });
+    });
+  }
+
+  addDustGenerationSignature(
+    transaction: UnprovenTransaction,
+    signatureData: Signature,
+  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+    return Either.gen(this, function* () {
+      const intent = transaction.intents?.get(1);
+      if (!intent) {
+        return yield* Either.left(
+          new WalletError.TransactingError({ message: 'No intent found in the transaction intents with segment = 1' }),
+        );
+      }
+
+      const { dustActions, guaranteedUnshieldedOffer } = intent;
+      if (!dustActions) {
+        return yield* Either.left(new WalletError.TransactingError({ message: 'No dustActions found in intent' }));
+      }
+
+      if (!guaranteedUnshieldedOffer) {
+        return yield* Either.left(
+          new WalletError.TransactingError({ message: 'No guaranteedUnshieldedOffer found in intent' }),
+        );
+      }
+
+      const [registration, ...restRegistrations] = dustActions.registrations;
+      if (!registration) {
+        return yield* Either.left(
+          new WalletError.TransactingError({ message: 'No registrations found in dustActions' }),
+        );
+      }
+
+      return yield* LedgerOps.ledgerTry(() => {
+        const signature = new SignatureEnabled(signatureData);
+        const registrationWithSignature = new DustRegistration(
+          signature.instance,
+          registration.nightKey,
+          registration.dustAddress,
+          registration.allowFeePayment,
+          signature,
+        );
+        const newDustActions = new DustActions(
+          signature.instance,
+          ProofMarker.preProof,
+          dustActions.ctime,
+          dustActions.spends,
+          [registrationWithSignature, ...restRegistrations],
+        );
+
+        // make a copy of intent to avoid mutation
+        const newIntent = Intent.deserialize<SignatureEnabled, PreProof, PreBinding>(
+          signature.instance,
+          ProofMarker.preProof,
+          BindingMarker.preBinding,
+          intent.serialize(),
+        );
+        newIntent.dustActions = newDustActions;
+
+        const inputsLen = guaranteedUnshieldedOffer.inputs.length;
+        const signatures: Signature[] = [];
+        for (let i = 0; i < inputsLen; ++i) {
+          signatures.push(guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData);
+        }
+        newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
+
+        // make a copy of transaction to avoid mutation
+        const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
+          signature.instance,
+          ProofMarker.preProof,
+          BindingMarker.preBinding,
+          transaction.serialize(),
+        );
+        newTransaction.intents = newTransaction.intents!.set(1, newIntent);
+
+        return {
+          type: ProvingRecipe.TRANSACTION_TO_PROVE as typeof ProvingRecipe.TRANSACTION_TO_PROVE,
+          transaction: newTransaction,
+        };
+      });
+    });
+  }
+
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
+    return (
+      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead
+    );
+  }
+
+  static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
+    const dustImbalance = transaction
+      .imbalances(0, totalFee)
+      .entries()
+      .find(([tt, _]) => tt.tag === 'dust');
+    return dustImbalance ? -dustImbalance[1] : totalFee;
+  }
+
+  addFeePayment(
+    secretKey: DustSecretKey,
+    state: DustCoreWallet,
+    transaction: UnprovenTransaction,
+    currentTime: Date,
+    ttl: Date,
+    ledgerParams: LedgerParameters,
+  ): Either.Either<
+    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
+    WalletError.WalletError
+  > {
+    const network = this.networkId;
+    const feeLeft = TransactingCapabilityImplementation.feeImbalance(
+      transaction,
+      this.calculateFee(transaction, ledgerParams),
+    );
+
+    const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
+    const selectedTokens = this.getCoinSelection()(dustTokens, feeLeft);
+    if (!selectedTokens.length) {
+      return Either.left(new WalletError.TransactingError({ message: 'No dust tokens found in the wallet state' }));
+    }
+
+    const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
+    const feeDiff = totalFeeInSelected - feeLeft;
+    if (feeDiff < 0n) {
+      // A sanity-check, should never happen
+      return Either.left(new WalletError.TransactingError({ message: 'Error in tokens selection algorithm' }));
+    }
+
+    // reduce the largest token's value by `feeDiff`
+    const tokensWithFeeToTake = selectedTokens.toSorted((a, b) => Number(b.value - a.value));
+    if (feeDiff > 0n) {
+      const highestByValue = tokensWithFeeToTake[0];
+      tokensWithFeeToTake[0] = {
+        value: highestByValue.value - feeDiff,
+        token: highestByValue.token,
+      };
+    }
+    return LedgerOps.ledgerTry(() => {
+      const intent = Intent.new(ttl);
+      const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
+
+      intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+        SignatureMarker.signature,
+        ProofMarker.preProof,
+        currentTime,
+        spends as UnprovenDustSpend[],
+        [],
+      );
+
+      const feeTransaction = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
+
+      return {
+        newState: updatedState,
+        recipe: {
+          type: ProvingRecipe.TRANSACTION_TO_PROVE,
+          transaction: transaction.merge(feeTransaction),
+        },
+      };
+    });
+  }
+
+  revert(state: DustCoreWallet, tx: TTransaction): Either.Either<DustCoreWallet, WalletError.WalletError> {
+    return Either.try({
+      try: () => state.revertTransaction(tx),
+      catch: (err) => {
+        return new WalletError.OtherWalletError({
+          message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
+          cause: err,
+        });
+      },
+    });
+  }
+
+  revertRecipe(
+    state: DustCoreWallet,
+    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
+  ): Either.Either<DustCoreWallet, WalletError.WalletError> {
+    const doRevert = (tx: UnprovenTransaction) => {
+      return Either.try({
+        try: () => state.revertTransaction(tx),
+        catch: (err) => {
+          return new WalletError.OtherWalletError({
+            message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
+            cause: err,
+          });
+        },
+      });
+    };
+
+    switch (recipe.type) {
+      case ProvingRecipe.TRANSACTION_TO_PROVE:
+        return doRevert(recipe.transaction);
+      case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE:
+        return doRevert(recipe.transactionToProve);
+      case ProvingRecipe.NOTHING_TO_PROVE:
+        return Either.right(state);
+    }
+  }
+
+  #parseAddress(addr: string): Either.Either<DustPublicKey, WalletError.AddressError> {
+    return Either.try({
+      try: () => {
+        const repr = MidnightBech32m.parse(addr);
+        return DustAddress.codec.decode(this.networkId, repr).data;
+      },
+      catch: (err) => {
+        return new WalletError.AddressError({
+          message: `Address parsing error: ${addr}`,
+          originalAddress: addr,
+          cause: err,
+        });
+      },
+    });
+  }
+}

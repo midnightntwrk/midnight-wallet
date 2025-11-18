@@ -1,0 +1,63 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk-indexer-client",
+  "version": "1.0.0-beta.11",
+  "type": "module",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./effect": {
+      "types": "./dist/effect/index.d.ts",
+      "import": "./dist/effect/index.js"
+    }
+  },
+  "dependencies": {
+    "@effect/platform": "^0.90.0",
+    "@graphql-typed-document-node/core": "^3.2.0",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.8",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.7",
+    "effect": "^3.17.3",
+    "graphql": "^16.11.0",
+    "graphql-http": "^1.22.4",
+    "graphql-ws": "^6.0.5"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.7",
+    "@graphql-codegen/client-preset": "^4.8.2",
+    "@graphql-codegen/typescript": "^4.1.6",
+    "@graphql-codegen/typescript-operations": "^4.6.1",
+    "eslint": "^9.37.0",
+    "publint": "~0.3.14",
+    "rimraf": "^6.0.1",
+    "testcontainers": "^11.8.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  },
+  "scripts": {
+    "gql:codegen": "graphql-codegen",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml}\"",
+    "test": "vitest run",
+    "lint": "eslint",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "dist:publish": "tsc -b ./tsconfig.publish.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
+    "publint": "publint --strict"
+  }
+}

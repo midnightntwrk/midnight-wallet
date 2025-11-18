@@ -1,0 +1,32 @@
+{
+  "include": ["src/**/*.ts", ".eslintrc.cjs"],
+  "extends": "@tsconfig/node20/tsconfig.json",
+  "compilerOptions": {
+    "types": ["vitest/globals"],
+    "module": "ESNext",
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "importHelpers": true,
+    "noEmit": true,
+    "composite": true,
+    "resolveJsonModule": true,
+    "target": "ESNext",
+    "moduleResolution": "Bundler",
+    "plugins": [
+      {
+        "name": "@effect/language-service"
+      }
+    ],
+    "noPropertyAccessFromIndexSignature": true,
+    "alwaysStrict": true,
+    "exactOptionalPropertyTypes": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "ignoreDeprecations": "5.0",
+    "erasableSyntaxOnly": true,
+    "lib": ["ESNext"]
+  }
+}
