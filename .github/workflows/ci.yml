@@ -71,42 +71,42 @@ jobs:
       - name: Run publint
         run: yarn publint
 
-      # - name: Run smoke e2e tests
-      #   run: |
-      #     yarn dlx turbo test-undeployed -- -t @smoke
+      - name: Run smoke e2e tests
+        run: |
+          yarn dlx turbo test-undeployed -- -t @smoke
 
-      # - name: Create allure properties
-      #   if: success() || failure()
-      #   working-directory: ./packages/e2e-tests/allure-results
-      #   run: |
-      #     echo "
-      #     env=${{ env.NETWORK }}
-      #     tags=@smoke
-      #     deployment=${{ env.DEPLOYMENT }}
-      #     platform=Linux
-      #     " > environment.properties
+      - name: Create allure properties
+        if: success() || failure()
+        working-directory: ./packages/e2e-tests/allure-results
+        run: |
+          echo "
+          env=${{ env.NETWORK }}
+          tags=@smoke
+          deployment=${{ env.DEPLOYMENT }}
+          platform=Linux
+          " > environment.properties
 
-      # - name: Send Results to Allure Server
-      #   uses: robkatona/send-allure-results@v1.0.5
-      #   if: ${{ always() }}
-      #   with:
-      #     allure-server-url: https://allure-server.prd.midnight.tools
-      #     allure-results-directory: ./packages/e2e-tests/reports/allure-results
-      #     project-id: headless-wallet-${{ env.DEPLOYMENT }}
-      #     security-user: ${{ env.ALLURE_ADMIN_USER }}
-      #     security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+      - name: Send Results to Allure Server
+        uses: robkatona/send-allure-results@v1.0.5
+        if: ${{ always() }}
+        with:
+          allure-server-url: https://allure-server.prd.midnight.tools
+          allure-results-directory: ./packages/e2e-tests/reports/allure-results
+          project-id: headless-wallet-${{ env.DEPLOYMENT }}
+          security-user: ${{ env.ALLURE_ADMIN_USER }}
+          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
-      # - name: Publish wallet TS Test Report
-      #   uses: dorny/test-reporter@v1
-      #   if: success() || failure()
-      #   with:
-      #     name: Wallet TS packages Junit Tests Report
-      #     reporter: java-junit
-      #     path: |
-      #       ./packages/e2e-tests/reports/test-report.xml
+      - name: Publish wallet TS Test Report
+        uses: dorny/test-reporter@v1
+        if: success() || failure()
+        with:
+          name: Wallet TS packages Junit Tests Report
+          reporter: java-junit
+          path: |
+            ./packages/e2e-tests/reports/test-report.xml
 
-      # - name: Upload Artifact
-      #   uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
-      #   with:
-      #     name: 'test-results-junit'
-      #     path: ./packages/e2e-tests/reports/report.xml
+      - name: Upload Artifact
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+        with:
+          name: 'test-results-junit'
+          path: ./packages/e2e-tests/reports/report.xml

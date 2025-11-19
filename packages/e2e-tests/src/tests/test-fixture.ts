@@ -191,16 +191,16 @@ export class TestContainersFixture {
         return 'https://rpc.testnet-02.midnight.network';
       }
       case 'qanet': {
-        return 'https://rpc.qanet.dev.midnight.network';
+        return 'wss://rpc.qanet.dev.midnight.network';
       }
       case 'preview': {
-        return 'https://rpc.preview.midnight.network';
+        return 'wss://rpc.preview.midnight.network';
       }
       case 'preprod': {
-        return 'https://rpc.preprod.midnight.network';
+        return 'wss://rpc.preprod.midnight.network';
       }
       case 'node-dev-01': {
-        return 'https://rpc.node-dev-01.midnight.network';
+        return 'wss://rpc.node-dev-01.midnight.network';
       }
       case 'undeployed': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);

@@ -58,7 +58,10 @@ describe('Smoke tests', () => {
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      Dust = DustWallet(fixture.getDustWalletConfig());
+      Dust = DustWallet({
+        ...fixture.getWalletConfig(),
+        ...fixture.getDustWalletConfig(),
+      });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       walletFunded = await utils.buildWalletFacade(seedFunded, fixture);
       receiverWallet = await utils.buildWalletFacade(seed, fixture);

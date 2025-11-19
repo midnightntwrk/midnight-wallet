@@ -257,7 +257,10 @@ export const buildWalletFacade = async (walletSeed: string, fixture: TestContain
   });
 
   const dustSeed = getDustSeed(walletSeed);
-  const Dust = DustWallet(fixture.getDustWalletConfig());
+  const Dust = DustWallet({
+    ...fixture.getWalletConfig(),
+    ...fixture.getDustWalletConfig(),
+  });
   const dustParameters = new ledger.DustParameters(5_000_000_000n, 8267n, 3n * 60n * 60n);
   const dustWallet = Dust.startWithSeed(dustSeed, dustParameters);
 
