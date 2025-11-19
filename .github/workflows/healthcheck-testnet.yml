@@ -5,6 +5,8 @@ on:
   schedule:
     - cron: '0 7 * * *'
 
+permissions: {}
+
 jobs:
   test:
     name: Healthcheck tests

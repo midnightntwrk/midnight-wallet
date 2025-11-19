@@ -7,6 +7,8 @@ on:
         branches: [main, develop]
     workflow_dispatch:
 
+permissions: {}
+
 jobs:
     license-header:
         name: Check License Headers
