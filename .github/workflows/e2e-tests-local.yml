@@ -12,6 +12,10 @@ env:
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: "undeployed"
   DEPLOYMENT: "local"
+  APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
+  APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
+  APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
+  APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
 permissions: {}
 
@@ -28,7 +32,7 @@ jobs:
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  #v6.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
         with:
           node-version: ${{ matrix.version }}
           cache: "yarn"
@@ -41,6 +45,10 @@ jobs:
           registry: "https://ghcr.io"
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
       - name: Build wallet and install dependencies
         run: |
@@ -79,7 +87,7 @@ jobs:
           yarn allure-generate
 
       - name: Publish artifacts (test reports)
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  #v5.0.0
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5.0.0
         if: success() || failure()
         with:
           name: test-reports-nodejs-${{ matrix.version }}

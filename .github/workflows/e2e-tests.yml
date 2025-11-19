@@ -92,8 +92,6 @@ on:
         description: Suite or a testname to run (refer to Jest docs)
         required: false
     secrets:
-      GH_TOKEN:
-        required: true
       GH_USERNAME:
         required: true
       MIDNIGHTBOT_PACKAGES_WRITE:
@@ -101,6 +99,14 @@ on:
       ALLURE_ADMIN_USER:
         required: true
       ALLURE_ADMIN_PASSWORD:
+        required: true
+      APP_INFRA_STORAGE_PASSWORD:
+        required: true
+      APP_INFRA_PUB_SUB_PASSWORD:
+        required: true
+      APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD:
+        required: true
+      APP_INFRA_SECRET:
         required: true
 
 permissions: {}
@@ -117,7 +123,7 @@ jobs:
       # - name: Determine the latest successful run ID with appropriate artifact
       #   continue-on-error: true
       #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      #     GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
       #   run: |
       #       LATEST_RUN_ID=$(./.github/scripts/find_run_id.sh ${{ github.repository }} "Healthcheck - ${{ inputs.deployment }}" ".sync_cache")
       #       echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
@@ -128,13 +134,13 @@ jobs:
       #   with:
       #     run-id: ${{ env.LATEST_RUN_ID }}
       #     path: ${{ env.SYNC_CACHE }}
-      #     github-token: ${{ secrets.GH_TOKEN }}
+      #     github-token: ${{ env.MIDNIGHT_GH_TOKEN }}
       #     name: .sync_cache
 
       - name: Debug
         run: ls -a -R ./packages/e2e-tests
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  #v6.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
         with:
           node-version-file: ".nvmrc"
           cache: "yarn"
@@ -176,12 +182,16 @@ jobs:
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
+          APP_INFRA_STORAGE_PASSWORD: ${{ env.APP_INFRA_STORAGE_PASSWORD }}
+          APP_INFRA_PUB_SUB_PASSWORD: ${{ env.APP_INFRA_PUB_SUB_PASSWORD }}
+          APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ env.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
+          APP_INFRA_SECRET: ${{ env.APP_INFRA_SECRET }}
         run: |
           yarn turbo test-remote -- ${{ inputs.modifier }}
 
       - name: Upload sync cache
         if: success() || failure()
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  #v5.0.0
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5.0.0
         with:
           name: .sync_cache
           path: ${{ env.SYNC_CACHE }}
@@ -215,7 +225,7 @@ jobs:
           yarn allure-generate
 
       - name: Publish artifacts (test reports)
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4  #v5.0.0
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v5.0.0
         if: success() || failure()
         with:
           name: test-reports

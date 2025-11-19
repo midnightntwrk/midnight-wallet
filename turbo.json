@@ -51,7 +51,21 @@
     },
     "test-remote": {
       "cache": false,
-      "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
+      "env": [
+        "NETWORK",
+        "DEPLOYMENT",
+        "SEED",
+        "SEED2",
+        "SEED_STABLE",
+        "ADDRESSES",
+        "NT_SEED",
+        "NT_SEED2",
+        "SYNC_CACHE",
+        "APP_INFRA_SECRET",
+        "APP_INFRA_STORAGE_PASSWORD",
+        "APP_INFRA_PUB_SUB_PASSWORD",
+        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
+      ]
     },
     "dist": {
       "inputs": [
