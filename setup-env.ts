@@ -11,4 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import dotenv from 'dotenv';
-dotenv.config({ path: '.env', override: true });
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Get the repository root directory (this file is at the root)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const rootDir = __dirname;
+
+// Load .env file from repository root
+dotenv.config({ path: path.join(rootDir, '.env'), override: true });

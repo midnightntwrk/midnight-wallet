@@ -2233,6 +2233,7 @@ __metadata:
     "@vitest/ui": "npm:4.0.8"
     allure-js-commons: "npm:^3.3.0"
     allure-vitest: "npm:^3.3.0"
+    dotenv: "npm:^16.0.0"
     eslint: "npm:^9.32.0"
     eslint-config-prettier: "npm:^10.0.2"
     eslint-plugin-prettier: "npm:^5.2.3"

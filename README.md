@@ -48,6 +48,13 @@ corepack enable
 Another option is to use [Nix](https://nixos.org). This project provides a [flake](flake.nix) with a devshell
 definition. In such case [direnv](https://direnv.net) is strongly recommended.
 
+**Environment Variables**: Environment variables can be configured via a `.env` file in the repository root for local
+test execution.
+
+We also support loading environment variables via [direnv](https://direnv.net).
+
+See the [Test Environment Setup](#test) section below for setup instructions.
+
 Additionally, it is worth installing turborepo as a global npm package (`npm install -g turbo`), for easier access for
 turbo command.
 
@@ -98,6 +105,27 @@ turbo format
 ```
 
 ## Test
+
+### Environment Setup
+
+Tests that require environment variables (such as those using Docker Compose for local infrastructure) need to be
+configured. The repository includes a `.env.example` file that serves as a template showing all available configuration
+options. To configure your environment:
+
+1. Copy `.env.example` to `.env`:
+
+   ```shell
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and fill in the required values for your environment (see `.env.example` for descriptions of each
+   variable).
+
+The `.env` file is automatically loaded by test setup files for tests that require environment variables (such as those
+using Docker Compose).
+
+If you're using [direnv](https://direnv.net), the `.env` file will also be loaded into your shell environment when you
+enter the directory, making the variables available to any commands you run in that shell.
 
 ### Unit tests
 

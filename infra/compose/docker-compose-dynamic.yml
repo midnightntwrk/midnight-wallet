@@ -31,9 +31,6 @@ services:
       RUST_LOG: "indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info"
       APP__INFRA__NODE__URL: "ws://node:9944"
       APP__APPLICATION__NETWORK_ID: "undeployed"
-      APP__INFRA__STORAGE__PASSWORD: "${APP_INFRA_STORAGE_PASSWORD}"
-      APP__INFRA__PUB_SUB__PASSWORD: "${APP_INFRA_PUB_SUB_PASSWORD}"
-      APP__INFRA__LEDGER_STATE_STORAGE__PASSWORD: "${APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD}"
       APP__INFRA__SECRET: "${APP_INFRA_SECRET}"
 
     healthcheck:

@@ -23,13 +23,7 @@
         "$TURBO_ROOT$/tsconfig.base.json",
         "vitest.config.mjs"
       ],
-      "env": [
-        "DEBUG",
-        "APP_INFRA_SECRET",
-        "APP_INFRA_STORAGE_PASSWORD",
-        "APP_INFRA_PUB_SUB_PASSWORD",
-        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
-      ],
+      "env": ["DEBUG", "APP_INFRA_SECRET"],
       "outputLogs": "new-only",
       "dependsOn": ["typecheck", "^dist"]
     },
@@ -40,14 +34,7 @@
     },
     "test-undeployed": {
       "cache": false,
-      "env": [
-        "NETWORK",
-        "DEPLOYMENT",
-        "APP_INFRA_SECRET",
-        "APP_INFRA_STORAGE_PASSWORD",
-        "APP_INFRA_PUB_SUB_PASSWORD",
-        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
-      ]
+      "env": ["NETWORK", "DEPLOYMENT", "APP_INFRA_SECRET"]
     },
     "test-remote": {
       "cache": false,
@@ -61,10 +48,7 @@
         "NT_SEED",
         "NT_SEED2",
         "SYNC_CACHE",
-        "APP_INFRA_SECRET",
-        "APP_INFRA_STORAGE_PASSWORD",
-        "APP_INFRA_PUB_SUB_PASSWORD",
-        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
+        "APP_INFRA_SECRET"
       ]
     },
     "dist": {
