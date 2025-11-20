@@ -96,14 +96,13 @@ jobs:
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
-      - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@v1
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@e08919a3b1fb83a78393dfb775a9c37f17d8eea6 # ratchet:mikepenz/action-junit-report@v5
         if: success() || failure()
         with:
-          name: Wallet TS packages Junit Tests Report
-          reporter: java-junit
-          path: |
-            ./packages/e2e-tests/reports/test-report.xml
+          check_name: 'Test Results Wallet SDK'
+          report_paths: |
+            **/test-report*.xml
 
       - name: Upload Artifact
         uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
