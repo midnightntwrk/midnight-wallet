@@ -23,9 +23,10 @@
         "$TURBO_ROOT$/tsconfig.base.json",
         "vitest.config.mjs"
       ],
+      "outputs": ["coverage/**", "reports/**"],
       "env": ["DEBUG", "APP_INFRA_SECRET"],
       "outputLogs": "new-only",
-      "dependsOn": ["typecheck", "^dist"]
+      "dependsOn": ["^dist"]
     },
     "typecheck": {
       "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
@@ -61,7 +62,7 @@
       ],
       "outputs": ["dist/**", "tsconfig.*.tsbuildinfo"],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "typecheck"]
+      "dependsOn": ["^dist"]
     },
     "dist:publish": {
       "inputs": [
@@ -104,8 +105,14 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "verify:check": {
+      "dependsOn": ["typecheck", "format:check", "lint"]
+    },
+    "verify:test": {
+      "dependsOn": ["test"]
+    },
     "verify": {
-      "dependsOn": ["typecheck", "format:check", "lint", "test"]
+      "dependsOn": ["verify:check", "verify:test"]
     }
   }
 }
