@@ -1,11 +1,9 @@
-name: Healthcheck - qanet
+name: Healthcheck - preview
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *"
-
-permissions: {}
+    - cron: '0 7 * * *'
 
 jobs:
   test:
@@ -13,6 +11,5 @@ jobs:
     uses: ./.github/workflows/e2e-tests.yml
     with:
       network: devnet
-      deployment: qanet
-      modifier: "-t @healthcheck"
+      modifier: '-t @healthcheck'
     secrets: inherit

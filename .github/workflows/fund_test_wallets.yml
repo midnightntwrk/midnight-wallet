@@ -3,7 +3,7 @@ name: Fund test wallets
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
-  SEED_STABLE: ${{ secrets.SEED_STABLE }}
+  SEED_STABLE: ${{ secrets.E2E_TESTS_SEED_STABLE }}
   FAUCET_SEED_HALO2: ${{ secrets.FAUCET_SEED_HALO2 }}
   FAUCET_SEED_TESTNET: ${{ secrets.FAUCET_SEED_TESTNET }}
 
@@ -16,15 +16,6 @@ on:
         required: true
         default: 'devnet'
         options:
-          - devnet
-          - testnet
-      deployment:
-        type: choice
-        description: Midnight deployment to use
-        required: true
-        default: 'qanet'
-        options:
-          - qanet
           - devnet
           - testnet
 
@@ -67,7 +58,6 @@ jobs:
           DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ env.FAUCET_SEED_HALO2 }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
-          ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
         run: |
           yarn install --immutable
           yarn dlx turbo test-e2e -- packages/e2e-tests/src/tests/fundTestWallets.test.ts
