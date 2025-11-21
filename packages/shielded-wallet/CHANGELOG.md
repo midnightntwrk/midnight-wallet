@@ -1,5 +1,13 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- Updated dependencies [fb55d52]
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.8
+
 ## 1.0.0-beta.9
 
 ### Patch Changes
