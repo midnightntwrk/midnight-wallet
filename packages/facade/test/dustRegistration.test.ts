@@ -29,20 +29,12 @@ vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
 
-const environmentVars = buildTestEnvironmentVariables(
-  [
-    'APP_INFRA_SECRET',
-    'APP_INFRA_STORAGE_PASSWORD',
-    'APP_INFRA_PUB_SUB_PASSWORD',
-    'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-  ],
-  {
-    additionalVars: {
-      TESTCONTAINERS_UID: environmentId,
-      RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-    },
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
+    RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
   },
-);
+});
 
 const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
   .withWaitStrategy(

@@ -30,12 +30,7 @@ export function useTestContainersFixture() {
     const network = process.env['NETWORK'] as MidnightNetwork;
     let composeEnvironment: StartedDockerComposeEnvironment;
 
-    const envVarsToPass = [
-      'APP_INFRA_SECRET',
-      'APP_INFRA_STORAGE_PASSWORD',
-      'APP_INFRA_PUB_SUB_PASSWORD',
-      'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-    ] as const;
+    const envVarsToPass = ['APP_INFRA_SECRET'] as const;
 
     switch (network) {
       case 'undeployed': {

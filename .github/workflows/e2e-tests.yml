@@ -9,9 +9,6 @@ env:
   HALO2_ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
   SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
 
-  APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
-  APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
-  APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
 on:
@@ -100,12 +97,6 @@ on:
         required: true
       ALLURE_ADMIN_PASSWORD:
         required: true
-      APP_INFRA_STORAGE_PASSWORD:
-        required: true
-      APP_INFRA_PUB_SUB_PASSWORD:
-        required: true
-      APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD:
-        required: true
       APP_INFRA_SECRET:
         required: true
 
@@ -182,9 +173,6 @@ jobs:
           NT_SEED: ${{ inputs.nt_seed }}
           NT_SEED2: ${{ inputs.nt_seed2 }}
           SYNC_CACHE: ${{ env.SYNC_CACHE }}
-          APP_INFRA_STORAGE_PASSWORD: ${{ env.APP_INFRA_STORAGE_PASSWORD }}
-          APP_INFRA_PUB_SUB_PASSWORD: ${{ env.APP_INFRA_PUB_SUB_PASSWORD }}
-          APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ env.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
           APP_INFRA_SECRET: ${{ env.APP_INFRA_SECRET }}
         run: |
           yarn turbo test-remote -- ${{ inputs.modifier }}
