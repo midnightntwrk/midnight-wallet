@@ -1,0 +1,213 @@
+import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  WalletRuntimeError,
+  Variant,
+  StateChange,
+  VersionChangeType,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { ProvingRecipe, TRANSACTION_TO_PROVE } from './ProvingRecipe.js';
+import { SerializationCapability } from './Serialization.js';
+import { WalletSyncUpdate, SyncCapability, SyncService } from './Sync.js';
+import { TransactingCapability, TokenTransfer } from './Transacting.js';
+import { OtherWalletError, WalletError } from './WalletError.js';
+import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { KeysCapability } from './Keys.js';
+import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { CoreWallet } from './CoreWallet.js';
+import { TransactionHistoryCapability } from './TransactionHistory.js';
+import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+
+const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
+  const appliedId = state.progress?.appliedId ?? 0n;
+  const highestTransactionId = state.progress?.highestTransactionId ?? 0n;
+
+  const sourceGap = highestTransactionId - appliedId;
+  const applyGap = appliedId - appliedId;
+
+  return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
+};
+
+const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
+  return previous.protocolVersion != current.protocolVersion
+    ? [
+        StateChange.VersionChange({
+          change: VersionChangeType.Version({
+            version: ProtocolVersion.ProtocolVersion(current.protocolVersion),
+          }),
+        }),
+      ]
+    : [];
+};
+
+export declare namespace RunningV1Variant {
+  export type Context<TSerialized, TSyncUpdate, TTransaction> = {
+    serializationCapability: SerializationCapability<CoreWallet, TSerialized>;
+    syncService: SyncService<CoreWallet, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    transactingCapability: TransactingCapability<TTransaction, CoreWallet>;
+    coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+    keysCapability: KeysCapability<CoreWallet>;
+    coinSelection: CoinSelection<Utxo>;
+    transactionHistoryCapability: TransactionHistoryCapability<TTransaction>;
+  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  export type AnyContext = Context<any, any, any>;
+}
+
+export const V1Tag: unique symbol = Symbol('V1');
+
+export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncUpdate, UnshieldedTransaction>;
+
+export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction>
+  implements Variant.RunningVariant<typeof V1Tag, CoreWallet>
+{
+  readonly __polyTag__: typeof V1Tag = V1Tag;
+  readonly #scope: Scope.Scope;
+  readonly #context: Variant.VariantContext<CoreWallet>;
+  readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>;
+
+  readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
+
+  constructor(
+    scope: Scope.Scope,
+    context: Variant.VariantContext<CoreWallet>,
+    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>,
+  ) {
+    this.#scope = scope;
+    this.#context = context;
+    this.#v1Context = v1Context;
+    this.state = Stream.fromEffect(context.stateRef.get).pipe(
+      Stream.flatMap((initialState) =>
+        context.stateRef.changes.pipe(
+          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
+            return [current, [previous, current]] as const;
+          }),
+        ),
+      ),
+      Stream.mapConcat(
+        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
+          // TODO: emit progress only upon actual change
+          return [
+            StateChange.State({ state: current }),
+            ...progress(current),
+            ...protocolVersionChange(previous, current),
+          ];
+        },
+      ),
+    );
+  }
+
+  startSyncInBackground(): Effect.Effect<void> {
+    return this.startSync().pipe(
+      Stream.runScoped(Sink.drain),
+      Effect.forkScoped,
+      Effect.provideService(Scope.Scope, this.#scope),
+    );
+  }
+
+  startSync(): Stream.Stream<void, WalletError, Scope.Scope> {
+    return pipe(
+      SubscriptionRef.get(this.#context.stateRef),
+      Stream.fromEffect,
+      Stream.flatMap((state) => this.#v1Context.syncService.updates(state)),
+      Stream.mapEffect((update) => {
+        return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+          Effect.try({
+            try: () => this.#v1Context.syncCapability.applyUpdate(state, update),
+            catch: (err) =>
+              new OtherWalletError({
+                message: 'Error while applying sync update',
+                cause: err,
+              }),
+          }),
+        );
+      }),
+      Stream.tapError((error) => Console.error(error)),
+      Stream.retry(
+        pipe(
+          Schedule.exponential(Duration.seconds(1), 2),
+          Schedule.map((delay) => {
+            const maxDelay = Duration.minutes(2);
+            const jitter = Duration.millis(Math.floor(Math.random() * 1000));
+            const delayWithJitter = Duration.toMillis(delay) + Duration.toMillis(jitter);
+
+            return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
+          }),
+        ),
+      ),
+    );
+  }
+
+  balanceTransaction(tx: TTransaction): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.balanceTransaction(state, tx),
+        EitherOps.toEffect,
+        Effect.map(
+          ({ transaction, newState }) =>
+            [
+              {
+                type: TRANSACTION_TO_PROVE,
+                transaction: transaction as ledger.UnprovenTransaction,
+              },
+              newState,
+            ] as const,
+        ),
+      );
+    });
+  }
+
+  transferTransaction(
+    outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.makeTransfer(state, outputs, ttl),
+        EitherOps.toEffect,
+        Effect.map(
+          ({ transaction, newState }) =>
+            [
+              {
+                type: TRANSACTION_TO_PROVE,
+                transaction: transaction as ledger.UnprovenTransaction,
+              },
+              newState,
+            ] as const,
+        ),
+      );
+    });
+  }
+
+  initSwap(
+    desiredInputs: Record<string, bigint>,
+    desiredOutputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.transactingCapability.initSwap(state, desiredInputs, desiredOutputs, ttl),
+        Effect.map(
+          ({ transaction, newState }) =>
+            [
+              {
+                type: TRANSACTION_TO_PROVE,
+                transaction: transaction as ledger.UnprovenTransaction,
+              },
+              newState,
+            ] as const,
+        ),
+      );
+    });
+  }
+
+  // finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError> {
+  // }
+
+  serializeState(state: CoreWallet): TSerialized {
+    return this.#v1Context.serializationCapability.serialize(state);
+  }
+}

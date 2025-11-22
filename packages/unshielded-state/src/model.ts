@@ -69,6 +69,15 @@ export const UnshieldedTransactionSchema = Schema.Data(
     type: Schema.Literal('RegularTransaction', 'SystemTransaction'),
     protocolVersion: Schema.Number,
     identifiers: Schema.Array(Schema.String),
+    block: Schema.Struct({
+      timestamp: Schema.Number,
+    }),
+    fees: Schema.NullOr(
+      Schema.Struct({
+        paidFees: SafeBigInt,
+        estimatedFees: SafeBigInt,
+      }),
+    ),
     transactionResult: Schema.NullOr(
       Schema.Struct({
         status: Schema.String, // TODO: change to literal
