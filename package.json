@@ -38,6 +38,8 @@
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "verify": "turbo run verify",
+    "verify:check": "turbo run verify:check",
+    "verify:test": "turbo run verify:test",
     "publint": "turbo run publint",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
