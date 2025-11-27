@@ -53,6 +53,8 @@ export class SyncService extends Context.Tag('@midnight-ntwrk/wallet-sdk-unshiel
           indexerClient({ address, transactionId }),
           Stream.provideLayer(WsSubscriptionClient.layer({ url: indexerUrl })),
           Stream.mapEffect((message) => {
+            console.log("Unshielded sync message");
+            console.dir(message, { depth: null });
             const { type } = message.unshieldedTransactions;
 
             if (type === 'UnshieldedTransactionsProgress') {

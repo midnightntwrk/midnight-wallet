@@ -24,6 +24,7 @@ import * as rx from 'rxjs';
 import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -186,12 +187,15 @@ describe('Dust Registration', () => {
           ),
         ),
     );
+    const nightBalanceBeforeRegistration = receiverStateWithNight.unshielded.balances.get(ledger.nativeToken().raw);
+    console.log('before registration');
+    console.dir(receiverStateWithNight.unshielded.availableCoins, { depth: null });
 
-    const nightUtxos = receiverStateWithNight.unshielded.availableCoins.filter(
-      (coin) => coin.registeredForDustGeneration === false,
-    );
+    const nightUtxos = receiverStateWithNight.unshielded.availableCoins
+      .filter((coin) => coin.registeredForDustGeneration === false)
+      .filter((coin) => coin.type === ledger.nativeToken().raw);
 
-    expect(nightUtxos.length).toBeGreaterThan(0);
+    expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.value))).toEqual(nightBalanceBeforeRegistration);
 
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
@@ -200,17 +204,29 @@ describe('Dust Registration', () => {
     );
 
     const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
+
+    console.log('designation tx');
+    console.log(finalizedDustTx.toString());
+
     const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
 
     expect(dustRegistrationTxHash).toBeTypeOf('string');
 
-    const receiverDustBalance = await rx.firstValueFrom(
+    const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
-        rx.filter((s) => s.dust.walletBalance(new Date()) > 0n),
-        rx.map((s) => s.dust.walletBalance(new Date())),
+        rx.debounceTime(10_000), //something better than this is needed
+        rx.filter((s) => s.isSynced),
+        rx.filter((s) => s.dust.availableCoins.length > 0),
       ),
     );
 
-    expect(receiverDustBalance).toBeGreaterThan(0n);
+    expect(receiverStateAfterRegistration.dust.walletBalance(new Date())).toBeGreaterThan(0n);
+
+    console.log('after registration');
+    console.dir(receiverStateAfterRegistration.unshielded.availableCoins, { depth: null });
+    const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances.get(
+      ledger.nativeToken().raw,
+    );
+    expect(nightBalanceAfterRegistration).toEqual(nightBalanceBeforeRegistration);
   });
 });
