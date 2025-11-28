@@ -42,7 +42,6 @@
       "cache": false,
       "env": [
         "NETWORK",
-        "DEPLOYMENT",
         "APP_INFRA_SECRET",
         "APP_INFRA_STORAGE_PASSWORD",
         "APP_INFRA_PUB_SUB_PASSWORD",
@@ -53,7 +52,6 @@
       "cache": false,
       "env": [
         "NETWORK",
-        "DEPLOYMENT",
         "SEED",
         "SEED2",
         "SEED_STABLE",

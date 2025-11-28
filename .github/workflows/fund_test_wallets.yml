@@ -18,15 +18,6 @@ on:
         options:
           - devnet
           - testnet
-      deployment:
-        type: choice
-        description: Midnight deployment to use
-        required: true
-        default: 'qanet'
-        options:
-          - qanet
-          - devnet
-          - testnet
 
 permissions: {}
 
@@ -64,7 +55,6 @@ jobs:
         if: env.NETWORK == 'devnet'
         env:
           NETWORK: ${{ inputs.network }}
-          DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ env.FAUCET_SEED_HALO2 }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
           ADDRESSES: ${{ vars.HALO2_ADDRESSES }}
@@ -76,7 +66,6 @@ jobs:
         if: env.NETWORK == 'testnet'
         env:
           NETWORK: ${{ inputs.network }}
-          DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ env.FAUCET_SEED_TESTNET }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
           ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}

@@ -11,7 +11,6 @@ env:
   ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: "undeployed"
-  DEPLOYMENT: "local"
   APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
   APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
   APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
@@ -65,7 +64,6 @@ jobs:
         run: |
           echo "
           env=${{ env.NETWORK }}
-          deployment=${{ env.DEPLOYMENT }}
           runtime=nodejs-${{ matrix.version }}
           platform=Linux
           " > environment.properties
@@ -76,7 +74,7 @@ jobs:
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.DEPLOYMENT }}
+          project-id: headless-wallet-${{ env.NETWORK }}
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 

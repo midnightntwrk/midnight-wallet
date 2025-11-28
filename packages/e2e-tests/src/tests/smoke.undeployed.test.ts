@@ -223,7 +223,7 @@ describe('Smoke tests', () => {
   );
 
   test(
-    'Unshielded wallet can be serialized and restored with in memory tx history storage',
+    'Unshielded wallet can be serialized and restored',
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');
@@ -265,7 +265,7 @@ describe('Smoke tests', () => {
   );
 
   test(
-    'Dust wallet can be serialized and restored with in memory tx history storage',
+    'Dust wallet can be serialized and restored',
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');

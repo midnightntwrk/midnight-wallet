@@ -1,18 +1,16 @@
-name: Healthcheck - qanet
+name: Healthcheck - preprod
 
 on:
   workflow_dispatch:
   schedule:
     - cron: '0 7 * * *'
 
-permissions: {}
-
 jobs:
   test:
     name: Healthcheck tests
     uses: ./.github/workflows/e2e-tests.yml
     with:
-      network: qanet
+      network: preprod
       seed: 1b2c2d3f981e495b399ae4699a21dd65096037c773bd3c6ad2ee858fc4914b98
       seed2: b5583ac1b80f74447c1a325a504002afcea2c812def06c1c3a662e6b58befb99
       nt_seed: f331ffb6856d10eaae9a3610bfffd785d23d035518694364195ffb0dc0f3a66e

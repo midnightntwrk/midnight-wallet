@@ -44,7 +44,7 @@ describe('Token transfer', () => {
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
-  const outputValue = 10_000n;
+  const outputValue = 100n;
 
   let sender: WalletFacade;
   let receiver: WalletFacade;
@@ -126,17 +126,19 @@ describe('Token transfer', () => {
       const initialDustBalance = initialState.dust.walletBalance(new Date());
 
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
-      logger.info(`Wallet 1: ${initialUnshieldedBalance} shielded tokens`);
+      logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
       logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
       logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
+      logger.info(`Wallet 1 address: ${initialState.unshielded.address}`);
 
       const initialReceiverState = await firstValueFrom(receiver.state());
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
       const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw);
       const initialReceiverDustBalance = initialReceiverState.dust.walletBalance(new Date());
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
-      logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} shielded tokens`);
+      logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
+      logger.info(`Wallet 2 address: ${initialReceiverState.unshielded.address}`);
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -145,10 +147,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(
-                NetworkId.NetworkId.Undeployed,
-                initialReceiverState.shielded.address,
-              ),
+              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
             },
           ],
         },
