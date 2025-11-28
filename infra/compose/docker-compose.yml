@@ -25,6 +25,14 @@ services:
   node:
     image: 'ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.7'
     container_name: node_$TESTCONTAINERS_UID
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - node-data:/data
     ports:
