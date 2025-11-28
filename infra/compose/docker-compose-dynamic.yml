@@ -1,40 +1,40 @@
 services:
   proof-server:
-    image: "ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.5"
+    image: 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.5'
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     ports:
-      - "127.0.0.1::6300"
+      - '127.0.0.1::6300'
     environment:
-      RUST_BACKTRACE: "full"
+      RUST_BACKTRACE: 'full'
       EXTRA_ARGS: -v
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:6300/version"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:6300/version']
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
 
   indexer:
-    image: "ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.8"
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.15'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
     security_opt:
       - no-new-privileges:true
     ports:
-      - "127.0.0.1::8088"
+      - '127.0.0.1::8088'
     environment:
-      RUST_LOG: "indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info"
-      APP__INFRA__NODE__URL: "ws://node:9944"
-      APP__APPLICATION__NETWORK_ID: "undeployed"
-      APP__INFRA__SECRET: "${APP_INFRA_SECRET}"
+      RUST_LOG: 'indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info'
+      APP__INFRA__NODE__URL: 'ws://node:9944'
+      APP__APPLICATION__NETWORK_ID: 'undeployed'
+      APP__INFRA__SECRET: '${APP_INFRA_SECRET}'
 
     healthcheck:
-      test: ["CMD-SHELL", "cat /var/run/indexer-standalone/running"]
+      test: ['CMD-SHELL', 'cat /var/run/indexer-standalone/running']
       interval: 60s
       timeout: 5s
       retries: 3
@@ -43,27 +43,27 @@ services:
       node:
         condition: service_healthy
   node:
-    image: "ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.4"
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.7'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
-    # Required capabilities: SETGID and SETUID are minimal capabilities needed by the
-    # midnight-node image to execute runuser command for user switching. Without these,
-    # the container fails with "runuser: cannot set groups: Operation not permitted".
-    # We drop ALL capabilities first, then add back only these two minimal ones.
     cap_add:
-      - SETGID
-      - SETUID
-    security_opt:
-      - no-new-privileges:true
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
     ports:
-      - "127.0.0.1::9944"
+      - '127.0.0.1::9944'
+    volumes:
+      - node-data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9944/health"]
+      test: ['CMD', 'curl', '-f', 'http://localhost:9944/health']
       interval: 2s
       timeout: 5s
       retries: 5
       start_period: 5s
     environment:
-      CFG_PRESET: "dev"
-      SIDECHAIN_BLOCK_BENEFICIARY: "04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e"
+      CFG_PRESET: 'dev'
+      SIDECHAIN_BLOCK_BENEFICIARY: '04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e'
+
+volumes:
+  node-data:
