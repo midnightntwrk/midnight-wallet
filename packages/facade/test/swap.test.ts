@@ -240,96 +240,96 @@ describe('Swaps', () => {
    * Disabled due to error validating Transaction: FeeCalculation(OutsideTimeToDismiss { time_to_dismiss: 15.494ms, allowed_time_to_dismiss: 15.000ms, size: 4601 })
    * We'll likely need to allow user to set payments in the fallible section of the transaction in order to avoid the issue above
    */
-  // it.skip('can perform an unshielded swap', async () => {
-  //   await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
+  it.skip('can perform an unshielded swap', async () => {
+    await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
 
-  //   const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
-  //   const { unshielded: walletAUnshieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
-  //   const { unshielded: walletBUnshieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
+    const { unshielded: walletAUnshieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
+    const { unshielded: walletBUnshieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
 
-  //   const unshieldedTokenType = ledger.unshieldedToken().raw;
-  //   const swapAmount = 1n;
-  //   const swapForAmount = 2n;
+    const unshieldedTokenType = ledger.unshieldedToken().raw;
+    const swapAmount = 1n;
+    const swapForAmount = 2n;
 
-  //   const desiredInputs: CombinedSwapInputs = {
-  //     unshielded: {
-  //       [unshieldedTokenType]: swapAmount,
-  //     },
-  //   };
+    const desiredInputs: CombinedSwapInputs = {
+      unshielded: {
+        [unshieldedTokenType]: swapAmount,
+      },
+    };
 
-  //   const desiredOutputs: CombinedSwapOutputs[] = [
-  //     {
-  //       type: 'unshielded',
-  //       outputs: [
-  //         {
-  //           type: unshieldedTokenType,
-  //           amount: swapForAmount,
-  //           receiverAddress: walletAUnshieldedStateBefore.address,
-  //         },
-  //       ],
-  //     },
-  //   ];
+    const desiredOutputs: CombinedSwapOutputs[] = [
+      {
+        type: 'unshielded',
+        outputs: [
+          {
+            type: unshieldedTokenType,
+            amount: swapForAmount,
+            receiverAddress: walletAUnshieldedStateBefore.address,
+          },
+        ],
+      },
+    ];
 
-  //   const swapTx = await walletAFacade.initSwap(
-  //     ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
-  //     desiredInputs,
-  //     desiredOutputs,
-  //     ttl,
-  //   );
+    const swapTx = await walletAFacade.initSwap(
+      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+      desiredInputs,
+      desiredOutputs,
+      ttl,
+    );
 
-  //   const signedSwapTx = await walletAFacade.signTransaction(swapTx.transaction, (payload) => {
-  //     return unshieldedWalletAKeystore.signData(payload);
-  //   });
+    const signedSwapTx = await walletAFacade.signTransaction(swapTx, (payload) => {
+      return unshieldedWalletAKeystore.signData(payload);
+    });
 
-  //   // assuming the tx is added to a pool and wallet B picks it up
+    // assuming the tx is added to a pool and wallet B picks it up
 
-  //   const walletBBalancedTx = await walletBFacade.balanceTransaction(
-  //     ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-  //     ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-  //     signedSwapTx,
-  //     ttl,
-  //   );
+    const walletBBalancedTx = await walletBFacade.balanceTransaction(
+      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      signedSwapTx,
+      ttl,
+    );
 
-  //   if (walletBBalancedTx.type !== 'TransactionToProve') {
-  //     throw new Error('Expected TransactionToProve');
-  //   }
+    if (walletBBalancedTx.type !== 'TransactionToProve') {
+      throw new Error('Expected TransactionToProve');
+    }
 
-  //   const walletBSignedTx = await walletBFacade.signTransaction(walletBBalancedTx.transaction, (payload) => {
-  //     return unshieldedWalletBKeystore.signData(payload);
-  //   });
+    const walletBSignedTx = await walletBFacade.signTransaction(walletBBalancedTx.transaction, (payload) => {
+      return unshieldedWalletBKeystore.signData(payload);
+    });
 
-  //   const finalizedTx = await walletBFacade.finalizeTransaction({
-  //     ...walletBBalancedTx,
-  //     transaction: walletBSignedTx,
-  //   });
+    const finalizedTx = await walletBFacade.finalizeTransaction({
+      ...walletBBalancedTx,
+      transaction: walletBSignedTx,
+    });
 
-  //   const txHash = await walletAFacade.submitTransaction(finalizedTx);
+    const txHash = await walletAFacade.submitTransaction(finalizedTx);
 
-  //   expect(txHash).toBeTypeOf('string');
+    expect(txHash).toBeTypeOf('string');
 
-  //   await Promise.all([
-  //     rx.firstValueFrom(
-  //       walletAFacade.state().pipe(rx.filter(({ unshielded }) => unshielded.pendingCoins.length === 0)),
-  //     ),
-  //     rx.firstValueFrom(
-  //       walletBFacade.state().pipe(rx.filter(({ unshielded }) => unshielded.pendingCoins.length === 0)),
-  //     ),
-  //   ]);
+    await Promise.all([
+      rx.firstValueFrom(
+        walletAFacade.state().pipe(rx.filter(({ unshielded }) => unshielded.pendingCoins.length === 0)),
+      ),
+      rx.firstValueFrom(
+        walletBFacade.state().pipe(rx.filter(({ unshielded }) => unshielded.pendingCoins.length === 0)),
+      ),
+    ]);
 
-  //   const { unshielded: walletAUnshieldedStateAfter } = await rx.firstValueFrom(walletAFacade.state());
-  //   const { unshielded: walletBUnshieldedStateAfter } = await rx.firstValueFrom(walletBFacade.state());
+    const { unshielded: walletAUnshieldedStateAfter } = await rx.firstValueFrom(walletAFacade.state());
+    const { unshielded: walletBUnshieldedStateAfter } = await rx.firstValueFrom(walletBFacade.state());
 
-  //   expect(walletAUnshieldedStateAfter.balances.get(unshieldedTokenType)).toBe(
-  //     walletAUnshieldedStateBefore.balances.get(unshieldedTokenType)! - swapAmount + swapForAmount,
-  //   );
+    expect(walletAUnshieldedStateAfter.balances[unshieldedTokenType]).toBe(
+      walletAUnshieldedStateBefore.balances[unshieldedTokenType] - swapAmount + swapForAmount,
+    );
 
-  //   expect(walletBUnshieldedStateAfter.balances.get(unshieldedTokenType)).toBe(
-  //     walletBUnshieldedStateBefore.balances.get(unshieldedTokenType)! + swapAmount - swapForAmount,
-  //   );
-  // });
+    expect(walletBUnshieldedStateAfter.balances[unshieldedTokenType]).toBe(
+      walletBUnshieldedStateBefore.balances[unshieldedTokenType] + swapAmount - swapForAmount,
+    );
+  });
 
-  // it.skip('can perform a combined shielded and unshielded swap', () => {
-  //   throw new Error('Not supported yet. Will be implemented in future PR.');
-  // });
+  it.skip('can perform a combined shielded and unshielded swap', () => {
+    throw new Error('Not supported yet. Will be implemented in future PR.');
+  });
 });
