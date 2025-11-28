@@ -13,6 +13,9 @@
 import { sampleIntentHash } from '@midnight-ntwrk/ledger-v6';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { DefaultV1Configuration } from '../src/v1/index.js';
+import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
 
 /**
  * TODO: place in separate package with more additional mock functions
@@ -35,6 +38,13 @@ export const generateMockTransaction = (
     identifiers: createdOutputs.map((output) => output.intentHash),
     createdUtxos: createdOutputs,
     spentUtxos: spentOutputs,
+    block: {
+      timestamp: Date.now(),
+    },
+    fees: {
+      paidFees: 0n,
+      estimatedFees: 0n,
+    },
     protocolVersion: 1,
     transactionResult: {
       status: applyStage,
@@ -74,4 +84,28 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
   }
 
   return Buffer.from(derivationResult.key);
+};
+
+/**
+ * Creates a default wallet configuration for testing.
+ * This encapsulates the common configuration pattern used across tests.
+ *
+ * @param indexerPort - The port number for the indexer service
+ * @param overrides - Optional partial configuration to override defaults
+ * @returns A complete DefaultV1Configuration object
+ */
+export const createWalletConfig = (
+  indexerPort: number,
+  overrides?: Partial<DefaultV1Configuration>,
+): DefaultV1Configuration => {
+  const defaultConfig: DefaultV1Configuration = {
+    indexerClientConnection: {
+      indexerWsUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
+      indexerHttpUrl: `http://localhost:${indexerPort}/api/v3/graphql`,
+    },
+    networkId: NetworkId.NetworkId.Undeployed,
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  };
+
+  return { ...defaultConfig, ...overrides };
 };

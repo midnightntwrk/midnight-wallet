@@ -33,6 +33,13 @@ export const generateMockTransaction = (
     createdUtxos: createdOutputs,
     spentUtxos: spentOutputs,
     protocolVersion: 1,
+    block: {
+      timestamp: Date.now(),
+    },
+    fees: {
+      paidFees: 0n,
+      estimatedFees: 0n,
+    },
     transactionResult: {
       status: applyStage,
       segments: [{ id: '1', success: true }],

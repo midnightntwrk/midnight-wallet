@@ -19,7 +19,12 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  InMemoryTransactionHistoryStorage,
+  PublicKeys,
+  UnshieldedWallet,
+  createKeystore,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { CombinedSwapInputs, CombinedSwapOutputs, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -96,6 +101,16 @@ describe('Swaps', () => {
     const shieldedWalletA = Shielded.startWithShieldedSeed(shieldedWalletASeed);
     const shieldedWalletB = Shielded.startWithShieldedSeed(shieldedWalletBSeed);
 
+    const unshieldedWalletA = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedWalletAKeystore));
+
+    const unshieldedWalletB = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedWalletBKeystore));
+
     const Dust = DustWallet({
       ...configuration,
       costParameters: {
@@ -106,18 +121,6 @@ describe('Swaps', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     const dustWalletA = Dust.startWithSeed(dustWalletASeed, dustParameters);
     const dustWalletB = Dust.startWithSeed(dustWalletBSeed, dustParameters);
-
-    const unshieldedWalletA = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedWalletAKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
-
-    const unshieldedWalletB = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedWalletBKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
 
     walletAFacade = new WalletFacade(shieldedWalletA, unshieldedWalletA, dustWalletA);
     walletBFacade = new WalletFacade(shieldedWalletB, unshieldedWalletB, dustWalletB);
@@ -309,12 +312,12 @@ describe('Swaps', () => {
     const { unshielded: walletAUnshieldedStateAfter } = await rx.firstValueFrom(walletAFacade.state());
     const { unshielded: walletBUnshieldedStateAfter } = await rx.firstValueFrom(walletBFacade.state());
 
-    expect(walletAUnshieldedStateAfter.balances.get(unshieldedTokenType)).toBe(
-      walletAUnshieldedStateBefore.balances.get(unshieldedTokenType)! - swapAmount + swapForAmount,
+    expect(walletAUnshieldedStateAfter.balances[unshieldedTokenType]).toBe(
+      walletAUnshieldedStateBefore.balances[unshieldedTokenType] - swapAmount + swapForAmount,
     );
 
-    expect(walletBUnshieldedStateAfter.balances.get(unshieldedTokenType)).toBe(
-      walletBUnshieldedStateBefore.balances.get(unshieldedTokenType)! + swapAmount - swapForAmount,
+    expect(walletBUnshieldedStateAfter.balances[unshieldedTokenType]).toBe(
+      walletBUnshieldedStateBefore.balances[unshieldedTokenType] + swapAmount - swapForAmount,
     );
   });
 
