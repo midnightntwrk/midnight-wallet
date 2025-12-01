@@ -12,7 +12,8 @@ jobs:
     name: Healthcheck tests
     uses: ./.github/workflows/e2e-tests.yml
     with:
-      network: testnet
+      branch: 57063377c28ffa96a929fda953107d06cb2c012b #v4 ledger wallet
+      network: testnet 
       deployment: testnet
       seed: b0dcbe35cba84c11863e973e75c22fc482812b76da09a47e16fabcf534ec6709
       seed2: db08516f526eb85dca7e14e31a27bd2b223f209dcc643f974c179ca400ecbc1a

@@ -2,8 +2,6 @@ name: E2E tests - local - nodejs
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "45 8 * * *"
 
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
