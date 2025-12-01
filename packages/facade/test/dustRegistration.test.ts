@@ -188,8 +188,6 @@ describe('Dust Registration', () => {
         ),
     );
     const nightBalanceBeforeRegistration = receiverStateWithNight.unshielded.balances.get(ledger.nativeToken().raw);
-    console.log('before registration');
-    console.dir(receiverStateWithNight.unshielded.availableCoins, { depth: null });
 
     const nightUtxos = receiverStateWithNight.unshielded.availableCoins
       .filter((coin) => coin.registeredForDustGeneration === false)
@@ -205,9 +203,6 @@ describe('Dust Registration', () => {
 
     const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
 
-    console.log('designation tx');
-    console.log(finalizedDustTx.toString());
-
     const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
 
     expect(dustRegistrationTxHash).toBeTypeOf('string');
@@ -222,8 +217,6 @@ describe('Dust Registration', () => {
 
     expect(receiverStateAfterRegistration.dust.walletBalance(new Date())).toBeGreaterThan(0n);
 
-    console.log('after registration');
-    console.dir(receiverStateAfterRegistration.unshielded.availableCoins, { depth: null });
     const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances.get(
       ledger.nativeToken().raw,
     );
