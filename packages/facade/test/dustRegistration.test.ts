@@ -25,6 +25,7 @@ import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { InMemoryTransactionHistoryStorage } from '../../unshielded-wallet/dist/tx-history-storage/InMemoryTransactionHistoryStorage.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -62,6 +63,8 @@ describe('Dust Registration', () => {
 
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
+
+  const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultV1Configuration;
@@ -117,6 +120,7 @@ describe('Dust Registration', () => {
       publicKey: PublicKey.fromKeyStore(unshieldedReceiverKeystore),
       networkId: NetworkId.NetworkId.Undeployed,
       indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
+      txHistoryStorage: unshieldedTxHistoryStorage,
     });
 
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
@@ -209,9 +213,13 @@ describe('Dust Registration', () => {
 
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
-        rx.debounceTime(10_000), //something better than this is needed
-        rx.filter((s) => s.isSynced),
-        rx.filter((s) => s.dust.availableCoins.length > 0),
+        rx.filter((state) => {
+          // @TODO after the unshielded runtime rewrite, we'll be able to access the tx history storage from the state
+          const txFound =
+            receiverFacade.unshielded.transactionHistory?.get(finalizedDustTx.transactionHash()) !== undefined;
+
+          return state.isSynced && state.dust.availableCoins.length > 0 && txFound;
+        }),
       ),
     );
 
