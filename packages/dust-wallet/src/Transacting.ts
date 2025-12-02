@@ -117,9 +117,11 @@ export const makeSimulatorTransactingCapability = (
   );
 };
 
-export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction>
-  implements TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>
-{
+export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
+  DustSecretKey,
+  DustCoreWallet,
+  TTransaction
+> {
   public readonly networkId: string;
   public readonly costParams: TotalCostParameters;
   public readonly getCoinSelection: () => CoinSelection<DustToken>;

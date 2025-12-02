@@ -19,9 +19,12 @@ export type RangeConfig = {
 };
 
 export const Numeric = 'NumericRange' as const;
-export class NumericRange
-  implements Variant.Variant<typeof Numeric, number, null, Variant.RunningVariant<typeof Numeric, number>>
-{
+export class NumericRange implements Variant.Variant<
+  typeof Numeric,
+  number,
+  null,
+  Variant.RunningVariant<typeof Numeric, number>
+> {
   __polyTag__: typeof Numeric = Numeric;
   #state: number = 0;
 
@@ -93,10 +96,12 @@ export class NumericRangeBuilder implements VariantBuilder.VariantBuilder<Numeri
 
 export type RangeMultiplierConfig = RangeConfig & { multiplier: number };
 export const NumericMultiplier = 'NumericMultiplier';
-export class NumericRangeMultiplier
-  implements
-    Variant.Variant<typeof NumericMultiplier, number, number, Variant.RunningVariant<typeof NumericMultiplier, number>>
-{
+export class NumericRangeMultiplier implements Variant.Variant<
+  typeof NumericMultiplier,
+  number,
+  number,
+  Variant.RunningVariant<typeof NumericMultiplier, number>
+> {
   __polyTag__: typeof NumericMultiplier = NumericMultiplier;
   #state: number = 0;
 
@@ -143,9 +148,10 @@ export class NumericRangeMultiplier
   }
 }
 
-export class NumericRangeMultiplierBuilder
-  implements VariantBuilder.VariantBuilder<NumericRangeMultiplier, RangeMultiplierConfig>
-{
+export class NumericRangeMultiplierBuilder implements VariantBuilder.VariantBuilder<
+  NumericRangeMultiplier,
+  RangeMultiplierConfig
+> {
   build(configuration: RangeMultiplierConfig): NumericRangeMultiplier {
     return new NumericRangeMultiplier(configuration);
   }
@@ -154,9 +160,12 @@ export class NumericRangeMultiplierBuilder
 export type InterceptingRunningVariant<TTag extends string | symbol, TState> = Variant.RunningVariant<TTag, TState> & {
   emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => Effect.Effect<void>;
 };
-export class InterceptingVariant<TTag extends string | symbol, TState>
-  implements Variant.Variant<TTag, TState, TState, InterceptingRunningVariant<TTag, TState>>
-{
+export class InterceptingVariant<TTag extends string | symbol, TState> implements Variant.Variant<
+  TTag,
+  TState,
+  TState,
+  InterceptingRunningVariant<TTag, TState>
+> {
   __polyTag__: TTag;
   constructor(tag: TTag) {
     this.__polyTag__ = tag;
@@ -193,9 +202,10 @@ export class InterceptingVariant<TTag extends string | symbol, TState>
  * Builder of an intercepting variant
  * It allows removing the possibility of race conditions by requiring an explicit gesture to migrate to a next/specific protocol version
  */
-export class InterceptingVariantBuilder<TTag extends string | symbol, TState>
-  implements VariantBuilder.VariantBuilder<InterceptingVariant<TTag, TState>, object>
-{
+export class InterceptingVariantBuilder<TTag extends string | symbol, TState> implements VariantBuilder.VariantBuilder<
+  InterceptingVariant<TTag, TState>,
+  object
+> {
   tag: TTag;
   constructor(tag: TTag) {
     this.tag = tag;

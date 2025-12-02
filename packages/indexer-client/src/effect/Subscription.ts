@@ -18,8 +18,11 @@ import type { Query } from './Query.js';
 /**
  * Describes a subscription of elements from an invocable GraphQL query.
  */
-export interface Subscription<R, V, F extends Subscription.SubscriptionFn<R, V> = Subscription.SubscriptionFn<R, V>>
-  extends Effect.Effect<F> {
+export interface Subscription<
+  R,
+  V,
+  F extends Subscription.SubscriptionFn<R, V> = Subscription.SubscriptionFn<R, V>,
+> extends Effect.Effect<F> {
   readonly tag: Context.Tag<Subscription<R, V>, F>;
   readonly run: F;
 }
@@ -48,11 +51,11 @@ export const make: <Name extends string, T extends Query.Document<R, V>, R = Que
 ) => new SubscriptionImpl<R, V, T>(`${name}Subscription`, document);
 
 class SubscriptionImpl<
-    R,
-    V,
-    T extends Query.Document<R, V> = Query.Document<R, V>,
-    F extends Subscription.SubscriptionFn<R, V> = Subscription.SubscriptionFn<R, V>,
-  >
+  R,
+  V,
+  T extends Query.Document<R, V> = Query.Document<R, V>,
+  F extends Subscription.SubscriptionFn<R, V> = Subscription.SubscriptionFn<R, V>,
+>
   extends Effectable.Class<F>
   implements Subscription<R, V, F>
 {

@@ -83,9 +83,10 @@ export type DefaultRunningV1 = RunningV1Variant<
   ledger.ZswapSecretKeys
 >;
 
-export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
-  implements Variant.RunningVariant<typeof V1Tag, CoreWallet>
-{
+export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
+  typeof V1Tag,
+  CoreWallet
+> {
   readonly __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
