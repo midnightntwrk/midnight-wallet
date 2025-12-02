@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-state
 
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+- 2c4a115: fix: fixes unshielded state sync update
+
 ## 1.0.0-beta.10
 
 ### Patch Changes

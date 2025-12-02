@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+- Updated dependencies [3f14055]
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-node-client@1.0.0-beta.10
+
 ## 1.0.0-beta.9
 
 ### Patch Changes

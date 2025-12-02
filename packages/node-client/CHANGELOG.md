@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+
 ## 1.0.0-beta.9
 
 ### Patch Changes
