@@ -37,7 +37,7 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.5",
+    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
     "eslint": "^9.37.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",

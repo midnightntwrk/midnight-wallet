@@ -11,7 +11,7 @@
     "lint": "eslint"
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.5",
+    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
     "@midnight-ntwrk/wallet-api": "^5.0.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.9",
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.8",
