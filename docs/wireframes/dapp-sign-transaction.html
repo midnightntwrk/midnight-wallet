@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, height=600">
+  <title>Midnight Wallet - Sign Transaction</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { midnight: { DEFAULT: '#6366F1', dark: '#1A1A2E' } } } }
+    }
+  </script>
+  <style>body { width: 360px; height: 600px; margin: 0 auto; border: 1px solid #e2e8f0; }</style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-900 flex items-center justify-center">
+  <div class="bg-white w-full h-full flex flex-col">
+    <header class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+      <div class="flex items-center gap-2">
+        <div class="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+        </div>
+        <span class="text-sm font-medium text-slate-600">midnight-dex.example.com</span>
+      </div>
+      <button class="p-2 hover:bg-slate-100 rounded-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <main class="flex-1 p-4 overflow-y-auto">
+      <div class="text-center mb-4">
+        <h2 class="text-lg font-semibold mb-1">Signature Request</h2>
+        <p class="text-sm text-slate-500">Review and sign this transaction</p>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-sm text-slate-600">Action</span>
+          <span class="text-sm font-medium px-2 py-1 bg-purple-100 text-purple-700 rounded">Swap</span>
+        </div>
+        <div class="border-t border-slate-200 my-3"></div>
+        <div class="space-y-3">
+          <div>
+            <p class="text-xs text-slate-500 mb-1">You Send</p>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold text-sm">N</div>
+                <span class="font-medium">NIGHT</span>
+              </div>
+              <span class="font-semibold">50.00</span>
+            </div>
+          </div>
+          <div class="flex justify-center">
+            <div class="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center">
+              <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3"/></svg>
+            </div>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 mb-1">You Receive (estimated)</p>
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-2">
+                <div class="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-bold text-sm">D</div>
+                <span class="font-medium">DUST</span>
+              </div>
+              <span class="font-semibold">~3,500.00</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 mb-4">
+        <p class="text-sm font-medium text-slate-700 mb-3">Transaction Details</p>
+        <div class="space-y-2 text-sm">
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">Rate</span>
+            <span class="font-mono">1 NIGHT = 70 DUST</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">Slippage</span>
+            <span>0.5%</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">Network Fee</span>
+            <span>0.001 DUST</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-slate-600">Contract</span>
+            <span class="font-mono text-indigo-600">midnight1swap...xyz</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-amber-50 border border-amber-200 rounded-xl p-3">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <p class="text-xs text-amber-700">Only sign transactions from dApps you trust. This action cannot be undone.</p>
+        </div>
+      </div>
+    </main>
+
+    <div class="p-4 border-t border-slate-100">
+      <div class="flex gap-3">
+        <button class="flex-1 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors">
+          Reject
+        </button>
+        <button class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
+          Sign & Submit
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

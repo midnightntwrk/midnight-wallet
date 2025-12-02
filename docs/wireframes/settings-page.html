@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, height=600">
+  <title>Midnight Wallet - Settings</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { midnight: { DEFAULT: '#6366F1', dark: '#1A1A2E' } } } }
+    }
+  </script>
+  <style>body { width: 360px; height: 600px; margin: 0 auto; border: 1px solid #e2e8f0; }</style>
+</head>
+<body class="bg-white font-sans text-slate-900">
+  <div class="flex flex-col h-full">
+    <header class="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+      <h1 class="font-semibold text-lg">Settings</h1>
+      <button class="p-2 hover:bg-slate-100 rounded-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+      </button>
+    </header>
+
+    <main class="flex-1 overflow-y-auto">
+      <div class="p-4">
+        <div class="flex items-center gap-3 p-3 bg-slate-50 rounded-xl mb-4">
+          <div class="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
+            P
+          </div>
+          <div class="flex-1">
+            <p class="font-semibold">Primary Wallet</p>
+            <p class="text-xs text-slate-500 font-mono">midnight1x7q...k3f</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </div>
+      </div>
+
+      <div class="px-4 mb-2">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">General</p>
+      </div>
+      <div class="bg-white">
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+            </div>
+            <div class="text-left">
+              <p class="font-medium text-sm">Network</p>
+              <p class="text-xs text-slate-500">MainNet</p>
+            </div>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707"/></svg>
+            </div>
+            <p class="font-medium text-sm">Appearance</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500">Light</span>
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </button>
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <p class="font-medium text-sm">Auto-Lock Timer</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500">15 min</span>
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </button>
+      </div>
+
+      <div class="px-4 mt-4 mb-2">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Security</p>
+      </div>
+      <div class="bg-white">
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
+            </div>
+            <p class="font-medium text-sm">Change Password</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <p class="font-medium text-sm">Show Recovery Phrase</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-cyan-100 flex items-center justify-center">
+              <svg class="w-4 h-4 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+            </div>
+            <p class="font-medium text-sm">Connected dApps</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-slate-500">3</span>
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+          </div>
+        </button>
+      </div>
+
+      <div class="px-4 mt-4 mb-2">
+        <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">About</p>
+      </div>
+      <div class="bg-white">
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <p class="font-medium text-sm">Version</p>
+          <span class="text-sm text-slate-500">1.0.0</span>
+        </button>
+        <button class="w-full flex items-center justify-between px-4 py-3 hover:bg-slate-50">
+          <p class="font-medium text-sm">Help & Support</p>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+        </button>
+      </div>
+
+      <div class="p-4">
+        <button class="w-full py-3 text-red-600 font-medium hover:bg-red-50 rounded-xl transition-colors">
+          Lock Wallet
+        </button>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

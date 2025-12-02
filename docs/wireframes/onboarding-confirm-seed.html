@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, height=600">
+  <title>Midnight Wallet - Confirm Seed</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter', 'sans-serif'] }, colors: { midnight: { DEFAULT: '#6366F1', dark: '#1A1A2E' } } } }
+    }
+  </script>
+  <style>body { width: 360px; height: 600px; margin: 0 auto; border: 1px solid #e2e8f0; }</style>
+</head>
+<body class="bg-white font-sans text-slate-900">
+  <div class="flex flex-col h-full">
+    <header class="flex items-center px-4 py-3 border-b border-slate-100">
+      <button class="p-2 -ml-2 hover:bg-slate-100 rounded-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h1 class="flex-1 text-center font-semibold text-lg">Confirm Phrase</h1>
+      <div class="w-9"></div>
+    </header>
+
+    <div class="px-4 py-2">
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-1 bg-indigo-600 rounded"></div>
+        <div class="flex-1 h-1 bg-indigo-600 rounded"></div>
+        <div class="flex-1 h-1 bg-slate-200 rounded"></div>
+      </div>
+      <p class="text-xs text-slate-500 mt-1">Step 2 of 3</p>
+    </div>
+
+    <main class="flex-1 p-4 overflow-y-auto">
+      <div class="text-center mb-6">
+        <h2 class="text-xl font-semibold mb-2">Verify Your Phrase</h2>
+        <p class="text-sm text-slate-500">Select the words in the correct order to verify you saved your recovery phrase.</p>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 mb-6 min-h-[100px]">
+        <div class="flex flex-wrap gap-2">
+          <span class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium">1. apple</span>
+          <span class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium">2. banana</span>
+          <span class="px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-lg text-sm font-medium">3. cherry</span>
+          <span class="px-3 py-1.5 border-2 border-dashed border-slate-300 text-slate-400 rounded-lg text-sm">4. _____</span>
+        </div>
+      </div>
+
+      <p class="text-sm text-slate-600 mb-3">Select word #4:</p>
+      <div class="grid grid-cols-3 gap-2">
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">forest</button>
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">dragon</button>
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">eagle</button>
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">garden</button>
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">harbor</button>
+        <button class="p-3 bg-white border border-slate-200 rounded-xl text-sm font-medium hover:border-indigo-500 hover:bg-indigo-50 transition-colors">island</button>
+      </div>
+    </main>
+
+    <div class="p-4 border-t border-slate-100">
+      <button class="w-full py-3 bg-slate-200 text-slate-400 font-medium rounded-xl cursor-not-allowed">
+        Continue
+      </button>
+      <button class="w-full py-2 mt-2 text-slate-500 text-sm">
+        Start Over
+      </button>
+    </div>
+  </div>
+</body>
+</html>
