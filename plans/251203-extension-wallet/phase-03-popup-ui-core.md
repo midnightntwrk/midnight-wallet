@@ -1,6 +1,6 @@
 # Phase 03: Popup UI Core
 
-**Status:** Pending | **Priority:** High | **Date:** 2025-12-03
+**Status:** Completed | **Priority:** High | **Date:** 2025-12-03 | **Reviewed:** 2025-12-03
 
 ## Context
 
@@ -198,28 +198,28 @@ Each page: functional component with basic layout.
 
 ## Todo List
 
-- [ ] Create wallet-store.ts (Zustand)
-- [ ] Create ui-store.ts (Zustand)
-- [ ] Create background.ts (messaging helper)
-- [ ] Create router.tsx (MemoryRouter)
-- [ ] Create main-layout.tsx
-- [ ] Install shadcn/ui components (button, card, input, dialog, tabs)
-- [ ] Create unlock page stub
-- [ ] Create home page stub
-- [ ] Create send page stub
-- [ ] Create receive page stub
-- [ ] Create settings page stub
-- [ ] Setup dark theme CSS variables
-- [ ] Wire up app.tsx entry
+- [x] Create wallet-store.ts (Zustand)
+- [x] Create ui-store.ts (Zustand)
+- [x] Create background.ts (messaging helper)
+- [x] Create router.tsx (MemoryRouter)
+- [x] Create main-layout.tsx
+- [x] Install shadcn/ui components (button, card, input, dialog, tabs)
+- [x] Create unlock page stub
+- [x] Create home page stub
+- [x] Create send page stub
+- [x] Create receive page stub
+- [x] Create settings page stub
+- [x] Setup dark theme CSS variables
+- [x] Wire up app.tsx entry
 
 ## Success Criteria
 
-- [ ] Popup renders at 360x600px
-- [ ] Navigation works between pages
-- [ ] Zustand state persists across navigation
-- [ ] Background messages send/receive
-- [ ] shadcn/ui components render correctly
-- [ ] Dark theme applied
+- [x] Popup renders at 360x600px
+- [x] Navigation works between pages
+- [x] Zustand state persists across navigation
+- [x] Background messages send/receive
+- [x] shadcn/ui components render correctly
+- [x] Dark theme applied
 
 ## Risk Assessment
 
