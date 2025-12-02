@@ -54,8 +54,15 @@
     "dist": {
       "inputs": [
         "src/**/*.ts",
+        "src/**/*.tsx",
+        "src/**/*.html",
+        "src/**/*.css",
+        "public/**/*",
         "tsconfig.json",
         "tsconfig.build.json",
+        "vite.config.ts",
+        "tailwind.config.js",
+        "postcss.config.js",
         "$TURBO_ROOT$/tsconfig.base.json",
         ".clean-timestamp"
       ],

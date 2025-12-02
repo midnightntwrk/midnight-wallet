@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Midnight Wallet",
+  "version": "0.1.0",
+  "description": "Secure wallet for Midnight Network - Privacy-first transactions with zero-knowledge proofs",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup/index.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/index.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*/*", "http://localhost/*"],
+      "js": ["content/index.js"],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["injected/provider.js"],
+      "matches": ["https://*/*", "http://localhost/*"]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
