@@ -19,7 +19,12 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  createKeystore,
+  UnshieldedWallet,
+  InMemoryTransactionHistoryStorage,
+  PublicKeys,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -106,17 +111,15 @@ describe('Dust Registration', () => {
     const dustSender = Dust.startWithSeed(dustSenderSeed, dustParameters);
     const dustReceiver = Dust.startWithSeed(dustReceiverSeed, dustParameters);
 
-    const unshieldedSender = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedSenderKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedSender = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedSenderKeystore));
 
-    const unshieldedReceiver = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedReceiverKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedReceiver = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedReceiverKeystore));
 
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
     receiverFacade = new WalletFacade(shieldedReceiver, unshieldedReceiver, dustReceiver);
@@ -140,7 +143,7 @@ describe('Dust Registration', () => {
   it('registers dust generation after receiving unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
-    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
+    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state);
 
     const tokenTransfer: CombinedTokenTransfer[] = [
       {

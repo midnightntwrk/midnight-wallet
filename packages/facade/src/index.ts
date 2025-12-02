@@ -47,7 +47,7 @@ export class FacadeState {
     return (
       this.shielded.state.progress.isStrictlyComplete() &&
       this.dust.state.progress.isStrictlyComplete() &&
-      this.unshielded.syncProgress?.synced === true
+      this.unshielded.progress.isStrictlyComplete()
     );
   }
 
@@ -70,7 +70,7 @@ export class WalletFacade {
   }
 
   state(): Observable<FacadeState> {
-    return combineLatest([this.shielded.state, this.unshielded.state(), this.dust.state]).pipe(
+    return combineLatest([this.shielded.state, this.unshielded.state, this.dust.state]).pipe(
       map(([shieldedState, unshieldedState, dustState]) => new FacadeState(shieldedState, unshieldedState, dustState)),
     );
   }

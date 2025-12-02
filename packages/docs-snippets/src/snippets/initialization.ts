@@ -17,7 +17,12 @@ import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultV1Configuration as ShieldedConfiguration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { createKeystore, PublicKey, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  createKeystore,
+  InMemoryTransactionHistoryStorage,
+  PublicKeys,
+  UnshieldedWallet,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { pick } from 'lodash-es';
@@ -70,10 +75,10 @@ const initWalletWithSeed = async (seed: Buffer) => {
     dustSecretKey,
     ledger.LedgerParameters.initialParameters().dust,
   );
-  const unshieldedWallet = await WalletBuilder.build({
+  const unshieldedWallet = UnshieldedWallet({
     ...configuration,
-    publicKey: PublicKey.fromKeyStore(unshieldedKeystore),
-  });
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedKeystore));
 
   const wallet: WalletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
   await wallet.start(shieldedSecretKeys, dustSecretKey);

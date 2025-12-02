@@ -19,7 +19,12 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  InMemoryTransactionHistoryStorage,
+  PublicKeys,
+  UnshieldedWallet,
+  createKeystore,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -107,17 +112,15 @@ describe('Wallet Facade Transfer', () => {
     const dustSender = Dust.startWithSeed(dustSenderSeed, dustParameters);
     const dustReceiver = Dust.startWithSeed(dustReceiverSeed, dustParameters);
 
-    const unshieldedSender = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedSenderKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedSender = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedSenderKeystore));
 
-    const unshieldedReceiver = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedReceiverKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedReceiver = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedReceiverKeystore));
 
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
     receiverFacade = new WalletFacade(shieldedReceiver, unshieldedReceiver, dustReceiver);
@@ -142,7 +145,7 @@ describe('Wallet Facade Transfer', () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
     const ledgerReceiverAddress = ShieldedAddress.codec
-      .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
+      .encode(configuration.networkId, await receiverFacade.shielded.getAddress())
       .asString();
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
@@ -182,7 +185,7 @@ describe('Wallet Facade Transfer', () => {
   it('allows to transfer unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
-    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
+    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state);
 
     const tokenTransfer: CombinedTokenTransfer[] = [
       {
@@ -221,7 +224,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -248,9 +251,9 @@ describe('Wallet Facade Transfer', () => {
 
     const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
 
-    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, outputOffer);
+    const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
-    const provenArbitrayTx = await senderFacade.shielded.finalizeTransaction({
+    const provenArbitraryTx = await senderFacade.shielded.finalizeTransaction({
       type: 'TransactionToProve',
       transaction: arbitraryTx,
     });
@@ -258,7 +261,7 @@ describe('Wallet Facade Transfer', () => {
     const balancedTx = await senderFacade.balanceTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      provenArbitrayTx,
+      provenArbitraryTx,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
@@ -320,7 +323,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();

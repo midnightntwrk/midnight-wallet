@@ -19,7 +19,12 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  createKeystore,
+  PublicKeys,
+  InMemoryTransactionHistoryStorage,
+  UnshieldedWallet,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -96,11 +101,10 @@ describe('Dust Deregistration', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     const dustWallet = Dust.startWithSeed(dustWalletSeed, dustParameters);
 
-    const unshieldedWallet = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedWalletKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedWallet = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedWalletKeystore));
 
     walletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
 
