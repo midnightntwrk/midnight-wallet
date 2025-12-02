@@ -5,6 +5,12 @@ import { HomePage } from './pages/home'
 import { SendPage } from './pages/send'
 import { ReceivePage } from './pages/receive'
 import { SettingsPage } from './pages/settings'
+import { WelcomePage } from './pages/onboarding/welcome'
+import { CreateWalletPage } from './pages/onboarding/create-wallet'
+import { ImportWalletPage } from './pages/onboarding/import-wallet'
+import { BackupSeedPage } from './pages/onboarding/backup-seed'
+import { ConfirmSeedPage } from './pages/onboarding/confirm-seed'
+import { SetPasswordPage } from './pages/onboarding/set-password'
 
 export const router = createMemoryRouter([
   {
@@ -17,6 +23,12 @@ export const router = createMemoryRouter([
       { path: 'send', element: <SendPage /> },
       { path: 'receive', element: <ReceivePage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'welcome', element: <WelcomePage /> },
+      { path: 'create-wallet', element: <CreateWalletPage /> },
+      { path: 'import-wallet', element: <ImportWalletPage /> },
+      { path: 'backup-seed', element: <BackupSeedPage /> },
+      { path: 'confirm-seed', element: <ConfirmSeedPage /> },
+      { path: 'set-password', element: <SetPasswordPage /> },
     ],
   },
 ])

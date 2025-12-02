@@ -75,3 +75,19 @@ export async function getAddress() {
 export async function signTransaction(transaction: unknown) {
   return sendMessage<{ signedTransaction: string }>('SIGN_TRANSACTION', { transaction })
 }
+
+export async function generateMnemonic() {
+  return sendMessage<string[]>('GENERATE_MNEMONIC')
+}
+
+export async function validateMnemonic(mnemonic: string[]) {
+  return sendMessage<boolean>('VALIDATE_MNEMONIC', { mnemonic })
+}
+
+export async function deriveAccountAddress(accountIndex: number) {
+  return sendMessage<{ address: string }>('DERIVE_ACCOUNT', { accountIndex })
+}
+
+export async function exportSeed(password: string, walletId: string) {
+  return sendMessage<string[]>('EXPORT_SEED', { password, walletId })
+}

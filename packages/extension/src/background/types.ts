@@ -35,6 +35,10 @@ export type InternalMessageType =
   | 'SIGN_TRANSACTION'
   | 'GET_ADDRESS'
   | 'GET_ACCOUNTS'
+  | 'GENERATE_MNEMONIC'
+  | 'VALIDATE_MNEMONIC'
+  | 'DERIVE_ACCOUNT'
+  | 'EXPORT_SEED'
 
 export type DAppMessageType =
   | 'MIDNIGHT_CONNECT'

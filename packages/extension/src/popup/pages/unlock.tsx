@@ -32,7 +32,7 @@ export function UnlockPage() {
       setWallets(walletList)
 
       if (walletList.length === 0) {
-        navigate('/settings', { replace: true })
+        navigate('/welcome', { replace: true })
       }
     } catch (err) {
       console.error('Failed to check state:', err)

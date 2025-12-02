@@ -1,6 +1,7 @@
 # Phase 04: Wallet Management
 
-**Status:** Pending | **Priority:** Critical | **Date:** 2025-12-03
+**Status:** Code Review Complete - CRITICAL ISSUES FOUND | **Priority:** Critical | **Date:** 2025-12-03
+**Review:** [Code Review Report](./reports/code-reviewer-251203-phase04-wallet-mgmt.md)
 
 ## Context
 
@@ -169,28 +170,48 @@ User selects random words to verify backup.
 
 ## Todo List
 
-- [ ] Create wallet-service.ts with SDK integration
-- [ ] Add wallet handlers to message-router.ts
-- [ ] Create /welcome page
-- [ ] Create /create-wallet page
-- [ ] Create /import-wallet page
-- [ ] Create /backup-seed page (display)
-- [ ] Create /confirm-seed page (verify)
-- [ ] Create /set-password page
-- [ ] Create seed-phrase-input.tsx component
-- [ ] Create seed-phrase-display.tsx component
-- [ ] Add onboarding routes to router
+- [x] Create wallet-service.ts with SDK integration
+- [x] Add wallet handlers to message-router.ts
+- [x] Create /welcome page
+- [x] Create /create-wallet page
+- [x] Create /import-wallet page
+- [x] Create /backup-seed page (display)
+- [x] Create /confirm-seed page (verify)
+- [x] Create /set-password page
+- [x] Create seed-phrase-input.tsx component
+- [x] Create seed-phrase-display.tsx component
+- [x] Add onboarding routes to router
+- [ ] **[BLOCKER]** Fix CRITICAL security issues (see review report)
 - [ ] Test create wallet flow E2E
 - [ ] Test import wallet flow E2E
 
 ## Success Criteria
 
-- [ ] Can generate new 24-word seed
-- [ ] Can import existing seed (valid checksum)
-- [ ] Rejects invalid seed phrases
-- [ ] Password encrypts seed correctly
-- [ ] Derived account returns valid address
-- [ ] Seed export requires re-auth
+- [x] Can generate new 24-word seed
+- [x] Can import existing seed (valid checksum)
+- [x] Rejects invalid seed phrases
+- [x] Password encrypts seed correctly
+- [~] Derived account returns valid address (**PARTIAL** - wrong Bech32m format)
+- [ ] Seed export requires re-auth (**FAILING** - missing re-authentication)
+
+## Code Review Results
+
+**Date:** 2025-12-03
+**Status:** ⚠️ CRITICAL ISSUES FOUND - DO NOT MERGE
+
+**Critical Issues (MUST FIX):**
+1. Seed phrase memory leak - never cleared from memory
+2. Seed visible in dev tools console/messages
+3. No re-authentication for seed export
+4. PBKDF2 iterations too low (100k vs 600k OWASP)
+5. Weak password validation (length-only)
+6. Session restore without integrity validation
+7. Missing Bech32m address format (incompatible with Midnight)
+
+**Build Status:** ✅ TypeScript compiles, builds successfully
+**Bundle Size:** 268.57 KB popup, 80.09 KB background
+
+**Full Report:** [./reports/code-reviewer-251203-phase04-wallet-mgmt.md](./reports/code-reviewer-251203-phase04-wallet-mgmt.md)
 
 ## Risk Assessment
 

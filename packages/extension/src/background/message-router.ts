@@ -5,10 +5,11 @@ import type {
   SessionState,
   EncryptedWallet,
 } from './types'
-import { encryptSeed } from './crypto-service'
+import { encryptSeed, decryptSeed } from './crypto-service'
 import {
   saveWallet,
   getWallets,
+  getWallet,
   deleteWallet,
   generateWalletId,
 } from './storage-service'
@@ -20,6 +21,14 @@ import {
   refreshSession,
   getDecryptedSeed,
 } from './session-manager'
+import {
+  generateMnemonic,
+  validateMnemonic,
+  createWallet as createWalletService,
+  importWallet as importWalletService,
+  deriveAccount,
+  exportSeed,
+} from './wallet-service'
 
 const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'PING',
@@ -33,6 +42,10 @@ const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'SIGN_TRANSACTION',
   'GET_ADDRESS',
   'GET_ACCOUNTS',
+  'GENERATE_MNEMONIC',
+  'VALIDATE_MNEMONIC',
+  'DERIVE_ACCOUNT',
+  'EXPORT_SEED',
 ]
 
 const DAPP_MESSAGE_TYPES: MessageType[] = [
@@ -86,34 +99,48 @@ async function handleCreateWallet(payload: {
   name: string
   password: string
   seedPhrase?: string
-}): Promise<MessageResponse<WalletInfo>> {
+}): Promise<MessageResponse<WalletInfo & { mnemonic?: string[] }>> {
   if (!payload.name || !payload.password) {
     return { success: false, error: 'Missing name or password' }
   }
 
-  const seedPhrase =
-    payload.seedPhrase || generateMockSeedPhrase()
+  try {
+    if (payload.seedPhrase) {
+      const { encryptedSeed, salt } = await encryptSeed(payload.seedPhrase, payload.password)
+      const wallet: EncryptedWallet = {
+        id: await generateWalletId(),
+        name: payload.name,
+        encryptedSeed,
+        salt,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      }
+      await saveWallet(wallet)
+      return {
+        success: true,
+        data: {
+          id: wallet.id,
+          name: wallet.name,
+          createdAt: wallet.createdAt,
+        },
+      }
+    }
 
-  const { encryptedSeed, salt } = await encryptSeed(seedPhrase, payload.password)
-
-  const wallet: EncryptedWallet = {
-    id: await generateWalletId(),
-    name: payload.name,
-    encryptedSeed,
-    salt,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
-  }
-
-  await saveWallet(wallet)
-
-  return {
-    success: true,
-    data: {
-      id: wallet.id,
-      name: wallet.name,
-      createdAt: wallet.createdAt,
-    },
+    const { id, mnemonic } = await createWalletService(payload.password, payload.name)
+    return {
+      success: true,
+      data: {
+        id,
+        name: payload.name,
+        createdAt: Date.now(),
+        mnemonic,
+      },
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to create wallet',
+    }
   }
 }
 
@@ -126,33 +153,30 @@ async function handleImportWallet(payload: {
     return { success: false, error: 'Missing name, password, or seedPhrase' }
   }
 
-  if (!isValidSeedPhrase(payload.seedPhrase)) {
-    return { success: false, error: 'Invalid seed phrase format' }
+  const words = payload.seedPhrase.trim().split(/\s+/)
+  if (words.length !== 12 && words.length !== 24) {
+    return { success: false, error: 'Seed phrase must be 12 or 24 words' }
   }
 
-  const { encryptedSeed, salt } = await encryptSeed(
-    payload.seedPhrase,
-    payload.password
-  )
-
-  const wallet: EncryptedWallet = {
-    id: await generateWalletId(),
-    name: payload.name,
-    encryptedSeed,
-    salt,
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+  if (!validateMnemonic(words)) {
+    return { success: false, error: 'Invalid seed phrase checksum' }
   }
 
-  await saveWallet(wallet)
-
-  return {
-    success: true,
-    data: {
-      id: wallet.id,
-      name: wallet.name,
-      createdAt: wallet.createdAt,
-    },
+  try {
+    const id = await importWalletService(words, payload.password, payload.name)
+    return {
+      success: true,
+      data: {
+        id,
+        name: payload.name,
+        createdAt: Date.now(),
+      },
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to import wallet',
+    }
   }
 }
 
@@ -185,7 +209,20 @@ async function handleGetAccounts(): Promise<MessageResponse<string[]>> {
   }
 
   refreshSession()
-  return { success: true, data: ['midnight1mock...address'] }
+  const seed = getDecryptedSeed()
+  if (!seed) {
+    return { success: false, error: 'Could not access seed' }
+  }
+
+  try {
+    const { address } = await deriveAccount(seed, 0)
+    return { success: true, data: [address] }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to derive accounts',
+    }
+  }
 }
 
 async function handleSignTransaction(payload: {
@@ -218,7 +255,20 @@ async function handleGetAddress(): Promise<MessageResponse<string>> {
   }
 
   refreshSession()
-  return { success: true, data: 'midnight1mock...address' }
+  const seed = getDecryptedSeed()
+  if (!seed) {
+    return { success: false, error: 'Could not access seed' }
+  }
+
+  try {
+    const { address } = await deriveAccount(seed, 0)
+    return { success: true, data: address }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to derive address',
+    }
+  }
 }
 
 async function handleDAppConnect(): Promise<MessageResponse> {
@@ -258,22 +308,78 @@ async function handleDAppSendTransaction(payload: {
   return { success: true, data: { txHash: 'mock_tx_hash' } }
 }
 
-function generateMockSeedPhrase(): string {
-  const words = [
-    'abandon', 'ability', 'able', 'about', 'above', 'absent',
-    'absorb', 'abstract', 'absurd', 'abuse', 'access', 'accident',
-  ]
-  const phrase: string[] = []
-  for (let i = 0; i < 12; i++) {
-    const randomIndex = Math.floor(Math.random() * words.length)
-    phrase.push(words[randomIndex])
+async function handleGenerateMnemonic(): Promise<MessageResponse<string[]>> {
+  try {
+    const mnemonic = generateMnemonic()
+    return { success: true, data: mnemonic }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to generate mnemonic',
+    }
   }
-  return phrase.join(' ')
 }
 
-function isValidSeedPhrase(phrase: string): boolean {
-  const words = phrase.trim().split(/\s+/)
-  return words.length === 12 || words.length === 24
+async function handleValidateMnemonic(payload: {
+  mnemonic: string[]
+}): Promise<MessageResponse<boolean>> {
+  if (!payload.mnemonic || !Array.isArray(payload.mnemonic)) {
+    return { success: false, error: 'Missing mnemonic' }
+  }
+
+  const isValid = validateMnemonic(payload.mnemonic)
+  return { success: true, data: isValid }
+}
+
+async function handleDeriveAccount(payload: {
+  accountIndex: number
+}): Promise<MessageResponse<{ address: string }>> {
+  if (!isUnlocked()) {
+    return { success: false, error: 'Wallet is locked' }
+  }
+
+  refreshSession()
+  const seed = getDecryptedSeed()
+  if (!seed) {
+    return { success: false, error: 'Could not access seed' }
+  }
+
+  try {
+    const { address } = await deriveAccount(seed, payload.accountIndex ?? 0)
+    return { success: true, data: { address } }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to derive account',
+    }
+  }
+}
+
+async function handleExportSeed(payload: {
+  password: string
+  walletId: string
+}): Promise<MessageResponse<string[]>> {
+  if (!isUnlocked()) {
+    return { success: false, error: 'Wallet is locked' }
+  }
+
+  if (!payload.password || !payload.walletId) {
+    return { success: false, error: 'Password and walletId required for seed export' }
+  }
+
+  try {
+    const wallet = await getWallet(payload.walletId)
+    if (!wallet) {
+      return { success: false, error: 'Wallet not found' }
+    }
+
+    const seed = await decryptSeed(wallet.encryptedSeed, wallet.salt, payload.password)
+    const words = seed.split(' ')
+    refreshSession()
+    return { success: true, data: words }
+  } catch {
+    return { success: false, error: 'Invalid password' }
+  }
 }
 
 export async function handleMessage(
@@ -327,6 +433,18 @@ export async function handleMessage(
 
     case 'GET_ADDRESS':
       return handleGetAddress()
+
+    case 'GENERATE_MNEMONIC':
+      return handleGenerateMnemonic()
+
+    case 'VALIDATE_MNEMONIC':
+      return handleValidateMnemonic(payload as { mnemonic: string[] })
+
+    case 'DERIVE_ACCOUNT':
+      return handleDeriveAccount(payload as { accountIndex: number })
+
+    case 'EXPORT_SEED':
+      return handleExportSeed(payload as { password: string; walletId: string })
 
     case 'MIDNIGHT_CONNECT':
       return handleDAppConnect()
