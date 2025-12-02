@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, height=600">
+  <title>Midnight Wallet - Send</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { midnight: { DEFAULT: '#6366F1', dark: '#1A1A2E' } }
+        }
+      }
+    }
+  </script>
+  <style>body { width: 360px; height: 600px; margin: 0 auto; border: 1px solid #e2e8f0; }</style>
+</head>
+<body class="bg-white font-sans text-slate-900">
+  <div class="flex flex-col h-full">
+    <header class="flex items-center px-4 py-3 border-b border-slate-100">
+      <button class="p-2 -ml-2 hover:bg-slate-100 rounded-lg">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+      </button>
+      <h1 class="flex-1 text-center font-semibold text-lg">Send</h1>
+      <div class="w-9"></div>
+    </header>
+
+    <main class="flex-1 p-4">
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Select Token</label>
+        <button class="w-full flex items-center justify-between p-3 border border-slate-200 rounded-xl hover:border-slate-300">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600 font-bold">N</div>
+            <div class="text-left">
+              <p class="font-medium">NIGHT</p>
+              <p class="text-xs text-slate-500">Balance: 125.50 NIGHT</p>
+            </div>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </button>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Recipient Address</label>
+        <div class="relative">
+          <input type="text" placeholder="midnight1..." class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent font-mono text-sm">
+          <button class="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 rounded">
+            <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <label class="block text-sm font-medium text-slate-700 mb-2">Amount</label>
+        <div class="relative">
+          <input type="text" placeholder="0.00" class="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-2xl font-semibold">
+          <button class="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1 bg-indigo-100 text-indigo-600 text-sm font-medium rounded-lg">MAX</button>
+        </div>
+        <p class="text-sm text-slate-500 mt-2">= $0.00 USD</p>
+      </div>
+
+      <div class="bg-slate-50 rounded-xl p-4 mb-6">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-sm text-slate-600">Network Fee</span>
+          <span class="text-sm font-medium">0.001 DUST</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="text-sm text-slate-600">Total</span>
+          <span class="text-sm font-medium">0.00 NIGHT + 0.001 DUST</span>
+        </div>
+      </div>
+    </main>
+
+    <div class="p-4 border-t border-slate-100">
+      <button class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
+        Review Transaction
+      </button>
+    </div>
+  </div>
+</body>
+</html>

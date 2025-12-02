@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=360, height=600">
+  <title>Midnight Wallet - dApp Connect</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+          colors: { midnight: { DEFAULT: '#6366F1', dark: '#1A1A2E' } }
+        }
+      }
+    }
+  </script>
+  <style>body { width: 360px; height: 600px; margin: 0 auto; border: 1px solid #e2e8f0; }</style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-900 flex items-center justify-center">
+  <div class="bg-white w-full h-full flex flex-col">
+    <div class="flex-1 flex flex-col items-center justify-center p-6">
+      <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center mb-4 shadow-lg">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"/></svg>
+      </div>
+      <h2 class="text-xl font-semibold mb-1">Connect to dApp</h2>
+      <p class="text-sm text-slate-500 mb-6">midnight-dex.example.com</p>
+
+      <div class="w-full bg-slate-50 rounded-xl p-4 mb-6">
+        <p class="text-sm font-medium text-slate-700 mb-3">This app wants to:</p>
+        <ul class="space-y-3">
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <span class="text-sm text-slate-600">View your wallet address</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <span class="text-sm text-slate-600">Request transaction approval</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <div class="w-5 h-5 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <svg class="w-3 h-3 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <span class="text-sm text-slate-600">View your token balances</span>
+          </li>
+        </ul>
+      </div>
+
+      <div class="w-full bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
+        <div class="flex items-start gap-2">
+          <svg class="w-5 h-5 text-amber-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+          <p class="text-xs text-amber-700">Only connect to sites you trust. This site cannot move funds without your approval.</p>
+        </div>
+      </div>
+
+      <div class="w-full bg-slate-50 rounded-xl p-3">
+        <div class="flex items-center gap-3">
+          <div class="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600"></div>
+          <div class="flex-1">
+            <p class="text-sm font-medium">Primary Wallet</p>
+            <p class="text-xs text-slate-500 font-mono">midnight1x7q...k3f</p>
+          </div>
+          <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+        </div>
+      </div>
+    </div>
+
+    <div class="p-4 border-t border-slate-100">
+      <div class="flex gap-3">
+        <button class="flex-1 py-3 border border-slate-200 text-slate-700 font-medium rounded-xl hover:bg-slate-50 transition-colors">
+          Cancel
+        </button>
+        <button class="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
+          Connect
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
