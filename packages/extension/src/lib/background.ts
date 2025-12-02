@@ -91,3 +91,36 @@ export async function deriveAccountAddress(accountIndex: number) {
 export async function exportSeed(password: string, walletId: string) {
   return sendMessage<string[]>('EXPORT_SEED', { password, walletId })
 }
+
+export interface Balances {
+  shielded: string
+  unshielded: string
+  dust: string
+}
+
+export interface Transaction {
+  hash: string
+  type: 'sent' | 'received'
+  amount: string
+  address: string
+  timestamp: number
+  status: 'pending' | 'confirmed' | 'failed'
+  memo?: string
+}
+
+export async function getBalances(address: string) {
+  return sendMessage<Balances>('GET_BALANCES', { address })
+}
+
+export async function getTransactionHistory(address: string) {
+  return sendMessage<Transaction[]>('GET_TX_HISTORY', { address })
+}
+
+export async function sendTokenTransaction(params: {
+  to: string
+  amount: string
+  type: 'shielded' | 'unshielded'
+  memo?: string
+}) {
+  return sendMessage<{ txHash: string }>('SEND_TRANSACTION', params)
+}

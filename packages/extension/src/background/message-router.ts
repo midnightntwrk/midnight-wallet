@@ -29,6 +29,14 @@ import {
   deriveAccount,
   exportSeed,
 } from './wallet-service'
+import {
+  getBalances,
+  getTransactionHistory,
+  sendTransaction,
+  type Balances,
+  type Transaction,
+  type SendTransactionParams,
+} from './transaction-service'
 
 const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'PING',
@@ -46,6 +54,9 @@ const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'VALIDATE_MNEMONIC',
   'DERIVE_ACCOUNT',
   'EXPORT_SEED',
+  'GET_BALANCES',
+  'GET_TX_HISTORY',
+  'SEND_TRANSACTION',
 ]
 
 const DAPP_MESSAGE_TYPES: MessageType[] = [
@@ -382,6 +393,78 @@ async function handleExportSeed(payload: {
   }
 }
 
+async function handleGetBalances(payload: {
+  address: string
+}): Promise<MessageResponse<Balances>> {
+  if (!isUnlocked()) {
+    return { success: false, error: 'Wallet is locked' }
+  }
+
+  if (!payload.address) {
+    return { success: false, error: 'Address is required' }
+  }
+
+  refreshSession()
+
+  try {
+    const balances = await getBalances(payload.address)
+    return { success: true, data: balances }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to get balances',
+    }
+  }
+}
+
+async function handleGetTxHistory(payload: {
+  address: string
+}): Promise<MessageResponse<Transaction[]>> {
+  if (!isUnlocked()) {
+    return { success: false, error: 'Wallet is locked' }
+  }
+
+  if (!payload.address) {
+    return { success: false, error: 'Address is required' }
+  }
+
+  refreshSession()
+
+  try {
+    const transactions = await getTransactionHistory(payload.address)
+    return { success: true, data: transactions }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to get transaction history',
+    }
+  }
+}
+
+async function handleSendTransaction(
+  payload: SendTransactionParams
+): Promise<MessageResponse<{ txHash: string }>> {
+  if (!isUnlocked()) {
+    return { success: false, error: 'Wallet is locked' }
+  }
+
+  if (!payload.to || !payload.amount) {
+    return { success: false, error: 'Missing required transaction parameters' }
+  }
+
+  refreshSession()
+
+  try {
+    const txHash = await sendTransaction(payload)
+    return { success: true, data: { txHash } }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to send transaction',
+    }
+  }
+}
+
 export async function handleMessage(
   message: { type: MessageType; payload?: unknown },
   sender: chrome.runtime.MessageSender
@@ -445,6 +528,15 @@ export async function handleMessage(
 
     case 'EXPORT_SEED':
       return handleExportSeed(payload as { password: string; walletId: string })
+
+    case 'GET_BALANCES':
+      return handleGetBalances(payload as { address: string })
+
+    case 'GET_TX_HISTORY':
+      return handleGetTxHistory(payload as { address: string })
+
+    case 'SEND_TRANSACTION':
+      return handleSendTransaction(payload as unknown as SendTransactionParams)
 
     case 'MIDNIGHT_CONNECT':
       return handleDAppConnect()

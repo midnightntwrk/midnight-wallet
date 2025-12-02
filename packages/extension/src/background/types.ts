@@ -39,6 +39,9 @@ export type InternalMessageType =
   | 'VALIDATE_MNEMONIC'
   | 'DERIVE_ACCOUNT'
   | 'EXPORT_SEED'
+  | 'GET_BALANCES'
+  | 'GET_TX_HISTORY'
+  | 'SEND_TRANSACTION'
 
 export type DAppMessageType =
   | 'MIDNIGHT_CONNECT'
@@ -122,6 +125,29 @@ export interface WalletInfo {
   id: string
   name: string
   createdAt: number
+}
+
+export interface Balances {
+  shielded: string
+  unshielded: string
+  dust: string
+}
+
+export interface Transaction {
+  hash: string
+  type: 'sent' | 'received'
+  amount: string
+  address: string
+  timestamp: number
+  status: 'pending' | 'confirmed' | 'failed'
+  memo?: string
+}
+
+export interface SendTransactionParams {
+  to: string
+  amount: string
+  type: 'shielded' | 'unshielded'
+  memo?: string
 }
 
 export interface UnlockAttempt {
