@@ -17,7 +17,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Reporter } from 'vitest/reporters';
-import { RunnerTestSuite, RunnerTaskResult } from 'vitest';
+import { Suite, TaskResult } from '@vitest/runner';
 
 // XRay JSON format interfaces based on the schema
 // TODOs:
@@ -40,7 +40,7 @@ interface XRayTest {
   testKey?: string;
   start: string;
   finish: string;
-  status: 'PASSED' | 'FAILED' | 'TODO' | 'EXECUTING' | 'ABORTED' | 'SKIPPED';
+  status: 'PASSED' | 'FAILED' | 'TODO' | 'EXECUTING' | 'BLOCKED' | 'SKIPPED';
   assignee?: string;
   testInfo?: XRayTestInfo;
   evidences?: Array<{
@@ -51,7 +51,7 @@ interface XRayTest {
   comment?: string;
   defects?: string[];
   examples?: Array<{
-    status: 'PASSED' | 'FAILED' | 'TODO' | 'EXECUTING' | 'ABORTED' | 'SKIPPED';
+    status: 'PASSED' | 'FAILED' | 'TODO' | 'EXECUTING' | 'BLOCKED' | 'SKIPPED';
     duration?: number;
     defects?: string[];
     comment?: string;
@@ -73,7 +73,7 @@ interface XRayReport {
 }
 
 function flattenTests(
-  suite: RunnerTestSuite,
+  suite: Suite,
   parentNames: string[] = [],
 ): {
   suiteName: string;
@@ -100,7 +100,7 @@ function flattenTests(
     if (task.type === 'suite') {
       results.push(...flattenTests(task, currentNames));
     } else if (task.type === 'test') {
-      const result = task.result as RunnerTaskResult;
+      const result = task.result as TaskResult;
 
       // Extract timing information
       const startTime = result?.startTime || Date.now();
@@ -133,9 +133,9 @@ function flattenTests(
 }
 
 export default class XRayJsonReporter implements Reporter {
-  private startTime: number = Date.now();
+  private readonly startTime: number = Date.now();
 
-  onFinished(files: RunnerTestSuite[]) {
+  onFinished(files: Suite[]): void {
     const testcases = files.flatMap((file) => flattenTests(file));
     const endTime = Date.now();
 
