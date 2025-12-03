@@ -1,0 +1,133 @@
+name: Release Extension
+
+on:
+  push:
+    tags:
+      - 'extension-v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., 0.1.0)'
+        required: true
+        type: string
+
+env:
+  MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
+  MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Extension
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Build extension
+        run: yarn turbo run dist --filter=@midnight-ntwrk/wallet-extension
+
+      - name: Run extension tests
+        run: yarn turbo run test --filter=@midnight-ntwrk/wallet-extension
+
+      - name: Run npm audit
+        run: |
+          cd packages/extension
+          npm audit --audit-level=high || true
+
+      - name: Verify no secrets in bundle
+        run: |
+          cd packages/extension/dist
+          ! grep -r "MIDNIGHT_GH_TOKEN\|API_KEY\|SECRET" . --include="*.js" || exit 1
+
+      - name: Check bundle size
+        run: |
+          cd packages/extension
+          du -sh dist/
+          BUNDLE_SIZE=$(du -sb dist/ | cut -f1)
+          if [ $BUNDLE_SIZE -gt 5242880 ]; then
+            echo "Warning: Bundle size exceeds 5MB"
+          fi
+
+      - name: Create extension zip
+        run: |
+          cd packages/extension
+          zip -r extension.zip dist/
+
+      - name: Upload extension artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: midnight-wallet-extension
+          path: packages/extension/extension.zip
+          retention-days: 30
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: packages/extension/extension.zip
+          body: |
+            ## Midnight Wallet Extension Release
+
+            ### Installation
+            1. Download `extension.zip`
+            2. Extract to a folder
+            3. Go to `chrome://extensions`
+            4. Enable "Developer mode"
+            5. Click "Load unpacked"
+            6. Select the extracted folder
+
+            ### Changes
+            See [CHANGELOG.md](./packages/extension/CHANGELOG.md) for details.
+          draft: false
+          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') }}
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run security audit
+        run: |
+          cd packages/extension
+          npm audit --json > audit-report.json || true
+          cat audit-report.json
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-audit-report
+          path: packages/extension/audit-report.json
+          retention-days: 30

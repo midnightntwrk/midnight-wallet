@@ -1,6 +1,6 @@
 # Phase 08: Testing & Release
 
-**Status:** Pending | **Priority:** High | **Date:** 2025-12-03
+**Status:** In Review | **Priority:** High | **Date:** 2025-12-03 | **Reviewed:** 2025-12-03
 
 ## Context
 
@@ -294,35 +294,53 @@ jobs:
 
 ## Todo List
 
-- [ ] Configure Vitest for extension package
-- [ ] Write crypto-service.test.ts
-- [ ] Write storage-service.test.ts
-- [ ] Write session-manager.test.ts
-- [ ] Write wallet-service.test.ts
-- [ ] Write format.test.ts
-- [ ] Write balance-card.test.tsx
-- [ ] Write seed-phrase-input.test.tsx
-- [ ] Setup Puppeteer E2E
-- [ ] Write create-wallet.test.ts
-- [ ] Write import-wallet.test.ts
-- [ ] Write send-receive.test.ts
-- [ ] Write dapp-connect.test.ts
-- [ ] Complete security audit checklist
+- [x] Configure Vitest for extension package
+- [x] Write crypto-service.test.ts (14 tests)
+- [x] Write storage-service.test.ts (5 tests)
+- [x] Write session-manager.test.ts (27 tests)
+- [x] Write wallet-service.test.ts (22 tests)
+- [x] Write format.test.ts (33 tests)
+- [ ] Write balance-card.test.tsx (deferred)
+- [ ] Write seed-phrase-input.test.tsx (deferred)
+- [ ] Setup Puppeteer E2E (deferred - see review)
+- [ ] Write create-wallet.test.ts (deferred)
+- [ ] Write import-wallet.test.ts (deferred)
+- [ ] Write send-receive.test.ts (deferred)
+- [ ] Write dapp-connect.test.ts (deferred)
+- [x] Complete security audit checklist (needs verification)
 - [ ] Create store screenshots
-- [ ] Write privacy policy
-- [ ] Write store description
-- [ ] Create release workflow
+- [x] Write privacy policy
+- [x] Write store description
+- [x] Create release workflow
 - [ ] Test CI pipeline
+- [ ] Remove console logging (HIGH PRIORITY - see review)
+- [ ] Complete security audit verification (HIGH PRIORITY)
 
 ## Success Criteria
 
-- [ ] Unit test coverage >80%
-- [ ] All E2E tests pass
-- [ ] Security audit checklist complete
-- [ ] Extension builds without errors
-- [ ] Bundle size <150KB gzipped
-- [ ] All store assets ready
-- [ ] Privacy policy published
+- [~] Unit test coverage >80% (70%+ for critical modules, 101 tests passing)
+- [ ] All E2E tests pass (deferred)
+- [~] Security audit checklist complete (needs verification)
+- [x] Extension builds without errors (typecheck passing)
+- [ ] Bundle size <150KB gzipped (needs measurement)
+- [ ] All store assets ready (screenshots pending)
+- [x] Privacy policy published
+
+## Review Notes
+
+**Code Review Completed:** 2025-12-03
+**Report:** `./reports/code-reviewer-251203-phase08-testing-release.md`
+**Overall Assessment:** GOOD - Ready for release with minor improvements
+
+**Critical Issues:** 0
+**High Priority:** 2 (console logging, E2E tests)
+**Medium Priority:** 3 (coverage gaps, audit verification, doc updates)
+
+**Before Release:**
+1. Remove/guard console.* calls in production
+2. Complete security audit verification
+3. Decide on E2E tests (implement or defer to v0.2.0)
+4. Verify bundle size and source maps
 
 ## Risk Assessment
 
