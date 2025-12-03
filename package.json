@@ -35,9 +35,11 @@
     "vite": "^7.1.11"
   },
   "scripts": {
-    "format": "turbo run format",
-    "format:check": "turbo run format:check",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\" && turbo run format",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\" && turbo run format:check",
     "verify": "turbo run verify",
+    "verify:check": "turbo run verify:check",
+    "verify:test": "turbo run verify:test",
     "publint": "turbo run publint",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

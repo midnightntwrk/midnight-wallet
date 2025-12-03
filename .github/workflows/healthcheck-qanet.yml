@@ -3,7 +3,7 @@ name: Healthcheck - qanet
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: '0 7 * * *'
 
 permissions: {}
 
@@ -14,5 +14,5 @@ jobs:
     with:
       network: devnet
       deployment: qanet
-      modifier: "-t @healthcheck"
+      modifier: '-t @healthcheck'
     secrets: inherit

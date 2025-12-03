@@ -144,7 +144,7 @@ namespace Effect {
     class SubscriptionRef
 }
 
-note for CapabilityA "This is a shared capability interface. 
+note for CapabilityA "This is a shared capability interface.
 E.g. something as foundational as balances"
 namespace CommonCapabilities {
     class CapabilityA~State~ {
@@ -158,7 +158,7 @@ namespace CommonCapabilities {
     }
 }
 
-note for CapabilityC "This is a variant-specific 
+note for CapabilityC "This is a variant-specific
 capability declaration"
 namespace AVariant {
     class CapabilityC {
