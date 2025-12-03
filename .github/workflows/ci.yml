@@ -132,6 +132,9 @@ jobs:
           name: build-artifacts-${{ github.run_id }}
           path: .
 
+      # The following 3 steps are the equivalent of running `yarn verify:check`/`turbo verify:check`
+      # They are separated into 3 steps to give better visibility of the errors in the ci.
+      # Future changes to verify:check should be reflected in these steps.
       - name: Run typecheck
         run: yarn typecheck
 
@@ -355,10 +358,3 @@ jobs:
 
       - name: Run publint
         run: yarn publint
-
-      - name: Save turbo cache
-        if: always()
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
