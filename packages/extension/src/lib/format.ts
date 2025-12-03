@@ -17,10 +17,28 @@ export function formatAmount(value: string | bigint, decimals = DECIMALS): strin
   return `${integerPart}.${trimmedFractional}`
 }
 
+const MAX_SAFE_AMOUNT = BigInt('9999999999999999999999')
+
 export function parseAmount(value: string, decimals = DECIMALS): bigint {
-  const [integerPart, fractionalPart = ''] = value.split('.')
+  const sanitized = value.replace(/[^0-9.]/g, '')
+  if (!sanitized || sanitized === '.') {
+    return BigInt(0)
+  }
+
+  const [integerPart = '0', fractionalPart = ''] = sanitized.split('.')
+
+  if (integerPart.length > 20) {
+    throw new Error('Amount too large')
+  }
+
   const paddedFractional = fractionalPart.padEnd(decimals, '0').slice(0, decimals)
-  return BigInt(integerPart + paddedFractional)
+  const result = BigInt((integerPart || '0') + paddedFractional)
+
+  if (result > MAX_SAFE_AMOUNT) {
+    throw new Error('Amount exceeds maximum allowed value')
+  }
+
+  return result
 }
 
 export function formatAmountWithSymbol(value: string | bigint, symbol = TOKEN_SYMBOL): string {
@@ -67,5 +85,5 @@ export function formatRelativeTime(timestamp: number): string {
 }
 
 export function isValidMidnightAddress(address: string): boolean {
-  return address.startsWith('midnight1') && address.length >= 40 && address.length <= 100
+  return address.startsWith('mn_dust_') && address.length >= 40 && address.length <= 120
 }

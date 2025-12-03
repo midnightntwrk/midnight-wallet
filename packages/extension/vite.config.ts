@@ -1,5 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
+import wasm from 'vite-plugin-wasm';
+import topLevelAwait from 'vite-plugin-top-level-await';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { resolve } from 'path';
 import { rename, mkdir, copyFile } from 'fs/promises';
 import { build } from 'vite';
@@ -59,7 +62,17 @@ function buildInjectedPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), moveHtmlPlugin(), buildInjectedPlugin()],
+  plugins: [
+    nodePolyfills({
+      include: ['buffer', 'process', 'util', 'stream'],
+      globals: { Buffer: true, process: true },
+    }),
+    wasm(),
+    topLevelAwait(),
+    react(),
+    moveHtmlPlugin(),
+    buildInjectedPlugin(),
+  ],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),

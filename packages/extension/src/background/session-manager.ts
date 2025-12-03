@@ -35,7 +35,7 @@ function recordUnlockAttempt(walletId: string): void {
 }
 
 export function isUnlocked(): boolean {
-  if (!currentSession) return false
+  if (!currentSession || !decryptedSeed) return false
   return Date.now() < currentSession.expiresAt
 }
 

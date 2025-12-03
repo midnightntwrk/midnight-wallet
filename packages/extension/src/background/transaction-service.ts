@@ -1,10 +1,12 @@
 import { getDecryptedSeed, isUnlocked, refreshSession } from './session-manager'
 import { deriveAccount } from './wallet-service'
+import { checkIndexerConnection } from './indexer-client'
 
 export interface Balances {
   shielded: string
   unshielded: string
   dust: string
+  synced: boolean
 }
 
 export interface Transaction {
@@ -27,6 +29,9 @@ export interface SendTransactionParams {
 let balanceCache: { address: string; balances: Balances; timestamp: number } | null = null
 const CACHE_TTL = 30000
 
+let lastSendTimestamp = 0
+const SEND_RATE_LIMIT_MS = 2000
+
 export async function getBalances(address: string): Promise<Balances> {
   if (balanceCache && balanceCache.address === address) {
     if (Date.now() - balanceCache.timestamp < CACHE_TTL) {
@@ -34,10 +39,17 @@ export async function getBalances(address: string): Promise<Balances> {
     }
   }
 
+  const isConnected = await checkIndexerConnection()
+
   const balances: Balances = {
-    shielded: '12550000000',
-    unshielded: '500000000',
-    dust: '25000000',
+    shielded: '0',
+    unshielded: '0',
+    dust: '0',
+    synced: false,
+  }
+
+  if (!isConnected) {
+    return balances
   }
 
   balanceCache = { address, balances, timestamp: Date.now() }
@@ -45,6 +57,11 @@ export async function getBalances(address: string): Promise<Balances> {
 }
 
 export async function sendTransaction(params: SendTransactionParams): Promise<string> {
+  const now = Date.now()
+  if (now - lastSendTimestamp < SEND_RATE_LIMIT_MS) {
+    throw new Error('Please wait before sending another transaction')
+  }
+
   if (!isUnlocked()) {
     throw new Error('Wallet is locked')
   }
@@ -56,7 +73,7 @@ export async function sendTransaction(params: SendTransactionParams): Promise<st
     throw new Error('Could not access seed')
   }
 
-  if (!params.to || !params.to.startsWith('midnight1')) {
+  if (!params.to || !params.to.startsWith('mn_dust_')) {
     throw new Error('Invalid recipient address')
   }
 
@@ -64,42 +81,19 @@ export async function sendTransaction(params: SendTransactionParams): Promise<st
     throw new Error('Invalid amount')
   }
 
+  lastSendTimestamp = now
+
   const txHash = `0x${Array.from({ length: 64 }, () =>
     Math.floor(Math.random() * 16).toString(16)
   ).join('')}`
 
+  clearBalanceCache()
+
   return txHash
 }
 
-export async function getTransactionHistory(address: string): Promise<Transaction[]> {
-  const now = Date.now()
-
-  return [
-    {
-      hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
-      type: 'sent',
-      amount: '2500000000',
-      address: 'midnight1x7k3f9876543210abcdef',
-      timestamp: now - 3600000,
-      status: 'confirmed',
-    },
-    {
-      hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
-      type: 'received',
-      amount: '10000000000',
-      address: 'midnight1a9m2p1234567890abcdef',
-      timestamp: now - 86400000,
-      status: 'confirmed',
-    },
-    {
-      hash: '0x567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234',
-      type: 'received',
-      amount: '500000000',
-      address: 'midnight1qwerty1234567890abcdef',
-      timestamp: now - 172800000,
-      status: 'confirmed',
-    },
-  ]
+export async function getTransactionHistory(_address: string): Promise<Transaction[]> {
+  return []
 }
 
 export async function getCurrentAddress(): Promise<string> {

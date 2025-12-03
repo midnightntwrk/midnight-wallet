@@ -96,6 +96,7 @@ export interface Balances {
   shielded: string
   unshielded: string
   dust: string
+  synced: boolean
 }
 
 export interface Transaction {

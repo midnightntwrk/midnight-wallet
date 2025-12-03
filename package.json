@@ -48,5 +48,10 @@
     "changeset:version": "yarn changeset version && yarn install --mode=update-lockfile",
     "changeset:check": "yarn changeset status --since=origin/main --verbose",
     "clean": "turbo run clean"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/compact-runtime": "^0.9.0",
+    "@midnight-ntwrk/ledger": "^4.0.0",
+    "@midnight-ntwrk/zswap": "^4.0.0"
   }
 }

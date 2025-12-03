@@ -21,13 +21,17 @@ export function ReceivePage() {
       try {
         const walletAddress = await getAddress()
         setAddress(walletAddress)
-      } catch {
+      } catch (err) {
+        const message = err instanceof Error ? err.message.toLowerCase() : ''
+        if (message.includes('locked') || message.includes('seed')) {
+          navigate('/unlock', { replace: true })
+        }
       } finally {
         setIsLoading(false)
       }
     }
     loadAddress()
-  }, [address, setAddress])
+  }, [address, setAddress, navigate])
 
   async function handleCopy() {
     if (!address) return

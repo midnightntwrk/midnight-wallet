@@ -27,10 +27,15 @@ export function SendPage() {
         const address = await getAddress()
         const balanceData = await getBalances(address)
         setBalance(balanceData)
-      } catch {}
+      } catch (err) {
+        const message = err instanceof Error ? err.message.toLowerCase() : ''
+        if (message.includes('locked') || message.includes('seed')) {
+          navigate('/unlock', { replace: true })
+        }
+      }
     }
     if (!balance) loadBalance()
-  }, [balance, setBalance])
+  }, [balance, setBalance, navigate])
 
   const availableBalance = balance
     ? txType === 'shielded'
@@ -107,7 +112,12 @@ export function SendPage() {
       const newBalance = await getBalances(address)
       setBalance(newBalance)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Transaction failed')
+      const message = err instanceof Error ? err.message : 'Transaction failed'
+      if (message.toLowerCase().includes('locked') || message.toLowerCase().includes('seed')) {
+        navigate('/unlock', { replace: true })
+        return
+      }
+      setError(message)
     } finally {
       setSending(false)
     }

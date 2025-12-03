@@ -9,6 +9,7 @@ export interface NetworkConfig {
   id: NetworkType
   name: string
   indexerUrl: string
+  indexerWsUrl: string
   proverUrl: string
   nodeUrl: string
 }
@@ -17,16 +18,18 @@ export const NETWORKS: Record<NetworkType, NetworkConfig> = {
   mainnet: {
     id: 'mainnet',
     name: 'Mainnet',
-    indexerUrl: 'https://indexer.midnight.network',
+    indexerUrl: 'https://indexer.midnight.network/api/v1/graphql',
+    indexerWsUrl: 'wss://indexer.midnight.network/api/v1/graphql/ws',
     proverUrl: 'https://prover.midnight.network',
     nodeUrl: 'https://node.midnight.network',
   },
   testnet: {
     id: 'testnet',
     name: 'Testnet',
-    indexerUrl: 'https://indexer.testnet.midnight.network',
-    proverUrl: 'https://prover.testnet.midnight.network',
-    nodeUrl: 'https://node.testnet.midnight.network',
+    indexerUrl: 'https://indexer.testnet-02.midnight.network/api/v1/graphql',
+    indexerWsUrl: 'wss://indexer.testnet-02.midnight.network/api/v1/graphql/ws',
+    proverUrl: 'https://lace-dev.proof-pub.stg.midnight.tools',
+    nodeUrl: 'https://rpc.testnet-02.midnight.network',
   },
 }
 

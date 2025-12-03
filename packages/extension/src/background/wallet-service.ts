@@ -1,6 +1,11 @@
 import * as bip39 from '@scure/bip39'
 import { wordlist as english } from '@scure/bip39/wordlists/english'
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd'
+import { ZswapSecretKeys } from '@midnight-ntwrk/ledger-v6'
+import {
+  ShieldedAddress,
+  ShieldedCoinPublicKey,
+  ShieldedEncryptionPublicKey,
+} from '@midnight-ntwrk/wallet-sdk-address-format'
 import { encryptSeed } from './crypto-service'
 import {
   saveWallet,
@@ -8,6 +13,9 @@ import {
   generateWalletId,
 } from './storage-service'
 import type { EncryptedWallet } from './types'
+
+const NETWORK_ID = 'test'
+const ENCRYPTION_PK_PREFIX = Buffer.from([0x03, 0x00])
 
 export function generateMnemonic(): string[] {
   const mnemonic = bip39.generateMnemonic(english, 256)
@@ -22,6 +30,13 @@ export function validateMnemonic(words: string[]): boolean {
 export async function mnemonicToSeed(words: string[]): Promise<Uint8Array> {
   const mnemonic = words.join(' ')
   return bip39.mnemonicToSeed(mnemonic)
+}
+
+export async function mnemonicToSeedHex(words: string[]): Promise<string> {
+  const mnemonic = words.join(' ')
+  const fullSeed = await bip39.mnemonicToSeed(mnemonic)
+  const seed32 = fullSeed.slice(0, 32)
+  return Buffer.from(seed32).toString('hex')
 }
 
 export async function createWallet(
@@ -74,31 +89,32 @@ export async function importWallet(
 
 export async function deriveAccount(
   seedPhrase: string,
-  accountIndex: number
-): Promise<{ address: string; publicKey: Uint8Array }> {
+  _accountIndex: number
+): Promise<{ address: string; coinPublicKey: string; encryptionPublicKey: string }> {
   const words = seedPhrase.split(' ')
-  const seed = await mnemonicToSeed(words)
+  const fullSeed = await bip39.mnemonicToSeed(words.join(' '))
+  const seed32 = fullSeed.slice(0, 32)
 
-  const result = HDWallet.fromSeed(seed)
-  if (result.type !== 'seedOk') {
-    throw new Error('Failed to create HD wallet from seed')
+  const zswapSecretKeys = ZswapSecretKeys.fromSeed(seed32)
+
+  const coinPublicKey = new ShieldedCoinPublicKey(
+    Buffer.from(zswapSecretKeys.coinPublicKey, 'hex')
+  )
+
+  const encryptionPKWithPrefix = Buffer.concat([
+    ENCRYPTION_PK_PREFIX,
+    Buffer.from(zswapSecretKeys.encryptionPublicKey, 'hex')
+  ])
+  const encryptionPublicKey = new ShieldedEncryptionPublicKey(encryptionPKWithPrefix)
+
+  const shieldedAddress = new ShieldedAddress(coinPublicKey, encryptionPublicKey)
+  const address = ShieldedAddress.codec.encode(NETWORK_ID, shieldedAddress).asString()
+
+  return {
+    address,
+    coinPublicKey: zswapSecretKeys.coinPublicKey,
+    encryptionPublicKey: zswapSecretKeys.encryptionPublicKey,
   }
-
-  const hdWallet = result.hdWallet
-  const accountKey = hdWallet.selectAccount(accountIndex)
-  const roleKey = accountKey.selectRole(Roles.NightExternal)
-  const derivation = roleKey.deriveKeyAt(0)
-
-  if (derivation.type !== 'keyDerived') {
-    throw new Error('Failed to derive key')
-  }
-
-  const publicKey = derivation.key
-  const address = formatAddress(publicKey)
-
-  hdWallet.clear()
-
-  return { address, publicKey }
 }
 
 export async function deriveMultipleAccounts(
@@ -113,13 +129,6 @@ export async function deriveMultipleAccounts(
   }
 
   return accounts
-}
-
-function formatAddress(publicKey: Uint8Array): string {
-  const hex = Array.from(publicKey)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('')
-  return `0x${hex}`
 }
 
 export async function exportSeed(
