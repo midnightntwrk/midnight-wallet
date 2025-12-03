@@ -2,6 +2,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useWalletStore } from '@/store/wallet-store'
 import { Home, Send, QrCode, Settings, Moon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Toast } from '@/components/ui/toast'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 
 function Header() {
   const { activeWallet } = useWalletStore()
@@ -31,6 +33,8 @@ function TabNav() {
     { path: '/settings', icon: Settings, label: 'Settings' },
   ]
 
+  const isSettingsSubPage = location.pathname.startsWith('/settings/')
+
   return (
     <nav className="flex items-center justify-around border-t border-slate-100 bg-white">
       {tabs.map(({ path, icon: Icon, label }) => (
@@ -39,7 +43,7 @@ function TabNav() {
           onClick={() => navigate(path)}
           className={cn(
             'flex flex-col items-center py-2 px-4 text-xs transition-colors',
-            location.pathname === path
+            (location.pathname === path || (path === '/settings' && isSettingsSubPage))
               ? 'text-indigo-600'
               : 'text-slate-400 hover:text-slate-600'
           )}
@@ -56,15 +60,20 @@ export function MainLayout() {
   const { isUnlocked } = useWalletStore()
   const location = useLocation()
 
-  const showNav = isUnlocked && location.pathname !== '/unlock'
+  const hiddenNavPaths = ['/unlock', '/welcome', '/create-wallet', '/import-wallet', '/backup-seed', '/confirm-seed', '/set-password']
+  const isApprovalPage = location.pathname.startsWith('/approve/')
+  const showNav = isUnlocked && !hiddenNavPaths.includes(location.pathname) && !isApprovalPage
 
   return (
     <div className="w-[360px] h-[600px] bg-white flex flex-col overflow-hidden">
       <Header />
       <main className="flex-1 overflow-y-auto">
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
       {showNav && <TabNav />}
+      <Toast />
     </div>
   )
 }

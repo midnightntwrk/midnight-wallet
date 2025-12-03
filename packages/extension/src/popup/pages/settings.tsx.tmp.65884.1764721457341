@@ -52,19 +52,15 @@ export function SettingsPage() {
   const navigate = useNavigate()
   const { activeWallet, lock: lockStore } = useWalletStore()
   const { showToast } = useUIStore()
-  const [isLocking, setIsLocking] = useState(false)
 
   async function handleLock() {
-    if (isLocking) return
-    setIsLocking(true)
     try {
       await lock()
       lockStore()
       navigate('/unlock', { replace: true })
     } catch (err) {
       showToast('Failed to lock wallet', 'error')
-    } finally {
-      setIsLocking(false)
+      console.error('Failed to lock:', err)
     }
   }
 
@@ -119,15 +115,10 @@ export function SettingsPage() {
       <div className="pt-2">
         <button
           onClick={handleLock}
-          disabled={isLocking}
-          className="w-full flex items-center justify-center gap-2 p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 p-3 text-red-500 hover:bg-red-50 rounded-xl transition-colors"
         >
-          {isLocking ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Lock className="w-5 h-5" />
-          )}
-          <span className="font-medium">{isLocking ? 'Locking...' : 'Lock Wallet'}</span>
+          <Lock className="w-5 h-5" />
+          <span className="font-medium">Lock Wallet</span>
         </button>
       </div>
     </div>

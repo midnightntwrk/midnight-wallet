@@ -5,6 +5,8 @@ import { HomePage } from './pages/home'
 import { SendPage } from './pages/send'
 import { ReceivePage } from './pages/receive'
 import { SettingsPage } from './pages/settings'
+import { ConnectedDappsPage } from './pages/settings/connected-dapps'
+import { ExportSeedPage } from './pages/settings/export-seed'
 import { WelcomePage } from './pages/onboarding/welcome'
 import { CreateWalletPage } from './pages/onboarding/create-wallet'
 import { ImportWalletPage } from './pages/onboarding/import-wallet'
@@ -36,6 +38,8 @@ export const router = createMemoryRouter([
       { path: 'send', element: <SendPage /> },
       { path: 'receive', element: <ReceivePage /> },
       { path: 'settings', element: <SettingsPage /> },
+      { path: 'settings/connected-dapps', element: <ConnectedDappsPage /> },
+      { path: 'settings/export-seed', element: <ExportSeedPage /> },
       { path: 'welcome', element: <WelcomePage /> },
       { path: 'create-wallet', element: <CreateWalletPage /> },
       { path: 'import-wallet', element: <ImportWalletPage /> },

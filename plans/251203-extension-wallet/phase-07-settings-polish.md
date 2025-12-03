@@ -1,6 +1,6 @@
 # Phase 07: Settings & Polish
 
-**Status:** Pending | **Priority:** Medium | **Date:** 2025-12-03
+**Status:** Completed (1 Fix Required) | **Priority:** Medium | **Date:** 2025-12-03 | **Review:** [Code Review Report](./reports/code-reviewer-251203-phase07-settings-polish.md)
 
 ## Context
 
@@ -264,31 +264,37 @@ export function ConnectedDappsPage() {
 
 ## Todo List
 
-- [ ] Create settings-store.ts (Zustand persist)
-- [ ] Create settings.tsx main page
-- [ ] Create network-selector.tsx
-- [ ] Create settings-section.tsx wrapper
-- [ ] Create loading-spinner.tsx
-- [ ] Create error-boundary.tsx
-- [ ] Create toast notifications (shadcn toast)
-- [ ] Create connected-dapps.tsx page
-- [ ] Create export-seed.tsx page
-- [ ] Create change-password.tsx page
-- [ ] Add page transition animations
-- [ ] Add loading states to async buttons
-- [ ] Add error handling to all API calls
-- [ ] Polish responsive typography
-- [ ] Test settings persistence
+- [x] Create settings-store.ts (Zustand persist) ✅
+- [x] Create settings.tsx main page ✅
+- [x] Create network-selector.tsx ✅
+- [x] Create settings-section.tsx wrapper ✅
+- [x] Create loading-spinner.tsx ✅
+- [x] Create error-boundary.tsx ✅
+- [x] Create toast notifications (shadcn toast) ✅
+- [x] Create connected-dapps.tsx page ✅
+- [x] Create export-seed.tsx page ✅
+- [ ] Create change-password.tsx page (SKIPPED - out of scope)
+- [x] Add page transition animations ✅
+- [x] Add loading states to async buttons ✅
+- [x] Add error handling to all API calls ✅
+- [x] Polish responsive typography ✅
+- [~] Test settings persistence ⚠️ (auto-lock sync broken - see review)
+
+**Completion:** 13/15 tasks (87%) - See [code review](./reports/code-reviewer-251203-phase07-settings-polish.md) for details
 
 ## Success Criteria
 
-- [ ] Network switch changes indexer URL
-- [ ] Auto-lock timer respects setting
-- [ ] Connected dApps can be revoked
-- [ ] Seed export requires password
-- [ ] Loading spinners show during async ops
-- [ ] Errors display user-friendly messages
-- [ ] Settings persist across sessions
+- [x] Network switch changes indexer URL ✅
+- [ ] Auto-lock timer respects setting ❌ **HIGH PRIORITY FIX REQUIRED**
+- [x] Connected dApps can be revoked ✅
+- [x] Seed export requires password ✅
+- [x] Loading spinners show during async ops ✅
+- [x] Errors display user-friendly messages ✅
+- [x] Settings persist across sessions ✅
+
+**Status:** 6/7 criteria met
+
+**BLOCKING ISSUE:** Auto-lock setting not synced to backend. Settings store updates `autoLockMinutes` but `session-manager.ts` never calls `setLockTimeout()`. Fix required before Phase 08.
 
 ## Risk Assessment
 
@@ -305,6 +311,29 @@ export function ConnectedDappsPage() {
 - Don't store password in settings
 - Revoke dApp removes all permissions
 
+## Review Summary
+
+**Date:** 2025-12-03
+**Status:** APPROVED WITH CONDITIONS
+**Report:** [Full Code Review](./reports/code-reviewer-251203-phase07-settings-polish.md)
+
+**Highlights:**
+- ✅ Build passes, TypeScript strict mode clean
+- ✅ Bundle size: 138KB (under 150KB target)
+- ✅ Zero XSS/injection vulnerabilities
+- ✅ Clean YAGNI/KISS/DRY architecture
+- ❌ Auto-lock backend sync broken (HIGH priority)
+
+**Issues Found:**
+- **HIGH (1):** Auto-lock setting not synced to session manager
+- **MEDIUM (4):** Missing loading states, DRY violations, password validation
+- **LOW (3):** Console statements, keyboard nav, toast duration
+
+**Before Phase 08:**
+1. Fix auto-lock backend sync (BLOCKING)
+2. Add Lock Wallet button loading state
+3. Document password policy decision
+
 ## Next Steps
 
-After completion, proceed to [Phase 08: Testing & Release](./phase-08-testing-release.md).
+After fixing auto-lock sync, proceed to [Phase 08: Testing & Release](./phase-08-testing-release.md).

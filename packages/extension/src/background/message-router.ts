@@ -20,6 +20,8 @@ import {
   isUnlocked,
   refreshSession,
   getDecryptedSeed,
+  setLockTimeout,
+  getLockTimeout,
 } from './session-manager'
 import {
   generateMnemonic,
@@ -36,7 +38,7 @@ import {
   type Transaction,
   type SendTransactionParams,
 } from './transaction-service'
-import { handleDappRequest, type DappRequest } from './dapp-handler'
+import { handleDappRequest, revokeOrigin, getApprovedOrigins, type DappRequest } from './dapp-handler'
 
 const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'PING',
@@ -57,6 +59,10 @@ const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'GET_BALANCES',
   'GET_TX_HISTORY',
   'SEND_TRANSACTION',
+  'GET_CONNECTED_DAPPS',
+  'REVOKE_DAPP',
+  'SET_AUTO_LOCK',
+  'GET_AUTO_LOCK',
 ]
 
 function isValidMessageType(type: unknown): type is MessageType {
@@ -419,6 +425,51 @@ async function handleSendTransaction(
   }
 }
 
+async function handleGetConnectedDapps(): Promise<MessageResponse<string[]>> {
+  try {
+    const origins = await getApprovedOrigins()
+    return { success: true, data: origins }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to get connected dApps',
+    }
+  }
+}
+
+async function handleRevokeDapp(payload: {
+  origin: string
+}): Promise<MessageResponse> {
+  if (!payload.origin) {
+    return { success: false, error: 'Origin is required' }
+  }
+
+  try {
+    await revokeOrigin(payload.origin)
+    return { success: true }
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Failed to revoke dApp',
+    }
+  }
+}
+
+async function handleSetAutoLock(payload: {
+  minutes: number
+}): Promise<MessageResponse> {
+  if (typeof payload.minutes !== 'number' || payload.minutes < 1 || payload.minutes > 60) {
+    return { success: false, error: 'Invalid auto-lock timeout (1-60 minutes)' }
+  }
+
+  setLockTimeout(payload.minutes)
+  return { success: true }
+}
+
+async function handleGetAutoLock(): Promise<MessageResponse<number>> {
+  return { success: true, data: getLockTimeout() }
+}
+
 export async function handleMessage(
   message: { type: MessageType; payload?: unknown } | DappRequest,
   sender: chrome.runtime.MessageSender
@@ -495,6 +546,18 @@ export async function handleMessage(
 
     case 'SEND_TRANSACTION':
       return handleSendTransaction(payload as unknown as SendTransactionParams)
+
+    case 'GET_CONNECTED_DAPPS':
+      return handleGetConnectedDapps()
+
+    case 'REVOKE_DAPP':
+      return handleRevokeDapp(payload as { origin: string })
+
+    case 'SET_AUTO_LOCK':
+      return handleSetAutoLock(payload as { minutes: number })
+
+    case 'GET_AUTO_LOCK':
+      return handleGetAutoLock()
 
     default:
       return { success: false, error: 'Unknown message type' }
