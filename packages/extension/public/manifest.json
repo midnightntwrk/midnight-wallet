@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Midnight Wallet",
+  "name": "Nocturne Wallet",
   "version": "0.1.0",
-  "description": "Secure wallet for Midnight Network - Privacy-first transactions with zero-knowledge proofs",
+  "description": "Nocturne - Secure wallet for Midnight Network with privacy-first transactions and zero-knowledge proofs",
   "permissions": ["storage"],
   "action": {
     "default_popup": "popup/index.html",

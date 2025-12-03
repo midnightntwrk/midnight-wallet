@@ -11,6 +11,19 @@ import { ImportWalletPage } from './pages/onboarding/import-wallet'
 import { BackupSeedPage } from './pages/onboarding/backup-seed'
 import { ConfirmSeedPage } from './pages/onboarding/confirm-seed'
 import { SetPasswordPage } from './pages/onboarding/set-password'
+import {
+  ApproveConnectionPage,
+  ApproveTransactionPage,
+  ApproveMessagePage,
+} from './pages/approve'
+
+function getInitialRoute(): string {
+  const hash = window.location.hash
+  if (hash.includes('/approve/')) {
+    return hash.replace('#', '')
+  }
+  return '/unlock'
+}
 
 export const router = createMemoryRouter([
   {
@@ -29,6 +42,11 @@ export const router = createMemoryRouter([
       { path: 'backup-seed', element: <BackupSeedPage /> },
       { path: 'confirm-seed', element: <ConfirmSeedPage /> },
       { path: 'set-password', element: <SetPasswordPage /> },
+      { path: 'approve/connect', element: <ApproveConnectionPage /> },
+      { path: 'approve/transaction', element: <ApproveTransactionPage /> },
+      { path: 'approve/message', element: <ApproveMessagePage /> },
     ],
   },
-])
+], {
+  initialEntries: [getInitialRoute()],
+})

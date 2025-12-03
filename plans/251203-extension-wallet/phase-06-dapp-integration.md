@@ -1,6 +1,7 @@
 # Phase 06: dApp Integration
 
-**Status:** Pending | **Priority:** High | **Date:** 2025-12-03
+**Status:** Code Review - CRITICAL SECURITY ISSUES | **Priority:** High | **Date:** 2025-12-03
+**Review Date:** 2025-12-03 | **Security Status:** ❌ BLOCKED - Critical vulnerabilities found
 
 ## Context
 
@@ -268,29 +269,64 @@ export function ApproveConnectionPage() {
 
 ## Todo List
 
-- [ ] Create injected/provider.ts (window.midnight)
-- [ ] Create content/provider-injector.ts
-- [ ] Create content/message-bridge.ts
-- [ ] Create content/index.ts entry
-- [ ] Create background/dapp-handler.ts
-- [ ] Create background/approval-manager.ts
-- [ ] Create approve-connection.tsx page
-- [ ] Create approve-transaction.tsx page
-- [ ] Create approve-message.tsx page
-- [ ] Update manifest.json (content scripts, web resources)
-- [ ] Update vite.config.ts (build injected separately)
-- [ ] Add dApp routes to router
+### Implementation (Complete)
+- [x] Create injected/provider.ts (window.midnight) - **HAS CRITICAL ISSUES**
+- [x] Create content/provider-injector.ts - Done (inline)
+- [x] Create content/message-bridge.ts - Done (inline)
+- [x] Create content/index.ts entry - Done
+- [x] Create background/dapp-handler.ts - **HAS CRITICAL ISSUES**
+- [x] Create background/approval-manager.ts - **HAS RACE CONDITION**
+- [x] Create approve-connection.tsx page - **HAS URL PARSING ISSUE**
+- [x] Create approve-transaction.tsx page - **HAS URL PARSING ISSUE**
+- [x] Create approve-message.tsx page - **HAS URL PARSING ISSUE**
+- [x] Update manifest.json (content scripts, web resources) - Done
+- [x] Update vite.config.ts (build injected separately) - Done
+- [x] Add dApp routes to router - Done
+
+### Security Fixes (CRITICAL - Required Before Merge)
+- [ ] **CRITICAL #1:** Fix wildcard postMessage in provider.ts (use window.location.origin)
+- [ ] **CRITICAL #2:** Add try-catch for URL parsing in all approval pages
+- [ ] **CRITICAL #4:** Add transaction validation in dapp-handler.ts
+- [ ] **CRITICAL #5:** Add JSON schema validation for approval data parsing
+- [ ] **HIGH #1:** Fix memory leak in pending requests cleanup
+- [ ] **HIGH #4:** Add sender origin validation in message-router.ts
+- [ ] **CRITICAL #3:** Add nonce-based provider verification (content script)
+- [ ] **CRITICAL #6:** Implement rate limiting for dApp requests
+
+### Testing
 - [ ] Test connection flow E2E
 - [ ] Test transaction signing E2E
+- [ ] Test security: origin spoofing attempts
+- [ ] Test security: malformed message injection
+- [ ] Test memory: rapid requests don't leak
+- [ ] Test race condition: approval window close during approval
 
 ## Success Criteria
 
-- [ ] window.midnight available on all pages
-- [ ] dApp can request connection
-- [ ] Approval popup appears for connect
-- [ ] Connected dApp can get accounts
-- [ ] TX signing shows approval popup
-- [ ] Events fire on account change
+### Functional
+- [x] window.midnight available on all pages
+- [x] dApp can request connection
+- [x] Approval popup appears for connect
+- [x] Connected dApp can get accounts
+- [x] TX signing shows approval popup
+- [ ] Events fire on account change - **NOT IMPLEMENTED**
+
+### Security (CRITICAL)
+- [ ] No wildcard postMessage usage
+- [ ] All URL parsing wrapped in try-catch
+- [ ] Transaction parameters validated
+- [ ] JSON parsing validates schema
+- [ ] Sender origin matches message origin
+- [ ] Rate limiting prevents DoS
+- [ ] No memory leaks in request handling
+- [ ] No race conditions in approval flow
+
+### Code Quality
+- [x] Build succeeds without errors
+- [x] TypeScript compiles cleanly
+- [x] Bundle size acceptable (provider: 1.45KB gzipped)
+- [ ] All critical security issues resolved
+- [ ] E2E tests pass
 
 ## Risk Assessment
 
@@ -308,6 +344,35 @@ export function ApproveConnectionPage() {
 - Rate-limit requests per origin
 - Log all dApp interactions
 
+## Code Review Summary (2025-12-03)
+
+**Review Report:** [code-reviewer-251203-phase06-dapp-integration.md](./reports/code-reviewer-251203-phase06-dapp-integration.md)
+
+### Implementation Status
+- ✅ 12/14 implementation tasks complete (86%)
+- ❌ 6 CRITICAL security vulnerabilities identified
+- ❌ 4 HIGH priority issues found
+- ⚠️ Event emission not implemented (accountsChanged, etc)
+
+### Critical Security Findings
+1. **Wildcard postMessage** - Message interception vulnerability (provider.ts)
+2. **Unvalidated URL parsing** - Crash vector in approval pages
+3. **Insufficient sender validation** - Origin spoofing possible
+4. **Type coercion without validation** - Injection vulnerability
+5. **Unvalidated JSON parsing** - Code injection vector
+6. **No rate limiting** - DoS vulnerability
+
+### Recommended Action
+**❌ DO NOT MERGE** until critical security issues resolved.
+
+**Fix Estimate:** 4-6 hours for critical + high priority issues
+
+**Next Steps:**
+1. Apply security fixes from review report (CRITICAL #1-6, HIGH #1,#4)
+2. Add E2E tests for approval flow
+3. Re-run security review
+4. Then proceed to Phase 07
+
 ## Next Steps
 
-After completion, proceed to [Phase 07: Settings & Polish](./phase-07-settings-polish.md).
+After security fixes and re-review, proceed to [Phase 07: Settings & Polish](./phase-07-settings-polish.md).

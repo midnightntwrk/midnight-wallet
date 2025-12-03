@@ -27,7 +27,6 @@ import {
   createWallet as createWalletService,
   importWallet as importWalletService,
   deriveAccount,
-  exportSeed,
 } from './wallet-service'
 import {
   getBalances,
@@ -37,6 +36,7 @@ import {
   type Transaction,
   type SendTransactionParams,
 } from './transaction-service'
+import { handleDappRequest, type DappRequest } from './dapp-handler'
 
 const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'PING',
@@ -59,28 +59,19 @@ const INTERNAL_MESSAGE_TYPES: MessageType[] = [
   'SEND_TRANSACTION',
 ]
 
-const DAPP_MESSAGE_TYPES: MessageType[] = [
-  'MIDNIGHT_CONNECT',
-  'MIDNIGHT_DISCONNECT',
-  'MIDNIGHT_GET_ACCOUNTS',
-  'MIDNIGHT_SIGN_TRANSACTION',
-  'MIDNIGHT_SEND_TRANSACTION',
-]
-
 function isValidMessageType(type: unknown): type is MessageType {
   if (typeof type !== 'string') return false
-  return (
-    INTERNAL_MESSAGE_TYPES.includes(type as MessageType) ||
-    DAPP_MESSAGE_TYPES.includes(type as MessageType)
-  )
+  return INTERNAL_MESSAGE_TYPES.includes(type as MessageType)
 }
 
 function isValidSender(sender: chrome.runtime.MessageSender): boolean {
   return sender.id === chrome.runtime.id
 }
 
-function isDAppMessage(type: MessageType): boolean {
-  return DAPP_MESSAGE_TYPES.includes(type)
+function isDappRequest(message: unknown): message is DappRequest {
+  if (typeof message !== 'object' || message === null) return false
+  const msg = message as Record<string, unknown>
+  return msg['type'] === 'DAPP_REQUEST' && typeof msg['origin'] === 'string' && typeof msg['method'] === 'string'
 }
 
 async function handlePing(): Promise<MessageResponse> {
@@ -282,43 +273,6 @@ async function handleGetAddress(): Promise<MessageResponse<string>> {
   }
 }
 
-async function handleDAppConnect(): Promise<MessageResponse> {
-  if (!isUnlocked()) {
-    return { success: false, error: 'Wallet is locked' }
-  }
-
-  return { success: true, data: { connected: true } }
-}
-
-async function handleDAppDisconnect(): Promise<MessageResponse> {
-  return { success: true }
-}
-
-async function handleDAppGetAccounts(): Promise<MessageResponse<string[]>> {
-  return handleGetAccounts()
-}
-
-async function handleDAppSignTransaction(payload: {
-  transaction: unknown
-}): Promise<MessageResponse> {
-  return handleSignTransaction(payload)
-}
-
-async function handleDAppSendTransaction(payload: {
-  signedTransaction: unknown
-}): Promise<MessageResponse> {
-  if (!isUnlocked()) {
-    return { success: false, error: 'Wallet is locked' }
-  }
-
-  if (!payload.signedTransaction) {
-    return { success: false, error: 'Missing signedTransaction' }
-  }
-
-  refreshSession()
-  return { success: true, data: { txHash: 'mock_tx_hash' } }
-}
-
 async function handleGenerateMnemonic(): Promise<MessageResponse<string[]>> {
   try {
     const mnemonic = generateMnemonic()
@@ -466,11 +420,15 @@ async function handleSendTransaction(
 }
 
 export async function handleMessage(
-  message: { type: MessageType; payload?: unknown },
+  message: { type: MessageType; payload?: unknown } | DappRequest,
   sender: chrome.runtime.MessageSender
 ): Promise<MessageResponse> {
   if (!isValidSender(sender)) {
     return { success: false, error: 'Invalid sender' }
+  }
+
+  if (isDappRequest(message)) {
+    return handleDappRequest(message)
   }
 
   if (!isValidMessageType(message.type)) {
@@ -537,23 +495,6 @@ export async function handleMessage(
 
     case 'SEND_TRANSACTION':
       return handleSendTransaction(payload as unknown as SendTransactionParams)
-
-    case 'MIDNIGHT_CONNECT':
-      return handleDAppConnect()
-
-    case 'MIDNIGHT_DISCONNECT':
-      return handleDAppDisconnect()
-
-    case 'MIDNIGHT_GET_ACCOUNTS':
-      return handleDAppGetAccounts()
-
-    case 'MIDNIGHT_SIGN_TRANSACTION':
-      return handleDAppSignTransaction(payload as { transaction: unknown })
-
-    case 'MIDNIGHT_SEND_TRANSACTION':
-      return handleDAppSendTransaction(
-        payload as { signedTransaction: unknown }
-      )
 
     default:
       return { success: false, error: 'Unknown message type' }

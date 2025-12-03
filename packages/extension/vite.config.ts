@@ -1,7 +1,8 @@
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
-import { rename, mkdir } from 'fs/promises';
+import { rename, mkdir, copyFile } from 'fs/promises';
+import { build } from 'vite';
 
 function moveHtmlPlugin(): Plugin {
   return {
@@ -18,8 +19,47 @@ function moveHtmlPlugin(): Plugin {
   };
 }
 
+function buildInjectedPlugin(): Plugin {
+  return {
+    name: 'build-injected',
+    closeBundle: async () => {
+      try {
+        await mkdir(resolve(__dirname, 'dist/injected'), { recursive: true });
+
+        await build({
+          configFile: false,
+          build: {
+            outDir: resolve(__dirname, 'dist/injected'),
+            emptyOutDir: false,
+            lib: {
+              entry: resolve(__dirname, 'src/injected/provider.ts'),
+              formats: ['iife'],
+              name: 'MidnightProvider',
+              fileName: () => 'provider.js',
+            },
+            rollupOptions: {
+              output: {
+                inlineDynamicImports: true,
+              },
+            },
+            minify: 'esbuild',
+            sourcemap: false,
+          },
+          resolve: {
+            alias: {
+              '@': resolve(__dirname, 'src'),
+            },
+          },
+        });
+      } catch (err) {
+        console.error('Failed to build injected script:', err);
+      }
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), moveHtmlPlugin()],
+  plugins: [react(), moveHtmlPlugin(), buildInjectedPlugin()],
   resolve: {
     alias: {
       '@': resolve(__dirname, 'src'),
