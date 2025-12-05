@@ -221,7 +221,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    currentTime: Date,
+    currentTime: Date | undefined,
     ttl: Date,
   ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {

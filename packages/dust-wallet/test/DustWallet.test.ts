@@ -289,7 +289,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('should allow to spend Dust tokens', async () => {
+  it('should allow spending Dust tokens', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
