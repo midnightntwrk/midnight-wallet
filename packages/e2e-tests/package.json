@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@cardano-sdk/key-management": "0.29.11",
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
+    "@midnight-ntwrk/ledger-v6": "6.2.0-rc.1",
     "@midnight-ntwrk/midnight-js-network-id": "0.2.5",
     "@midnight-ntwrk/wallet": "npm:@midnight-ntwrk/wallet@5.0.0",
     "@midnight-ntwrk/wallet-api": "^5.0.0",
