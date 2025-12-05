@@ -1,9 +1,9 @@
 ---
 name: Bug report
 about: Submit a bug report
-title: ""
+title: ''
 labels: midnight-template-repo, public
-assignees: ""
+assignees: ''
 ---
 
 ### Context & versions:
