@@ -95,15 +95,29 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "//#format:root": {
+      "cache": false,
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
+    "//#format:check:root": {
+      "cache": false,
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
     "format": {
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
-      "outputLogs": "new-only"
+      "outputLogs": "new-only",
+      "dependsOn": ["//#format:root"]
     },
     "format:check": {
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
-      "outputLogs": "new-only"
+      "outputLogs": "new-only",
+      "dependsOn": ["//#format:check:root"]
     },
     "verify:check": {
       "dependsOn": ["typecheck", "format:check", "lint"]
