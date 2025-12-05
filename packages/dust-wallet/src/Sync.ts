@@ -20,7 +20,7 @@ import {
   SubscriptionClient,
   QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Simulator, SimulatorState } from './Simulator.js';
@@ -232,7 +232,7 @@ export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, Wall
       const events = [update.raw].filter((event) => event !== null);
       return secretKeys((keys) =>
         state
-          .applyEvents(keys, events, new Date())
+          .applyEvents(keys, events)
           .updateProgress({ appliedIndex: nextIndex, highestRelevantWalletIndex, isConnected: true }),
       );
     },
@@ -256,10 +256,6 @@ export const makeSimulatorSyncService = (
 export const makeSimulatorSyncCapability = (): SyncCapability<DustCoreWallet, SimulatorSyncUpdate> => ({
   applyUpdate: (state: DustCoreWallet, update: SimulatorSyncUpdate) =>
     state
-      .applyEvents(
-        update.secretKey,
-        update.update.lastTxResult?.events || [],
-        DateOps.secondsToDate(update.update.lastTxNumber),
-      )
+      .applyEvents(update.secretKey, update.update.lastTxResult?.events || [])
       .updateProgress({ appliedIndex: update.update.lastTxNumber }),
 });

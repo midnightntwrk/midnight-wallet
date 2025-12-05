@@ -93,10 +93,10 @@ export class WalletFacade {
 
     switch (recipe.type) {
       case ProvingRecipe.TRANSACTION_TO_PROVE:
-        return await this.dust.addFeePayment(dustSecretKeys, recipe.transaction, new Date(), ttl);
+        return await this.dust.addFeePayment(dustSecretKeys, recipe.transaction, undefined, ttl);
       case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE: {
         // if the shielded wallet returned a proven transaction, we need to pay fees with the dust wallet
-        const balancedTx = await this.dust.addFeePayment(dustSecretKeys, recipe.transactionToProve, new Date(), ttl);
+        const balancedTx = await this.dust.addFeePayment(dustSecretKeys, recipe.transactionToProve, undefined, ttl);
 
         if (balancedTx.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
           throw Error('Unexpected transaction type after adding fee payment.');
@@ -110,7 +110,7 @@ export class WalletFacade {
       case ProvingRecipe.NOTHING_TO_PROVE: {
         // @TODO fix casting
         const txToBalance = recipe.transaction as unknown as ledger.UnprovenTransaction;
-        return await this.dust.addFeePayment(dustSecretKeys, txToBalance, new Date(), ttl);
+        return await this.dust.addFeePayment(dustSecretKeys, txToBalance, undefined, ttl);
       }
     }
   }
@@ -165,7 +165,7 @@ export class WalletFacade {
         throw Error('Unexpected transaction type.');
       }
 
-      const recipe = await this.dust.addFeePayment(dustSecretKey, shieldedTxRecipe.transaction, new Date(), ttl);
+      const recipe = await this.dust.addFeePayment(dustSecretKey, shieldedTxRecipe.transaction, undefined, ttl);
 
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');
@@ -176,7 +176,7 @@ export class WalletFacade {
 
     // if there's an unshielded tx only, pay fees (balance) with shielded wallet
     if (shieldedTxRecipe === undefined && unshieldedTx !== undefined) {
-      const recipe = await this.dust.addFeePayment(dustSecretKey, unshieldedTx, new Date(), ttl);
+      const recipe = await this.dust.addFeePayment(dustSecretKey, unshieldedTx, undefined, ttl);
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');
       }
@@ -190,7 +190,7 @@ export class WalletFacade {
       }
       const txToBalance = shieldedTxRecipe.transaction.merge(unshieldedTx);
 
-      const recipe = await this.dust.addFeePayment(dustSecretKey, txToBalance, new Date(), ttl);
+      const recipe = await this.dust.addFeePayment(dustSecretKey, txToBalance, undefined, ttl);
 
       if (recipe.type !== 'TransactionToProve') {
         throw Error('Unexpected transaction type after adding fee payment.');

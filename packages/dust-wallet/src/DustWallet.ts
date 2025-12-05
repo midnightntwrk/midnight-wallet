@@ -124,7 +124,7 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    currentTime: Date,
+    currentTime: Date | undefined,
     ttl: Date,
   ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
 
@@ -222,7 +222,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     addFeePayment(
       secretKey: DustSecretKey,
       transaction: UnprovenTransaction,
-      currentTime: Date,
+      currentTime: Date | undefined,
       ttl: Date,
     ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
       return this.runtime
