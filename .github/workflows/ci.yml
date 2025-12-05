@@ -71,7 +71,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v4
         if: always()
         with:
           name: build-artifacts-${{ github.run_id }}
@@ -241,7 +241,7 @@ jobs:
       #       ./packages/e2e-tests/reports/test-report.xml
 
       # - name: Upload Artifact
-      #   uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+      #   uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
       #   with:
       #     name: 'test-results-junit'
       #     path: ./packages/e2e-tests/reports/report.xml
@@ -295,7 +295,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v4
         if: always()
         with:
           name: build-publish-artifacts-${{ github.run_id }}
