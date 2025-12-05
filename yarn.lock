@@ -2363,20 +2363,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-unshielded-state@workspace:packages/unshielded-state":
-  version: 0.0.0-use.local
-  resolution: "@midnight-ntwrk/wallet-sdk-unshielded-state@workspace:packages/unshielded-state"
-  dependencies:
-    "@midnight-ntwrk/ledger-v6": "npm:6.1.0-alpha.5"
-    effect: "npm:^3.17.3"
-    eslint: "npm:^9.37.0"
-    publint: "npm:~0.3.14"
-    rimraf: "npm:^6.0.1"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^3.2.4"
-  languageName: unknown
-  linkType: soft
-
 "@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:1.0.0-beta.11, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
