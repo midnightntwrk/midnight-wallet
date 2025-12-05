@@ -24,7 +24,7 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
+    "@midnight-ntwrk/ledger-v6": "6.2.0-rc.1",
     "@scure/base": "^1.2.6",
     "@subsquid/scale-codec": "^4.0.1"
   },
