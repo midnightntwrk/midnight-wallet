@@ -193,10 +193,7 @@ export class TransactingCapabilityImplementation<TTransaction extends ledger.Unp
         });
 
         // mark the coins as spent
-        const [spentInputs] = yield* Either.try({
-          try: () => CoreWallet.spendUtxos(wallet, inputs),
-          catch: (error) => new TransactingError({ message: 'Failed to spend coins', cause: error }),
-        });
+        const [spentInputs] = yield* CoreWallet.spendUtxos(wallet, inputs);
 
         const ledgerInputs = spentInputs.map((input) => ({
           ...input,
@@ -349,10 +346,7 @@ export class TransactingCapabilityImplementation<TTransaction extends ledger.Unp
         },
       });
 
-      const [spentInputs, updatedWallet] = yield* Either.try({
-        try: () => CoreWallet.spendUtxos(wallet, inputs),
-        catch: (error) => new TransactingError({ message: 'Failed to spend coins', cause: error }),
-      });
+      const [spentInputs, updatedWallet] = yield* CoreWallet.spendUtxos(wallet, inputs);
 
       const ledgerInputs = spentInputs.map((input) => ({
         ...input,
