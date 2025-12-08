@@ -78,4 +78,5 @@ export const sleep = (secs: number) => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
 
-export const waitForDustGenerated = () => sleep(10);
+// we need to wait for at least one block for Dust to be generated
+export const waitForDustGenerated = (seconds: number = 10) => sleep(seconds);

@@ -17,7 +17,14 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
+import {
+  getShieldedSeed,
+  getUnshieldedSeed,
+  getDustSeed,
+  tokenValue,
+  waitForFullySynced,
+  waitForDustGenerated,
+} from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -140,6 +147,7 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to transfer shielded tokens only', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await waitForDustGenerated();
 
     const ledgerReceiverAddress = ShieldedAddress.codec
       .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
@@ -181,6 +189,7 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to transfer unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await waitForDustGenerated();
 
     const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
 
@@ -229,6 +238,7 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to balance and submit an arbitrary shielded transaction', async () => {
     await waitForFullySynced(senderFacade);
+    await waitForDustGenerated();
 
     const shieldedReceiverState = await rx.firstValueFrom(receiverFacade.shielded.state);
 
@@ -279,6 +289,7 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to balance and submit an arbitrary unshielded transaction', async () => {
     await waitForFullySynced(senderFacade);
+    await waitForDustGenerated();
 
     const outputs = [
       {

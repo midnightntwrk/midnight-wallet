@@ -151,6 +151,7 @@ describe('Dust Registration', () => {
 
   it('registers dust generation after receiving unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await waitForDustGenerated();
 
     const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
 
@@ -159,15 +160,13 @@ describe('Dust Registration', () => {
         type: 'unshielded',
         outputs: [
           {
-            amount: tokenValue(150000n),
+            amount: tokenValue(150_000_000n),
             receiverAddress: unshieldedReceiverState.address,
             type: ledger.unshieldedToken().raw,
           },
         ],
       },
     ];
-
-    await waitForDustGenerated();
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const transferRecipe = await senderFacade.transferTransaction(
@@ -209,6 +208,7 @@ describe('Dust Registration', () => {
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.value))).toEqual(nightBalanceBeforeRegistration);
 
     await waitForDustGenerated();
+
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
