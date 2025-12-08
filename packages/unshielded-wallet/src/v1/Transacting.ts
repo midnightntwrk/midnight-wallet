@@ -106,19 +106,6 @@ export const makeDefaultTransactingCapability = (
   );
 };
 
-// export const makeSimulatorTransactingCapability = (
-//   config: DefaultTransactingConfiguration,
-//   getContext: () => DefaultTransactingContext,
-// ): TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, ledger.ProofErasedTransaction> => {
-//   return new TransactingCapabilityImplementation(
-//     config.networkId,
-//     () => getContext().coinSelection,
-//     () => getContext().coinsAndBalancesCapability,
-//     () => getContext().keysCapability,
-//     TransactionTrait.proofErased,
-//   );
-// };
-
 export class TransactingCapabilityImplementation<TTransaction extends ledger.UnprovenTransaction>
   implements TransactingCapability<ledger.UnprovenTransaction, CoreWallet>
 {
