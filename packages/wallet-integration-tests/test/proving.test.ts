@@ -21,7 +21,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
 const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.5';
-const PROOF_SERVER_PORT: number = 6300;
+const PROOF_SERVER_PORT: number = 6301;
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
 
