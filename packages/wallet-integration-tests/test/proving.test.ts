@@ -38,13 +38,10 @@ const makeTransaction = () => {
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
-  Effect.promise(() => {
-    return new GenericContainer(PROOF_SERVER_IMAGE)
+  Effect.promise(async () => {
+    return await new GenericContainer(PROOF_SERVER_IMAGE)
       .withExposedPorts(PROOF_SERVER_PORT)
       .withWaitStrategy(Wait.forListeningPorts().withStartupTimeout(120_000))
-      .withEnvironment({
-        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-      })
       .start();
   }),
   (container) => Effect.promise(() => container.stop()),
