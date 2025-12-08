@@ -20,7 +20,7 @@ import type { DefaultV1Configuration as ShieldedConfiguration } from '@midnight-
 import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
-  PublicKeys,
+  PublicKey as UnshieldedPublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -84,7 +84,7 @@ export const initWalletWithSeed = async (
   const unshieldedWallet = UnshieldedWallet({
     ...configuration,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-  }).startWithPublicKeys(PublicKeys.fromKeyStore(unshieldedKeystore));
+  }).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore));
 
   const facade: WalletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
   await facade.start(shieldedSecretKeys, dustSecretKey);
