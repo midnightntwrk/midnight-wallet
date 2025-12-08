@@ -214,11 +214,10 @@ export class WalletFacade {
 
     const dustState = await this.dust.waitForSyncedState();
     const receiverAddress = dustReceiverAddress ?? dustState.dustAddress;
-    const nextBlock = new Date();
-    const ttl = new Date(nextBlock.getTime() + 60 * 60 * 1000);
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
     const transaction = await this.dust.createDustGenerationTransaction(
-      nextBlock,
+      undefined,
       ttl,
       nightUtxos.map((utxo) => ({ ...utxo, ctime: new Date(utxo.ctime) })),
       nightVerifyingKey,

@@ -73,3 +73,7 @@ export const tokenValue = (value: bigint): bigint => value * 10n ** 6n;
 export const waitForFullySynced = async (facade: WalletFacade): Promise<void> => {
   await rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.isSynced)));
 };
+
+export const sleep = (secs: number) => {
+  return new Promise((resolve) => setTimeout(resolve, secs * 1000));
+};
