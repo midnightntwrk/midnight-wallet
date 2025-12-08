@@ -77,3 +77,5 @@ export const waitForFullySynced = async (facade: WalletFacade): Promise<void> =>
 export const sleep = (secs: number) => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
+
+export const waitForDustGenerated = () => sleep(10);

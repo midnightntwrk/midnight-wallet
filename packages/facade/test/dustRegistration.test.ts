@@ -17,7 +17,14 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced, sleep } from './utils.js';
+import {
+  getShieldedSeed,
+  getUnshieldedSeed,
+  getDustSeed,
+  tokenValue,
+  waitForFullySynced,
+  waitForDustGenerated,
+} from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -160,7 +167,8 @@ describe('Dust Registration', () => {
       },
     ];
 
-    await sleep(10);
+    await waitForDustGenerated();
+
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const transferRecipe = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
@@ -200,7 +208,7 @@ describe('Dust Registration', () => {
 
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.value))).toEqual(nightBalanceBeforeRegistration);
 
-    await sleep(10);
+    await waitForDustGenerated();
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
