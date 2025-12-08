@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { initWalletWithSeed } from '../utils.ts';
+import { initWalletWithSeed, waitForDustGenerated } from '../utils.ts';
 import * as rx from 'rxjs';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Buffer } from 'buffer';
@@ -23,6 +23,8 @@ const sender = await initWalletWithSeed(
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+
+await waitForDustGenerated();
 
 const receiverAddress = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
