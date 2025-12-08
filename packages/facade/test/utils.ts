@@ -74,9 +74,9 @@ export const waitForFullySynced = async (facade: WalletFacade): Promise<void> =>
   await rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.isSynced)));
 };
 
-export const sleep = (secs: number) => {
+export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
 
 // we need to wait for at least one block for Dust to be generated
-export const waitForDustGenerated = (seconds: number = 10) => sleep(seconds);
+export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
