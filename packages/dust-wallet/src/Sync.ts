@@ -164,7 +164,7 @@ export const makeDefaultSyncService = (
             hash: blockData.hash,
             height: blockData.height,
             ledgerParameters: LedgerParameters.deserialize(Buffer.from(blockData.ledgerParameters, 'hex')),
-            timestamp: new Date(blockData.timestamp * 1000),
+            timestamp: new Date(blockData.timestamp),
           }));
         }),
       );
