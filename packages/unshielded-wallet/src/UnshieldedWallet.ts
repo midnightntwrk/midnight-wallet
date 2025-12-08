@@ -16,7 +16,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { SerializationCapability } from './v1/Serialization.js';
-import { TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { TransactionHistoryService } from './v1/TransactionHistory.js';
 import { CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { KeysCapability } from './v1/Keys.js';
 import { TokenTransfer } from './v1/Transacting.js';
@@ -33,7 +33,7 @@ export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability<UnshieldedUpdate>;
+  transactionHistory: TransactionHistoryService<UnshieldedUpdate>;
 };
 
 export class UnshieldedWalletState<TSerialized = string> {

@@ -17,7 +17,7 @@ import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-clien
 import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryCapability } from './TransactionHistory.js';
+import { TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 
@@ -39,7 +39,7 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<WalletSyncUpdate>;
+  transactionHistoryService: TransactionHistoryService<WalletSyncUpdate>;
 };
 
 export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncService<CoreWallet, WalletSyncUpdate> => {
@@ -122,8 +122,8 @@ export const makeDefaultSyncCapability = (
               appliedId: BigInt(update.transaction.id),
             });
 
-            const { transactionHistoryCapability } = getContext();
-            void transactionHistoryCapability.create(update);
+            const { transactionHistoryService } = getContext();
+            void transactionHistoryService.create(update);
 
             return stateAfterUpdatingProgress;
           }),

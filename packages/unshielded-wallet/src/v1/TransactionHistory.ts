@@ -13,7 +13,7 @@
 import { TransactionHistoryStorage, TransactionHistoryEntry, TransactionHash } from '../storage/index.js';
 import { UnshieldedUpdate } from './SyncSchema.js';
 
-export interface TransactionHistoryCapability<SyncUpdate> {
+export interface TransactionHistoryService<SyncUpdate> {
   create(update: SyncUpdate): Promise<void>;
   get(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
   getAll(): AsyncIterableIterator<TransactionHistoryEntry>;
@@ -36,10 +36,10 @@ const convertUpdateToEntry = ({ transaction, status }: UnshieldedUpdate): Transa
   };
 };
 
-export const makeDefaultTransactionHistoryCapability = (
+export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
-): TransactionHistoryCapability<UnshieldedUpdate> => {
+): TransactionHistoryService<UnshieldedUpdate> => {
   const { txHistoryStorage } = config;
 
   return {
