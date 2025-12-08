@@ -10,12 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import type { CoreWallet } from './CoreWallet.js';
 import { SignatureVerifyingKey } from '@midnight-ntwrk/ledger-v6';
 
 export type KeysCapability<TState> = {
   getPublicKey(state: TState): SignatureVerifyingKey;
-  getAddress(state: TState): string;
+  getAddress(state: TState): UnshieldedAddress;
 };
 
 export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
@@ -23,8 +24,8 @@ export const makeDefaultKeysCapability = (): KeysCapability<CoreWallet> => {
     getPublicKey: (state: CoreWallet): SignatureVerifyingKey => {
       return state.publicKey.publicKey;
     },
-    getAddress: (state: CoreWallet): string => {
-      return state.publicKey.address;
+    getAddress: (state: CoreWallet): UnshieldedAddress => {
+      return new UnshieldedAddress(Buffer.from(state.publicKey.address, 'hex'));
     },
   };
 };

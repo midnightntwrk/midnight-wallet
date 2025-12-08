@@ -28,6 +28,7 @@ import { PublicKey } from './KeyStore.js';
 import { SyncProgress } from './v1/SyncProgress.js';
 import { TransactionHistoryEntry } from './storage/index.js';
 import { UnshieldedUpdate } from './v1/SyncSchema.js';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
@@ -63,7 +64,7 @@ export class UnshieldedWalletState<TSerialized = string> {
     return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
   }
 
-  get address(): ledger.UserAddress {
+  get address(): UnshieldedAddress {
     return this.capabilities.keys.getAddress(this.state);
   }
 
@@ -124,7 +125,7 @@ export interface CustomizedUnshieldedWallet<
 
   waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
 
-  getAddress(): Promise<ledger.UserAddress>;
+  getAddress(): Promise<UnshieldedAddress>;
 }
 
 export interface CustomizedUnshieldedWalletClass<
@@ -257,7 +258,7 @@ export function CustomUnshieldedWallet<
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
     }
 
-    getAddress(): Promise<ledger.UserAddress> {
+    getAddress(): Promise<UnshieldedAddress> {
       return rx.firstValueFrom(this.state).then((state) => state.address);
     }
   };
