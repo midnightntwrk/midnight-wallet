@@ -104,6 +104,7 @@ export class DustCoreWallet {
   applyEvents(secretKey: DustSecretKey, events: Event[], currentTime: Date): DustCoreWallet {
     if (!events.length) return this;
 
+    // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
     const updatedState = this.state.replayEvents(secretKey, events).processTtls(currentTime);
 
     let updatedPending = this.pendingDustTokens;
