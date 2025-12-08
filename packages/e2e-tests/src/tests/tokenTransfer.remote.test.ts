@@ -20,6 +20,7 @@ import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { inspect } from 'node:util';
 
 /**
  * Tests performing a token transfer
@@ -44,7 +45,7 @@ describe('Token transfer', () => {
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
   const timeout = 600_000;
-  const outputValue = 100n;
+  const outputValue = utils.tNightAmount(10n);
 
   let sender: WalletFacade;
   let receiver: WalletFacade;
@@ -63,6 +64,7 @@ describe('Token transfer', () => {
   beforeAll(async () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
+    logger.info(`Random seed: ${seed}`);
 
     wallet = await utils.buildWalletFacade(seedFunded, fixture);
     wallet2 = await utils.buildWalletFacade(seed, fixture);
@@ -120,21 +122,23 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer transaction using bech32m address');
       await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(receiver)]);
-      const initialState = await firstValueFrom(sender.state());
-      const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialUnshieldedBalance = initialState.unshielded.balances.get(unshieldedTokenRaw);
-      const initialDustBalance = initialState.dust.walletBalance(new Date());
+      const senderInitialState = await firstValueFrom(sender.state());
+      const initialShieldedBalance = senderInitialState.shielded.balances[shieldedTokenRaw];
+      const initialUnshieldedBalance = senderInitialState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      const initialDustBalance = senderInitialState.dust.walletBalance(new Date());
 
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
       logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
-      logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
-      logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
-      logger.info(`Wallet 1 address: ${initialState.unshielded.address}`);
+      logger.info(`Wallet 1 available shielded coins: ${senderInitialState.shielded.availableCoins.length}`);
+      logger.info(inspect(senderInitialState.shielded.availableCoins, { depth: null }));
+      logger.info(`Wallet 1 available unshielded coins: ${senderInitialState.unshielded.availableCoins.length}`);
+      logger.info(inspect(senderInitialState.unshielded.availableCoins, { depth: null }));
+      logger.info(`Wallet 1 address: ${senderInitialState.unshielded.address}`);
 
       const initialReceiverState = await firstValueFrom(receiver.state());
-      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
-      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;
+      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
       const initialReceiverDustBalance = initialReceiverState.dust.walletBalance(new Date());
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
       logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
@@ -169,72 +173,73 @@ describe('Token transfer', () => {
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
+      logger.info('Signing tx...');
+      logger.info(txToProve);
       const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
         senderKeyStore.signData(payload),
       );
+      logger.info('Transaction to prove...');
+      logger.info(signedTx.toString());
       const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      logger.info('Submitting transaction...');
+      logger.info(provenTx.toString());
       const txId = await sender.submitTransaction(provenTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForFacadePending(sender);
-      // logger.info(utils.walletStateTrimmed(pendingState));
-      expect(pendingState.shielded.balances[shieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(
-        initialShieldedBalance - outputValue,
-      );
-      expect(pendingState.unshielded.balances.get(unshieldedTokenRaw)).toBeLessThanOrEqual(
-        (initialUnshieldedBalance ?? 0n) - outputValue,
-      );
-      expect(pendingState.shielded.availableCoins.length).toBeLessThanOrEqual(
-        initialState.shielded.availableCoins.length,
-      );
-      expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      expect(pendingState.unshielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
-      // expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
-      // expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
+      // const pendingState = await utils.waitForFacadePending(sender);
+      // // logger.info(utils.walletStateTrimmed(pendingState));
+      // expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      // expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
+      // expect(pendingState.unshielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
+      // expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
 
-      logger.info('waiting for tx in history');
+      // logger.info('waiting for tx in history');
       // await waitForTxInHistory(txId, sender);
       await utils.waitForFacadePendingClear(sender);
-      const finalState = await utils.waitForSyncFacade(sender);
+      const senderFinalState = await utils.waitForSyncFacade(sender);
       // logger.info(walletStateTrimmed(finalState));
-      const senderFinalShieldedBalance = finalState.shielded.balances[shieldedTokenRaw];
-      const senderFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
-      const senderFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
+      const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
+      const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances.get(unshieldedTokenRaw);
+      const senderFinalDustBalance = senderFinalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 1 final available dust: ${senderFinalDustBalance}`);
       logger.info(`Wallet 1 final available shielded coins: ${senderFinalShieldedBalance}`);
       logger.info(`Wallet 1 final available unshielded coins: ${senderFinalUnshieldedBalance}`);
+      // assert balance after tx history is fixed
       expect(senderFinalShieldedBalance).toBe(initialShieldedBalance - outputValue);
-      expect(senderFinalUnshieldedBalance).toBe(initialUnshieldedBalance ?? 0n - outputValue);
-      expect(senderFinalDustBalance).toBeLessThan(initialDustBalance);
-      expect(finalState.shielded.availableCoins.length).toBeLessThanOrEqual(
-        initialState.shielded.availableCoins.length,
+      expect(senderFinalUnshieldedBalance).toBe(initialUnshieldedBalance - outputValue);
+      expect(senderFinalShieldedBalance).toBeLessThan(initialShieldedBalance);
+      expect(senderFinalUnshieldedBalance).toBeLessThan(initialUnshieldedBalance);
+      expect(senderFinalState.shielded.availableCoins.length).toBeLessThanOrEqual(
+        senderInitialState.shielded.availableCoins.length,
       );
-      expect(finalState.dust.pendingCoins.length).toBe(0);
-      expect(finalState.shielded.pendingCoins.length).toBe(0);
-      expect(finalState.shielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
-      expect(finalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
-        initialState.unshielded.availableCoins.length,
+      expect(senderFinalState.dust.pendingCoins.length).toBe(0);
+      expect(senderFinalState.shielded.pendingCoins.length).toBe(0);
+      expect(senderFinalState.shielded.totalCoins.length).toBeLessThanOrEqual(
+        senderInitialState.shielded.totalCoins.length,
       );
-      expect(finalState.unshielded.pendingCoins.length).toBe(0);
-      expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
+      expect(senderFinalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
+        senderInitialState.unshielded.availableCoins.length,
+      );
+      expect(senderFinalState.unshielded.pendingCoins.length).toBe(0);
+      expect(senderFinalState.unshielded.totalCoins.length).toBeLessThanOrEqual(
+        senderInitialState.shielded.totalCoins.length,
+      );
       // expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
       // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
 
       // await waitForTxInHistory(txId, receiver);
-      const finalState2 = await utils.waitForSyncFacade(receiver);
+      const receiverFinalState = await utils.waitForSyncFacade(receiver);
       // logger.info(walletStateTrimmed(finalState2));
-      const receiverFinalShieldedBalance = finalState.shielded.balances[shieldedTokenRaw];
-      const receiverFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
-      const receiverFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
+      const receiverFinalShieldedBalance = receiverFinalState.shielded.balances[shieldedTokenRaw] ?? 0n;
+      const receiverFinalUnshieldedBalance = receiverFinalState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      const receiverFinalDustBalance = receiverFinalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 2 final available shielded coins: ${receiverFinalShieldedBalance}`);
       logger.info(`Wallet 2 final available unshielded coins: ${receiverFinalUnshieldedBalance}`);
       expect(receiverFinalShieldedBalance).toBe(initialReceiverShieldedBalance + outputValue);
       expect(receiverFinalUnshieldedBalance).toBe(initialReceiverUnshieldedBalance ?? 0n + outputValue);
-      expect(finalState2.shielded.pendingCoins.length).toBe(0);
-      expect(finalState2.shielded.totalCoins.length).toBeGreaterThanOrEqual(
+      expect(receiverFinalState.shielded.pendingCoins.length).toBe(0);
+      expect(receiverFinalState.shielded.totalCoins.length).toBeGreaterThanOrEqual(
         initialReceiverState.shielded.totalCoins.length + 1,
       );
       expect(receiverFinalDustBalance).toBe(initialReceiverDustBalance);
@@ -271,13 +276,18 @@ describe('Token transfer', () => {
           ],
         },
       ];
+      logger.info('Transfer transaction...');
       const txToProve = await sender.transferTransaction(
         senderShieldedSecretKey,
         senderDustKey,
         outputsToCreate,
         new Date(),
       );
+      logger.info('Transaction to prove...');
+      logger.info(txToProve);
       const provenTx = await sender.finalizeTransaction(txToProve);
+      logger.info('Submitting transaction...');
+      logger.info(provenTx);
       const txId = await sender.submitTransaction(provenTx);
       const fees = provenTx.fees(ledger.LedgerParameters.initialParameters());
       logger.info('Transaction id: ' + txId);

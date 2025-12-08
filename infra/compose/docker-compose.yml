@@ -1,6 +1,6 @@
 services:
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.15'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.17'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -23,7 +23,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.7'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.18.0-rc.8'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

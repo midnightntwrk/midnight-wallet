@@ -10,17 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-/* eslint-disable @typescript-eslint/restrict-plus-operands */
-/* eslint-disable @typescript-eslint/no-base-to-string */
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import { nativeToken, ZswapSecretKeys } from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
-import { logger } from './logger.js';
 import { exit } from 'node:process';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { logger } from './logger.js';
+import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { createKeystore, UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { inspect } from 'node:util';
 
 /**
  * Tests performing a token transfer
@@ -30,179 +29,200 @@ import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
  */
 
 describe('Token transfer', () => {
-  if (process.env['SEED'] === undefined) {
-    logger.info('SEED env var not set');
-    exit(1);
-  }
-  if (process.env['SEED_STABLE'] === undefined) {
-    logger.info('SEED_STABLE env var not set');
+  if (
+    process.env['SEED2'] === undefined ||
+    process.env['SEED'] === undefined ||
+    process.env['SEED_STABLE'] === undefined
+  ) {
+    logger.info('SEED or SEED2 or SEED_STABLE env vars not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
-  const seedFunded = process.env['SEED'];
-  const seedStable = process.env['SEED_STABLE'];
-  const timeout = 3_600_000;
-  const outputValue = 100_000_000n;
-  const nativeTokenValue = 25n;
-  const nativeTokenValue2 = 50n;
-  const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
-  const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
-  const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
-  const secretKey = ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seedFunded));
+  const fundedSeed = process.env['SEED'];
+  const ReceiverSeed = process.env['SEED2'];
+  const StableSeed = process.env['SEED_STABLE'];
+  const initialReceiverShieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(ReceiverSeed));
+  const initialFundedShieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(fundedSeed));
+  const initialReceiverDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(ReceiverSeed));
+  const initialFundedDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(fundedSeed));
+  const shieldedTokenRaw = ledger.shieldedToken().raw;
+  const unshieldedTokenRaw = ledger.unshieldedToken().raw;
+  const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
+  const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
+  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
+  const timeout = 600_000;
+  const outputValue = utils.tNightAmount(10n);
 
-  let Wallet: ShieldedWalletClass;
-  let walletFunded: ShieldedWallet;
+  let sender: WalletFacade;
+  let receiver: WalletFacade;
+  let senderKeyStore: UnshieldedKeystore;
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
 
-  beforeEach(() => {
+  beforeAll(async () => {
     fixture = getFixture();
-    switch (TestContainersFixture.network) {
-      case 'undeployed':
-        networkId = NetworkId.NetworkId.Undeployed;
-        break;
-      case 'devnet':
-        networkId = NetworkId.NetworkId.DevNet;
-        break;
-      case 'testnet':
-        networkId = NetworkId.NetworkId.TestNet;
-        break;
-    }
+    networkId = fixture.getNetworkId();
+    senderKeyStore = createKeystore(utils.getUnshieldedSeed(fundedSeed), networkId);
 
-    const walletConfig: DefaultV1Configuration = fixture.getWalletConfig();
-    Wallet = ShieldedWallet(walletConfig);
-    walletFunded = Wallet.startWithShieldedSeed(Buffer.from(seedFunded, 'hex'));
-  });
+    sender = await utils.buildWalletFacade(fundedSeed, fixture);
+    receiver = await utils.buildWalletFacade(ReceiverSeed, fixture);
+    await sender.start(initialFundedShieldedSecretKey, initialFundedDustSecretKey);
+    await receiver.start(initialReceiverShieldedSecretKey, initialReceiverDustSecretKey);
+    logger.info('Two wallets started');
+    logger.info(`shielded token type: ${shieldedTokenRaw}`);
+    logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
+  }, syncTimeout);
 
-  afterEach(async () => {
-    await walletFunded.stop();
-  });
+  afterAll(async () => {
+    await utils.closeWallet(sender);
+    await utils.closeWallet(receiver);
+  }, timeout);
 
-  test(
-    'Is working for distribution to the test wallets',
+  test.only(
+    'Distributing tokens to test wallet',
     async () => {
-      if (process.env['ADDRESSES'] === undefined) {
-        logger.info('ADDRESSES env var not set');
-        exit(1);
-      }
-      const addresses = process.env['ADDRESSES'].split(',');
+      await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(receiver)]);
+      const initialState = await firstValueFrom(sender.state());
+      const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
+      const initialUnshieldedBalance = initialState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      const initialDustBalance = initialState.dust.walletBalance(new Date());
 
-      await utils.waitForSyncShielded(walletFunded);
+      logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
+      logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
+      logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
+      logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
+      logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
+      logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
+      logger.info(inspect(initialState.unshielded.availableCoins, { depth: null }));
+      logger.info(`Wallet 1 address: ${initialState.unshielded.address}`);
 
-      const sendTx = async (address: string): Promise<void> => {
-        const initialState = await firstValueFrom(walletFunded.state);
-        const initialBalance = initialState.balances[rawNativeTokenType] ?? 0n;
-        const initialBalanceNative = initialState.balances[nativeTokenHash] ?? 0n;
-        logger.info(`Wallet 1: ${initialBalance} tDUST`);
-        logger.info(`Wallet 1: ${initialBalanceNative} ${nativeTokenHash}`);
-        logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
-        logger.info(
-          `Sending ${outputValue / 1_000_000n} tDUST and ${nativeTokenValue} ${nativeTokenHash} to address: ${address}`,
-        );
+      const initialReceiverState = await firstValueFrom(receiver.state());
+      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;
+      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
+      logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
+      logger.info(`Wallet 2 address: ${initialReceiverState.unshielded.address}`);
 
-        const outputsToCreate = [
-          {
-            type: rawNativeTokenType,
-            amount: outputValue,
-            receiverAddress: address,
-          },
-          {
-            type: nativeTokenHash,
-            amount: nativeTokenValue,
-            receiverAddress: address,
-          },
-        ];
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: outputValue + 1n,
+              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+            },
+          ],
+        },
+        {
+          type: 'unshielded',
+          outputs: [
+            {
+              type: unshieldedTokenRaw,
+              amount: outputValue + 1n,
+              receiverAddress: initialReceiverState.unshielded.address,
+            },
+          ],
+        },
+      ];
 
-        const txToProve = await walletFunded.transferTransaction(secretKey, outputsToCreate);
-        const provenTx = await walletFunded.finalizeTransaction(txToProve);
-        const id = await walletFunded.submitTransaction(provenTx);
-        logger.info('Transaction id: ' + id);
-
-        const pendingState = await utils.waitForPending(walletFunded);
-        // logger.info(utils.walletStateTrimmed(pendingState));
-        logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-
-        const finalState = await utils.waitForFinalizedBalance(walletFunded);
-        // logger.info(utils.walletStateTrimmed(finalState));
-        expect(finalState.balances[rawNativeTokenType] ?? 0n).toBeLessThan(initialBalance - outputValue);
-        expect(finalState.balances[nativeTokenHash] ?? 0n).toBe(initialBalanceNative - nativeTokenValue);
-        expect(finalState.pendingCoins.length).toBe(0);
-        // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
-      };
-
-      for (const address of addresses) {
-        await sendTx(address);
-      }
+      const txToProve = await sender.transferTransaction(
+        initialFundedShieldedSecretKey,
+        initialFundedDustSecretKey,
+        outputsToCreate,
+        new Date(Date.now() + 30 * 60 * 1000),
+      );
+      logger.info('Signing tx...');
+      logger.info(txToProve);
+      const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
+        senderKeyStore.signData(payload),
+      );
+      logger.info('Transaction to prove...');
+      logger.info(signedTx.toString());
+      const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      logger.info('Submitting transaction...');
+      logger.info(provenTx.toString());
+      const txId = await sender.submitTransaction(provenTx);
+      logger.info('txProcessing');
+      logger.info('Transaction id: ' + txId);
     },
-    timeout,
+    syncTimeout,
   );
 
   test(
     'Is working for preparing the stable wallet',
     async () => {
-      const walletStable: ShieldedWallet = Wallet.startWithShieldedSeed(Buffer.from(seedStable, 'hex'));
+      const nativeToken1Amount = utils.tNightAmount(25n);
+      const nativeToken2Amount = utils.tNightAmount(50n);
+      const stableWalletShieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(StableSeed));
+      const stableWalletDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(StableSeed));
 
-      const addressStable = (await firstValueFrom(walletStable.state)).address;
-      const walletAddressStable = utils.getShieldedAddress(networkId, addressStable);
-      await walletStable.stop();
+      const stableWallet = await utils.buildWalletFacade(StableSeed, fixture);
+      await stableWallet.start(stableWalletShieldedSecretKey, stableWalletDustSecretKey);
 
-      await utils.waitForSyncShielded(walletFunded);
-      const initialState = await firstValueFrom(walletFunded.state);
-      const initialBalance = initialState.balances[rawNativeTokenType] ?? 0n;
-      const initialBalanceNative = initialState.balances[nativeTokenHash] ?? 0n;
-      const initialBalanceNative2 = initialState.balances[nativeTokenHash2] ?? 0n;
-      logger.info(`Wallet 1: ${initialBalance} tDUST`);
-      logger.info(`Wallet 1: ${initialBalanceNative} ${nativeTokenHash}`);
-      logger.info(`Wallet 1: ${initialBalanceNative2} ${nativeTokenHash2}`);
-      logger.info(`Wallet 1 available coins: ${initialState.availableCoins.length}`);
-      logger.info(
-        `Sending ${
-          outputValue / 1_000_000n
-        } tDUST and ${nativeTokenValue} ${nativeTokenHash} to address: ${walletAddressStable}`,
+      await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(stableWallet)]);
+      const initialState = await firstValueFrom(sender.state());
+      const initialNativeToken1Balance = initialState.shielded.balances[nativeToken1Raw];
+      const initialNativeToken2Balance = initialState.shielded.balances[nativeToken2Raw];
+      const initialDustBalance = initialState.dust.walletBalance(new Date());
+
+      logger.info(`Wallet 1: ${initialNativeToken1Balance} native 1 tokens`);
+      logger.info(`Wallet 1: ${initialNativeToken2Balance} native 1 tokens`);
+      logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
+      logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
+      logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
+      logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
+
+      const initialReceiverState = await firstValueFrom(stableWallet.state());
+      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;
+      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
+      logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
+      logger.info(`Wallet 2 address: ${initialReceiverState.unshielded.address}`);
+
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: nativeToken1Raw,
+              amount: nativeToken1Amount,
+              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+            },
+            {
+              type: nativeToken2Raw,
+              amount: nativeToken2Amount,
+              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+            },
+          ],
+        },
+      ];
+
+      const txToProve = await sender.transferTransaction(
+        initialFundedShieldedSecretKey,
+        initialFundedDustSecretKey,
+        outputsToCreate,
+        new Date(Date.now() + 30 * 60 * 1000),
       );
+      logger.info('Signing tx...');
+      logger.info(txToProve);
+      const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
+        senderKeyStore.signData(payload),
+      );
+      logger.info('Transaction to prove...');
+      logger.info(signedTx.toString());
+      const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      logger.info('Submitting transaction...');
+      logger.info(provenTx.toString());
+      const txId = await sender.submitTransaction(provenTx);
+      logger.info('txProcessing');
+      logger.info('Transaction id: ' + txId);
 
-      const outputsToCreate = [
-        {
-          type: rawNativeTokenType,
-          amount: outputValue,
-          receiverAddress: walletAddressStable,
-        },
-        {
-          type: nativeTokenHash,
-          amount: nativeTokenValue,
-          receiverAddress: walletAddressStable,
-        },
-      ];
-
-      const outputsToCreate2 = [
-        {
-          type: nativeTokenHash2,
-          amount: nativeTokenValue2,
-          receiverAddress: walletAddressStable,
-        },
-      ];
-
-      const txToProve = await walletFunded.transferTransaction(secretKey, outputsToCreate);
-      const provenTx = await walletFunded.finalizeTransaction(txToProve);
-      const id = await walletFunded.submitTransaction(provenTx);
-      logger.info('Transaction id: ' + id);
-      // await utils.waitForTxInHistory(String(id), walletFunded);
-
-      logger.info(`Sending ${nativeTokenValue2} ${nativeTokenHash2} to address: ${walletAddressStable}`);
-      const txToProve2 = await walletFunded.transferTransaction(secretKey, outputsToCreate2);
-      const provenTx2 = await walletFunded.finalizeTransaction(txToProve2);
-      const id2 = await walletFunded.submitTransaction(provenTx2);
-      logger.info('Transaction id: ' + id2);
-      // await utils.waitForTxInHistory(String(id2), walletFunded);
-      const finalState = await utils.waitForSyncShielded(walletFunded);
-      // logger.info(utils.walletStateTrimmed(finalState));
-      expect(finalState.balances[rawNativeTokenType] ?? 0n).toBeLessThan(initialBalance - outputValue);
-      expect(finalState.balances[nativeTokenHash] ?? 0n).toBe(initialBalanceNative - nativeTokenValue);
-      expect(finalState.balances[nativeTokenHash2] ?? 0n).toBe(initialBalanceNative2 - nativeTokenValue2);
-      expect(finalState.pendingCoins.length).toBe(0);
-      // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 2);
-
-      // TO-DO: contract deploy and call, obtaining minted token from contract
+      await utils.waitForFacadePendingClear(sender);
+      await utils.waitForFacadePendingClear(stableWallet);
+      const finalReceiverState = await firstValueFrom(stableWallet.state());
+      expect(finalReceiverState.shielded.balances[nativeToken1Raw] ?? 0n).toBe(nativeToken1Amount);
+      expect(finalReceiverState.shielded.balances[nativeToken2Raw] ?? 0n).toBe(nativeToken2Amount);
     },
     timeout,
   );

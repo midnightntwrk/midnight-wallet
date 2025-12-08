@@ -590,6 +590,8 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   return derivationResult.key;
 };
 
+export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
+
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
 export type MidnightNetwork = 'undeployed' | 'node-dev-01' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';
