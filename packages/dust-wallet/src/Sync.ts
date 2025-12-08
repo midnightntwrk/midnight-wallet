@@ -33,6 +33,7 @@ export interface SyncService<TState, TStartAux, TUpdate> {
   blockData: () => Effect.Effect<BlockData, WalletError.WalletError>;
 }
 
+// TODO: use schema instead
 export interface BlockData {
   hash: string;
   height: number;
@@ -160,6 +161,7 @@ export const makeDefaultSyncService = (
           if (!blockData) {
             return Effect.fail(WalletError.WalletError.other('Unable to fetch block data'));
           }
+          // TODO: convert to schema
           return LedgerOps.ledgerTry(() => ({
             hash: blockData.hash,
             height: blockData.height,
