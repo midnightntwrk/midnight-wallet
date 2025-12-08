@@ -107,7 +107,7 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   start(secretKey: DustSecretKey): Promise<void>;
 
   createDustGenerationTransaction(
-    currentTime: Date,
+    currentTime: Date | undefined,
     ttl: Date,
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -186,7 +186,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     }
 
     createDustGenerationTransaction(
-      currentTime: Date,
+      currentTime: Date | undefined,
       ttl: Date,
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: SignatureVerifyingKey,
