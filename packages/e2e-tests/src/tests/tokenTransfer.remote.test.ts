@@ -20,6 +20,7 @@ import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Tests performing a token transfer
@@ -64,8 +65,8 @@ describe('Token transfer', () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
-    wallet = await utils.buildWalletFacade(seedFunded, fixture);
-    wallet2 = await utils.buildWalletFacade(seed, fixture);
+    wallet = utils.buildWalletFacade(seedFunded, fixture);
+    wallet2 = utils.buildWalletFacade(seed, fixture);
     await wallet.start(initialFundedShieldedSecretKey, initialFundedDustSecretKey);
     await wallet2.start(initialReceiverShieldedSecretKey, initialReceiverDustSecretKey);
     logger.info('Two wallets started');
@@ -122,7 +123,7 @@ describe('Token transfer', () => {
       await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(receiver)]);
       const initialState = await firstValueFrom(sender.state());
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialUnshieldedBalance = initialState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       const initialDustBalance = initialState.dust.walletBalance(new Date());
 
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
@@ -133,7 +134,7 @@ describe('Token transfer', () => {
 
       const initialReceiverState = await firstValueFrom(receiver.state());
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
-      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances[unshieldedTokenRaw];
       const initialReceiverDustBalance = initialReceiverState.dust.walletBalance(new Date());
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
       logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} shielded tokens`);
@@ -158,7 +159,9 @@ describe('Token transfer', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: initialReceiverState.unshielded.address,
+              receiverAddress: UnshieldedAddress.codec
+                .encode(networkId, initialReceiverState.unshielded.address)
+                .asString(),
             },
           ],
         },
@@ -183,7 +186,7 @@ describe('Token transfer', () => {
       expect(pendingState.shielded.balances[shieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(
         initialShieldedBalance - outputValue,
       );
-      expect(pendingState.unshielded.balances.get(unshieldedTokenRaw)).toBeLessThanOrEqual(
+      expect(pendingState.unshielded.balances[unshieldedTokenRaw]).toBeLessThanOrEqual(
         (initialUnshieldedBalance ?? 0n) - outputValue,
       );
       expect(pendingState.shielded.availableCoins.length).toBeLessThanOrEqual(
@@ -202,7 +205,7 @@ describe('Token transfer', () => {
       const finalState = await utils.waitForSyncFacade(sender);
       // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance = finalState.shielded.balances[shieldedTokenRaw];
-      const senderFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
+      const senderFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
       const senderFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 1 final available dust: ${senderFinalDustBalance}`);
       logger.info(`Wallet 1 final available shielded coins: ${senderFinalShieldedBalance}`);
@@ -228,7 +231,7 @@ describe('Token transfer', () => {
       const finalState2 = await utils.waitForSyncFacade(receiver);
       // logger.info(walletStateTrimmed(finalState2));
       const receiverFinalShieldedBalance = finalState.shielded.balances[shieldedTokenRaw];
-      const receiverFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
+      const receiverFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
       const receiverFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 2 final available shielded coins: ${receiverFinalShieldedBalance}`);
       logger.info(`Wallet 2 final available unshielded coins: ${receiverFinalUnshieldedBalance}`);

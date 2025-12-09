@@ -37,7 +37,7 @@ describe('Funded wallet', () => {
   beforeEach(async () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
-      wallet = await utils.buildWalletFacade(seedFunded, fixture);
+      wallet = utils.buildWalletFacade(seedFunded, fixture);
       await wallet.start(fundedSecretKey, fundedDustSecretKey);
     });
   });
@@ -64,9 +64,9 @@ describe('Funded wallet', () => {
         500000000000000n,
       );
       expect(state?.unshielded.balances).toHaveLength(1);
-      expect(state?.unshielded.balances.get(unshieldedTokenRaw)).toBe(2_500_000_000_000_000n);
+      expect(state?.unshielded.balances[unshieldedTokenRaw]).toBe(2_500_000_000_000_000n);
       expect(
-        state?.unshielded.balances.get('0000000000000000000000000000000000000000000000000000000000000002'),
+        state?.unshielded.balances['0000000000000000000000000000000000000000000000000000000000000002'],
       ).toBeUndefined();
       expect(state?.dust.totalCoins).toHaveLength(5);
       expect(state?.dust.walletBalance(new Date())).toBe(12500000000000000000000000n);
@@ -100,13 +100,13 @@ describe('Funded wallet', () => {
 
       const unshieldedCoins = state.unshielded.totalCoins;
       expect(unshieldedCoins).toHaveLength(5);
-      expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.intentHash))).toBeTruthy();
+      expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.utxo.intentHash))).toBeTruthy();
       unshieldedCoins.forEach((c) => {
-        expect(c.value).toBe(500000000000000n);
-        expect(c.outputNo).toBe(0);
-        expect(typeof c.owner).toBe('string');
-        expect(typeof c.type).toBe('string');
-        expect(c.registeredForDustGeneration).toBe(true);
+        expect(c.utxo.value).toBe(500000000000000n);
+        expect(c.utxo.outputNo).toBe(0);
+        expect(typeof c.utxo.owner).toBe('string');
+        expect(typeof c.utxo.type).toBe('string');
+        expect(c.meta.registeredForDustGeneration).toBe(true);
       });
 
       const dustCoins = state.dust.totalCoins;
@@ -149,13 +149,13 @@ describe('Funded wallet', () => {
 
       const unshieldedCoins = state.unshielded.availableCoins;
       expect(unshieldedCoins).toHaveLength(5);
-      expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.intentHash))).toBeTruthy();
+      expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.utxo.intentHash))).toBeTruthy();
       unshieldedCoins.forEach((c) => {
-        expect(c.value).toBe(500000000000000n);
-        expect(c.outputNo).toBe(0);
-        expect(typeof c.owner).toBe('string');
-        expect(typeof c.type).toBe('string');
-        expect(c.registeredForDustGeneration).toBe(true);
+        expect(c.utxo.value).toBe(500000000000000n);
+        expect(c.utxo.outputNo).toBe(0);
+        expect(typeof c.utxo.owner).toBe('string');
+        expect(typeof c.utxo.type).toBe('string');
+        expect(c.meta.registeredForDustGeneration).toBe(true);
       });
 
       const dustCoins = state.dust.availableCoins;
