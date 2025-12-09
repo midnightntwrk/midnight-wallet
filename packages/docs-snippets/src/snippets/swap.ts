@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { initWalletWithSeed, waitForDustGenerated } from '../utils.ts';
+import { initWalletWithSeed } from '../utils.ts';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { FacadeState } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -26,7 +26,6 @@ const bob = await initWalletWithSeed(
 
 const aliceInitialState = await rx.firstValueFrom(alice.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 const bobInitialState = await rx.firstValueFrom(bob.wallet.state().pipe(rx.filter((s) => s.isSynced)));
-await waitForDustGenerated();
 
 const shieldedToken1 = '0000000000000000000000000000000000000000000000000000000000000001';
 const shieldedToken2 = '0000000000000000000000000000000000000000000000000000000000000002';

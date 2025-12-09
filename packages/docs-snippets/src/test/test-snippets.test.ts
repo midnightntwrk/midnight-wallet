@@ -16,7 +16,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.setConfig({ testTimeout: 900_000, hookTimeout: 60_000 });
@@ -142,10 +142,9 @@ describe('Snippet outputs', () => {
         },
       });
 
-      const environment = new DockerComposeEnvironment(
-        getComposeDirectory(),
-        'docker-compose-dynamic.yml',
-      ).withEnvironment(environmentVars);
+      const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
+        .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
+        .withEnvironment(environmentVars);
 
       startedEnvironment = await environment.up();
 

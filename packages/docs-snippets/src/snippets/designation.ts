@@ -14,7 +14,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { initWalletWithSeed, waitForDustGenerated } from '../utils.ts';
+import { initWalletWithSeed } from '../utils.ts';
 import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
 
 const sender = await initWalletWithSeed(
@@ -23,7 +23,6 @@ const sender = await initWalletWithSeed(
 const { wallet, unshieldedKeystore } = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
-await waitForDustGenerated();
 
 await sender.wallet
   .transferTransaction(

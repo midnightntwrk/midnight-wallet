@@ -89,10 +89,3 @@ export const initWalletWithSeed = async (
   await facade.start(shieldedSecretKeys, dustSecretKey);
   return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };
-
-export const sleep = (secs: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, secs * 1000));
-};
-
-// at least one block should pass for the dust to be generated
-export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
