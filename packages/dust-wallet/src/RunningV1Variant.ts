@@ -168,7 +168,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   createDustGenerationTransaction(
-    currentTime: Date,
+    currentTime: Date | undefined,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -179,7 +179,8 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     }
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
-      Effect.bind('utxosWithDustValue', ({ currentState }) =>
+      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
+      Effect.bind('utxosWithDustValue', ({ currentState, blockData }) =>
         LedgerOps.ledgerTry(() => {
           const dustPublicKey = this.#v1Context.keysCapability.getDustPublicKey(currentState);
           return nightUtxos.map((utxo) => {
@@ -189,14 +190,26 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               nonce: LedgerOps.randomNonce(),
               dtime: undefined,
             };
-            const dustValue = updatedValue(utxo.ctime, 0n, genInfo, currentTime, currentState.state.params);
+            const dustValue = updatedValue(
+              utxo.ctime,
+              0n,
+              genInfo,
+              currentTime ?? blockData.timestamp,
+              currentState.state.params,
+            );
             return { token: utxo, value: dustValue };
           });
         }),
       ),
-      Effect.flatMap(({ utxosWithDustValue }) => {
+      Effect.flatMap(({ utxosWithDustValue, blockData }) => {
         return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
+          .createDustGenerationTransaction(
+            currentTime ?? blockData.timestamp,
+            ttl,
+            utxosWithDustValue,
+            nightVerifyingKey,
+            dustReceiverAddress,
+          )
           .pipe(EitherOps.toEffect);
       }),
     );
@@ -213,22 +226,31 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
 
   calculateFee(transaction: AnyTransaction): Effect.Effect<bigint, WalletError.WalletError> {
     return pipe(
-      this.#v1Context.syncService.ledgerParameters(),
-      Effect.map((params) => this.#v1Context.transactingCapability.calculateFee(transaction, params)),
+      this.#v1Context.syncService.blockData(),
+      Effect.map((blockData) =>
+        this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+      ),
     );
   }
 
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    currentTime: Date,
     ttl: Date,
+    currentTime?: Date,
   ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.syncService.ledgerParameters(),
-        Effect.flatMap((params) =>
-          this.#v1Context.transactingCapability.addFeePayment(secretKey, state, transaction, currentTime, ttl, params),
+        this.#v1Context.syncService.blockData(),
+        Effect.flatMap((blockData) =>
+          this.#v1Context.transactingCapability.addFeePayment(
+            secretKey,
+            state,
+            transaction,
+            ttl,
+            currentTime ?? blockData.timestamp,
+            blockData.ledgerParameters,
+          ),
         ),
         Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );

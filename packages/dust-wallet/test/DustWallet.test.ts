@@ -142,8 +142,8 @@ describe('DustWallet', () => {
       const feeRecipe = (yield* wallet.addFeePayment(
         dustSecretKey,
         registerForDustTransaction,
-        currentTime,
         ttl,
+        currentTime,
       )) as ProvingRecipe.TransactionToProve;
 
       const intent = feeRecipe.transaction.intents!.get(1);
@@ -289,7 +289,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('should allow to spend Dust tokens', async () => {
+  it('should allow spending Dust tokens', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
@@ -352,8 +352,8 @@ describe('DustWallet', () => {
       const transactionWithFee = (yield* wallet.addFeePayment(
         dustSecretKey,
         transferTransaction,
-        currentTime,
         ttl,
+        currentTime,
       )) as ProvingRecipe.TransactionToProve;
       const transaction = yield* wallet.finalizeTransaction({
         type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
@@ -450,8 +450,8 @@ describe('DustWallet', () => {
       const transactionWithFee = (yield* wallet.addFeePayment(
         dustSecretKey,
         transferTransaction,
-        currentTime,
         ttl,
+        currentTime,
       )) as ProvingRecipe.TransactionToProve;
       const transaction = yield* wallet.finalizeTransaction({
         type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,

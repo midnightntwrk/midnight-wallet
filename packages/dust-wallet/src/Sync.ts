@@ -30,7 +30,15 @@ import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError.WalletError, Scope.Scope>;
-  ledgerParameters: () => Effect.Effect<LedgerParameters, WalletError.WalletError>;
+  blockData: () => Effect.Effect<BlockData, WalletError.WalletError>;
+}
+
+// TODO: use schema instead
+export interface BlockData {
+  hash: string;
+  height: number;
+  ledgerParameters: LedgerParameters;
+  timestamp: Date;
 }
 
 export interface SyncCapability<TState, TUpdate> {
@@ -138,22 +146,28 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
-    ledgerParameters: (): Effect.Effect<LedgerParameters, WalletError.WalletError> => {
+    blockData: (): Effect.Effect<BlockData, WalletError.WalletError> => {
       return Effect.gen(function* () {
         const query = yield* BlockHash;
         const result = yield* query({ offset: null });
-        return result.block?.ledgerParameters;
+        return result.block;
       }).pipe(
         Effect.provide(indexerSyncService.queryClient()),
         Effect.scoped,
         Effect.catchAll((err) =>
           Effect.fail(WalletError.WalletError.other(`Encountered unexpected error: ${err.message}`)),
         ),
-        Effect.flatMap((ledgerParameters) => {
-          if (ledgerParameters === undefined) {
-            return Effect.fail(WalletError.WalletError.other('Unable to fetch ledger parameters'));
+        Effect.flatMap((blockData) => {
+          if (!blockData) {
+            return Effect.fail(WalletError.WalletError.other('Unable to fetch block data'));
           }
-          return LedgerOps.ledgerTry(() => LedgerParameters.deserialize(Buffer.from(ledgerParameters, 'hex')));
+          // TODO: convert to schema
+          return LedgerOps.ledgerTry(() => ({
+            hash: blockData.hash,
+            height: blockData.height,
+            ledgerParameters: LedgerParameters.deserialize(Buffer.from(blockData.ledgerParameters, 'hex')),
+            timestamp: new Date(blockData.timestamp),
+          }));
         }),
       );
     },
@@ -245,11 +259,18 @@ export const makeSimulatorSyncService = (
   return {
     updates: (_state: DustCoreWallet, secretKey: DustSecretKey) =>
       config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
-    ledgerParameters: (): Effect.Effect<LedgerParameters> =>
-      pipe(
-        config.simulator.getLatestState(),
-        Effect.map((state) => state.ledger.parameters),
-      ),
+    blockData: (): Effect.Effect<BlockData> => {
+      return Effect.gen(function* () {
+        const state = yield* config.simulator.getLatestState();
+        const timestamp = DateOps.secondsToDate(state.lastTxNumber);
+        return {
+          hash: yield* Simulator.blockHash(timestamp),
+          height: Number(state.lastTxNumber),
+          ledgerParameters: state.ledger.parameters,
+          timestamp,
+        };
+      });
+    },
   };
 };
 

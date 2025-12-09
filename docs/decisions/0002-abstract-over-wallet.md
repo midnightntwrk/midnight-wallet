@@ -2,7 +2,8 @@
 
 - Status: accepted
 
-_Note: This ADR was written with the original Scala implementation in mind, but the principles and decision rationale remain relevant for the current TypeScript implementation._
+_Note: This ADR was written with the original Scala implementation in mind, but the principles and decision rationale
+remain relevant for the current TypeScript implementation._
 
 ## Context and Problem Statement
 

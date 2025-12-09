@@ -107,7 +107,7 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   start(secretKey: DustSecretKey): Promise<void>;
 
   createDustGenerationTransaction(
-    currentTime: Date,
+    currentTime: Date | undefined,
     ttl: Date,
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
@@ -124,8 +124,8 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
   addFeePayment(
     secretKey: DustSecretKey,
     transaction: UnprovenTransaction,
-    currentTime: Date,
     ttl: Date,
+    currentTime?: Date,
   ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
 
   finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction>;
@@ -186,7 +186,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     }
 
     createDustGenerationTransaction(
-      currentTime: Date,
+      currentTime: Date | undefined,
       ttl: Date,
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: SignatureVerifyingKey,
@@ -222,12 +222,12 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
     addFeePayment(
       secretKey: DustSecretKey,
       transaction: UnprovenTransaction,
-      currentTime: Date,
       ttl: Date,
+      currentTime?: Date,
     ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, currentTime, ttl),
+          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, ttl, currentTime),
         })
         .pipe(Effect.runPromise);
     }

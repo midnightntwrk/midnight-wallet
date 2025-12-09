@@ -42,7 +42,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
@@ -115,7 +115,7 @@ describe('Dust Deregistration', () => {
   });
 
   it('deregisters from dust generation', async () => {
-    // NOTE: by default our test account is already registered for Dust generation
+    // NOTE: by default, our test account is already registered for Dust generation
     await waitForFullySynced(walletFacade);
 
     const walletStateWithNight = await rx.firstValueFrom(

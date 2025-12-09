@@ -17,7 +17,14 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
+import {
+  getShieldedSeed,
+  getUnshieldedSeed,
+  getDustSeed,
+  tokenValue,
+  waitForFullySynced,
+  waitForDustGenerated,
+} from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -44,13 +51,10 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
-/**
- * We need the dust wallet to transact
- */
 describe('Dust Registration', () => {
   const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
   const shieldedReceiverSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
@@ -152,7 +156,7 @@ describe('Dust Registration', () => {
         type: 'unshielded',
         outputs: [
           {
-            amount: tokenValue(150000n),
+            amount: tokenValue(150_000_000n),
             receiverAddress: unshieldedReceiverState.address,
             type: ledger.unshieldedToken().raw,
           },
@@ -198,6 +202,8 @@ describe('Dust Registration', () => {
       .filter((coin) => coin.type === ledger.nativeToken().raw);
 
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.value))).toEqual(nightBalanceBeforeRegistration);
+
+    await waitForDustGenerated();
 
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
