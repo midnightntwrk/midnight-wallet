@@ -41,7 +41,8 @@ const proofServerContainerResource = Effect.acquireRelease(
   Effect.promise(async () => {
     return await new GenericContainer(PROOF_SERVER_IMAGE)
       .withExposedPorts(PROOF_SERVER_PORT)
-      .withWaitStrategy(Wait.forListeningPorts().withStartupTimeout(120_000))
+      .withWaitStrategy(Wait.forListeningPorts())
+      .withStartupTimeout(120_000)
       .start();
   }),
   (container) => Effect.promise(() => container.stop()),
