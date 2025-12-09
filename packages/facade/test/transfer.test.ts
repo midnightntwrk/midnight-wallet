@@ -17,14 +17,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getShieldedSeed,
-  getUnshieldedSeed,
-  getDustSeed,
-  tokenValue,
-  waitForFullySynced,
-  waitForDustGenerated,
-} from './utils.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -50,13 +43,10 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
-/**
- * We need the dust wallet to transact
- */
 describe('Wallet Facade Transfer', () => {
   const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
   const shieldedReceiverSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
@@ -147,7 +137,6 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to transfer shielded tokens only', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
-    await waitForDustGenerated();
 
     const ledgerReceiverAddress = ShieldedAddress.codec
       .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
@@ -189,7 +178,6 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to transfer unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
-    await waitForDustGenerated();
 
     const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
 
@@ -238,7 +226,6 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to balance and submit an arbitrary shielded transaction', async () => {
     await waitForFullySynced(senderFacade);
-    await waitForDustGenerated();
 
     const shieldedReceiverState = await rx.firstValueFrom(receiverFacade.shielded.state);
 
@@ -289,7 +276,6 @@ describe('Wallet Facade Transfer', () => {
 
   it('allows to balance and submit an arbitrary unshielded transaction', async () => {
     await waitForFullySynced(senderFacade);
-    await waitForDustGenerated();
 
     const outputs = [
       {

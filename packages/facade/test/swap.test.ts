@@ -17,14 +17,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getShieldedSeed,
-  getUnshieldedSeed,
-  getDustSeed,
-  tokenValue,
-  waitForFullySynced,
-  waitForDustGenerated,
-} from './utils.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -50,7 +43,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
@@ -147,7 +140,6 @@ describe('Swaps', () => {
 
   it('can perform a shielded swap', async () => {
     await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
-    await waitForDustGenerated();
 
     const { shielded: walletAShieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
     const { shielded: walletBShieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
@@ -239,7 +231,6 @@ describe('Swaps', () => {
    */
   it.skip('can perform an unshielded swap', async () => {
     await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
-    await waitForDustGenerated();
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
