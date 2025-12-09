@@ -103,7 +103,15 @@ console.dir(
       'encryptionPublicKey',
       'address',
     ]),
-    unshielded: syncedState.unshielded,
+    unshielded: pick(syncedState.unshielded, [
+      'balances',
+      'availableCoins',
+      'pendingCoins',
+      'totalCoins',
+      'progress',
+      'transactionHistory',
+      'address',
+    ]),
     dust: pick(syncedState.dust, [
       'totalCoins',
       'availableCoins',
