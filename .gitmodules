@@ -1,0 +1,3 @@
+[submodule "apps/browser-extension"]
+	path = apps/browser-extension
+	url = https://github.com/htlabs-xyz/nocturne-wallet.git
