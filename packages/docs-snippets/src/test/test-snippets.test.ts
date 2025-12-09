@@ -19,7 +19,7 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.setConfig({ testTimeout: 900_000, hookTimeout: 60_000 });
+vi.setConfig({ testTimeout: 900_000, hookTimeout: 200_000 });
 
 const NO_NET_SUFFIX = 'no-net';
 const DEBUG_LOG_ENABLED = (process.env['DEBUG'] ?? '').includes('wallet:snippet');
@@ -144,7 +144,8 @@ describe('Snippet outputs', () => {
 
       const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
         .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
-        .withEnvironment(environmentVars);
+        .withEnvironment(environmentVars)
+        .withStartupTimeout(100_000);
 
       startedEnvironment = await environment.up();
 
