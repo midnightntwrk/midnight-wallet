@@ -9,7 +9,6 @@
 '@midnight-ntwrk/wallet-sdk-node-client': patch
 '@midnight-ntwrk/wallet-sdk-prover-client': patch
 '@midnight-ntwrk/wallet-sdk-runtime': patch
-'@midnight-ntwrk/wallet-sdk-unshielded-state': patch
 '@midnight-ntwrk/wallet-sdk-unshielded-wallet': patch
 '@midnight-ntwrk/wallet-sdk-utilities': patch
 '@midnight-ntwrk/wallet-sdk-shielded': patch
