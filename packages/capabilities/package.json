@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "3.0.0-beta.7",
+  "version": "3.0.0-beta.9",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -24,12 +24,12 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.7",
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.6",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.9",
+    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.7",
     "effect": "^3.17.3"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.5",
+    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
     "publint": "~0.3.14",
@@ -41,8 +41,8 @@
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",
-    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml}\"",
-    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml}\"",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "dist": "tsc -b ./tsconfig.build.json",
     "dist:publish": "tsc -b ./tsconfig.publish.json",
     "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",

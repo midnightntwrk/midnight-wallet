@@ -24,7 +24,8 @@ result
 .nix/
 .env
 .direnv/
-.vscode/
+.vscode/*
+!.vscode/.checkmarxIgnored
 !.vscode/settings.json
 !.vscode/extensions.json
 .bloop/

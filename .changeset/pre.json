@@ -17,13 +17,18 @@
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "1.0.0-beta.8",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.4",
     "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.6",
-    "@midnight-ntwrk/wallet-integration-tests": "0.0.1"
+    "@midnight-ntwrk/wallet-integration-tests": "0.0.1",
+    "@midnight-ntwrk/wallet-sdk-docs-snippets": "1.0.0-beta.1"
   },
   "changesets": [
+    "bold-nights-smoke",
     "bright-facts-know",
     "clear-rules-wink",
+    "dirty-tires-try",
     "every-maps-tie",
+    "famous-donkeys-sink",
     "honest-moose-knock",
+    "icy-adults-spend",
     "large-chicken-smash",
     "lovely-parents-stop",
     "metal-impalas-dream",
@@ -32,6 +37,8 @@
     "orange-cycles-run",
     "short-needles-prove",
     "six-cooks-sink",
+    "smart-camels-feel",
+    "smart-coats-travel",
     "sweet-jars-enjoy",
     "thirty-falcons-tie",
     "true-states-accept"

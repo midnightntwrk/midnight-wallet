@@ -35,20 +35,12 @@ vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
 
-const environmentVars = buildTestEnvironmentVariables(
-  [
-    'APP_INFRA_SECRET',
-    'APP_INFRA_STORAGE_PASSWORD',
-    'APP_INFRA_PUB_SUB_PASSWORD',
-    'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-  ],
-  {
-    additionalVars: {
-      TESTCONTAINERS_UID: environmentId,
-      RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-    },
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
+    RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
   },
-);
+});
 
 const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
   .withWaitStrategy(
@@ -64,14 +56,17 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
  * We need the dust wallet to transact
  */
 describe('Wallet Facade Transfer', () => {
-  const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const shieldedReceiverSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const SENDER_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
+  const RECEIVER_SEED = '0000000000000000000000000000000000000000000000000000000000001111';
 
-  const unshieldedSenderSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const unshieldedReceiverSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const shieldedSenderSeed = getShieldedSeed(SENDER_SEED);
+  const shieldedReceiverSeed = getShieldedSeed(RECEIVER_SEED);
 
-  const dustSenderSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const dustReceiverSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
+  const unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
+
+  const dustSenderSeed = getDustSeed(SENDER_SEED);
+  const dustReceiverSeed = getDustSeed(RECEIVER_SEED);
 
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);

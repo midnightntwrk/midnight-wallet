@@ -67,20 +67,12 @@ describe.skip('Wallet transacting', () => {
   beforeEach(async () => {
     const environmentId = randomUUID();
 
-    const environmentVars = buildTestEnvironmentVariables(
-      [
-        'APP_INFRA_SECRET',
-        'APP_INFRA_STORAGE_PASSWORD',
-        'APP_INFRA_PUB_SUB_PASSWORD',
-        'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-      ],
-      {
-        additionalVars: {
-          TESTCONTAINERS_UID: environmentId,
-          RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-        },
+    const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+      additionalVars: {
+        TESTCONTAINERS_UID: environmentId,
+        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
       },
-    );
+    });
 
     const environment = new DockerComposeEnvironment(
       getComposeDirectory(),

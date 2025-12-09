@@ -26,7 +26,6 @@ import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-
 import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { PublicKey } from './KeyStore.js';
 import { SyncProgress } from './v1/SyncProgress.js';
-import { TransactionHistoryEntry } from './storage/index.js';
 import { UnshieldedUpdate } from './v1/SyncSchema.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
@@ -72,8 +71,8 @@ export class UnshieldedWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  get transactionHistory(): AsyncIterableIterator<TransactionHistoryEntry> {
-    return this.capabilities.transactionHistory.getAll();
+  get transactionHistory(): TransactionHistoryService<UnshieldedUpdate> {
+    return this.capabilities.transactionHistory;
   }
 
   constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: UnshieldedWalletCapabilities<TSerialized>) {

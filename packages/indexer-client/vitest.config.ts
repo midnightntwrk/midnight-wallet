@@ -17,6 +17,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   test: {
+    setupFiles: ['../../setup-env.ts'],
     environment: 'node',
     globals: true,
     coverage: {

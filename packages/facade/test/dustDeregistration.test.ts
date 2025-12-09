@@ -34,20 +34,12 @@ vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
 const environmentId = randomUUID();
 
-const environmentVars = buildTestEnvironmentVariables(
-  [
-    'APP_INFRA_SECRET',
-    'APP_INFRA_STORAGE_PASSWORD',
-    'APP_INFRA_PUB_SUB_PASSWORD',
-    'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-  ],
-  {
-    additionalVars: {
-      TESTCONTAINERS_UID: environmentId,
-      RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-    },
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
+    RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
   },
-);
+});
 
 const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
   .withWaitStrategy(
@@ -60,11 +52,11 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
   .withStartupTimeout(100_000);
 
 describe('Dust Deregistration', () => {
-  const shieldedWalletSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
+  const SEED = '0000000000000000000000000000000000000000000000000000000000000003';
 
-  const unshieldedWalletSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-
-  const dustWalletSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000000002');
+  const shieldedWalletSeed = getShieldedSeed(SEED);
+  const unshieldedWalletSeed = getUnshieldedSeed(SEED);
+  const dustWalletSeed = getDustSeed(SEED);
 
   const unshieldedWalletKeystore = createKeystore(unshieldedWalletSeed, NetworkId.NetworkId.Undeployed);
 

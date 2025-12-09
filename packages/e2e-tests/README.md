@@ -25,37 +25,22 @@ from the root of the project
 
 ## Running e2e tests
 
-Tests require following environment variables set to define which networkId to use and against which deployment you want
-to run them. Based on these, an appropriate docker compose file will be spun up using testcontainers.
+### Environment Setup
 
-- for local:
+Tests require environment variables to be configured. The repository includes a `.env.example` file that serves as a
+template showing all available configuration options. To configure your environment:
 
-```
-export DEPLOYMENT=local; export NETWORK=undeployed
-```
+1. Copy `.env.example` to `.env`:
 
-- for devnet deployments:
+   ```shell
+   cp .env.example .env
+   ```
 
-  ```
-  export DEPLOYMENT=ariadne-qa; export NETWORK=devnet
-  ```
+2. Edit `.env` and fill in the required values for your environment (see `.env.example` for descriptions of each
+   variable).
 
-  ```
-  export DEPLOYMENT=devnet; export NETWORK=devnet
-  ```
-
-  - additional environment variables are needed to supply seeds of the test wallets on devnet networks: `SEED` and
-    `SEED2`
-
-You can also create a `.env` file in the root of this repository. For example :-
-
-```
-NETWORK=undeployed
-DEPLOYMENT=local
-```
-
-This file is automatically loaded, any environment variables are overriden with the contents of this file, when
-executing the e2e tests.
+The `.env` file is automatically loaded by the test setup when running any tests (including e2e tests). Environment
+variables from the `.env` file will override any existing environment variables when executing tests.
 
 Then to run all tests (all following commands in the root of the project):
 

@@ -30,25 +30,18 @@ import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
 
-const environmentVars = buildTestEnvironmentVariables(
-  [
-    'APP_INFRA_SECRET',
-    'APP_INFRA_STORAGE_PASSWORD',
-    'APP_INFRA_PUB_SUB_PASSWORD',
-    'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-  ],
-  {
-    additionalVars: {
-      TESTCONTAINERS_UID: environmentId,
-      RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-    },
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
+    RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
   },
-);
+});
 
 const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
   .withWaitStrategy(
@@ -64,17 +57,22 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
  * We need the dust wallet to transact
  */
 describe('Dust Registration', () => {
-  const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const shieldedReceiverSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const SENDER_SEED = '0000000000000000000000000000000000000000000000000000000000000002';
+  const RECEIVER_SEED = '0000000000000000000000000000000000000000000000000000000000001111';
 
-  const unshieldedSenderSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const unshieldedReceiverSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const shieldedSenderSeed = getShieldedSeed(SENDER_SEED);
+  const shieldedReceiverSeed = getShieldedSeed(RECEIVER_SEED);
 
-  const dustSenderSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const dustReceiverSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
+  const unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
+
+  const dustSenderSeed = getDustSeed(SENDER_SEED);
+  const dustReceiverSeed = getDustSeed(RECEIVER_SEED);
 
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
+
+  const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   let startedEnvironment: StartedDockerComposeEnvironment;
   let configuration: DefaultV1Configuration;
@@ -127,7 +125,7 @@ describe('Dust Registration', () => {
 
     const unshieldedReceiver = UnshieldedWallet({
       ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: unshieldedTxHistoryStorage,
     }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore));
 
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
@@ -201,11 +199,13 @@ describe('Dust Registration', () => {
         ),
     );
 
+    const nightBalanceBeforeRegistration = receiverStateWithNight.unshielded.balances[ledger.nativeToken().raw];
+
     const nightUtxos = receiverStateWithNight.unshielded.availableCoins.filter(
-      (coin) => coin.meta.registeredForDustGeneration === false,
+      (coin) => coin.meta.registeredForDustGeneration === false && coin.utxo.type === ledger.nativeToken().raw,
     );
 
-    expect(nightUtxos.length).toBeGreaterThan(0);
+    expect(ArrayOps.sumBigInt(nightUtxos.map(({ utxo }) => utxo.value))).toEqual(nightBalanceBeforeRegistration);
 
     const dustRegistrationRecipe = await receiverFacade.registerNightUtxosForDustGeneration(
       nightUtxos,
@@ -214,17 +214,30 @@ describe('Dust Registration', () => {
     );
 
     const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
+
     const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
 
     expect(dustRegistrationTxHash).toBeTypeOf('string');
 
-    const receiverDustBalance = await rx.firstValueFrom(
+    const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
-        rx.filter((s) => s.dust.walletBalance(new Date()) > 0n),
-        rx.map((s) => s.dust.walletBalance(new Date())),
+        rx.mergeMap(async (state) => {
+          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+
+          return {
+            state,
+            txFound: txInHistory !== undefined,
+          };
+        }),
+        rx.filter(({ state, txFound }) => txFound && state.isSynced && state.dust.availableCoins.length > 0),
+        rx.map(({ state }) => state),
       ),
     );
 
-    expect(receiverDustBalance).toBeGreaterThan(0n);
+    expect(receiverStateAfterRegistration.dust.walletBalance(new Date())).toBeGreaterThan(0n);
+
+    const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[ledger.nativeToken().raw];
+
+    expect(nightBalanceAfterRegistration).toEqual(nightBalanceBeforeRegistration);
   });
 });

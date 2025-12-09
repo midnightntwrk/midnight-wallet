@@ -1,5 +1,35 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+- Updated dependencies [3f14055]
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-node-client@1.0.0-beta.10
+
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- fb55d52: Introduce more convenient API for Bech32m address encoding/decoding Remove network id from Dust wallet
+  initialization methods (so they are read from the configuration) Introduce FacadeState and add a getter to check for
+  sync status of whole facade wallet Introduce CompositeDerivation for HD wallet, so that it is possible to derive keys
+  for multiple roles at once
+- Updated dependencies [fb55d52]
+- Updated dependencies [a06ccf3]
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.7
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.12
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.0.0-beta.9
+
 ## 1.0.0-beta.8
 
 ### Patch Changes

@@ -7,31 +7,33 @@ env:
   ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: undeployed
   DEPLOYMENT: local
-
-  APP_INFRA_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_STORAGE_PASSWORD }}
-  APP_INFRA_PUB_SUB_PASSWORD: ${{ secrets.APP_INFRA_PUB_SUB_PASSWORD }}
-  APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD: ${{ secrets.APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD }}
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
 on:
+  workflow_dispatch:
   pull_request:
-    branches: ["**"]
+    branches: ['**']
   push:
-    branches: ["main"]
+    branches: ['main']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions: {}
 
 jobs:
   build:
-    name: Lint & Test
-    runs-on: ubuntu-latest-16-core-x64
+    name: Build
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  #v6.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+        id: setup-node
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
           cache-dependency-path: yarn.lock
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -47,7 +49,7 @@ jobs:
       - name: Log in to GitHub Container registry
         uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
         with:
-          registry: "https://ghcr.io"
+          registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
           password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
@@ -58,17 +60,151 @@ jobs:
       - name: Install dependencies
         run: yarn install --immutable
 
-      - name: Verify
-        run: yarn verify
+      - name: Run dist
+        run: yarn dist
 
-      - name: Clean
-        run: yarn clean
+      - name: Save turbo cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
 
-      - name: Build for publishing
-        run: yarn dist:publish
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        if: always()
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: |
+            packages/*/dist/**
+            packages/*/tsconfig.*.tsbuildinfo
 
-      - name: Run publint
-        run: yarn publint
+  general-checks:
+    name: General Checks
+    needs: [build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      # The following 3 steps are the equivalent of running `yarn verify:check`/`turbo verify:check`
+      # They are separated into 3 steps to give better visibility of the errors in the ci.
+      # Future changes to verify:check should be reflected in these steps.
+      - name: Run typecheck
+        run: yarn typecheck
+
+      - name: Run format check
+        run: yarn format:check
+
+      - name: Run linter
+        run: yarn lint
+
+      - name: Save turbo cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+
+  tests:
+    name: Tests
+    needs: [general-checks]
+    runs-on: ubuntu-latest-16-core-x64
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        with:
+          name: build-artifacts-${{ github.run_id }}
+          path: .
+
+      - name: Run tests
+        run: yarn test
 
       # - name: Run smoke e2e tests
       #   run: |
@@ -109,3 +245,116 @@ jobs:
       #   with:
       #     name: 'test-results-junit'
       #     path: ./packages/e2e-tests/reports/report.xml
+
+  build-publish:
+    name: Build for Publishing
+    needs: [tests]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Run dist:publish
+        run: yarn dist:publish
+
+      - name: Save turbo cache
+        if: always()
+        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        if: always()
+        with:
+          name: build-publish-artifacts-${{ github.run_id }}
+          path: |
+            packages/*/dist/**
+            packages/*/tsconfig.*.tsbuildinfo
+
+  publish-checks:
+    name: Publish Checks
+    needs: [build-publish]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+        id: setup-node
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: yarn.lock
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Check tool versions
+        run: |
+          node --version
+          corepack --version
+          yarn --version
+
+      - name: Log in to GitHub Container registry
+        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        with:
+          registry: 'https://ghcr.io'
+          username: ${{ env.MIDNIGHT_GH_USER }}
+          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Restore turbo cache
+        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 #v4.3.0
+        with:
+          path: .turbo
+          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
+          restore-keys: |
+            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        with:
+          name: build-publish-artifacts-${{ github.run_id }}
+          path: .
+        continue-on-error: true
+
+      - name: Run publint
+        run: yarn publint

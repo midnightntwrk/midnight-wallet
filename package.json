@@ -18,6 +18,7 @@
     "@vitest/ui": "4.0.8",
     "allure-js-commons": "^3.3.0",
     "allure-vitest": "^3.3.0",
+    "dotenv": "^16.0.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.0.2",
     "eslint-plugin-prettier": "^5.2.3",
@@ -34,9 +35,13 @@
     "vite": "^7.1.11"
   },
   "scripts": {
+    "format:root": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check:root": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "verify": "turbo run verify",
+    "verify:check": "turbo run verify:check",
+    "verify:test": "turbo run verify:test",
     "publint": "turbo run publint",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",

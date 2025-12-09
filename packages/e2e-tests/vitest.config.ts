@@ -16,7 +16,7 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    setupFiles: ['allure-vitest/setup', './setup-env.ts'],
+    setupFiles: ['allure-vitest/setup', '../../setup-env.ts'],
     pool: 'threads',
     environment: 'node',
     testTimeout: 90_000,

@@ -24,19 +24,11 @@ const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 
 const environmentId = randomUUID();
 
-const environmentVars = buildTestEnvironmentVariables(
-  [
-    'APP_INFRA_SECRET',
-    'APP_INFRA_STORAGE_PASSWORD',
-    'APP_INFRA_PUB_SUB_PASSWORD',
-    'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-  ],
-  {
-    additionalVars: {
-      TESTCONTAINERS_UID: environmentId,
-    },
+const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
+  additionalVars: {
+    TESTCONTAINERS_UID: environmentId,
   },
-);
+});
 
 const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose.yml')
   // The test below assumes indexer is able to serve blocks, so we wait for it to index at least one block

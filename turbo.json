@@ -23,15 +23,10 @@
         "$TURBO_ROOT$/tsconfig.base.json",
         "vitest.config.mjs"
       ],
-      "env": [
-        "DEBUG",
-        "APP_INFRA_SECRET",
-        "APP_INFRA_STORAGE_PASSWORD",
-        "APP_INFRA_PUB_SUB_PASSWORD",
-        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
-      ],
+      "outputs": ["coverage/**", "reports/**"],
+      "env": ["DEBUG", "APP_INFRA_SECRET"],
       "outputLogs": "new-only",
-      "dependsOn": ["typecheck", "^dist"]
+      "dependsOn": ["^dist"]
     },
     "typecheck": {
       "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
@@ -40,18 +35,22 @@
     },
     "test-undeployed": {
       "cache": false,
-      "env": [
-        "NETWORK",
-        "DEPLOYMENT",
-        "APP_INFRA_SECRET",
-        "APP_INFRA_STORAGE_PASSWORD",
-        "APP_INFRA_PUB_SUB_PASSWORD",
-        "APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD"
-      ]
+      "env": ["NETWORK", "DEPLOYMENT", "APP_INFRA_SECRET"]
     },
     "test-remote": {
       "cache": false,
-      "env": ["NETWORK", "DEPLOYMENT", "SEED", "SEED2", "SEED_STABLE", "ADDRESSES", "NT_SEED", "NT_SEED2", "SYNC_CACHE"]
+      "env": [
+        "NETWORK",
+        "DEPLOYMENT",
+        "SEED",
+        "SEED2",
+        "SEED_STABLE",
+        "ADDRESSES",
+        "NT_SEED",
+        "NT_SEED2",
+        "SYNC_CACHE",
+        "APP_INFRA_SECRET"
+      ]
     },
     "dist": {
       "inputs": [
@@ -63,7 +62,7 @@
       ],
       "outputs": ["dist/**", "tsconfig.*.tsbuildinfo"],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist", "typecheck"]
+      "dependsOn": ["^dist"]
     },
     "dist:publish": {
       "inputs": [
@@ -96,18 +95,38 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
-    "format": {
-      "inputs": ["**/*.{ts,js,json,yaml,yml}", ".prettierrc.json", "**/.prettierignore"],
+    "//#format:root": {
+      "cache": false,
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
       "outputs": [],
       "outputLogs": "new-only"
+    },
+    "//#format:check:root": {
+      "cache": false,
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
+    "format": {
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
+      "outputs": [],
+      "outputLogs": "new-only",
+      "dependsOn": ["//#format:root"]
     },
     "format:check": {
-      "inputs": ["**/*.{ts,js,json,yaml,yml}", ".prettierrc.json", "**/.prettierignore"],
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
-      "outputLogs": "new-only"
+      "outputLogs": "new-only",
+      "dependsOn": ["//#format:check:root"]
+    },
+    "verify:check": {
+      "dependsOn": ["typecheck", "format:check", "lint"]
+    },
+    "verify:test": {
+      "dependsOn": ["test"]
     },
     "verify": {
-      "dependsOn": ["typecheck", "format:check", "lint", "test"]
+      "dependsOn": ["verify:check", "verify:test"]
     }
   }
 }

@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-indexer-client
 
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [a06ccf3]
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.9
+
 ## 1.0.0-beta.11
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- a06ccf3: Adds missing main property in the package.json file for the abstractions package
+
 ## 1.0.0-beta.8
 
 ### Minor Changes

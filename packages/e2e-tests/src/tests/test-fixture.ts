@@ -12,6 +12,7 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { exit } from 'process';
+import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { MidnightNetwork } from './utils.js';
@@ -26,16 +27,11 @@ export function useTestContainersFixture() {
 
   beforeAll(async () => {
     logger.info(`Spinning up ${process.env['NETWORK']} test environment...`);
-    const uid = Math.floor(Math.random() * 1000).toString();
+    const uid = randomUUID();
     const network = process.env['NETWORK'] as MidnightNetwork;
     let composeEnvironment: StartedDockerComposeEnvironment;
 
-    const envVarsToPass = [
-      'APP_INFRA_SECRET',
-      'APP_INFRA_STORAGE_PASSWORD',
-      'APP_INFRA_PUB_SUB_PASSWORD',
-      'APP_INFRA_LEDGER_STATE_STORAGE_PASSWORD',
-    ] as const;
+    const envVarsToPass = ['APP_INFRA_SECRET'] as const;
 
     switch (network) {
       case 'undeployed': {

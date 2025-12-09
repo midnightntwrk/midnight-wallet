@@ -1,0 +1,15 @@
+name: Healthcheck - preview
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * *'
+
+jobs:
+  test:
+    name: Healthcheck tests
+    uses: ./.github/workflows/e2e-tests.yml
+    with:
+      network: devnet
+      modifier: '-t @healthcheck'
+    secrets: inherit

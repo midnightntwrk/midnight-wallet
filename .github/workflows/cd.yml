@@ -11,7 +11,9 @@ on:
     branches:
       - main
 
-concurrency: ${{ github.workflow }}-${{ github.ref }}
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 
 permissions: {}
 
@@ -24,17 +26,17 @@ jobs:
       pull-requests: write
       packages: write
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 #v5.0.0
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903  #v6.0.0
+      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
         with:
-          node-version-file: ".nvmrc"
-          cache: "yarn"
-          cache-dependency-path: "yarn.lock"
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
           # This is required for the npm publish step
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: "https://npm.pkg.github.com"
-          scope: "@midnight-ntwrk"
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
 
       - name: Enable corepack
         run: corepack enable
@@ -73,7 +75,7 @@ jobs:
         id: changesets
         uses: changesets/action@e0145edc7d9d8679003495b11f87bd8ef63c0cba #v1.5.3
         with:
-          title: "chore: release"
+          title: 'chore: release'
           version: yarn changeset:version
           publish: yarn changeset:publish
           setupGitUser: false
