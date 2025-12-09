@@ -35,6 +35,7 @@
     "vite": "^7.1.11"
   },
   "scripts": {
+    "build:browser-extension": "yarn workspace @midnight-ntwrk/browser-extension build",
     "format:root": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check:root": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format": "turbo run format",

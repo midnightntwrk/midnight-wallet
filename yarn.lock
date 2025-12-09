@@ -2173,21 +2173,21 @@ __metadata:
 
 "@midnight-ntwrk/ledger-v6@npm:6.1.0-alpha.6":
   version: 6.1.0-alpha.6
-  resolution: "@midnight-ntwrk/ledger-v6@npm:6.1.0-alpha.6::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v6%2F6.1.0-alpha.6%2Ff403540eca387202cd690dba171e97c682924ecd"
+  resolution: "@midnight-ntwrk/ledger-v6@npm:6.1.0-alpha.6"
   checksum: 10c0/e3b7425d6f1db73d8b0bbebb142c67e8b8bfb718c684bfe91d83b5d9cf28024c1ae6a150827ecd9d14a5d2b5e167a6140037112d1025a6ac2bb8adacf83c24a5
   languageName: node
   linkType: hard
 
 "@midnight-ntwrk/midnight-js-network-id@npm:0.2.5":
   version: 0.2.5
-  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.2.5::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fmidnight-js-network-id%2F0.2.5%2Fd27788cb24b11431e501f034070e3d16c966bcfa"
+  resolution: "@midnight-ntwrk/midnight-js-network-id@npm:0.2.5"
   checksum: 10c0/1da98e7b116d182dfbe6a54a423c397bd6debe1309cfd5a021df5c1d5e8d4ff63d50adda7588ff3175ff4af611cf57fd318b712e355a8a62f4aa5f1ff5bc0200
   languageName: node
   linkType: hard
 
 "@midnight-ntwrk/wallet-api@npm:^3.5.0":
   version: 3.5.0
-  resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F3.5.0%2Fca387b2ca0ce9a7d68d7776886c938668925f196"
+  resolution: "@midnight-ntwrk/wallet-api@npm:3.5.0"
   dependencies:
     "@midnight-ntwrk/zswap": "npm:^3.0.2"
   peerDependencies:
@@ -2198,7 +2198,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet-api@npm:^5.0.0":
   version: 5.0.0
-  resolution: "@midnight-ntwrk/wallet-api@npm:5.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-api%2F5.0.0%2F3fdac91d3019d1e0e8f440a6444d9fd840f72741"
+  resolution: "@midnight-ntwrk/wallet-api@npm:5.0.0"
   dependencies:
     "@midnight-ntwrk/zswap": "npm:^4.0.0"
   peerDependencies:
@@ -2264,7 +2264,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet-sdk-address-format@npm:^2.0.0":
   version: 2.0.0
-  resolution: "@midnight-ntwrk/wallet-sdk-address-format@npm:2.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-address-format%2F2.0.0%2F655a703be8e7281b08cfe84c0478026f5212d240"
+  resolution: "@midnight-ntwrk/wallet-sdk-address-format@npm:2.0.0"
   dependencies:
     "@scure/base": "npm:^1.1.9"
   peerDependencies:
@@ -2292,7 +2292,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet-sdk-capabilities@npm:^2.0.0":
   version: 2.0.0
-  resolution: "@midnight-ntwrk/wallet-sdk-capabilities@npm:2.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-capabilities%2F2.0.0%2F2be32fb38122603c262184c024bf8b99e8ce3573"
+  resolution: "@midnight-ntwrk/wallet-sdk-capabilities@npm:2.0.0"
   peerDependencies:
     "@midnight-ntwrk/zswap": 4.0.0
   checksum: 10c0/00b1efeeb4ba0f3802af0be95cd18ce22ea96721b909df38905a23dd84eca466433d8b77559c3c1eedb2f9333b551b428c021d64ac1cfb1bc453b515416ddef6
@@ -2559,7 +2559,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet-sdk-unshielded-state@npm:1.0.0-beta.11":
   version: 1.0.0-beta.11
-  resolution: "@midnight-ntwrk/wallet-sdk-unshielded-state@npm:1.0.0-beta.11::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-unshielded-state%2F1.0.0-beta.11%2Fa0f509d8388642aa28ad00e075f81f9dcf46697d"
+  resolution: "@midnight-ntwrk/wallet-sdk-unshielded-state@npm:1.0.0-beta.11"
   dependencies:
     effect: "npm:^3.17.3"
   checksum: 10c0/8693cb744e19130d6eb83e7978c66f2803310053be3873f38e49037f35650374e0a2b67d96671ec973d758ffc071672ff23e2e807fa98d85f9051f1973bc6392
@@ -2608,7 +2608,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet@npm:@midnight-ntwrk/wallet@5.0.0":
   version: 5.0.0
-  resolution: "@midnight-ntwrk/wallet@npm:5.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F5.0.0%2F0019bbe327e49af96b27b9dc99bbe2015397a4e2"
+  resolution: "@midnight-ntwrk/wallet@npm:5.0.0"
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:^2.0.0"
@@ -2625,7 +2625,7 @@ __metadata:
 
 "@midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.4, @midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.4":
   version: 3.7.4
-  resolution: "@midnight-ntwrk/wallet@npm:3.7.4::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.4%2F4b2e2ea506862eca50295098b6497cf37305d55b"
+  resolution: "@midnight-ntwrk/wallet@npm:3.7.4"
   dependencies:
     "@midnight-ntwrk/wallet-api": "npm:^3.5.0"
     "@midnight-ntwrk/zswap": "npm:^3.0.2"
@@ -2640,14 +2640,14 @@ __metadata:
 
 "@midnight-ntwrk/zswap@npm:4.0.0, @midnight-ntwrk/zswap@npm:^4.0.0":
   version: 4.0.0
-  resolution: "@midnight-ntwrk/zswap@npm:4.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F4.0.0%2Fcf83884fe94a4f03aadfc82e5161c05d54822053"
+  resolution: "@midnight-ntwrk/zswap@npm:4.0.0"
   checksum: 10c0/c4bedf9e89a781639b2c1da104a1ab6947897c47dd77ee36e40f4e39f371b335b2636e64d3f4a87451be6632946de24221d8946e7ce56e8dc897f4335ac9b323
   languageName: node
   linkType: hard
 
 "@midnight-ntwrk/zswap@npm:^3.0.2":
   version: 3.0.6
-  resolution: "@midnight-ntwrk/zswap@npm:3.0.6::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzswap%2F3.0.6%2Feeb594d52b8abf93e6b5510a9cb1c3c6eca521b8"
+  resolution: "@midnight-ntwrk/zswap@npm:3.0.6"
   checksum: 10c0/bc10f8d739596fc0a6e00179be81c50153315e144801b2e39f95140082277ad8b066a50193832951f1e4f03fbaf86efdfd550b4cb59f59b213f98657c31d9850
   languageName: node
   linkType: hard
@@ -4507,11 +4507,11 @@ __metadata:
   linkType: hard
 
 "allure-commandline@npm:^2.27.0":
-  version: 2.34.1
-  resolution: "allure-commandline@npm:2.34.1"
+  version: 2.35.1
+  resolution: "allure-commandline@npm:2.35.1"
   bin:
     allure: bin/allure
-  checksum: 10c0/8f8d67e0c917d83b2324d760ea8d082c4c8527dcf3feb5b0a1fd4a13cfc995314d447b1084b25b651d68f5fb75d1b1157b0d55bbdc58d23e5e26ea38741df1a4
+  checksum: 10c0/6aa34bf3a276a191a25f59d29225166b9c593d784692f233fad764a8739f5b93139b2d07b4659983e24a62ec36bac12d2dfc9b1ad1aab4081e7a4944697baa7f
   languageName: node
   linkType: hard
 
@@ -10241,8 +10241,8 @@ __metadata:
   linkType: hard
 
 "testcontainers@npm:^11.7.2, testcontainers@npm:^11.8.1":
-  version: 11.9.0
-  resolution: "testcontainers@npm:11.9.0"
+  version: 11.10.0
+  resolution: "testcontainers@npm:11.10.0"
   dependencies:
     "@balena/dockerignore": "npm:^1.0.2"
     "@types/dockerode": "npm:^3.3.47"
@@ -10259,7 +10259,7 @@ __metadata:
     tar-fs: "npm:^3.1.1"
     tmp: "npm:^0.2.5"
     undici: "npm:^7.16.0"
-  checksum: 10c0/9d5f95ada46f190b12930376332bbfb8a7c5e868d62eba0916cd29fa1031a6bd0b919ca9eec59219a717accb52a3e663526d2fde31a33f3d99fc7940efecadac
+  checksum: 10c0/1ae0ee097bb214a314285a33cbfdbe41abc7099f6622f1ab0f9cb33ed80267c5964ce218ceec1b4ff7fd3781586337b298bb8819dd343f52190862f7ca628fe6
   languageName: node
   linkType: hard
 
