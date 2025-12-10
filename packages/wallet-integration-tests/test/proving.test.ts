@@ -15,7 +15,6 @@ import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Layer, pipe } from 'effect';
-import * as os from 'node:os';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';

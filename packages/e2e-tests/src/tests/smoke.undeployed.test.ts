@@ -25,10 +25,11 @@ import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-
 import {
   createKeystore,
   PublicKey,
-  WalletBuilder as UnshieldedWalletBuilder,
+  UnshieldedWallet,
+  InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { InMemoryTransactionHistoryStorage } from '../../../unshielded-wallet/dist/tx-history-storage/InMemoryTransactionHistoryStorage.js';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Smoke tests
@@ -63,8 +64,8 @@ describe('Smoke tests', () => {
         ...fixture.getDustWalletConfig(),
       });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
-      walletFunded = await utils.buildWalletFacade(seedFunded, fixture);
-      receiverWallet = await utils.buildWalletFacade(seed, fixture);
+      walletFunded = utils.buildWalletFacade(seedFunded, fixture);
+      receiverWallet = utils.buildWalletFacade(seed, fixture);
       await walletFunded.start(fundedSecretKey, fundedDustSecretKey);
       await receiverWallet.start(receiverWalletSecretKey, receiverWalletDustSecretKey);
       logger.info('Two wallets started');
@@ -96,7 +97,7 @@ describe('Smoke tests', () => {
       await Promise.all([utils.waitForSyncFacade(walletFunded), utils.waitForSyncFacade(receiverWallet)]);
       const initialState = await utils.waitForSyncFacade(walletFunded);
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialUnshieldedBalance = initialState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
       logger.info(`Wallet 1 total shielded coins: ${initialState.shielded.totalCoins.length}`);
@@ -104,7 +105,7 @@ describe('Smoke tests', () => {
       logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
       expect(initialState.shielded.balances[shieldedTokenRaw]).toBe(balance);
-      expect(initialState.unshielded.balances.get(unshieldedTokenRaw)).toBe(balance);
+      expect(initialState.unshielded.balances[unshieldedTokenRaw]).toBe(balance);
       expect(Object.keys(initialState.shielded.balances)).toHaveLength(3);
       // expect(initialState.unshielded.balances.size).toBe(3);
 
@@ -112,7 +113,7 @@ describe('Smoke tests', () => {
       const initialBalance2 = initialState2.shielded.balances[shieldedTokenRaw];
       expect(initialBalance2).toBe(undefined);
       expect(Object.keys(initialState2.shielded.balances)).toHaveLength(0);
-      expect(initialState.unshielded.balances.size).toBe(1);
+      expect(Object.keys(initialState.unshielded.balances)).toHaveLength(1);
       logger.info(`Wallet 2: ${initialBalance2}`);
       logger.info(`Wallet 2 available coins: ${initialState2.shielded.availableCoins.length}`);
 
@@ -133,7 +134,9 @@ describe('Smoke tests', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: initialState2.unshielded.address,
+              receiverAddress: UnshieldedAddress.codec
+                .encode(NetworkId.NetworkId.Undeployed, initialState2.unshielded.address)
+                .asString(),
             },
           ],
         },
@@ -153,7 +156,7 @@ describe('Smoke tests', () => {
 
       const pendingState = await utils.waitForFacadePending(walletFunded);
       expect(pendingState.shielded.balances[shieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
-      expect(pendingState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBeLessThanOrEqual(balance - outputValue);
+      expect(pendingState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
       expect(pendingState.unshielded.totalCoins.length).toBe(5);
       expect(pendingState.shielded.availableCoins.length).toBe(6);
@@ -166,7 +169,7 @@ describe('Smoke tests', () => {
       const finalState = await utils.waitForSyncFacade(walletFunded);
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(balance - outputValue);
-      expect(finalState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBeLessThanOrEqual(balance - outputValue);
+      expect(finalState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
       expect(finalState.shielded.totalCoins.length).toBe(7);
       expect(finalState.unshielded.totalCoins.length).toBe(5);
       expect(finalState.unshielded.availableCoins.length).toBe(5);
@@ -176,7 +179,7 @@ describe('Smoke tests', () => {
       await utils.waitForFinalizedBalance(receiverWallet.shielded);
       const finalState2 = await utils.waitForSyncFacade(receiverWallet);
       const finalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
-      const finalUnshieldedBalance = finalState2.unshielded.balances.get(unshieldedTokenRaw);
+      const finalUnshieldedBalance = finalState2.unshielded.balances[unshieldedTokenRaw];
       logger.info(finalState2);
       logger.info(`Wallet 2 available coins: ${finalState2.shielded.availableCoins.length}`);
       logger.info(`Wallet 2: ${finalShieldedBalance} shielded tokens`);
@@ -235,12 +238,14 @@ describe('Smoke tests', () => {
       fixture = getFixture();
       const txHistoryStorage = new InMemoryTransactionHistoryStorage();
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
-      const initialWallet = await UnshieldedWalletBuilder.build({
-        publicKey: PublicKey.fromKeyStore(unshieldedKeyStore),
+      const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
-        indexerUrl: fixture.getIndexerUri(),
+        indexerClientConnection: {
+          indexerHttpUrl: fixture.getIndexerUri(),
+          indexerWsUrl: fixture.getIndexerWsUri(),
+        },
         txHistoryStorage,
-      });
+      }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       logger.info(`Waiting to sync...`);
       // const syncedState = await utils.waitForSyncUnshielded(initialWallet);
       // TODO add assertion for Tx history
@@ -249,13 +254,14 @@ describe('Smoke tests', () => {
       await initialWallet.stop();
 
       const restoredTxHistory = InMemoryTransactionHistoryStorage.fromSerialized(serializedTxHistory);
-      const restoredWallet = await UnshieldedWalletBuilder.restore({
-        publicKey: PublicKey.fromKeyStore(unshieldedKeyStore),
+      const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
-        indexerUrl: fixture.getIndexerUri(),
-        serializedState,
+        indexerClientConnection: {
+          indexerHttpUrl: fixture.getIndexerUri(),
+          indexerWsUrl: fixture.getIndexerWsUri(),
+        },
         txHistoryStorage: restoredTxHistory,
-      });
+      }).restore(serializedState);
 
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();

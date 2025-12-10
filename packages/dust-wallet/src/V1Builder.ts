@@ -86,8 +86,7 @@ export class V1Builder<
   TSyncUpdate = never,
   TTransaction = never,
   TStartAux extends object = object,
-> implements VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
-{
+> implements VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig> {
   #buildState: V1Builder.PartialBuildState<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
   constructor(

@@ -67,8 +67,8 @@ describe('Token transfer', () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
-    wallet = await utils.buildWalletFacade(fundedSeed, fixture);
-    wallet2 = await utils.buildWalletFacade(receivingSeed, fixture);
+    wallet = utils.buildWalletFacade(fundedSeed, fixture);
+    wallet2 = utils.buildWalletFacade(receivingSeed, fixture);
 
     await wallet.start(initialFundedSecretKey, fundedDustSecretKey);
     await wallet2.start(initialReceiverSecretKey, receiverDustSecretKey);
@@ -113,7 +113,7 @@ describe('Token transfer', () => {
       await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(receiver)]);
       const initialState = await firstValueFrom(sender.state());
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialUnshieldedBalance = initialState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       const initialDustBalance = initialState.dust.walletBalance(new Date());
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} shielded tokens`);
@@ -124,7 +124,7 @@ describe('Token transfer', () => {
       const initialReceiverState = await firstValueFrom(receiver.state());
       const initialReceiverShieldedBalance1 = initialReceiverState.shielded.balances[nativeToken1Raw];
       const initialReceiverShieldedBalance2 = initialReceiverState.shielded.balances[nativeToken2Raw];
-      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances.get(unshieldedTokenRaw);
+      const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances[unshieldedTokenRaw];
       const initialReceiverDustBalance = initialReceiverState.dust.walletBalance(new Date());
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance1} native token 1`);
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance2} native token 2`);
@@ -180,7 +180,7 @@ describe('Token transfer', () => {
       // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
-      const senderFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
+      const senderFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
       const senderFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 1 final available dust: ${senderFinalDustBalance}`);
       logger.info(`Wallet 1 final available shielded coins: ${senderFinalShieldedBalance1}`);
@@ -207,7 +207,7 @@ describe('Token transfer', () => {
       // logger.info(walletStateTrimmed(finalState2));
       const receiverFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const receiverFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
-      const receiverFinalUnshieldedBalance = finalState.unshielded.balances.get(unshieldedTokenRaw);
+      const receiverFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
       const receiverFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
       logger.info(`Wallet 2 final available shielded coins: ${receiverFinalShieldedBalance1}`);
       logger.info(`Wallet 2 final available shielded coins: ${receiverFinalShieldedBalance2}`);

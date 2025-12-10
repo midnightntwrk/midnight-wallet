@@ -129,8 +129,8 @@ export interface CustomizedShieldedWallet<
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 > extends WalletLike.WalletLike<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
-  > {
+  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+> {
   readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
   start(secretKeys: TStartAux): Promise<void>;
@@ -171,8 +171,8 @@ export interface CustomizedShieldedWalletClass<
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
 > extends WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
-  > {
+  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+> {
   configuration: TConfig;
   startWithShieldedSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   startWithSecretKeys(

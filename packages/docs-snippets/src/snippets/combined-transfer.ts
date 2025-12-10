@@ -69,14 +69,14 @@ const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
     rx.filter((s) => {
-      const nightBalance = s.unshielded.balances.get(ledger.unshieldedToken().raw) ?? 0n;
+      const nightBalance = s.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n;
       return nightBalance > 0n;
     }),
   ),
 );
 
 console.log('Transfer completed;');
-console.log('  Night balance:', receiverState.unshielded.balances.get(ledger.unshieldedToken().raw) ?? 0n);
+console.log('  Night balance:', receiverState.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n);
 console.log('  shielded token balance:', receiverState.shielded.balances[ledger.shieldedToken().raw] ?? 0n);
 
 await receiver.wallet.stop();

@@ -72,11 +72,11 @@ export const make: <Name extends string, T extends Query.Document<R, V>, R = Que
 ) => new QueryImpl<R, V, T>(`${name}Query`, document);
 
 class QueryImpl<
-    R,
-    V,
-    T extends Query.Document<R, V> = Query.Document<R, V>,
-    F extends Query.QueryFn<R, V> = Query.QueryFn<R, V>,
-  >
+  R,
+  V,
+  T extends Query.Document<R, V> = Query.Document<R, V>,
+  F extends Query.QueryFn<R, V> = Query.QueryFn<R, V>,
+>
   extends Effectable.Class<F>
   implements Query<R, V, F>
 {

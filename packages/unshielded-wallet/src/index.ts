@@ -10,6 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './WalletBuilder.js';
-export { State as UnshieldedWalletState } from './State.js';
-export { PublicKey, createKeystore, UnshieldedKeystore, Keystore } from './KeyStore.js';
+export * from './UnshieldedWallet.js';
+export * from './storage/index.js';
+export * from './KeyStore.js';

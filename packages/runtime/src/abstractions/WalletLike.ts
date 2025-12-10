@@ -41,8 +41,10 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
 /**
  * Defines the static portion of wallet-like definition
  */
-export interface WalletClassLike<TVariants extends AnyVersionedVariantArray, TWallet extends WalletLike<TVariants>>
-  extends BaseWalletClass<TVariants> {
+export interface WalletClassLike<
+  TVariants extends AnyVersionedVariantArray,
+  TWallet extends WalletLike<TVariants>,
+> extends BaseWalletClass<TVariants> {
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): TWallet;
 }
 

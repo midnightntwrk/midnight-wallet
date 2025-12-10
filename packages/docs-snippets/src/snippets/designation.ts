@@ -52,7 +52,7 @@ await sender.wallet
       wallet.state().pipe(
         rx.filter((s) => s.isSynced),
         rx.filter((s) => {
-          const nightBalance = s.unshielded.balances.get(ledger.nativeToken().raw) ?? 0n;
+          const nightBalance = s.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
           return nightBalance > 0n;
         }),
       ),

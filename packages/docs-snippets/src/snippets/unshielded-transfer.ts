@@ -51,7 +51,7 @@ const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
     rx.filter((s) => {
-      const nightBalance = s.unshielded.balances.get(ledger.unshieldedToken().raw) ?? 0n;
+      const nightBalance = s.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n;
       return nightBalance > 0n;
     }),
   ),
@@ -59,7 +59,7 @@ const receiverState = await rx.firstValueFrom(
 
 console.log(
   'Unshielded transfer completed; night balance:',
-  receiverState.unshielded.balances.get(ledger.unshieldedToken().raw) ?? 0n,
+  receiverState.unshielded.balances[ledger.unshieldedToken().raw] ?? 0n,
 );
 
 await receiver.wallet.stop();

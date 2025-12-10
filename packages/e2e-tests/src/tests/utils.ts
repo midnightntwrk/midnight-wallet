@@ -27,9 +27,9 @@ import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
+  InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
-  WalletBuilder as unshieldedWalletBuilder,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -44,13 +44,12 @@ export const waitForSyncProgress = async (wallet: WalletFacade) =>
     wallet.state().pipe(
       throttleTime(5000),
       tap((state) => {
-        const applyGap = state.unshielded.syncProgress?.applyGap ?? 0n;
+        const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
         logger.info(`Wallet facade behind by ${applyGap}`);
       }),
-      filter(
-        (state) =>
-          // Let's allow progress only if syncProgress is defined
-          state.unshielded.syncProgress !== undefined && state.unshielded.syncProgress?.applyGap !== 0,
+      filter((state) =>
+        // Let's allow progress only if syncProgress is defined
+        state.unshielded.progress.isStrictlyComplete(),
       ),
     ),
   );
@@ -101,12 +100,14 @@ const restoreUnshieldedWallet = async (
     if (serialized) {
       logger.info(`Unshielded serialize: ${serialized}`);
       const keyStore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
-      const wallet = await unshieldedWalletBuilder.restore({
-        publicKey: PublicKey.fromKeyStore(keyStore),
+      const wallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
-        indexerUrl: fixture.getIndexerWsUri(),
-        serializedState: serialized,
-      });
+        indexerClientConnection: {
+          indexerHttpUrl: fixture.getIndexerUri(),
+          indexerWsUrl: fixture.getIndexerWsUri(),
+        },
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
     }
@@ -182,7 +183,8 @@ export const provideWallet = async (
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
     const restoredWalletState = await firstValueFrom(restoredWallet.state());
-    const applyGap = restoredWalletState.unshielded.syncProgress?.applyGap;
+    const applyGap =
+      restoredWalletState.unshielded.progress.highestTransactionId - restoredWalletState.unshielded.progress.appliedId;
     logger.info(`Apply gap: ${applyGap}`);
     if ((applyGap ?? 0) < 0) {
       logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
@@ -244,17 +246,20 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
   }
 };
 
-export const buildWalletFacade = async (walletSeed: string, fixture: TestContainersFixture) => {
+export const buildWalletFacade = (walletSeed: string, fixture: TestContainersFixture) => {
   const unshieldedKeyStore = createKeystore(getUnshieldedSeed(walletSeed), fixture.getNetworkId());
   const Wallet = ShieldedWallet(fixture.getWalletConfig());
 
   const shieldedWallet = Wallet.startWithShieldedSeed(getShieldedSeed(walletSeed));
 
-  const unshieldedWallet = await unshieldedWalletBuilder.build({
-    publicKey: PublicKey.fromKeyStore(unshieldedKeyStore),
+  const unshieldedWallet = UnshieldedWallet({
     networkId: fixture.getNetworkId(),
-    indexerUrl: fixture.getIndexerWsUri(),
-  });
+    indexerClientConnection: {
+      indexerHttpUrl: fixture.getIndexerUri(),
+      indexerWsUrl: fixture.getIndexerWsUri(),
+    },
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
 
   const dustSeed = getDustSeed(walletSeed);
   const Dust = DustWallet({
@@ -281,17 +286,14 @@ export const closeWallet = async (wallet: WalletFacade) => {
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   firstValueFrom(
-    wallet.state().pipe(
+    wallet.state.pipe(
       throttleTime(5_000),
       tap((state) => {
-        const applyGap = state.syncProgress?.applyGap;
+        const applyGap = state.state.progress.highestTransactionId - state.state.progress.appliedId;
         // const txs = state.transactionHistory.length;
         logger.info(`Wallet behind by ${applyGap} indices`);
       }),
-      filter(
-        (state) =>
-          state.syncProgress !== undefined && state.syncProgress?.applyGap === 0 && state.syncProgress?.synced === true,
-      ),
+      filter((state) => state.state.progress.isStrictlyComplete()),
     ),
   );
 
@@ -341,14 +343,14 @@ export const waitForSyncFacade = async (facade: WalletFacade) =>
     facade.state().pipe(
       throttleTime(5_000),
       tap((state) => {
-        const applyGap = state.unshielded.syncProgress?.applyGap;
+        const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
         logger.info(`Wallet facade behind by ${applyGap}`);
       }),
       filter(
         (state) =>
           state.dust.state.progress.isStrictlyComplete() &&
           state.shielded.state.progress.isStrictlyComplete() &&
-          state.unshielded.syncProgress?.synced === true,
+          state.unshielded.progress.isStrictlyComplete(),
       ),
     ),
   );
@@ -408,13 +410,13 @@ export const waitForPending = (wallet: ShieldedWallet) =>
 
 export const waitForBalanceUpdate = (wallet: UnshieldedWallet) =>
   firstValueFrom(
-    wallet.state().pipe(
+    wallet.state.pipe(
       tap((state) => {
-        const balanceSize = state.balances.size;
+        const balanceSize = Object.values(state.balances).length;
         logger.info(`Balance size: ${balanceSize}, waiting for balance to update...`);
       }),
       filter((state) => {
-        return state.balances.size > 0;
+        return Object.values(state.balances).length > 0;
       }),
     ),
   );
@@ -434,7 +436,7 @@ export const waitForDustBalance = (wallet: WalletFacade, expectedDustBalance: bi
 
 export const waitForFinalizedBalanceUnshielded = (wallet: UnshieldedWallet) =>
   firstValueFrom(
-    wallet.state().pipe(
+    wallet.state.pipe(
       tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);

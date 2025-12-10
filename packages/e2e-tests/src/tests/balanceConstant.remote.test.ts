@@ -52,7 +52,7 @@ describe('Balance constant', () => {
   beforeEach(async () => {
     const fixture = getFixture();
 
-    walletFacade = await utils.buildWalletFacade(seed, fixture);
+    walletFacade = utils.buildWalletFacade(seed, fixture);
     await walletFacade.start(shieldedSecretKey, dustSecretKey);
   }, syncTimeout);
 
