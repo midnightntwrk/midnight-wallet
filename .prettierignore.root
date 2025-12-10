@@ -1,0 +1,15 @@
+# This file is used by the root tasks "format:root" & "format:check:root"
+# It is important that we ignore the "packages" directory, but if we do that in the
+# standard .prettierignore then vscode fails to format.
+#
+# This file is ONLY used by the root tasks.
+#
+
+dist/
+coverage/
+reports/
+.yarnrc.yml
+.changeset/
+.turbo/
+.yarn/
+packages/
