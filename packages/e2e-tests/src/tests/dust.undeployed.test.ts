@@ -67,7 +67,7 @@ describe('Dust tests', () => {
   const sendAndRegisterNightUtxos = async () => {
     const initialState = await utils.waitForSyncFacade(walletFunded);
     const receiverInitialState = await utils.waitForSyncFacade(receiverWallet);
-    const initialAvailableCoins = initialState.unshielded.availableCoins.length;
+    const receiverInitialAvailableCoins = receiverInitialState.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
     logger.info(`Wallet 1 total unshielded coins: ${initialState.unshielded.totalCoins.length}`);
@@ -112,17 +112,9 @@ describe('Dust tests', () => {
     logger.info('Transaction id: ' + txId);
 
     logger.info('Waiting for finalized balance...');
-    await utils.waitForFacadePendingClear(walletFunded);
-    await utils.waitForFacadePendingClear(receiverWallet);
-    // const receiverState2 = await rx.firstValueFrom(
-    //   receiverWallet.state().pipe(
-    //     // rx.debounceTime(10_000),
-    //     rx.filter((s) => s.isSynced),
-    //     rx.filter((s) => s.unshielded.availableCoins.length > initialAvailableCoins),
-    //   ),
-    // );
-    const receiverState2 = await utils.waitForSyncFacade(receiverWallet);
+    const receiverState2 = await utils.waitForUnshieldedCoinUpdate(receiverWallet, receiverInitialAvailableCoins);
     const finalUnshieldedBalance = receiverState2.unshielded.balances[unshieldedTokenRaw];
+    logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
 
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
@@ -161,7 +153,7 @@ describe('Dust tests', () => {
     expect(nightBalanceAfterRegistration).toBe(finalUnshieldedBalance);
   };
 
-  test(
+  test.only(
     'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
     async () => {
       await sendAndRegisterNightUtxos();
