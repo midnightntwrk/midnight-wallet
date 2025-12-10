@@ -43,7 +43,7 @@ export const runNodeContainer = (
 export const runProofServerContainer = (
   adjustment: (t: GenericContainer) => GenericContainer = identity,
 ): Effect.Effect<StartedTestContainer, Error, Scope.Scope> => {
-  const container = new GenericContainer('ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.5')
+  const container = new GenericContainer('ghcr.io/midnight-ntwrk/proof-server:6.2.0-rc.2')
     .withEnvironment({
       RUST_BACKTRACE: 'full',
     })
