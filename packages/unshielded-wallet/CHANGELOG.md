@@ -1,5 +1,14 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 1.0.0-beta.14
+
+### Patch Changes
+
+- 283ff55: fix: unshielded state update bug
+- b9865cf: feat: rewrite unshielded wallet runtime
+- Updated dependencies [b9865cf]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.13
+
 ## 1.0.0-beta.13
 
 ### Patch Changes

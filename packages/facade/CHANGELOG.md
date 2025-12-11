@@ -1,5 +1,16 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- b9865cf: feat: rewrite unshielded wallet runtime
+- Updated dependencies [283ff55]
+- Updated dependencies [b9865cf]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@1.0.0-beta.14
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.12
+
 ## 1.0.0-beta.11
 
 ### Patch Changes
