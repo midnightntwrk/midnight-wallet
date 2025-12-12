@@ -165,7 +165,7 @@ describe('Token transfer', () => {
     },
     timeout,
   );
-  test.only(
+  test(
     'Is working for unshielded token transfer @smoke @healthcheck',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
@@ -524,7 +524,7 @@ describe('Token transfer', () => {
       const txFees = await fundedFacade.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
-      const pendingState = await utils.waitForFacadePending(fundedFacade);
+      await utils.waitForFacadePending(fundedFacade);
       // logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
       // expect(pendingState.shielded.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
       // expect(pendingState.shielded.availableCoins.length).toBe(7); // Test intemittently failing for different available coins
@@ -570,7 +570,6 @@ describe('Token transfer', () => {
       const initialAvailableCoins = syncedState?.shielded.availableCoins.length ?? 0;
       const initialTotalCoins = syncedState?.shielded.totalCoins.length ?? 0;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      const balance = 2500000000000000n;
 
       const initialState2 = await firstValueFrom(walletFacade.state());
       const initialBalance2 = initialState2.shielded.balances[shieldedTokenRaw];

@@ -65,15 +65,12 @@ describe('Token transfer', () => {
   beforeAll(async () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
-    logger.info(`Random seed: ${seed}`);
 
     wallet = utils.buildWalletFacade(seedFunded, fixture);
     wallet2 = utils.buildWalletFacade(seed, fixture);
     await wallet.start(initialFundedShieldedSecretKey, initialFundedDustSecretKey);
     await wallet2.start(initialReceiverShieldedSecretKey, initialReceiverDustSecretKey);
     logger.info('Two wallets started');
-    logger.info(`shielded token type: ${shieldedTokenRaw}`);
-    logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
     const date = new Date();
     const hour = date.getHours();
@@ -143,7 +140,10 @@ describe('Token transfer', () => {
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
       logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
       logger.info(
-        `Wallet 2 address: ${utils.getUnshieldedAddress(networkId, initialReceiverState.unshielded.address)}`,
+        `Wallet 2 unshielded address: ${utils.getUnshieldedAddress(networkId, initialReceiverState.unshielded.address)}`,
+      );
+      logger.info(
+        `Wallet 2 shielded address: ${utils.getShieldedAddress(networkId, initialReceiverState.shielded.address)}`,
       );
 
       const outputsToCreate: CombinedTokenTransfer[] = [
@@ -289,7 +289,6 @@ describe('Token transfer', () => {
       logger.info('Submitting transaction...');
       logger.info(provenTx);
       const txId = await sender.submitTransaction(provenTx);
-      const fees = provenTx.fees(ledger.LedgerParameters.initialParameters());
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForPending(sender.shielded);
