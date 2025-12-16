@@ -59,14 +59,15 @@ export const makeDefaultProvingService = (
             ),
             Effect.map((proven) => proven.bind()),
             Effect.provide(clientLayer),
-            Effect.catchAll((error) =>
-              Effect.fail(
+            Effect.catchAll((error) => {
+              console.log(error);
+              return Effect.fail(
                 new ProvingError({
                   message: error.message,
                   cause: error,
                 }),
-              ),
-            ),
+              );
+            }),
           );
         case 'NothingToProve':
           return Effect.succeed(recipe.transaction);

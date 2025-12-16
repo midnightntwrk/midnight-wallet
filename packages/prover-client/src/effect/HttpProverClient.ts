@@ -22,6 +22,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { BlobOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
+import { Worker } from 'worker_threads';
 
 const PROVE_TX_PATH = '/prove';
 const CHECK_TX_PATH = '/check';
@@ -46,6 +47,22 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
       }),
     ),
   );
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const callProverWorker = <RResponse>(op: 'check' | 'prove', args: any[]): Promise<RResponse> => {
+  return new Promise((resolve, reject) => {
+    console.log('Starting a worker');
+    //'./dist/proof-worker.js'
+    const worker = new Worker(new URL('../proof-worker.js', import.meta.url), { workerData: [op, args] });
+    worker.on('message', resolve);
+    worker.on('error', reject);
+    worker.on('exit', (code: number) => {
+      if (code !== 0) {
+        reject(new Error(`Prover worker stopped with exit code ${code}`));
+      }
+    });
+  });
+};
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
   constructor(baseUrl: HttpURL.HttpUrl) {
@@ -129,7 +146,41 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
       ),
   });
 
+  private wasmProverProvider = (): ledger.ProvingProvider => ({
+    check: async (serializedPreimage: Uint8Array, keyLocation: string): Promise<(bigint | undefined)[]> =>
+      pipe(
+        Effect.succeed(callProverWorker<(bigint | undefined)[]>('check', [serializedPreimage, keyLocation])),
+        Effect.runPromise,
+      ),
+    prove: async (
+      serializedPreimage: Uint8Array,
+      keyLocation: string,
+      overwriteBindingInput?: bigint,
+    ): Promise<Uint8Array> =>
+      pipe(
+        Effect.succeed(callProverWorker<Uint8Array>('prove', [serializedPreimage, keyLocation, overwriteBindingInput])),
+        Effect.runPromise,
+      ),
+  });
+
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
+    transaction: ledger.Transaction<S, ledger.PreProof, B>,
+    costModel: ledger.CostModel,
+  ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
+    return pipe(
+      Effect.succeed(this.wasmProverProvider()),
+      Effect.flatMap((provider) =>
+        Effect.tryPromise({
+          try: () => transaction.prove(provider, costModel),
+          catch: (error) =>
+            error instanceof ClientError || error instanceof ServerError
+              ? error
+              : new ClientError({ message: 'Failed to prove transaction', cause: error }),
+        }),
+      ),
+    );
+  }
+  /*proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
     transaction: ledger.Transaction<S, ledger.PreProof, B>,
     costModel: ledger.CostModel,
   ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError> {
@@ -145,5 +196,5 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         }),
       ),
     );
-  }
+  }*/
 }
