@@ -22,7 +22,7 @@ const sender = await initWalletWithSeed(
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 const initialSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
-const initialBalance = initialSenderState.unshielded.balances.get(ledger.nativeToken().raw) ?? 0n;
+const initialBalance = initialSenderState.unshielded.balances[ledger.nativeToken().raw] ?? 0n;
 
 const makeTransactionBlueprint = () => {
   const unshieldedOffer = ledger.UnshieldedOffer.new(
@@ -68,18 +68,18 @@ const finalSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.f
 const receiverState = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),
-    rx.filter((s) => (s.unshielded.balances.get(ledger.nativeToken().raw) ?? 0n) !== 0n),
+    rx.filter((s) => (s.unshielded.balances[ledger.nativeToken().raw] ?? 0n) !== 0n),
   ),
 );
 
 console.log('Unshielded transfer by balancing completed');
 console.log(
   'Did sender send all its Night?',
-  (finalSenderState.unshielded.balances.get(ledger.nativeToken().raw) ?? 0n) === 0n,
+  (finalSenderState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === 0n,
 );
 console.log(
   'Did receiver receive all the Night?',
-  (receiverState.unshielded.balances.get(ledger.nativeToken().raw) ?? 0n) === initialBalance,
+  (receiverState.unshielded.balances[ledger.nativeToken().raw] ?? 0n) === initialBalance,
 );
 
 await receiver.wallet.stop();

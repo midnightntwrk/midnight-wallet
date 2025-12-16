@@ -94,12 +94,13 @@ describe('BlockHash query', () => {
   });
 
   it('should support query function injection', async () => {
-    const block = { block: { height: 1_000, hash: 'SOME_HASH', ledgerParameters: '0x0' } };
+    const block = { block: { height: 1_000, hash: 'SOME_HASH', ledgerParameters: '0x0', timestamp: 1 } };
     const blockExpectation = expect.objectContaining({
       block: expect.objectContaining({
         height: block.block.height,
         hash: block.block.hash,
         ledgerParameters: block.block.ledgerParameters,
+        timestamp: block.block.timestamp,
       }),
     });
     const mockedQueryFn: Mock<(v: BlockHashQueryVariables) => Effect.Effect<BlockHashQuery>> = vi.fn();

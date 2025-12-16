@@ -64,8 +64,8 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     secretKey: TSecrets,
     state: TState,
     transaction: UnprovenTransaction,
-    currentTime: Date,
     ttl: Date,
+    currentTime: Date,
     ledgerParams: LedgerParameters,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
@@ -117,9 +117,11 @@ export const makeSimulatorTransactingCapability = (
   );
 };
 
-export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction>
-  implements TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>
-{
+export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
+  DustSecretKey,
+  DustCoreWallet,
+  TTransaction
+> {
   public readonly networkId: string;
   public readonly costParams: TotalCostParameters;
   public readonly getCoinSelection: () => CoinSelection<DustToken>;
@@ -285,8 +287,8 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     secretKey: DustSecretKey,
     state: DustCoreWallet,
     transaction: UnprovenTransaction,
-    currentTime: Date,
     ttl: Date,
+    currentTime: Date,
     ledgerParams: LedgerParameters,
   ): Either.Either<
     { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
@@ -307,8 +309,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
     const feeDiff = totalFeeInSelected - feeLeft;
     if (feeDiff < 0n) {
-      // A sanity-check, should never happen
-      return Either.left(new WalletError.TransactingError({ message: 'Error in tokens selection algorithm' }));
+      return Either.left(new WalletError.TransactingError({ message: 'Not enough Dust generated to pay the fee' }));
     }
 
     // reduce the largest token's value by `feeDiff`

@@ -52,7 +52,7 @@ describe('Transaction balancing examples', () => {
   beforeEach(async () => {
     await allure.step('Distribute coins to sender', async function () {
       fixture = getFixture();
-      fundedFacade = await utils.buildWalletFacade(fundedSeed, fixture);
+      fundedFacade = utils.buildWalletFacade(fundedSeed, fixture);
       await fundedFacade.start(fundedShieldedSecretKey, fundedDustSecretKey);
 
       const initialState = await utils.waitForSyncFacade(fundedFacade);
@@ -118,7 +118,7 @@ describe('Transaction balancing examples', () => {
         // expect(finalState.shielded.transactionHistory.length).toBe(initialState.shielded.transactionHistory.length + 2);
         await utils.waitForFacadePendingClear(senderFacade);
       };
-      senderFacade = await utils.buildWalletFacade(senderSeed, fixture);
+      senderFacade = utils.buildWalletFacade(senderSeed, fixture);
       await senderFacade.start(senderShieldedSecretKey, senderDustSecretKey);
       const state = await utils.waitForSyncFacade(senderFacade);
       const walletAddress = utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, state.shielded.address);
@@ -144,7 +144,7 @@ describe('Transaction balancing examples', () => {
       const receiver1SecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(receiver1Seed));
       const receiver1DustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(receiver1Seed));
 
-      receiver1 = await utils.buildWalletFacade(receiver1Seed, fixture);
+      receiver1 = utils.buildWalletFacade(receiver1Seed, fixture);
       await receiver1.start(receiver1SecretKey, receiver1DustSecretKey);
 
       const initialState = await utils.waitForSyncFacade(senderFacade);
@@ -234,7 +234,7 @@ describe('Transaction balancing examples', () => {
       const receiver1SecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(receiver1Seed));
       const receiver1DustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(receiver1Seed));
 
-      receiver1 = await utils.buildWalletFacade(receiver1Seed, fixture);
+      receiver1 = utils.buildWalletFacade(receiver1Seed, fixture);
       await receiver1.start(receiver1SecretKey, receiver1DustSecretKey);
 
       const initialState = await utils.waitForSyncFacade(senderFacade);
@@ -326,9 +326,9 @@ describe('Transaction balancing examples', () => {
       const output2 = 10_000_000n;
       const output3 = 3_000_000n;
 
-      receiver1 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
-      receiver2 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
-      receiver3 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver1 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver2 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver3 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
 
       const initialState = await utils.waitForSyncFacade(senderFacade);
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw] ?? 0n;
@@ -459,7 +459,7 @@ describe('Transaction balancing examples', () => {
       allure.feature('Transaction balancing');
       allure.story('Error when trying to transfer all available tdust');
 
-      receiver1 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver1 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
 
       const initialState = await utils.waitForSyncFacade(senderFacade);
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw] ?? 0n;
@@ -520,7 +520,7 @@ describe('Transaction balancing examples', () => {
       const output1 = 1_000_000n;
       const walletFees = 159620n;
 
-      receiver1 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver1 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
 
       const initialState = await utils.waitForSyncFacade(senderFacade);
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw] ?? 0n;
@@ -649,7 +649,7 @@ describe('Transaction balancing examples', () => {
 
       await utils.closeWallet(receiver1);
 
-      receiver1 = await utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
+      receiver1 = utils.buildWalletFacade(randomBytes(32).toString('hex'), fixture);
 
       const finalReceiverWalletState = await utils.waitForSyncFacade(receiver1);
       const finalWalletBalancer = finalReceiverWalletState.shielded.balances[shieldedTokenRaw] ?? 0n;
@@ -674,7 +674,7 @@ describe('Transaction balancing examples', () => {
       const receiver1SecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(receiver1Seed));
       const receiver1DustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(receiver1Seed));
 
-      receiver1 = await utils.buildWalletFacade(receiver1Seed, fixture);
+      receiver1 = utils.buildWalletFacade(receiver1Seed, fixture);
       await receiver1.start(receiver1SecretKey, receiver1DustSecretKey);
       const initialState = await utils.waitForSyncFacade(senderFacade);
       logger.info(initialState.shielded.balances);

@@ -19,10 +19,15 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  InMemoryTransactionHistoryStorage,
+  PublicKey,
+  UnshieldedWallet,
+  createKeystore,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -43,22 +48,22 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
-/**
- * We need the dust wallet to transact
- */
 describe('Wallet Facade Transfer', () => {
-  const shieldedSenderSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const shieldedReceiverSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const SENDER_SEED = '0000000000000000000000000000000000000000000000000000000000000001';
+  const RECEIVER_SEED = '0000000000000000000000000000000000000000000000000000000000001111';
 
-  const unshieldedSenderSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const unshieldedReceiverSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const shieldedSenderSeed = getShieldedSeed(SENDER_SEED);
+  const shieldedReceiverSeed = getShieldedSeed(RECEIVER_SEED);
 
-  const dustSenderSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000000002');
-  const dustReceiverSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000001111');
+  const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
+  const unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
+
+  const dustSenderSeed = getDustSeed(SENDER_SEED);
+  const dustReceiverSeed = getDustSeed(RECEIVER_SEED);
 
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
@@ -107,17 +112,15 @@ describe('Wallet Facade Transfer', () => {
     const dustSender = Dust.startWithSeed(dustSenderSeed, dustParameters);
     const dustReceiver = Dust.startWithSeed(dustReceiverSeed, dustParameters);
 
-    const unshieldedSender = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedSenderKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedSender = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore));
 
-    const unshieldedReceiver = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedReceiverKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedReceiver = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore));
 
     senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
     receiverFacade = new WalletFacade(shieldedReceiver, unshieldedReceiver, dustReceiver);
@@ -142,7 +145,7 @@ describe('Wallet Facade Transfer', () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
     const ledgerReceiverAddress = ShieldedAddress.codec
-      .encode(NetworkId.NetworkId.Undeployed, await receiverFacade.shielded.getAddress())
+      .encode(configuration.networkId, await receiverFacade.shielded.getAddress())
       .asString();
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
@@ -182,7 +185,7 @@ describe('Wallet Facade Transfer', () => {
   it('allows to transfer unshielded tokens', async () => {
     await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
 
-    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state());
+    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state);
 
     const tokenTransfer: CombinedTokenTransfer[] = [
       {
@@ -190,7 +193,9 @@ describe('Wallet Facade Transfer', () => {
         outputs: [
           {
             amount: tokenValue(1n),
-            receiverAddress: unshieldedReceiverState.address,
+            receiverAddress: UnshieldedAddress.codec
+              .encode(configuration.networkId, unshieldedReceiverState.address)
+              .asString(),
             type: ledger.unshieldedToken().raw,
           },
         ],
@@ -221,7 +226,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();
@@ -248,9 +253,9 @@ describe('Wallet Facade Transfer', () => {
 
     const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
 
-    const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, outputOffer);
+    const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
-    const provenArbitrayTx = await senderFacade.shielded.finalizeTransaction({
+    const provenArbitraryTx = await senderFacade.shielded.finalizeTransaction({
       type: 'TransactionToProve',
       transaction: arbitraryTx,
     });
@@ -258,7 +263,7 @@ describe('Wallet Facade Transfer', () => {
     const balancedTx = await senderFacade.balanceTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      provenArbitrayTx,
+      provenArbitraryTx,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
@@ -320,7 +325,7 @@ describe('Wallet Facade Transfer', () => {
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()
-        .pipe(rx.filter((s) => Array.from(s.unshielded.balances).some(([_, value]) => value === tokenValue(1n)))),
+        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((c) => c.utxo.value === tokenValue(1n)))),
     );
 
     expect(isValid).toBeTruthy();

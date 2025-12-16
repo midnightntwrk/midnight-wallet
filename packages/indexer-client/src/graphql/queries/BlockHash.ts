@@ -21,6 +21,7 @@ export const BlockHash = Query.make(
         height
         hash
         ledgerParameters
+        timestamp
       }
     }
   `),

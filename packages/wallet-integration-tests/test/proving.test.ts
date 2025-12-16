@@ -15,7 +15,6 @@ import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Layer, pipe } from 'effect';
-import * as os from 'node:os';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
@@ -38,13 +37,11 @@ const makeTransaction = () => {
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
-  Effect.promise(() => {
-    return new GenericContainer(PROOF_SERVER_IMAGE)
+  Effect.promise(async () => {
+    return await new GenericContainer(PROOF_SERVER_IMAGE)
       .withExposedPorts(PROOF_SERVER_PORT)
-      .withWaitStrategy(Wait.forListeningPorts().withStartupTimeout(120_000))
-      .withEnvironment({
-        RAYON_NUM_THREADS: Math.min(os.availableParallelism(), 32).toString(10),
-      })
+      .withWaitStrategy(Wait.forListeningPorts())
+      .withStartupTimeout(120_000)
       .start();
   }),
   (container) => Effect.promise(() => container.stop()),

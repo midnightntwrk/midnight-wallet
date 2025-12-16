@@ -20,21 +20,19 @@ import {
   signatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { pipe } from 'effect';
 
 export type PublicKey = {
   publicKey: SignatureVerifyingKey;
-  address: UnshieldedAddress;
+  addressHex: UserAddress;
+  address: string;
 };
+
 export const PublicKey = {
   fromKeyStore: (keystore: UnshieldedKeystore): PublicKey => {
     return {
       publicKey: keystore.getPublicKey(),
-      address: pipe(
-        keystore.getAddress(),
-        (str) => Buffer.from(str, 'hex'),
-        (bytes) => new UnshieldedAddress(bytes),
-      ),
+      addressHex: keystore.getAddress(),
+      address: keystore.getBech32Address().asString(),
     };
   },
 };
@@ -45,12 +43,6 @@ export interface UnshieldedKeystore {
   getPublicKey(): SignatureVerifyingKey;
   getAddress(): UserAddress;
   signData(data: Uint8Array): Signature;
-}
-
-export interface Keystore {
-  keystore: UnshieldedKeystore;
-  getBech32Address(): MidnightBech32m;
-  getPublicKey(): SignatureVerifyingKey;
 }
 
 export const createKeystore = (

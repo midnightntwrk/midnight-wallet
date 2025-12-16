@@ -29,7 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -71,7 +71,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v4
         if: always()
         with:
           name: build-artifacts-${{ github.run_id }}
@@ -86,7 +86,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -127,7 +127,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 #v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -158,7 +158,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -198,7 +198,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 #v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -241,7 +241,7 @@ jobs:
       #       ./packages/e2e-tests/reports/test-report.xml
 
       # - name: Upload Artifact
-      #   uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1
+      #   uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4
       #   with:
       #     name: 'test-results-junit'
       #     path: ./packages/e2e-tests/reports/report.xml
@@ -253,7 +253,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -295,7 +295,7 @@ jobs:
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
 
       - name: Upload build artifacts
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 #v4
+        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 #v4
         if: always()
         with:
           name: build-publish-artifacts-${{ github.run_id }}
@@ -310,7 +310,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@2028fbc5c25fe9cf00d9f06a71cc4710d4507903 #v6.0.0
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
         id: setup-node
         with:
           node-version-file: '.nvmrc'
@@ -350,7 +350,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 #v4
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 #v4
         with:
           name: build-publish-artifacts-${{ github.run_id }}
           path: .

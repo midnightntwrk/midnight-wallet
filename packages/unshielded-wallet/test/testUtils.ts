@@ -12,7 +12,10 @@
 // limitations under the License.
 import { sampleIntentHash } from '@midnight-ntwrk/ledger-v6';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshielded-state';
+import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { DefaultV1Configuration } from '../src/v1/index.js';
+import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
 
 /**
  * TODO: place in separate package with more additional mock functions
@@ -20,37 +23,51 @@ import { UnshieldedTransaction, Utxo } from '@midnight-ntwrk/wallet-sdk-unshield
 export const generateMockTransaction = (
   owner: string,
   type: string,
-  applyStage: 'SucceedEntirely' | 'FailEntirely',
+  applyStage: 'SUCCESS' | 'FAILURE',
   createdOutputsAmount: number,
   spentOutputsAmount: number,
-): UnshieldedTransaction => {
-  const createdOutputs = Array.from({ length: createdOutputsAmount }, () => generateMockUtxo(owner, type));
-
-  const spentOutputs = Array.from({ length: spentOutputsAmount }, () => generateMockUtxo(owner, type));
+): UnshieldedUpdate => {
+  const createdUtxos = Array.from({ length: createdOutputsAmount }, () => generateMockUtxoWithMeta(owner, type));
+  const spentUtxos = Array.from({ length: spentOutputsAmount }, () => generateMockUtxoWithMeta(owner, type));
 
   return {
-    id: Math.floor(Math.random() * 1000),
-    hash: crypto.randomUUID(),
-    type: 'RegularTransaction',
-    identifiers: createdOutputs.map((output) => output.intentHash),
-    createdUtxos: createdOutputs,
-    spentUtxos: spentOutputs,
-    protocolVersion: 1,
-    transactionResult: {
-      status: applyStage,
-      segments: [{ id: '1', success: true }],
+    type: 'UnshieldedTransaction',
+    transaction: {
+      id: Math.floor(Math.random() * 1000),
+      hash: crypto.randomUUID(),
+      type: 'RegularTransaction',
+      protocolVersion: 1,
+      identifiers: createdUtxos.map((u) => u.utxo.intentHash),
+      block: {
+        timestamp: new Date(),
+      },
+      fees: {
+        paidFees: 0n,
+        estimatedFees: 0n,
+      },
+      transactionResult: {
+        status: applyStage,
+        segments: [{ id: 1, success: applyStage === 'SUCCESS' }],
+      },
     },
+    createdUtxos,
+    spentUtxos,
+    status: applyStage,
   };
 };
 
-export const generateMockUtxo = (owner: string, type: string): Utxo => ({
-  value: BigInt(Math.ceil(Math.random() * 100)),
-  owner,
-  type: type,
-  intentHash: sampleIntentHash(),
-  outputNo: Math.floor(Math.random() * 100),
-  ctime: Date.now(),
-  registeredForDustGeneration: true,
+export const generateMockUtxoWithMeta = (owner: string, type: string): UtxoWithMeta => ({
+  utxo: {
+    value: BigInt(Math.ceil(Math.random() * 100)),
+    owner,
+    type,
+    intentHash: sampleIntentHash(),
+    outputNo: Math.floor(Math.random() * 100),
+  },
+  meta: {
+    ctime: new Date(),
+    registeredForDustGeneration: true,
+  },
 });
 
 export const seedHex = (length: number = 64, seed: number = 42): string =>
@@ -74,4 +91,28 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
   }
 
   return Buffer.from(derivationResult.key);
+};
+
+/**
+ * Creates a default wallet configuration for testing.
+ * This encapsulates the common configuration pattern used across tests.
+ *
+ * @param indexerPort - The port number for the indexer service
+ * @param overrides - Optional partial configuration to override defaults
+ * @returns A complete DefaultV1Configuration object
+ */
+export const createWalletConfig = (
+  indexerPort: number,
+  overrides?: Partial<DefaultV1Configuration>,
+): DefaultV1Configuration => {
+  const defaultConfig: DefaultV1Configuration = {
+    indexerClientConnection: {
+      indexerWsUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
+      indexerHttpUrl: `http://localhost:${indexerPort}/api/v3/graphql`,
+    },
+    networkId: NetworkId.NetworkId.Undeployed,
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  };
+
+  return { ...defaultConfig, ...overrides };
 };

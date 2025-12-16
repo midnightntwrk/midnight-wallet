@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [b9865cf]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.13
+
 ## 1.0.0-beta.11
 
 ### Patch Changes

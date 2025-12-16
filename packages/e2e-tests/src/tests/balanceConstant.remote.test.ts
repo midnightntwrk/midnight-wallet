@@ -51,7 +51,7 @@ describe('Balance constant', () => {
   beforeEach(async () => {
     const fixture = getFixture();
 
-    walletFacade = await utils.buildWalletFacade(seed, fixture);
+    walletFacade = utils.buildWalletFacade(seed, fixture);
     await walletFacade.start(shieldedSecretKey, dustSecretKey);
   }, syncTimeout);
 
@@ -74,7 +74,7 @@ describe('Balance constant', () => {
       expect(syncedState.shielded.balances[shieldedTokenRaw] ?? 0n).toBe(expectedShieldedBalance);
       expect(syncedState.shielded.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
       expect(syncedState.shielded.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBe(expectedUnshieldedBalance);
+      expect(syncedState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(expectedUnshieldedBalance);
       expect(syncedState.dust.walletBalance(new Date())).toBe(expectedDustBalance);
       expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.shielded.pendingCoins.length).toBe(0);
@@ -97,7 +97,7 @@ describe('Balance constant', () => {
       expect(syncedState.shielded.balances[shieldedTokenRaw] ?? 0n).toBe(expectedDustBalance);
       expect(syncedState.shielded.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
       expect(syncedState.shielded.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBe(expectedUnshieldedBalance);
+      expect(syncedState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(expectedUnshieldedBalance);
       expect(syncedState.dust.walletBalance(new Date())).toBe(expectedDustBalance);
       expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.shielded.pendingCoins.length).toBe(0);

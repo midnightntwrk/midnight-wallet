@@ -25,8 +25,15 @@ export const UnshieldedTransactions = Subscription.make(
             id
             hash
             protocolVersion
+            block {
+              timestamp
+            }
             ... on RegularTransaction {
               identifiers
+              fees {
+                paidFees
+                estimatedFees
+              }
               transactionResult {
                 status
                 segments {

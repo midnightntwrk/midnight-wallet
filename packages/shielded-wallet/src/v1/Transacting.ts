@@ -109,8 +109,7 @@ class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
 
 export class TransactingCapabilityImplementation<
   TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-> implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>
-{
+> implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
   public readonly txTrait: TransactionTrait<TTransaction>;

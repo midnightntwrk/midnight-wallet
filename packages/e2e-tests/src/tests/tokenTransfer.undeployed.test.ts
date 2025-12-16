@@ -20,6 +20,7 @@ import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { randomBytes } from 'node:crypto';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Tests performing a token transfer
@@ -51,8 +52,8 @@ describe('Token transfer', () => {
   beforeEach(async () => {
     fixture = getFixture();
 
-    fundedFacade = await utils.buildWalletFacade(fundedSeed, fixture);
-    walletFacade = await utils.buildWalletFacade(seed, fixture);
+    fundedFacade = utils.buildWalletFacade(fundedSeed, fixture);
+    walletFacade = utils.buildWalletFacade(seed, fixture);
 
     await fundedFacade.start(fundedShieldedSecretKey, fundedDustSecretKey);
     await walletFacade.start(seedShieldedSecretKey, seedDustSecretKey);
@@ -161,8 +162,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 available coins: ${initialState.shielded.availableCoins.length}`);
 
-      const receiver1 = await utils.buildWalletFacade(receiverSeed1, fixture);
-      const receiver2 = await utils.buildWalletFacade(receiverSeed2, fixture);
+      const receiver1 = utils.buildWalletFacade(receiverSeed1, fixture);
+      const receiver2 = utils.buildWalletFacade(receiverSeed2, fixture);
       await receiver1.start(receiverShieldedSecretKey1, receiverDustSecretKey1);
       await receiver2.start(receiverShieldedSecretKey2, receiverDustSecretKey2);
       const initialReceiver1State = await utils.waitForSyncFacade(receiver1);
@@ -189,7 +190,9 @@ describe('Token transfer', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: initialReceiver1State.unshielded.address,
+              receiverAddress: UnshieldedAddress.codec
+                .encode(fixture.getNetworkId(), initialReceiver1State.unshielded.address)
+                .asString(),
             },
           ],
         },
@@ -212,7 +215,9 @@ describe('Token transfer', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: initialReceiver2State.unshielded.address,
+              receiverAddress: UnshieldedAddress.codec
+                .encode(fixture.getNetworkId(), initialReceiver2State.unshielded.address)
+                .asString(),
             },
           ],
         },
@@ -251,15 +256,15 @@ describe('Token transfer', () => {
       logger.info(`Dust fees paid: ${initialDustBalance - finalState.dust.walletBalance(new Date(3 * 1000))}`);
       // actually deducted fees are greater - PM-7721
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance - outputValue * 2n);
-      expect(finalState.unshielded.balances.get(unshieldedTokenRaw)).toBe(initialBalance - outputValue * 2n);
+      expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBe(initialBalance - outputValue * 2n);
       expect(finalState.shielded.availableCoins.length).toBe(7);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.totalCoins.length).toBe(7);
       expect(finalState.dust.walletBalance(new Date(3 * 1000))).toBeLessThan(initialDustBalance - txFees);
       expect(finalReceiver1State.shielded.balances[shieldedTokenRaw]).toBe(outputValue);
-      expect(finalReceiver1State.unshielded.balances.get(shieldedTokenRaw)).toBe(outputValue);
+      expect(finalReceiver1State.unshielded.balances[shieldedTokenRaw]).toBe(outputValue);
       expect(finalReceiver2State.shielded.balances[shieldedTokenRaw]).toBe(outputValue);
-      expect(finalReceiver2State.unshielded.balances.get(shieldedTokenRaw)).toBe(outputValue);
+      expect(finalReceiver2State.unshielded.balances[shieldedTokenRaw]).toBe(outputValue);
       await receiver1.stop();
       await receiver2.stop();
     },
@@ -872,21 +877,15 @@ describe('Token transfer', () => {
       await Promise.all([utils.waitForSyncFacade(fundedFacade), utils.waitForSyncFacade(walletFacade)]);
       const initialState = await firstValueFrom(fundedFacade.state());
       const initialDustBalance = initialState.dust.walletBalance(new Date()) ?? 0n;
-      const initialBalance = initialState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      const initialBalance = initialState.unshielded.balances[unshieldedTokenRaw] ?? 0n;
       logger.info(initialState.unshielded.balances);
-      // Object.entries(initialState.unshielded.balances).forEach(([key, _]) => {
-      //   if (key !== unshieldedTokenRaw) tokenTypeHash = key;
-      // });
-      // if (tokenTypeHash === undefined) {
-      //   throw new Error('No native tokens found');
-      // }
       logger.info(`Wallet 1: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1: ${initialBalance} unshielded token`);
       logger.info(`Wallet 1 available coins: ${initialState.unshielded.availableCoins.length}`);
       logger.info(initialState.unshielded.availableCoins);
 
       const initialState2 = await firstValueFrom(walletFacade.state());
-      const initialBalance2 = initialState2.unshielded.balances.get(unshieldedTokenRaw) ?? 0n;
+      const initialBalance2 = initialState2.unshielded.balances[unshieldedTokenRaw] ?? 0n;
       logger.info(`Wallet 1: ${initialBalance2} unshielded token`);
       logger.info(`Wallet 2 available coins: ${initialState2.unshielded.availableCoins.length}`);
 
@@ -897,7 +896,9 @@ describe('Token transfer', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValueNativeToken,
-              receiverAddress: initialState2.unshielded.address,
+              receiverAddress: UnshieldedAddress.codec
+                .encode(fixture.getNetworkId(), initialState2.unshielded.address)
+                .asString(),
             },
           ],
         },
@@ -919,7 +920,7 @@ describe('Token transfer', () => {
       // logger.info(walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.unshielded.availableCoins.length}`);
       expect(pendingState.dust.walletBalance(new Date()) ?? 0n).toBeLessThan(initialDustBalance);
-      expect(pendingState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBeLessThanOrEqual(
+      expect(pendingState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(
         initialBalance - outputValue,
       );
       expect(pendingState.unshielded.availableCoins.length).toBeLessThan(initialState.unshielded.availableCoins.length);
@@ -934,9 +935,7 @@ describe('Token transfer', () => {
       // logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.unshielded.availableCoins.length}`);
       expect(finalState.dust.walletBalance(new Date()) ?? 0n).toBeLessThan(initialDustBalance);
-      expect(finalState.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBe(
-        initialBalance - outputValueNativeToken,
-      );
+      expect(finalState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(initialBalance - outputValueNativeToken);
       expect(finalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
         initialState.unshielded.availableCoins.length,
       );
@@ -945,7 +944,7 @@ describe('Token transfer', () => {
       // expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
       // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
       logger.info(`Wallet 1: ${finalState.dust.walletBalance(new Date(3 * 1000))} tDUST`);
-      logger.info(`Wallet 1: ${finalState.unshielded.balances.get(unshieldedTokenRaw)} unshielded tokens`);
+      logger.info(`Wallet 1: ${finalState.unshielded.balances[unshieldedTokenRaw]} unshielded tokens`);
       logger.info(`Dust fees paid: ${initialDustBalance - finalState.dust.walletBalance(new Date(3 * 1000))}`);
 
       await utils.waitForFacadePendingClear(walletFacade);
@@ -953,10 +952,8 @@ describe('Token transfer', () => {
       const finalState2 = await utils.waitForSyncFacade(walletFacade);
       // logger.info(walletStateTrimmed(finalState2));
       logger.info(`Wallet 2 available coins: ${finalState2.unshielded.availableCoins.length}`);
-      logger.info(`Wallet 2: ${finalState2.unshielded.balances.get(unshieldedTokenRaw)} unshielded tokens`);
-      expect(finalState2.unshielded.balances.get(unshieldedTokenRaw) ?? 0n).toBe(
-        initialBalance2 + outputValueNativeToken,
-      );
+      logger.info(`Wallet 2: ${finalState2.unshielded.balances[unshieldedTokenRaw]} unshielded tokens`);
+      expect(finalState2.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(initialBalance2 + outputValueNativeToken);
       expect(finalState2.unshielded.availableCoins.length).toBe(initialState2.unshielded.availableCoins.length + 1);
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
       expect(finalState2.unshielded.totalCoins.length).toBeGreaterThanOrEqual(

@@ -19,7 +19,12 @@ import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { WalletBuilder, PublicKey, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  createKeystore,
+  PublicKey,
+  InMemoryTransactionHistoryStorage,
+  UnshieldedWallet,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -42,16 +47,16 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
     Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
   )
   .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
-  .withWaitStrategy(`indexer_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
   .withEnvironment(environmentVars)
   .withStartupTimeout(100_000);
 
 describe('Dust Deregistration', () => {
-  const shieldedWalletSeed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
+  const SEED = '0000000000000000000000000000000000000000000000000000000000000003';
 
-  const unshieldedWalletSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-
-  const dustWalletSeed = getDustSeed('0000000000000000000000000000000000000000000000000000000000000002');
+  const shieldedWalletSeed = getShieldedSeed(SEED);
+  const unshieldedWalletSeed = getUnshieldedSeed(SEED);
+  const dustWalletSeed = getDustSeed(SEED);
 
   const unshieldedWalletKeystore = createKeystore(unshieldedWalletSeed, NetworkId.NetworkId.Undeployed);
 
@@ -96,11 +101,10 @@ describe('Dust Deregistration', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     const dustWallet = Dust.startWithSeed(dustWalletSeed, dustParameters);
 
-    const unshieldedWallet = await WalletBuilder.build({
-      publicKey: PublicKey.fromKeyStore(unshieldedWalletKeystore),
-      networkId: NetworkId.NetworkId.Undeployed,
-      indexerUrl: configuration.indexerClientConnection.indexerWsUrl!,
-    });
+    const unshieldedWallet = UnshieldedWallet({
+      ...configuration,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletKeystore));
 
     walletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
 
@@ -115,7 +119,7 @@ describe('Dust Deregistration', () => {
   });
 
   it('deregisters from dust generation', async () => {
-    // NOTE: by default our test account is already registered for Dust generation
+    // NOTE: by default, our test account is already registered for Dust generation
     await waitForFullySynced(walletFacade);
 
     const walletStateWithNight = await rx.firstValueFrom(
@@ -126,7 +130,7 @@ describe('Dust Deregistration', () => {
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
     const nightUtxos = walletStateWithNight.unshielded.availableCoins.filter(
-      (coin) => coin.registeredForDustGeneration === true,
+      (coin) => coin.meta.registeredForDustGeneration === true,
     );
 
     const deregisterTokens = 2;
@@ -157,7 +161,9 @@ describe('Dust Deregistration', () => {
     const newWalletState = await rx.firstValueFrom(
       walletFacade
         .state()
-        .pipe(rx.filter((s) => s.unshielded.availableCoins.some((coin) => coin.registeredForDustGeneration === false))),
+        .pipe(
+          rx.filter((s) => s.unshielded.availableCoins.some((coin) => coin.meta.registeredForDustGeneration === false)),
+        ),
     );
 
     const availableCoinsWithInfo = newWalletState.dust.availableCoinsWithFullInfo(new Date());

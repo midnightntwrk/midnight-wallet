@@ -47,11 +47,16 @@ const simpleHash = (input: string): Effect.Effect<string> => {
 };
 
 export class Simulator {
-  static nextBlockContext = (blockTime: Date): Effect.Effect<BlockContext> =>
+  static blockHash = (blockTime: Date): Effect.Effect<string> =>
     pipe(
       DateOps.dateToSeconds(blockTime).toString(16),
       (str) => (str.length % 2 == 0 ? str : str.padStart(str.length + 1, '0')),
       simpleHash,
+    );
+
+  static nextBlockContext = (blockTime: Date): Effect.Effect<BlockContext> =>
+    pipe(
+      Simulator.blockHash(blockTime),
       Effect.map((hash) => ({
         parentBlockHash: hash,
         secondsSinceEpoch: DateOps.dateToSeconds(blockTime),

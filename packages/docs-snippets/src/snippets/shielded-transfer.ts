@@ -23,6 +23,7 @@ const sender = await initWalletWithSeed(
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+
 const receiverAddress = await rx.firstValueFrom(
   receiver.wallet.state().pipe(
     rx.filter((s) => s.isSynced),

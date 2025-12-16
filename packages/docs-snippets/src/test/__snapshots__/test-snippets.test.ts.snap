@@ -3,7 +3,7 @@
 exports[`Snippet outputs > with network > should output the correct result for 'balancing' 1`] = `
 [
   "Unshielded transfer by balancing completed
-Did sender send all its Night? true
+Did sender send all its Night? false
 Did receiver receive all the Night? true
 ",
 ]
@@ -229,106 +229,170 @@ exports[`Snippet outputs > with network > should output the correct result for '
     }
   },
   unshielded: {
-    address: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-    balances: Map(1) {
-      '0000000000000000000000000000000000000000000000000000000000000000' => 2500000000000000n
+    balances: {
+      '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n
     },
-    pendingCoins: [],
     availableCoins: [
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       }
     ],
+    pendingCoins: [],
     totalCoins: [
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '671fc41b74cc5a23ca53e6fb618ec04fa89a8aa142bff83932b1be160599edf6',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '59a28165ce6b386da2b1ba78a319f6c250510646a2f1bddcbe507ecc0230b5d3',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: 'e9d4d140177940ed001455c2278d7f26c881f3899874ce2ab4a70deda33283b0',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       },
       {
-        value: 500000000000000n,
-        owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
-        type: '0000000000000000000000000000000000000000000000000000000000000000',
-        intentHash: '90aaed75d94757eac47aeebb956be58f9f66d1e0e62f2e76d10b35f463e30122',
-        outputNo: 0,
-        ctime: 1754395200000,
-        registeredForDustGeneration: true
+        utxo: {
+          value: 500000000000000n,
+          owner: 'mn_addr_undeployed1h3ssm5ru2t6eqy4g3she78zlxn96e36ms6pq996aduvmateh9p9sk96u7s',
+          type: '0000000000000000000000000000000000000000000000000000000000000000',
+          intentHash: 'c230c54a599a3d3472c5ee3f350c94745f1231412a4be729ea9f40db5e6776df',
+          outputNo: 0
+        },
+        meta: {
+          ctime: 2025-08-05T12:00:00.000Z,
+          registeredForDustGeneration: true
+        }
       }
     ],
-    syncProgress: { applyGap: 0, synced: true }
+    progress: {
+      appliedId: 9n,
+      highestTransactionId: 9n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
+    },
+    transactionHistory: {
+      create: [AsyncFunction: create],
+      get: [AsyncFunction: get],
+      getAll: [Function: getAll],
+      delete: [AsyncFunction: delete]
+    },
+    address: UnshieldedAddress {
+      data: Buffer(32) [Uint8Array] [
+        188,  97,  13, 208, 124,  82, 245, 144,
+         18, 168, 140,  47, 159,  28,  95,  52,
+        203, 172, 199,  91, 134, 130,   2, 151,
+         93, 111,  25, 190, 175,  55,  40,  75
+      ],
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
+        type: 'addr',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
+    }
   },
   dust: {
     totalCoins: [

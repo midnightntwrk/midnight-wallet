@@ -97,13 +97,13 @@
     },
     "//#format:root": {
       "cache": false,
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
       "outputs": [],
       "outputLogs": "new-only"
     },
     "//#format:check:root": {
       "cache": false,
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
       "outputs": [],
       "outputLogs": "new-only"
     },

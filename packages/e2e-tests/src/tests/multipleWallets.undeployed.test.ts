@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { DustParameters, nativeToken } from '@midnight-ntwrk/ledger-v6';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
@@ -20,10 +19,10 @@ import * as allure from 'allure-js-commons';
 import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
+  InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedKeystore,
   UnshieldedWallet,
-  WalletBuilder,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
@@ -53,14 +52,14 @@ describe('Syncing', () => {
   let fixture: TestContainersFixture;
   const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
 
-  beforeEach(async () => {
-    await allure.step('Start multiple wallets', async function () {
+  beforeEach(() => {
+    allure.step('Start multiple wallets', function () {
       fixture = getFixture();
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       const Dust = DustWallet(fixture.getDustWalletConfig());
       const dustParameters = new DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
 
-      async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
+      function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
           unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
           shieldedWallets[i] = Wallet.startWithShieldedSeed(seeds[i]);
@@ -68,11 +67,14 @@ describe('Syncing', () => {
         }
 
         for (let i = 0; i < seeds.length; i++) {
-          unshieldedWallets[i] = await WalletBuilder.build({
-            publicKey: PublicKey.fromKeyStore(unshieldedKeystores[i]),
-            networkId: NetworkId.NetworkId.Undeployed,
-            indexerUrl: fixture.getIndexerWsUri(),
-          });
+          unshieldedWallets[i] = UnshieldedWallet({
+            networkId: fixture.getNetworkId(),
+            indexerClientConnection: {
+              indexerHttpUrl: fixture.getIndexerUri(),
+              indexerWsUrl: fixture.getIndexerWsUri(),
+            },
+            txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
         }
 
         for (let i = 0; i < seeds.length; i++) {
@@ -80,7 +82,7 @@ describe('Syncing', () => {
         }
       }
 
-      await buildWallets(seeds);
+      buildWallets(seeds);
     });
   }, timeout);
 
@@ -109,7 +111,7 @@ describe('Syncing', () => {
         const syncedState = await firstValueFrom(facade.state());
         logger.info(`Wallet ${index}: ${syncedState.shielded.balances[rawNativeTokenType ?? 0n]}`);
         expect(syncedState.shielded.state.progress.isStrictlyComplete()).toBeTruthy();
-        expect(syncedState.unshielded.syncProgress).toBeTruthy();
+        expect(syncedState.unshielded.progress.isStrictlyComplete()).toBeTruthy();
       }
     },
     timeout,
