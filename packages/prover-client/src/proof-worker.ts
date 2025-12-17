@@ -22,6 +22,7 @@ const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
     try {
       return await fetch(url);
     } catch (e) {
+      // eslint-disable-next-line no-console
       console.log('Failed to fetch at attempt', i + 1, url, e);
     }
   }
