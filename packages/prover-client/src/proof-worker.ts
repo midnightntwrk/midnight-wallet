@@ -74,16 +74,20 @@ const keyMaterialProvider = {
 };
 const wasmProver = provingProvider(keyMaterialProvider);
 
-// eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-const [op, args]: ['check' | 'prove', Array<never>] = workerData;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment
+const [op, args]: ['check' | 'prove', any[]] = workerData;
 // we handle polymorphic data here
 // @ts-nocheck
 if (op === 'check') {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const [a, b] = args;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const result = await wasmProver.check(a, b);
   parentPort!.postMessage(result);
 } else if (op === 'prove') {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const [a, b, c] = args;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
   const result = await wasmProver.prove(a, b, c);
   parentPort!.postMessage(result);
 }
