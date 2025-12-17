@@ -200,15 +200,6 @@ describe('DustWallet', () => {
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
-  /*it('should download', async () => {
-    const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
-    const ver = 8;
-    const url = `${s3}/dust/${ver}/spend.verifier`;
-    console.log(url);
-    const f = await fetch(url);
-    console.log(await f.arrayBuffer());
-  });*/
-
   it('should build', async () => {
     return Effect.gen(function* () {
       const lastState = yield* SubscriptionRef.get(stateRef);
