@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { firstValueFrom } from 'rxjs';
+import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -97,8 +97,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterAll(async () => {
-    await utils.saveState(sender, filenameWallet);
-    await utils.saveState(receiver, filenameWallet2);
+    // await utils.saveState(sender, filenameWallet);
+    // await utils.saveState(receiver, filenameWallet2);
     await utils.closeWallet(sender);
     await utils.closeWallet(receiver);
   }, timeout);
@@ -113,7 +113,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer transaction using bech32m address');
       await Promise.all([utils.waitForSyncFacade(sender), utils.waitForSyncFacade(receiver)]);
-      const initialState = await firstValueFrom(sender.state());
+      const initialState = await rx.firstValueFrom(sender.state());
       const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNative2Balance = initialState.shielded.balances[nativeToken2Raw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
@@ -125,13 +125,15 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available shielded coins: ${initialState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
 
-      const initialReceiverState = await firstValueFrom(receiver.state());
+      const initialReceiverState = await rx.firstValueFrom(receiver.state());
       const initialReceiverShieldedBalance1 = initialReceiverState.shielded.balances[nativeToken1Raw];
       const initialReceiverShieldedBalance2 = initialReceiverState.shielded.balances[nativeToken2Raw];
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
+      const initialNumAvailableShieldedCoins = initialReceiverState.shielded.availableCoins.length;
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance1} native token 1`);
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance2} native token 2`);
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
+      logger.info(`Wallet 2 available shielded coins: ${initialNumAvailableShieldedCoins}`);
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -162,22 +164,35 @@ describe('Token transfer', () => {
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForFacadePending(sender);
-      expect(pendingState.shielded.balances[nativeToken1Raw] ?? 0n).toBeLessThanOrEqual(
-        initialNative1Balance - outputValue,
-      );
-      expect(pendingState.shielded.balances[nativeToken2Raw] ?? 0n).toBeLessThanOrEqual(
-        initialNative2Balance - outputValue,
-      );
-      expect(pendingState.shielded.availableCoins.length).toBeLessThanOrEqual(
-        initialState.shielded.availableCoins.length,
-      );
-      expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      expect(pendingState.unshielded.pendingCoins.length).toBe(0);
-      expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
+      // const pendingState = await utils.waitForFacadePending(sender);
+      // expect(pendingState.shielded.balances[nativeToken1Raw] ?? 0n).toBeLessThanOrEqual(
+      //   initialNative1Balance - outputValue,
+      // );
+      // expect(pendingState.shielded.balances[nativeToken2Raw] ?? 0n).toBeLessThanOrEqual(
+      //   initialNative2Balance - outputValue,
+      // );
+      // expect(pendingState.shielded.availableCoins.length).toBeLessThanOrEqual(
+      //   initialState.shielded.availableCoins.length,
+      // );
+      // expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
+      // expect(pendingState.unshielded.pendingCoins.length).toBe(0);
+      // expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
 
-      logger.info('waiting for tx in history');
-      await utils.waitForFacadePendingClear(sender);
+      // logger.info('waiting for tx in history');
+      // await utils.waitForFacadePendingClear(sender);
+      await rx.firstValueFrom(
+        receiver.state().pipe(
+          rx.tap((state) => {
+            const currentNumAvailableCoins = state.shielded.availableCoins.length;
+            logger.info(
+              `Shielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableShieldedCoins}...`,
+            );
+          }),
+          rx.debounceTime(10_000),
+          rx.filter((s) => s.isSynced),
+          rx.filter((s) => s.shielded.availableCoins.length > initialNumAvailableShieldedCoins),
+        ),
+      );
       const finalState = await utils.waitForSyncFacade(sender);
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];

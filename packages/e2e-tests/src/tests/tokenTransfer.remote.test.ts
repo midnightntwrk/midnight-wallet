@@ -101,11 +101,11 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterAll(async () => {
-    const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
-    const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
+    // const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
+    // const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
-    await utils.saveState(sender, filenameWallet);
-    await utils.saveState(receiver, filenameWallet2);
+    // await utils.saveState(sender, filenameWallet);
+    // await utils.saveState(receiver, filenameWallet2);
     await utils.closeWallet(sender);
     await utils.closeWallet(receiver);
   }, timeout);

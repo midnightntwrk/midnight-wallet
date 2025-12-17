@@ -56,7 +56,7 @@ describe('Dust tests', () => {
       );
 
       const unregisteredUtxosNumber = unregisteredNightUtxos.length;
-      expect(unregisteredUtxosNumber).toBeGreaterThan(0);
+      expect(unregisteredUtxosNumber, 'No unregistered UTXOs found').toBeGreaterThan(0);
       logger.info(`utxo length: ${unregisteredUtxosNumber}`);
 
       const firstNightUtxo = unregisteredNightUtxos[0];
@@ -77,7 +77,7 @@ describe('Dust tests', () => {
             const registeredTokens = s.unshielded.availableCoins.filter(
               (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === true,
             );
-            logger.info(`unregistered tokens: ${registeredTokens.length}`);
+            logger.info(`registered tokens: ${registeredTokens.length}`);
           }),
           rx.filter(
             (s) =>
