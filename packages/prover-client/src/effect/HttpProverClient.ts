@@ -51,7 +51,9 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const callProverWorker = <RResponse>(op: 'check' | 'prove', args: any[]): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('../proof-worker.js', import.meta.url), { workerData: [op, args] });
+    const currentFile = import.meta.url;
+    const ext = currentFile.substring(currentFile.lastIndexOf('.'));
+    const worker = new Worker(new URL(`../proof-worker${ext}`, currentFile), { workerData: [op, args] });
     worker.on('message', resolve);
     worker.on('error', reject);
     worker.on('exit', (code: number) => {
