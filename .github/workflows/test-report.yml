@@ -1,7 +1,7 @@
 name: 'Test Report'
 on:
   workflow_run:
-    workflows: ['CI']                   
+    workflows: ['CI']
     types:
       - completed
 permissions:
@@ -12,9 +12,9 @@ jobs:
   report:
     runs-on: ubuntu-latest
     steps:
-    - name: Publish wallet TS Test Report
-      uses: dorny/test-reporter@v2
-      with:
-        name: Wallet TS packages Junit Tests Report      
-        reporter: java-junit           
-        path: '*.xml'                    
+      - name: Publish wallet TS Test Report
+        uses: dorny/test-reporter@v2
+        with:
+          name: Wallet TS packages Junit Tests Report
+          reporter: java-junit
+          path: '*.xml'
