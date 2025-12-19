@@ -269,7 +269,7 @@ describe('Token transfer', () => {
       const txId = await sender.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      await utils.waitForPending(sender.shielded);
+      await utils.waitForFacadePending(sender);
       await utils.waitForFacadePendingClear(sender);
       const finalState = await utils.waitForSyncFacade(sender);
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
@@ -327,7 +327,7 @@ describe('Token transfer', () => {
   //       Promise.all([sender.submitTransaction(provenTx), sender.submitTransaction(provenTx)]),
   //     ).rejects.toThrow();
 
-  //     const finalState = await utils.waitForFinalizedBalance(sender.shielded);
+  //     const finalState = await utils.waitForFinalizedShieldedBalance(sender.shielded);
   //     expect(finalState).toMatchObject(syncedState);
   //     expect(finalState.balances[rawNativeTokenType]).toBe(initialDustBalance);
   //     expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
@@ -383,7 +383,7 @@ describe('Token transfer', () => {
   //     );
   //     await expect(sender.finalizeTransaction(txToProve)).rejects.toThrow();
 
-  //     const finalState = await waitForFinalizedBalance(sender.shielded);
+  //     const finalState = await waitForFinalizedShieldedBalance(sender.shielded);
   //     expect(finalState).toMatchObject(syncedState);
   //     expect(finalState.balances[rawNativeTokenType]).toBe(initialDustBalance);
   //     expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);

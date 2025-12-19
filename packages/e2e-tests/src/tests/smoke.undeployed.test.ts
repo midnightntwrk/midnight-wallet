@@ -172,7 +172,7 @@ describe('Smoke tests', () => {
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
 
-      await utils.waitForFinalizedBalance(receiverWallet.shielded);
+      await utils.waitForFinalizedShieldedBalance(receiverWallet.shielded);
       const finalState2 = await utils.waitForSyncFacade(receiverWallet);
       const finalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
       const finalUnshieldedBalance = finalState2.unshielded.balances[unshieldedTokenRaw];

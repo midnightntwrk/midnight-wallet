@@ -141,12 +141,9 @@ describe('Dust tests', () => {
 
     await utils.waitForSyncFacade(receiverWallet);
 
-    const receiverStateAfterRegistration = await rx.firstValueFrom(
-      receiverWallet.state().pipe(
-        rx.debounceTime(10_000),
-        rx.filter((s) => s.isSynced),
-        rx.filter((s) => s.dust.availableCoins.length > 0),
-      ),
+    const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
+      receiverWallet,
+      finalizedDustTx,
     );
 
     const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[unshieldedTokenRaw];

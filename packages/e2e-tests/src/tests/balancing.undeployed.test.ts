@@ -161,13 +161,7 @@ describe('Transaction balancing examples', () => {
       const dustRegistrationTxid = await senderFacade.submitTransaction(finalizedDustTx);
       logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
-      await rx.firstValueFrom(
-        senderFacade.state().pipe(
-          rx.debounceTime(15_000),
-          rx.filter((s) => s.isSynced),
-          rx.filter((s) => s.dust.availableCoins.length > 0),
-        ),
-      );
+      await utils.waitForStateAfterDustRegistration(senderFacade, finalizedDustTx);
     });
   }, timeout);
 
@@ -227,11 +221,11 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
       // logger.info(utils.walletStateTrimmed(pendingState));
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
@@ -308,13 +302,13 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
       // logger.info(utils.walletStateTrimmed(pendingState));
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
-      expect(pendingState.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
+      expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
@@ -420,12 +414,12 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
-      expect(pendingState.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
+      expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
