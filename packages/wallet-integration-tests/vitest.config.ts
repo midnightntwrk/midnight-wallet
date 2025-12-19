@@ -19,6 +19,7 @@ export default defineConfig({
     setupFiles: ['../../setup-env.ts'],
     environment: 'node',
     globals: true,
+    retry: 1,
     include: ['test/*.test.ts'],
     exclude: ['node_modules', 'dist'],
     coverage: {

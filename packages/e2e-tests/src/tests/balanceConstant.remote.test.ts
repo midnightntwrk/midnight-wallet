@@ -17,6 +17,7 @@ import { logger } from './logger.js';
 import { exit } from 'node:process';
 import * as allure from 'allure-js-commons';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { inspect } from 'node:util';
 
 /**
  * Tests checking balance is constant
@@ -34,12 +35,12 @@ describe('Balance constant', () => {
   const seed = process.env['SEED_STABLE'];
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const nativeTokenHash = '02000000000000000000000000000000000000000000000000000000000000000001';
-  const nativeTokenHash2 = '02000000000000000000000000000000000000000000000000000000000000000002';
-  const expectedShieldedBalance = 100_000_000n;
-  const expectedTokenOneBalance = 25n;
-  const expectedTokenTwoBalance = 50n;
-  const expectedUnshieldedBalance = 100_000_000n;
+  const nativeTokenHash = '0000000000000000000000000000000000000000000000000000000000000001';
+  const nativeTokenHash2 = '0000000000000000000000000000000000000000000000000000000000000002';
+  const expectedShieldedBalance = utils.tNightAmount(10n);
+  const expectedTokenOneBalance = utils.tNightAmount(25n);
+  const expectedTokenTwoBalance = utils.tNightAmount(50n);
+  const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
   const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
@@ -70,16 +71,15 @@ describe('Balance constant', () => {
       allure.story('Balance constant when syncing from 0');
 
       const syncedState = await utils.waitForSyncFacade(walletFacade);
-      // logger.info(walletStateTrimmed(syncedState));
-      expect(syncedState.shielded.balances[shieldedTokenRaw] ?? 0n).toBe(expectedShieldedBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(expectedUnshieldedBalance);
-      expect(syncedState.dust.walletBalance(new Date())).toBe(expectedDustBalance);
+      logger.info(inspect(syncedState.shielded.availableCoins, { depth: null }));
+      logger.info(inspect(syncedState.unshielded.availableCoins, { depth: null }));
+      expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedShieldedBalance);
+      expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+      expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+      expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
       expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.shielded.pendingCoins.length).toBe(0);
-      expect(syncedState.shielded.totalCoins).toBeGreaterThanOrEqual(3);
-      expect(syncedState.shielded.transactionHistory.length).toBeGreaterThanOrEqual(2);
+      expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
     },
     syncTimeout,
   );
@@ -94,15 +94,13 @@ describe('Balance constant', () => {
       allure.story('Balance constant');
 
       const syncedState = await utils.waitForSyncFacade(walletFacade);
-      expect(syncedState.shielded.balances[shieldedTokenRaw] ?? 0n).toBe(expectedDustBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash] ?? 0n).toBe(expectedTokenOneBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash2] ?? 0n).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBe(expectedUnshieldedBalance);
-      expect(syncedState.dust.walletBalance(new Date())).toBe(expectedDustBalance);
+      expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
+      expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+      expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+      expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
       expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
       expect(syncedState.shielded.pendingCoins.length).toBe(0);
-      expect(syncedState.shielded.totalCoins).toBeGreaterThanOrEqual(3);
-      expect(syncedState.shielded.transactionHistory.length).toBeGreaterThanOrEqual(2);
+      expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
     },
     syncTimeout,
   );

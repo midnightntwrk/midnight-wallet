@@ -55,7 +55,6 @@ jobs:
         if: env.NETWORK == 'devnet'
         env:
           NETWORK: ${{ inputs.network }}
-          DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ env.FAUCET_SEED_HALO2 }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
         run: |
@@ -66,7 +65,6 @@ jobs:
         if: env.NETWORK == 'testnet'
         env:
           NETWORK: ${{ inputs.network }}
-          DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ env.FAUCET_SEED_TESTNET }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
           ADDRESSES: ${{ vars.TESTNET_ADDRESSES }}
