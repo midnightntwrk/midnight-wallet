@@ -52,9 +52,8 @@ const callProverWorker = <RResponse>(
       workerData: [op, args],
     });
     worker.on('message', (data: WorkerMessage<RResponse>) => {
-      console.log('main thread received message from worker:', data);
       if (data.op === 'lookupKey') {
-        console.log('inside main thread lookupKey:', data.keyLocation);
+        console.log('main thread: received an ask for lookupKey ', data.keyLocation);
         kmProvider
           .lookupKey(data.keyLocation)
           .then((result) => {
@@ -63,7 +62,7 @@ const callProverWorker = <RResponse>(
           })
           .catch(reject);
       } else if (data.op === 'getParams') {
-        console.log('inside main thread getParams:', data.k);
+        console.log('main thread: received an ask for getParams:', data.k);
         kmProvider
           .getParams(data.k)
           .then((result) => {

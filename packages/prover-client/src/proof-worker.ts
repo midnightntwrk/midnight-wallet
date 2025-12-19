@@ -20,12 +20,12 @@ const [op, args]: ['check' | 'prove', any[]] = workerData;
 const keyMaterialProvider: KeyMaterialProvider = {
   lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
     return new Promise((resolve, reject) => {
-      console.log('asking for keys: ', keyLocation);
+      console.log('worker: asking for keys: ', keyLocation);
       parentPort!.postMessage({ op: 'lookupKey', keyLocation });
 
       const subscription = (message: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined }) => {
-        console.log('inside worker (lookupKey): ', message.keyLocation);
         if (message.op === 'lookupKey' && message.keyLocation === keyLocation) {
+          console.log('worker: received results for lookupKey: ', message.keyLocation);
           parentPort!.off('message', subscription);
           resolve(message.result);
         }
@@ -36,12 +36,12 @@ const keyMaterialProvider: KeyMaterialProvider = {
   },
   getParams(k: number): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
-      console.log('asking for params: ', k);
+      console.log('worker: asking for params: ', k);
       parentPort!.postMessage({ op: 'getParams', k });
 
       const subscription = (message: { op: string; k: number; result: Uint8Array }) => {
-        console.log('inside worker (getParams): ', message.k);
         if (message.op === 'getParams' && message.k === k) {
+          console.log('worker: received results for getParams: ', message.k);
           parentPort!.off('message', subscription);
           resolve(message.result);
         }
