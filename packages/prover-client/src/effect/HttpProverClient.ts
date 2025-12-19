@@ -52,8 +52,7 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
 const callProverWorker = <RResponse>(op: 'check' | 'prove', args: any[]): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
-    const ext = currentFile.substring(currentFile.lastIndexOf('.'));
-    const worker = new Worker(new URL(`../proof-worker${ext}`, currentFile), { workerData: [op, args] });
+    const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { workerData: [op, args] });
     worker.on('message', resolve);
     worker.on('error', reject);
     worker.on('exit', (code: number) => {
