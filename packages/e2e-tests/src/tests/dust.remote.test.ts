@@ -109,7 +109,7 @@ describe('Dust tests', () => {
   );
 
   test(
-    'Able to deregister night tokens for dust decay @healhcheck',
+    'Able to deregister night tokens for dust decay @healthcheck',
     async () => {
       const initialWalletState = await utils.waitForSyncFacade(walletFacade);
       const initialDustBalance = initialWalletState.dust.walletBalance(new Date());
