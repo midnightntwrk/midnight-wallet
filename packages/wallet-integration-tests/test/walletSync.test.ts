@@ -24,7 +24,7 @@ import {
 import { randomUUID } from 'node:crypto';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 
 import os from 'node:os';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
@@ -42,9 +42,15 @@ const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
   },
 });
 
-const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml').withEnvironment(
-  environmentVars,
-);
+const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
+  .withWaitStrategy(
+    `proof-server_${environmentId}`,
+    Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
+  )
+  .withWaitStrategy(`node_${environmentId}`, Wait.forListeningPorts())
+  .withWaitStrategy(`indexer_${environmentId}`, Wait.forLogMessage(/block indexed".*height":1,.*/gm))
+  .withEnvironment(environmentVars)
+  .withStartupTimeout(100_000);
 
 describe('Wallet Sync', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;

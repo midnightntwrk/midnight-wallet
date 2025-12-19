@@ -1,4 +1,4 @@
-name: Healthcheck - qanet
+name: Healthcheck - preprod
 
 on:
   workflow_dispatch:
@@ -10,6 +10,6 @@ jobs:
     name: Healthcheck tests
     uses: ./.github/workflows/e2e-tests.yml
     with:
-      network: qanet
+      network: preprod
       modifier: '-t @healthcheck'
     secrets: inherit

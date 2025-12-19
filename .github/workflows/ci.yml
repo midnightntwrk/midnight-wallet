@@ -206,30 +206,29 @@ jobs:
       - name: Run tests
         run: yarn test
 
-      # - name: Run smoke e2e tests
-      #   run: |
-      #     yarn dlx turbo test-undeployed -- -t @smoke
+      - name: Run smoke e2e tests
+        run: |
+          yarn dlx turbo test-undeployed -- -t @smoke
 
-      # - name: Create allure properties
-      #   if: success() || failure()
-      #   working-directory: ./packages/e2e-tests/allure-results
-      #   run: |
-      #     echo "
-      #     env=${{ env.NETWORK }}
-      #     tags=@smoke
-      #     deployment=${{ env.DEPLOYMENT }}
-      #     platform=Linux
-      #     " > environment.properties
+      - name: Create allure properties
+        if: success() || failure()
+        working-directory: ./packages/e2e-tests/allure-results
+        run: |
+          echo "
+          env=${{ env.NETWORK }}
+          tags=@smoke
+          platform=Linux
+          " > environment.properties
 
-      # - name: Send Results to Allure Server
-      #   uses: robkatona/send-allure-results@v1.0.5
-      #   if: ${{ always() }}
-      #   with:
-      #     allure-server-url: https://allure-server.prd.midnight.tools
-      #     allure-results-directory: ./packages/e2e-tests/reports/allure-results
-      #     project-id: headless-wallet-${{ env.DEPLOYMENT }}
-      #     security-user: ${{ env.ALLURE_ADMIN_USER }}
-      #     security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+      - name: Send Results to Allure Server
+        uses: robkatona/send-allure-results@v1.0.5
+        if: ${{ always() }}
+        with:
+          allure-server-url: https://allure-server.prd.midnight.tools
+          allure-results-directory: ./packages/e2e-tests/reports/allure-results
+          project-id: headless-wallet-${{ env.NETWORK }}
+          security-user: ${{ env.ALLURE_ADMIN_USER }}
+          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
       # - name: Publish wallet TS Test Report
       #   uses: dorny/test-reporter@v1

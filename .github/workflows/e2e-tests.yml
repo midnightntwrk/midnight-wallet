@@ -156,7 +156,6 @@ jobs:
       - name: Run e2e tests
         env:
           NETWORK: ${{ inputs.network }}
-          DEPLOYMENT: ${{ inputs.deployment }}
           SEED: ${{ inputs.seed || secrets.E2E_TESTS_SEED }}
           SEED2: ${{ inputs.seed2 || secrets.E2E_TESTS_SEED2 }}
           SEED_STABLE: ${{ env.SEED_STABLE }}
@@ -182,7 +181,6 @@ jobs:
           echo "
           env=${{ inputs.network }}
           tags=${{ inputs.modifier }}
-          deployment=${{ inputs.deployment }}
           platform=Linux
           " > environment.properties
 
@@ -192,7 +190,7 @@ jobs:
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ inputs.deployment }}
+          project-id: headless-wallet-${{ inputs.NETWORK }}
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 

@@ -55,21 +55,21 @@ describe('Funded wallet', () => {
       allure.story('Wallet state properties - funded');
       logger.info('Waiting for sync...');
       const state = await utils.waitForSyncFacade(wallet);
-      expect(Object.keys(state.shielded.balances)).toHaveLength(3);
-      expect(state?.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
-      expect(state?.shielded.balances['0000000000000000000000000000000000000000000000000000000000000001']).toBe(
+      expect(state.shielded.totalCoins).toHaveLength(7);
+      expect(state.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
+      expect(state.shielded.balances['0000000000000000000000000000000000000000000000000000000000000001']).toBe(
         500000000000000n,
       );
       expect(state?.shielded.balances['0000000000000000000000000000000000000000000000000000000000000002']).toBe(
         500000000000000n,
       );
-      expect(state?.unshielded.balances).toHaveLength(1);
-      expect(state?.unshielded.balances[unshieldedTokenRaw]).toBe(2_500_000_000_000_000n);
+      expect(state.unshielded.totalCoins).toHaveLength(5);
+      expect(state.unshielded.balances[unshieldedTokenRaw]).toBe(2_500_000_000_000_000n);
       expect(
-        state?.unshielded.balances['0000000000000000000000000000000000000000000000000000000000000002'],
+        state.unshielded.balances['0000000000000000000000000000000000000000000000000000000000000002'],
       ).toBeUndefined();
-      expect(state?.dust.totalCoins).toHaveLength(5);
-      expect(state?.dust.walletBalance(new Date())).toBe(12500000000000000000000000n);
+      expect(state.dust.totalCoins).toHaveLength(5);
+      expect(state.dust.walletBalance(new Date())).toBe(12500000000000000000000000n);
     },
     timeout,
   );
