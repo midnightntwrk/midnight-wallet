@@ -11,26 +11,66 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import { provingProvider, type KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
+import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 import { parentPort, workerData } from 'worker_threads';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment
-const [keyMaterialProvider, op, args]: [KeyMaterialProvider, 'check' | 'prove', any[]] = workerData;
+const [op, args]: ['check' | 'prove', any[]] = workerData;
 
-const wasmProver = provingProvider(keyMaterialProvider);
+const keyMaterialProvider: KeyMaterialProvider = {
+  lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
+    return new Promise((resolve, reject) => {
+      console.log('asking for keys: ', keyLocation);
+      parentPort!.postMessage({ op: 'lookupKey', keyLocation });
+
+      const subscription = (message: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined }) => {
+        console.log('inside worker (lookupKey): ', message.keyLocation);
+        if (message.op === 'lookupKey' && message.keyLocation === keyLocation) {
+          parentPort!.off('message', subscription);
+          resolve(message.result);
+        }
+      };
+
+      parentPort!.on('message', subscription);
+    });
+  },
+  getParams(k: number): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+      console.log('asking for params: ', k);
+      parentPort!.postMessage({ op: 'getParams', k });
+
+      const subscription = (message: { op: string; k: number; result: Uint8Array }) => {
+        console.log('inside worker (getParams): ', message.k);
+        if (message.op === 'getParams' && message.k === k) {
+          parentPort!.off('message', subscription);
+          resolve(message.result);
+        }
+      };
+
+      parentPort!.on('message', subscription);
+    });
+  },
+};
 
 // we handle polymorphic data here
 // @ts-nocheck
 if (op === 'check') {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const [a, b] = args;
+  const [a] = args;
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  const result = await wasmProver.check(a, b);
-  parentPort!.postMessage(result);
+  const result = await check(a, keyMaterialProvider);
+  parentPort!.postMessage({
+    op: 'result',
+    value: result,
+  });
 } else if (op === 'prove') {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const [a, b, c] = args;
+  const [a, b] = args;
+
   // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  const result = await wasmProver.prove(a, b, c);
-  parentPort!.postMessage(result);
+  const result = await prove(a, keyMaterialProvider, b);
+  parentPort!.postMessage({
+    op: 'result',
+    value: result,
+  });
 }
