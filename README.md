@@ -28,6 +28,10 @@ are registered as workspaces in yarn, so yarn can resolve the dependencies. Main
   selection
 - `wallet-integration-tests` - tests examining public APIs
 
+> [!NOTE]
+>
+> Packaging for web requires polyfills for Node's `Buffer` and `assert`.
+
 For a reference about structure and internal rules to follow, consult [Design Doc](./docs//Design.md) and
 [IcePanel component diagram](https://app.icepanel.io/landscapes/yERCUolKk91aYF1pzsql/versions/latest/diagrams/editor?diagram=JwWBu6RYGg&model=onccvco5c4p&overlay_tab=tags&x1=-1463.3&y1=-888&x2=2295.3&y2=1072)
 
