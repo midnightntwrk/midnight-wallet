@@ -12,7 +12,7 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import * as rx from 'rxjs';
-import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
+import { WalletState } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
