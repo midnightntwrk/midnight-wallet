@@ -24,11 +24,11 @@
     "fast-check": "^4.2.0",
     "pure-rand": "^7.0.1",
     "rxjs": "^7.5.5",
-    "testcontainers": "^11.8.1"
+    "testcontainers": "^11.10.0"
   },
   "devDependencies": {
     "eslint": "^9.32.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.16"
   }
 }

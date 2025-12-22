@@ -45,8 +45,8 @@ describe('Dust tests', () => {
   });
 
   afterAll(async () => {
-    await utils.closeWallet(walletFacade);
-  }, 20_000);
+    await walletFacade.stop();
+  });
 
   test(
     'Able to register Night tokens for Dust generation @healthcheck',
