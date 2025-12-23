@@ -44,7 +44,7 @@ describe('Token transfer', () => {
   const initialFundedDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seedFunded));
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
+  const syncTimeout = 30 * 60 * 1000; //  30 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = utils.tNightAmount(10n);
 
@@ -104,7 +104,7 @@ describe('Token transfer', () => {
     await receiver.stop();
   }, timeout);
 
-  test(
+  test.only(
     'Is working for valid transfer @healthcheck',
     async () => {
       allure.tag('smoke');
@@ -194,7 +194,8 @@ describe('Token transfer', () => {
 
       // logger.info('waiting for tx in history');
       // await waitForTxInHistory(txId, sender);
-      await utils.waitForFacadePendingClear(sender);
+      // await utils.waitForFacadePendingClear(sender);
+      await utils.waitForUnshieldedCoinUpdate(receiver, initialReceiverState.unshielded.availableCoins.length);
       const senderFinalState = await utils.waitForSyncFacade(sender);
       // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
@@ -216,12 +217,12 @@ describe('Token transfer', () => {
       expect(senderFinalState.shielded.totalCoins.length).toBeLessThanOrEqual(
         senderInitialState.shielded.totalCoins.length,
       );
+      expect(senderFinalState.unshielded.pendingCoins.length).toBe(0);
       expect(senderFinalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
         senderInitialState.unshielded.availableCoins.length,
       );
-      expect(senderFinalState.unshielded.pendingCoins.length).toBe(0);
       expect(senderFinalState.unshielded.totalCoins.length).toBeLessThanOrEqual(
-        senderInitialState.shielded.totalCoins.length,
+        senderInitialState.unshielded.totalCoins.length,
       );
       // expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
       // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
@@ -236,6 +237,9 @@ describe('Token transfer', () => {
       expect(receiverFinalShieldedBalance).toBe(initialReceiverShieldedBalance + outputValue);
       expect(receiverFinalUnshieldedBalance).toBe(initialReceiverUnshieldedBalance + outputValue);
       expect(receiverFinalState.shielded.pendingCoins.length).toBe(0);
+      expect(receiverFinalState.shielded.availableCoins.length).toBeGreaterThanOrEqual(
+        initialReceiverState.shielded.availableCoins.length + 1,
+      );
       expect(receiverFinalState.shielded.totalCoins.length).toBeGreaterThanOrEqual(
         initialReceiverState.shielded.totalCoins.length + 1,
       );

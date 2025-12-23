@@ -249,7 +249,7 @@ describe('Transaction balancing examples', () => {
       expect(finalState2.shielded.balances[shieldedTokenRaw]).toBe(output35);
       // validateWalletTxHistory(finalState2, initialState2);
 
-      await utils.closeWallet(receiver1);
+      await receiver1.stop();
     },
     timeout,
   );
@@ -323,7 +323,7 @@ describe('Transaction balancing examples', () => {
       const finalState2 = await utils.waitForSyncFacade(receiver1);
       logger.info(`Wallet 2: ${finalState2.shielded.balances[shieldedTokenRaw]} shielded tokens`);
       expect(finalState2.shielded.balances[shieldedTokenRaw]).toBe(output);
-      await utils.closeWallet(receiver1);
+      await receiver1.stop();
     },
     timeout,
   );
@@ -449,9 +449,9 @@ describe('Transaction balancing examples', () => {
       logger.info(finalState4.shielded.availableCoins);
       expect(finalState4.shielded.balances[shieldedTokenRaw]).toBe(nativeTokenOutput);
 
-      await utils.closeWallet(receiver1);
-      await utils.closeWallet(receiver2);
-      await utils.closeWallet(receiver3);
+      await receiver1.stop();
+      await receiver2.stop();
+      await receiver3.stop();
     },
     timeout,
   );

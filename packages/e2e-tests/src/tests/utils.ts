@@ -272,18 +272,6 @@ export const buildWalletFacade = (walletSeed: string, fixture: TestContainersFix
   return new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
 };
 
-export const closeWallet = async (wallet: WalletFacade) => {
-  try {
-    await wallet.stop();
-  } catch (e: unknown) {
-    if (typeof e === 'string') {
-      logger.warn(e);
-    } else if (e instanceof Error) {
-      logger.warn(e.message);
-    }
-  }
-};
-
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
   rx.firstValueFrom(
     wallet.state.pipe(

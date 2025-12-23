@@ -60,8 +60,8 @@ describe('Dust tests', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(walletFunded);
-    await utils.closeWallet(receiverWallet);
+    await walletFunded.stop();
+    await receiverWallet.stop();
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {

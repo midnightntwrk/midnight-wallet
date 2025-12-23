@@ -58,7 +58,7 @@ describe('Balance constant', () => {
 
   afterEach(async () => {
     // await utils.saveState(walletFacade, filename);
-    await utils.closeWallet(walletFacade);
+    await walletFacade.stop();
   }, syncTimeout);
 
   test(

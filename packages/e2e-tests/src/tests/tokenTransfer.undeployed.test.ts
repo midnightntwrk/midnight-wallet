@@ -59,8 +59,8 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(fundedFacade);
-    await utils.closeWallet(walletFacade);
+    await fundedFacade.stop();
+    await walletFacade.stop();
   });
 
   test(

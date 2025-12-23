@@ -56,7 +56,7 @@ describe('Token transfer', () => {
   let senderKeyStore: UnshieldedKeystore;
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
-  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
+  const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
   const timeout = 600_000;
 
   beforeAll(async () => {

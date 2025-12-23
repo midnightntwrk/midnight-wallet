@@ -72,8 +72,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterAll(async () => {
-    await utils.closeWallet(sender);
-    await utils.closeWallet(receiver);
+    await sender.stop();
+    await receiver.stop();
   }, timeout);
 
   test(
