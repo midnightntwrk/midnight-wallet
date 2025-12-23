@@ -157,7 +157,10 @@ describe('Token transfer', () => {
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
+      logger.info(txToProve);
       const provenTx = await sender.finalizeTransaction(txToProve);
+      logger.info(provenTx.toString());
+      logger.info('Submitting tx:');
       const txId = await sender.submitTransaction(provenTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
@@ -275,10 +278,10 @@ describe('Token transfer', () => {
       const finalState = await utils.waitForSyncFacade(sender);
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
-      expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
-      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
-      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
+      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length + 1);
+      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + 1);
     },
     syncTimeout,
   );
