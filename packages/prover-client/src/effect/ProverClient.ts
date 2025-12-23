@@ -13,6 +13,7 @@
 import { Effect, Context } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 
 /**
  * A client that provides proof services for unproven transactions.
@@ -24,11 +25,19 @@ export class ProverClient extends Context.Tag('@midnight-ntwrk/prover-client#Pro
 
 export declare namespace ProverClient {
   /**
-   * Provides server related configuration for {@link ProverClient} implementations.
+   * Provides server-related configuration for {@link ProverClient} implementations.
    */
   interface ServerConfig {
     /** The base URL to the Proof Server. */
     readonly url: URL | string;
+  }
+
+  /**
+   * Provides wasm-related configuration for {@link ProverClient} implementations.
+   */
+  interface WasmConfig {
+    /** The base URL to the Proof Server. */
+    readonly keyMaterialProvider: KeyMaterialProvider;
   }
 
   interface Service {

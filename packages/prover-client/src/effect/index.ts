@@ -12,3 +12,4 @@
 // limitations under the License.
 export * as ProverClient from './ProverClient.js';
 export * as HttpProverClient from './HttpProverClient.js';
+export * as WasmProverClient from './WasmProverClient.js';
