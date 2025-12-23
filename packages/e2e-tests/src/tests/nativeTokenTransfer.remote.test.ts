@@ -98,6 +98,7 @@ describe('Token transfer', () => {
     // await utils.saveState(receiver, filenameWallet2);
     await sender.stop();
     await receiver.stop();
+    logger.info('Wallets stopped');
   }, timeout);
 
   test(

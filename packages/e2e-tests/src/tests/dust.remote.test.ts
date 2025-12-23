@@ -46,6 +46,7 @@ describe('Dust tests', () => {
 
   afterAll(async () => {
     await walletFacade.stop();
+    logger.info('Wallet stopped');
   });
 
   test(

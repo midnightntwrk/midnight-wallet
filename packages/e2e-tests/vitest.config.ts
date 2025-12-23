@@ -23,14 +23,6 @@ export default defineConfig({
     testTimeout: 90_000,
     globals: true,
     exclude: ['node_modules', 'dist'],
-    coverage: {
-      provider: 'v8',
-      enabled: true,
-      clean: true,
-      include: ['src/**/*.ts'],
-      reporter: ['clover', 'json', 'json-summary', 'lcov', 'text'],
-      reportsDirectory: './coverage',
-    },
     reporters: [
       'default',
       ['junit', { outputFile: './reports/test-report.xml' }],
