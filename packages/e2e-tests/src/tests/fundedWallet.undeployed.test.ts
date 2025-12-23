@@ -43,7 +43,7 @@ describe('Funded wallet', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(wallet);
+    await wallet.stop();
   });
 
   test(

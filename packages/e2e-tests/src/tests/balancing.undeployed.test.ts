@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as rx from 'rxjs';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
@@ -161,13 +160,7 @@ describe('Transaction balancing examples', () => {
       const dustRegistrationTxid = await senderFacade.submitTransaction(finalizedDustTx);
       logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
-      await rx.firstValueFrom(
-        senderFacade.state().pipe(
-          rx.debounceTime(15_000),
-          rx.filter((s) => s.isSynced),
-          rx.filter((s) => s.dust.availableCoins.length > 0),
-        ),
-      );
+      await utils.waitForStateAfterDustRegistration(senderFacade, finalizedDustTx);
     });
   }, timeout);
 
@@ -227,11 +220,11 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
       // logger.info(utils.walletStateTrimmed(pendingState));
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
@@ -256,7 +249,7 @@ describe('Transaction balancing examples', () => {
       expect(finalState2.shielded.balances[shieldedTokenRaw]).toBe(output35);
       // validateWalletTxHistory(finalState2, initialState2);
 
-      await utils.closeWallet(receiver1);
+      await receiver1.stop();
     },
     timeout,
   );
@@ -308,13 +301,13 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
       // logger.info(utils.walletStateTrimmed(pendingState));
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
-      expect(pendingState.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
+      expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
@@ -330,7 +323,7 @@ describe('Transaction balancing examples', () => {
       const finalState2 = await utils.waitForSyncFacade(receiver1);
       logger.info(`Wallet 2: ${finalState2.shielded.balances[shieldedTokenRaw]} shielded tokens`);
       expect(finalState2.shielded.balances[shieldedTokenRaw]).toBe(output);
-      await utils.closeWallet(receiver1);
+      await receiver1.stop();
     },
     timeout,
   );
@@ -420,12 +413,12 @@ describe('Transaction balancing examples', () => {
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      const pendingState = await utils.waitForPending(senderFacade.shielded);
-      logger.info(`Wallet 1 available coins: ${pendingState.availableCoins.length}`);
-      expect(pendingState.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
-      expect(pendingState.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      expect(pendingState.pendingCoins.length).toBeLessThanOrEqual(2);
-      expect(pendingState.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      const pendingState = await utils.waitForFacadePending(senderFacade);
+      logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
+      expect(pendingState.shielded.balances[shieldedTokenRaw]).toBeLessThan(initialBalance);
+      expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
+      expect(pendingState.shielded.pendingCoins.length).toBeLessThanOrEqual(2);
+      expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       await utils.waitForFacadePendingClear(senderFacade);
       const finalState = await utils.waitForSyncFacade(senderFacade);
@@ -456,9 +449,9 @@ describe('Transaction balancing examples', () => {
       logger.info(finalState4.shielded.availableCoins);
       expect(finalState4.shielded.balances[shieldedTokenRaw]).toBe(nativeTokenOutput);
 
-      await utils.closeWallet(receiver1);
-      await utils.closeWallet(receiver2);
-      await utils.closeWallet(receiver3);
+      await receiver1.stop();
+      await receiver2.stop();
+      await receiver3.stop();
     },
     timeout,
   );

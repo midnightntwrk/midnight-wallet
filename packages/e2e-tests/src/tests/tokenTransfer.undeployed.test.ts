@@ -59,8 +59,8 @@ describe('Token transfer', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(fundedFacade);
-    await utils.closeWallet(walletFacade);
+    await fundedFacade.stop();
+    await walletFacade.stop();
   });
 
   test(
@@ -593,7 +593,7 @@ describe('Token transfer', () => {
         Promise.all([fundedFacade.submitTransaction(provenTx), fundedFacade.submitTransaction(provenTx)]),
       ).rejects.toThrow();
 
-      const finalState = await utils.waitForFinalizedBalance(fundedFacade.shielded);
+      const finalState = await utils.waitForFinalizedShieldedBalance(fundedFacade.shielded);
       expect(finalState.balances[shieldedTokenRaw]).toBe(initialBalance);
       expect(finalState.availableCoins.length).toBe(initialAvailableCoins);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -697,7 +697,7 @@ describe('Token transfer', () => {
       const provenTx = await fundedFacade.finalizeTransaction(txToProve);
       await expect(fundedFacade.submitTransaction(provenTx)).rejects.toThrow();
 
-      const finalState = await utils.waitForFinalizedBalance(fundedFacade.shielded);
+      const finalState = await utils.waitForFinalizedShieldedBalance(fundedFacade.shielded);
       expect(finalState.balances[dustTokenHash]).toBe(balance);
       expect(finalState.availableCoins.length).toBe(5);
       expect(finalState.pendingCoins.length).toBe(0);
@@ -1060,7 +1060,7 @@ describe('Token transfer', () => {
         Promise.all([fundedFacade.submitTransaction(provenTx), fundedFacade.submitTransaction(provenTx)]),
       ).rejects.toThrow();
 
-      const finalState = await utils.waitForFinalizedBalance(fundedFacade.shielded);
+      const finalState = await utils.waitForFinalizedShieldedBalance(fundedFacade.shielded);
       expect(finalState).toMatchObject(syncedState);
       expect(finalState.balances[dustTokenHash]).toBe(initialDustBalance);
       expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
@@ -1115,7 +1115,7 @@ describe('Token transfer', () => {
       );
       await expect(fundedFacade.finalizeTransaction(txToProve)).rejects.toThrow();
 
-      const finalState = await utils.waitForFinalizedBalance(fundedFacade.shielded);
+      const finalState = await utils.waitForFinalizedShieldedBalance(fundedFacade.shielded);
       expect(finalState).toMatchObject(syncedState);
       expect(finalState.balances[dustTokenHash]).toBe(initialDustBalance);
       expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);

@@ -73,7 +73,7 @@ describe('Fresh wallet with empty state', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(wallet);
+    await wallet.stop();
   });
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {

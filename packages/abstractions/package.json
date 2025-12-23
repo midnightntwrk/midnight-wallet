@@ -34,7 +34,7 @@
     "rimraf": "^6.0.1",
     "to-words": "^4.5.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.16"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",

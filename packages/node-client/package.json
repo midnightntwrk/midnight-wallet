@@ -45,7 +45,7 @@
     "bn.js": "^5.2.2",
     "effect": "^3.17.3",
     "rxjs": "^7.5",
-    "testcontainers": "^11.8.1"
+    "testcontainers": "^11.10.0"
   },
   "devDependencies": {
     "@effect/cluster": "^0.46.2",
@@ -66,7 +66,7 @@
     "rimraf": "^6.0.1",
     "tsx": "^4.20.4",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4",
+    "vitest": "^4.0.16",
     "yargs": "^18.0.0"
   },
   "scripts": {
