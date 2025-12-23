@@ -60,7 +60,7 @@ describe('Token transfer', () => {
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
@@ -94,7 +94,7 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  afterAll(async () => {
+  afterEach(async () => {
     // const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
     // const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
@@ -105,7 +105,7 @@ describe('Token transfer', () => {
     logger.info('Wallets stopped');
   }, timeout);
 
-  test.only(
+  test(
     'Is working for valid transfer @healthcheck',
     async () => {
       allure.tag('smoke');

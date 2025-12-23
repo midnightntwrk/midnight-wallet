@@ -59,7 +59,7 @@ describe('Token transfer', () => {
   const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
   const timeout = 600_000;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
@@ -93,7 +93,7 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  afterAll(async () => {
+  afterEach(async () => {
     // await utils.saveState(sender, filenameWallet);
     // await utils.saveState(receiver, filenameWallet2);
     await sender.stop();

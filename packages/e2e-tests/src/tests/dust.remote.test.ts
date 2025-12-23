@@ -35,7 +35,7 @@ describe('Dust tests', () => {
   let walletFacade: WalletFacade;
   let walletKeystore: UnshieldedKeystore;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     const fixture = getFixture();
     const networkId = fixture.getNetworkId();
     walletFacade = utils.buildWalletFacade(seed, fixture);
@@ -44,7 +44,7 @@ describe('Dust tests', () => {
     await walletFacade.start(walletSecretKey, walletDustSecretKey);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await walletFacade.stop();
     logger.info('Wallet stopped');
   });
