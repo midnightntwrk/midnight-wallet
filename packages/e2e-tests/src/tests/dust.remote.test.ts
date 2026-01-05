@@ -122,9 +122,9 @@ describe('Dust tests', () => {
       logger.info(`Registered night UTXOs: ${inspect(registeredNightUtxos, { depth: null })}`);
       expect(registeredNightUtxos.length).toBeGreaterThan(0);
 
-      const deregisterTokens = 2;
+      const firstRegisteredNightUtxo = registeredNightUtxos[0];
       const dustDeregistrationRecipe = await walletFacade.deregisterFromDustGeneration(
-        registeredNightUtxos.slice(0, deregisterTokens),
+        [firstRegisteredNightUtxo],
         walletKeystore.getPublicKey(),
         (payload) => walletKeystore.signData(payload),
       );
