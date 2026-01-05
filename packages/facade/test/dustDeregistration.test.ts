@@ -129,6 +129,9 @@ describe('Dust Deregistration', () => {
     const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
+    const nightUtxosNotRegisteredForDustGenerationBeforeDeregistration =
+      walletStateWithNight.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === false);
+
     const nightUtxosRegisteredForDustGeneration = walletStateWithNight.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === true,
     );
@@ -180,7 +183,7 @@ describe('Dust Deregistration', () => {
 
     expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
     expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(
-      nightUtxosRegisteredForDustGeneration.length - deregisterTokens,
+      nightUtxosNotRegisteredForDustGenerationBeforeDeregistration.length + deregisterTokens,
     );
   });
 });
