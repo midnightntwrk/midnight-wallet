@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either, Duration } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { Simulator, SimulatorState } from './Simulator.js';

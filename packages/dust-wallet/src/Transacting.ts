@@ -32,7 +32,7 @@ import {
   UnprovenTransaction,
   addressFromKey,
   LedgerParameters,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';

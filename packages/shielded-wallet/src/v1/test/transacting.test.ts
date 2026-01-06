@@ -16,7 +16,7 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Array as Arr, Effect, Iterable, Order, pipe, Record } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';

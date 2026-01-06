@@ -13,7 +13,7 @@
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
 import { useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';

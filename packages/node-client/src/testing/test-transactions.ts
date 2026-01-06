@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Error, FileSystem } from '@effect/platform';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 // #region setup
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';

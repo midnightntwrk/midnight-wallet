@@ -24,7 +24,7 @@ import {
   TransactionContext,
   ProofErasedTransaction,
   SyntheticCost,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { NetworkId } from './types/ledger.js';
