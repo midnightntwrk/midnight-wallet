@@ -1,6 +1,10 @@
 services:
   indexer:
+<<<<<<< HEAD
     image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.18'
+=======
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.19'
+>>>>>>> main
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

@@ -1,5 +1,24 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- aef8d4b: Performance improvement: Shielded and Dust wallet now send events in batches of 50 or after 10 seconds if
+  total events has not reached 50
+- Updated dependencies [aef8d4b]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.8
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.14
+
+## 1.0.0-beta.14
+
+### Patch Changes
+
+- 283ff55: fix: unshielded state update bug
+- b9865cf: feat: rewrite unshielded wallet runtime
+- Updated dependencies [b9865cf]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.13
+
 ## 1.0.0-beta.13
 
 ### Patch Changes

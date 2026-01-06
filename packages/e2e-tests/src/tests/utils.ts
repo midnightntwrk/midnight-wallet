@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-import { filter, firstValueFrom, tap, throttleTime } from 'rxjs';
+import * as rx from 'rxjs';
 import { WalletState, type Wallet } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
@@ -40,14 +40,14 @@ export const Segments = {
 };
 
 export const waitForSyncProgress = async (wallet: WalletFacade) =>
-  await firstValueFrom(
+  await rx.firstValueFrom(
     wallet.state().pipe(
-      throttleTime(5000),
-      tap((state) => {
+      rx.throttleTime(5000),
+      rx.tap((state) => {
         const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
         logger.info(`Wallet facade behind by ${applyGap}`);
       }),
-      filter((state) =>
+      rx.filter((state) =>
         // Let's allow progress only if syncProgress is defined
         state.unshielded.progress.isStrictlyComplete(),
       ),
@@ -182,7 +182,7 @@ export const provideWallet = async (
     const restoredWallet = new WalletFacade(restoredShielded, restoredUnshielded, restoredDust);
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
-    const restoredWalletState = await firstValueFrom(restoredWallet.state());
+    const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
     const applyGap =
       restoredWalletState.unshielded.progress.highestTransactionId - restoredWalletState.unshielded.progress.appliedId;
     logger.info(`Apply gap: ${applyGap}`);
@@ -262,8 +262,11 @@ export const buildWalletFacade = (walletSeed: string, fixture: TestContainersFix
   }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
 
   const dustSeed = getDustSeed(walletSeed);
-  const Dust = DustWallet(fixture.getDustWalletConfig());
-  const dustParameters = new ledger.DustParameters(5_000_000_000n, 8267n, 3n * 60n * 60n);
+  const Dust = DustWallet({
+    ...fixture.getWalletConfig(),
+    ...fixture.getDustWalletConfig(),
+  });
+  const dustParameters = ledger.LedgerParameters.initialParameters().dust;
   const dustWallet = Dust.startWithSeed(dustSeed, dustParameters);
 
   return new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
@@ -282,23 +285,23 @@ export const closeWallet = async (wallet: WalletFacade) => {
 };
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      throttleTime(5_000),
-      tap((state) => {
+      rx.throttleTime(5_000),
+      rx.tap((state) => {
         const applyGap = state.state.progress.highestTransactionId - state.state.progress.appliedId;
         // const txs = state.transactionHistory.length;
         logger.info(`Wallet behind by ${applyGap} indices`);
       }),
-      filter((state) => state.state.progress.isStrictlyComplete()),
+      rx.filter((state) => state.state.progress.isStrictlyComplete()),
     ),
   );
 
 export const waitForSyncShielded = (wallet: ShieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      throttleTime(5_000),
-      tap((state) => {
+      rx.throttleTime(5_000),
+      rx.tap((state) => {
         const applyGap = state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex;
         const sourceGap = state.state?.progress.highestIndex - state.state?.progress.highestRelevantIndex;
         // const txs = state.transactionHistory.length;
@@ -306,7 +309,7 @@ export const waitForSyncShielded = (wallet: ShieldedWallet) =>
           `Wallet behind by ${applyGap} indices, source behind by ${sourceGap}, synced = ${state.state?.progress.isStrictlyComplete()}`,
         );
       }),
-      filter(
+      rx.filter(
         (state) =>
           state.state?.progress !== undefined &&
           state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex === 0n &&
@@ -317,16 +320,16 @@ export const waitForSyncShielded = (wallet: ShieldedWallet) =>
   );
 
 export const waitForSyncOld = (wallet: Wallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state().pipe(
-      throttleTime(5_000),
-      tap((state) => {
+      rx.throttleTime(5_000),
+      rx.tap((state) => {
         const applyGap = state.syncProgress?.lag.applyGap ?? 0n;
         const sourceGap = state.syncProgress?.lag.sourceGap ?? 0n;
         const txs = state.transactionHistory.length;
         logger.info(`Wallet behind by ${applyGap} indices, source behind by ${sourceGap}, transactions=${txs}`);
       }),
-      filter(
+      rx.filter(
         (state) =>
           state.syncProgress !== undefined &&
           state?.syncProgress?.lag?.applyGap === 0n &&
@@ -336,32 +339,27 @@ export const waitForSyncOld = (wallet: Wallet) =>
   );
 
 export const waitForSyncFacade = async (facade: WalletFacade) =>
-  await firstValueFrom(
+  await rx.firstValueFrom(
     facade.state().pipe(
-      throttleTime(5_000),
-      tap((state) => {
+      rx.throttleTime(5_000),
+      rx.tap((state) => {
         const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
         logger.info(`Wallet facade behind by ${applyGap}`);
       }),
-      filter(
-        (state) =>
-          state.dust.state.progress.isStrictlyComplete() &&
-          state.shielded.state.progress.isStrictlyComplete() &&
-          state.unshielded.progress.isStrictlyComplete(),
-      ),
+      rx.filter((state) => state.isSynced === true),
     ),
   );
 
 export const waitForFacadePending = (wallet: WalletFacade) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state().pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const shieldedPending = state.shielded.pendingCoins.length;
         logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins...`);
         const unshieldedPending = state.shielded.pendingCoins.length;
         logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins...`);
       }),
-      filter(
+      rx.filter(
         (state) =>
           // Let's allow progress only if pendingCoins are present
           state.shielded.pendingCoins.length > 0 || state.unshielded.pendingCoins.length > 0,
@@ -370,9 +368,9 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
   );
 
 export const waitForFacadePendingClear = (wallet: WalletFacade) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state().pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const shieldedPending = state.shielded.pendingCoins.length;
         logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins to clear...`);
         const unshieldedPending = state.unshielded.pendingCoins.length;
@@ -380,7 +378,8 @@ export const waitForFacadePendingClear = (wallet: WalletFacade) =>
         const dustPending = state.dust.pendingCoins.length;
         logger.info(`Dust wallet pending coins: ${dustPending}, waiting for pending coins to clear...`);
       }),
-      filter(
+      rx.debounceTime(10_000),
+      rx.filter(
         (state) =>
           // Allow progress only if there are no pending coins
           state.shielded.pendingCoins.length == 0 &&
@@ -391,13 +390,13 @@ export const waitForFacadePendingClear = (wallet: WalletFacade) =>
   );
 
 export const waitForPending = (wallet: ShieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins...`);
       }),
-      filter((state) => {
+      rx.filter((state) => {
         // Let's allow progress only if pendingCoins are present
         const pending = state.pendingCoins.length;
         return pending > 0;
@@ -406,39 +405,39 @@ export const waitForPending = (wallet: ShieldedWallet) =>
   );
 
 export const waitForBalanceUpdate = (wallet: UnshieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const balanceSize = Object.values(state.balances).length;
         logger.info(`Balance size: ${balanceSize}, waiting for balance to update...`);
       }),
-      filter((state) => {
+      rx.filter((state) => {
         return Object.values(state.balances).length > 0;
       }),
     ),
   );
 
 export const waitForDustBalance = (wallet: WalletFacade, expectedDustBalance: bigint) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state().pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const dustBalance = state.dust.walletBalance(new Date(Date.now() + 60 * 60 * 1000));
         logger.info(`Dust balance: ${dustBalance}`);
       }),
-      filter((state) => {
+      rx.filter((state) => {
         return state.dust.walletBalance(new Date(Date.now() + 60 * 60 * 1000)) >= expectedDustBalance;
       }),
     ),
   );
 
 export const waitForFinalizedBalanceUnshielded = (wallet: UnshieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
-      filter((state) => {
+      rx.filter((state) => {
         // Let's allow progress only if pendingCoins are cleared
         const pending = state.pendingCoins.length;
         return pending === 0;
@@ -447,17 +446,32 @@ export const waitForFinalizedBalanceUnshielded = (wallet: UnshieldedWallet) =>
   );
 
 export const waitForFinalizedBalance = (wallet: ShieldedWallet) =>
-  firstValueFrom(
+  rx.firstValueFrom(
     wallet.state.pipe(
-      tap((state) => {
+      rx.tap((state) => {
         const pending = state.pendingCoins.length;
         logger.info(`Wallet pending coins: ${pending}, waiting for pending coins cleared...`);
       }),
-      filter((state) => {
+      rx.filter((state) => {
         // Let's allow progress only if pendingCoins are cleared
         const pending = state.pendingCoins.length;
         return pending === 0;
       }),
+    ),
+  );
+
+export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvailableCoins: number) =>
+  rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.tap((state) => {
+        const currentNumAvailableCoins = state.unshielded.availableCoins.length;
+        logger.info(
+          `Unshielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableCoins}...`,
+        );
+      }),
+      rx.debounceTime(10_000),
+      rx.filter((s) => s.isSynced),
+      rx.filter((s) => s.unshielded.availableCoins.length > initialNumAvailableCoins),
     ),
   );
 
@@ -589,6 +603,12 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   return derivationResult.key;
 };
 
+export const sleep = (secs: number): Promise<void> => {
+  return new Promise((resolve) => setTimeout(resolve, secs * 1000));
+};
+
+export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
+
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type MidnightNetwork = 'undeployed' | 'node-dev-01' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';
+export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';

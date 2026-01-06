@@ -107,7 +107,10 @@ export const UnshieldedState = {
 
       return {
         availableUtxos: HashMap.union(
-          state.availableUtxos,
+          HashMap.removeMany(
+            state.availableUtxos,
+            update.spentUtxos.map((utxo) => UtxoHash(utxo.utxo)),
+          ),
           HashMap.fromIterable(update.createdUtxos.map((utxo) => [UtxoHash(utxo.utxo), utxo])),
         ),
         pendingUtxos: HashMap.removeMany(

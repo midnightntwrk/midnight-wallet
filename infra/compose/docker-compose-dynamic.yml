@@ -1,6 +1,10 @@
 services:
   proof-server:
+<<<<<<< HEAD
     image: 'ghcr.io/midnight-ntwrk/proof-server:6.2.0-rc.2'
+=======
+    image: 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.6'
+>>>>>>> main
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -19,7 +23,11 @@ services:
       start_period: 10s
 
   indexer:
+<<<<<<< HEAD
     image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.18'
+=======
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:3.0.0-alpha.19'
+>>>>>>> main
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

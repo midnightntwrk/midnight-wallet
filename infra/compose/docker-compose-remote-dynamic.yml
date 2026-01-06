@@ -1,6 +1,10 @@
 services:
   proof-server:
+<<<<<<< HEAD
     image: 'ghcr.io/midnight-ntwrk/proof-server:6.2.0-rc.2'
+=======
+    image: 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.6'
+>>>>>>> main
     container_name: proof-server_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

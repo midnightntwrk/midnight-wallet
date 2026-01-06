@@ -35,13 +35,12 @@
     },
     "test-undeployed": {
       "cache": false,
-      "env": ["NETWORK", "DEPLOYMENT", "APP_INFRA_SECRET"]
+      "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
     "test-remote": {
       "cache": false,
       "env": [
         "NETWORK",
-        "DEPLOYMENT",
         "SEED",
         "SEED2",
         "SEED_STABLE",
@@ -97,13 +96,13 @@
     },
     "//#format:root": {
       "cache": false,
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
       "outputs": [],
       "outputLogs": "new-only"
     },
     "//#format:check:root": {
       "cache": false,
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore"],
+      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
       "outputs": [],
       "outputLogs": "new-only"
     },

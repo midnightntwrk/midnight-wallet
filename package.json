@@ -35,8 +35,8 @@
     "vite": "^7.1.11"
   },
   "scripts": {
-    "format:root": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
-    "format:check:root": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check:root": "prettier --check --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format": "turbo run format",
     "format:check": "turbo run format:check",
     "verify": "turbo run verify",
