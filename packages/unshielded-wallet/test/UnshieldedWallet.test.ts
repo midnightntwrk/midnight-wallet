@@ -55,6 +55,7 @@ describe('UnshieldedWallet', () => {
 
     await unshieldedWallet.start();
 
+    // Just waiting for synced state is not enough because there is a possibility of reporting a synced state with no coins at the very beginning
     await waitForCoins(unshieldedWallet);
 
     const state = await unshieldedWallet.waitForSyncedState();
