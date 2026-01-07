@@ -50,8 +50,8 @@
     "prettier": "^3.7.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
-    "testcontainers": "^11.8.1",
+    "testcontainers": "^11.10.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.16"
   }
 }
