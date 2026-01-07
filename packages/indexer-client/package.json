@@ -42,6 +42,7 @@
     "@graphql-codegen/typescript": "^4.1.6",
     "@graphql-codegen/typescript-operations": "^4.6.1",
     "eslint": "^9.37.0",
+    "prettier": "^3.7.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "testcontainers": "^11.8.1",
