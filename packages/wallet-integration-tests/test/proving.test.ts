@@ -44,7 +44,7 @@ const proofServerContainerResource = Effect.acquireRelease(
       .withStartupTimeout(120_000)
       .start();
   }),
-  (container) => Effect.promise(() => container.stop()),
+  (container) => Effect.promise(async () => await container.stop()),
 ).pipe(
   Effect.map((proofServerContainer) => {
     const proofServerPort = proofServerContainer.getMappedPort(PROOF_SERVER_PORT);

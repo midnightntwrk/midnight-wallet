@@ -5,23 +5,9 @@ hosted deployment of choice.
 
 ## Setup
 
-### 1. Nix
+### Yarn
 
-First install [Nix](https://nixos.org). Then [direnv](https://direnv.net) is optional but strongly recommended. This
-project provides a [flake](flake.nix) with a dev shell definition.
-
-### 2. Internal private registry and credentials
-
-Configure Yarn and Nix by following the
-[Authentication setup document](https://input-output.atlassian.net/wiki/spaces/MN/pages/3696001685/Authentication+setup).
-
-### 3. Install npm dependencies
-
-```shell
-nix develop .#typescript --command yarn
-```
-
-from the root of the project
+To install the required dependencies in the root of the repository run `yarn install` followed by `yarn dist`
 
 ## Running e2e tests
 
@@ -45,17 +31,53 @@ variables from the `.env` file will override any existing environment variables 
 Then to run all tests (all following commands in the root of the project):
 
 ```shell
-nix develop .#typescript --command yarn test-e2e
+yarn test-e2e
 ```
 
-To run a subset of tests with a tag:
+To run a subset of local tests with a tag:
 
 ```shell
-nix develop .#typescript --command yarn test-e2e -- -t @healthcheck
+yarn test-undeployed -- -t @smoke
 ```
 
 To run tests from a specific file:
 
 ```shell
-nix develop .#typescript --command yarn test-e2e -- packages/e2e-tests/src/tests/emptyWallet.test.ts
+yarn test-e2e -- packages/e2e-tests/src/tests/emptyWallet.universal.test.ts
 ```
+
+## Tests Guide
+
+Tests are split between `undeployed` and `remote`. Undeployed tests run on a locally built Midnight network with
+prefunded wallet funds. The docker file for running local instance of Midnight network can be found in
+`infra/compose/docker-compose-dynamic.yml`.
+
+Remote tests are designed to be run on deployed test environments where test wallets need to be set up with funds and
+generated dust to run successfully. All remote tests spin up a local instance of the proof server which can be found in
+`infra/compose/docker-compose-remote-dynamic.yml`.
+
+### Tests overview
+
+Balancing - Transaction balancing feature. Ensuring that the lowest available coin should always be spent before
+spending higher value coins of the same type.
+
+Balance constant (Remote) - Unused wallet should list the correct amount of shielded and unshielded tokens.
+
+Dust - Dust registration and deregistration transactions. Includes edge cases for spending all available tokens in the
+wallet. Dust generation and decay is highly accelerated in `undeployed` so the full available dust generation and decay
+can be observed instantly.
+
+Funded wallet - Tokens are correctly listed for prefunded wallet.
+
+Empty wallet - Tests to ensure empty wallet behaves as expected. Includes serialization and restore of wallet facade.
+Includes empty wallet state functions e.g. wallet state address.
+
+Multiple wallets - Multiple wallets are able to sync concurrently.
+
+Smoke - Subset of tests that cover core wallet functionality. - Transfer of shielded and unshielded tokens - Wallets
+serialization and restore
+
+Token transfer - Wallet transactions for unshielded and shielded tokens. Includes negative scenarios to assert correct
+error messages are returned from the wallet.
+
+Native token (remote) - Wallet transactions specifically focused on native shielded tokens.
