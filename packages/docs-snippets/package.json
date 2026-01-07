@@ -41,16 +41,21 @@
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
-    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp"
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
+    "serve:test-site": "vite serve ./test-site"
   },
   "devDependencies": {
     "@types/lodash-es": "^4",
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
+    "prettier": "^3.7.4",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "testcontainers": "^11.7.2",
     "typescript": "^5.9.3",
+    "vite": "^7.3.0",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vite-plugin-wasm": "^3.5.0",
     "vitest": "^3.2.4"
   }
 }
