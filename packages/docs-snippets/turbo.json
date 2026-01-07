@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "serve:test-site": {
+      "dependsOn": ["^dist", "typecheck"],
+      "inputs": ["test-site/**", "src/**", "tsconfig.json", "tsconfig.build.json"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}
