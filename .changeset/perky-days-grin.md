@@ -10,4 +10,4 @@
 '@midnight-ntwrk/wallet-sdk-facade': patch
 ---
 
-chore: update ledger to 6.2.0-rc.2
+chore: update ledger to 7.0.0-alpha.1
