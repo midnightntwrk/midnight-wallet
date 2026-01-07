@@ -11,11 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { sampleIntentHash } from '@midnight-ntwrk/ledger-v6';
+import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DefaultV1Configuration } from '../src/v1/index.js';
 import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
+import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
 /**
  * TODO: place in separate package with more additional mock functions
@@ -115,4 +117,8 @@ export const createWalletConfig = (
   };
 
   return { ...defaultConfig, ...overrides };
+};
+
+export const waitForCoins = (wallet: UnshieldedWallet): Promise<UnshieldedWalletState<string>> => {
+  return rx.firstValueFrom(wallet.state.pipe(rx.filter((state) => state.availableCoins.length > 0)));
 };
