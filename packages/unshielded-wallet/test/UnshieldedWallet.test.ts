@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UnshieldedWallet } from '../src/index.js';
-import { getUnshieldedSeed, createWalletConfig } from './testUtils.js';
+import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { InMemoryTransactionHistoryStorage, NoOpTransactionHistoryStorage } from '../src/storage/index.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -55,9 +55,10 @@ describe('UnshieldedWallet', () => {
 
     await unshieldedWallet.start();
 
-    await unshieldedWallet.waitForSyncedState(0n);
+    // Just waiting for synced state is not enough because there is a possibility of reporting a synced state with no coins at the very beginning
+    await waitForCoins(unshieldedWallet);
 
-    const state = await firstValueFrom(unshieldedWallet.state);
+    const state = await unshieldedWallet.waitForSyncedState();
 
     expect(UnshieldedAddress.codec.encode(config.networkId, state.address).asString()).toBe(
       'mn_addr_undeployed1gkasr3z3vwyscy2jpp53nzr37v7n4r3lsfgj6v5g584dakjzt0xqun4d4r',
@@ -79,9 +80,9 @@ describe('UnshieldedWallet', () => {
 
     await initialWallet.start();
 
-    await initialWallet.waitForSyncedState();
+    await waitForCoins(initialWallet);
 
-    const initialState = await firstValueFrom(initialWallet.state);
+    const initialState = await initialWallet.waitForSyncedState();
 
     expect(initialState.availableCoins.length).toBeGreaterThan(0);
     expect(initialState.pendingCoins.length).toBe(0);
@@ -119,10 +120,9 @@ describe('UnshieldedWallet', () => {
     const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 
     await initialWallet.start();
+    await waitForCoins(initialWallet);
 
-    await initialWallet.waitForSyncedState();
-
-    const initialState = await firstValueFrom(initialWallet.state);
+    const initialState = await initialWallet.waitForSyncedState();
 
     expect(initialState.availableCoins.length).toBeGreaterThan(0);
     expect(initialState.pendingCoins.length).toBe(0);

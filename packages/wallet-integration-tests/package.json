@@ -28,6 +28,7 @@
   },
   "devDependencies": {
     "eslint": "^9.32.0",
+    "prettier": "^3.7.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }
