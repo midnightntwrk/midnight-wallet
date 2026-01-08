@@ -15,7 +15,7 @@ import * as rx from 'rxjs';
 import { WalletState } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';

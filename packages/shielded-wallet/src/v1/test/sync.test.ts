@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Stream, Scope, pipe, Chunk, Option, Duration, TestClock, TestContext, Fiber, Ref } from 'effect';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';

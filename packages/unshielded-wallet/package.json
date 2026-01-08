@@ -23,13 +23,12 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
+    "@midnight-ntwrk/ledger-v7": "7.0.0-alpha.1",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.9",
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.9",
     "@midnight-ntwrk/wallet-sdk-capabilities": "3.0.0-beta.9",
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.7",
     "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.14",
-    "@midnight-ntwrk/wallet-sdk-unshielded-state": "1.0.0-beta.11",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.8",
     "effect": "^3.17.3",
     "rxjs": "^7.5"

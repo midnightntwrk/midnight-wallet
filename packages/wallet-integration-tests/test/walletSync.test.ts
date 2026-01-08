@@ -27,7 +27,7 @@ import * as rx from 'rxjs';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 
 import os from 'node:os';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
 

@@ -19,7 +19,7 @@ import {
   updatedValue,
   FinalizedTransaction,
   UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';

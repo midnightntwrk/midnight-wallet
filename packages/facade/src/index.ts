@@ -15,7 +15,7 @@ import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 export interface TokenTransfer {
   type: ledger.RawTokenType;
