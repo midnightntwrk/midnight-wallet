@@ -12,7 +12,7 @@
 // limitations under the License.
 import { HttpProverClient, WasmProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import type { KeyMaterialProvider, ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe.js';
 import { ProvingError, WalletError } from './WalletError.js';

@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 // This file is part of MIDNIGHT-WALLET-SDK.
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
@@ -12,65 +13,73 @@
 // limitations under the License.
 
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
-import { parentPort, workerData } from 'worker_threads';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any,@typescript-eslint/no-unsafe-assignment
-const [op, args]: ['check' | 'prove', any[]] = workerData;
 
 const keyMaterialProvider: KeyMaterialProvider = {
   lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
-    return new Promise((resolve, reject) => {
-      console.log('worker: asking for keys: ', keyLocation);
-      parentPort!.postMessage({ op: 'lookupKey', keyLocation });
+    return new Promise((resolve) => {
+      postMessage({ op: 'lookupKey', keyLocation });
 
-      const subscription = (message: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined }) => {
-        if (message.op === 'lookupKey' && message.keyLocation === keyLocation) {
-          console.log('worker: received results for lookupKey: ', message.keyLocation);
-          parentPort!.off('message', subscription);
-          resolve(message.result);
+      const subscription = (message: {
+        data: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined };
+      }) => {
+        if (message.data.op === 'lookupKey' && message.data.keyLocation === keyLocation) {
+          console.log('worker: received results for lookupKey: ', message.data.keyLocation);
+          removeEventListener('message', subscription);
+          resolve(message.data.result);
         }
       };
 
-      parentPort!.on('message', subscription);
+      addEventListener('message', subscription);
     });
   },
   getParams(k: number): Promise<Uint8Array> {
-    return new Promise((resolve, reject) => {
-      console.log('worker: asking for params: ', k);
-      parentPort!.postMessage({ op: 'getParams', k });
+    return new Promise((resolve) => {
+      postMessage({ op: 'getParams', k });
 
-      const subscription = (message: { op: string; k: number; result: Uint8Array }) => {
-        if (message.op === 'getParams' && message.k === k) {
-          console.log('worker: received results for getParams: ', message.k);
-          parentPort!.off('message', subscription);
-          resolve(message.result);
+      const subscription = (message: { data: { op: string; k: number; result: Uint8Array } }) => {
+        if (message.data.op === 'getParams' && message.data.k === k) {
+          console.log('worker: received results for getParams: ', message.data.k);
+          removeEventListener('message', subscription);
+          resolve(message.data.result);
         }
       };
 
-      parentPort!.on('message', subscription);
+      addEventListener('message', subscription);
     });
   },
 };
 
 // we handle polymorphic data here
-// @ts-nocheck
-if (op === 'check') {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const [a] = args;
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  const result = await check(a, keyMaterialProvider);
-  parentPort!.postMessage({
-    op: 'result',
-    value: result,
-  });
-} else if (op === 'prove') {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const [a, b] = args;
+addEventListener(
+  'message',
+  ({ data }: MessageEvent<{ op: 'check' | 'prove' | undefined; args: [Uint8Array, (bigint | undefined)?] }>) => {
+    const { op, args } = data;
+    if (op === 'check') {
+      const [a] = args;
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-  const result = await prove(a, keyMaterialProvider, b);
-  parentPort!.postMessage({
-    op: 'result',
-    value: result,
-  });
-}
+      check(a, keyMaterialProvider)
+        .then((result) => {
+          postMessage({
+            op: 'result',
+            value: result,
+          });
+        })
+        .catch((e) => {
+          throw e;
+        });
+    } else if (op === 'prove') {
+      const [a, b] = args;
+
+      prove(a, keyMaterialProvider, b)
+        .then((result) => {
+          postMessage({
+            op: 'result',
+            value: result,
+          });
+        })
+        .catch((e) => {
+          throw e;
+        });
+    }
+  },
+);
