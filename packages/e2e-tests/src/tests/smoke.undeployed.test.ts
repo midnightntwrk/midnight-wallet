@@ -281,7 +281,7 @@ describe('Smoke tests', () => {
       const initialState = await utils.waitForSyncFacade(walletFunded);
       const publicKey = initialState.dust.dustPublicKey;
       const address = initialState.dust.dustAddress;
-      const dustBalance = initialState.dust.walletBalance(new Date());
+      const dustBalance = initialState.dust.walletBalance(new Date(3 * 1000));
       const serialized = await walletFunded.dust.serializeState();
       logger.info(`serializeState: ${serialized}`);
       const stateObject = JSON.parse(serialized);
@@ -296,7 +296,7 @@ describe('Smoke tests', () => {
       logger.info(restoredState);
       expect(restoredState.dustPublicKey).toBe(publicKey);
       expect(restoredState.dustAddress).toBe(address);
-      expect(restoredState.walletBalance(new Date())).toBe(dustBalance);
+      expect(restoredState.walletBalance(new Date(3 * 1000))).toBe(dustBalance);
       await restoredWallet.stop();
     },
     timeout,

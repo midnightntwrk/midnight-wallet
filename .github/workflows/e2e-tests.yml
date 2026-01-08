@@ -190,7 +190,7 @@ jobs:
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ inputs.NETWORK }}
+          project-id: headless-wallet-${{ inputs.NETWORK }}-nightly
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
