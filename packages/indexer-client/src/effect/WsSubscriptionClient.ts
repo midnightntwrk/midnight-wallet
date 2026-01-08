@@ -30,7 +30,7 @@ export const layer: (
     WsURL.make(config.url).pipe(
       Effect.flatMap((url) =>
         Effect.acquireRelease(
-          Effect.sync(() => createClient({ url: url.toString(), shouldRetry: () => true, retryAttempts: 100 })),
+          Effect.sync(() => createClient({ url: url.toString(), shouldRetry: () => false, keepAlive: 15_000 })),
           (client) => Effect.sync(() => client.dispose()),
         ),
       ),
