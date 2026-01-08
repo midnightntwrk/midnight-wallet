@@ -15,7 +15,7 @@
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -73,8 +73,8 @@ describe('Smoke tests', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(walletFunded);
-    await utils.closeWallet(receiverWallet);
+    await walletFunded.stop();
+    await receiverWallet.stop();
   }, 20_000);
 
   test(
@@ -172,7 +172,7 @@ describe('Smoke tests', () => {
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
 
-      await utils.waitForFinalizedBalance(receiverWallet.shielded);
+      await utils.waitForFinalizedShieldedBalance(receiverWallet.shielded);
       const finalState2 = await utils.waitForSyncFacade(receiverWallet);
       const finalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
       const finalUnshieldedBalance = finalState2.unshielded.balances[unshieldedTokenRaw];

@@ -18,7 +18,7 @@ import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
 import {
@@ -73,7 +73,7 @@ describe('Fresh wallet with empty state', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(wallet);
+    await wallet.stop();
   });
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {

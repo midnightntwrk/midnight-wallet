@@ -13,13 +13,13 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Layer, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:6.1.0-alpha.6';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:7.0.0-alpha.1';
 const PROOF_SERVER_PORT: number = 6300;
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 300_000 });
@@ -44,7 +44,7 @@ const proofServerContainerResource = Effect.acquireRelease(
       .withStartupTimeout(120_000)
       .start();
   }),
-  (container) => Effect.promise(() => container.stop()),
+  (container) => Effect.promise(async () => await container.stop()),
 ).pipe(
   Effect.map((proofServerContainer) => {
     const proofServerPort = proofServerContainer.getMappedPort(PROOF_SERVER_PORT);

@@ -21,7 +21,7 @@ import {
   Signaturish,
   Transaction,
   Event,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';

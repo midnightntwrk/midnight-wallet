@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
@@ -42,7 +42,7 @@ describe('Balance constant', () => {
   const expectedTokenTwoBalance = utils.tNightAmount(50n);
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
-  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
+  // const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
   const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
   const shieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seed));
@@ -57,9 +57,9 @@ describe('Balance constant', () => {
   }, syncTimeout);
 
   afterEach(async () => {
-    await utils.saveState(walletFacade, filename);
-    await utils.closeWallet(walletFacade);
-  });
+    // await utils.saveState(walletFacade, filename);
+    await walletFacade.stop();
+  }, syncTimeout);
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',
