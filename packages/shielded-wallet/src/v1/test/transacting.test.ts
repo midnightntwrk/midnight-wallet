@@ -163,6 +163,32 @@ describe('V1 Wallet Transacting', () => {
       }).pipe(Effect.runPromise);
     });
 
+    it('balances a transaction spending all available tokens', async () => {
+      const wallets = prepareWallets({
+        A: {
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
+          coins: [shieldedValue(1), shieldedValue(2), shieldedValue(3)],
+        },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingService();
+      const transactionValue = shieldedValue(6); // Spending all coins (1+2+3=6)
+      const tx = pipe(transactionValue, (value) => {
+        const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
+        return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
+      });
+
+      return Effect.gen(function* () {
+        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
+        const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
+        const proven = yield* proving.prove(recipe);
+
+        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
+        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+      }).pipe(Effect.runPromise);
+    });
+
     it('balances a transaction with a fallible offer', () => {
       const wallets = prepareWallets({
         A: {
@@ -404,7 +430,7 @@ describe('V1 Wallet Transacting', () => {
 
     it('raises an error if there are not enough tokens for transfer', () => {
       const initialCoinValues = [shieldedValue(1), shieldedValue(2), shieldedValue(3)];
-      const transferValue = shieldedValue(6);
+      const transferValue = shieldedValue(7); // Trying to transfer 7 when only 6 available
       const wallets = prepareWallets({
         A: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)), coins: initialCoinValues },
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
