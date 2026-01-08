@@ -13,7 +13,7 @@
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -60,8 +60,8 @@ describe('Dust tests', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(walletFunded);
-    await utils.closeWallet(receiverWallet);
+    await walletFunded.stop();
+    await receiverWallet.stop();
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {
@@ -141,12 +141,9 @@ describe('Dust tests', () => {
 
     await utils.waitForSyncFacade(receiverWallet);
 
-    const receiverStateAfterRegistration = await rx.firstValueFrom(
-      receiverWallet.state().pipe(
-        rx.debounceTime(10_000),
-        rx.filter((s) => s.isSynced),
-        rx.filter((s) => s.dust.availableCoins.length > 0),
-      ),
+    const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
+      receiverWallet,
+      finalizedDustTx,
     );
 
     const nightBalanceAfterRegistration = receiverStateAfterRegistration.unshielded.balances[unshieldedTokenRaw];

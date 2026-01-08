@@ -17,7 +17,7 @@ import { StartedNetwork } from 'testcontainers';
 import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
 import { PlatformError } from '@effect/platform/Error';
 import { NodeContext } from '@effect/platform-node';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const paths = new (class {

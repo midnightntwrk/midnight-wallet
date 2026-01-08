@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustPublicKey } from '@midnight-ntwrk/ledger-v6';
+import { DustPublicKey } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DustCoreWallet } from './DustCoreWallet.js';
 
