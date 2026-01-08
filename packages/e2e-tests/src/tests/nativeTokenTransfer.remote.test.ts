@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -56,10 +56,10 @@ describe('Token transfer', () => {
   let senderKeyStore: UnshieldedKeystore;
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
-  const syncTimeout = (1 * 60 + 30) * 60 * 1000; // 1 hour + 30 minutes in milliseconds
+  const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
   const timeout = 600_000;
 
-  beforeAll(async () => {
+  beforeEach(async () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
@@ -93,11 +93,12 @@ describe('Token transfer', () => {
     }
   }, syncTimeout);
 
-  afterAll(async () => {
+  afterEach(async () => {
     // await utils.saveState(sender, filenameWallet);
     // await utils.saveState(receiver, filenameWallet2);
-    await utils.closeWallet(sender);
-    await utils.closeWallet(receiver);
+    await sender.stop();
+    await receiver.stop();
+    logger.info('Wallets stopped');
   }, timeout);
 
   test(
@@ -156,7 +157,10 @@ describe('Token transfer', () => {
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
+      logger.info(txToProve);
       const provenTx = await sender.finalizeTransaction(txToProve);
+      logger.info(provenTx.toString());
+      logger.info('Submitting tx:');
       const txId = await sender.submitTransaction(provenTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
@@ -269,15 +273,15 @@ describe('Token transfer', () => {
       const txId = await sender.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
-      await utils.waitForPending(sender.shielded);
+      await utils.waitForFacadePending(sender);
       await utils.waitForFacadePendingClear(sender);
       const finalState = await utils.waitForSyncFacade(sender);
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
-      expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
-      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
-      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
+      expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
+      expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length + 1);
+      expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + 1);
     },
     syncTimeout,
   );
@@ -327,7 +331,7 @@ describe('Token transfer', () => {
   //       Promise.all([sender.submitTransaction(provenTx), sender.submitTransaction(provenTx)]),
   //     ).rejects.toThrow();
 
-  //     const finalState = await utils.waitForFinalizedBalance(sender.shielded);
+  //     const finalState = await utils.waitForFinalizedShieldedBalance(sender.shielded);
   //     expect(finalState).toMatchObject(syncedState);
   //     expect(finalState.balances[rawNativeTokenType]).toBe(initialDustBalance);
   //     expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);
@@ -383,7 +387,7 @@ describe('Token transfer', () => {
   //     );
   //     await expect(sender.finalizeTransaction(txToProve)).rejects.toThrow();
 
-  //     const finalState = await waitForFinalizedBalance(sender.shielded);
+  //     const finalState = await waitForFinalizedShieldedBalance(sender.shielded);
   //     expect(finalState).toMatchObject(syncedState);
   //     expect(finalState.balances[rawNativeTokenType]).toBe(initialDustBalance);
   //     expect(finalState.balances[tokenTypeHash]).toBe(initialBalance);

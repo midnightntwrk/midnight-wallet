@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { CoreWallet } from './CoreWallet.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { pipe, Array } from 'effect';
 import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 

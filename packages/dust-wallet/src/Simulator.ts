@@ -24,7 +24,7 @@ import {
   TransactionContext,
   ProofErasedTransaction,
   SyntheticCost,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { NetworkId } from './types/ledger.js';
@@ -92,6 +92,16 @@ export class Simulator {
   ): Either.Either<[{ blockNumber: bigint; blockHash: string }, SimulatorState], LedgerOps.LedgerError> {
     return LedgerOps.ledgerTry(() => {
       blockFullness = blockFullness ?? tx.cost(simulatorState.ledger.parameters);
+
+      const detailedBlockFullness = simulatorState.ledger.parameters.normalizeFullness(blockFullness);
+      const computedBlockFullness = Math.max(
+        detailedBlockFullness.readTime,
+        detailedBlockFullness.computeTime,
+        detailedBlockFullness.blockUsage,
+        detailedBlockFullness.bytesWritten,
+        detailedBlockFullness.bytesChurned,
+      );
+
       const blockNumber = blockContext.secondsSinceEpoch;
       const blockTime = DateOps.secondsToDate(blockNumber);
       const verifiedTransaction = tx.wellFormed(simulatorState.ledger, strictness, blockTime);
@@ -100,7 +110,7 @@ export class Simulator {
 
       const newSimulatorState = {
         ...simulatorState,
-        ledger: newLedgerState.postBlockUpdate(blockTime, blockFullness),
+        ledger: newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness),
         lastTx: tx,
         lastTxResult: txResult,
         lastTxNumber: blockNumber,

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { LedgerParameters, nativeToken } from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
@@ -50,16 +50,16 @@ describe('Syncing', () => {
   const unshieldedKeystores: Array<UnshieldedKeystore> = [];
   const facades: Array<WalletFacade> = [];
   let fixture: TestContainersFixture;
-  const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
+  const rawNativeTokenType = (ledger.nativeToken() as { tag: string; raw: string }).raw;
 
-  beforeEach(() => {
-    allure.step('Start multiple wallets', function () {
+  beforeEach(async () => {
+    await allure.step('Start multiple wallets', async function () {
       fixture = getFixture();
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
-      const dustParameters = LedgerParameters.initialParameters().dust;
+      const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-      function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
+      async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
           unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
           shieldedWallets[i] = Wallet.startWithShieldedSeed(seeds[i]);
@@ -79,10 +79,11 @@ describe('Syncing', () => {
 
         for (let i = 0; i < seeds.length; i++) {
           facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i]);
+          await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
         }
       }
 
-      buildWallets(seeds);
+      await buildWallets(seeds);
     });
   }, timeout);
 

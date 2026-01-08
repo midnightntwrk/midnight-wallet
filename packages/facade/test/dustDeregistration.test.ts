@@ -12,7 +12,7 @@
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -129,13 +129,16 @@ describe('Dust Deregistration', () => {
     const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
-    const nightUtxos = walletStateWithNight.unshielded.availableCoins.filter(
+    const nightUtxosNotRegisteredForDustGenerationBeforeDeregistration =
+      walletStateWithNight.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === false);
+
+    const nightUtxosRegisteredForDustGeneration = walletStateWithNight.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === true,
     );
 
     const deregisterTokens = 2;
     const dustDeregistrationRecipe = await walletFacade.deregisterFromDustGeneration(
-      nightUtxos.slice(0, deregisterTokens),
+      nightUtxosRegisteredForDustGeneration.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
       (payload) => unshieldedWalletKeystore.signData(payload),
     );
@@ -158,15 +161,29 @@ describe('Dust Deregistration', () => {
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
-    const newWalletState = await rx.firstValueFrom(
-      walletFacade
-        .state()
-        .pipe(
-          rx.filter((s) => s.unshielded.availableCoins.some((coin) => coin.meta.registeredForDustGeneration === false)),
-        ),
+    const walletStateAfterRegistration = await rx.firstValueFrom(
+      walletFacade.state().pipe(
+        rx.mergeMap(async (state) => {
+          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+
+          return {
+            state,
+            txFound: txInHistory !== undefined,
+          };
+        }),
+        rx.filter(({ state, txFound }) => txFound && state.isSynced),
+        rx.map(({ state }) => state),
+      ),
     );
 
-    const availableCoinsWithInfo = newWalletState.dust.availableCoinsWithFullInfo(new Date());
+    const availableCoinsWithInfo = walletStateAfterRegistration.dust.availableCoinsWithFullInfo(new Date());
+    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterRegistration.unshielded.availableCoins.filter(
+      (coin) => coin.meta.registeredForDustGeneration === false,
+    );
+
     expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
+    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(
+      nightUtxosNotRegisteredForDustGenerationBeforeDeregistration.length + deregisterTokens,
+    );
   });
 });
