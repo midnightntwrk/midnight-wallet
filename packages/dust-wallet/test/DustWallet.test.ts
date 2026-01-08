@@ -22,7 +22,7 @@ import {
   UserAddress,
   ProofErasedTransaction,
   nativeToken,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Proving, ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';

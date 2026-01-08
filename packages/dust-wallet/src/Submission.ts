@@ -17,7 +17,7 @@ import {
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
-import { FinalizedTransaction, ProofErasedTransaction } from '@midnight-ntwrk/ledger-v6';
+import { FinalizedTransaction, ProofErasedTransaction } from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Simulator } from './Simulator.js';
 import { NetworkId } from './types/ledger.js';
