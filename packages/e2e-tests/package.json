@@ -23,8 +23,6 @@
     "@cardano-sdk/key-management": "0.29.11",
     "@midnight-ntwrk/ledger-v6": "6.1.0-alpha.6",
     "@midnight-ntwrk/midnight-js-network-id": "0.2.5",
-    "@midnight-ntwrk/wallet": "npm:@midnight-ntwrk/wallet@5.0.0",
-    "@midnight-ntwrk/wallet-api": "^5.0.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-facade": "workspace:^",

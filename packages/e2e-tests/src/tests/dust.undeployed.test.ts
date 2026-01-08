@@ -14,12 +14,10 @@ import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
-import { CombinedTokenTransfer, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import { createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -33,40 +31,32 @@ describe('Dust tests', () => {
   const getFixture = useTestContainersFixture();
   const seed = 'b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82';
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const fundedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seedFunded));
-  const fundedDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seedFunded));
-  const unshieldedFundedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), NetworkId.NetworkId.Undeployed);
-  const receiverWalletSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
-  const receiverWalletDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seed));
-  const receiverKeystore = createKeystore(utils.getUnshieldedSeed(seed), NetworkId.NetworkId.Undeployed);
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const timeout = 300_000;
   const outputValue = utils.tNightAmount(1000n);
 
   let fixture: TestContainersFixture;
-  let walletFunded: WalletFacade;
-  let receiverWallet: WalletFacade;
+  let funded: utils.WalletInit;
+  let receiver: utils.WalletInit;
 
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      walletFunded = utils.buildWalletFacade(seedFunded, fixture);
-      receiverWallet = utils.buildWalletFacade(seed, fixture);
-      await walletFunded.start(fundedSecretKey, fundedDustSecretKey);
-      await receiverWallet.start(receiverWalletSecretKey, receiverWalletDustSecretKey);
+      funded = await utils.initWalletWithSeed(seedFunded, fixture);
+      receiver = await utils.initWalletWithSeed(seed, fixture);
       logger.info('Two wallets started');
     });
   });
 
   afterEach(async () => {
-    await walletFunded.stop();
-    await receiverWallet.stop();
+    await funded.wallet.stop();
+    await receiver.wallet.stop();
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {
-    const initialState = await utils.waitForSyncFacade(walletFunded);
-    const receiverInitialState = await utils.waitForSyncFacade(receiverWallet);
+    const initialState = await utils.waitForSyncFacade(funded.wallet);
+    const receiverInitialState = await utils.waitForSyncFacade(receiver.wallet);
     const receiverInitialAvailableCoins = receiverInitialState.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
@@ -98,21 +88,21 @@ describe('Dust tests', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txToProve = await walletFunded.transferTransaction(
-      fundedSecretKey,
-      fundedDustSecretKey,
+    const txToProve = await funded.wallet.transferTransaction(
+      funded.shieldedSecretKeys,
+      funded.dustSecretKey,
       outputsToCreate,
       ttl,
     );
-    const signedTx = await walletFunded.signTransaction(txToProve.transaction, (payload) =>
-      unshieldedFundedKeyStore.signData(payload),
+    const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+      funded.unshieldedKeystore.signData(payload),
     );
-    const provenTx = await walletFunded.finalizeTransaction({ ...txToProve, transaction: signedTx });
-    const txId = await walletFunded.submitTransaction(provenTx);
+    const provenTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+    const txId = await funded.wallet.submitTransaction(provenTx);
     logger.info('Transaction id: ' + txId);
 
     logger.info('Waiting for finalized balance...');
-    const receiverState2 = await utils.waitForUnshieldedCoinUpdate(receiverWallet, receiverInitialAvailableCoins);
+    const receiverState2 = await utils.waitForUnshieldedCoinUpdate(receiver.wallet, receiverInitialAvailableCoins);
     const finalUnshieldedBalance = receiverState2.unshielded.balances[unshieldedTokenRaw];
     logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
@@ -129,20 +119,20 @@ describe('Dust tests', () => {
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
     logger.info(`utxo length: ${nightUtxos.length}`);
 
-    const dustRegistrationRecipe = await receiverWallet.registerNightUtxosForDustGeneration(
+    const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
       [firstNightUtxo],
-      receiverKeystore.getPublicKey(),
-      (payload) => receiverKeystore.signData(payload),
+      receiver.unshieldedKeystore.getPublicKey(),
+      (payload) => receiver.unshieldedKeystore.signData(payload),
     );
 
-    const finalizedDustTx = await receiverWallet.finalizeTransaction(dustRegistrationRecipe);
-    const dustRegistrationTxid = await receiverWallet.submitTransaction(finalizedDustTx);
+    const finalizedDustTx = await receiver.wallet.finalizeTransaction(dustRegistrationRecipe);
+    const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
-    await utils.waitForSyncFacade(receiverWallet);
+    await utils.waitForSyncFacade(receiver.wallet);
 
     const receiverStateAfterRegistration = await utils.waitForStateAfterDustRegistration(
-      receiverWallet,
+      receiver.wallet,
       finalizedDustTx,
     );
 
@@ -154,9 +144,9 @@ describe('Dust tests', () => {
     'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
     async () => {
       await sendAndRegisterNightUtxos();
-      const initialWalletState = await utils.waitForSyncFacade(receiverWallet);
+      const initialWalletState = await utils.waitForSyncFacade(receiver.wallet);
       const receiverDustBalance = await rx.firstValueFrom(
-        receiverWallet.state().pipe(
+        receiver.wallet.state().pipe(
           rx.tap((s) => {
             const dustBalance = s.dust.walletBalance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
@@ -168,7 +158,7 @@ describe('Dust tests', () => {
 
       expect(receiverDustBalance).toBeGreaterThan(0n);
       await rx.firstValueFrom(
-        receiverWallet.state().pipe(
+        receiver.wallet.state().pipe(
           rx.tap((s) => {
             const registeredTokens = s.unshielded.availableCoins.filter(
               (coin) => coin.meta.registeredForDustGeneration === true,
@@ -199,7 +189,7 @@ describe('Dust tests', () => {
       // allure.feature('Transactions');
       // allure.story('Valid transfer transaction');
 
-      const initialWalletState = await utils.waitForSyncFacade(receiverWallet);
+      const initialWalletState = await utils.waitForSyncFacade(receiver.wallet);
 
       const registerdNightUtxosBeforeRegister = initialWalletState.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === true,
@@ -210,7 +200,7 @@ describe('Dust tests', () => {
         await sendAndRegisterNightUtxos();
         // Wait for registered tokens
         await rx.firstValueFrom(
-          receiverWallet.state().pipe(
+          receiver.wallet.state().pipe(
             rx.tap((s) => {
               const registeredTokens = s.unshielded.availableCoins.filter(
                 (coin) => coin.meta.registeredForDustGeneration === true,
@@ -225,7 +215,7 @@ describe('Dust tests', () => {
         );
       }
 
-      const walletStateBeforeDeregister = await utils.waitForSyncFacade(receiverWallet);
+      const walletStateBeforeDeregister = await utils.waitForSyncFacade(receiver.wallet);
       const initialNightBalance = walletStateBeforeDeregister.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Initial Night Balance: ${initialNightBalance}`);
 
@@ -238,15 +228,15 @@ describe('Dust tests', () => {
       expect(registeredNightUtxos.length).toBeGreaterThan(0);
 
       const deregisterTokens = 2;
-      const dustDeregistrationRecipe = await receiverWallet.deregisterFromDustGeneration(
+      const dustDeregistrationRecipe = await receiver.wallet.deregisterFromDustGeneration(
         registeredNightUtxos.slice(0, deregisterTokens),
-        receiverKeystore.getPublicKey(),
-        (payload) => receiverKeystore.signData(payload),
+        receiver.unshieldedKeystore.getPublicKey(),
+        (payload) => receiver.unshieldedKeystore.signData(payload),
       );
 
-      const balancedTransactionRecipe = await receiverWallet.balanceTransaction(
-        receiverWalletSecretKey,
-        receiverWalletDustSecretKey,
+      const balancedTransactionRecipe = await receiver.wallet.balanceTransaction(
+        receiver.shieldedSecretKeys,
+        receiver.dustSecretKey,
         dustDeregistrationRecipe.transaction,
         new Date(Date.now() + 30 * 60 * 1000),
       );
@@ -255,14 +245,14 @@ describe('Dust tests', () => {
         throw new Error('Expected a transaction to prove');
       }
 
-      const finalizedDustTx = await receiverWallet.finalizeTransaction(balancedTransactionRecipe);
-      const dustDeregistrationTxid = await receiverWallet.submitTransaction(finalizedDustTx);
+      const finalizedDustTx = await receiver.wallet.finalizeTransaction(balancedTransactionRecipe);
+      const dustDeregistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);
 
-      const walletStateAfterDeregister = await utils.waitForSyncFacade(receiverWallet);
+      const walletStateAfterDeregister = await utils.waitForSyncFacade(receiver.wallet);
 
       const finalDustBalance = await rx.firstValueFrom(
-        receiverWallet.state().pipe(
+        receiver.wallet.state().pipe(
           rx.tap((s) => {
             const dustBalance = s.dust.walletBalance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
@@ -287,7 +277,7 @@ describe('Dust tests', () => {
       await sendAndRegisterNightUtxos();
       // Wait for dust balance to be generated
       const initialWalletState = await rx.firstValueFrom(
-        receiverWallet.state().pipe(
+        receiver.wallet.state().pipe(
           rx.debounceTime(10_000),
           rx.tap((s) => {
             const registeredTokens = s.unshielded.availableCoins.filter(
@@ -304,7 +294,7 @@ describe('Dust tests', () => {
       const initialUnshieldedBalance = initialWalletState.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
 
-      const initialFundedState = await utils.waitForSyncFacade(walletFunded);
+      const initialFundedState = await utils.waitForSyncFacade(funded.wallet);
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'unshielded',
@@ -320,21 +310,21 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiverWallet.transferTransaction(
-        receiverWalletSecretKey,
-        receiverWalletDustSecretKey,
+      const txToProve = await receiver.wallet.transferTransaction(
+        receiver.shieldedSecretKeys,
+        receiver.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const signedTx = await receiverWallet.signTransaction(txToProve.transaction, (payload) =>
-        receiverKeystore.signData(payload),
+      const signedTx = await receiver.wallet.signTransaction(txToProve.transaction, (payload) =>
+        receiver.unshieldedKeystore.signData(payload),
       );
-      const provenTx = await receiverWallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
-      const txId = await receiverWallet.submitTransaction(provenTx);
+      const provenTx = await receiver.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const txId = await receiver.wallet.submitTransaction(provenTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);
-      await utils.waitForFacadePendingClear(receiverWallet);
-      const finalReceiverState = await utils.waitForSyncFacade(receiverWallet);
+      await utils.waitForFacadePendingClear(receiver.wallet);
+      const finalReceiverState = await utils.waitForSyncFacade(receiver.wallet);
       const finalUnshieldedBalance = finalReceiverState.unshielded.balances[unshieldedTokenRaw];
       expect(finalUnshieldedBalance).toBe(0n);
       logger.info(`Final unshielded balance: ${finalUnshieldedBalance}`);
@@ -349,7 +339,7 @@ describe('Dust tests', () => {
       await sendAndRegisterNightUtxos();
       // Wait for dust balance to be generated
       const initialWalletState = await rx.firstValueFrom(
-        receiverWallet.state().pipe(
+        receiver.wallet.state().pipe(
           rx.tap((s) => {
             const registeredTokens = s.unshielded.availableCoins.filter(
               (coin) => coin.meta.registeredForDustGeneration === true,
@@ -369,7 +359,7 @@ describe('Dust tests', () => {
       const initialshieldedBalance = initialWalletState.shielded.balances[shieldedTokenRaw];
       logger.info(`Wallet 1: ${initialshieldedBalance} shielded tokens`);
 
-      const initialFundedState = await utils.waitForSyncFacade(walletFunded);
+      const initialFundedState = await utils.waitForSyncFacade(funded.wallet);
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -383,18 +373,18 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiverWallet.transferTransaction(
-        receiverWalletSecretKey,
-        receiverWalletDustSecretKey,
+      const txToProve = await receiver.wallet.transferTransaction(
+        receiver.shieldedSecretKeys,
+        receiver.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await receiverWallet.finalizeTransaction(txToProve);
-      const txId = await receiverWallet.submitTransaction(provenTx);
+      const provenTx = await receiver.wallet.finalizeTransaction(txToProve);
+      const txId = await receiver.wallet.submitTransaction(provenTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);
-      await utils.waitForFacadePendingClear(receiverWallet);
-      const finalReceiverState = await utils.waitForSyncFacade(receiverWallet);
+      await utils.waitForFacadePendingClear(receiver.wallet);
+      const finalReceiverState = await utils.waitForSyncFacade(receiver.wallet);
       const finalshieldedBalance = finalReceiverState.shielded.balances[shieldedTokenRaw];
       logger.info(`Final shielded balance: ${finalshieldedBalance}`);
       expect(finalshieldedBalance).toBe(0n);

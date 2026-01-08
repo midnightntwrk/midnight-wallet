@@ -14,7 +14,6 @@ import { useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import * as utils from './utils.js';
 import * as allure from 'allure-js-commons';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
 
 /**
@@ -26,24 +25,21 @@ import { logger } from './logger.js';
 describe('Funded wallet', () => {
   const getFixture = useTestContainersFixture();
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const fundedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seedFunded));
-  const fundedDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seedFunded));
   const rawNativeTokenType = (ledger.nativeToken() as { tag: string; raw: string }).raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const timeout = 120_000;
 
-  let wallet: WalletFacade;
+  let funded: utils.WalletInit;
 
   beforeEach(async () => {
     await allure.step('Start a funded wallet', async function () {
       const fixture = getFixture();
-      wallet = utils.buildWalletFacade(seedFunded, fixture);
-      await wallet.start(fundedSecretKey, fundedDustSecretKey);
+      funded = await utils.initWalletWithSeed(seedFunded, fixture);
     });
   });
 
   afterEach(async () => {
-    await wallet.stop();
+    await funded.wallet.stop();
   });
 
   test(
@@ -54,11 +50,11 @@ describe('Funded wallet', () => {
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
       logger.info('Waiting for sync...');
-      const state = await utils.waitForSyncFacade(wallet);
+      const state = await utils.waitForSyncFacade(funded.wallet);
       expect(state.shielded.totalCoins).toHaveLength(7);
       expect(state.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
-      expect(state.shielded.balances['0000000000000000000000000000000000000000000000000000000000000001']).toBe(
-        500000000000000n,
+      expect(state.shielded.balances['000000000000000000000000000000111111111111111111111111']).toBe(
+        5_555_555_555_555n,
       );
       expect(state?.shielded.balances['0000000000000000000000000000000000000000000000000000000000000002']).toBe(
         500000000000000n,
@@ -81,7 +77,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(wallet);
+      const state = await utils.waitForSyncFacade(funded.wallet);
       const shieldedCoins = state.shielded.totalCoins;
       expect(shieldedCoins).toHaveLength(7);
       expect(utils.isArrayUnique(shieldedCoins.map((c) => c.coin.nonce))).toBeTruthy();
@@ -130,7 +126,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(wallet);
+      const state = await utils.waitForSyncFacade(funded.wallet);
       const shieldedCoins = state.shielded.availableCoins;
       expect(shieldedCoins).toHaveLength(7);
       expect(utils.isArrayUnique(shieldedCoins.map((c) => c.coin.nonce))).toBeTruthy();
@@ -180,7 +176,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(wallet);
+      const state = await utils.waitForSyncFacade(funded.wallet);
       expect(state.shielded.pendingCoins).toHaveLength(0);
       expect(state.unshielded.pendingCoins).toHaveLength(0);
       expect(state.dust.pendingCoins).toHaveLength(0);
