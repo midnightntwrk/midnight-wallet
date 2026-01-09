@@ -12,7 +12,11 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
-export type AnyTransaction = ledger.UnprovenTransaction | ledger.FinalizedTransaction | ledger.ProofErasedTransaction;
+export type AnyTransaction =
+  | ledger.UnprovenTransaction
+  | ledger.FinalizedTransaction
+  | ledger.ProofErasedTransaction
+  | ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 export type UnprovenDustSpend = ledger.DustSpend<ledger.PreProof>;
 
 export type NetworkId = string;

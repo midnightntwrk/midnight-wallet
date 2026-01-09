@@ -17,6 +17,7 @@ import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wal
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 
+export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 export interface TokenTransfer {
   type: ledger.RawTokenType;
   receiverAddress: string;
@@ -64,10 +65,12 @@ export class FacadeState {
   }
 }
 
+const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
+
 export class WalletFacade {
-  shielded: ShieldedWallet;
-  unshielded: UnshieldedWallet;
-  dust: DustWallet;
+  readonly shielded: ShieldedWallet;
+  readonly unshielded: UnshieldedWallet;
+  readonly dust: DustWallet;
 
   constructor(shieldedWallet: ShieldedWallet, unshieldedWallet: UnshieldedWallet, dustWallet: DustWallet) {
     this.shielded = shieldedWallet;
@@ -75,159 +78,32 @@ export class WalletFacade {
     this.dust = dustWallet;
   }
 
-  state(): Observable<FacadeState> {
-    return combineLatest([this.shielded.state, this.unshielded.state, this.dust.state]).pipe(
-      map(([shieldedState, unshieldedState, dustState]) => new FacadeState(shieldedState, unshieldedState, dustState)),
-    );
+  private defaultTtl(): Date {
+    return new Date(Date.now() + DEFAULT_TTL_MS);
   }
 
-  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
-    await this.shielded.submitTransaction(tx, 'Finalized');
-
-    return tx.identifiers().at(-1)!;
+  private mergeUnprovenTransactions(
+    a: ledger.UnprovenTransaction | undefined,
+    b: ledger.UnprovenTransaction | undefined,
+  ): ledger.UnprovenTransaction | undefined {
+    if (a && b) return a.merge(b);
+    return a ?? b;
   }
 
-  async balanceTransaction(
-    zswapSecretKeys: ledger.ZswapSecretKeys,
-    dustSecretKeys: ledger.DustSecretKey,
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-    ttl: Date,
-  ): Promise<ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>> {
-    const unshieldedBalancedTx = await this.unshielded.balanceTransaction(tx);
-
-    const recipe = await this.shielded.balanceTransaction(zswapSecretKeys, unshieldedBalancedTx, []);
-
-    switch (recipe.type) {
-      case ProvingRecipe.TRANSACTION_TO_PROVE:
-        return await this.dust.addFeePayment(dustSecretKeys, recipe.transaction, ttl);
-      case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE: {
-        // if the shielded wallet returned a proven transaction, we need to pay fees with the dust wallet
-        const balancedTx = await this.dust.addFeePayment(dustSecretKeys, recipe.transactionToProve, ttl);
-
-        if (balancedTx.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
-          throw Error('Unexpected transaction type after adding fee payment.');
-        }
-
-        return {
-          ...recipe,
-          transactionToProve: balancedTx.transaction,
-        };
-      }
-      case ProvingRecipe.NOTHING_TO_PROVE: {
-        // @TODO fix casting
-        const txToBalance = recipe.transaction as unknown as ledger.UnprovenTransaction;
-        return await this.dust.addFeePayment(dustSecretKeys, txToBalance, ttl);
-      }
-    }
-  }
-
-  async finalizeTransaction(
-    recipe: ProvingRecipe.ProvingRecipe<ledger.FinalizedTransaction>,
-  ): Promise<ledger.FinalizedTransaction> {
-    return await this.shielded.finalizeTransaction(recipe);
-  }
-
-  async signTransaction(
-    tx: ledger.UnprovenTransaction,
-    signSegment: (data: Uint8Array) => ledger.Signature,
-  ): Promise<ledger.UnprovenTransaction> {
-    return await this.unshielded.signTransaction(tx, signSegment);
-  }
-
-  async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
-    return await this.dust.calculateFee(tx);
-  }
-
-  async transferTransaction(
-    zswapSecretKeys: ledger.ZswapSecretKeys,
-    dustSecretKey: ledger.DustSecretKey,
-    outputs: CombinedTokenTransfer[],
-    ttl: Date,
-  ): Promise<ProvingRecipe.TransactionToProve> {
-    const unshieldedOutputs = outputs
-      .filter((output) => output.type === 'unshielded')
-      .flatMap((output) => output.outputs);
-
-    const shieldedOutputs = outputs.filter((output) => output.type === 'shielded').flatMap((output) => output.outputs);
-
-    if (unshieldedOutputs.length === 0 && shieldedOutputs.length === 0) {
-      throw Error('At least one shielded or unshielded output is required.');
-    }
-
-    let shieldedTxRecipe = undefined;
-    let unshieldedTx = undefined;
-
-    if (unshieldedOutputs.length > 0) {
-      unshieldedTx = await this.unshielded.transferTransaction(unshieldedOutputs, ttl);
-    }
-
-    if (shieldedOutputs.length > 0) {
-      shieldedTxRecipe = await this.shielded.transferTransaction(zswapSecretKeys, shieldedOutputs);
-    }
-
-    // if there's a shielded tx only, return it as it's already balanced
-    if (shieldedTxRecipe !== undefined && unshieldedTx === undefined) {
-      if (shieldedTxRecipe.type !== 'TransactionToProve') {
-        throw Error('Unexpected transaction type.');
-      }
-
-      const recipe = await this.dust.addFeePayment(dustSecretKey, shieldedTxRecipe.transaction, ttl);
-
-      if (recipe.type !== 'TransactionToProve') {
-        throw Error('Unexpected transaction type after adding fee payment.');
-      }
-
-      return recipe;
-    }
-
-    // if there's an unshielded tx only, pay fees (balance) with shielded wallet
-    if (shieldedTxRecipe === undefined && unshieldedTx !== undefined) {
-      const recipe = await this.dust.addFeePayment(dustSecretKey, unshieldedTx, ttl);
-      if (recipe.type !== 'TransactionToProve') {
-        throw Error('Unexpected transaction type after adding fee payment.');
-      }
-      return recipe;
-    }
-
-    // if there's a shielded and unshielded tx, pay fees for unshielded and merge them
-    if (shieldedTxRecipe !== undefined && unshieldedTx !== undefined) {
-      if (shieldedTxRecipe.type !== 'TransactionToProve') {
-        throw Error('Unexpected transaction type.');
-      }
-      const txToBalance = shieldedTxRecipe.transaction.merge(unshieldedTx);
-
-      const recipe = await this.dust.addFeePayment(dustSecretKey, txToBalance, ttl);
-
-      if (recipe.type !== 'TransactionToProve') {
-        throw Error('Unexpected transaction type after adding fee payment.');
-      }
-
-      return recipe;
-    }
-
-    throw Error('Unexpected transaction state.');
-  }
-
-  async registerNightUtxosForDustGeneration(
+  private async createDustRegistrationTransaction(
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
-    dustReceiverAddress?: string,
-  ): Promise<ProvingRecipe.TransactionToProve> {
-    if (nightUtxos.length === 0) {
-      throw Error('At least one Night UTXO is required.');
-    }
-
-    const dustState = await this.dust.waitForSyncedState();
-    const receiverAddress = dustReceiverAddress ?? dustState.dustAddress;
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    dustReceiverAddress: string | undefined,
+  ): Promise<ledger.UnprovenTransaction> {
+    const ttl = this.defaultTtl();
 
     const transaction = await this.dust.createDustGenerationTransaction(
       undefined,
       ttl,
       nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
       nightVerifyingKey,
-      receiverAddress,
+      dustReceiverAddress,
     );
 
     const intent = transaction.intents?.get(1);
@@ -238,12 +114,126 @@ export class WalletFacade {
     const signatureData = intent.signatureData(1);
     const signature = await Promise.resolve(signDustRegistration(signatureData));
 
-    const recipe = await this.dust.addDustGenerationSignature(transaction, signature);
-    if (recipe.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
-      throw Error('Unexpected recipe type returned when registering Night UTXOs.');
+    return await this.dust.addDustGenerationSignature(transaction, signature);
+  }
+
+  state(): Observable<FacadeState> {
+    return combineLatest([this.shielded.state, this.unshielded.state, this.dust.state]).pipe(
+      map(([shieldedState, unshieldedState, dustState]) => new FacadeState(shieldedState, unshieldedState, dustState)),
+    );
+  }
+
+  async waitForSyncedState(): Promise<FacadeState> {
+    const [shieldedState, unshieldedState, dustState] = await Promise.all([
+      this.shielded.waitForSyncedState(),
+      this.unshielded.waitForSyncedState(),
+      this.dust.waitForSyncedState(),
+    ]);
+
+    return new FacadeState(shieldedState, unshieldedState, dustState);
+  }
+
+  async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
+    await this.shielded.submitTransaction(tx, 'Finalized');
+
+    return tx.identifiers().at(-1)!;
+  }
+
+  async balanceBoundTransaction(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
+    dustSecretKeys: ledger.DustSecretKey,
+    tx: ledger.FinalizedTransaction,
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction> {
+    const unshieldedBalancing = await this.unshielded.balanceBoundTransaction(tx);
+    const shieldedBalancing = await this.shielded.balanceTransaction(zswapSecretKeys, tx);
+
+    const mergedBalancing = this.mergeUnprovenTransactions(shieldedBalancing, unshieldedBalancing);
+
+    const feeBalancingTransaction = await this.dust.balanceTransactions(
+      dustSecretKeys,
+      mergedBalancing ? [tx, mergedBalancing] : [tx],
+      ttl,
+    );
+
+    return mergedBalancing ? mergedBalancing.merge(feeBalancingTransaction) : feeBalancingTransaction;
+  }
+
+  async balanceUnboundTransaction(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
+    dustSecretKeys: ledger.DustSecretKey,
+    tx: UnboundTransaction,
+    ttl: Date,
+  ): Promise<ledger.FinalizedTransaction> {
+    // For unbound transactions, unshielded balancing happens in placed not with a balancing transaction
+    const balancedUnshieldedTx = await this.unshielded.balanceUnboundTransaction(tx);
+    const shieldedBalancingTx = await this.shielded.balanceTransaction(zswapSecretKeys, tx);
+
+    // unbound unshielded tx are balanced in place, check if balancedUnshieldedTx is present and use it as base tx
+    const baseTx = balancedUnshieldedTx ?? tx;
+
+    // Add fee payment - pass shielded balancing if present, otherwise just calculate fee for base tx
+    const transactionsToPayFeesFor = shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx];
+    const feeBalancingTransaction = await this.dust.balanceTransactions(dustSecretKeys, transactionsToPayFeesFor, ttl);
+
+    // Create the final balancing transaction
+    const finalBalancingTransaction = shieldedBalancingTx
+      ? shieldedBalancingTx.merge(feeBalancingTransaction)
+      : feeBalancingTransaction;
+
+    const provenBalancingTransaction = await this.proveTransaction(finalBalancingTransaction);
+
+    return provenBalancingTransaction.merge(baseTx.bind());
+  }
+
+  async proveTransaction(transaction: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
+    return await this.shielded.proveTransaction(transaction);
+  }
+
+  async signTransaction(
+    tx: ledger.UnprovenTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Promise<ledger.UnprovenTransaction> {
+    return await this.unshielded.signTransaction(tx, signSegment);
+  }
+
+  async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
+    return await this.dust.calculateFee([tx]);
+  }
+
+  async transferTransaction(
+    zswapSecretKeys: ledger.ZswapSecretKeys,
+    dustSecretKey: ledger.DustSecretKey,
+    outputs: CombinedTokenTransfer[],
+    ttl: Date,
+  ): Promise<ledger.UnprovenTransaction> {
+    const unshieldedOutputs = outputs
+      .filter((output) => output.type === 'unshielded')
+      .flatMap((output) => output.outputs);
+
+    const shieldedOutputs = outputs.filter((output) => output.type === 'shielded').flatMap((output) => output.outputs);
+
+    if (unshieldedOutputs.length === 0 && shieldedOutputs.length === 0) {
+      throw Error('At least one shielded or unshielded output is required.');
     }
 
-    return recipe;
+    let shieldedTx: ledger.UnprovenTransaction | undefined;
+    let unshieldedTx: ledger.UnprovenTransaction | undefined;
+
+    if (unshieldedOutputs.length > 0) {
+      unshieldedTx = await this.unshielded.transferTransaction(unshieldedOutputs, ttl);
+    }
+
+    if (shieldedOutputs.length > 0) {
+      shieldedTx = await this.shielded.transferTransaction(zswapSecretKeys, shieldedOutputs);
+    }
+
+    const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
+
+    // Add fee payment
+    const feeBalancingTransaction = await this.dust.balanceTransactions(dustSecretKey, [mergedTxs], ttl);
+
+    return mergedTxs.merge(feeBalancingTransaction);
   }
 
   async initSwap(
@@ -271,7 +261,7 @@ export class WalletFacade {
       throw Error('At least one shielded or unshielded swap is required.');
     }
 
-    const shieldedTxRecipe =
+    const shieldedTx =
       hasShieldedPart && shieldedInputs !== undefined
         ? await this.shielded.initSwap(zswapSecretKeys, shieldedInputs, shieldedOutputs)
         : undefined;
@@ -281,54 +271,42 @@ export class WalletFacade {
         ? await this.unshielded.initSwap(unshieldedInputs, unshieldedOutputs, ttl)
         : undefined;
 
-    if (shieldedTxRecipe !== undefined && shieldedTxRecipe.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
-      throw Error('Unexpected transaction type.');
+    const combinedTx = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx);
+
+    if (!combinedTx) {
+      throw Error('Unexpected transaction state.');
     }
 
-    if (shieldedTxRecipe && unshieldedTx) {
-      return shieldedTxRecipe.transaction.merge(unshieldedTx);
+    return combinedTx;
+  }
+
+  async registerNightUtxosForDustGeneration(
+    nightUtxos: readonly UtxoWithMeta[],
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
+    dustReceiverAddress?: string,
+  ): Promise<ledger.UnprovenTransaction> {
+    if (nightUtxos.length === 0) {
+      throw Error('At least one Night UTXO is required.');
     }
 
-    if (shieldedTxRecipe) {
-      return shieldedTxRecipe.transaction;
-    }
+    const dustState = await this.dust.waitForSyncedState();
+    const receiverAddress = dustReceiverAddress ?? dustState.dustAddress;
 
-    if (unshieldedTx) {
-      return unshieldedTx;
-    }
-
-    throw Error('Unexpected transaction state.');
+    return await this.createDustRegistrationTransaction(
+      nightUtxos,
+      nightVerifyingKey,
+      signDustRegistration,
+      receiverAddress,
+    );
   }
 
   async deregisterFromDustGeneration(
     nightUtxos: UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
-  ): Promise<ProvingRecipe.TransactionToProve> {
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
-
-    const transaction = await this.dust.createDustGenerationTransaction(
-      undefined,
-      ttl,
-      nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
-      nightVerifyingKey,
-      undefined,
-    );
-
-    const intent = transaction.intents?.get(1);
-    if (!intent) {
-      throw Error('Dust generation transaction is missing intent segment 1.');
-    }
-
-    const signatureData = intent.signatureData(1);
-    const signature = await Promise.resolve(signDustRegistration(signatureData));
-
-    const recipe = await this.dust.addDustGenerationSignature(transaction, signature);
-    if (recipe.type !== ProvingRecipe.TRANSACTION_TO_PROVE) {
-      throw Error('Unexpected recipe type returned when registering Night UTXOs.');
-    }
-
-    return recipe;
+  ): Promise<ledger.UnprovenTransaction> {
+    return await this.createDustRegistrationTransaction(nightUtxos, nightVerifyingKey, signDustRegistration, undefined);
   }
 
   async start(zswapSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {

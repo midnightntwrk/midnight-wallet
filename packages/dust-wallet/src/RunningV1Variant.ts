@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule } from 'effect';
+import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
 import {
   DustSecretKey,
   nativeToken,
@@ -219,54 +219,56 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
 
-  calculateFee(transaction: AnyTransaction): Effect.Effect<bigint, WalletError.WalletError> {
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError.WalletError> {
     return pipe(
       this.#v1Context.syncService.blockData(),
       Effect.map((blockData) =>
-        this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+        Arr.reduce(
+          transactions,
+          0n,
+          (total, transaction) =>
+            total + this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+        ),
       ),
     );
   }
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.syncService.blockData(),
         Effect.flatMap((blockData) =>
-          this.#v1Context.transactingCapability.addFeePayment(
+          this.#v1Context.transactingCapability.balanceTransactions(
             secretKey,
             state,
-            transaction,
+            transactions,
             ttl,
             currentTime ?? blockData.timestamp,
             blockData.ledgerParameters,
           ),
         ),
-        Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );
     });
   }
 
-  finalizeTransaction(
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
-  ): Effect.Effect<TTransaction, WalletError.WalletError> {
+  proveTransaction(transaction: UnprovenTransaction): Effect.Effect<TTransaction, WalletError.WalletError> {
     return this.#v1Context.provingService
-      .prove(recipe)
+      .prove(transaction)
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertRecipe(state, recipe)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );

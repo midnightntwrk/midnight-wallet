@@ -114,21 +114,18 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
     dustReceiverAddress: string | undefined,
   ): Promise<UnprovenTransaction>;
 
-  addDustGenerationSignature(
-    transaction: UnprovenTransaction,
-    signature: Signature,
-  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
+  addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
 
-  calculateFee(transaction: AnyTransaction): Promise<bigint>;
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
+  ): Promise<UnprovenTransaction>;
 
-  finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction>;
+  proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction>;
 
   readonly submitTransaction: SubmitTransactionMethod<FinalizedTransaction>;
 
@@ -200,10 +197,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
         .pipe(Effect.runPromise);
     }
 
-    addDustGenerationSignature(
-      transaction: UnprovenTransaction,
-      signature: Signature,
-    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
+    addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
@@ -211,31 +205,31 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
         .pipe(Effect.runPromise);
     }
 
-    calculateFee(transaction: AnyTransaction): Promise<bigint> {
+    calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.calculateFee(transaction),
+          [V1Tag]: (v1) => v1.calculateFee(transactions),
         })
         .pipe(Effect.runPromise);
     }
 
-    addFeePayment(
+    balanceTransactions(
       secretKey: DustSecretKey,
-      transaction: UnprovenTransaction,
+      transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
+    ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, ttl, currentTime),
+          [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),
         })
         .pipe(Effect.runPromise);
     }
 
-    finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction> {
+    proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.finalizeTransaction(recipe),
+          [V1Tag]: (v1) => v1.proveTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

@@ -32,6 +32,8 @@ export type NothingToProve<Transaction> = {
 };
 
 export type ProvingRecipe<Transaction> =
-  | TransactionToProve
   | BalanceTransactionToProve<Transaction>
-  | NothingToProve<Transaction>;
+  | NothingToProve<Transaction>
+  | TransactionToProve;
+
+export type BalancingResult = ledger.UnprovenTransaction | undefined;

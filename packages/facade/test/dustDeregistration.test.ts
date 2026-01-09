@@ -134,27 +134,29 @@ describe('Dust Deregistration', () => {
     );
 
     const deregisterTokens = 2;
-    const dustDeregistrationRecipe = await walletFacade.deregisterFromDustGeneration(
+
+    const dustDeregistrationTx = await walletFacade.deregisterFromDustGeneration(
       nightUtxos.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
       (payload) => unshieldedWalletKeystore.signData(payload),
     );
 
-    const balancedTransactionRecipe = await walletFacade.balanceTransaction(
+    const provenDustDeregistrationTx = await walletFacade.proveTransaction(dustDeregistrationTx);
+
+    const balancingDustDeregistrationTx = await walletFacade.balanceBoundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
       ledger.DustSecretKey.fromSeed(dustWalletSeed),
-      dustDeregistrationRecipe.transaction,
+      provenDustDeregistrationTx,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    if (balancedTransactionRecipe.type !== 'TransactionToProve') {
-      throw new Error('Expected a transaction to prove');
-    }
-
     // NOTE: we don't sign the transaction via "walletFacade.signTransaction" as
     // the (de)registerFromDustGeneration method already adds the required signatures
-    const finalizedDustTx = await walletFacade.finalizeTransaction(balancedTransactionRecipe);
-    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalizedDustTx);
+    const provenBalancingDustDeregistrationTx = await walletFacade.proveTransaction(balancingDustDeregistrationTx);
+
+    const finalTx = provenDustDeregistrationTx.merge(provenBalancingDustDeregistrationTx);
+
+    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalTx);
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 

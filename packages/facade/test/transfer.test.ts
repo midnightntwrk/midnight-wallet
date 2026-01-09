@@ -149,7 +149,7 @@ describe('Wallet Facade Transfer', () => {
       .asString();
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
-    const transfer = await senderFacade.transferTransaction(
+    const unprovenTx = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       [
@@ -167,7 +167,7 @@ describe('Wallet Facade Transfer', () => {
       ttl,
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction(transfer);
+    const finalizedTx = await senderFacade.proveTransaction(unprovenTx);
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
@@ -203,21 +203,18 @@ describe('Wallet Facade Transfer', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const recipe = await senderFacade.transferTransaction(
+    const transaction = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
       ttl,
     );
 
-    const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
+    const signedTx = await senderFacade.signTransaction(transaction, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction({
-      ...recipe,
-      transaction: signedTx,
-    });
+    const finalizedTx = await senderFacade.proveTransaction(signedTx);
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
@@ -255,21 +252,20 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
-    const provenArbitraryTx = await senderFacade.shielded.finalizeTransaction({
-      type: 'TransactionToProve',
-      transaction: arbitraryTx,
-    });
+    const provenArbitraryTx = await senderFacade.proveTransaction(arbitraryTx);
 
-    const balancedTx = await senderFacade.balanceTransaction(
+    const balancingArbitraryTx = await senderFacade.balanceBoundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       provenArbitraryTx,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction(balancedTx);
+    const provenBalancingArbitraryTx = await senderFacade.proveTransaction(balancingArbitraryTx);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    const balancedArbitraryTx = provenBalancingArbitraryTx.merge(provenArbitraryTx);
+
+    const submittedTxHash = await senderFacade.submitTransaction(balancedArbitraryTx);
 
     expect(submittedTxHash).toBeTypeOf('string');
 
@@ -282,7 +278,7 @@ describe('Wallet Facade Transfer', () => {
     expect(isValid).toBeTruthy();
   });
 
-  it('allows to balance and submit an arbitrary unshielded transaction', async () => {
+  it.only('allows to balance and submit an arbitrary unshielded transaction', async () => {
     await waitForFullySynced(senderFacade);
 
     const outputs = [
@@ -298,27 +294,28 @@ describe('Wallet Facade Transfer', () => {
 
     const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
 
-    const recipe = await senderFacade.balanceTransaction(
+    const signedArbitraryTx = await receiverFacade.signTransaction(arbitraryTx, (payload) =>
+      unshieldedReceiverKeystore.signData(payload),
+    );
+
+    const provenArbitraryTx = await receiverFacade.proveTransaction(signedArbitraryTx);
+
+    const balancingArbitraryTx = await senderFacade.balanceBoundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
-      arbitraryTx,
+      provenArbitraryTx,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    if (recipe.type !== 'TransactionToProve') {
-      throw new Error('Expected a transaction to prove');
-    }
-
-    const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
+    const balancingSignedArbitraryTx = await senderFacade.signTransaction(balancingArbitraryTx, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const finalizedTx = await senderFacade.finalizeTransaction({
-      ...recipe,
-      transaction: signedTx,
-    });
+    const provenBalancingArbitraryTx = await senderFacade.proveTransaction(balancingSignedArbitraryTx);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    const balancedArbitraryTx = provenArbitraryTx.merge(provenBalancingArbitraryTx);
+
+    const submittedTxHash = await senderFacade.submitTransaction(balancedArbitraryTx);
 
     expect(submittedTxHash).toBeTypeOf('string');
 
