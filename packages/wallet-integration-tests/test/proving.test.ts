@@ -52,7 +52,7 @@ const proofServerContainerResource = Effect.acquireRelease(
   }),
 );
 
-describe('Default Proving Service', () => {
+describe('Proving Service', () => {
   const adHocProve = (tx: ledger.UnprovenTransaction): Effect.Effect<ledger.FinalizedTransaction> =>
     pipe(
       ProverClient.ProverClient,
@@ -102,60 +102,80 @@ describe('Default Proving Service', () => {
       expectedImbalance: -42n,
     },
   ] as const;
-  it.each(recipes)(
-    'does transform proving recipe into final, proven transaction',
-    async ({ recipe, expectedImbalance }) => {
-      const finalTx = await Effect.gen(function* () {
-        const readyRecipe = yield* recipe;
-        const proofServerUrl = yield* proofServerContainerResource;
-        const service = Proving.makeDefaultProvingService({
-          provingServerUrl: proofServerUrl,
-        });
 
-        return yield* service.prove(readyRecipe);
-      }).pipe(Effect.scoped, Effect.runPromise);
+  describe('Default Proving Service', () => {
+    it.each(recipes)(
+      'does transform proving recipe into final, proven transaction',
+      async ({ recipe, expectedImbalance }) => {
+        const finalTx = await Effect.gen(function* () {
+          const readyRecipe = yield* recipe;
+          const service = Proving.makeDefaultProvingService({});
 
-      expect(finalTx).toBeInstanceOf(ledger.Transaction);
-      expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
-    },
-  );
+          return yield* service.prove(readyRecipe);
+        }).pipe(Effect.scoped, Effect.runPromise);
 
-  it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
-    const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
-    const result = await Effect.gen(function* () {
-      const misconfiguredService = Proving.makeServerProvingService({
-        provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
-      });
-      return yield* misconfiguredService.prove(recipe);
-    }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
-
-    Either.match(result, {
-      onRight: (result) => {
-        throw new Error(`Unexpected success: ${result.toString()}`);
+        expect(finalTx).toBeInstanceOf(ledger.Transaction);
+        expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
       },
-      onLeft: (error) => {
-        expect(error).toBeInstanceOf(WalletError.ProvingError);
-      },
-    });
+    );
   });
 
-  it('does fail with wallet error instance when proving fails (e.g. due to connection error)', async () => {
-    const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
-    const result = await Effect.gen(function* () {
-      const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
-      const misconfiguredService = Proving.makeServerProvingService({
-        provingServerUrl: proofServerUrl,
-      });
-      return yield* misconfiguredService.prove(recipe);
-    }).pipe(Effect.either, Effect.runPromise);
+  describe('Server Proving Service', () => {
+    it.each(recipes)(
+      'does transform proving recipe into final, proven transaction',
+      async ({ recipe, expectedImbalance }) => {
+        const finalTx = await Effect.gen(function* () {
+          const readyRecipe = yield* recipe;
+          const proofServerUrl = yield* proofServerContainerResource;
+          const service = Proving.makeServerProvingService({
+            provingServerUrl: proofServerUrl,
+          });
 
-    Either.match(result, {
-      onRight: (result) => {
-        throw new Error(`Unexpected success: ${result.toString()}`);
+          return yield* service.prove(readyRecipe);
+        }).pipe(Effect.scoped, Effect.runPromise);
+
+        expect(finalTx).toBeInstanceOf(ledger.Transaction);
+        expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
       },
-      onLeft: (error) => {
-        expect(error).toBeInstanceOf(WalletError.ProvingError);
-      },
+    );
+
+    it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
+      const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
+      const result = await Effect.gen(function* () {
+        const misconfiguredService = Proving.makeServerProvingService({
+          provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
+        });
+        return yield* misconfiguredService.prove(recipe);
+      }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
+
+      Either.match(result, {
+        onRight: (result) => {
+          throw new Error(`Unexpected success: ${result.toString()}`);
+        },
+        onLeft: (error) => {
+          expect(error).toBeInstanceOf(WalletError.ProvingError);
+        },
+      });
+    });
+
+    it('does fail with wallet error instance when proving fails (e.g. due to connection error)', async () => {
+      const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
+      const result = await Effect.gen(function* () {
+        const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
+        const misconfiguredService = Proving.makeServerProvingService({
+          provingServerUrl: proofServerUrl,
+        });
+        return yield* misconfiguredService.prove(recipe);
+      }).pipe(Effect.either, Effect.runPromise);
+
+      Either.match(result, {
+        onRight: (result) => {
+          throw new Error(`Unexpected success: ${result.toString()}`);
+        },
+        onLeft: (error) => {
+          expect(error).toBeInstanceOf(WalletError.ProvingError);
+        },
+      });
     });
   });
 });
