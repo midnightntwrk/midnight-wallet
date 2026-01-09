@@ -15,6 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import * as allure from 'allure-js-commons';
 import { logger } from './logger.js';
+import { inspect } from 'util';
 
 /**
  * Tests using a funded wallet
@@ -25,7 +26,7 @@ import { logger } from './logger.js';
 describe('Funded wallet', () => {
   const getFixture = useTestContainersFixture();
   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-  const rawNativeTokenType = (ledger.nativeToken() as { tag: string; raw: string }).raw;
+  const rawNativeTokenType = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const timeout = 120_000;
 
@@ -51,10 +52,11 @@ describe('Funded wallet', () => {
       allure.story('Wallet state properties - funded');
       logger.info('Waiting for sync...');
       const state = await utils.waitForSyncFacade(funded.wallet);
+      logger.info(`Wallet synced. Shielded balance: ${inspect(state.shielded.balances)}`);
       expect(state.shielded.totalCoins).toHaveLength(7);
       expect(state.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
-      expect(state.shielded.balances['000000000000000000000000000000111111111111111111111111']).toBe(
-        5_555_555_555_555n,
+      expect(state.shielded.balances['0000000000000000000000000000000000000000000000000000000000000001']).toBe(
+        500000000000000n,
       );
       expect(state?.shielded.balances['0000000000000000000000000000000000000000000000000000000000000002']).toBe(
         500000000000000n,

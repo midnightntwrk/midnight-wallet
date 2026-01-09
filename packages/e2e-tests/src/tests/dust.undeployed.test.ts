@@ -14,7 +14,6 @@ import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
@@ -216,6 +215,20 @@ describe('Dust tests', () => {
         );
       }
 
+      const receiverDustBalance = await rx.firstValueFrom(
+        receiver.wallet.state().pipe(
+          rx.tap((s) => {
+            const dustBalance = s.dust.walletBalance(new Date());
+            logger.info(`Dust balance: ${dustBalance}`);
+          }),
+          rx.filter((s) => s.dust.walletBalance(new Date()) > 7n * 10n ** 14n),
+          rx.map((s) => s.dust.walletBalance(new Date())),
+        ),
+      );
+
+      expect(receiverDustBalance).toBeGreaterThan(0n);
+      logger.info(`Dust balance before deregistration: ${receiverDustBalance}`);
+
       const walletStateBeforeDeregister = await utils.waitForSyncFacade(receiver.wallet);
       const initialNightBalance = walletStateBeforeDeregister.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Initial Night Balance: ${initialNightBalance}`);
@@ -223,7 +236,7 @@ describe('Dust tests', () => {
       const initialDustBalance = walletStateBeforeDeregister.dust.walletBalance(new Date());
       logger.info(`Initial Dust Balance: ${initialDustBalance}`);
 
-      const registeredNightUtxos = initialWalletState.unshielded.availableCoins.filter(
+      const registeredNightUtxos = walletStateBeforeDeregister.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === true,
       );
       expect(registeredNightUtxos.length).toBeGreaterThan(0);
