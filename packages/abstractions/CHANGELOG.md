@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- bcef7d8: Allow TX creation with no own outputs
+
 ## 1.0.0-beta.9
 
 ### Patch Changes
