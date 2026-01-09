@@ -71,7 +71,7 @@ export function useTestContainersFixture() {
         break;
       }
       default: {
-        logger.warn(`Unrecognized network: ${network}`);
+        logger.warn(`Unrecognized network: ${String(network)}`);
         exit(1);
       }
     }
@@ -132,6 +132,9 @@ export class TestContainersFixture {
       case 'testnet': {
         return 'https://indexer.testnet-02.midnight.network/api/v3/graphql';
       }
+      case 'devnet': {
+        return 'https://indexer.devnet.midnight.network/api/v3/graphql';
+      }
       case 'qanet': {
         return 'https://indexer.qanet.dev.midnight.network/api/v3/graphql';
       }
@@ -140,9 +143,6 @@ export class TestContainersFixture {
       }
       case 'preprod': {
         return 'https://indexer.preprod.midnight.network/api/v3/graphql';
-      }
-      case 'node-dev-01': {
-        return 'https://indexer.node-dev-01.midnight.network/api/v3/graphql';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -159,6 +159,9 @@ export class TestContainersFixture {
       case 'testnet': {
         return 'wss://indexer.testnet-02.midnight.network/api/v3/graphql/ws';
       }
+      case 'devnet': {
+        return 'wss://indexer.devnet.midnight.network/api/v3/graphql/ws';
+      }
       case 'qanet': {
         return 'wss://indexer.qanet.dev.midnight.network/api/v3/graphql/ws';
       }
@@ -167,9 +170,6 @@ export class TestContainersFixture {
       }
       case 'preprod': {
         return 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
-      }
-      case 'node-dev-01': {
-        return 'wss://indexer.node-dev-01.midnight.network/api/v3/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -186,17 +186,17 @@ export class TestContainersFixture {
       case 'testnet': {
         return 'https://rpc.testnet-02.midnight.network';
       }
+      case 'devnet': {
+        return 'wss://rpc.devnet.midnight.network';
+      }
       case 'qanet': {
-        return 'https://rpc.qanet.dev.midnight.network';
+        return 'wss://rpc.qanet.dev.midnight.network';
       }
       case 'preview': {
-        return 'https://rpc.preview.midnight.network';
+        return 'wss://rpc.preview.midnight.network';
       }
       case 'preprod': {
-        return 'https://rpc.preprod.midnight.network';
-      }
-      case 'node-dev-01': {
-        return 'https://rpc.node-dev-01.midnight.network';
+        return 'wss://rpc.preprod.midnight.network';
       }
       case 'undeployed': {
         const nodePortRpc = this.getNodeContainer().getMappedPort(TestContainersFixture.NODE_PORT_RPC);

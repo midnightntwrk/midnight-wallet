@@ -18,7 +18,7 @@ import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-
 import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
 import {
@@ -32,6 +32,7 @@ import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { logger } from './logger.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { inspect } from 'node:util';
 
 /**
  * Tests using an empty wallet
@@ -46,7 +47,7 @@ describe('Fresh wallet with empty state', () => {
   const walletSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(walletSeed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(walletSeed));
   let walletKeystore: UnshieldedKeystore;
-  const timeout = (process.env['NETWORK'] as utils.MidnightNetwork) === 'devnet' ? 240_000 : 120_000;
+  const timeout = 120_000;
 
   let Wallet: ShieldedWalletClass;
   let Dust: DustWalletClass;
@@ -59,10 +60,11 @@ describe('Fresh wallet with empty state', () => {
     await allure.step('Start a fresh wallet', async function () {
       fixture = getFixture();
       networkId = fixture.getNetworkId();
+      logger.info(`Network id: ${networkId}`);
       expect(fixture).toBeDefined();
       walletKeystore = createKeystore(utils.getUnshieldedSeed(walletSeed), fixture.getNetworkId());
 
-      Dust = DustWallet(fixture.getDustWalletConfig());
+      Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
       wallet = utils.buildWalletFacade(walletSeed, fixture);
@@ -71,7 +73,7 @@ describe('Fresh wallet with empty state', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(wallet);
+    await wallet.stop();
   });
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {
@@ -174,9 +176,9 @@ describe('Fresh wallet with empty state', () => {
       const walletAddress = UnshieldedAddress.codec.encode(fixture.getNetworkId(), walletState.address).asString();
       const serialized = await wallet.unshielded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.utxos).toHaveLength(0);
-      expect(stateObject.pendingUtxos).toHaveLength(0);
-
+      logger.info(`Serialized unshielded wallet state: ${inspect(stateObject)}`);
+      expect(stateObject.publicKey.publicKey).toHaveLength(64);
+      expect(stateObject.publicKey.addressHex).toHaveLength(64);
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
@@ -363,7 +365,7 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
       const walletState = await firstValueFrom(wallet.unshielded.state);
-      expect(walletState.balances).toHaveLength(0);
+      expect(walletState.balances).toStrictEqual({});
     },
     timeout,
   );

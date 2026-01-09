@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustParameters, nativeToken } from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
@@ -35,7 +35,7 @@ import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
 describe('Syncing', () => {
   const getFixture = useTestContainersFixture();
-  const timeout = 240_000;
+  const timeout = 300_000;
   const seeds = [
     getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     getShieldedSeed('b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82'),
@@ -50,16 +50,16 @@ describe('Syncing', () => {
   const unshieldedKeystores: Array<UnshieldedKeystore> = [];
   const facades: Array<WalletFacade> = [];
   let fixture: TestContainersFixture;
-  const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
+  const rawNativeTokenType = (ledger.nativeToken() as { tag: string; raw: string }).raw;
 
-  beforeEach(() => {
-    allure.step('Start multiple wallets', function () {
+  beforeEach(async () => {
+    await allure.step('Start multiple wallets', async function () {
       fixture = getFixture();
       Wallet = ShieldedWallet(fixture.getWalletConfig());
-      const Dust = DustWallet(fixture.getDustWalletConfig());
-      const dustParameters = new DustParameters(5_000_000_000n, 8_267n, 3n * 60n * 60n);
+      const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
+      const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-      function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
+      async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
           unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
           shieldedWallets[i] = Wallet.startWithShieldedSeed(seeds[i]);
@@ -79,10 +79,11 @@ describe('Syncing', () => {
 
         for (let i = 0; i < seeds.length; i++) {
           facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i]);
+          await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
         }
       }
 
-      buildWallets(seeds);
+      await buildWallets(seeds);
     });
   }, timeout);
 

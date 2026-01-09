@@ -21,7 +21,7 @@ import {
   HttpURL,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { BlobOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 const PROVE_TX_PATH = '/prove';
 const CHECK_TX_PATH = '/check';

@@ -14,7 +14,7 @@ import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
 import { PublicKey } from '../KeyStore.js';
 import { UnshieldedState, UnshieldedUpdate } from './UnshieldedState.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Either, Array as Arr, pipe } from 'effect';
 import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, WalletError } from './WalletError.js';
 

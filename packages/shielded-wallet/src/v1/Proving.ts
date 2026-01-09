@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { HttpProverClient, WasmProver, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 import { Effect, pipe } from 'effect';
 import { ProvingRecipe } from './ProvingRecipe.js';

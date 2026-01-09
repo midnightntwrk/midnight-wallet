@@ -18,7 +18,7 @@ import {
   signData,
   UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v6';
+} from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export type PublicKey = {

@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, it, expect, vi } from 'vitest';
 import { DefaultV1Variant, V1Builder } from '../V1Builder.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from '../WalletError.js';
 import { Effect, Either, Encoding, Option, pipe, Ref, SubscriptionRef } from 'effect';
 import { SubmissionService } from '../Submission.js';

@@ -1,7 +1,7 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-utilities",
   "description": "Domain-agnostic utilities for the wallet SDK - common operations and types",
-  "version": "1.0.0-beta.7",
+  "version": "1.0.0-beta.9",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -40,7 +40,7 @@
     "effect": "^3.17.3",
     "portfinder": "^1.0.37",
     "rxjs": "^7.5",
-    "testcontainers": "^11.8.1"
+    "testcontainers": "^11.10.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit",
@@ -56,9 +56,10 @@
   "devDependencies": {
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
+    "prettier": "^3.7.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.16"
   }
 }
