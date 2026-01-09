@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+
 ## 1.0.0-beta.8
 
 ### Patch Changes
