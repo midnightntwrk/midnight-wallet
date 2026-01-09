@@ -184,7 +184,7 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
         return cache.get(cacheKey) as Uint8Array;
       }
 
-      const data = await fetchWithRetry(`${s3}/bls_filecoin_2p${k}`);
+      const data = await fetchWithRetry(`${s3}/bls_midnight_2p${k}`);
       const result = new Uint8Array(await data.arrayBuffer());
       cache.set(cacheKey, result);
 
