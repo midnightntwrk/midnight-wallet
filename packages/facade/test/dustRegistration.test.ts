@@ -12,7 +12,7 @@
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';

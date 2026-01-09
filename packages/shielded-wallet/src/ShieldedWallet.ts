@@ -12,7 +12,7 @@
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { BalancingResult, ProvingRecipe } from './v1/ProvingRecipe.js';

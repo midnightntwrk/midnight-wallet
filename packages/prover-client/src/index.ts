@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect } from 'effect';
 import { ProverClient, HttpProverClient as _HttpProverClient } from './effect/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 /**
  * Sends serialized unproven transactions to a Proof Server over HTTP.

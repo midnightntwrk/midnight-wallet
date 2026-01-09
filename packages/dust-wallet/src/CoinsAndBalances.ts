@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Array, pipe } from 'effect';
-import { updatedValue } from '@midnight-ntwrk/ledger-v6';
+import { updatedValue } from '@midnight-ntwrk/ledger-v7';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { DustGenerationInfo, DustToken, DustTokenFullInfo } from './types/Dust.js';

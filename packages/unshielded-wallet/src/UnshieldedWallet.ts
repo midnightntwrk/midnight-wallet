@@ -21,7 +21,7 @@ import {
   BoundTransaction,
   UnboundTransaction,
 } from './v1/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { SerializationCapability } from './v1/Serialization.js';

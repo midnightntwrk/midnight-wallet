@@ -35,7 +35,7 @@ import { KeysCapability } from './Keys.js';
 import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet.js';
 import { TransactionHistoryService } from './TransactionHistory.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedId = state.progress?.appliedId ?? 0n;

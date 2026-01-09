@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Array as Arr, Data, Either, Option, pipe, Record } from 'effect';
-import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Array as Arr, Either, Option, pipe, Record } from 'effect';
+import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { BalancingResult } from './ProvingRecipe.js';
 import { CoreWallet } from './CoreWallet.js';
 import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
@@ -100,8 +100,6 @@ export const makeSimulatorTransactingCapability = (
   );
 };
 
-class NoSelfOutputsError extends Data.TaggedError('NoSelfOutputs')<object> {}
-
 export class TransactingCapabilityImplementation<
   TTransaction extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
 > implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
@@ -150,7 +148,6 @@ export class TransactingCapabilityImplementation<
         afterFallible,
         initialImbalances,
         coinSelection,
-        0,
         Imbalances.empty(),
       );
 
@@ -192,7 +189,6 @@ export class TransactingCapabilityImplementation<
         state,
         imbalances,
         this.getCoinSelection(),
-        selfCoins.length,
         Imbalances.empty(),
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
@@ -236,7 +232,6 @@ export class TransactingCapabilityImplementation<
         state,
         TransactionImbalances.empty(),
         this.getCoinSelection(),
-        outputsParseResult.selfCoins.length,
         inputsParseResult,
       );
       const finalState = CoreWallet.watchCoins(newState, secretKeys, outputsParseResult.selfCoins);
@@ -371,7 +366,6 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     imbalances: TransactionImbalances,
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
-    knownSelfOutputs: number,
     targetImbalances: Imbalances,
   ): Either.Either<{ offer: ledger.ZswapOffer<ledger.PreProof>; newState: CoreWallet }, WalletError> {
     return Either.gen(this, function* () {
@@ -405,99 +399,11 @@ export class TransactingCapabilityImplementation<
         },
       });
 
-      if (balanceRecipe.outputs.length + knownSelfOutputs == 0) {
-        return yield* Either.left(new NoSelfOutputsError({}));
-      }
-
       return yield* pipe(
         this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
         Either.fromOption(() => {
           return new OtherWalletError({
             message: 'Could not create a valid guaranteed offer',
-          });
-        }),
-      );
-    }).pipe(
-      EitherOps.flatMapLeft((err: NoSelfOutputsError | WalletError) => {
-        if (err instanceof NoSelfOutputsError) {
-          return this.#balanceGuaranteedWithSelfOutput(secretKeys, state, imbalances, coinSelection, targetImbalances);
-        } else {
-          return Either.left(err);
-        }
-      }),
-    );
-  }
-
-  #balanceGuaranteedWithSelfOutput(
-    secretKeys: ledger.ZswapSecretKeys,
-    state: CoreWallet,
-    imbalances: TransactionImbalances,
-    coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
-    targetImbalances: Imbalances,
-  ) {
-    return Either.gen(this, function* () {
-      const additionalOutputValue = 100_000n;
-      const balanceRecipe = yield* Either.try({
-        try: () => {
-          return getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
-            coins: this.getCoins()
-              .getAvailableCoins(state)
-              .map((c) => c.coin),
-            initialImbalances: Imbalances.merge(
-              imbalances.guaranteed,
-              Imbalances.fromEntry((ledger.shieldedToken() as { raw: string }).raw, -1n * additionalOutputValue),
-            ),
-            transactionCostModel: ShieldedCostModel,
-            feeTokenType: '',
-            coinSelection,
-            targetImbalances,
-            createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
-            isCoinEqual: (a, b) => a.nonce === b.nonce,
-          });
-        },
-        catch: (err) => {
-          if (err instanceof BalancingInsufficientFundsError) {
-            return new InsufficientFundsError({
-              message: 'Insufficient funds',
-              tokenType: err.tokenType,
-              amount: imbalances.guaranteed.get(err.tokenType) ?? 0n,
-            });
-          } else {
-            return new OtherWalletError({
-              message: 'Balancing guaranteed section failed',
-              cause: err,
-            });
-          }
-        },
-      });
-      const additionalCoin = ledger.createShieldedCoinInfo(
-        (ledger.shieldedToken() as { raw: string }).raw,
-        additionalOutputValue,
-      );
-      const additionalOffer = pipe(
-        additionalCoin,
-        (coin) =>
-          ledger.ZswapOutput.new(
-            coin,
-            0,
-            this.getKeys().getCoinPublicKey(state).toHexString(),
-            this.getKeys().getEncryptionPublicKey(state).toHexString(),
-          ),
-        (output) =>
-          ledger.ZswapOffer.fromOutput(output, (ledger.shieldedToken() as { raw: string }).raw, additionalOutputValue),
-      );
-
-      return yield* pipe(
-        this.#prepareOffer(secretKeys, state, balanceRecipe, 0),
-        Option.map(({ newState, offer }) => {
-          return {
-            newState: CoreWallet.watchCoins(newState, secretKeys, [additionalCoin]),
-            offer: offer.merge(additionalOffer),
-          };
-        }),
-        Either.fromOption(() => {
-          return new OtherWalletError({
-            message: 'Balancing guaranteed section failed',
           });
         }),
       );

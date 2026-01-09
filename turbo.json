@@ -35,13 +35,12 @@
     },
     "test-undeployed": {
       "cache": false,
-      "env": ["NETWORK", "DEPLOYMENT", "APP_INFRA_SECRET"]
+      "env": ["NETWORK", "APP_INFRA_SECRET"]
     },
     "test-remote": {
       "cache": false,
       "env": [
         "NETWORK",
-        "DEPLOYMENT",
         "SEED",
         "SEED2",
         "SEED_STABLE",

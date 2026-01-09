@@ -1,5 +1,19 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.0.0-beta.9
+
+### Patch Changes
+
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+
+## 1.0.0-beta.8
+
+### Patch Changes
+
+- aef8d4b: Performance improvement: Shielded and Dust wallet now send events in batches of 50 or after 10 seconds if
+  total events has not reached 50
+
 ## 1.0.0-beta.7
 
 ### Patch Changes

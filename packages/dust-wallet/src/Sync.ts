@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v6';
+import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration } from 'effect';
+import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v7';
 import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -140,9 +140,14 @@ export const makeDefaultSyncService = (
       state: DustCoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<WalletSyncUpdate, WalletError.WalletError, Scope.Scope> => {
+      const batchSize = 50;
+      const batchTimeout = Duration.seconds(10);
+
       return pipe(
         indexerSyncService.subscribeWallet(state),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKey)),
+        Stream.groupedWithin(batchSize, batchTimeout),
+        Stream.flatMap((chunk) => Stream.fromIterable(chunk)),
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },

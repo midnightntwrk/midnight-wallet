@@ -10,8 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either } from 'effect';
+
+import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either, Duration } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
@@ -181,6 +182,9 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
+      const batchSize = 50;
+      const batchTimeout = Duration.seconds(10);
+
       return pipe(
         ZswapEvents.run({ id: Number(appliedIndex) }),
         Stream.provideLayer(WsSubscriptionClient.layer({ url: indexerWsUrl })),
@@ -193,6 +197,8 @@ export const makeEventsSyncService = (
           ),
         ),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
+        Stream.groupedWithin(batchSize, batchTimeout),
+        Stream.flatMap((chunk) => Stream.fromIterable(chunk)),
       );
     },
   };

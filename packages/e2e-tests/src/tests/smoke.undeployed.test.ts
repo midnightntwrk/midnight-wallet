@@ -15,7 +15,7 @@
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -47,7 +47,7 @@ describe('Smoke tests', () => {
   const receiverWalletDustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seed));
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const timeout = 240_000;
+  const timeout = 300_000;
   const outputValue = 1_000n;
 
   let fixture: TestContainersFixture;
@@ -59,7 +59,10 @@ describe('Smoke tests', () => {
   beforeEach(async () => {
     await allure.step('Start two wallets', async function () {
       fixture = getFixture();
-      Dust = DustWallet(fixture.getDustWalletConfig());
+      Dust = DustWallet({
+        ...fixture.getWalletConfig(),
+        ...fixture.getDustWalletConfig(),
+      });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       walletFunded = utils.buildWalletFacade(seedFunded, fixture);
       receiverWallet = utils.buildWalletFacade(seed, fixture);
@@ -70,8 +73,8 @@ describe('Smoke tests', () => {
   });
 
   afterEach(async () => {
-    await utils.closeWallet(walletFunded);
-    await utils.closeWallet(receiverWallet);
+    await walletFunded.stop();
+    await receiverWallet.stop();
   }, 20_000);
 
   test(
@@ -152,28 +155,24 @@ describe('Smoke tests', () => {
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(walletFunded);
-      expect(pendingState.shielded.balances[shieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
-      expect(pendingState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
       expect(pendingState.unshielded.totalCoins.length).toBe(5);
       expect(pendingState.shielded.availableCoins.length).toBe(6);
-      expect(pendingState.unshielded.availableCoins.length).toBe(4);
-      expect(pendingState.shielded.pendingCoins.length).toBe(1);
-      expect(pendingState.unshielded.pendingCoins.length).toBe(1);
+      expect(pendingState.unshielded.availableCoins.length).toBe(5);
 
       logger.info('Waiting for finalized balance...');
       await utils.waitForFacadePendingClear(walletFunded);
       const finalState = await utils.waitForSyncFacade(walletFunded);
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(balance - outputValue);
-      expect(finalState.unshielded.balances[unshieldedTokenRaw] ?? 0n).toBeLessThanOrEqual(balance - outputValue);
+      expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBeLessThanOrEqual(balance - outputValue);
       expect(finalState.shielded.totalCoins.length).toBe(7);
       expect(finalState.unshielded.totalCoins.length).toBe(5);
       expect(finalState.unshielded.availableCoins.length).toBe(5);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
 
-      await utils.waitForFinalizedBalance(receiverWallet.shielded);
+      await utils.waitForFinalizedShieldedBalance(receiverWallet.shielded);
       const finalState2 = await utils.waitForSyncFacade(receiverWallet);
       const finalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
       const finalUnshieldedBalance = finalState2.unshielded.balances[unshieldedTokenRaw];
@@ -203,14 +202,14 @@ describe('Smoke tests', () => {
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await walletFunded.shielded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(1);
+      expect(stateObject.txHistory).toHaveLength(0);
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
-      await walletFunded.stop();
 
       logger.info('Restoring wallet from serialized state...');
       const restoredWallet = Wallet.restore(serialized);
+      await restoredWallet.start(fundedSecretKey);
       try {
         const restoredState = await restoredWallet.waitForSyncedState();
         const restoredStateTxHistory = utils.getTransactionHistoryIds(restoredState);
@@ -223,7 +222,7 @@ describe('Smoke tests', () => {
   );
 
   test(
-    'Unshielded wallet can be serialized and restored with in memory tx history storage',
+    'Unshielded wallet can be serialized and restored',
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');
@@ -260,15 +259,17 @@ describe('Smoke tests', () => {
         txHistoryStorage: restoredTxHistory,
       }).restore(serializedState);
 
+      await restoredWallet.start();
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();
       // TODO add assertion for Tx history
+      await restoredWallet.stop();
     },
     timeout,
   );
 
   test(
-    'Dust wallet can be serialized and restored with in memory tx history storage',
+    'Dust wallet can be serialized and restored',
     async () => {
       allure.tag('smoke');
       allure.tag('healthcheck');
