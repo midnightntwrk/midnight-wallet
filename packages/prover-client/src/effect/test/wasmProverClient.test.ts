@@ -23,13 +23,13 @@ import {
 } from '@midnight-ntwrk/ledger-v6';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
-import * as WasmProverClient from '../WasmProverClient.js';
+import * as WasmProver from '../WasmProver.js';
 import * as ProverClient from '../ProverClient.js';
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
-const wasmConfig = { keyMaterialProvider: WasmProverClient.makeDefaultKeyMaterialProvider() };
+const wasmConfig = { keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() };
 
-describe('WasmProverClient', () => {
+describe('WasmProver', () => {
   describe('with available wasm prover', () => {
     const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
     const makeValidTransaction = (spendCoinAmount: bigint) => {
@@ -64,7 +64,7 @@ describe('WasmProverClient', () => {
           expect(filteredImbalances.length).toEqual(1);
           expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
         }).pipe(
-          Effect.provide(WasmProverClient.layer(wasmConfig)),
+          Effect.provide(WasmProver.layer(wasmConfig)),
           Effect.catchAll((err) => {
             // eslint-disable-next-line no-console
             console.error(err);
@@ -87,7 +87,7 @@ describe('WasmProverClient', () => {
           yield* proveClient.proveTransaction(tx, CostModel.initialCostModel());
         }).pipe(
           Effect.catchAll(() => Effect.succeed(void 0)),
-          Effect.provide(WasmProverClient.layer(wasmConfig)),
+          Effect.provide(WasmProver.layer(wasmConfig)),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );

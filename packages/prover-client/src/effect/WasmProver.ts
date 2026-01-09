@@ -26,7 +26,7 @@ import { ProverClient } from './ProverClient.js';
  */
 export const layer: (config: ProverClient.WasmConfig) => Layer.Layer<ProverClient, InvalidProtocolSchemeError> = (
   config,
-) => Layer.effect(ProverClient, Effect.succeed(new WasmProverClientImpl(config.keyMaterialProvider)));
+) => Layer.effect(ProverClient, Effect.succeed(new WasmProverImpl(config.keyMaterialProvider)));
 
 type WorkerMessage<RResponse> =
   | {
@@ -84,7 +84,7 @@ const callProverWorker = <RResponse>(
   });
 };
 
-class WasmProverClientImpl implements Context.Tag.Service<ProverClient> {
+class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   constructor(keyMaterialProvider: KeyMaterialProvider) {
     this.keyMaterialProvider = keyMaterialProvider;
   }

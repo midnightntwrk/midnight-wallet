@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { HttpProverClient, WasmProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { HttpProverClient, WasmProver, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 import { Effect, pipe } from 'effect';
@@ -28,8 +28,8 @@ export type DefaultProvingConfiguration = {
 export const makeDefaultProvingService = (
   configuration: DefaultProvingConfiguration,
 ): ProvingService<ledger.FinalizedTransaction> => {
-  const clientLayer = WasmProverClient.layer({
-    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProverClient.makeDefaultKeyMaterialProvider(),
+  const clientLayer = WasmProver.layer({
+    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
   });
 
   return {
