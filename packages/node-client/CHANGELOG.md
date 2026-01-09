@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.0.0-beta.11
+
+### Patch Changes
+
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+
 ## 1.0.0-beta.10
 
 ### Patch Changes
