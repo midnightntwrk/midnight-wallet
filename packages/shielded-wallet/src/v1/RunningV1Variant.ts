@@ -21,7 +21,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProvingService } from './Proving.js';
-import { ProvingRecipe } from './ProvingRecipe.js';
+import { BalancingResult } from './ProvingRecipe.js';
 import { SerializationCapability } from './Serialization.js';
 import { EventsSyncUpdate, SyncCapability, SyncService } from './Sync.js';
 import { TransactingCapability, TokenTransfer } from './Transacting.js';
@@ -167,26 +167,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+  ): Effect.Effect<BalancingResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx),
-        EitherOps.toEffect,
-        Effect.map(({ recipe, newState }) => [recipe, newState] as const),
-      );
+      return pipe(this.#v1Context.transactingCapability.balanceTransaction(secretKeys, state, tx), EitherOps.toEffect);
     });
   }
 
   transferTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     outputs: ReadonlyArray<TokenTransfer>,
-  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+  ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.transactingCapability.makeTransfer(secretKeys, state, outputs),
-        EitherOps.toEffect,
-        Effect.map(({ recipe, newState }) => [recipe, newState] as const),
-      );
+      return pipe(this.#v1Context.transactingCapability.makeTransfer(secretKeys, state, outputs), EitherOps.toEffect);
     });
   }
 
@@ -194,23 +186,22 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     secretKeys: ledger.ZswapSecretKeys,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
-  ): Effect.Effect<ProvingRecipe<TTransaction>, WalletError> {
+  ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.transactingCapability.initSwap(secretKeys, state, desiredInputs, desiredOutputs),
         EitherOps.toEffect,
-        Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );
     });
   }
 
-  finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Effect.Effect<TTransaction, WalletError> {
+  proveTransaction(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError> {
     return this.#v1Context.provingService
-      .prove(recipe)
+      .prove(transaction)
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertRecipe(state, recipe)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );

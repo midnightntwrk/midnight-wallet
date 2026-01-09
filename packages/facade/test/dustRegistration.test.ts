@@ -172,23 +172,21 @@ describe('Dust Registration', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transferRecipe = await senderFacade.transferTransaction(
+    const transferTx = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
       ttl,
     );
 
-    const signedTransferTx = await senderFacade.signTransaction(transferRecipe.transaction, (payload) =>
+    const signedTransferTx = await senderFacade.signTransaction(transferTx, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const finalizedTransferTx = await senderFacade.finalizeTransaction({
-      ...transferRecipe,
-      transaction: signedTransferTx,
-    });
+    const provenTransferTx = await senderFacade.proveTransaction(signedTransferTx);
 
-    const transferTxHash = await senderFacade.submitTransaction(finalizedTransferTx);
+    const transferTxHash = await senderFacade.submitTransaction(provenTransferTx);
+
     expect(transferTxHash).toBeTypeOf('string');
 
     const receiverStateWithNight = await rx.firstValueFrom(
@@ -219,16 +217,16 @@ describe('Dust Registration', () => {
       (payload) => unshieldedReceiverKeystore.signData(payload),
     );
 
-    const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
+    const provenDustRegistrationTx = await receiverFacade.proveTransaction(dustRegistrationRecipe);
 
-    const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
+    const dustRegistrationTxHash = await receiverFacade.submitTransaction(provenDustRegistrationTx);
 
     expect(dustRegistrationTxHash).toBeTypeOf('string');
 
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+          const txInHistory = await state.unshielded.transactionHistory.get(provenDustRegistrationTx.transactionHash());
 
           return {
             state,

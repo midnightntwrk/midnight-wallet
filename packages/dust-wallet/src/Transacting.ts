@@ -37,7 +37,7 @@ import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address
 import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
-import { AnyTransaction, DustToken, NetworkId, TotalCostParameters, UnprovenDustSpend } from './types/index.js';
+import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
 import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
@@ -56,28 +56,22 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError>;
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: TSecrets,
     state: TState,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
-    WalletError.WalletError
-  >;
+  ): Either.Either<[UnprovenTransaction, TState], WalletError.WalletError>;
 
   revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError.WalletError>;
 
-  revertRecipe(
-    state: TState,
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
-  ): Either.Either<TState, WalletError.WalletError>;
+  revertTransaction(state: TState, transaction: UnprovenTransaction): Either.Either<TState, WalletError.WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -192,7 +186,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signatureData: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
     return Either.gen(this, function* () {
       const intent = transaction.intents?.get(1);
       if (!intent) {
@@ -261,10 +255,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
         newTransaction.intents = newTransaction.intents!.set(1, newIntent);
 
-        return {
-          type: ProvingRecipe.TRANSACTION_TO_PROVE as typeof ProvingRecipe.TRANSACTION_TO_PROVE,
-          transaction: newTransaction,
-        };
+        return newTransaction;
       });
     });
   }
@@ -283,21 +274,20 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     return dustImbalance ? -dustImbalance[1] : totalFee;
   }
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
     state: DustCoreWallet,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
-    WalletError.WalletError
-  > {
+  ): Either.Either<[UnprovenTransaction, DustCoreWallet], WalletError.WalletError> {
     const network = this.networkId;
-    const feeLeft = TransactingCapabilityImplementation.feeImbalance(
-      transaction,
-      this.calculateFee(transaction, ledgerParams),
+    const feeLeft = transactions.reduce(
+      (total, transaction) =>
+        total +
+        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
+      0n,
     );
 
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
@@ -321,6 +311,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         token: highestByValue.token,
       };
     }
+
     return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
       const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
@@ -329,19 +320,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         SignatureMarker.signature,
         ProofMarker.preProof,
         currentTime,
-        spends as UnprovenDustSpend[],
+        [...spends],
         [],
       );
 
       const feeTransaction = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
 
-      return {
-        newState: updatedState,
-        recipe: {
-          type: ProvingRecipe.TRANSACTION_TO_PROVE,
-          transaction: transaction.merge(feeTransaction),
-        },
-      };
+      return [feeTransaction, updatedState];
     });
   }
 
@@ -357,30 +342,19 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
-  revertRecipe(
+  revertTransaction(
     state: DustCoreWallet,
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
+    transaction: UnprovenTransaction,
   ): Either.Either<DustCoreWallet, WalletError.WalletError> {
-    const doRevert = (tx: UnprovenTransaction) => {
-      return Either.try({
-        try: () => state.revertTransaction(tx),
-        catch: (err) => {
-          return new WalletError.OtherWalletError({
-            message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
-            cause: err,
-          });
-        },
-      });
-    };
-
-    switch (recipe.type) {
-      case ProvingRecipe.TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transaction);
-      case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transactionToProve);
-      case ProvingRecipe.NOTHING_TO_PROVE:
-        return Either.right(state);
-    }
+    return Either.try({
+      try: () => state.revertTransaction(transaction),
+      catch: (err) => {
+        return new WalletError.OtherWalletError({
+          message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
+          cause: err,
+        });
+      },
+    });
   }
 
   #parseAddress(addr: string): Either.Either<DustPublicKey, WalletError.AddressError> {
