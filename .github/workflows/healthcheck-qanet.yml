@@ -12,5 +12,4 @@ jobs:
     with:
       network: qanet
       modifier: '-t @healthcheck'
-      branch: bcef7d816c37af15aa880ce84c2202cc321f060d
     secrets: inherit
