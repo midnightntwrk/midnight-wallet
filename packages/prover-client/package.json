@@ -32,7 +32,9 @@
     "@midnight-ntwrk/ledger-v7": "7.0.0-alpha.1",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.9",
-    "effect": "^3.17.3"
+    "@midnight-ntwrk/zkir-v2": "2.1.0-alpha.1",
+    "effect": "^3.17.3",
+    "web-worker": "^1.5.0"
   },
   "devDependencies": {
     "eslint": "^9.37.0",

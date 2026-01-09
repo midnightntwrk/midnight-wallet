@@ -3,7 +3,8 @@
   "compilerOptions": {
     "noEmit": false,
     "rootDir": "./src",
-    "outDir": "./dist"
+    "outDir": "./dist",
+    "lib": ["ESNext", "dom"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/test/**/*.ts", "src/**/*.test.ts"]

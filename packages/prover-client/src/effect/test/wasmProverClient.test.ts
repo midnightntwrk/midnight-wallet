@@ -22,46 +22,15 @@ import {
   ZswapOutput,
 } from '@midnight-ntwrk/ledger-v7';
 import { Effect } from 'effect';
-import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import * as HttpProverClient from '../HttpProverClient.js';
+import { describe, expect, it } from 'vitest';
+import * as WasmProver from '../WasmProver.js';
 import * as ProverClient from '../ProverClient.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:7.0.0-alpha.1';
-const PROOF_SERVER_PORT: number = 6300;
-
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
+const wasmConfig = { keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() };
 
-describe('HttpProverClient', () => {
-  describe('layer', () => {
-    // Ensures that we cannot construct a layer for HttpProverClient when we use common incorrect URI schemes.
-    it.each(['ftp:', 'mailto:', 'ws:', 'wss:', 'file:'])(
-      'should fail when constructed with %s as the URI scheme',
-      async (scheme) => {
-        await Effect.gen(function* () {
-          // We should never be able to resolve a ProverClient since the configuration used to create the
-          // associated HttpProverClient layer is invalid with the protocol schemes being used.
-          return yield* ProverClient.ProverClient;
-        }).pipe(
-          Effect.flatMap((_) => Effect.fail('Unexpectedly resolved a ProverClient')),
-          Effect.provide(HttpProverClient.layer({ url: `${scheme}//localhost.com` })),
-          // Ensure the reported invalid protocol scheme is the one used.
-          Effect.catchTag('InvalidProtocolSchemeError', (err) =>
-            err.invalidScheme !== scheme
-              ? Effect.fail(`Expected '${scheme}' but received '${err.invalidScheme}'`)
-              : Effect.succeed(void 0),
-          ),
-          Effect.runPromise,
-        );
-      },
-    );
-  });
-
-  describe('with available Proof Server', () => {
-    let proofServerContainer: StartedTestContainer | undefined = undefined;
-
-    const proofServerPort = () => proofServerContainer?.getMappedPort(PROOF_SERVER_PORT) ?? PROOF_SERVER_PORT;
-
+describe('WasmProver', () => {
+  describe('with available wasm prover', () => {
     const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
     const makeValidTransaction = (spendCoinAmount: bigint) => {
       const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
@@ -72,17 +41,6 @@ describe('HttpProverClient', () => {
 
       return Transaction.fromParts('undeployed', unprovenOffer);
     };
-
-    beforeAll(async () => {
-      proofServerContainer = await new GenericContainer(PROOF_SERVER_IMAGE)
-        .withExposedPorts(PROOF_SERVER_PORT)
-        .withWaitStrategy(Wait.forListeningPorts().withStartupTimeout(timeout_minutes(2)))
-        .start();
-    }, timeout_minutes(5));
-
-    afterAll(async () => {
-      await proofServerContainer?.stop();
-    }, timeout_minutes(1));
 
     it(
       'should prove a valid transaction',
@@ -106,7 +64,7 @@ describe('HttpProverClient', () => {
           expect(filteredImbalances.length).toEqual(1);
           expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
         }).pipe(
-          Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
+          Effect.provide(WasmProver.layer(wasmConfig)),
           Effect.catchAll((err) => {
             // eslint-disable-next-line no-console
             console.error(err);
@@ -129,7 +87,7 @@ describe('HttpProverClient', () => {
           yield* proveClient.proveTransaction(tx, CostModel.initialCostModel());
         }).pipe(
           Effect.catchAll(() => Effect.succeed(void 0)),
-          Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
+          Effect.provide(WasmProver.layer(wasmConfig)),
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );
