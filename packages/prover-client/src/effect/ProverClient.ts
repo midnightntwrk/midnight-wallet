@@ -36,7 +36,7 @@ export declare namespace ProverClient {
    * Provides wasm-related configuration for {@link ProverClient} implementations.
    */
   interface WasmConfig {
-    /** The base URL to the Proof Server. */
+    /** The Key Material Provider. */
     readonly keyMaterialProvider: KeyMaterialProvider;
   }
 
