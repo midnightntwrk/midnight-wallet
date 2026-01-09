@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { makeServerProvingService, Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v6';
 import { Effect, Either, Layer, pipe } from 'effect';
@@ -123,7 +123,7 @@ describe('Default Proving Service', () => {
   it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
     const result = await Effect.gen(function* () {
-      const misconfiguredService = Proving.makeDefaultProvingService({
+      const misconfiguredService = Proving.makeServerProvingService({
         provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
       });
       return yield* misconfiguredService.prove(recipe);
@@ -143,7 +143,7 @@ describe('Default Proving Service', () => {
     const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
     const result = await Effect.gen(function* () {
       const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
-      const misconfiguredService = Proving.makeDefaultProvingService({
+      const misconfiguredService = Proving.makeServerProvingService({
         provingServerUrl: proofServerUrl,
       });
       return yield* misconfiguredService.prove(recipe);
