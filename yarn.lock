@@ -2484,7 +2484,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v7": "npm:7.0.0-alpha.1"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0-beta.10"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.9"
-    "@midnight-ntwrk/zkir-v2": "npm:2.0.0-alpha.5"
+    "@midnight-ntwrk/zkir-v2": "npm:2.1.0-alpha.1"
     effect: "npm:^3.17.3"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
@@ -2535,7 +2535,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.0.0-beta.12"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.0-beta.10"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.9"
-    "@midnight-ntwrk/zkir-v2": "npm:2.0.0-alpha.5"
+    "@midnight-ntwrk/zkir-v2": "npm:2.1.0-alpha.1"
     "@polkadot/types": "npm:^16.4.1"
     "@scure/base": "npm:^1.1.9"
     effect: "npm:^3.17.3"
@@ -2629,10 +2629,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/zkir-v2@npm:2.0.0-alpha.5":
-  version: 2.0.0-alpha.5
-  resolution: "@midnight-ntwrk/zkir-v2@npm:2.0.0-alpha.5::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.0.0-alpha.5%2F07e0c3dd49948430c2f54a8c2352ae2bc43b7455"
-  checksum: 10c0/a0e55b88e4d773a1a528338b162a225531f4002f8cd20a184f035717c164bb3e6793208c47c69eafd716fcbb47d75642f5bc929ab30991367782537ade78d63f
+"@midnight-ntwrk/zkir-v2@npm:2.1.0-alpha.1":
+  version: 2.1.0-alpha.1
+  resolution: "@midnight-ntwrk/zkir-v2@npm:2.1.0-alpha.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.1.0-alpha.1%2F7846340494cd63fc3f1e1ff5f0f96cc46c5346e7"
+  checksum: 10c0/49405d02544f3efcc9d882c5db01b182537cc7cac783e895a2597515ceecc90115b8c22d791f6dd56376605d550137c8d732a96794ecb0892babdda9c0ad4386
   languageName: node
   linkType: hard
 

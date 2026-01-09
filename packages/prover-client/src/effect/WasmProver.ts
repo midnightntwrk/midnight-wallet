@@ -134,7 +134,7 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
   const cache = new Map<string, ProvingKeyMaterial | Uint8Array>();
   const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
-  const ver = 6;
+  const ver = 9;
 
   const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
     for (let i = 0; i < retries; i++) {
