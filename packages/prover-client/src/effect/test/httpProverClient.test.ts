@@ -27,7 +27,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
 import * as ProverClient from '../ProverClient.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:7.0.0-alpha.1';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:7.0.0-rc.1';
 const PROOF_SERVER_PORT: number = 6300;
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;

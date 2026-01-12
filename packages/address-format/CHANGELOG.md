@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-address-format
 
+## 3.0.0-beta.11
+
+### Patch Changes
+
+- 8b8d708: chore: update ledger to version 7.0.0-rc.1
+
 ## 3.0.0-beta.10
 
 ### Patch Changes

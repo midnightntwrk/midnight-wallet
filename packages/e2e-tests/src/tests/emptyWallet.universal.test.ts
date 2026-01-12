@@ -22,13 +22,10 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
 import {
-  createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { logger } from './logger.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -46,13 +43,12 @@ describe('Fresh wallet with empty state', () => {
   const walletSeed = '0000000000000000000000000000000000000000000000000000000000000009';
   const walletSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(walletSeed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(walletSeed));
-  let walletKeystore: UnshieldedKeystore;
   const timeout = 120_000;
 
   let Wallet: ShieldedWalletClass;
   let Dust: DustWalletClass;
   let shieldedWallet: ShieldedWallet;
-  let wallet: WalletFacade;
+  let wallet: utils.WalletInit;
   let networkId: NetworkId.NetworkId;
   let fixture: TestContainersFixture;
 
@@ -62,18 +58,16 @@ describe('Fresh wallet with empty state', () => {
       networkId = fixture.getNetworkId();
       logger.info(`Network id: ${networkId}`);
       expect(fixture).toBeDefined();
-      walletKeystore = createKeystore(utils.getUnshieldedSeed(walletSeed), fixture.getNetworkId());
 
       Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
-      wallet = utils.buildWalletFacade(walletSeed, fixture);
-      await wallet.start(walletSecretKey, dustSecretKey);
+      wallet = await utils.initWalletWithSeed(walletSeed, fixture);
     });
   });
 
   afterEach(async () => {
-    await wallet.stop();
+    await wallet.wallet.stop();
   });
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {
@@ -127,7 +121,7 @@ describe('Fresh wallet with empty state', () => {
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-      }).startWithPublicKey(PublicKey.fromKeyStore(walletKeystore));
+      }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();
     }
@@ -172,9 +166,9 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       const walletAddress = UnshieldedAddress.codec.encode(fixture.getNetworkId(), walletState.address).asString();
-      const serialized = await wallet.unshielded.serializeState();
+      const serialized = await wallet.wallet.unshielded.serializeState();
       const stateObject = JSON.parse(serialized);
       logger.info(`Serialized unshielded wallet state: ${inspect(stateObject)}`);
       expect(stateObject.publicKey.publicKey).toHaveLength(64);
@@ -201,10 +195,10 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const state = await utils.waitForSyncFacade(wallet);
+      const state = await utils.waitForSyncFacade(wallet.wallet);
       const publicKey = state.dust.dustPublicKey;
       const address = state.dust.dustAddress;
-      const serialized = await wallet.dust.serializeState();
+      const serialized = await wallet.wallet.dust.serializeState();
       const stateObject = await JSON.parse(serialized);
       expect(stateObject.publicKey.publicKey).toContain(publicKey);
       expect(stateObject.state).toBeTruthy();
@@ -224,7 +218,7 @@ describe('Fresh wallet with empty state', () => {
     allure.epic('Headless wallet');
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
-    const state = await firstValueFrom(wallet.shielded.state);
+    const state = await firstValueFrom(wallet.wallet.shielded.state);
     expect(state.address.coinPublicKeyString()).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -233,7 +227,7 @@ describe('Fresh wallet with empty state', () => {
     allure.epic('Headless wallet');
     allure.feature('Wallet state');
     allure.story('Wallet state properties - fresh');
-    const state = await firstValueFrom(wallet.shielded.state);
+    const state = await firstValueFrom(wallet.wallet.shielded.state);
     expect(state.address.encryptionPublicKeyString()).toMatch(/^[0-9a-f]{64}$/);
   });
 
@@ -244,7 +238,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.balances).toMatchObject({});
     },
     timeout,
@@ -257,7 +251,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.totalCoins).toHaveLength(0);
     },
     timeout,
@@ -270,7 +264,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.availableCoins).toHaveLength(0);
     },
     timeout,
@@ -283,7 +277,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.pendingCoins).toHaveLength(0);
     },
     timeout,
@@ -296,7 +290,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.transactionHistory).toHaveLength(0);
     },
     timeout,
@@ -309,7 +303,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m coin public key');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.address.coinPublicKeyString()).toMatch(/^[0-9a-f]{64}$/);
     },
     timeout,
@@ -322,7 +316,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const state = await firstValueFrom(wallet.shielded.state);
+      const state = await firstValueFrom(wallet.wallet.shielded.state);
       expect(state.address.encryptionPublicKeyString()).toMatch(/^[0-9a-f]{64}$/);
     },
     timeout,
@@ -335,7 +329,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       expect(walletState.address).toBeTruthy();
       utils.validateNetworkInAddress(
         UnshieldedAddress.codec.encode(fixture.getNetworkId(), walletState.address).asString(),
@@ -351,7 +345,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       expect(walletState.availableCoins).toHaveLength(0);
     },
     timeout,
@@ -364,7 +358,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       expect(walletState.balances).toStrictEqual({});
     },
     timeout,
@@ -377,7 +371,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       expect(walletState.pendingCoins).toHaveLength(0);
     },
     timeout,
@@ -390,7 +384,7 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state - Bech32m');
       allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.unshielded.state);
+      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
       expect(walletState.totalCoins).toHaveLength(0);
     },
     timeout,
@@ -399,7 +393,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Dust wallet returns empty balance',
     async () => {
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       expect(walletState.walletBalance(new Date())).toBe(0n);
     },
     timeout,
@@ -408,7 +402,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Dust wallet returns valid public key',
     async () => {
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       const publicKey = walletState.dustPublicKey;
       expect(publicKey).toBeTruthy();
       expect(publicKey).toBeTypeOf('bigint');
@@ -423,7 +417,7 @@ describe('Fresh wallet with empty state', () => {
       // allure.epic('Headless wallet');
       // allure.feature('Wallet state - Bech32m');
       // allure.story('Wallet returns Bech32m encryption public key');
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       const dustAddress = walletState.dustAddress;
       logger.info(`Dust Address: ${dustAddress}`);
       expect(dustAddress).toBeTruthy();
@@ -435,7 +429,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Dust wallet returns no available coins',
     async () => {
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       expect(walletState.availableCoins).toHaveLength(0);
     },
     timeout,
@@ -444,7 +438,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Dust wallet returns no total coins',
     async () => {
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       expect(walletState.totalCoins).toHaveLength(0);
     },
     timeout,
@@ -453,7 +447,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Dust wallet returns no pending coins',
     async () => {
-      const walletState = await firstValueFrom(wallet.dust.state);
+      const walletState = await firstValueFrom(wallet.wallet.dust.state);
       expect(walletState.pendingCoins).toHaveLength(0);
     },
     timeout,
