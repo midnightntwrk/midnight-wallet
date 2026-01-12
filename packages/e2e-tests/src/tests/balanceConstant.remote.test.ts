@@ -16,7 +16,6 @@ import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import * as allure from 'allure-js-commons';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
 /**
@@ -44,21 +43,18 @@ describe('Balance constant', () => {
   const expectedDustBalance = expectedShieldedBalance;
   // const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
   const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
-  const shieldedSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
-  const dustSecretKey = ledger.DustSecretKey.fromSeed(utils.getDustSeed(seed));
 
-  let walletFacade: WalletFacade;
+  let wallet: utils.WalletInit;
 
   beforeEach(async () => {
     const fixture = getFixture();
 
-    walletFacade = utils.buildWalletFacade(seed, fixture);
-    await walletFacade.start(shieldedSecretKey, dustSecretKey);
+    wallet = await utils.initWalletWithSeed(seed, fixture);
   }, syncTimeout);
 
   afterEach(async () => {
     // await utils.saveState(walletFacade, filename);
-    await walletFacade.stop();
+    await wallet.wallet.stop();
   }, syncTimeout);
 
   test(
@@ -70,7 +66,7 @@ describe('Balance constant', () => {
       allure.feature('Balance');
       allure.story('Balance constant when syncing from 0');
 
-      const syncedState = await utils.waitForSyncFacade(walletFacade);
+      const syncedState = await utils.waitForSyncFacade(wallet.wallet);
       logger.info(inspect(syncedState.shielded.availableCoins, { depth: null }));
       logger.info(inspect(syncedState.unshielded.availableCoins, { depth: null }));
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedShieldedBalance);
@@ -93,7 +89,7 @@ describe('Balance constant', () => {
       allure.feature('Wallet state');
       allure.story('Balance constant');
 
-      const syncedState = await utils.waitForSyncFacade(walletFacade);
+      const syncedState = await utils.waitForSyncFacade(wallet.wallet);
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
       expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
       expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);

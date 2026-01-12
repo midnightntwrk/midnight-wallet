@@ -43,6 +43,11 @@ on:
         type: string
         description: Suite or a testname to run (refer to Jest docs)
         required: false
+      branch:
+        type: string
+        description: Branch to run the tests against
+        required: false
+        default: 'main'
   workflow_call:
     inputs:
       network:
@@ -70,6 +75,11 @@ on:
         type: string
         description: Suite or a testname to run (refer to Jest docs)
         required: false
+      branch:
+        type: string
+        description: Branch to run the tests against
+        required: false
+        default: 'main'
     secrets:
       GH_USERNAME:
         required: true
@@ -100,6 +110,8 @@ jobs:
     permissions: write-all
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+        with:
+          ref: ${{ inputs.branch }}
 
       # - name: Determine the latest successful run ID with appropriate artifact
       #   continue-on-error: true

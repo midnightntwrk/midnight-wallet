@@ -1,5 +1,15 @@
 # @midnight-ntwrk/wallet-sdk-runtime
 
+## 1.0.0-beta.10
+
+### Patch Changes
+
+- bcef7d8: Allow TX creation with no own outputs
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+
 ## 1.0.0-beta.9
 
 ### Patch Changes

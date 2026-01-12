@@ -1,5 +1,16 @@
 # @midnight-ntwrk/wallet-sdk-capabilities
 
+## 3.0.0-beta.10
+
+### Patch Changes
+
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-hd@3.0.0-beta.8
+
 ## 3.0.0-beta.9
 
 ### Patch Changes
