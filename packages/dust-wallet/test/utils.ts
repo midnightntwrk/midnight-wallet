@@ -1,5 +1,4 @@
 // This file is part of MIDNIGHT-WALLET-SDK.
-import { Bindingish, Intent, Proofish, Signaturish, Transaction } from '@midnight-ntwrk/ledger-v7';
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,6 +10,8 @@ import { Bindingish, Intent, Proofish, Signaturish, Transaction } from '@midnigh
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+import { Bindingish, Intent, Proofish, Signaturish, Transaction } from '@midnight-ntwrk/ledger-v7';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { pipe, Iterable as Iter, Number as Num } from 'effect';
 
