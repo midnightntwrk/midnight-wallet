@@ -143,29 +143,25 @@ describe('Dust Deregistration', () => {
       (payload) => unshieldedWalletKeystore.signData(payload),
     );
 
-    const provenDustDeregistrationTx = await walletFacade.proveTransaction(dustDeregistrationTx);
-
-    const balancingDustDeregistrationTx = await walletFacade.balanceBoundTransaction(
+    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
       ledger.DustSecretKey.fromSeed(dustWalletSeed),
-      provenDustDeregistrationTx,
+      dustDeregistrationTx.transaction,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    // NOTE: we don't sign the transaction via "walletFacade.signTransaction" as
-    // the (de)registerFromDustGeneration method already adds the required signatures
-    const provenBalancingDustDeregistrationTx = await walletFacade.proveTransaction(balancingDustDeregistrationTx);
+    const provenDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
 
-    const finalTx = provenDustDeregistrationTx.merge(provenBalancingDustDeregistrationTx);
-
-    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalTx);
+    const dustDeregistrationTxHash = await walletFacade.submitTransaction(provenDustDeregistrationTx);
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
     const walletStateAfterRegistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+          const txInHistory = await state.unshielded.transactionHistory.get(
+            provenDustDeregistrationTx.transactionHash(),
+          );
 
           return {
             state,

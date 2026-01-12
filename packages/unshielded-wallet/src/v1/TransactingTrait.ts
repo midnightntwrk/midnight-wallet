@@ -23,14 +23,17 @@ export type TransactingTrait = {
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
     segment: number,
   ) => Either.Either<Uint8Array, WalletError>;
-  getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>): number[];
+  getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[];
   addSignature(
     transaction: ledger.UnprovenTransaction,
     signature: ledger.Signature,
     segment: number,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
   bind(transaction: UnboundTransaction): Either.Either<BoundTransaction, WalletError>;
-  getImbalances(transaction: BoundTransaction | UnboundTransaction, segment: number): Imbalances;
+  getImbalances(
+    transaction: BoundTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    segment: number,
+  ): Imbalances;
   addSignaturesToOffer(
     offer: ledger.UnshieldedOffer<ledger.SignatureEnabled>,
     signature: ledger.Signature,
@@ -60,7 +63,7 @@ export const TransactingTrait: TransactingTrait = {
       catch: (error) => new TransactingError({ message: 'Failed to get offer signature data', cause: error }),
     });
   },
-  getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>): number[] {
+  getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[] {
     return transaction.intents?.keys().toArray() ?? [];
   },
   addSignature(

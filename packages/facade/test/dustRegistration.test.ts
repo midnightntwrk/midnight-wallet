@@ -179,11 +179,11 @@ describe('Dust Registration', () => {
       ttl,
     );
 
-    const signedTransferTx = await senderFacade.signTransaction(transferTx, (payload) =>
+    const signedTransferTx = await senderFacade.signRecipe(transferTx, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const provenTransferTx = await senderFacade.proveTransaction(signedTransferTx);
+    const provenTransferTx = await senderFacade.finalizeRecipe(signedTransferTx);
 
     const transferTxHash = await senderFacade.submitTransaction(provenTransferTx);
 
@@ -217,7 +217,7 @@ describe('Dust Registration', () => {
       (payload) => unshieldedReceiverKeystore.signData(payload),
     );
 
-    const provenDustRegistrationTx = await receiverFacade.proveTransaction(dustRegistrationRecipe);
+    const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
 
     const dustRegistrationTxHash = await receiverFacade.submitTransaction(provenDustRegistrationTx);
 

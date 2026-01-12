@@ -28,7 +28,12 @@ import { SerializationCapability } from './v1/Serialization.js';
 import { TransactionHistoryService } from './v1/TransactionHistory.js';
 import { CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { KeysCapability } from './v1/Keys.js';
-import { TokenTransfer, BoundTransactionBalanceResult, UnboundTransactionBalanceResult } from './v1/Transacting.js';
+import {
+  TokenTransfer,
+  BoundTransactionBalanceResult,
+  UnboundTransactionBalanceResult,
+  UnprovenTransactionBalanceResult,
+} from './v1/Transacting.js';
 import { WalletSyncUpdate } from './v1/SyncSchema.js';
 import { UtxoWithMeta } from './v1/UnshieldedState.js';
 import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
@@ -110,6 +115,8 @@ export interface CustomizedUnshieldedWallet<
   balanceBoundTransaction(tx: BoundTransaction): Promise<BoundTransactionBalanceResult>;
 
   balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult>;
+
+  balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult>;
 
   transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
 
@@ -218,6 +225,14 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceUnboundTransaction(tx),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.balanceUnprovenTransaction(tx),
         })
         .pipe(Effect.runPromise);
     }

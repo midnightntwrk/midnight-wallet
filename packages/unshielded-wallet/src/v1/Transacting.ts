@@ -39,6 +39,8 @@ export type BoundTransactionBalanceResult = ledger.UnprovenTransaction | undefin
 
 export type UnboundTransactionBalanceResult = UnboundTransaction | undefined;
 
+export type UnprovenTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
+
 export type TransactingResult<TTransaction, TState> = {
   readonly newState: TState;
   readonly transaction: TTransaction;
@@ -67,6 +69,11 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     transaction: UnboundTransaction,
   ): Either.Either<[UnboundTransactionBalanceResult, CoreWallet], WalletError>;
+
+  balanceUnprovenTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.UnprovenTransaction,
+  ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError>;
 
   signTransaction(
     transaction: ledger.UnprovenTransaction,
@@ -118,81 +125,68 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     this.txTrait = txTrait;
   }
 
+  /**
+   * Balances an unbound transaction
+   * Note: Unbound transactions are balanced in place and returned
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   */
   balanceUnboundTransaction(
     wallet: CoreWallet,
     transaction: UnboundTransaction,
   ): Either.Either<[UnboundTransactionBalanceResult, CoreWallet], WalletError> {
-    return Either.gen(this, function* () {
-      const segments = this.txTrait.getSegments(transaction);
-
-      // no segments to balance
-      if (segments.length === 0) {
-        return [undefined, wallet];
-      }
-
-      // !! is GUARANTEED_SEGMENT needed here?
-      for (const segment of [...segments, GUARANTEED_SEGMENT]) {
-        const imbalances = this.txTrait.getImbalances(transaction, segment);
-
-        // intent is balanced
-        if (imbalances.size === 0) continue;
-
-        const intent = transaction.intents?.get(segment);
-
-        if (!intent) {
-          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} was not found` }));
-        }
-
-        const isBound = this.txTrait.isIntentBound(intent);
-
-        if (isBound) {
-          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} is already bound` }));
-        }
-
-        const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
-
-        const { offer } = yield* this.#prepareOffer(wallet, recipe);
-
-        const targetOffer =
-          segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
-
-        const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
-
-        if (segment !== GUARANTEED_SEGMENT) {
-          intent.fallibleUnshieldedOffer = mergedOffer;
-        } else {
-          intent.guaranteedUnshieldedOffer = mergedOffer;
-        }
-
-        transaction.intents = transaction.intents?.set(segment, intent);
-      }
-
-      return [transaction, wallet];
-    });
+    return this.#balanceUnboundishTransaction(wallet, transaction);
   }
 
+  /**
+   * Balances an unproven transaction
+   * Note: This method does the same thing as balanceUnboundTransaction but is provided for convenience and type safety
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   */
+  balanceUnprovenTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.UnprovenTransaction,
+  ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError> {
+    return this.#balanceUnboundishTransaction(wallet, transaction);
+  }
+
+  /**
+   * Balances a bound transaction
+   * Note: In bound transactions we can only balance the guaranteed section in intents
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns A balancing counterpart transaction (which should be merged with the original transaction )
+   * and the new wallet state if successful, otherwise an error
+   */
   balanceBoundTransaction(
     wallet: CoreWallet,
     transaction: BoundTransaction,
   ): Either.Either<[BoundTransactionBalanceResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
-      const intent = transaction.intents?.get(1);
+      // Ensure all intents are bound
+      const segments = this.txTrait.getSegments(transaction);
 
-      if (!intent) {
-        return [undefined, wallet];
+      for (const segment of segments) {
+        const intent = transaction.intents?.get(segment);
+
+        const isBound = this.txTrait.isIntentBound(intent!);
+
+        if (!isBound) {
+          return yield* Either.left(
+            new TransactingError({ message: `Intent at segment ${GUARANTEED_SEGMENT} is not bound` }),
+          );
+        }
       }
 
-      const isBound = this.txTrait.isIntentBound(intent);
-
-      if (!isBound) {
-        return yield* Either.left(
-          new TransactingError({ message: `Intent at segment ${GUARANTEED_SEGMENT} is not bound` }),
-        );
-      }
+      // get the first intent we'll use to place the guaranteed section balancing
+      const intent = transaction.intents?.get(segments[0]);
 
       const imbalances = this.txTrait.getImbalances(transaction, GUARANTEED_SEGMENT);
 
-      // intent is balanced
+      // guaranteed section is balanced
       if (imbalances.size === 0) {
         return [undefined, wallet];
       }
@@ -201,13 +195,20 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const { newState, offer } = yield* this.#prepareOffer(wallet, recipe);
 
-      const balancingIntent = ledger.Intent.new(intent.ttl);
+      const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
 
       return [ledger.Transaction.fromPartsRandomized(this.networkId, undefined, undefined, balancingIntent), newState];
     });
   }
 
+  /**
+   * Makes a transfer transaction
+   * @param wallet - The wallet to make the transfer with
+   * @param outputs - The outputs for the transfer
+   * @param ttl - The TTL for the transaction
+   * @returns The balanced transfer transaction and the new wallet state if successful, otherwise an error
+   */
   makeTransfer(
     wallet: CoreWallet,
     outputs: ReadonlyArray<TokenTransfer>,
@@ -219,7 +220,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const isValid = outputs.every((output) => output.amount > 0n);
 
       if (!isValid) {
-        throw new TransactingError({ message: 'The amount needs to be positive' });
+        return yield* Either.left(new TransactingError({ message: 'The amount of all inputs needs to be positive' }));
       }
 
       const ledgerOutputs = outputs.map((output) => {
@@ -254,6 +255,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
+  /**
+   * Initializes a swap transaction
+   * @param wallet - The wallet to initialize the swap for
+   * @param desiredInputs - The desired inputs for the swap
+   * @param desiredOutputs - The desired outputs for the swap
+   * @param ttl - The TTL for the swap
+   * @returns The initialized swap transaction and the new wallet state if successful, otherwise an error
+   */
   initSwap(
     wallet: CoreWallet,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
@@ -265,12 +274,12 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
       if (!outputsValid) {
-        return yield* Either.left(new TransactingError({ message: 'The amount needs to be positive' }));
+        return yield* Either.left(new TransactingError({ message: 'The amount of all outputs needs to be positive' }));
       }
 
       const inputsValid = Object.entries(desiredInputs).every(([, amount]) => amount > 0n);
       if (!inputsValid) {
-        return yield* Either.left(new TransactingError({ message: 'The input amounts need to be positive' }));
+        return yield* Either.left(new TransactingError({ message: 'The amount of all inputs needs to be positive' }));
       }
 
       const ledgerOutputs = desiredOutputs.map((output) => ({
@@ -320,6 +329,14 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
+  /**
+   * Balances a segment of a transaction
+   * @param wallet - The wallet to balance the segment for
+   * @param imbalances - The imbalances to balance the segment for
+   * @param targetImbalances - The target imbalances to balance the segment for
+   * @param coinSelection - The coin selection to use for the balance recipe
+   * @returns The balance recipe if successful, otherwise an error
+   */
   #balanceSegment(
     wallet: CoreWallet,
     imbalances: Imbalances,
@@ -363,6 +380,12 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
+  /**
+   * Prepares an offer for a given balance recipe
+   * @param wallet - The wallet to prepare the offer for
+   * @param balanceRecipe - The balance recipe to prepare the offer for
+   * @returns The prepared offer and the new wallet state if successful, otherwise an error
+   */
   #prepareOffer(
     wallet: CoreWallet,
     balanceRecipe: BalanceRecipe<ledger.Utxo, ledger.UtxoOutput>,
@@ -409,5 +432,70 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
           }),
       }),
     );
+  }
+
+  /**
+   * Balances an unboundish (unproven or unbound) transaction
+   * @param wallet - The wallet to balance the transaction with
+   * @param transaction - The transaction to balance
+   * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   */
+  #balanceUnboundishTransaction<
+    T extends ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
+  >(wallet: CoreWallet, transaction: T): Either.Either<[T | undefined, CoreWallet], WalletError> {
+    return Either.gen(this, function* () {
+      const segments = this.txTrait.getSegments(transaction);
+
+      // no segments to balance
+      if (segments.length === 0) {
+        return [undefined, wallet];
+      }
+
+      for (const segment of [...segments, GUARANTEED_SEGMENT]) {
+        const imbalances = this.txTrait.getImbalances(
+          transaction as UnboundTransaction | ledger.UnprovenTransaction,
+          segment,
+        );
+
+        // intent is balanced
+        if (imbalances.size === 0) {
+          continue;
+        }
+
+        // if segment is GUARANTEED_SEGMENT, use the first intent to balance guaranteed section
+        const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
+
+        const intent = transaction.intents?.get(intentSegment);
+
+        if (!intent) {
+          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} was not found` }));
+        }
+
+        const isBound = this.txTrait.isIntentBound(intent);
+
+        if (isBound) {
+          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} is already bound` }));
+        }
+
+        const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());
+
+        const { offer } = yield* this.#prepareOffer(wallet, recipe);
+
+        const targetOffer =
+          segment !== GUARANTEED_SEGMENT ? intent.fallibleUnshieldedOffer : intent.guaranteedUnshieldedOffer;
+
+        const mergedOffer = yield* this.#mergeOffers(offer, targetOffer);
+
+        if (segment !== GUARANTEED_SEGMENT) {
+          intent.fallibleUnshieldedOffer = mergedOffer;
+        } else {
+          intent.guaranteedUnshieldedOffer = mergedOffer;
+        }
+
+        transaction.intents = transaction.intents?.set(intentSegment, intent);
+      }
+
+      return [transaction, wallet];
+    });
   }
 }

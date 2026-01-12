@@ -185,21 +185,18 @@ describe('Swaps', () => {
       ttl,
     );
 
-    const finalizedSwapTx = await walletAFacade.finalizeTransaction({
-      type: 'TransactionToProve',
-      transaction: swapTx,
-    });
+    const finalizedSwapTx = await walletAFacade.finalizeRecipe(swapTx);
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
-    const walletBBalancedTx = await walletBFacade.balanceTransaction(
+    const walletBBalancedTx = await walletBFacade.balanceBoundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,
       new Date(Date.now() + 60 * 60 * 1000),
     );
 
-    const finalizedTx = await walletBFacade.finalizeTransaction(walletBBalancedTx);
+    const finalizedTx = await walletBFacade.finalizeRecipe(walletBBalancedTx);
 
     const txHash = await walletBFacade.submitTransaction(finalizedTx);
 
@@ -272,31 +269,26 @@ describe('Swaps', () => {
       ttl,
     );
 
-    const signedSwapTx = await walletAFacade.signTransaction(swapTx, (payload) => {
+    const signedSwapTx = await walletAFacade.signRecipe(swapTx, (payload) => {
       return unshieldedWalletAKeystore.signData(payload);
     });
 
+    const finalizedSwapTx = await walletAFacade.finalizeRecipe(signedSwapTx);
+
     // assuming the tx is added to a pool and wallet B picks it up
 
-    const walletBBalancedTx = await walletBFacade.balanceTransaction(
+    const walletBBalancedTx = await walletBFacade.balanceBoundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      signedSwapTx,
+      finalizedSwapTx,
       ttl,
     );
 
-    if (walletBBalancedTx.type !== 'TransactionToProve') {
-      throw new Error('Expected TransactionToProve');
-    }
-
-    const walletBSignedTx = await walletBFacade.signTransaction(walletBBalancedTx.transaction, (payload) => {
+    const walletBSignedTx = await walletBFacade.signRecipe(walletBBalancedTx, (payload) => {
       return unshieldedWalletBKeystore.signData(payload);
     });
 
-    const finalizedTx = await walletBFacade.finalizeTransaction({
-      ...walletBBalancedTx,
-      transaction: walletBSignedTx,
-    });
+    const finalizedTx = await walletBFacade.finalizeRecipe(walletBSignedTx);
 
     const txHash = await walletAFacade.submitTransaction(finalizedTx);
 

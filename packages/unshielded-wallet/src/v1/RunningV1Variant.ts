@@ -27,6 +27,7 @@ import {
   TokenTransfer,
   BoundTransactionBalanceResult,
   UnboundTransactionBalanceResult,
+  UnprovenTransactionBalanceResult,
 } from './Transacting.js';
 import { BoundTransaction, UnboundTransaction } from './TransactingTrait.js';
 import { WalletError } from './WalletError.js';
@@ -158,6 +159,14 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   balanceUnboundTransaction(tx: UnboundTransaction): Effect.Effect<UnboundTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(this.#v1Context.transactingCapability.balanceUnboundTransaction(state, tx), EitherOps.toEffect);
+    });
+  }
+
+  balanceUnprovenTransaction(
+    tx: ledger.UnprovenTransaction,
+  ): Effect.Effect<UnprovenTransactionBalanceResult, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.balanceUnprovenTransaction(state, tx), EitherOps.toEffect);
     });
   }
 
