@@ -278,11 +278,17 @@ export class TransactingCapabilityImplementation<
         type: output.type,
       };
     });
+    const hasNightOutput = ledgerOutputs.some((output) => output.type === ledger.nativeToken().raw);
 
     return Either.try({
       try: () => {
         const intent = ledger.Intent.new(ttl);
-        intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new([], ledgerOutputs, []);
+        const offer = ledger.UnshieldedOffer.new([], ledgerOutputs, []);
+        if (hasNightOutput) {
+          intent.fallibleUnshieldedOffer = offer;
+        } else {
+          intent.guaranteedUnshieldedOffer = offer;
+        }
         return {
           newState: wallet,
           transaction: ledger.Transaction.fromParts(networkId, undefined, undefined, intent) as TTransaction,

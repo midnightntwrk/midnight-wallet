@@ -51,6 +51,7 @@
     "rimraf": "^6.0.1",
     "testcontainers": "^11.10.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.16",
+    "fast-check": "^4.5.3"
   }
 }

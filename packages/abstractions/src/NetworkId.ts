@@ -20,4 +20,8 @@ export const NetworkId = {
   PreProd: 'preprod',
 } as const;
 
-export type NetworkId = (typeof NetworkId)[keyof typeof NetworkId];
+export type WellKnownNetworkId = (typeof NetworkId)[keyof typeof NetworkId];
+
+// The type is structured like this to highlight that Network id is an arbitrary string, but these are well-known values
+// eslint-disable-next-line @typescript-eslint/no-redundant-type-constituents
+export type NetworkId = WellKnownNetworkId | string;
