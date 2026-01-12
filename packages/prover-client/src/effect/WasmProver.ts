@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // This file is part of MIDNIGHT-WALLET-SDK.
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
@@ -49,34 +48,25 @@ const callProverWorker = <RResponse>(
 ): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
-    console.log('initializing worker');
     const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
-    console.log('posting initial message:', op);
     worker.postMessage({ op, args });
-    console.log('initial message posted');
 
     worker.addEventListener('message', ({ data }: { data: WorkerMessage<RResponse> }) => {
-      console.log('main thread: message received -> ', data.op);
       if (data.op === 'lookupKey') {
-        console.log('main thread: received an ask for lookupKey ', data.keyLocation);
         kmProvider
           .lookupKey(data.keyLocation)
           .then((result) => {
-            console.log('main thread:', data.keyLocation, 'keys fetched, sending results to worker');
             worker.postMessage({ op: 'lookupKey', keyLocation: data.keyLocation, result });
           })
           .catch(reject);
       } else if (data.op === 'getParams') {
-        console.log('main thread: received an ask for getParams:', data.k);
         kmProvider
           .getParams(data.k)
           .then((result) => {
-            console.log('main thread:', data.k, 'params fetched, posting results');
             worker.postMessage({ op: 'getParams', k: data.k, result });
           })
           .catch(reject);
       } else if (data.op === 'result') {
-        console.log('main thread: received result');
         resolve(data.value);
       }
     });
@@ -147,7 +137,8 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
       try {
         return await fetch(url);
       } catch (e) {
-        console.log('Failed to fetch at attempt', i + 1, url, e);
+        // eslint-disable-next-line no-console
+        console.error('Failed to fetch at attempt', i + 1, url, e);
       }
     }
     throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
@@ -166,7 +157,6 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
       }
 
       if (cache.has(pth)) {
-        console.log('-> Using cached keys for', pth);
         return cache.get(pth) as ProvingKeyMaterial;
       }
 
@@ -186,7 +176,6 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
     getParams: async (k: number): Promise<Uint8Array> => {
       const cacheKey = `params-${k}`;
       if (cache.has(cacheKey)) {
-        console.log('-> Using cached params for', k);
         return cache.get(cacheKey) as Uint8Array;
       }
 

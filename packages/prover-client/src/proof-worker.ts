@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 // This file is part of MIDNIGHT-WALLET-SDK.
 // Copyright (C) 2025 Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
@@ -23,7 +22,6 @@ const keyMaterialProvider: KeyMaterialProvider = {
         data: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined };
       }) => {
         if (message.data.op === 'lookupKey' && message.data.keyLocation === keyLocation) {
-          console.log('worker: received results for lookupKey: ', message.data.keyLocation);
           removeEventListener('message', subscription);
           resolve(message.data.result);
         }
@@ -38,7 +36,6 @@ const keyMaterialProvider: KeyMaterialProvider = {
 
       const subscription = (message: { data: { op: string; k: number; result: Uint8Array } }) => {
         if (message.data.op === 'getParams' && message.data.k === k) {
-          console.log('worker: received results for getParams: ', message.data.k);
           removeEventListener('message', subscription);
           resolve(message.data.result);
         }
