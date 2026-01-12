@@ -1,5 +1,16 @@
 # @midnight-ntwrk/wallet-sdk-indexer-client
 
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- 94a39ef: Adjust WebSocket client configuration to prevent unnecessary reconnections and data requests
+- bcef7d8: Allow TX creation with no own outputs
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+
 ## 1.0.0-beta.14
 
 ### Patch Changes

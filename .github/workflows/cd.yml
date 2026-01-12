@@ -25,6 +25,11 @@ jobs:
       contents: write
       pull-requests: write
       packages: write
+
+    concurrency:
+      group: release-${{ github.ref_name }}
+      cancel-in-progress: false
+
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
@@ -40,12 +45,6 @@ jobs:
 
       - name: Enable corepack
         run: corepack enable
-
-      - name: Check tool versions
-        run: |
-          node --version
-          corepack --version
-          yarn --version
 
       - name: Configure yarn
         run: |
@@ -83,3 +82,63 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
           NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+
+  canary:
+    name: Canary (snapshot publish)
+    runs-on: ubuntu-latest-8-core-x64
+    permissions:
+      packages: write
+      contents: read
+    concurrency:
+      group: canary-${{ github.ref_name }}
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+
+      - uses: actions/setup-node@395ad3262231945c25e8478fd5baf05154b1d79f #v6.1.0
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'yarn'
+          cache-dependency-path: 'yarn.lock'
+          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@midnight-ntwrk'
+
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Configure yarn
+        run: |
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Snapshot version + publish canary
+        env:
+          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          # Temporarily exit pre-mode so snapshots are allowed
+          yarn changeset pre exit
+
+          # Apply snapshot versions
+          yarn changeset version --snapshot canary
+
+          # Install dependencies with the new snapshot versions
+          yarn install --mode=update-lockfile
+
+          # Build AFTER snapshot versions are applied
+          yarn dist:publish
+
+          # Publish under dist-tag "canary"
+          yarn changeset publish --tag canary
+
+      - name: Cleanup (always)
+        if: always()
+        run: |
+          git reset --hard
+          git clean -fd

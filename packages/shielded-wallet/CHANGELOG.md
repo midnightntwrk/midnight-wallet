@@ -1,5 +1,23 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 1.0.0-beta.14
+
+### Patch Changes
+
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+- Updated dependencies [94a39ef]
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.15
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.0.0-beta.12
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-node-client@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.9
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0-beta.10
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.0-beta.10
+
 ## 1.0.0-beta.13
 
 ### Patch Changes

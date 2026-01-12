@@ -12,7 +12,6 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import * as rx from 'rxjs';
-import { WalletState } from '@midnight-ntwrk/wallet-api';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
@@ -29,6 +28,7 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
+  UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
@@ -37,6 +37,13 @@ import { DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-d
 export const Segments = {
   guaranteed: 0,
   fallible: 1,
+};
+
+export type WalletInit = {
+  wallet: WalletFacade;
+  shieldedSecretKeys: ledger.ZswapSecretKeys;
+  dustSecretKey: ledger.DustSecretKey;
+  unshieldedKeystore: UnshieldedKeystore;
 };
 
 export const waitForSyncProgress = async (wallet: WalletFacade) =>
@@ -177,7 +184,7 @@ export const provideWallet = async (
 
   if (!restoredShielded || !restoredUnshielded || !restoredDust) {
     logger.info('Building wallet facade from scratch');
-    return buildWalletFacade(seed, fixture);
+    return (await initWalletWithSeed(seed, fixture)).wallet;
   } else {
     const restoredWallet = new WalletFacade(restoredShielded, restoredUnshielded, restoredDust);
     // check if wallet is syncing correctly
@@ -188,7 +195,7 @@ export const provideWallet = async (
     logger.info(`Apply gap: ${applyGap}`);
     if ((applyGap ?? 0) < 0) {
       logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
-      return buildWalletFacade(seed, fixture);
+      return (await initWalletWithSeed(seed, fixture)).wallet;
     } else {
       logger.info('Successfully restored wallet facade.');
       return restoredWallet;
@@ -246,30 +253,25 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
   }
 };
 
-export const buildWalletFacade = (walletSeed: string, fixture: TestContainersFixture) => {
-  const unshieldedKeyStore = createKeystore(getUnshieldedSeed(walletSeed), fixture.getNetworkId());
-  const Wallet = ShieldedWallet(fixture.getWalletConfig());
+export const initWalletWithSeed = async (seed: string, fixture: TestContainersFixture): Promise<WalletInit> => {
+  const walletConfig = fixture.getWalletConfig();
+  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
+  const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
+  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
 
-  const shieldedWallet = Wallet.startWithShieldedSeed(getShieldedSeed(walletSeed));
-
+  const shieldedWallet = ShieldedWallet(walletConfig).startWithShieldedSeed(getShieldedSeed(seed));
+  const dustWallet = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() }).startWithSeed(
+    getDustSeed(seed),
+    ledger.LedgerParameters.initialParameters().dust,
+  );
   const unshieldedWallet = UnshieldedWallet({
-    networkId: fixture.getNetworkId(),
-    indexerClientConnection: {
-      indexerHttpUrl: fixture.getIndexerUri(),
-      indexerWsUrl: fixture.getIndexerWsUri(),
-    },
+    ...walletConfig,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-  }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
+  }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
 
-  const dustSeed = getDustSeed(walletSeed);
-  const Dust = DustWallet({
-    ...fixture.getWalletConfig(),
-    ...fixture.getDustWalletConfig(),
-  });
-  const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-  const dustWallet = Dust.startWithSeed(dustSeed, dustParameters);
-
-  return new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
+  const facade: WalletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
+  await facade.start(shieldedSecretKeys, dustSecretKey);
+  return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
@@ -445,17 +447,6 @@ export const getTransactionHistoryIds = (state: ShieldedWalletState) => {
 //   expect(normalized1).toStrictEqual(normalized2);
 // }
 
-// Validate wallet transaction history after wallet has received token
-export function validateWalletTxHistory(finalWalletState: WalletState, initialWalletState: WalletState) {
-  expect(finalWalletState.availableCoins.length).toBe(initialWalletState.availableCoins.length + 1);
-  expect(finalWalletState.pendingCoins.length).toBe(0);
-  expect(finalWalletState.coins.length).toBeGreaterThanOrEqual(initialWalletState.coins.length + 1);
-  expect(finalWalletState.nullifiers.length).toBeGreaterThanOrEqual(initialWalletState.nullifiers.length + 1);
-  expect(finalWalletState.transactionHistory.length).toBeGreaterThanOrEqual(
-    initialWalletState.transactionHistory.length + 1,
-  );
-}
-
 export function validateNetworkInAddress(address: string) {
   switch (TestContainersFixture.network) {
     case 'testnet':
@@ -492,7 +483,7 @@ export const getShieldedSeed = (seed: string): Uint8Array => {
   if (derivationResult.type === 'keyOutOfBounds') {
     throw new Error('Key derivation out of bounds');
   }
-
+  hdWallet.clear();
   return Buffer.from(derivationResult.key);
 };
 
@@ -510,6 +501,7 @@ export const getUnshieldedSeed = (seed: string): Uint8Array<ArrayBufferLike> => 
   if (derivationResult.type === 'keyOutOfBounds') {
     throw new Error('Key derivation out of bounds');
   }
+  hdWallet.clear();
 
   return derivationResult.key;
 };
@@ -528,6 +520,7 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   if (derivationResult.type === 'keyOutOfBounds') {
     throw new Error('Key derivation out of bounds');
   }
+  hdWallet.clear();
 
   return derivationResult.key;
 };
