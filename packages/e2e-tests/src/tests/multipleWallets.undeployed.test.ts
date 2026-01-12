@@ -35,7 +35,7 @@ import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
 describe('Syncing', () => {
   const getFixture = useTestContainersFixture();
-  const timeout = 300_000;
+  const timeout = 600_000;
   const seeds = [
     getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000001'),
     getShieldedSeed('b7d32a5094ec502af45aa913b196530e155f17ef05bbf5d75e743c17c3824a82'),

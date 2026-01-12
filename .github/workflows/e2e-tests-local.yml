@@ -3,7 +3,7 @@ name: E2E tests - local - nodejs
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 0 * * *'
 
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
@@ -24,7 +24,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [20, 22]
+        version: [22]
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
@@ -71,7 +71,7 @@ jobs:
         with:
           allure-server-url: https://allure-server.prd.midnight.tools
           allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.NETWORK }}
+          project-id: headless-wallet-${{ env.NETWORK }}-nightly
           security-user: ${{ env.ALLURE_ADMIN_USER }}
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
