@@ -91,11 +91,13 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   protected readonly keyMaterialProvider: KeyMaterialProvider;
 
-  private wasmProverProvider = (): ledger.ProvingProvider => ({
+  private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
       pipe(
         Effect.succeed(
-          callProverWorker<(bigint | undefined)[]>(this.keyMaterialProvider, 'check', [serializedPreimage]),
+          callProverWorker<(bigint | undefined)[]>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
+            serializedPreimage,
+          ]),
         ),
         Effect.runPromise,
       ),
@@ -106,7 +108,10 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
     ): Promise<Uint8Array> =>
       pipe(
         Effect.succeed(
-          callProverWorker<Uint8Array>(this.keyMaterialProvider, 'prove', [serializedPreimage, overwriteBindingInput]),
+          callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
+            serializedPreimage,
+            overwriteBindingInput,
+          ]),
         ),
         Effect.runPromise,
       ),
@@ -115,9 +120,10 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
     transaction: ledger.Transaction<S, ledger.PreProof, B>,
     costModel: ledger.CostModel,
+    keyMaterialProvider?: KeyMaterialProvider,
   ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError> {
     return pipe(
-      Effect.succeed(this.wasmProverProvider()),
+      Effect.succeed(this.wasmProverProvider(keyMaterialProvider)),
       Effect.flatMap((provider) =>
         Effect.tryPromise({
           try: () => transaction.prove(provider, costModel),
