@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- 8b8d708: chore: update ledger to version 7.0.0-rc.1
+
 ## 1.0.0-beta.11
 
 ### Patch Changes
