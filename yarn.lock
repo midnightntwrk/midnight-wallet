@@ -2566,6 +2566,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.9"
     effect: "npm:^3.17.3"
     eslint: "npm:^9.37.0"
+    fast-check: "npm:^4.5.3"
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
     rimraf: "npm:^6.0.1"
@@ -6277,6 +6278,15 @@ __metadata:
   dependencies:
     pure-rand: "npm:^7.0.0"
   checksum: 10c0/8bd1a0c772cde26901f165356f91def147da6eee5c27b392944392ad0cf2412b0aac7dd1614cdc6c6bb58bb5bfed20eb9c3997a8c042162e3f090f6198964974
+  languageName: node
+  linkType: hard
+
+"fast-check@npm:^4.5.3":
+  version: 4.5.3
+  resolution: "fast-check@npm:4.5.3"
+  dependencies:
+    pure-rand: "npm:^7.0.0"
+  checksum: 10c0/e50846538de208756ecc3fab9d8bdc5d9677d2e27c611ccbbb3269c44635e819eb0a2323fcf4bf9aae648f7066cc5d7bda339549b25b8e35139831adf4975329
   languageName: node
   linkType: hard
 
