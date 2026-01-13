@@ -4,8 +4,8 @@
   "tasks": {
     "lint": {
       "inputs": [
-        "src/**/*.ts",
-        "test/**/*.ts",
+        "src/**/*.{ts,tsx}",
+        "test/**/*.{ts,tsx}",
         "scripts/**/*.ts",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
@@ -17,8 +17,8 @@
     },
     "test": {
       "inputs": [
-        "test/**/*.ts",
-        "src/**/*.ts",
+        "test/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json",
         "vitest.config.mjs"
@@ -29,7 +29,7 @@
       "dependsOn": ["^dist"]
     },
     "typecheck": {
-      "inputs": ["test/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
+      "inputs": ["test/**/*.{ts,tsx}", "src/**/*.{ts,tsx}", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
@@ -53,11 +53,13 @@
     },
     "dist": {
       "inputs": [
-        "src/**/*.ts",
+        "index.html",
+        "src/**/*.{ts,tsx}",
         "tsconfig.json",
         "tsconfig.build.json",
         "$TURBO_ROOT$/tsconfig.base.json",
-        ".clean-timestamp"
+        ".clean-timestamp",
+        "vite.config.ts"
       ],
       "outputs": ["dist/**", "tsconfig.*.tsbuildinfo"],
       "outputLogs": "new-only",
@@ -107,13 +109,13 @@
       "outputLogs": "new-only"
     },
     "format": {
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
+      "inputs": ["**/*.{ts,tsx,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
       "outputLogs": "new-only",
       "dependsOn": ["//#format:root"]
     },
     "format:check": {
-      "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
+      "inputs": ["**/*.{ts,tsx,js,json,yaml,yml,md}", ".prettierrc.json", "**/.prettierignore"],
       "outputs": [],
       "outputLogs": "new-only",
       "dependsOn": ["//#format:check:root"]
