@@ -83,28 +83,18 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
-      pipe(
-        Effect.succeed(
-          callProverWorker<(bigint | undefined)[]>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
-            serializedPreimage,
-          ]),
-        ),
-        Effect.runPromise,
-      ),
+      callProverWorker<(bigint | undefined)[]>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
+        serializedPreimage,
+      ]),
     prove: async (
       serializedPreimage: Uint8Array,
       _keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      pipe(
-        Effect.succeed(
-          callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
-            serializedPreimage,
-            overwriteBindingInput,
-          ]),
-        ),
-        Effect.runPromise,
-      ),
+      callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
+        serializedPreimage,
+        overwriteBindingInput,
+      ]),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
