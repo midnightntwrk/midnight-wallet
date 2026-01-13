@@ -109,11 +109,11 @@ export class WalletFacade {
     return a ?? b;
   }
 
-  private async createDustRegistrationTransaction(
+  private async createDustActionTransaction(
+    action: { type: 'registration'; dustReceiverAddress: string } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
-    dustReceiverAddress: string | undefined,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
 
@@ -122,7 +122,7 @@ export class WalletFacade {
       ttl,
       nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
       nightVerifyingKey,
-      dustReceiverAddress,
+      action.type === 'registration' ? action.dustReceiverAddress : undefined,
     );
 
     const intent = transaction.intents?.get(1);
@@ -403,11 +403,11 @@ export class WalletFacade {
     const dustState = await this.dust.waitForSyncedState();
     const receiverAddress = dustReceiverAddress ?? dustState.dustAddress;
 
-    const dustRegistrationTx = await this.createDustRegistrationTransaction(
+    const dustRegistrationTx = await this.createDustActionTransaction(
+      { type: 'registration', dustReceiverAddress: receiverAddress },
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
-      receiverAddress,
     );
 
     return {
@@ -421,11 +421,11 @@ export class WalletFacade {
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
   ): Promise<UnprovenTransactionRecipe> {
-    const dustDeregistrationTx = await this.createDustRegistrationTransaction(
+    const dustDeregistrationTx = await this.createDustActionTransaction(
+      { type: 'deregistration' },
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
-      undefined,
     );
     return {
       type: 'UNPROVEN_TRANSACTION',
