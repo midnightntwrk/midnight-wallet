@@ -23,7 +23,7 @@ import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstr
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { ProvingRecipe, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
 import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances.js';

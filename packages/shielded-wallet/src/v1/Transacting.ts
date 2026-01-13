@@ -14,7 +14,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { BalancingResult } from './ProvingRecipe.js';
 import { CoreWallet } from './CoreWallet.js';
 import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
 import {
@@ -26,7 +25,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
-import { TransactionTrait } from './Transaction.js';
+import { TransactionOps } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 
@@ -35,6 +34,8 @@ export interface TokenTransfer {
   readonly type: ledger.RawTokenType;
   readonly receiverAddress: string;
 }
+
+export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
 export interface TransactingCapability<TSecrets, TState, TTransaction> {
   balanceTransaction(
@@ -59,9 +60,10 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
 
   //These functions below do not exactly match here, but also seem to be somewhat good place to put
   //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
-  revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError>;
-
-  revertTransaction(state: TState, transaction: ledger.UnprovenTransaction): Either.Either<TState, WalletError>;
+  revertTransaction(
+    state: TState,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+  ): Either.Either<TState, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -83,7 +85,7 @@ export const makeDefaultTransactingCapability = (
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
-    TransactionTrait.default,
+    TransactionOps.default,
   );
 };
 
@@ -96,7 +98,7 @@ export const makeSimulatorTransactingCapability = (
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
-    TransactionTrait.proofErased,
+    TransactionOps.proofErased,
   );
 };
 
@@ -105,7 +107,7 @@ export class TransactingCapabilityImplementation<
 > implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-  public readonly txTrait: TransactionTrait<TTransaction>;
+  public readonly txTrait: TransactionOps<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
@@ -114,7 +116,7 @@ export class TransactingCapabilityImplementation<
     getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
-    txTrait: TransactionTrait<TTransaction>,
+    txTrait: TransactionOps<TTransaction>,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
@@ -183,7 +185,7 @@ export class TransactingCapabilityImplementation<
         ArrayOps.fold((a, b) => a.merge(b)),
       );
       const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
-      const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
+      const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         state,
@@ -244,23 +246,9 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  revert(state: CoreWallet, tx: TTransaction): Either.Either<CoreWallet, WalletError> {
-    return Either.try({
-      try: () => {
-        return CoreWallet.revertTransaction(state, tx);
-      },
-      catch: (err) => {
-        return new OtherWalletError({
-          message: `Error while reverting transaction ${this.txTrait.id(tx)}`,
-          cause: err,
-        });
-      },
-    });
-  }
-
   revertTransaction(
     state: CoreWallet,
-    transaction: ledger.UnprovenTransaction,
+    transaction: TTransaction | ledger.UnprovenTransaction,
   ): Either.Either<CoreWallet, WalletError> {
     return Either.try({
       try: () => {
@@ -268,7 +256,7 @@ export class TransactingCapabilityImplementation<
       },
       catch: (err) => {
         return new OtherWalletError({
-          message: `Error while reverting transaction ${TransactionTrait.unproven.id(transaction)}`,
+          message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });
       },
@@ -490,7 +478,7 @@ export class TransactingCapabilityImplementation<
                 ArrayOps.fold((a, b) => a.merge(b)),
               );
               const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
-              const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
+              const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
 
               return {
                 imbalances,

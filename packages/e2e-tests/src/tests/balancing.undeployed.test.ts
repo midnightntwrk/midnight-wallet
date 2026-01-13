@@ -119,16 +119,16 @@ describe('Transaction balancing examples', () => {
         },
       ];
 
-      const txToProve = await fundedFacade.transferTransaction(
+      const txToProveRecipe = await fundedFacade.transferTransaction(
         fundedShieldedSecretKey,
         fundedDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const signedTx = await fundedFacade.signTransaction(txToProve.transaction, (payload) =>
+      const signedRecipe = await fundedFacade.signRecipe(txToProveRecipe, (payload) =>
         unshieldedFundedKeyStore.signData(payload),
       );
-      const provenTx = await fundedFacade.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await fundedFacade.finalizeRecipe(signedRecipe);
       const id = await fundedFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + id);
       // Register dust
@@ -154,7 +154,7 @@ describe('Transaction balancing examples', () => {
       );
       logger.info('Dust registration recipe:');
       logger.info(dustRegistrationRecipe.transaction.toString());
-      const finalizedDustTx = await senderFacade.finalizeTransaction(dustRegistrationRecipe);
+      const finalizedDustTx = await senderFacade.finalizeRecipe(dustRegistrationRecipe);
       logger.info(finalizedDustTx.toString());
       logger.info('Submitting dust registration transaction');
       const dustRegistrationTxid = await senderFacade.submitTransaction(finalizedDustTx);
@@ -210,13 +210,13 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await senderFacade.transferTransaction(
+      const txToProveRecipe = await senderFacade.transferTransaction(
         senderShieldedSecretKey,
         senderDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await senderFacade.finalizeTransaction(txToProve);
+      const provenTx = await senderFacade.finalizeRecipe(txToProveRecipe);
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
@@ -291,13 +291,13 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await senderFacade.transferTransaction(
+      const txToProveRecipe = await senderFacade.transferTransaction(
         senderShieldedSecretKey,
         senderDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await senderFacade.finalizeTransaction(txToProve);
+      const provenTx = await senderFacade.finalizeRecipe(txToProveRecipe);
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
@@ -403,13 +403,13 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await senderFacade.transferTransaction(
+      const txToProveRecipe = await senderFacade.transferTransaction(
         senderShieldedSecretKey,
         senderDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await senderFacade.finalizeTransaction(txToProve);
+      const provenTx = await senderFacade.finalizeRecipe(txToProveRecipe);
       const txId = await senderFacade.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 

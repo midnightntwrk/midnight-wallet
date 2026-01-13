@@ -98,16 +98,16 @@ describe('Dust tests', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txToProve = await walletFunded.transferTransaction(
+    const txToProveRecipe = await walletFunded.transferTransaction(
       fundedSecretKey,
       fundedDustSecretKey,
       outputsToCreate,
       ttl,
     );
-    const signedTx = await walletFunded.signTransaction(txToProve.transaction, (payload) =>
+    const signedRecipe = await walletFunded.signRecipe(txToProveRecipe, (payload) =>
       unshieldedFundedKeyStore.signData(payload),
     );
-    const provenTx = await walletFunded.finalizeTransaction({ ...txToProve, transaction: signedTx });
+    const provenTx = await walletFunded.finalizeRecipe(signedRecipe);
     const txId = await walletFunded.submitTransaction(provenTx);
     logger.info('Transaction id: ' + txId);
 
@@ -135,7 +135,7 @@ describe('Dust tests', () => {
       (payload) => receiverKeystore.signData(payload),
     );
 
-    const finalizedDustTx = await receiverWallet.finalizeTransaction(dustRegistrationRecipe);
+    const finalizedDustTx = await receiverWallet.finalizeRecipe(dustRegistrationRecipe);
     const dustRegistrationTxid = await receiverWallet.submitTransaction(finalizedDustTx);
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
@@ -244,18 +244,14 @@ describe('Dust tests', () => {
         (payload) => receiverKeystore.signData(payload),
       );
 
-      const balancedTransactionRecipe = await receiverWallet.balanceTransaction(
+      const balancedTransactionRecipe = await receiverWallet.balanceUnprovenTransaction(
         receiverWalletSecretKey,
         receiverWalletDustSecretKey,
         dustDeregistrationRecipe.transaction,
         new Date(Date.now() + 30 * 60 * 1000),
       );
 
-      if (balancedTransactionRecipe.type !== 'TransactionToProve') {
-        throw new Error('Expected a transaction to prove');
-      }
-
-      const finalizedDustTx = await receiverWallet.finalizeTransaction(balancedTransactionRecipe);
+      const finalizedDustTx = await receiverWallet.finalizeRecipe(balancedTransactionRecipe);
       const dustDeregistrationTxid = await receiverWallet.submitTransaction(finalizedDustTx);
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);
 
@@ -320,16 +316,16 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiverWallet.transferTransaction(
+      const txToProveRecipe = await receiverWallet.transferTransaction(
         receiverWalletSecretKey,
         receiverWalletDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const signedTx = await receiverWallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedRecipe = await receiverWallet.signRecipe(txToProveRecipe, (payload) =>
         receiverKeystore.signData(payload),
       );
-      const provenTx = await receiverWallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await receiverWallet.finalizeRecipe(signedRecipe);
       const txId = await receiverWallet.submitTransaction(provenTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);
@@ -383,13 +379,13 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiverWallet.transferTransaction(
+      const txToProveRecipe = await receiverWallet.transferTransaction(
         receiverWalletSecretKey,
         receiverWalletDustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await receiverWallet.finalizeTransaction(txToProve);
+      const provenTx = await receiverWallet.finalizeRecipe(txToProveRecipe);
       const txId = await receiverWallet.submitTransaction(provenTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);

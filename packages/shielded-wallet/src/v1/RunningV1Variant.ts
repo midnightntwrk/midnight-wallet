@@ -21,10 +21,9 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { ProvingService } from './Proving.js';
-import { BalancingResult } from './ProvingRecipe.js';
 import { SerializationCapability } from './Serialization.js';
 import { EventsSyncUpdate, SyncCapability, SyncService } from './Sync.js';
-import { TransactingCapability, TokenTransfer } from './Transacting.js';
+import { TransactingCapability, TokenTransfer, BalancingResult } from './Transacting.js';
 import { OtherWalletError, WalletError } from './WalletError.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
@@ -216,7 +215,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revert(state, transaction)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );

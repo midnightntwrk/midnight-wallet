@@ -21,8 +21,8 @@ import {
   UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { ArrayOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   WalletRuntimeError,
   Variant,
@@ -229,11 +229,12 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     return pipe(
       this.#v1Context.syncService.blockData(),
       Effect.map((blockData) =>
-        Arr.reduce(
+        pipe(
           transactions,
-          0n,
-          (total, transaction) =>
-            total + this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+          Arr.map((transaction) =>
+            this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+          ),
+          ArrayOps.sumBigInt,
         ),
       ),
     );
@@ -283,7 +284,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revert(state, transaction)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );

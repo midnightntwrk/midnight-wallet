@@ -14,7 +14,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { makeSimulatorProvingService } from '../Proving.js';
-import { BALANCE_TRANSACTION_TO_PROVE, NOTHING_TO_PROVE, TRANSACTION_TO_PROVE } from '../ProvingRecipe.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
@@ -31,29 +30,12 @@ const makeTransaction = () => {
 
 describe('Simulator proving service', () => {
   const testUnprovenTx = makeTransaction();
-  const testErasedTx = makeTransaction().eraseProofs();
 
-  const recipes = [
-    { recipe: { type: NOTHING_TO_PROVE, transaction: testErasedTx }, expectedImbalance: -42n },
-    {
-      recipe: {
-        type: BALANCE_TRANSACTION_TO_PROVE,
-        transactionToBalance: testErasedTx,
-        transactionToProve: testUnprovenTx,
-      },
-      expectedImbalance: -84n,
-    },
-    { recipe: { type: TRANSACTION_TO_PROVE, transaction: testUnprovenTx }, expectedImbalance: -42n },
-  ] as const;
+  it('does transform unproven transaction into proof-erased transaction', async () => {
+    const service = makeSimulatorProvingService();
+    const finalTx: ledger.ProofErasedTransaction = await service.prove(testUnprovenTx).pipe(Effect.runPromise);
 
-  it.each(recipes)(
-    'does transform proving recipe into final, proof-erased transaction',
-    async ({ recipe, expectedImbalance }) => {
-      const service = makeSimulatorProvingService();
-      const finalTx: ledger.ProofErasedTransaction = await service.prove(recipe).pipe(Effect.runPromise);
-
-      expect(finalTx).toBeInstanceOf(ledger.Transaction);
-      expect(getNonDustImbalance(finalTx.imbalances(0), ledger.shieldedToken().raw)).toEqual(expectedImbalance);
-    },
-  );
+    expect(finalTx).toBeInstanceOf(ledger.Transaction);
+    expect(getNonDustImbalance(finalTx.imbalances(0), ledger.shieldedToken().raw)).toEqual(-42n);
+  });
 });

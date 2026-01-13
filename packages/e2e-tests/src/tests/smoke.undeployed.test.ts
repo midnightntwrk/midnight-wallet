@@ -141,16 +141,16 @@ describe('Smoke tests', () => {
           ],
         },
       ];
-      const txToProve = await walletFunded.transferTransaction(
+      const txToProveRecipe = await walletFunded.transferTransaction(
         fundedSecretKey,
         fundedDustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      const signedTx = await walletFunded.signTransaction(txToProve.transaction, (payload) =>
+      const signedRecipe = await walletFunded.signRecipe(txToProveRecipe, (payload) =>
         unshieldedFundedKeyStore.signData(payload),
       );
-      const provenTx = await walletFunded.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await walletFunded.finalizeRecipe(signedRecipe);
       const txId = await walletFunded.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 

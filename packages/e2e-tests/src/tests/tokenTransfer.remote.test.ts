@@ -166,20 +166,17 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         senderShieldedSecretKey,
         senderDustKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Signing tx...');
-      logger.info(txToProve);
-      const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
-        senderKeyStore.signData(payload),
-      );
+      logger.info(txToProveRecipe);
+      const signedRecipe = await sender.signRecipe(txToProveRecipe, (payload) => senderKeyStore.signData(payload));
       logger.info('Transaction to prove...');
-      logger.info(signedTx.toString());
-      const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await sender.finalizeRecipe(signedRecipe);
       logger.info('Submitting transaction...');
       logger.info(provenTx.toString());
       const txId = await sender.submitTransaction(provenTx);
@@ -276,15 +273,15 @@ describe('Token transfer', () => {
         },
       ];
       logger.info('Transfer transaction...');
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         senderShieldedSecretKey,
         senderDustKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Transaction to prove...');
-      logger.info(txToProve);
-      const provenTx = await sender.finalizeTransaction(txToProve);
+      logger.info(txToProveRecipe);
+      const provenTx = await sender.finalizeRecipe(txToProveRecipe);
       logger.info('Submitting transaction...');
       logger.info(provenTx);
       const txId = await sender.submitTransaction(provenTx);
@@ -352,17 +349,17 @@ describe('Token transfer', () => {
       ],
       ttl,
     );
-    const provenTx = await sender.finalizeTransaction({ type: 'TransactionToProve', transaction: swapTx });
+    const provenTx = await sender.finalizeRecipe(swapTx);
     const wallet1TxId = await sender.submitTransaction(provenTx);
     logger.info('Transaction id: ' + wallet1TxId);
 
-    const wallet2BalancedTx = await receiver.balanceTransaction(
+    const wallet2BalancedTx = await receiver.balanceBoundTransaction(
       receiverShieldedSecretKey,
       receiverDustKey,
       provenTx,
       ttl,
     );
-    const finalizedSwapTx = await receiver.finalizeTransaction(wallet2BalancedTx);
+    const finalizedSwapTx = await receiver.finalizeRecipe(wallet2BalancedTx);
     const wallet2TxId = await receiver.submitTransaction(finalizedSwapTx);
     logger.info('Transaction id 2: ' + wallet2TxId);
 
@@ -410,10 +407,7 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(networkId, offer);
-      const provenTx = await sender.finalizeTransaction({
-        type: 'TransactionToProve',
-        transaction: unprovenTx,
-      });
+      const provenTx = await sender.proveTransaction(unprovenTx);
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);
       await expect(
@@ -481,13 +475,13 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         senderShieldedSecretKey,
         senderDustKey,
         outputsToCreate,
         new Date(),
       );
-      await expect(sender.finalizeTransaction(txToProve)).rejects.toThrow();
+      await expect(sender.finalizeRecipe(txToProveRecipe)).rejects.toThrow();
 
       // const pendingState = await waitForPending(walletFunded);
       // logger.info(pendingState);
@@ -569,13 +563,13 @@ describe('Token transfer', () => {
         },
       ];
       try {
-        const txToProve = await sender.transferTransaction(
+        const txToProveRecipe = await sender.transferTransaction(
           senderShieldedSecretKey,
           senderDustKey,
           outputsToCreate,
           new Date(),
         );
-        const provenTx = await sender.finalizeTransaction(txToProve);
+        const provenTx = await sender.finalizeRecipe(txToProveRecipe);
         await sender.submitTransaction(provenTx);
       } catch (e: unknown) {
         if (e instanceof Error) {

@@ -25,7 +25,7 @@ import {
 } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { Proving, ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed } from './utils.js';
 import { UtxoWithMeta, V1Builder, Transacting, DustCoreWallet, V1Variant, RunningV1Variant } from '../src/index.js';
@@ -101,17 +101,9 @@ describe('DustWallet', () => {
       const intent = registerForDustTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
       const signature = keyStore.signData(intentSignatureData);
-      const recipe = (yield* wallet.addDustGenerationSignature(
-        registerForDustTransaction,
-        signature,
-      )) as ProvingRecipe.TransactionToProve;
-      expect(recipe.type).toEqual(ProvingRecipe.TRANSACTION_TO_PROVE);
+      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(registerForDustTransaction, signature);
 
-      const signedTransaction = {
-        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
-        transaction: recipe.transaction.eraseProofs(),
-      };
-      const transaction = yield* wallet.finalizeTransaction(signedTransaction);
+      const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
       const result = yield* wallet.submitTransaction(transaction);
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
@@ -139,27 +131,19 @@ describe('DustWallet', () => {
         undefined,
       );
 
-      const feeRecipe = (yield* wallet.addFeePayment(
+      const feeTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
-        registerForDustTransaction,
+        [registerForDustTransaction],
         ttl,
         currentTime,
-      )) as ProvingRecipe.TransactionToProve;
+      );
 
-      const intent = feeRecipe.transaction.intents!.get(1);
+      const intent = feeTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
       const signature = keyStore.signData(intentSignatureData);
-      const recipeWithSignature = (yield* wallet.addDustGenerationSignature(
-        feeRecipe.transaction,
-        signature,
-      )) as ProvingRecipe.TransactionToProve;
-      expect(recipeWithSignature.type).toEqual(ProvingRecipe.TRANSACTION_TO_PROVE);
+      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(feeTransaction, signature);
 
-      const signedTransaction = {
-        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
-        transaction: recipeWithSignature.transaction.eraseProofs(),
-      };
-      const transaction = yield* wallet.finalizeTransaction(signedTransaction);
+      const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
       const result = yield* wallet.submitTransaction(transaction);
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
@@ -349,16 +333,13 @@ describe('DustWallet', () => {
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
       // cover fees with dust
-      const transactionWithFee = (yield* wallet.addFeePayment(
+      const transactionWithFee = yield* wallet.balanceTransactions(
         dustSecretKey,
-        transferTransaction,
+        [transferTransaction],
         ttl,
         currentTime,
-      )) as ProvingRecipe.TransactionToProve;
-      const transaction = yield* wallet.finalizeTransaction({
-        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
-        transaction: transactionWithFee.transaction.eraseProofs(),
-      });
+      );
+      const transaction = yield* wallet.proveTransaction(transactionWithFee);
 
       yield* wallet.submitTransaction(transaction);
       yield* waitForTx(stateRef, 4);
@@ -439,7 +420,7 @@ describe('DustWallet', () => {
       walletState = yield* SubscriptionRef.get(stateRef);
 
       // capture fees
-      const totalFee = yield* wallet.calculateFee(transferTransaction);
+      const totalFee = yield* wallet.calculateFee([transferTransaction]);
       const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(
         walletState,
         getCurrentTime(simulatorState),
@@ -447,16 +428,13 @@ describe('DustWallet', () => {
       expect(totalFee).toBeGreaterThan(0n);
 
       // cover fees with dust
-      const transactionWithFee = (yield* wallet.addFeePayment(
+      const transactionWithFee = yield* wallet.balanceTransactions(
         dustSecretKey,
-        transferTransaction,
+        [transferTransaction],
         ttl,
         currentTime,
-      )) as ProvingRecipe.TransactionToProve;
-      const transaction = yield* wallet.finalizeTransaction({
-        type: ProvingRecipe.NOTHING_TO_PROVE as typeof ProvingRecipe.NOTHING_TO_PROVE,
-        transaction: transactionWithFee.transaction.eraseProofs(),
-      });
+      );
+      const transaction = yield* wallet.proveTransaction(transactionWithFee);
 
       // validate fee imbalance
       expect(Transacting.TransactingCapabilityImplementation.feeImbalance(transaction, totalFee)).toBe(0n);

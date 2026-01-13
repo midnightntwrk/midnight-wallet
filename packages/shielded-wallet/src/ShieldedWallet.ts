@@ -15,7 +15,7 @@ import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Varian
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { BalancingResult, ProvingRecipe } from './v1/ProvingRecipe.js';
+import { BalancingResult } from './v1/Transacting.js';
 import { SerializationCapability } from './v1/Serialization.js';
 import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances.js';

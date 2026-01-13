@@ -23,7 +23,6 @@ import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import { makeSimulatorProvingService } from '../Proving.js';
-import { BalanceTransactionToProve, NOTHING_TO_PROVE } from '../ProvingRecipe.js';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   DefaultTransactingConfiguration,
@@ -154,11 +153,15 @@ describe('V1 Wallet Transacting', () => {
       });
 
       return Effect.gen(function* () {
-        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
-        const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
-        const proven = yield* proving.prove(recipe);
+        const [balancedTx] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
 
-        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
+        expect(balancedTx).toBeDefined();
+
+        const proven = yield* proving.prove(balancedTx!);
+
+        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
     });
@@ -180,11 +183,14 @@ describe('V1 Wallet Transacting', () => {
       });
 
       return Effect.gen(function* () {
-        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
-        const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
-        const proven = yield* proving.prove(recipe);
+        const [balancedTx] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
 
-        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
+        expect(balancedTx).toBeDefined();
+        const proven = yield* proving.prove(balancedTx!);
+
+        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
     });
@@ -210,17 +216,22 @@ describe('V1 Wallet Transacting', () => {
       ).eraseProofs();
 
       return Effect.gen(function* () {
-        const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
-        const recipe = result.recipe as BalanceTransactionToProve<ledger.ProofErasedTransaction>;
-        const proven = yield* proving.prove(recipe);
+        const [balancedTx] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
+
+        expect(balancedTx).toBeDefined();
+
+        const proven = yield* proving.prove(balancedTx!);
+
         expect(
-          recipe.transactionToProve.fallibleOffer
+          balancedTx!.fallibleOffer
             ?.entries()
             .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
             .reduce((acc, curr) => acc + curr, 0n),
         ).toEqual(transactionValueFallible);
 
-        expect(recipe.transactionToProve.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
+        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           transactionValueGuaranteed,
         );
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
@@ -246,12 +257,14 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+      );
 
-      expect(getAvailableCoins(result.newState).length).toBe(0);
+      expect(getAvailableCoins(newState).length).toBe(0);
       expect(
         Arr.sort(
-          result.newState.state.pendingSpends.values().map(([coin]) => coin),
+          newState.state.pendingSpends.values().map(([coin]) => coin),
           orderCoinByValue,
         ),
       ).toEqual(Arr.sort(wallets.A.wallet.state.coins, orderCoinByValue));
@@ -276,9 +289,10 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
-
-      const pendingOutputs = Array.from(result.newState.state.pendingOutputs.values());
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+      );
+      const pendingOutputs = Array.from(newState.state.pendingOutputs.values());
       expect(pendingOutputs.length).toEqual(2);
       pendingOutputs.forEach(([output]) => {
         // Knowing that default coin selection is "smaller-first", and that fallible sections needs to be balanced first to properly pay fees in the guaranteed one,
@@ -331,12 +345,14 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const result = EitherOps.getOrThrowLeft(transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx));
+      const [, newState] = EitherOps.getOrThrowLeft(
+        transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+      );
       const anotherTx = pipe(makeOutputOffer({ recipient: wallets.B, coin: shieldedValue(1) }), (offer) =>
         ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs(),
       );
 
-      const secondResult = transacting.balanceTransaction(wallets.A.keys, result.newState, anotherTx);
+      const secondResult = transacting.balanceTransaction(wallets.A.keys, newState, anotherTx);
 
       expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
@@ -355,12 +371,14 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
             makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
           ]),
         );
-        const proven = yield* proving.prove(result.recipe);
+
+        expect(balancedTx).toBeDefined();
+        const proven = yield* proving.prove(balancedTx);
 
         expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
@@ -376,17 +394,17 @@ describe('V1 Wallet Transacting', () => {
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [, newState] = yield* EitherOps.toEffect(
           transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
             makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
           ]),
         );
 
-        const bookedCoinValues = result.newState.state.pendingSpends
+        const bookedCoinValues = newState.state.pendingSpends
           .values()
           .map(([c]) => c.value)
           .toArray();
-        const availableCoinValues = getAvailableCoins(result.newState).map((c) => c.value);
+        const availableCoinValues = getAvailableCoins(newState).map((c) => c.value);
         const sumValues = ArrayOps.sumBigInt([...bookedCoinValues, ...availableCoinValues]);
         const bookedCoinsSum = ArrayOps.sumBigInt(bookedCoinValues);
 
@@ -405,14 +423,14 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
         ]),
       );
 
-      const availableCoinValues = getAvailableCoins(result.newState).map((c) => c.value);
-      const pendingCoinValues = result.newState.state.pendingOutputs
+      const availableCoinValues = getAvailableCoins(newState).map((c) => c.value);
+      const pendingCoinValues = newState.state.pendingOutputs
         .values()
         .map(([c]) => c.value)
         .toArray();
@@ -489,12 +507,12 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const result = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: transferValue }),
         ]),
       );
-      const secondResult = transacting.makeTransfer(wallets.A.keys, result.newState, [
+      const secondResult = transacting.makeTransfer(wallets.A.keys, newState, [
         makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(1) }),
       ]);
 
@@ -515,7 +533,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: shieldedValue(1) }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -523,7 +541,8 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        expect(balancedTx).toBeDefined();
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(balancedTx);
         const imbalances = proven.imbalances(0);
         expect(new Set(imbalances.keys().filter((key) => key.tag === 'shielded'))).toEqual(
           new Set([shieldedTokenType, { tag: 'shielded', raw: theOtherTokenType }]),
@@ -551,7 +570,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [theOtherTokenType]: theOtherTokenAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -559,7 +578,8 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        expect(balancedTx).toBeDefined();
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(balancedTx);
         const imbalances = proven.imbalances(0);
         expect(new Set(imbalances.keys())).toEqual(
           new Set([shieldedTokenType, { tag: 'shielded', raw: theOtherTokenType }]),
@@ -589,7 +609,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [theOtherTokenType1]: theOtherTokenAmount1 }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -597,7 +617,8 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
+        expect(balancedTx).toBeDefined();
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(balancedTx);
         const imbalances = proven.imbalances(0);
 
         expect(new Set(imbalances.keys())).toEqual(
@@ -630,7 +651,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [tx] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -638,11 +659,12 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(tx);
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
-        const balancedProven = yield* proving.prove(balancedResult.recipe);
+        expect(balancedTx).toBeDefined();
+        const balancedProven = yield* proving.prove(balancedTx!);
 
         const imbalances = balancedProven.imbalances(0);
 
@@ -661,7 +683,7 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: shieldedValue(1) }, [
           makeTransferOutput({
             recipient: wallets.A,
@@ -670,7 +692,7 @@ describe('V1 Wallet Transacting', () => {
         ]),
       );
       const bookedCoins = pipe(
-        result.newState.state.pendingOutputs.values(),
+        newState.state.pendingOutputs.values(),
         Iterable.map(([coin]) => ({ type: coin.type, value: coin.value })),
         Arr.sort(orderCoinByValue),
       );
@@ -689,7 +711,7 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
           makeTransferOutput({
             recipient: wallets.A,
@@ -698,7 +720,7 @@ describe('V1 Wallet Transacting', () => {
         ]),
       );
       const expectedCoins = pipe(
-        result.newState.state.pendingOutputs.values(),
+        newState.state.pendingOutputs.values(),
         Record.fromIterableWith(([coin]) => [coin.type, coin.value]),
       );
 
@@ -788,22 +810,17 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const firstResult = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: dustAmount }),
         ]),
       );
-      const secondResult = transacting.initSwap(
-        wallets.A.keys,
-        firstResult.newState,
-        { [rawShieldedTokenType]: dustAmount },
-        [
-          makeTransferOutput({
-            recipient: wallets.A,
-            coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
-          }),
-        ],
-      );
+      const secondResult = transacting.initSwap(wallets.A.keys, newState, { [rawShieldedTokenType]: dustAmount }, [
+        makeTransferOutput({
+          recipient: wallets.A,
+          coin: { tokenType: theOtherTokenType, value: theOtherTokenAmount },
+        }),
+      ]);
 
       expect(() => EitherOps.getOrThrowLeft(secondResult)).toThrow();
     });
@@ -823,13 +840,13 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [tx, newState] = yield* EitherOps.toEffect(
           transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
             makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
           ]),
         );
-        const proven = yield* proving.prove(result.recipe);
-        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
+        const proven = yield* proving.prove(tx);
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, proven));
 
         expect(getAvailableCoins(afterRevert).map((coin) => ({ type: coin.type, value: coin.value }))).toEqual([
           { type: rawShieldedTokenType, value: shieldedValue(3) },
@@ -847,13 +864,13 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [tx, newState] = yield* EitherOps.toEffect(
           transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
             makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
           ]),
         );
-        const proven = yield* proving.prove(result.recipe);
-        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, proven));
+        const proven = yield* proving.prove(tx);
+        const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, proven));
 
         expect(afterRevert.state.pendingOutputs.size).toEqual(0);
       }).pipe(Effect.runPromise);
@@ -875,7 +892,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [tx, newState] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -883,15 +900,17 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(tx);
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
-        const balancedProven = yield* proving.prove(balancedResult.recipe);
+        const balancedProven = yield* proving.prove(balancedTx!);
 
-        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(
+          transacting.revertTransaction(newState, balancedProven),
+        );
         const afterRevertB: CoreWallet = EitherOps.getOrThrowLeft(
-          transacting.revert(balancedResult.newState, balancedProven),
+          transacting.revertTransaction(newState, balancedProven),
         );
 
         expect(afterRevertA.state.pendingSpends.size).toEqual(0);
@@ -915,7 +934,7 @@ describe('V1 Wallet Transacting', () => {
       const proving = makeSimulatorProvingService();
 
       return Effect.gen(function* () {
-        const result = yield* EitherOps.toEffect(
+        const [tx, newState] = yield* EitherOps.toEffect(
           transacting.initSwap(wallets.A.keys, wallets.A.wallet, { [rawShieldedTokenType]: dustAmount }, [
             makeTransferOutput({
               recipient: wallets.A,
@@ -923,15 +942,18 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(result.recipe);
-        const balancedResult = yield* EitherOps.toEffect(
+        const proven: ledger.ProofErasedTransaction = yield* proving.prove(tx);
+        const [balancedTx] = yield* EitherOps.toEffect(
           transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
         );
-        const balancedProven = yield* proving.prove(balancedResult.recipe);
 
-        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(transacting.revert(result.newState, balancedProven));
+        const balancedProven = yield* proving.prove(balancedTx!);
+
+        const afterRevertA: CoreWallet = EitherOps.getOrThrowLeft(
+          transacting.revertTransaction(newState, balancedProven),
+        );
         const afterRevertB: CoreWallet = EitherOps.getOrThrowLeft(
-          transacting.revert(balancedResult.newState, balancedProven),
+          transacting.revertTransaction(newState, balancedProven),
         );
 
         expect(afterRevertA.state.pendingOutputs.size).toEqual(0);
@@ -967,13 +989,13 @@ describe('V1 Wallet Transacting', () => {
           fallibleOffer,
         ).eraseProofs();
 
-        const balanceResult = yield* EitherOps.toEffect(
+        const [balancedTx, newState] = yield* EitherOps.toEffect(
           transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
         );
-        const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
+        const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balancedTx!);
 
         const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-          transacting.revert(balanceResult.newState, balancedProven),
+          transacting.revertTransaction(newState, balancedProven),
         );
 
         expect(
@@ -1020,13 +1042,13 @@ describe('V1 Wallet Transacting', () => {
           fallibleOffer,
         ).eraseProofs();
 
-        const balanceResult = yield* EitherOps.toEffect(
+        const [balancedTx, newState] = yield* EitherOps.toEffect(
           transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
         );
-        const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balanceResult.recipe);
+        const balancedProven: ledger.ProofErasedTransaction = yield* proving.prove(balancedTx!);
 
         const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-          transacting.revert(balanceResult.newState, balancedProven),
+          transacting.revertTransaction(newState, balancedProven),
         );
 
         expect(afterRevert.state.pendingOutputs.size).toEqual(0);
@@ -1059,13 +1081,13 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const balanceResult = EitherOps.getOrThrowLeft(
+      const [balancedTx, newState] = EitherOps.getOrThrowLeft(
         transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
       );
 
-      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-        transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
-      );
+      expect(balancedTx).toBeDefined();
+
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, balancedTx!));
 
       expect(
         Arr.sort(
@@ -1108,13 +1130,11 @@ describe('V1 Wallet Transacting', () => {
         fallibleOffer,
       ).eraseProofs();
 
-      const balanceResult = EitherOps.getOrThrowLeft(
+      const [balancedTx, newState] = EitherOps.getOrThrowLeft(
         transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, txToBalance),
       );
 
-      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-        transacting.revertRecipe(balanceResult.newState, balanceResult.recipe),
-      );
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, balancedTx!));
 
       expect(afterRevert.state.pendingOutputs.size).toEqual(0);
     });
@@ -1126,14 +1146,12 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [tx, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
         ]),
       );
-      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-        transacting.revertRecipe(result.newState, result.recipe),
-      );
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, tx));
 
       expect(
         afterRevert.state.coins
@@ -1151,14 +1169,12 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [tx, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
         ]),
       );
-      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-        transacting.revertRecipe(result.newState, result.recipe),
-      );
+      const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(transacting.revertTransaction(newState, tx));
 
       expect(afterRevert.state.pendingOutputs.size).toEqual(0);
     });
@@ -1170,24 +1186,24 @@ describe('V1 Wallet Transacting', () => {
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
 
-      const result = EitherOps.getOrThrowLeft(
+      const [, newState] = EitherOps.getOrThrowLeft(
         transacting.makeTransfer(wallets.A.keys, wallets.A.wallet, [
           makeTransferOutput({ recipient: wallets.B, coin: shieldedValue(2) }),
         ]),
       );
 
       const afterRevert: CoreWallet = EitherOps.getOrThrowLeft(
-        transacting.revertRecipe(result.newState, {
-          type: NOTHING_TO_PROVE,
-          transaction: pipe(
+        transacting.revertTransaction(
+          newState,
+          pipe(
             makeOutputOffer({ recipient: wallets.A, coin: shieldedValue(1) }),
             (offer) => ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer),
             (tx) => tx.eraseProofs(),
           ),
-        }),
+        ),
       );
 
-      expect(afterRevert).toBe(result.newState);
+      expect(afterRevert).toBe(newState);
     });
   });
 });

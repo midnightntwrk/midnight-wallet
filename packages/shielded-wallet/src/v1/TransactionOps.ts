@@ -15,30 +15,30 @@ import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { TransactionImbalances } from './TransactionImbalances.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 
-export type TransactionTrait<Tx> = {
+export type TransactionOps<Tx> = {
   getImbalances(tx: Tx): TransactionImbalances;
   id(tx: Tx): string;
 };
-export const TransactionTrait = new (class {
-  default: TransactionTrait<ledger.FinalizedTransaction> = {
+export const TransactionOps = new (class {
+  default: TransactionOps<ledger.FinalizedTransaction> = {
     getImbalances(tx: ledger.FinalizedTransaction): TransactionImbalances {
-      return TransactionTrait.shared.getImbalances(tx);
+      return TransactionOps.shared.getImbalances(tx);
     },
     id(tx) {
       return tx.identifiers().at(0)!;
     },
   };
-  proofErased: TransactionTrait<ledger.ProofErasedTransaction> = {
+  proofErased: TransactionOps<ledger.ProofErasedTransaction> = {
     getImbalances(tx): TransactionImbalances {
-      return TransactionTrait.shared.getImbalances(tx);
+      return TransactionOps.shared.getImbalances(tx);
     },
     id(tx) {
       return tx.identifiers().at(0)!;
     },
   };
-  unproven: TransactionTrait<ledger.UnprovenTransaction> = {
+  unproven: TransactionOps<ledger.UnprovenTransaction> = {
     getImbalances(tx: ledger.UnprovenTransaction): TransactionImbalances {
-      return TransactionTrait.shared.getImbalances(tx);
+      return TransactionOps.shared.getImbalances(tx);
     },
     id(tx) {
       return tx.identifiers().at(0)!;
@@ -49,8 +49,8 @@ export const TransactionTrait = new (class {
     getImbalances(
       tx: ledger.FinalizedTransaction | ledger.UnprovenTransaction | ledger.ProofErasedTransaction,
     ): TransactionImbalances {
-      const guaranteedImbalances = TransactionTrait.shared.getGuaranteedImbalances(tx);
-      const fallibleImbalances = TransactionTrait.shared.getFallibleImbalances(tx);
+      const guaranteedImbalances = TransactionOps.shared.getGuaranteedImbalances(tx);
+      const fallibleImbalances = TransactionOps.shared.getFallibleImbalances(tx);
 
       return pipe({
         guaranteed: guaranteedImbalances,

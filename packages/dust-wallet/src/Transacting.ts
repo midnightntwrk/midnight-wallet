@@ -34,7 +34,7 @@ import {
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v7';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
@@ -69,9 +69,10 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     ledgerParams: LedgerParameters,
   ): Either.Either<[UnprovenTransaction, TState], WalletError.WalletError>;
 
-  revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError.WalletError>;
-
-  revertTransaction(state: TState, transaction: UnprovenTransaction): Either.Either<TState, WalletError.WalletError>;
+  revertTransaction(
+    state: TState,
+    transaction: UnprovenTransaction | TTransaction,
+  ): Either.Either<TState, WalletError.WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -330,21 +331,9 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
-  revert(state: DustCoreWallet, tx: TTransaction): Either.Either<DustCoreWallet, WalletError.WalletError> {
-    return Either.try({
-      try: () => state.revertTransaction(tx),
-      catch: (err) => {
-        return new WalletError.OtherWalletError({
-          message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
-          cause: err,
-        });
-      },
-    });
-  }
-
   revertTransaction(
     state: DustCoreWallet,
-    transaction: UnprovenTransaction,
+    transaction: UnprovenTransaction | TTransaction,
   ): Either.Either<DustCoreWallet, WalletError.WalletError> {
     return Either.try({
       try: () => state.revertTransaction(transaction),

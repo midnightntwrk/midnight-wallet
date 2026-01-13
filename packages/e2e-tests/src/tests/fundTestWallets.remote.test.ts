@@ -128,20 +128,16 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         initialFundedShieldedSecretKey,
         initialFundedDustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Signing tx...');
-      logger.info(txToProve);
-      const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
-        senderKeyStore.signData(payload),
-      );
+      const signedRecipe = await sender.signRecipe(txToProveRecipe, (payload) => senderKeyStore.signData(payload));
       logger.info('Transaction to prove...');
-      logger.info(signedTx.toString());
-      const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await sender.finalizeRecipe(signedRecipe);
       logger.info('Submitting transaction...');
       logger.info(provenTx.toString());
       const txId = await sender.submitTransaction(provenTx);
@@ -201,20 +197,17 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         initialFundedShieldedSecretKey,
         initialFundedDustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Signing tx...');
-      logger.info(txToProve);
-      const signedTx = await sender.signTransaction(txToProve.transaction, (payload) =>
-        senderKeyStore.signData(payload),
-      );
+      logger.info(txToProveRecipe);
+      const signedRecipe = await sender.signRecipe(txToProveRecipe, (payload) => senderKeyStore.signData(payload));
       logger.info('Transaction to prove...');
-      logger.info(signedTx.toString());
-      const provenTx = await sender.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const provenTx = await sender.finalizeRecipe(signedRecipe);
       logger.info('Submitting transaction...');
       logger.info(provenTx.toString());
       const txId = await sender.submitTransaction(provenTx);

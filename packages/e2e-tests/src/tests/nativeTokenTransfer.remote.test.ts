@@ -151,14 +151,14 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         senderSecretKey,
         senderDustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      logger.info(txToProve);
-      const provenTx = await sender.finalizeTransaction(txToProve);
+      logger.info(txToProveRecipe);
+      const provenTx = await sender.finalizeRecipe(txToProveRecipe);
       logger.info(provenTx.toString());
       logger.info('Submitting tx:');
       const txId = await sender.submitTransaction(provenTx);
@@ -263,13 +263,13 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await sender.transferTransaction(
+      const txToProveRecipe = await sender.transferTransaction(
         senderSecretKey,
         senderDustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      const provenTx = await sender.finalizeTransaction(txToProve);
+      const provenTx = await sender.finalizeRecipe(txToProveRecipe);
       const txId = await sender.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 

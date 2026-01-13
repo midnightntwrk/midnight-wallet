@@ -22,7 +22,7 @@ import {
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactingTrait, BoundTransaction, UnboundTransaction } from './TransactingTrait.js';
+import { TransactionOps, BoundTransaction, UnboundTransaction } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -100,14 +100,14 @@ export const makeDefaultTransactingCapability = (
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
-    TransactingTrait,
+    TransactionOps,
   );
 };
 
 export class TransactingCapabilityImplementation implements TransactingCapability<CoreWallet> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.Utxo>;
-  public readonly txTrait: TransactingTrait;
+  public readonly txTrait: TransactionOps;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
@@ -116,7 +116,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     getCoinSelection: () => CoinSelection<ledger.Utxo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
-    txTrait: TransactingTrait,
+    txTrait: TransactionOps,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
@@ -181,7 +181,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         }
       }
 
-      // get the first intent we'll use to place the guaranteed section balancing
+      // get the first intent so we can use its ttl to create the balancing intent
       const intent = transaction.intents?.get(segments[0]);
 
       const imbalances = this.txTrait.getImbalances(transaction, GUARANTEED_SEGMENT);
@@ -468,13 +468,13 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         const intent = transaction.intents?.get(intentSegment);
 
         if (!intent) {
-          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} was not found` }));
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
         }
 
         const isBound = this.txTrait.isIntentBound(intent);
 
         if (isBound) {
-          return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} is already bound` }));
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
         }
 
         const recipe = yield* this.#balanceSegment(wallet, imbalances, Imbalances.empty(), this.getCoinSelection());

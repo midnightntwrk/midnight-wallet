@@ -42,10 +42,8 @@ await sender.wallet
     ],
     new Date(Date.now() + 30 * 60 * 1000),
   )
-  .then((recipe) =>
-    sender.wallet.signTransaction(recipe.transaction, (payload) => sender.unshieldedKeystore.signData(payload)),
-  )
-  .then((tx) => sender.wallet.finalizeTransaction({ type: 'TransactionToProve', transaction: tx }))
+  .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
+  .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction))
   .then(() =>
     rx.firstValueFrom(
@@ -73,7 +71,7 @@ await wallet
     unshieldedKeystore.getPublicKey(),
     (payload) => unshieldedKeystore.signData(payload),
   )
-  .then((recipe) => wallet.finalizeTransaction(recipe))
+  .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));
 
 const stateAfter = await rx.firstValueFrom(

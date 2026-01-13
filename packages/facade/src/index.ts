@@ -245,16 +245,16 @@ export class WalletFacade {
   async finalizeRecipe(recipe: BalancingRecipe): Promise<ledger.FinalizedTransaction> {
     switch (recipe.type) {
       case 'BOUND_TRANSACTION': {
-        const provenBalancing = await this.shielded.proveTransaction(recipe.balancingTransaction);
+        const provenBalancing = await this.proveTransaction(recipe.balancingTransaction);
         return provenBalancing.merge(recipe.originalTransaction);
       }
       case 'UNBOUND_TRANSACTION': {
-        const provenBalancingTx = await this.shielded.proveTransaction(recipe.balancingTransaction);
+        const provenBalancingTx = await this.proveTransaction(recipe.balancingTransaction);
         const boundTransaction = recipe.baseTransaction.bind();
         return provenBalancingTx.merge(boundTransaction);
       }
       case 'UNPROVEN_TRANSACTION': {
-        return await this.shielded.proveTransaction(recipe.transaction);
+        return await this.proveTransaction(recipe.transaction);
       }
     }
   }
@@ -290,11 +290,15 @@ export class WalletFacade {
     }
   }
 
-  private async signTransaction(
+  async signTransaction(
     tx: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     return await this.unshielded.signTransaction(tx, signSegment);
+  }
+
+  async proveTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
+    return await this.shielded.proveTransaction(tx);
   }
 
   async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {

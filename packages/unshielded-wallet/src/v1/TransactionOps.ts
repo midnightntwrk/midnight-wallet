@@ -18,18 +18,17 @@ import { TransactingError, WalletError } from './WalletError.js';
 export type BoundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>;
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-export type TransactingTrait = {
+export type TransactionOps = {
   getSignatureData: (
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
     segment: number,
   ) => Either.Either<Uint8Array, WalletError>;
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[];
   addSignature(
-    transaction: ledger.UnprovenTransaction,
+    transaction: ledger.UnprovenTransaction | UnboundTransaction,
     signature: ledger.Signature,
     segment: number,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
-  bind(transaction: UnboundTransaction): Either.Either<BoundTransaction, WalletError>;
   getImbalances(
     transaction: BoundTransaction | UnboundTransaction | ledger.UnprovenTransaction,
     segment: number,
@@ -43,7 +42,7 @@ export type TransactingTrait = {
   isIntentBound(intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): boolean;
 };
 
-export const TransactingTrait: TransactingTrait = {
+export const TransactionOps: TransactionOps = {
   getSignatureData(
     tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
     segment: number,
@@ -81,7 +80,7 @@ export const TransactingTrait: TransactingTrait = {
         () => new TransactingError({ message: 'Intent with a given segment was not found' }),
       );
 
-      if (TransactingTrait.isIntentBound(originalIntent)) {
+      if (TransactionOps.isIntentBound(originalIntent)) {
         return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} is already bound` }));
       }
 
@@ -97,7 +96,7 @@ export const TransactingTrait: TransactingTrait = {
       });
 
       if (clonedIntent.fallibleUnshieldedOffer) {
-        clonedIntent.fallibleUnshieldedOffer = yield* TransactingTrait.addSignaturesToOffer(
+        clonedIntent.fallibleUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
           clonedIntent.fallibleUnshieldedOffer,
           signature,
           segment,
@@ -106,7 +105,7 @@ export const TransactingTrait: TransactingTrait = {
       }
 
       if (clonedIntent.guaranteedUnshieldedOffer) {
-        clonedIntent.guaranteedUnshieldedOffer = yield* TransactingTrait.addSignaturesToOffer(
+        clonedIntent.guaranteedUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
           clonedIntent.guaranteedUnshieldedOffer,
           signature,
           segment,
@@ -129,12 +128,6 @@ export const TransactingTrait: TransactingTrait = {
       .toArray();
 
     return Imbalances.fromEntries(imbalances);
-  },
-  bind(transaction: UnboundTransaction): Either.Either<BoundTransaction, WalletError> {
-    return Either.try({
-      try: () => transaction.bind(),
-      catch: (error) => new TransactingError({ message: 'Failed to bind transaction', cause: error }),
-    });
   },
   addSignaturesToOffer(
     offer: ledger.UnshieldedOffer<ledger.SignatureEnabled>,
