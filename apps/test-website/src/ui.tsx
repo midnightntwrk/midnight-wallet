@@ -1,12 +1,12 @@
-import React, { ReactElement, useEffect } from 'react';
+import React from 'react';
 
-const useAnimationFrame = (callback) => {
+const useAnimationFrame = (callback: (delta: number) => void) => {
   // Use useRef for mutable variables that we want to persist
   // without triggering a re-render on their change
-  const requestRef = React.useRef();
-  const previousTimeRef = React.useRef();
+  const requestRef = React.useRef(0);
+  const previousTimeRef = React.useRef(0);
 
-  const animate = (time) => {
+  const animate = (time: number) => {
     if (previousTimeRef.current != undefined) {
       const deltaTime = time - previousTimeRef.current;
       callback(deltaTime);
