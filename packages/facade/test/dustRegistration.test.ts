@@ -172,20 +172,20 @@ describe('Dust Registration', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transferTx = await senderFacade.transferTransaction(
+    const transferTxRecipe = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
       ttl,
     );
 
-    const signedTransferTx = await senderFacade.signRecipe(transferTx, (payload) =>
+    const signedTransferTxRecipe = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const provenTransferTx = await senderFacade.finalizeRecipe(signedTransferTx);
+    const finalizedTx = await senderFacade.finalizeRecipe(signedTransferTxRecipe);
 
-    const transferTxHash = await senderFacade.submitTransaction(provenTransferTx);
+    const transferTxHash = await senderFacade.submitTransaction(finalizedTx);
 
     expect(transferTxHash).toBeTypeOf('string');
 

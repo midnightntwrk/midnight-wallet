@@ -124,7 +124,7 @@ export const TransactionOps: TransactionOps = {
       .entries()
       .filter(([token, value]) => token.tag === 'unshielded' && value !== 0n)
       .map(([token, value]) => [token, value] as [ledger.UnshieldedTokenType, bigint])
-      .map(([token, value]) => [token.raw, value] as [string, bigint])
+      .map(([token, value]) => [token.raw, value] as const)
       .toArray();
 
     return Imbalances.fromEntries(imbalances);
@@ -150,6 +150,6 @@ export const TransactionOps: TransactionOps = {
     );
   },
   isIntentBound(intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): boolean {
-    return intent.binding instanceof ledger.Binding;
+    return intent.binding.instance === 'binding';
   },
 };

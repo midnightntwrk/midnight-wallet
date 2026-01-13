@@ -150,9 +150,9 @@ describe('Dust Deregistration', () => {
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    const provenDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
+    const finalizedDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
 
-    const dustDeregistrationTxHash = await walletFacade.submitTransaction(provenDustDeregistrationTx);
+    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalizedDustDeregistrationTx);
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
@@ -160,7 +160,7 @@ describe('Dust Deregistration', () => {
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
           const txInHistory = await state.unshielded.transactionHistory.get(
-            provenDustDeregistrationTx.transactionHash(),
+            finalizedDustDeregistrationTx.transactionHash(),
           );
 
           return {

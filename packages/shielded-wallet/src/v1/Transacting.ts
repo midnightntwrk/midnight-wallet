@@ -107,7 +107,7 @@ export class TransactingCapabilityImplementation<
 > implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-  public readonly txTrait: TransactionOps<TTransaction>;
+  public readonly txOps: TransactionOps<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
@@ -116,13 +116,13 @@ export class TransactingCapabilityImplementation<
     getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
-    txTrait: TransactionOps<TTransaction>,
+    txOps: TransactionOps<TTransaction>,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
     this.getCoinSelection = getCoinSelection;
     this.getKeys = getKeys;
-    this.txTrait = txTrait;
+    this.txOps = txOps;
   }
 
   balanceTransaction(
@@ -132,7 +132,7 @@ export class TransactingCapabilityImplementation<
   ): Either.Either<[BalancingResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
-      const initialImbalances = this.txTrait.getImbalances(tx);
+      const initialImbalances = this.txOps.getImbalances(tx);
 
       if (TransactionImbalances.areBalanced(initialImbalances)) {
         return [undefined, state];

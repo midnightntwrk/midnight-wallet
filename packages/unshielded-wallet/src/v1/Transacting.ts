@@ -107,7 +107,7 @@ export const makeDefaultTransactingCapability = (
 export class TransactingCapabilityImplementation implements TransactingCapability<CoreWallet> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.Utxo>;
-  public readonly txTrait: TransactionOps;
+  public readonly txOps: TransactionOps;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
@@ -116,13 +116,13 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     getCoinSelection: () => CoinSelection<ledger.Utxo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
-    txTrait: TransactionOps,
+    txOps: TransactionOps,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
     this.getCoinSelection = getCoinSelection;
     this.getKeys = getKeys;
-    this.txTrait = txTrait;
+    this.txOps = txOps;
   }
 
   /**
@@ -167,12 +167,12 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<[BoundTransactionBalanceResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       // Ensure all intents are bound
-      const segments = this.txTrait.getSegments(transaction);
+      const segments = this.txOps.getSegments(transaction);
 
       for (const segment of segments) {
         const intent = transaction.intents?.get(segment);
 
-        const isBound = this.txTrait.isIntentBound(intent!);
+        const isBound = this.txOps.isIntentBound(intent!);
 
         if (!isBound) {
           return yield* Either.left(
@@ -184,7 +184,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       // get the first intent so we can use its ttl to create the balancing intent
       const intent = transaction.intents?.get(segments[0]);
 
-      const imbalances = this.txTrait.getImbalances(transaction, GUARANTEED_SEGMENT);
+      const imbalances = this.txOps.getImbalances(transaction, GUARANTEED_SEGMENT);
 
       // guaranteed section is balanced
       if (imbalances.size === 0) {
@@ -315,15 +315,15 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError> {
     return Either.gen(this, function* () {
-      const segments = this.txTrait.getSegments(transaction);
+      const segments = this.txOps.getSegments(transaction);
       if (!segments.length) {
         throw new SignError({ message: 'No segments found in the provided transaction' });
       }
 
       for (const segment of segments) {
-        const signedData = yield* this.txTrait.getSignatureData(transaction, segment);
+        const signedData = yield* this.txOps.getSignatureData(transaction, segment);
         const signature = signSegment(signedData);
-        transaction = yield* this.txTrait.addSignature(transaction, signature, segment);
+        transaction = yield* this.txOps.addSignature(transaction, signature, segment);
       }
       return transaction;
     });
@@ -444,7 +444,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     T extends ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
   >(wallet: CoreWallet, transaction: T): Either.Either<[T | undefined, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
-      const segments = this.txTrait.getSegments(transaction);
+      const segments = this.txOps.getSegments(transaction);
 
       // no segments to balance
       if (segments.length === 0) {
@@ -452,7 +452,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       }
 
       for (const segment of [...segments, GUARANTEED_SEGMENT]) {
-        const imbalances = this.txTrait.getImbalances(
+        const imbalances = this.txOps.getImbalances(
           transaction as UnboundTransaction | ledger.UnprovenTransaction,
           segment,
         );
@@ -471,7 +471,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
           return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
         }
 
-        const isBound = this.txTrait.isIntentBound(intent);
+        const isBound = this.txOps.isIntentBound(intent);
 
         if (isBound) {
           return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is already bound` }));
