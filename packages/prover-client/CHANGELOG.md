@@ -1,5 +1,13 @@
 # @midnight-ntwrk/wallet-sdk-prover-client
 
+## 1.0.0-beta.13
+
+### Patch Changes
+
+- 8b8d708: chore: update ledger to version 7.0.0-rc.1
+- Updated dependencies [8b8d708]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.10
+
 ## 1.0.0-beta.12
 
 ### Patch Changes
