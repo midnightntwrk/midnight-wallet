@@ -175,9 +175,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         const isBound = this.txOps.isIntentBound(intent!);
 
         if (!isBound) {
-          return yield* Either.left(
-            new TransactingError({ message: `Intent at segment ${GUARANTEED_SEGMENT} is not bound` }),
-          );
+          return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} is not bound` }));
         }
       }
 
