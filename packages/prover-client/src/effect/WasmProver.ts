@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import Worker from 'web-worker';
-import { Context, Effect, Encoding, Layer, pipe } from 'effect';
+import { Context, Effect, Encoding, Layer, Schema, pipe } from 'effect';
 import { InvalidProtocolSchemeError, ClientError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
@@ -27,47 +27,66 @@ export const layer: (config: ProverClient.WasmConfig) => Layer.Layer<ProverClien
   config,
 ) => Layer.effect(ProverClient, Effect.succeed(new WasmProverImpl(config.keyMaterialProvider)));
 
-type WorkerMessage<RResponse> =
-  | {
-      op: 'lookupKey';
-      keyLocation: string;
-    }
-  | {
-      op: 'getParams';
-      k: number;
-    }
-  | {
-      op: 'result';
-      value: RResponse;
-    };
+const LookupKeySchema = Schema.Struct({
+  op: Schema.Literal('lookupKey'),
+  keyLocation: Schema.String,
+});
 
-const callProverWorker = <RResponse>(
+const GetParamsSchema = Schema.Struct({
+  op: Schema.Literal('getParams'),
+  k: Schema.Number,
+});
+
+const ResultSchema = Schema.Union(
+  Schema.Uint8ArrayFromBase64,
+  Schema.Array(Schema.Union(Schema.BigInt, Schema.Undefined)),
+);
+
+const ResponseSchema = Schema.Struct({
+  op: Schema.Literal('result'),
+  value: ResultSchema,
+});
+
+const MessageDataSchema = Schema.Union(LookupKeySchema, GetParamsSchema, ResponseSchema);
+
+type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
+type WorkerResponse = Schema.Schema.Type<typeof ResultSchema>;
+
+const callProverWorker = (
   kmProvider: KeyMaterialProvider,
   op: 'check' | 'prove',
   args: [Uint8Array, (bigint | undefined)?],
-): Promise<RResponse> => {
+): Promise<WorkerResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
     const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
+
+    // initialize worker
     worker.postMessage({ op, args: [Encoding.encodeBase64(args[0]), args[1]] });
 
-    worker.addEventListener('message', ({ data }: { data: WorkerMessage<RResponse> }) => {
-      if (data.op === 'lookupKey') {
+    // a message from the worker
+    worker.addEventListener('message', ({ data }: { data: MessageData }) => {
+      const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
+      const { op } = decoded;
+      if (op === 'lookupKey') {
+        const { keyLocation } = decoded;
         kmProvider
-          .lookupKey(data.keyLocation)
+          .lookupKey(keyLocation)
           .then((result) => {
-            worker.postMessage({ op: 'lookupKey', keyLocation: data.keyLocation, result });
+            worker.postMessage({ op, keyLocation, result });
           })
           .catch(reject);
-      } else if (data.op === 'getParams') {
+      } else if (op === 'getParams') {
+        const { k } = decoded;
         kmProvider
-          .getParams(data.k)
+          .getParams(k)
           .then((result) => {
-            worker.postMessage({ op: 'getParams', k: data.k, result });
+            worker.postMessage({ op, k, result });
           })
           .catch(reject);
-      } else if (data.op === 'result') {
-        resolve(data.value);
+      } else if (op === 'result') {
+        const { value } = decoded;
+        resolve(value);
       }
     });
     worker.addEventListener('error', reject);
@@ -83,18 +102,18 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
-      callProverWorker<(bigint | undefined)[]>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
-        serializedPreimage,
-      ]),
+      callProverWorker(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [serializedPreimage]) as Promise<
+        Array<bigint | undefined>
+      >,
     prove: async (
       serializedPreimage: Uint8Array,
       _keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
+      callProverWorker(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
         serializedPreimage,
         overwriteBindingInput,
-      ]),
+      ]) as Promise<Uint8Array>,
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
