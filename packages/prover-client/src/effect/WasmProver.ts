@@ -37,26 +37,20 @@ const GetParamsSchema = Schema.Struct({
   k: Schema.Number,
 });
 
-const ResultSchema = Schema.Union(
-  Schema.Uint8ArrayFromBase64,
-  Schema.Array(Schema.Union(Schema.BigInt, Schema.Undefined)),
-);
-
 const ResponseSchema = Schema.Struct({
   op: Schema.Literal('result'),
-  value: ResultSchema,
+  value: Schema.Union(Schema.Uint8ArrayFromBase64, Schema.Array(Schema.Union(Schema.BigInt, Schema.Undefined))),
 });
 
 const MessageDataSchema = Schema.Union(LookupKeySchema, GetParamsSchema, ResponseSchema);
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
-type WorkerResponse = Schema.Schema.Type<typeof ResultSchema>;
 
-const callProverWorker = (
+const callProverWorker = <RResponse>(
   kmProvider: KeyMaterialProvider,
   op: 'check' | 'prove',
   args: [Uint8Array, (bigint | undefined)?],
-): Promise<WorkerResponse> => {
+): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
     const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
@@ -86,7 +80,7 @@ const callProverWorker = (
           .catch(reject);
       } else if (op === 'result') {
         const { value } = decoded;
-        resolve(value);
+        resolve(value as RResponse);
       }
     });
     worker.addEventListener('error', reject);
@@ -102,18 +96,18 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
-      callProverWorker(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [serializedPreimage]) as Promise<
-        Array<bigint | undefined>
-      >,
+      callProverWorker<Array<bigint | undefined>>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
+        serializedPreimage,
+      ]),
     prove: async (
       serializedPreimage: Uint8Array,
       _keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      callProverWorker(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
+      callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
         serializedPreimage,
         overwriteBindingInput,
-      ]) as Promise<Uint8Array>,
+      ]),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
