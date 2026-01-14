@@ -26,7 +26,7 @@
       "outputs": ["coverage/**", "reports/**"],
       "env": ["DEBUG", "APP_INFRA_SECRET"],
       "outputLogs": "new-only",
-      "dependsOn": ["^dist"]
+      "dependsOn": ["^dist", "typecheck"]
     },
     "typecheck": {
       "inputs": [

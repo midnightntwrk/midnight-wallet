@@ -30,6 +30,7 @@ import {
   chooseCoin,
   CoinsAndBalancesCapability,
   CoinSelection,
+  DefaultCoinsAndBalancesContext,
   makeDefaultCoinsAndBalancesCapability,
 } from './CoinsAndBalances.js';
 import {
@@ -303,7 +304,14 @@ export class V1Builder<
     return this.withProving(Proving.makeDefaultProvingService);
   }
 
-  withCoinsAndBalancesDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
+  withCoinsAndBalancesDefaults(): V1Builder<
+    TConfig,
+    TContext & DefaultCoinsAndBalancesContext,
+    TSerialized,
+    TSyncUpdate,
+    TTransaction,
+    TStartAux
+  > {
     return this.withCoinsAndBalances(makeDefaultCoinsAndBalancesCapability);
   }
 

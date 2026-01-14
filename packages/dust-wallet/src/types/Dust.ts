@@ -26,9 +26,12 @@ export type DustTokenWithNullifier = DustToken & {
   nullifier: DustNullifier;
 };
 
-export type DustTokenFullInfo = {
+export type DustTokenFullInfo = DustGenerationDetails & {
   token: DustToken;
-  dtime: Date | undefined;
+};
+
+export type DustGenerationDetails = {
+  dtime: Date | undefined; // when the backing Night UTxO was spent
   maxCap: bigint; // maximum capacity (gen.value * night_dust_ratio)
   maxCapReachedAt: Date; // ctime + timeToCapSeconds
   generatedNow: bigint;
