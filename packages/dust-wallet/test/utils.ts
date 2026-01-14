@@ -10,7 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+import { Bindingish, Intent, Proofish, Signaturish, Transaction } from '@midnight-ntwrk/ledger-v7';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { pipe, Iterable as Iter, Number as Num } from 'effect';
 
 export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   const seedBuffer = Buffer.from(seed, 'hex');
@@ -28,4 +31,22 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   }
 
   return derivationResult.key;
+};
+
+export const sumUtxos = (
+  tx: Transaction<Signaturish, Proofish, Bindingish>,
+  section: 'guaranteed' | 'fallible',
+  type: 'input' | 'output',
+): number => {
+  return pipe(
+    tx,
+    (tx) => tx.intents ?? new Map<number, Intent<Signaturish, Proofish, Bindingish>>(),
+    (intentsMap) => intentsMap.values(),
+    Iter.map((intent) =>
+      section === 'guaranteed' ? intent.guaranteedUnshieldedOffer : intent.fallibleUnshieldedOffer,
+    ),
+    Iter.map((maybeOffer) => (type == 'input' ? maybeOffer?.inputs : maybeOffer?.outputs)),
+    Iter.map((maybeUtxos) => maybeUtxos?.length ?? 0),
+    Iter.reduce(0, Num.sum),
+  );
 };

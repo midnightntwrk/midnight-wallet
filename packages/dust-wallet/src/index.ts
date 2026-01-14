@@ -19,3 +19,4 @@ export * as Transacting from './Transacting.js';
 export * from './RunningV1Variant.js';
 export * from './V1Builder.js';
 export * from './types/index.js';
+export * as CoinsAndBalances from './CoinsAndBalances.js';
