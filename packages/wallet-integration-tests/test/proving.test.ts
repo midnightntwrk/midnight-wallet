@@ -37,13 +37,16 @@ const makeTransaction = () => {
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
-  Effect.promise(async () => {
-    return await new GenericContainer(PROOF_SERVER_IMAGE)
-      .withExposedPorts(PROOF_SERVER_PORT)
-      .withWaitStrategy(Wait.forListeningPorts())
-      .withStartupTimeout(120_000)
-      .withReuse()
-      .start();
+  Effect.tryPromise({
+    try: async () => {
+      return await new GenericContainer(PROOF_SERVER_IMAGE)
+        .withExposedPorts(PROOF_SERVER_PORT)
+        .withWaitStrategy(Wait.forListeningPorts())
+        .withStartupTimeout(120_000)
+        .withReuse()
+        .start();
+    },
+    catch: (error) => Effect.fail(error),
   }),
   (container) => Effect.promise(async () => await container.stop()),
 ).pipe(
@@ -51,7 +54,7 @@ const proofServerContainerResource = Effect.acquireRelease(
     const proofServerPort = proofServerContainer.getMappedPort(PROOF_SERVER_PORT);
     return new URL(`http://localhost:${proofServerPort}`);
   }),
-  Effect.retry(Schedule.recurUpTo(Duration.seconds(200_000))),
+  Effect.retry(Schedule.spaced(Duration.millis(10))),
 );
 
 describe('Default Proving Service', () => {
