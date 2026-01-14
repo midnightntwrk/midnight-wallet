@@ -22,11 +22,10 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
+  UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Buffer } from 'buffer';
-import * as rx from 'rxjs';
-import { pick } from 'lodash-es';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);
 const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v3/graphql`;
@@ -48,7 +47,15 @@ export const defaultConfiguration: Configuration = {
   indexerUrl: INDEXER_WS_URL,
 };
 
-export const init = async (seed: Buffer, configuration: Configuration = defaultConfiguration) => {
+export const init = async (
+  seed: Buffer,
+  configuration: Configuration = defaultConfiguration,
+): Promise<{
+  wallet: WalletFacade;
+  shieldedSecretKeys: ledger.ZswapSecretKeys;
+  dustSecretKey: ledger.DustSecretKey;
+  unshieldedKeystore: UnshieldedKeystore;
+}> => {
   const hdWallet = HDWallet.fromSeed(seed);
 
   if (hdWallet.type !== 'seedOk') {
@@ -84,6 +91,3 @@ export const init = async (seed: Buffer, configuration: Configuration = defaultC
   await wallet.start(shieldedSecretKeys, dustSecretKey);
   return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };
-
-
-

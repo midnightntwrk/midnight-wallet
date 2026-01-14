@@ -25,7 +25,7 @@
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.3",
     "buffer": "^6.0.3",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "lodash-es": "^4.17.22",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
