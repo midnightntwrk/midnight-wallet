@@ -14,7 +14,7 @@ import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prove
 import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Layer, pipe } from 'effect';
+import { Effect, Either, Layer, pipe, Scope } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
@@ -103,42 +103,39 @@ describe('Proving Service', () => {
     },
   ] as const;
 
-  describe('Default Proving Service', () => {
-    it.each(recipes)(
-      'does transform proving recipe into final, proven transaction',
-      async ({ recipe, expectedImbalance }) => {
-        const finalTx = await Effect.gen(function* () {
-          const readyRecipe = yield* recipe;
-          const service = Proving.makeDefaultProvingService({});
+  function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTransaction>>(
+    implName: string,
+    makeService: () => Effect.Effect<T, never, Scope.Scope>,
+  ) {
+    describe(`${implName} implementation of ProvingService`, () => {
+      it.each(recipes)(
+        'does transform proving recipe into final, proven transaction',
+        async ({ recipe, expectedImbalance }) => {
+          return Effect.gen(function* () {
+            const readyRecipe = yield* recipe;
+            const service = yield* makeService();
+            const finalTx = yield* service.prove(readyRecipe);
 
-          return yield* service.prove(readyRecipe);
-        }).pipe(Effect.scoped, Effect.runPromise);
+            expect(finalTx).toBeInstanceOf(ledger.Transaction);
+            expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
+          }).pipe(Effect.scoped, Effect.runPromise);
+        },
+      );
+    });
+  }
 
-        expect(finalTx).toBeInstanceOf(ledger.Transaction);
-        expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
-      },
-    );
-  });
+  runInterfaceTests('Default Proving', () => Effect.succeed(Proving.makeDefaultProvingService({})));
+
+  runInterfaceTests('Server Proving', () =>
+    Effect.gen(function* () {
+      const proofServerUrl = yield* proofServerContainerResource;
+      return Proving.makeServerProvingService({
+        provingServerUrl: proofServerUrl,
+      });
+    }),
+  );
 
   describe('Server Proving Service', () => {
-    it.each(recipes)(
-      'does transform proving recipe into final, proven transaction',
-      async ({ recipe, expectedImbalance }) => {
-        const finalTx = await Effect.gen(function* () {
-          const readyRecipe = yield* recipe;
-          const proofServerUrl = yield* proofServerContainerResource;
-          const service = Proving.makeServerProvingService({
-            provingServerUrl: proofServerUrl,
-          });
-
-          return yield* service.prove(readyRecipe);
-        }).pipe(Effect.scoped, Effect.runPromise);
-
-        expect(finalTx).toBeInstanceOf(ledger.Transaction);
-        expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(expectedImbalance);
-      },
-    );
-
     it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
       const recipe = { type: ProvingRecipe.TRANSACTION_TO_PROVE, transaction: testUnprovenTx } as const;
       const result = await Effect.gen(function* () {
