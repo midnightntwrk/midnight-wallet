@@ -60,7 +60,7 @@ const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
   .then((recipe) => alice.wallet.finalizeRecipe(recipe));
 
 await bob.wallet
-  .balanceBoundTransaction(
+  .balanceFinalizedTransaction(
     bob.shieldedSecretKeys,
     bob.dustSecretKey,
     aliceSwapTx,

@@ -18,7 +18,6 @@ import {
   V1Tag,
   V1Variant,
   CoreWallet,
-  BoundTransaction,
   UnboundTransaction,
 } from './v1/index.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
@@ -30,7 +29,7 @@ import { CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { KeysCapability } from './v1/Keys.js';
 import {
   TokenTransfer,
-  BoundTransactionBalanceResult,
+  FinalizedTransactionBalanceResult,
   UnboundTransactionBalanceResult,
   UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
@@ -112,7 +111,7 @@ export interface CustomizedUnshieldedWallet<
 
   start(): Promise<void>;
 
-  balanceBoundTransaction(tx: BoundTransaction): Promise<BoundTransactionBalanceResult>;
+  balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult>;
 
   balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult>;
 
@@ -213,10 +212,10 @@ export function CustomUnshieldedWallet<
       return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground() }).pipe(Effect.runPromise);
     }
 
-    balanceBoundTransaction(tx: BoundTransaction): Promise<BoundTransactionBalanceResult> {
+    balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceBoundTransaction(tx),
+          [V1Tag]: (v1) => v1.balanceFinalizedTransaction(tx),
         })
         .pipe(Effect.runPromise);
     }

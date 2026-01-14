@@ -189,7 +189,7 @@ describe('Swaps', () => {
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
-    const walletBBalancedTxRecipe = await walletBFacade.balanceBoundTransaction(
+    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,
@@ -277,7 +277,7 @@ describe('Swaps', () => {
 
     // assuming the tx is added to a pool and wallet B picks it up
 
-    const walletBBalancedTxRecipe = await walletBFacade.balanceBoundTransaction(
+    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,

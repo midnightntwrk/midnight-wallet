@@ -25,11 +25,11 @@ import { WalletSyncUpdate } from './SyncSchema.js';
 import {
   TransactingCapability,
   TokenTransfer,
-  BoundTransactionBalanceResult,
+  FinalizedTransactionBalanceResult,
   UnboundTransactionBalanceResult,
   UnprovenTransactionBalanceResult,
 } from './Transacting.js';
-import { BoundTransaction, UnboundTransaction } from './TransactionOps.js';
+import { UnboundTransaction } from './TransactionOps.js';
 import { WalletError } from './WalletError.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
@@ -150,9 +150,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     );
   }
 
-  balanceBoundTransaction(tx: BoundTransaction): Effect.Effect<BoundTransactionBalanceResult, WalletError> {
+  balanceFinalizedTransaction(
+    tx: ledger.FinalizedTransaction,
+  ): Effect.Effect<FinalizedTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(this.#v1Context.transactingCapability.balanceBoundTransaction(state, tx), EitherOps.toEffect);
+      return pipe(this.#v1Context.transactingCapability.balanceFinalizedTransaction(state, tx), EitherOps.toEffect);
     });
   }
 

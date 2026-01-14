@@ -22,7 +22,7 @@ import {
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactionOps, BoundTransaction, UnboundTransaction } from './TransactionOps.js';
+import { TransactionOps, UnboundTransaction, IntentOf } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -35,7 +35,7 @@ export interface TokenTransfer {
   readonly receiverAddress: string;
 }
 
-export type BoundTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
+export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
 
 export type UnboundTransactionBalanceResult = UnboundTransaction | undefined;
 
@@ -60,10 +60,10 @@ export interface TransactingCapability<TState> {
     ttl: Date,
   ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
 
-  balanceBoundTransaction(
+  balanceFinalizedTransaction(
     wallet: CoreWallet,
-    transaction: BoundTransaction,
-  ): Either.Either<[BoundTransactionBalanceResult, CoreWallet], WalletError>;
+    transaction: ledger.FinalizedTransaction,
+  ): Either.Either<[FinalizedTransactionBalanceResult, CoreWallet], WalletError>;
 
   balanceUnboundTransaction(
     wallet: CoreWallet,
@@ -161,10 +161,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @returns A balancing counterpart transaction (which should be merged with the original transaction )
    * and the new wallet state if successful, otherwise an error
    */
-  balanceBoundTransaction(
+  balanceFinalizedTransaction(
     wallet: CoreWallet,
-    transaction: BoundTransaction,
-  ): Either.Either<[BoundTransactionBalanceResult, CoreWallet], WalletError> {
+    transaction: ledger.FinalizedTransaction,
+  ): Either.Either<[FinalizedTransactionBalanceResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       // Ensure all intents are bound
       const segments = this.txOps.getSegments(transaction);
@@ -438,9 +438,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
    */
-  #balanceUnboundishTransaction<
-    T extends ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.PreBinding>,
-  >(wallet: CoreWallet, transaction: T): Either.Either<[T | undefined, CoreWallet], WalletError> {
+  #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
+    wallet: CoreWallet,
+    transaction: T,
+  ): Either.Either<[T | undefined, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const segments = this.txOps.getSegments(transaction);
 
@@ -450,10 +451,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       }
 
       for (const segment of [...segments, GUARANTEED_SEGMENT]) {
-        const imbalances = this.txOps.getImbalances(
-          transaction as UnboundTransaction | ledger.UnprovenTransaction,
-          segment,
-        );
+        const imbalances = this.txOps.getImbalances(transaction, segment);
 
         // intent is balanced
         if (imbalances.size === 0) {
@@ -463,7 +461,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
         // if segment is GUARANTEED_SEGMENT, use the first intent to balance guaranteed section
         const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
 
-        const intent = transaction.intents?.get(intentSegment);
+        const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
 
         if (!intent) {
           return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
@@ -490,7 +488,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
           intent.guaranteedUnshieldedOffer = mergedOffer;
         }
 
-        transaction.intents = transaction.intents?.set(intentSegment, intent);
+        (transaction.intents as Map<number, IntentOf<T>>)?.set(intentSegment, intent);
       }
 
       return [transaction, wallet];

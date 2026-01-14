@@ -334,7 +334,7 @@ describe('Token transfer', () => {
     const wallet1TxId = await sender.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + wallet1TxId);
 
-    const wallet2BalancedTx = await receiver.wallet.balanceBoundTransaction(
+    const wallet2BalancedTx = await receiver.wallet.balanceFinalizedTransaction(
       receiver.shieldedSecretKeys,
       receiver.dustSecretKey,
       finalizedTx,
