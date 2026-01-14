@@ -105,7 +105,7 @@ describe('Wallet Facade Transfer', () => {
     const Dust = DustWallet({
       ...configuration,
       costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
+        additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
     });
@@ -253,7 +253,7 @@ describe('Wallet Facade Transfer', () => {
     await pipe(
       senderFacade.state(),
       rx.filter((s) => s.isSynced),
-      rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
+      rx.filter((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
       rx.firstValueFrom,
     );
 
