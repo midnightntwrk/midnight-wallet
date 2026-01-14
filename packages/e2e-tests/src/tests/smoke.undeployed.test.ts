@@ -152,7 +152,7 @@ describe('Smoke tests', () => {
       expect(pendingState.shielded.totalCoins.length).toBe(7);
       expect(pendingState.unshielded.totalCoins.length).toBe(5);
       expect(pendingState.shielded.availableCoins.length).toBe(6);
-      expect(pendingState.unshielded.availableCoins.length).toBe(5);
+      expect(pendingState.unshielded.availableCoins.length).toBe(4);
 
       logger.info('Waiting for finalized balance...');
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -161,6 +161,7 @@ describe('Smoke tests', () => {
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(balance - outputValue);
       expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBeLessThanOrEqual(balance - outputValue);
       expect(finalState.shielded.totalCoins.length).toBe(7);
+      expect(finalState.shielded.availableCoins.length).toBe(7);
       expect(finalState.unshielded.totalCoins.length).toBe(5);
       expect(finalState.unshielded.availableCoins.length).toBe(5);
       expect(finalState.shielded.pendingCoins.length).toBe(0);

@@ -211,6 +211,7 @@ describe('Token transfer', () => {
 
       // await utils.waitForFacadePendingClear(fundedFacade);
       // const finalState = await utils.waitForSyncFacade(fundedFacade);
+      await utils.waitForFacadePendingClear(funded.wallet);
       const finalState = await firstValueFrom(
         funded.wallet.state().pipe(
           tap((state) => {
