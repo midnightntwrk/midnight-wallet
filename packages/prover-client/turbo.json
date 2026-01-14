@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "dependsOn": ["^dist"]
+      "dependsOn": ["dist"]
     }
   }
 }
