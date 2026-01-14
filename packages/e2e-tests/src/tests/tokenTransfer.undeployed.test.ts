@@ -221,7 +221,7 @@ describe('Token transfer', () => {
         ),
       );
       logger.info(`Wallet 1 available coins: ${finalState.unshielded.availableCoins.length}`);
-      expect(finalState.dust.walletBalance(new Date())).toBeLessThan(initialDustBalance);
+      expect(finalState.dust.walletBalance(new Date(3 * 1000))).toBeLessThan(initialDustBalance);
       expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBe(initialUnshieldedBalance - outputValue);
       expect(finalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
         initialState.unshielded.availableCoins.length,

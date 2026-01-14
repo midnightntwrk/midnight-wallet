@@ -13,7 +13,13 @@
 import { combineLatest, map, Observable } from 'rxjs';
 import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { AnyTransaction, DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { Array as Arr, pipe } from 'effect';
+import {
+  AnyTransaction,
+  DustWallet,
+  DustWalletState,
+  CoinsAndBalances as DustCoinsAndBalances,
+} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ProvingRecipe } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 
@@ -244,6 +250,37 @@ export class WalletFacade {
     }
 
     return recipe;
+  }
+
+  async estimateRegistration(nightUtxos: readonly UtxoWithMeta[]): Promise<{
+    fee: bigint;
+    dustGenerationEstimations: ReadonlyArray<DustCoinsAndBalances.UtxoWithFullDustDetails>;
+  }> {
+    const now = new Date();
+    const dustState = await this.dust.waitForSyncedState();
+    const dustGenerationEstimations = pipe(
+      nightUtxos,
+      Arr.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
+      (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
+      (split) => split.guaranteed,
+    );
+    const fakeSigningKey = ledger.sampleSigningKey();
+    const fakeVerifyingKey = ledger.signatureVerifyingKey(fakeSigningKey);
+    const fakeRegistrationRecipe = await this.registerNightUtxosForDustGeneration(
+      nightUtxos,
+      fakeVerifyingKey,
+      (payload) => ledger.signData(fakeSigningKey, payload),
+      dustState.dustAddress,
+    );
+    const finalizedFakeTx = fakeRegistrationRecipe.transaction.mockProve().bind();
+
+    const fee = await this.calculateTransactionFee(finalizedFakeTx);
+
+    return {
+      fee,
+      dustGenerationEstimations,
+    };
   }
 
   async initSwap(
