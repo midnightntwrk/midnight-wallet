@@ -12,7 +12,20 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Stream, Scope, pipe, Chunk, Option, Duration, TestClock, TestContext, Fiber, Ref } from 'effect';
+import {
+  Effect,
+  Stream,
+  Scope,
+  pipe,
+  Chunk,
+  Option,
+  Duration,
+  TestClock,
+  TestContext,
+  Fiber,
+  Ref,
+  Number as Num,
+} from 'effect';
 import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { describe, expect, it } from 'vitest';
@@ -80,7 +93,7 @@ const createMockSubscriptionFn = (
 
   return (_variables: ZswapEventsSubscriptionVariables) => {
     const baseStream = pipe(
-      Stream.range(1, totalRecords + 1),
+      Stream.range(1, totalRecords),
       Stream.map((id) => ({
         zswapLedgerEvents: {
           id,
@@ -155,7 +168,7 @@ describe('Wallet subscription', () => {
   const numberOfEventsToProduce = 333;
 
   describe('should stream GraphQL subscription', () => {
-    it('should handle batching events into multiples of 50 events with no delay', async () => {
+    it('should handle batching events into multiples of batch size config with no delay', async () => {
       const mockEventHex = await createMockEventHex();
       const mockSubscriptionFn = createMockSubscriptionFn(numberOfEventsToProduce, mockEventHex);
 
@@ -168,42 +181,23 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
           },
+          batchSize,
         });
 
-        const { stream, batches } = yield* withBatchLogging(
-          syncService.updates(initialState, secretKeys),
-          batchSize,
-          batchTimeout,
+        const updates = yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
+        const batchSizes = pipe(
+          updates,
+          Chunk.map((update) => update.updates.length),
         );
-
-        const updates = yield* stream.pipe(Stream.take(numberOfEventsToProduce), Stream.runCollect);
-        const batchSizes = yield* Ref.get(batches);
-
-        const updatesArray = Chunk.toArray(updates);
-        expect(updatesArray.length).toBe(numberOfEventsToProduce);
 
         // Verify size-based batching: should have full batches of batchSize, plus possibly a final partial batch
         const expectedFullBatches = Math.floor(numberOfEventsToProduce / batchSize);
-        const hasPartialBatch = numberOfEventsToProduce % batchSize !== 0;
-        expect(batchSizes.length).toBeGreaterThanOrEqual(expectedFullBatches);
+        const lastBatchSize = numberOfEventsToProduce % batchSize;
+        const expectedBatchSizes = Chunk.makeBy(expectedFullBatches, () => batchSize).pipe(Chunk.append(lastBatchSize));
 
-        // All full batches should be size batchSize (size-based batching)
-        for (let i = 0; i < expectedFullBatches; i++) {
-          expect(batchSizes[i]).toBe(batchSize);
-        }
-
-        // If there's a partial batch, verify it's the last one and is less than 50
-        if (hasPartialBatch && batchSizes.length > expectedFullBatches) {
-          const lastBatchSize = batchSizes[batchSizes.length - 1];
-          expect(lastBatchSize).toBeLessThan(batchSize);
-          expect(lastBatchSize).toBeGreaterThan(0);
-        }
-
-        // Verify batch totals add up to at least NUM_EVENTS (may be slightly more due to stream buffering)
-        const totalFromBatches = batchSizes.reduce((sum, size) => sum + size, 0);
-        expect(totalFromBatches).toBeGreaterThanOrEqual(numberOfEventsToProduce);
-
-        yield* Effect.log(`Processed ${updatesArray.length} updates in ${batchSizes.length} size-based batches`);
+        expect(Num.sumAll(batchSizes)).toEqual(numberOfEventsToProduce);
+        expect(Chunk.size(updates)).toBe(Math.ceil(numberOfEventsToProduce / batchSize));
+        expect(batchSizes).toEqual(expectedBatchSizes);
       }).pipe(Effect.provideService(ZswapEvents.tag, mockSubscriptionFn), Effect.scoped, Effect.runPromise);
     });
 

@@ -31,7 +31,7 @@
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "graphql": "^16.11.0",
     "graphql-http": "^1.22.4",
     "graphql-ws": "^6.0.5"

@@ -29,7 +29,13 @@
       "dependsOn": ["^dist"]
     },
     "typecheck": {
-      "inputs": ["test/**/*.{ts,tsx}", "src/**/*.{ts,tsx}", "scripts/**/*.ts", "tsconfig*.json", "$TURBO_ROOT$/tsconfig.base.json"],
+      "inputs": [
+        "test/**/*.{ts,tsx}",
+        "src/**/*.{ts,tsx}",
+        "scripts/**/*.ts",
+        "tsconfig*.json",
+        "$TURBO_ROOT$/tsconfig.base.json"
+      ],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },

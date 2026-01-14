@@ -2203,7 +2203,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.0-beta.11"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:1.0.0-beta.15"
     "@types/node": "npm:^22.17.0"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.32.0"
     fast-check: "npm:^4.2.0"
     prettier: "npm:^3.7.0"
@@ -2219,7 +2219,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
   dependencies:
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
     prettier: "npm:^3.7.0"
@@ -2255,7 +2255,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v7": "npm:7.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.0.0-beta.11"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0-beta.8"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
     prettier: "npm:^3.7.0"
@@ -2305,7 +2305,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:1.0.0-beta.15"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
     "@types/node": "npm:22.17.0"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
@@ -2369,7 +2369,7 @@ __metadata:
     "@graphql-typed-document-node/core": "npm:^3.2.0"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0-beta.10"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     graphql: "npm:^16.11.0"
     graphql-http: "npm:^1.22.4"
@@ -2442,7 +2442,7 @@ __metadata:
     "@types/bn.js": "npm:^5.2.0"
     "@types/yargs": "npm:^17.0.33"
     bn.js: "npm:^5.2.2"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
@@ -2464,7 +2464,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v7": "npm:7.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0-beta.10"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
@@ -2481,7 +2481,7 @@ __metadata:
   dependencies:
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0-beta.10"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.32.0"
     fast-check: "npm:^4.2.0"
     prettier: "npm:^3.7.0"
@@ -2515,7 +2515,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
     "@polkadot/types": "npm:^16.4.1"
     "@scure/base": "npm:^1.1.9"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
     isomorphic-ws: "npm:^5.0.0"
@@ -2544,7 +2544,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0-beta.8"
     "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:1.0.0-beta.16"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0-beta.10"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
@@ -2560,7 +2560,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities"
   dependencies:
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
     portfinder: "npm:^1.0.37"
@@ -2588,7 +2588,7 @@ __metadata:
     "@types/react": "npm:^19.2.8"
     "@types/react-dom": "npm:^19.2.3"
     buffer: "npm:^6.0.3"
-    effect: "npm:^3.17.3"
+    effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
     lodash-es: "npm:^4.17.22"
@@ -5953,13 +5953,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"effect@npm:^3.17.3":
-  version: 3.19.10
-  resolution: "effect@npm:3.19.10"
+"effect@npm:^3.19.14":
+  version: 3.19.14
+  resolution: "effect@npm:3.19.14"
   dependencies:
     "@standard-schema/spec": "npm:^1.0.0"
     fast-check: "npm:^3.23.1"
-  checksum: 10c0/c8f06557cc6c187c83d5fea22eb1444c4c593c38c9a1d989e30198bbf41f346f6ea01e0334198a6fed1dd8682a64697d96e765798b80872c68011a0b0b1afb5f
+  checksum: 10c0/8ada627fedb6596e19d21d4adb8ad43109b9f303f7b8e864493cb9f26edccfbd16915cbe10cb6c0fa6a2ece4d3781a91a2309e72882278e85fdd37ee2177acc8
   languageName: node
   linkType: hard
 
