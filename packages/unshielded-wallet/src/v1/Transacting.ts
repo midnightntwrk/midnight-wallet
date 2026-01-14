@@ -214,7 +214,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
     return Either.gen(this, function* () {
       const { networkId } = this;
-
       const isValid = outputs.every((output) => output.amount > 0n);
 
       if (!isValid) {
@@ -244,7 +243,13 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       });
 
       const intent = ledger.Intent.new(ttl);
-      intent.guaranteedUnshieldedOffer = offer;
+
+      const hasNightOutput = ledgerOutputs.some((output) => output.type === ledger.nativeToken().raw);
+      if (hasNightOutput) {
+        intent.fallibleUnshieldedOffer = offer;
+      } else {
+        intent.guaranteedUnshieldedOffer = offer;
+      }
 
       return {
         newState,

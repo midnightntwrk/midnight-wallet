@@ -129,11 +129,8 @@ describe('Dust Deregistration', () => {
     const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
-    const nightUtxosNotRegisteredForDustGenerationBeforeDeregistration =
-      walletStateWithNight.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === false);
-
     const nightUtxosRegisteredForDustGeneration = walletStateWithNight.unshielded.availableCoins.filter(
-      (coin) => coin.meta.registeredForDustGeneration === true,
+      (coin) => coin.meta.registeredForDustGeneration,
     );
 
     const deregisterTokens = 2;
@@ -156,7 +153,7 @@ describe('Dust Deregistration', () => {
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
-    const walletStateAfterRegistration = await rx.firstValueFrom(
+    const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
           const txInHistory = await state.unshielded.transactionHistory.get(
@@ -173,14 +170,12 @@ describe('Dust Deregistration', () => {
       ),
     );
 
-    const availableCoinsWithInfo = walletStateAfterRegistration.dust.availableCoinsWithFullInfo(new Date());
-    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterRegistration.unshielded.availableCoins.filter(
+    const availableCoinsWithInfo = walletStateAfterDeregistration.dust.availableCoinsWithFullInfo(new Date());
+    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterDeregistration.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
 
     expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
-    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(
-      nightUtxosNotRegisteredForDustGenerationBeforeDeregistration.length + deregisterTokens,
-    );
+    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(2);
   });
 });

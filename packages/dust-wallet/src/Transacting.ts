@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either } from 'effect';
+import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
   DustPublicKey,
@@ -24,7 +24,6 @@ import {
   SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
-  Utxo,
   UtxoOutput,
   UtxoSpend,
   FinalizedTransaction,
@@ -32,13 +31,14 @@ import {
   UnprovenTransaction,
   addressFromKey,
   LedgerParameters,
+  nativeToken,
 } from '@midnight-ntwrk/ledger-v7';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
-import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
+import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 
@@ -48,7 +48,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
-    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
@@ -140,29 +140,50 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
-    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
+    const makeOffer = (
+      utxos: ReadonlyArray<UtxoWithFullDustDetails>,
+    ): Option.Option<UnshieldedOffer<SignatureEnabled>> => {
+      if (utxos.length === 0) {
+        return Option.none();
+      }
+      const totalValue = pipe(
+        utxos,
+        IterableOps.map((coin) => coin.utxo.value),
+        BigIntOps.sumAll,
+      );
+      const inputs: UtxoSpend[] = utxos.map(({ utxo }) => ({
+        ...utxo,
+        owner: nightVerifyingKey,
+      }));
+      const output: UtxoOutput = {
+        owner: addressFromKey(nightVerifyingKey),
+        type: nativeToken().raw,
+        value: totalValue,
+      };
+
+      return Option.some(UnshieldedOffer.new(inputs, [output], []));
+    };
+
     return Either.gen(this, function* () {
       const receiver = dustReceiverAddress ? yield* this.#parseAddress(dustReceiverAddress) : undefined;
 
       return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
-        const intent = Intent.new(ttl);
-        const totalDustValue = nightUtxos.reduce((total, { value }) => total + value, 0n);
-        const inputs: UtxoSpend[] = nightUtxos.map(({ token: utxo }) => ({
-          ...utxo,
-          owner: nightVerifyingKey,
-        }));
 
-        const outputs: UtxoOutput[] = inputs.map((input) => ({
-          owner: addressFromKey(nightVerifyingKey),
-          type: input.type,
-          value: input.value,
-        }));
+        const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
-        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+        const totalDustValue = pipe(
+          splitResult.guaranteed,
+          IterableOps.map((coin) => coin.dust.generatedNow),
+          BigIntOps.sumAll,
+        );
+
+        const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
+        const maybeFallibleOffer = makeOffer(splitResult.fallible);
 
         const dustRegistration: DustRegistration<SignatureEnabled> = new DustRegistration(
           SignatureMarker.signature,
@@ -170,13 +191,36 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           receiver,
           dustReceiverAddress !== undefined ? totalDustValue : 0n,
         );
-
-        intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+        const dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
           ProofMarker.preProof,
           currentTime,
           [],
           [dustRegistration],
+        );
+
+        const intent = pipe(
+          Intent.new(ttl),
+          (intent) =>
+            Option.match(maybeGuaranteedOffer, {
+              onNone: () => intent,
+              onSome: (guaranteedOffer) => {
+                intent.guaranteedUnshieldedOffer = guaranteedOffer;
+                return intent;
+              },
+            }),
+          (intent) =>
+            Option.match(maybeFallibleOffer, {
+              onNone: () => intent,
+              onSome: (fallibleOffer) => {
+                intent.fallibleUnshieldedOffer = fallibleOffer;
+                return intent;
+              },
+            }),
+          (intent) => {
+            intent.dustActions = dustActions;
+            return intent;
+          },
         );
 
         return Transaction.fromParts(network, undefined, undefined, intent);
@@ -196,7 +240,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
       }
 
-      const { dustActions, guaranteedUnshieldedOffer } = intent;
+      const { dustActions, guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
       if (!dustActions) {
         return yield* Either.left(new WalletError.TransactingError({ message: 'No dustActions found in intent' }));
       }
@@ -246,6 +290,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           signatures.push(guaranteedUnshieldedOffer.signatures.at(i) ?? signatureData);
         }
         newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
+
+        if (fallibleUnshieldedOffer) {
+          const inputsLen = fallibleUnshieldedOffer.inputs.length;
+          const signatures: Signature[] = [];
+          for (let i = 0; i < inputsLen; ++i) {
+            signatures.push(fallibleUnshieldedOffer.signatures.at(i) ?? signatureData);
+          }
+          newIntent.fallibleUnshieldedOffer = fallibleUnshieldedOffer.addSignatures(signatures);
+        }
 
         // make a copy of transaction to avoid mutation
         const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(

@@ -26,7 +26,7 @@ import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstract
 import { TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { Balance, CoinsAndBalancesCapability, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { KeysCapability } from './Keys.js';
 import { V1Tag } from './RunningV1Variant.js';
@@ -96,6 +96,13 @@ export class DustWalletState {
     return this.capabilities.coinsAndBalances.getAvailableCoinsWithFullInfo(this.state, time);
   }
 
+  estimateDustGeneration(
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    currentTime: Date,
+  ): ReadonlyArray<UtxoWithFullDustDetails> {
+    return this.capabilities.coinsAndBalances.estimateDustGeneration(this.state, nightUtxos, currentTime);
+  }
+
   serialize(): string {
     return this.capabilities.serialization.serialize(this.state);
   }
@@ -136,7 +143,9 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
 
 export interface DustWalletClass extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]> {
   startWithSeed(seed: Uint8Array, dustParameters: DustParameters): DustWallet;
+
   startWithSecretKey(secretKey: DustSecretKey, dustParameters: DustParameters): DustWallet;
+
   restore(serializedState: string): DustWallet;
 }
 
