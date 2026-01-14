@@ -463,7 +463,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
           continue;
         }
 
-        // if segment is GUARANTEED_SEGMENT, use the first intent to balance guaranteed section
+        // if segment is GUARANTEED_SEGMENT, use the first intent to place the balancing offer in the guaranteed section
         const intentSegment = segment === GUARANTEED_SEGMENT ? segments[0] : segment;
 
         const intent = transaction.intents?.get(intentSegment) as IntentOf<T> | undefined;
@@ -493,7 +493,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
           intent.guaranteedUnshieldedOffer = mergedOffer;
         }
 
-        (transaction.intents as Map<number, IntentOf<T>>)?.set(intentSegment, intent);
+        (transaction.intents as Map<number, IntentOf<T>>) = (transaction.intents as Map<number, IntentOf<T>>).set(
+          intentSegment,
+          intent,
+        );
       }
 
       return [transaction, wallet];

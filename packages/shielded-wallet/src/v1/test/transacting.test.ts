@@ -149,20 +149,25 @@ describe('V1 Wallet Transacting', () => {
       const transactionValue = shieldedValue(4);
       const tx = pipe(transactionValue, (value) => {
         const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
-        return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
+        return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
       });
 
       return Effect.gen(function* () {
-        const [balancedTx] = EitherOps.getOrThrowLeft(
+        const [balancingTransaction] = EitherOps.getOrThrowLeft(
           transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
         );
 
-        expect(balancedTx).toBeDefined();
+        expect(balancingTransaction).toBeDefined();
 
-        const proven = yield* proving.prove(balancedTx!);
+        const balancedTransaction = tx.merge(balancingTransaction!);
 
-        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
-        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+        const provenTransaction = yield* proving.prove(balancedTransaction);
+
+        // check that the balancing transaction is correct
+        expect(balancingTransaction!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
+
+        // check that the final transaction is balanced correctly
+        expect(provenTransaction.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
     });
 
@@ -179,19 +184,25 @@ describe('V1 Wallet Transacting', () => {
       const transactionValue = shieldedValue(6); // Spending all coins (1+2+3=6)
       const tx = pipe(transactionValue, (value) => {
         const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
-        return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
+        return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
       });
 
       return Effect.gen(function* () {
-        const [balancedTx] = EitherOps.getOrThrowLeft(
+        const [balancingTransaction] = EitherOps.getOrThrowLeft(
           transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
         );
 
-        expect(balancedTx).toBeDefined();
-        const proven = yield* proving.prove(balancedTx!);
+        expect(balancingTransaction).toBeDefined();
 
-        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
-        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+        const balancedTransaction = tx.merge(balancingTransaction!);
+
+        const provenTransaction = yield* proving.prove(balancedTransaction);
+
+        // check that the balancing transaction is correct
+        expect(balancingTransaction!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toEqual(transactionValue);
+
+        // check that the final transaction is balanced correctly
+        expect(provenTransaction.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
     });
 
@@ -209,32 +220,34 @@ describe('V1 Wallet Transacting', () => {
       const transactionValueGuaranteed = shieldedValue(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
       const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1 });
-      const tx = ledger.Transaction.fromParts(
-        NetworkId.NetworkId.Undeployed,
-        guaranteedOffer,
-        fallibleOffer,
-      ).eraseProofs();
+      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, guaranteedOffer, fallibleOffer);
 
       return Effect.gen(function* () {
-        const [balancedTx] = EitherOps.getOrThrowLeft(
+        const [balancingTransaction] = EitherOps.getOrThrowLeft(
           transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
         );
 
-        expect(balancedTx).toBeDefined();
+        expect(balancingTransaction).toBeDefined();
 
-        const proven = yield* proving.prove(balancedTx!);
+        const balancedTransaction = tx.merge(balancingTransaction!);
 
+        const provenTransaction = yield* proving.prove(balancedTransaction);
+
+        // check that the fallible section of the balancing transaction is correct
         expect(
-          balancedTx!.fallibleOffer
+          balancingTransaction!.fallibleOffer
             ?.entries()
             .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
             .reduce((acc, curr) => acc + curr, 0n),
         ).toEqual(transactionValueFallible);
 
-        expect(balancedTx!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
+        // check that the guaranteed section of the balancing transaction is correct
+        expect(balancingTransaction!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
           transactionValueGuaranteed,
         );
-        expect(proven.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+
+        // check that the final transaction is balanced correctly
+        expect(provenTransaction.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
       }).pipe(Effect.runPromise);
     });
 
@@ -659,14 +672,21 @@ describe('V1 Wallet Transacting', () => {
             }),
           ]),
         );
-        const proven: ledger.ProofErasedTransaction = yield* proving.prove(tx);
-        const [balancedTx] = yield* EitherOps.toEffect(
-          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, proven),
-        );
-        expect(balancedTx).toBeDefined();
-        const balancedProven = yield* proving.prove(balancedTx!);
+        // simulate proving the transaction
+        const provenTransaction = yield* proving.prove(tx);
 
-        const imbalances = balancedProven.imbalances(0);
+        // the proven transaction is picked up by another user (wallet B)
+        const [balancingTransaction] = yield* EitherOps.toEffect(
+          transacting.balanceTransaction(wallets.B.keys, wallets.B.wallet, provenTransaction),
+        );
+
+        expect(balancingTransaction).toBeDefined();
+
+        const balancingProvenTransaction = yield* proving.prove(balancingTransaction!);
+
+        const balancedTransaction = provenTransaction.merge(balancingProvenTransaction);
+
+        const imbalances = balancedTransaction.imbalances(0);
 
         expect(new Set(imbalances.keys()).size).toBe(0);
         expect(getNonDustImbalance(imbalances, rawShieldedTokenType)).toBe(0n);

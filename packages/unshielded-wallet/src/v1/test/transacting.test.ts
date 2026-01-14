@@ -43,7 +43,7 @@ const utxoArbitrary = (tokenType: ledger.RawTokenType, owner: PublicKey): fc.Arb
         value: fc.bigInt({ min: 1n, max: (1n << 64n) - 1n }),
         owner: fc.constant(owner.addressHex),
         type: fc.constant(tokenType),
-        intentHash: fc.constant(ledger.sampleIntentHash()),
+        intentHash: fc.context().map(() => ledger.sampleIntentHash()),
         outputNo: fc.nat(10),
       }),
       meta: fc.record({

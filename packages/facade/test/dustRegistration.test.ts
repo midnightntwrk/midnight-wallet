@@ -292,16 +292,8 @@ describe('Dust Registration', () => {
         [transfersToMake],
         DateOps.addSeconds(new Date(), 1800),
       )
-      .then(async (recipe) => {
-        const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
-          unshieldedSenderKeystore.signData(payload),
-        );
-        return {
-          ...recipe,
-          transaction: signedTx,
-        };
-      })
-      .then((recipe) => senderFacade.finalizeTransaction(recipe))
+      .then((recipe) => senderFacade.signRecipe(recipe, (payload) => unshieldedSenderKeystore.signData(payload)))
+      .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))
       .then((tx) => senderFacade.submitTransaction(tx));
 
     // Let's wait until receiver has received Night and has generated enough Dust to pay fees for the registration tx
@@ -334,7 +326,7 @@ describe('Dust Registration', () => {
         unshieldedReceiverKeystore.getPublicKey(),
         (payload) => unshieldedReceiverKeystore.signData(payload),
       )
-      .then((recipe) => receiverFacade.finalizeTransaction(recipe))
+      .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));
 
     const finalReceiverState = await rx.firstValueFrom(

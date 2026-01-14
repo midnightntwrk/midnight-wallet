@@ -132,17 +132,19 @@ describe('DustWallet', () => {
         undefined,
       );
 
-      const feeTransaction = yield* wallet.balanceTransactions(
+      const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
         [registerForDustTransaction],
         ttl,
         currentTime,
       );
 
-      const intent = feeTransaction.intents!.get(1);
+      const balancedTransaction = registerForDustTransaction.merge(balancingTransaction);
+
+      const intent = balancedTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
       const signature = keyStore.signData(intentSignatureData);
-      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(feeTransaction, signature);
+      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(balancedTransaction, signature);
 
       const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
       const result = yield* wallet.submitTransaction(transaction);
@@ -368,15 +370,18 @@ describe('DustWallet', () => {
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
       // cover fees with dust
-      const transactionWithFee = yield* wallet.balanceTransactions(
+      const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],
         ttl,
         currentTime,
       );
-      const transaction = yield* wallet.proveTransaction(transactionWithFee);
 
-      yield* wallet.submitTransaction(transaction);
+      const balancedTransaction = transferTransaction.merge(balancingTransaction);
+
+      const provenTransaction = yield* wallet.proveTransaction(balancedTransaction);
+
+      yield* wallet.submitTransaction(provenTransaction);
       yield* waitForTx(stateRef, 4);
 
       simulatorState = yield* simulator.getLatestState();
@@ -463,18 +468,21 @@ describe('DustWallet', () => {
       expect(totalFee).toBeGreaterThan(0n);
 
       // cover fees with dust
-      const transactionWithFee = yield* wallet.balanceTransactions(
+      const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],
         ttl,
         currentTime,
       );
-      const transaction = yield* wallet.proveTransaction(transactionWithFee);
+
+      const balancedTransaction = transferTransaction.merge(balancingTransaction);
+
+      const provenTransaction = yield* wallet.proveTransaction(balancedTransaction);
 
       // validate fee imbalance
-      expect(Transacting.TransactingCapabilityImplementation.feeImbalance(transaction, totalFee)).toBe(0n);
+      expect(Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee)).toBe(0n);
 
-      yield* wallet.submitTransaction(transaction);
+      yield* wallet.submitTransaction(provenTransaction);
       yield* waitForTx(stateRef, 11);
 
       walletState = yield* SubscriptionRef.get(stateRef);
