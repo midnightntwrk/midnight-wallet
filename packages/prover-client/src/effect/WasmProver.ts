@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import Worker from 'web-worker';
-import { Context, Effect, Layer, pipe } from 'effect';
+import { Context, Effect, Encoding, Layer, pipe } from 'effect';
 import { InvalidProtocolSchemeError, ClientError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
@@ -49,7 +49,7 @@ const callProverWorker = <RResponse>(
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
     const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
-    worker.postMessage({ op, args });
+    worker.postMessage({ op, args: [Encoding.encodeBase64(args[0]), args[1]] });
 
     worker.addEventListener('message', ({ data }: { data: WorkerMessage<RResponse> }) => {
       if (data.op === 'lookupKey') {

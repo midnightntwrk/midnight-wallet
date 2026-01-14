@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
+import { Either, Schema } from 'effect';
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 
 const keyMaterialProvider: KeyMaterialProvider = {
@@ -46,11 +46,24 @@ const keyMaterialProvider: KeyMaterialProvider = {
   },
 };
 
-// we handle polymorphic data here
-addEventListener(
-  'message',
-  ({ data }: MessageEvent<{ op: 'check' | 'prove' | undefined; args: [Uint8Array, (bigint | undefined)?] }>) => {
-    const { op, args } = data;
+const CheckOperationSchema = Schema.Struct({
+  op: Schema.Literal('check'),
+  args: Schema.Tuple(Schema.Uint8ArrayFromBase64),
+});
+
+const ProveOperationSchema = Schema.Struct({
+  op: Schema.Literal('prove'),
+  args: Schema.Tuple(Schema.Uint8ArrayFromBase64, Schema.Union(Schema.BigInt, Schema.Undefined)),
+});
+
+const MessageDataSchema = Schema.Union(CheckOperationSchema, ProveOperationSchema);
+
+type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
+
+addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
+  const decoded = Schema.decodeUnknownEither(MessageDataSchema)(data);
+  if (Either.isRight(decoded)) {
+    const { op, args } = decoded.right;
     if (op === 'check') {
       const [a] = args;
 
@@ -78,5 +91,5 @@ addEventListener(
           throw e;
         });
     }
-  },
-);
+  }
+});
