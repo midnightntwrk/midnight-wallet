@@ -2600,10 +2600,9 @@ __metadata:
     rxjs: "npm:^7.5"
     testcontainers: "npm:^11.10.0"
     typescript: "npm:^5.9.3"
-    vite: "npm:^7.3.0"
+    vite: "npm:^7.3.1"
     vite-plugin-node-polyfills: "npm:^0.24.0"
     vite-plugin-wasm: "npm:^3.5.0"
-    vitest: "npm:^4.0.16"
   languageName: unknown
   linkType: soft
 

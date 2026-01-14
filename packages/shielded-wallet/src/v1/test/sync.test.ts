@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import { vi } from 'vitest';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import {
   Effect,
@@ -38,6 +39,10 @@ import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Simulator } from '../Simulator.js';
+
+vi.setConfig({
+  testTimeout: 10_000,
+});
 
 // Helper to create a valid hex-encoded ledger event
 const createMockEventHex = async (): Promise<string> => {

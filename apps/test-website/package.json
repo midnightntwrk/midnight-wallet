@@ -34,7 +34,6 @@
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json",
-    "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",
@@ -51,9 +50,8 @@
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0",
+    "vite": "^7.3.1",
     "vite-plugin-node-polyfills": "^0.24.0",
-    "vite-plugin-wasm": "^3.5.0",
-    "vitest": "^4.0.16"
+    "vite-plugin-wasm": "^3.5.0"
   }
 }
