@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-facade",
-  "version": "1.0.0-beta.15",
+  "version": "1.0.0-beta.16",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -27,10 +27,10 @@
     "@midnight-ntwrk/ledger-v7": "7.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "1.0.0-beta.14",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "1.0.0-beta.15",
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.15",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "1.0.0-beta.17",
+    "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.16",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "1.0.0-beta.18",
     "rxjs": "^7.5"
   },
   "devDependencies": {
