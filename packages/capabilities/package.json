@@ -26,7 +26,7 @@
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "effect": "^3.17.3"
+    "effect": "^3.19.14"
   },
   "devDependencies": {
     "@midnight-ntwrk/ledger-v7": "7.0.0-rc.1",
