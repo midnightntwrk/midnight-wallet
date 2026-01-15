@@ -10,12 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, Encoding, Schema } from 'effect';
+import { Encoding, Schema } from 'effect';
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+
+const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
 
 const keyMaterialProvider: KeyMaterialProvider = {
   lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       postMessage({ op: 'lookupKey', keyLocation });
 
       const subscription = (message: {
@@ -28,10 +30,11 @@ const keyMaterialProvider: KeyMaterialProvider = {
       };
 
       addEventListener('message', subscription);
+      setTimeout(() => reject(new Error(`Promise timed out for lookupKey: ${keyLocation}`)), MAX_TIME_TO_PROCESS);
     });
   },
   getParams(k: number): Promise<Uint8Array> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       postMessage({ op: 'getParams', k });
 
       const subscription = (message: { data: { op: string; k: number; result: Uint8Array } }) => {
@@ -42,6 +45,7 @@ const keyMaterialProvider: KeyMaterialProvider = {
       };
 
       addEventListener('message', subscription);
+      setTimeout(() => reject(new Error(`Promise timed out for getParams: ${k}`)), MAX_TIME_TO_PROCESS);
     });
   },
 };
@@ -53,7 +57,7 @@ const CheckOperationSchema = Schema.Struct({
 
 const ProveOperationSchema = Schema.Struct({
   op: Schema.Literal('prove'),
-  args: Schema.Tuple(Schema.Uint8ArrayFromBase64, Schema.Union(Schema.BigInt, Schema.Undefined)),
+  args: Schema.Tuple(Schema.Uint8ArrayFromBase64, Schema.Union(Schema.BigIntFromSelf, Schema.Undefined)),
 });
 
 const MessageDataSchema = Schema.Union(CheckOperationSchema, ProveOperationSchema);
@@ -61,9 +65,10 @@ const MessageDataSchema = Schema.Union(CheckOperationSchema, ProveOperationSchem
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
 
 addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
-  const decoded = Schema.decodeUnknownEither(MessageDataSchema)(data);
-  if (Either.isRight(decoded)) {
-    const { op, args } = decoded.right;
+  if (data.op === 'check' || data.op === 'prove') {
+    const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
+    const { op, args } = decoded;
+
     if (op === 'check') {
       const [a] = args;
 

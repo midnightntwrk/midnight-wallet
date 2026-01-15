@@ -39,7 +39,7 @@ const GetParamsSchema = Schema.Struct({
 
 const ResponseSchema = Schema.Struct({
   op: Schema.Literal('result'),
-  value: Schema.Union(Schema.Uint8ArrayFromBase64, Schema.Array(Schema.Union(Schema.BigInt, Schema.Undefined))),
+  value: Schema.Union(Schema.Uint8ArrayFromBase64, Schema.Array(Schema.Union(Schema.BigIntFromSelf, Schema.Undefined))),
 });
 
 const MessageDataSchema = Schema.Union(LookupKeySchema, GetParamsSchema, ResponseSchema);
@@ -84,6 +84,7 @@ const callProverWorker = <RResponse>(
       }
     });
     worker.addEventListener('error', reject);
+    setTimeout(() => reject(new Error(`${op} action timed out`)), 10 * 60 * 1000);
   });
 };
 
