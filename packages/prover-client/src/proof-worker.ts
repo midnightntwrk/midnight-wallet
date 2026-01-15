@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Encoding, Schema } from 'effect';
+import { Either, Encoding, Schema } from 'effect';
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 
 const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
@@ -60,41 +60,54 @@ const ProveOperationSchema = Schema.Struct({
   args: Schema.Tuple(Schema.Uint8ArrayFromBase64, Schema.Union(Schema.BigIntFromSelf, Schema.Undefined)),
 });
 
-const MessageDataSchema = Schema.Union(CheckOperationSchema, ProveOperationSchema);
+const LookupKeyOperationSchema = Schema.Struct({
+  op: Schema.Literal('lookupKey'),
+  keyLocation: Schema.String,
+});
+
+const GetParamsOperationSchema = Schema.Struct({
+  op: Schema.Literal('getParams'),
+  k: Schema.Number,
+});
+
+const MessageDataSchema = Schema.Union(
+  CheckOperationSchema,
+  ProveOperationSchema,
+  LookupKeyOperationSchema,
+  GetParamsOperationSchema,
+);
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
 
 addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
-  if (data.op === 'check' || data.op === 'prove') {
-    const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
-    const { op, args } = decoded;
+  const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
+  const { op } = decoded;
 
-    if (op === 'check') {
-      const [a] = args;
+  if (op === 'check') {
+    const [a] = decoded.args;
 
-      check(a, keyMaterialProvider)
-        .then((result) => {
-          postMessage({
-            op: 'result',
-            value: result,
-          });
-        })
-        .catch((e) => {
-          throw e;
+    check(a, keyMaterialProvider)
+      .then((result) => {
+        postMessage({
+          op: 'result',
+          value: result,
         });
-    } else if (op === 'prove') {
-      const [a, b] = args;
+      })
+      .catch((e) => {
+        throw e;
+      });
+  } else if (op === 'prove') {
+    const [a, b] = decoded.args;
 
-      prove(a, keyMaterialProvider, b)
-        .then((result) => {
-          postMessage({
-            op: 'result',
-            value: Encoding.encodeBase64(result),
-          });
-        })
-        .catch((e) => {
-          throw e;
+    prove(a, keyMaterialProvider, b)
+      .then((result) => {
+        postMessage({
+          op: 'result',
+          value: Encoding.encodeBase64(result),
         });
-    }
+      })
+      .catch((e) => {
+        throw e;
+      });
   }
 });

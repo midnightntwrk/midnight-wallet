@@ -27,6 +27,8 @@ export const layer: (config: ProverClient.WasmConfig) => Layer.Layer<ProverClien
   config,
 ) => Layer.effect(ProverClient, Effect.succeed(new WasmProverImpl(config.keyMaterialProvider)));
 
+const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
+
 const LookupKeySchema = Schema.Struct({
   op: Schema.Literal('lookupKey'),
   keyLocation: Schema.String,
@@ -84,7 +86,7 @@ const callProverWorker = <RResponse>(
       }
     });
     worker.addEventListener('error', reject);
-    setTimeout(() => reject(new Error(`${op} action timed out`)), 10 * 60 * 1000);
+    setTimeout(() => reject(new Error(`${op} action timed out`)), MAX_TIME_TO_PROCESS);
   });
 };
 
