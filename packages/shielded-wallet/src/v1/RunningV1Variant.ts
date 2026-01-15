@@ -62,7 +62,7 @@ export declare namespace RunningV1Variant {
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
     syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
     transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
-    provingService: ProvingService<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>;
+    provingService: ProvingService<TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     submissionService: SubmissionService<TTransaction>;
@@ -194,9 +194,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     });
   }
 
-  proveTransaction(
-    transaction: ledger.UnprovenTransaction,
-  ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>, WalletError> {
+  finalizeTransaction(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError> {
     return this.#v1Context.provingService
       .prove(transaction)
       .pipe(

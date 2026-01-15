@@ -25,18 +25,17 @@ export type DefaultProvingConfiguration = {
 
 export const makeDefaultProvingService = (
   configuration: DefaultProvingConfiguration,
-): ProvingService<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> => {
+): ProvingService<ledger.FinalizedTransaction> => {
   const clientLayer = HttpProverClient.layer({
     url: configuration.provingServerUrl,
   });
 
   return {
-    prove(
-      transaction: ledger.UnprovenTransaction,
-    ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>, WalletError> {
+    prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.FinalizedTransaction, WalletError> {
       return pipe(
         ProverClient.ProverClient,
         Effect.flatMap((client) => client.proveTransaction(transaction, ledger.CostModel.initialCostModel())),
+        Effect.map((transaction) => transaction.bind()),
         Effect.provide(clientLayer),
         Effect.catchAll((error) =>
           Effect.fail(

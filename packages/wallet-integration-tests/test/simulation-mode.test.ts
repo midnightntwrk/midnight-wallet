@@ -88,7 +88,7 @@ describe('Working in simulation mode', () => {
               .then((addr) => ShieldedAddress.codec.encode(Wallet.configuration.networkId, addr).asString()),
           },
         ]);
-        const tx = await senderWallet.proveTransaction(unprovenTx);
+        const tx = await senderWallet.finalizeTransaction(unprovenTx);
         await senderWallet.submitTransaction(tx);
       }).pipe(Effect.forkScoped);
 

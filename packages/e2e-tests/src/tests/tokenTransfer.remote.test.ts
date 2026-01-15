@@ -388,11 +388,11 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(networkId, offer);
-      const provenTx = await sender.wallet.proveTransaction(unprovenTx);
+      const finalizedTx = await sender.wallet.finalizeTransaction(unprovenTx);
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);
       await expect(
-        Promise.all([sender.wallet.submitTransaction(provenTx), sender.wallet.submitTransaction(provenTx)]),
+        Promise.all([sender.wallet.submitTransaction(finalizedTx), sender.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
       // const txToProve = await walletFunded.transferTransaction(outputsToCreate);
       // const provenTx = await walletFunded.proveTransaction(txToProve);

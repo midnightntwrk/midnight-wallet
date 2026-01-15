@@ -293,10 +293,7 @@ export class V1Builder<
   }
 
   withProving<TProvingConfig, TProvingContext extends Partial<RunningV1Variant.AnyContext>>(
-    provingService: (
-      config: TProvingConfig,
-      getContext: () => TProvingContext,
-    ) => ProvingService<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>,
+    provingService: (config: TProvingConfig, getContext: () => TProvingContext) => ProvingService<TTransaction>,
   ): V1Builder<
     TConfig & TProvingConfig,
     TContext & TProvingContext,
@@ -583,11 +580,8 @@ declare namespace V1Builder {
     ) => SerializationCapability<CoreWallet, null, TSerialized>;
   };
 
-  type HasProving<TConfig, TContext> = {
-    readonly provingService: (
-      configuration: TConfig,
-      getContext: () => TContext,
-    ) => ProvingService<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>;
+  type HasProving<TConfig, TContext, TTransaction> = {
+    readonly provingService: (configuration: TConfig, getContext: () => TContext) => ProvingService<TTransaction>;
   };
 
   type HasCoinsAndBalances<TConfig, TContext> = {
@@ -620,7 +614,7 @@ declare namespace V1Builder {
       HasSerialization<TConfig, TContext, TSerialized> &
       HasTransacting<TConfig, TContext, TTransaction> &
       HasCoinSelection<TConfig, TContext> &
-      HasProving<TConfig, TContext> &
+      HasProving<TConfig, TContext, TTransaction> &
       HasSubmission<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &

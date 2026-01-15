@@ -27,7 +27,7 @@ import {
   tokenValue,
   waitForFullySynced,
   waitForDustGenerated,
-} from './utils.js';
+} from './utils/helpers.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,

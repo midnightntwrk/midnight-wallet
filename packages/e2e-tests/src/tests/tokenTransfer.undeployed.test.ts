@@ -571,9 +571,9 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const provenTx = await funded.wallet.proveTransaction(unprovenTx);
+      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
       await expect(
-        Promise.all([funded.wallet.submitTransaction(provenTx), funded.wallet.submitTransaction(provenTx)]),
+        Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
@@ -1033,10 +1033,10 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, tokenTypeHash, outputValueNativeToken);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const provenTx = await funded.wallet.proveTransaction(unprovenTx);
+      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
 
       await expect(
-        Promise.all([funded.wallet.submitTransaction(provenTx), funded.wallet.submitTransaction(provenTx)]),
+        Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);

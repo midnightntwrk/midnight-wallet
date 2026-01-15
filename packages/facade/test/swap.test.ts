@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   InMemoryTransactionHistoryStorage,
@@ -30,6 +30,7 @@ import { CombinedSwapInputs, CombinedSwapOutputs, WalletFacade } from '../src/in
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { makeProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -142,6 +143,8 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
+    const provingService = makeProvingService(configuration.provingServerUrl);
+
     const facadeAState = await waitForFullySynced(walletAFacade);
     const facadeBState = await waitForFullySynced(walletBFacade);
 
@@ -187,7 +190,7 @@ describe('Swaps', () => {
     );
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
-    const unboundSwapTx = await walletAFacade.proveTransaction(swapTxRecipe.transaction);
+    const unboundSwapTx = await provingService.proveTransaction(swapTxRecipe.transaction);
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
