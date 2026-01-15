@@ -134,8 +134,7 @@ export const TransactionOps: TransactionOps = {
       .imbalances(segment)
       .entries()
       .filter(([token, value]) => token.tag === 'unshielded' && value !== 0n)
-      .map(([token, value]) => [token, value] as [ledger.UnshieldedTokenType, bigint])
-      .map(([token, value]) => [token.raw, value] as const)
+      .map(([token, value]) => [(token as { tag: 'unshielded'; raw: string }).raw.toString(), value] as const)
       .toArray();
 
     return Imbalances.fromEntries(imbalances);
