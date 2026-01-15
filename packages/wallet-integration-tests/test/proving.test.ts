@@ -110,7 +110,7 @@ describe('Proving Service', () => {
 
   function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTransaction>>(
     implName: string,
-    makeService: () => Effect.Effect<T, never, Scope.Scope>,
+    makeService: () => Effect.Effect<T, unknown, Scope.Scope>,
   ) {
     describe(`${implName} implementation of ProvingService`, () => {
       it.each(recipes)(
@@ -132,12 +132,14 @@ describe('Proving Service', () => {
   runInterfaceTests('Default Proving', () => Effect.succeed(Proving.makeDefaultProvingService({})));
 
   runInterfaceTests('Server Proving', () =>
-    Effect.gen(function* () {
-      const proofServerUrl = yield* proofServerContainerResource;
-      return Proving.makeServerProvingService({
-        provingServerUrl: proofServerUrl,
-      });
-    }),
+    pipe(
+      proofServerContainerResource,
+      Effect.map((proofServerUrl) =>
+        Proving.makeServerProvingService({
+          provingServerUrl: proofServerUrl,
+        }),
+      ),
+    ),
   );
 
   describe('Server Proving Service', () => {
