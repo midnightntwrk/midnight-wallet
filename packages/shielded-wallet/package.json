@@ -38,7 +38,7 @@
     "@midnight-ntwrk/wallet-sdk-runtime": "1.0.0-beta.11",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
     "@scure/base": "^1.1.9",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "isomorphic-ws": "^5.0.0",
     "node-fetch": "3.3.2",
     "rxjs": "^7.5",

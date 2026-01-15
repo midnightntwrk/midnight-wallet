@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration } from 'effect';
+import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
 import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v7';
 import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
@@ -120,14 +120,16 @@ export const SyncEventsUpdateSchema = Schema.Struct({
 export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
 
 export type WalletSyncUpdate = {
-  update: WalletSyncSubscription;
+  updates: WalletSyncSubscription[];
   secretKeys: SecretKeysResource;
+  timestamp: Date;
 };
 export const WalletSyncUpdate = {
-  create: (update: WalletSyncSubscription, secretKey: DustSecretKey): WalletSyncUpdate => {
+  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
     return {
-      update,
+      updates,
       secretKeys: SecretKeysResource.create(secretKey),
+      timestamp,
     };
   },
 };
@@ -140,14 +142,15 @@ export const makeDefaultSyncService = (
       state: DustCoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<WalletSyncUpdate, WalletError.WalletError, Scope.Scope> => {
-      const batchSize = 50;
-      const batchTimeout = Duration.seconds(10);
+      const batchSize = 10;
+      const batchTimeout = Duration.millis(1);
 
       return pipe(
         indexerSyncService.subscribeWallet(state),
-        Stream.map((data) => WalletSyncUpdate.create(data, secretKey)),
         Stream.groupedWithin(batchSize, batchTimeout),
-        Stream.flatMap((chunk) => Stream.fromIterable(chunk)),
+        Stream.map(Chunk.toArray),
+        Stream.map((data) => WalletSyncUpdate.create(data, secretKey, new Date())),
+        Stream.schedule(Schedule.spaced(Duration.millis(4))),
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
@@ -238,9 +241,16 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
 export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate(state: DustCoreWallet, wrappedUpdate: WalletSyncUpdate): DustCoreWallet {
-      const { update, secretKeys } = wrappedUpdate;
-      const nextIndex = BigInt(update.id);
-      const highestRelevantWalletIndex = BigInt(update.maxId);
+      const { updates, secretKeys } = wrappedUpdate;
+
+      // Nothing to update yet
+      if (updates.length === 0) {
+        return state;
+      }
+
+      const lastUpdate = updates.at(-1)!;
+      const nextIndex = BigInt(lastUpdate.id);
+      const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
 
       // in case the nextIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
@@ -248,10 +258,10 @@ export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, Wall
         return state.updateProgress({ highestRelevantWalletIndex, isConnected: true });
       }
 
-      const events = [update.raw].filter((event) => event !== null);
+      const events = updates.map((u) => u.raw).filter((event) => event !== null);
       return secretKeys((keys) =>
         state
-          .applyEvents(keys, events, new Date())
+          .applyEvents(keys, events, wrappedUpdate.timestamp)
           .updateProgress({ appliedIndex: nextIndex, highestRelevantWalletIndex, isConnected: true }),
       );
     },

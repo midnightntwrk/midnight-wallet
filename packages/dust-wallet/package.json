@@ -33,7 +33,7 @@
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.0.0-beta.13",
     "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.15",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "rxjs": "^7.5"
   },
   "scripts": {
