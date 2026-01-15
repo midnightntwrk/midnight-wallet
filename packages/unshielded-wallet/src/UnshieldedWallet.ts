@@ -11,7 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1/index.js';
+import {
+  BaseV1Configuration,
+  DefaultV1Configuration,
+  V1Builder,
+  V1Tag,
+  V1Variant,
+  CoreWallet,
+  UnboundTransaction,
+} from './v1/index.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
@@ -19,7 +27,12 @@ import { SerializationCapability } from './v1/Serialization.js';
 import { TransactionHistoryService } from './v1/TransactionHistory.js';
 import { CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { KeysCapability } from './v1/Keys.js';
-import { TokenTransfer } from './v1/Transacting.js';
+import {
+  TokenTransfer,
+  FinalizedTransactionBalanceResult,
+  UnboundTransactionBalanceResult,
+  UnprovenTransactionBalanceResult,
+} from './v1/Transacting.js';
 import { WalletSyncUpdate } from './v1/SyncSchema.js';
 import { UtxoWithMeta } from './v1/UnshieldedState.js';
 import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
@@ -86,26 +99,23 @@ export class UnshieldedWalletState<TSerialized = string> {
   }
 }
 
-export type UnshieldedWallet = CustomizedUnshieldedWallet<ledger.FinalizedTransaction, WalletSyncUpdate, string>;
+export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
 
-export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
-  ledger.FinalizedTransaction,
-  WalletSyncUpdate,
-  string
->;
+export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<WalletSyncUpdate, string, DefaultV1Configuration>;
 
 export interface CustomizedUnshieldedWallet<
-  TTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> extends WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction>>]> {
+> extends WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]> {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
 
   start(): Promise<void>;
 
-  balanceTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>>;
+  balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult>;
+
+  balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult>;
+
+  balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult>;
 
   transferTransaction(outputs: readonly TokenTransfer[], ttl: Date): Promise<ledger.UnprovenTransaction>;
 
@@ -128,14 +138,13 @@ export interface CustomizedUnshieldedWallet<
 }
 
 export interface CustomizedUnshieldedWalletClass<
-  TTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
-> extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction>>]> {
+> extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]> {
   configuration: TConfig;
-  startWithPublicKey(publicKey: PublicKey): CustomizedUnshieldedWallet<TTransaction, TSyncUpdate, TSerialized>;
-  restore(serializedState: TSerialized): CustomizedUnshieldedWallet<TTransaction, TSyncUpdate, TSerialized>;
+  startWithPublicKey(publicKey: PublicKey): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
+  restore(serializedState: TSerialized): CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>;
 }
 
 export function UnshieldedWallet(configuration: DefaultV1Configuration): UnshieldedWalletClass {
@@ -144,30 +153,29 @@ export function UnshieldedWallet(configuration: DefaultV1Configuration): Unshiel
 
 export function CustomUnshieldedWallet<
   TConfig extends BaseV1Configuration = DefaultV1Configuration,
-  TTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction>, TConfig>,
-): CustomizedUnshieldedWalletClass<TTransaction, TSyncUpdate, TSerialized, TConfig> {
+  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate>, TConfig>,
+): CustomizedUnshieldedWalletClass<TSyncUpdate, TSerialized, TConfig> {
   const buildArgs = [configuration] as WalletBuilder.BuildArguments<
     [
       VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction>, TConfig>
+        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate>, TConfig>
       >,
     ]
   >;
   const BaseWallet = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, builder)
     .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction>>],
+    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>],
     TConfig
   >;
 
   return class CustomUnshieldedWalletImplementation
     extends BaseWallet
-    implements CustomizedUnshieldedWallet<TTransaction, TSyncUpdate, TSerialized>
+    implements CustomizedUnshieldedWallet<TSyncUpdate, TSerialized>
   {
     static startWithPublicKey(publicKeys: PublicKey): CustomUnshieldedWalletImplementation {
       return CustomUnshieldedWalletImplementation.startFirst(
@@ -186,7 +194,7 @@ export function CustomUnshieldedWallet<
     readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
 
     constructor(
-      runtime: Runtime.Runtime<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction>>]>,
+      runtime: Runtime.Runtime<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]>,
       scope: Scope.CloseableScope,
     ) {
       super(runtime, scope);
@@ -204,12 +212,26 @@ export function CustomUnshieldedWallet<
       return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground() }).pipe(Effect.runPromise);
     }
 
-    balanceTransaction(
-      tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>> {
+    balanceFinalizedTransaction(tx: ledger.FinalizedTransaction): Promise<FinalizedTransactionBalanceResult> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.balanceTransaction(tx),
+          [V1Tag]: (v1) => v1.balanceFinalizedTransaction(tx),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    balanceUnboundTransaction(tx: UnboundTransaction): Promise<UnboundTransactionBalanceResult> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.balanceUnboundTransaction(tx),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    balanceUnprovenTransaction(tx: ledger.UnprovenTransaction): Promise<UnprovenTransactionBalanceResult> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.balanceUnprovenTransaction(tx),
         })
         .pipe(Effect.runPromise);
     }

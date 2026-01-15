@@ -22,7 +22,14 @@ import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { SerializationCapability } from './Serialization.js';
 import { SyncCapability, SyncService } from './Sync.js';
 import { WalletSyncUpdate } from './SyncSchema.js';
-import { TransactingCapability, TokenTransfer } from './Transacting.js';
+import {
+  TransactingCapability,
+  TokenTransfer,
+  FinalizedTransactionBalanceResult,
+  UnboundTransactionBalanceResult,
+  UnprovenTransactionBalanceResult,
+} from './Transacting.js';
+import { UnboundTransaction } from './TransactionOps.js';
 import { WalletError } from './WalletError.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
@@ -54,39 +61,36 @@ const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): State
 };
 
 export declare namespace RunningV1Variant {
-  export type Context<TSerialized, TSyncUpdate, TTransaction> = {
+  export type Context<TSerialized, TSyncUpdate> = {
     serializationCapability: SerializationCapability<CoreWallet, TSerialized>;
     syncService: SyncService<CoreWallet, TSyncUpdate>;
     syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
-    transactingCapability: TransactingCapability<TTransaction, CoreWallet>;
+    transactingCapability: TransactingCapability<CoreWallet>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.Utxo>;
     transactionHistoryService: TransactionHistoryService<WalletSyncUpdate>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export type AnyContext = Context<any, any, any>;
+  export type AnyContext = Context<any, any>;
 }
 
 export const V1Tag: unique symbol = Symbol('V1');
 
-export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncUpdate, ledger.FinalizedTransaction>;
+export type DefaultRunningV1 = RunningV1Variant<string, WalletSyncUpdate>;
 
-export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction> implements Variant.RunningVariant<
-  typeof V1Tag,
-  CoreWallet
-> {
+export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.RunningVariant<typeof V1Tag, CoreWallet> {
   readonly __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
   readonly #context: Variant.VariantContext<CoreWallet>;
-  readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>;
+  readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>;
 
   readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
   constructor(
     scope: Scope.Scope,
     context: Variant.VariantContext<CoreWallet>,
-    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction>,
+    v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate>,
   ) {
     this.#scope = scope;
     this.#context = context;
@@ -146,15 +150,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction> implements
     );
   }
 
-  balanceTransaction(
-    tx: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
-  ): Effect.Effect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>, WalletError> {
+  balanceFinalizedTransaction(
+    tx: ledger.FinalizedTransaction,
+  ): Effect.Effect<FinalizedTransactionBalanceResult, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.transactingCapability.balanceTransaction(state, tx),
-        EitherOps.toEffect,
-        Effect.map(({ transaction, newState }) => [transaction, newState]),
-      );
+      return pipe(this.#v1Context.transactingCapability.balanceFinalizedTransaction(state, tx), EitherOps.toEffect);
+    });
+  }
+
+  balanceUnboundTransaction(tx: UnboundTransaction): Effect.Effect<UnboundTransactionBalanceResult, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.balanceUnboundTransaction(state, tx), EitherOps.toEffect);
+    });
+  }
+
+  balanceUnprovenTransaction(
+    tx: ledger.UnprovenTransaction,
+  ): Effect.Effect<UnprovenTransactionBalanceResult, WalletError> {
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.balanceUnprovenTransaction(state, tx), EitherOps.toEffect);
     });
   }
 
@@ -166,13 +180,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction> implements
       return pipe(
         this.#v1Context.transactingCapability.makeTransfer(state, outputs, ttl),
         EitherOps.toEffect,
-        Effect.flatMap(({ transaction, newState }) =>
-          pipe(
-            this.#v1Context.transactingCapability.balanceTransaction(newState, transaction),
-            EitherOps.toEffect,
-            Effect.map(({ transaction, newState }) => [transaction as ledger.UnprovenTransaction, newState]),
-          ),
-        ),
+        Effect.map(({ transaction, newState }) => [transaction, newState]),
       );
     });
   }

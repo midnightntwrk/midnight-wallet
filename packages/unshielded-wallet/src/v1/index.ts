@@ -22,6 +22,6 @@ export * from './RunningV1Variant.js';
 export * as Simulator from './Simulator.js';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
-export * from './Transaction.js';
+export * from './TransactionOps.js';
 export * as TransactionHistoryStorage from '../storage/index.js';
 export * as UnshieldedState from './UnshieldedState.js';

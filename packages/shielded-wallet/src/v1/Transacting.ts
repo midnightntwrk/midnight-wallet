@@ -14,12 +14,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import {
-  BALANCE_TRANSACTION_TO_PROVE,
-  NOTHING_TO_PROVE,
-  ProvingRecipe,
-  TRANSACTION_TO_PROVE,
-} from './ProvingRecipe.js';
 import { CoreWallet } from './CoreWallet.js';
 import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
 import {
@@ -31,7 +25,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
-import { TransactionTrait } from './Transaction.js';
+import { TransactionOps } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 
@@ -41,32 +35,35 @@ export interface TokenTransfer {
   readonly receiverAddress: string;
 }
 
+export type BalancingResult = ledger.UnprovenTransaction | undefined;
+
 export interface TransactingCapability<TSecrets, TState, TTransaction> {
   balanceTransaction(
     secrets: TSecrets,
     state: TState,
     // That's definitely fine for now, question is whether it is worth bastracting over in general case
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
+  ): Either.Either<[BalancingResult, TState], WalletError>;
 
   makeTransfer(
     secrets: TSecrets,
     state: TState,
     outputs: ReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
+  ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
 
   initSwap(
     secrets: TSecrets,
     state: TState,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: TState }, WalletError>;
+  ): Either.Either<[ledger.UnprovenTransaction, TState], WalletError>;
 
   //These functions below do not exactly match here, but also seem to be somewhat good place to put
   //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
-  revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError>;
-
-  revertRecipe(state: TState, recipe: ProvingRecipe<TTransaction>): Either.Either<TState, WalletError>;
+  revertTransaction(
+    state: TState,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+  ): Either.Either<TState, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -88,7 +85,7 @@ export const makeDefaultTransactingCapability = (
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
-    TransactionTrait.default,
+    TransactionOps.default,
   );
 };
 
@@ -101,7 +98,7 @@ export const makeSimulatorTransactingCapability = (
     () => getContext().coinSelection,
     () => getContext().coinsAndBalancesCapability,
     () => getContext().keysCapability,
-    TransactionTrait.proofErased,
+    TransactionOps.proofErased,
   );
 };
 
@@ -110,7 +107,7 @@ export class TransactingCapabilityImplementation<
 > implements TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction> {
   public readonly networkId: NetworkId.NetworkId;
   public readonly getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-  public readonly txTrait: TransactionTrait<TTransaction>;
+  public readonly txOps: TransactionOps<TTransaction>;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
@@ -119,33 +116,26 @@ export class TransactingCapabilityImplementation<
     getCoinSelection: () => CoinSelection<ledger.QualifiedShieldedCoinInfo>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
-    txTrait: TransactionTrait<TTransaction>,
+    txOps: TransactionOps<TTransaction>,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
     this.getCoinSelection = getCoinSelection;
     this.getKeys = getKeys;
-    this.txTrait = txTrait;
+    this.txOps = txOps;
   }
 
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     tx: TTransaction,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
+  ): Either.Either<[BalancingResult, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const coinSelection = this.getCoinSelection();
-      const networkId = this.networkId;
-      const initialImbalances = this.txTrait.getImbalances(tx);
+      const initialImbalances = this.txOps.getImbalances(tx);
 
       if (TransactionImbalances.areBalanced(initialImbalances)) {
-        return {
-          recipe: {
-            type: NOTHING_TO_PROVE,
-            transaction: tx,
-          },
-          newState: state,
-        };
+        return [undefined, state];
       }
 
       const { newState: afterFallible, offer: maybeFallible } = yield* this.balanceFallibleSection(
@@ -154,6 +144,7 @@ export class TransactingCapabilityImplementation<
         initialImbalances,
         coinSelection,
       );
+
       const { newState: afterGuaranteed, offer: guaranteed } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         afterFallible,
@@ -162,14 +153,7 @@ export class TransactingCapabilityImplementation<
         Imbalances.empty(),
       );
 
-      return {
-        newState: afterGuaranteed,
-        recipe: {
-          type: BALANCE_TRANSACTION_TO_PROVE,
-          transactionToBalance: tx,
-          transactionToProve: ledger.Transaction.fromParts(networkId, guaranteed, maybeFallible),
-        },
-      };
+      return [ledger.Transaction.fromParts(this.networkId, guaranteed, maybeFallible), afterGuaranteed];
     });
   }
 
@@ -177,7 +161,7 @@ export class TransactingCapabilityImplementation<
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
+  ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const positiveTransfers = yield* pipe(
         transfers,
@@ -201,7 +185,7 @@ export class TransactingCapabilityImplementation<
         ArrayOps.fold((a, b) => a.merge(b)),
       );
       const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
-      const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
+      const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
       const { offer, newState } = yield* this.#balanceGuaranteedSection(
         secretKeys,
         state,
@@ -212,13 +196,7 @@ export class TransactingCapabilityImplementation<
       const finalState = CoreWallet.watchCoins(newState, secretKeys, selfCoins);
       const finalTx = unprovenTxToBalance.merge(ledger.Transaction.fromParts(networkId, offer));
 
-      return {
-        newState: finalState,
-        recipe: {
-          type: TRANSACTION_TO_PROVE,
-          transaction: finalTx,
-        },
-      };
+      return [finalTx, finalState];
     });
   }
 
@@ -227,7 +205,7 @@ export class TransactingCapabilityImplementation<
     state: CoreWallet,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: ReadonlyArray<TokenTransfer>,
-  ): Either.Either<{ recipe: ProvingRecipe<TTransaction>; newState: CoreWallet }, WalletError> {
+  ): Either.Either<[ledger.UnprovenTransaction, CoreWallet], WalletError> {
     return Either.gen(this, function* () {
       const outputsValid = desiredOutputs.every((output) => output.amount > 0n);
       if (!outputsValid) {
@@ -264,53 +242,25 @@ export class TransactingCapabilityImplementation<
         ? outputsParseResult.unprovenTxToBalance.merge(balancingTx)
         : balancingTx;
 
-      return {
-        newState: finalState,
-        recipe: {
-          type: TRANSACTION_TO_PROVE,
-          transaction: finalTx,
-        },
-      };
+      return [finalTx, finalState];
     });
   }
 
-  revert(state: CoreWallet, tx: TTransaction): Either.Either<CoreWallet, WalletError> {
+  revertTransaction(
+    state: CoreWallet,
+    transaction: TTransaction | ledger.UnprovenTransaction,
+  ): Either.Either<CoreWallet, WalletError> {
     return Either.try({
       try: () => {
-        return CoreWallet.revertTransaction(state, tx);
+        return CoreWallet.revertTransaction(state, transaction);
       },
       catch: (err) => {
         return new OtherWalletError({
-          message: `Error while reverting transaction ${this.txTrait.id(tx)}`,
+          message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });
       },
     });
-  }
-
-  revertRecipe(state: CoreWallet, recipe: ProvingRecipe<TTransaction>): Either.Either<CoreWallet, WalletError> {
-    const doRevert = (tx: ledger.UnprovenTransaction) => {
-      return Either.try({
-        try: () => {
-          return CoreWallet.revertTransaction(state, tx);
-        },
-        catch: (err) => {
-          return new OtherWalletError({
-            message: `Error while reverting transaction ${TransactionTrait.unproven.id(tx)}`,
-            cause: err,
-          });
-        },
-      });
-    };
-
-    switch (recipe.type) {
-      case TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transaction);
-      case BALANCE_TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transactionToProve);
-      case NOTHING_TO_PROVE:
-        return Either.right(state);
-    }
   }
 
   #prepareOffer(
@@ -528,7 +478,7 @@ export class TransactingCapabilityImplementation<
                 ArrayOps.fold((a, b) => a.merge(b)),
               );
               const unprovenTxToBalance = ledger.Transaction.fromParts(networkId, offerToBalance);
-              const imbalances = TransactionTrait.unproven.getImbalances(unprovenTxToBalance);
+              const imbalances = TransactionOps.unproven.getImbalances(unprovenTxToBalance);
 
               return {
                 imbalances,

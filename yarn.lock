@@ -2326,6 +2326,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.0.0-beta.11"
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:1.0.0-beta.14"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0-beta.8"
+    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.0.0-beta.13"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:1.0.0-beta.15"
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:1.0.0-beta.17"
     eslint: "npm:^9.37.0"

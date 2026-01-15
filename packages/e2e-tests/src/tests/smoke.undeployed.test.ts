@@ -135,24 +135,24 @@ describe('Smoke tests', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         unshieldedFundedKeyStore.signData(payload),
       );
-      const provenTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
-      const txId = await funded.wallet.submitTransaction(provenTx);
+      const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
+      const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
       expect(pendingState.unshielded.totalCoins.length).toBe(5);
       expect(pendingState.shielded.availableCoins.length).toBe(6);
-      expect(pendingState.unshielded.availableCoins.length).toBe(5);
+      expect(pendingState.unshielded.availableCoins.length).toBe(4);
 
       logger.info('Waiting for finalized balance...');
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -161,6 +161,7 @@ describe('Smoke tests', () => {
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(balance - outputValue);
       expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBeLessThanOrEqual(balance - outputValue);
       expect(finalState.shielded.totalCoins.length).toBe(7);
+      expect(finalState.shielded.availableCoins.length).toBe(7);
       expect(finalState.unshielded.totalCoins.length).toBe(5);
       expect(finalState.unshielded.availableCoins.length).toBe(5);
       expect(finalState.shielded.pendingCoins.length).toBe(0);

@@ -119,23 +119,23 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Signing tx...');
-      logger.info(txToProve);
-      const signedTx = await sender.wallet.signTransaction(txToProve.transaction, (payload) =>
+      logger.info(txRecipe);
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
         sender.unshieldedKeystore.signData(payload),
       );
       logger.info('Transaction to prove...');
-      logger.info(signedTx.toString());
-      const provenTx = await sender.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      logger.info(signedTxRecipe);
+      const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(provenTx.toString());
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      logger.info(finalizedTx.toString());
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
     },
@@ -189,23 +189,23 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
       logger.info('Signing tx...');
-      logger.info(txToProve);
-      const signedTx = await sender.wallet.signTransaction(txToProve.transaction, (payload) =>
+      logger.info(txRecipe);
+      const signedTxRecipe = await sender.wallet.signRecipe(txRecipe, (payload) =>
         sender.unshieldedKeystore.signData(payload),
       );
       logger.info('Transaction to prove...');
-      logger.info(signedTx.toString());
-      const provenTx = await sender.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      logger.info(signedTxRecipe);
+      const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(provenTx.toString());
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      logger.info(finalizedTx);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 

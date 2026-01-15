@@ -15,7 +15,7 @@ import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Varian
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { ProvingRecipe } from './v1/ProvingRecipe.js';
+import { BalancingResult } from './v1/Transacting.js';
 import { SerializationCapability } from './v1/Serialization.js';
 import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances.js';
@@ -37,6 +37,8 @@ export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledg
   keys: KeysCapability<CoreWallet>;
   transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
 };
+
+export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.FinalizedTransaction> {
   static readonly mapState =
@@ -139,21 +141,20 @@ export interface CustomizedShieldedWallet<
   balanceTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    newCoins: readonly ledger.ShieldedCoinInfo[],
-  ): Promise<ProvingRecipe<TTransaction>>;
+  ): Promise<BalancingResult>;
 
   transferTransaction(
     secretKeys: ledger.ZswapSecretKeys,
     outputs: readonly TokenTransfer[],
-  ): Promise<ProvingRecipe<TTransaction>>;
+  ): Promise<ledger.UnprovenTransaction>;
 
   initSwap(
     secretKeys: ledger.ZswapSecretKeys,
     desiredInputs: Record<ledger.RawTokenType, bigint>,
     desiredOutputs: readonly TokenTransfer[],
-  ): Promise<ProvingRecipe<TTransaction>>;
+  ): Promise<ledger.UnprovenTransaction>;
 
-  finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Promise<TTransaction>;
+  finalizeTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction>;
 
   readonly submitTransaction: SubmitTransactionMethod<TTransaction>;
 
@@ -258,7 +259,7 @@ export function CustomShieldedWallet<
     balanceTransaction(
       secretKeys: ledger.ZswapSecretKeys,
       tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
-    ): Promise<ProvingRecipe<TTransaction>> {
+    ): Promise<BalancingResult> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransaction(secretKeys, tx),
@@ -269,7 +270,7 @@ export function CustomShieldedWallet<
     transferTransaction(
       secretKeys: ledger.ZswapSecretKeys,
       outputs: readonly TokenTransfer[],
-    ): Promise<ProvingRecipe<TTransaction>> {
+    ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.transferTransaction(secretKeys, outputs),
@@ -281,16 +282,16 @@ export function CustomShieldedWallet<
       secretKeys: ledger.ZswapSecretKeys,
       desiredInputs: Record<ledger.RawTokenType, bigint>,
       desiredOutputs: readonly TokenTransfer[],
-    ): Promise<ProvingRecipe<TTransaction>> {
+    ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({ [V1Tag]: (v1) => v1.initSwap(secretKeys, desiredInputs, desiredOutputs) })
         .pipe(Effect.runPromise);
     }
 
-    finalizeTransaction(recipe: ProvingRecipe<TTransaction>): Promise<TTransaction> {
+    finalizeTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.finalizeTransaction(recipe),
+          [V1Tag]: (v1) => v1.finalizeTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

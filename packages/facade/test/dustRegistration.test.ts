@@ -27,7 +27,7 @@ import {
   tokenValue,
   waitForFullySynced,
   waitForDustGenerated,
-} from './utils.js';
+} from './utils/helpers.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
@@ -178,23 +178,21 @@ describe('Dust Registration', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const transferRecipe = await senderFacade.transferTransaction(
+    const transferTxRecipe = await senderFacade.transferTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
       ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
       ttl,
     );
 
-    const signedTransferTx = await senderFacade.signTransaction(transferRecipe.transaction, (payload) =>
+    const signedTransferTxRecipe = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
       unshieldedSenderKeystore.signData(payload),
     );
 
-    const finalizedTransferTx = await senderFacade.finalizeTransaction({
-      ...transferRecipe,
-      transaction: signedTransferTx,
-    });
+    const finalizedTx = await senderFacade.finalizeRecipe(signedTransferTxRecipe);
 
-    const transferTxHash = await senderFacade.submitTransaction(finalizedTransferTx);
+    const transferTxHash = await senderFacade.submitTransaction(finalizedTx);
+
     expect(transferTxHash).toBeTypeOf('string');
 
     const receiverStateWithNight = await rx.firstValueFrom(
@@ -225,16 +223,16 @@ describe('Dust Registration', () => {
       (payload) => unshieldedReceiverKeystore.signData(payload),
     );
 
-    const finalizedDustTx = await receiverFacade.finalizeTransaction(dustRegistrationRecipe);
+    const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
 
-    const dustRegistrationTxHash = await receiverFacade.submitTransaction(finalizedDustTx);
+    const dustRegistrationTxHash = await receiverFacade.submitTransaction(provenDustRegistrationTx);
 
     expect(dustRegistrationTxHash).toBeTypeOf('string');
 
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+          const txInHistory = await state.unshielded.transactionHistory.get(provenDustRegistrationTx.transactionHash());
 
           return {
             state,
@@ -294,16 +292,8 @@ describe('Dust Registration', () => {
         [transfersToMake],
         DateOps.addSeconds(new Date(), 1800),
       )
-      .then(async (recipe) => {
-        const signedTx = await senderFacade.signTransaction(recipe.transaction, (payload) =>
-          unshieldedSenderKeystore.signData(payload),
-        );
-        return {
-          ...recipe,
-          transaction: signedTx,
-        };
-      })
-      .then((recipe) => senderFacade.finalizeTransaction(recipe))
+      .then((recipe) => senderFacade.signRecipe(recipe, (payload) => unshieldedSenderKeystore.signData(payload)))
+      .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))
       .then((tx) => senderFacade.submitTransaction(tx));
 
     // Let's wait until receiver has received Night and has generated enough Dust to pay fees for the registration tx
@@ -336,7 +326,7 @@ describe('Dust Registration', () => {
         unshieldedReceiverKeystore.getPublicKey(),
         (payload) => unshieldedReceiverKeystore.signData(payload),
       )
-      .then((recipe) => receiverFacade.finalizeTransaction(recipe))
+      .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));
 
     const finalReceiverState = await rx.firstValueFrom(
