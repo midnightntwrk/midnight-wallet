@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, Encoding, Schema } from 'effect';
+import { Encoding, Schema } from 'effect';
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 
 const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
