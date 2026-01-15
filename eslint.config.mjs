@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { includeIgnoreFile } from '@eslint/compat';
 
 export const packageConfig = (...cfgs) => {
-  const defaultFiles = ['src/**/*.ts', 'test/**/*.ts', 'scripts/**/*.ts'];
+  const defaultFiles = ['src/**/*.{ts,tsx}', 'test/**/*.{ts,tsx}', 'scripts/**/*.ts'];
   return [
     ...defaultConfig.map((config) => ({ ...config, files: defaultFiles })),
     globalIgnores,

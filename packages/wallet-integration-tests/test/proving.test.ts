@@ -13,7 +13,7 @@
 import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either } from 'effect';
+import { Effect, Either, Schedule, Duration } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
@@ -36,12 +36,16 @@ const makeTransaction = () => {
 };
 
 const proofServerContainerResource = Effect.acquireRelease(
-  Effect.promise(async () => {
-    return await new GenericContainer(PROOF_SERVER_IMAGE)
-      .withExposedPorts(PROOF_SERVER_PORT)
-      .withWaitStrategy(Wait.forListeningPorts())
-      .withStartupTimeout(120_000)
-      .start();
+  Effect.tryPromise({
+    try: async () => {
+      return await new GenericContainer(PROOF_SERVER_IMAGE)
+        .withExposedPorts(PROOF_SERVER_PORT)
+        .withWaitStrategy(Wait.forListeningPorts())
+        .withStartupTimeout(120_000)
+        .withReuse()
+        .start();
+    },
+    catch: (error) => Effect.fail(error),
   }),
   (container) => Effect.promise(async () => await container.stop()),
 ).pipe(
@@ -49,6 +53,7 @@ const proofServerContainerResource = Effect.acquireRelease(
     const proofServerPort = proofServerContainer.getMappedPort(PROOF_SERVER_PORT);
     return new URL(`http://localhost:${proofServerPort}`);
   }),
+  Effect.retry(Schedule.spaced(Duration.millis(10))),
 );
 
 describe('Default Proving Service', () => {

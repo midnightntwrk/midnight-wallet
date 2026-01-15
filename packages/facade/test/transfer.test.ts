@@ -30,6 +30,7 @@ import { CombinedTokenTransfer, WalletFacade } from '../src/index.js';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { pipe } from 'effect';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -104,7 +105,7 @@ describe('Wallet Facade Transfer', () => {
     const Dust = DustWallet({
       ...configuration,
       costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
+        additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
     });
@@ -142,7 +143,15 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer shielded tokens only', async () => {
-    await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await Promise.all([
+      pipe(
+        senderFacade.state(),
+        rx.filter((s) => s.isSynced),
+        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
+        rx.firstValueFrom,
+      ),
+      waitForFullySynced(receiverFacade),
+    ]);
 
     const ledgerReceiverAddress = ShieldedAddress.codec
       .encode(configuration.networkId, await receiverFacade.shielded.getAddress())
@@ -183,7 +192,15 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer unshielded tokens', async () => {
-    await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await Promise.all([
+      pipe(
+        senderFacade.state(),
+        rx.filter((s) => s.isSynced),
+        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
+        rx.firstValueFrom,
+      ),
+      waitForFullySynced(receiverFacade),
+    ]);
 
     const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state);
 
@@ -230,7 +247,12 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to balance and submit an arbitrary shielded transaction', async () => {
-    await waitForFullySynced(senderFacade);
+    await pipe(
+      senderFacade.state(),
+      rx.filter((s) => s.isSynced),
+      rx.filter((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
+      rx.firstValueFrom,
+    );
 
     const shieldedReceiverState = await rx.firstValueFrom(receiverFacade.shielded.state);
 
@@ -275,7 +297,12 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to balance and submit an arbitrary unshielded transaction', async () => {
-    await waitForFullySynced(senderFacade);
+    await pipe(
+      senderFacade.state(),
+      rx.filter((s) => s.isSynced),
+      rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
+      rx.firstValueFrom,
+    );
 
     const outputs = [
       {

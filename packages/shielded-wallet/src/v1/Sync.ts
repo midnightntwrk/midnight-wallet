@@ -12,11 +12,11 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, ParseResult, Scope, Stream, Schema, pipe, Either, Duration } from 'effect';
+import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TransactionHistoryCapability } from './TransactionHistory.js';
@@ -37,6 +37,7 @@ export type IndexerClientConnection = {
 
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
+  batchSize?: number;
 };
 
 export type DefaultSyncContext = {
@@ -69,13 +70,13 @@ export const SecretKeysResource = {
 };
 
 export type WalletSyncUpdate = {
-  update: EventsSyncUpdate;
+  updates: EventsSyncUpdate[];
   secretKeys: SecretKeysResource;
 };
 export const WalletSyncUpdate = {
-  create: (update: EventsSyncUpdate, secretKeys: ledger.ZswapSecretKeys): WalletSyncUpdate => {
+  create: (updates: EventsSyncUpdate[], secretKeys: ledger.ZswapSecretKeys): WalletSyncUpdate => {
     return {
-      update,
+      updates,
       secretKeys: SecretKeysResource.create(secretKeys),
     };
   },
@@ -182,8 +183,7 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
-      const batchSize = 50;
-      const batchTimeout = Duration.seconds(10);
+      const batchSize = config.batchSize ?? 10;
 
       return pipe(
         ZswapEvents.run({ id: Number(appliedIndex) }),
@@ -191,14 +191,16 @@ export const makeEventsSyncService = (
         Stream.mapError((error) => new SyncWalletError(error)),
         Stream.mapEffect((subscription) =>
           pipe(
-            Schema.decodeUnknownEither(EventsSyncUpdateFromPayload)(subscription.zswapLedgerEvents),
+            subscription.zswapLedgerEvents,
+            Schema.decodeUnknownEither(EventsSyncUpdateFromPayload),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),
         ),
+        Stream.groupedWithin(batchSize, Duration.millis(1)),
+        Stream.map(Chunk.toArray),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
-        Stream.groupedWithin(batchSize, batchTimeout),
-        Stream.flatMap((chunk) => Stream.fromIterable(chunk)),
+        Stream.schedule(Schedule.spaced(Duration.millis(4))),
       );
     },
   };
@@ -207,8 +209,13 @@ export const makeEventsSyncService = (
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
-      const nextIndex = BigInt(wrappedUpdate.update.id);
-      const highestRelevantWalletIndex = BigInt(wrappedUpdate.update.maxId);
+      if (wrappedUpdate.updates.length === 0) {
+        return state;
+      }
+
+      const lastUpdate = wrappedUpdate.updates.at(-1)!;
+      const nextIndex = BigInt(lastUpdate.id);
+      const highestRelevantWalletIndex = BigInt(lastUpdate.maxId);
       // in case the nextIndex is less than or equal to the appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
@@ -219,11 +226,18 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       }
 
       return wrappedUpdate.secretKeys((keys) => {
-        return CoreWallet.updateProgress(CoreWallet.replayEvents(state, keys, [wrappedUpdate.update.event]), {
-          highestRelevantWalletIndex,
-          appliedIndex: nextIndex,
-          isConnected: true,
-        });
+        return CoreWallet.updateProgress(
+          CoreWallet.replayEvents(
+            state,
+            keys,
+            wrappedUpdate.updates.map((u) => u.event),
+          ),
+          {
+            highestRelevantWalletIndex,
+            appliedIndex: nextIndex,
+            isConnected: true,
+          },
+        );
       });
     },
   };
