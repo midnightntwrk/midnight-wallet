@@ -13,12 +13,15 @@
  * limitations under the License.
  */
 
-/// <reference types="vitest" />
-/// <reference types="vitest/globals" />
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite';
+import wasm from 'vite-plugin-wasm';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 export default defineConfig({
-  test: {
-    projects: ['packages/*/vitest.config.ts', 'apps/*/vitest.config.ts'],
+  root: new URL('./', import.meta.url).pathname,
+  build: {
+    outDir: 'dist',
   },
+  // @ts-expect-error - vite-plugin-wasm is not typed
+  plugins: [wasm(), nodePolyfills({ include: ['buffer', 'assert'], globals: { Buffer: true }, protocolImports: true })],
 });

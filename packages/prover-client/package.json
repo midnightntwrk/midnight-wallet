@@ -33,7 +33,7 @@
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
     "@midnight-ntwrk/zkir-v2": "2.1.0-alpha.1",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "web-worker": "^1.5.0"
   },
   "devDependencies": {

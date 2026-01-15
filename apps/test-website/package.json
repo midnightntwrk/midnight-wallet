@@ -1,0 +1,57 @@
+{
+  "name": "@midnight-ntwrk/wallet-test-website",
+  "description": "A browser target for testing the wallet SDK behavior",
+  "version": "1.0.0-beta.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "dependencies": {
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
+    "buffer": "^6.0.3",
+    "effect": "^3.19.14",
+    "lodash-es": "^4.17.22",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "rxjs": "^7.5",
+    "testcontainers": "^11.10.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",
+    "dist": "vite build",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
+    "dev": "vite",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@types/lodash-es": "^4",
+    "eslint": "^9.37.0",
+    "fast-check": "^4.2.0",
+    "prettier": "^3.7.0",
+    "publint": "~0.3.14",
+    "rimraf": "^6.0.1",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vite-plugin-wasm": "^3.5.0"
+  }
+}
