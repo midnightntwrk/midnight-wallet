@@ -142,10 +142,11 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
+    const facadeAState = await waitForFullySynced(walletAFacade);
+    const facadeBState = await waitForFullySynced(walletBFacade);
 
-    const { shielded: walletAShieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
-    const { shielded: walletBShieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
+    const { shielded: walletAShieldedStateBefore } = facadeAState;
+    const { shielded: walletBShieldedStateBefore } = facadeBState;
 
     const nativeShieldedTokenType = '0000000000000000000000000000000000000000000000000000000000000002';
     const nativeShieldedTokenAmount = tokenValue(10n);
@@ -156,7 +157,7 @@ describe('Swaps', () => {
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
     const shieldedWalletAAddress = ShieldedAddress.codec
-      .encode(NetworkId.NetworkId.Undeployed, await walletAFacade.shielded.getAddress())
+      .encode(configuration.networkId, await walletAFacade.shielded.getAddress())
       .asString();
 
     const desiredInputs: CombinedSwapInputs = {
@@ -178,21 +179,22 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTx = await walletAFacade.initSwap(
+    const swapTxRecipe = await walletAFacade.initSwap(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
       ttl,
     );
 
-    const finalizedSwapTx = await walletAFacade.finalizeRecipe(swapTx);
+    // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
+    const unboundSwapTx = await walletAFacade.proveTransaction(swapTxRecipe.transaction);
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
-    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
+    const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      finalizedSwapTx,
+      unboundSwapTx,
       new Date(Date.now() + 60 * 60 * 1000),
     );
 
@@ -275,8 +277,7 @@ describe('Swaps', () => {
 
     const finalizedSwapTx = await walletAFacade.finalizeRecipe(signedSwapTxRecipe);
 
-    // assuming the tx is added to a pool and wallet B picks it up
-
+    // the tx is picked up by another wallet (wallet B)
     const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),

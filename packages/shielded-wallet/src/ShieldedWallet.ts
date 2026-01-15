@@ -154,7 +154,9 @@ export interface CustomizedShieldedWallet<
     desiredOutputs: readonly TokenTransfer[],
   ): Promise<ledger.UnprovenTransaction>;
 
-  proveTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction>;
+  proveTransaction(
+    transaction: ledger.UnprovenTransaction,
+  ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>;
 
   readonly submitTransaction: SubmitTransactionMethod<TTransaction>;
 
@@ -288,7 +290,9 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    proveTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction> {
+    proveTransaction(
+      transaction: ledger.UnprovenTransaction,
+    ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.proveTransaction(transaction),

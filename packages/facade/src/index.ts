@@ -252,15 +252,18 @@ export class WalletFacade {
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
         const provenBalancing = await this.proveTransaction(recipe.balancingTransaction);
-        return provenBalancing.merge(recipe.originalTransaction);
+        const finalizedTransaction = provenBalancing.bind();
+        return finalizedTransaction.merge(recipe.originalTransaction);
       }
       case 'UNBOUND_TRANSACTION': {
         const provenBalancingTx = await this.proveTransaction(recipe.balancingTransaction);
+        const finalizedBalancingTx = provenBalancingTx.bind();
         const finalizedTransaction = recipe.baseTransaction.bind();
-        return provenBalancingTx.merge(finalizedTransaction);
+        return finalizedTransaction.merge(finalizedBalancingTx);
       }
       case 'UNPROVEN_TRANSACTION': {
-        return await this.proveTransaction(recipe.transaction);
+        const provenTransaction = await this.proveTransaction(recipe.transaction);
+        return provenTransaction.bind();
       }
     }
   }
@@ -303,7 +306,7 @@ export class WalletFacade {
     return await this.unshielded.signTransaction(tx, signSegment);
   }
 
-  async proveTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
+  async proveTransaction(tx: ledger.UnprovenTransaction): Promise<UnboundTransaction> {
     return await this.shielded.proveTransaction(tx);
   }
 
