@@ -1,5 +1,18 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 1.0.0-beta.16
+
+### Patch Changes
+
+- eec1ddb: feat: rewrite balancing recipes
+- a768341: Expose a method enabling to estimate requirements for issuing a Dust designation tx
+- Updated dependencies [eec1ddb]
+- Updated dependencies [aa3c5d7]
+- Updated dependencies [a768341]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@1.0.0-beta.18
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.16
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@1.0.0-beta.15
+
 ## 1.0.0-beta.15
 
 ### Patch Changes

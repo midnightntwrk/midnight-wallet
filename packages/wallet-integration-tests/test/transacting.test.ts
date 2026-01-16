@@ -198,7 +198,7 @@ describe.skip('Wallet transacting', () => {
             };
           });
           return v1.transferTransaction(walletKeys, transferOutputs).pipe(
-            Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
+            Effect.flatMap((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
             Effect.flatMap((tx) =>
               Effect.all({
                 transaction: Effect.succeed(tx),
@@ -245,7 +245,7 @@ describe.skip('Wallet transacting', () => {
               },
             ])
             .pipe(
-              Effect.flatMap((recipe) => v1.finalizeTransaction(recipe)),
+              Effect.flatMap((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
               Effect.flatMap((tx) => v1.submitTransaction(tx, 'Finalized')),
             ),
       })
@@ -275,7 +275,7 @@ describe.skip('Wallet transacting', () => {
         [V1Tag]: (v1) =>
           pipe(
             v1.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
-            Effect.andThen((recipe) => v1.finalizeTransaction(recipe)),
+            Effect.andThen((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
           ),
       })
       .pipe(
@@ -284,7 +284,7 @@ describe.skip('Wallet transacting', () => {
             [V1Tag]: (v1) =>
               pipe(
                 v1.balanceTransaction(wallet2Keys, tx),
-                Effect.andThen((recipe) => v1.finalizeTransaction(recipe)),
+                Effect.andThen((unprovenTx) => v1.finalizeTransaction(unprovenTx!)),
                 Effect.tap((tx) => v1.submitTransaction(tx, 'Finalized')),
               ),
           });

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { FacadeState, WalletFacade } from '../src/index.js';
+import { FacadeState, WalletFacade } from '../../src/index.js';
 import * as rx from 'rxjs';
 
 export const getShieldedSeed = (seed: string): Uint8Array => {

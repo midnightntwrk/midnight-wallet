@@ -42,26 +42,16 @@ const makeTransactionBlueprint = () => {
 };
 
 await sender.wallet
-  .balanceTransaction(
+  .balanceUnprovenTransaction(
     sender.shieldedSecretKeys,
     sender.dustSecretKey,
     makeTransactionBlueprint(),
     new Date(Date.now() + 30 * 60 * 1000),
   )
   .then((recipe) => {
-    let tx: ledger.UnprovenTransaction;
-    switch (recipe.type) {
-      case 'TransactionToProve':
-        tx = recipe.transaction;
-        break;
-      case 'BalanceTransactionToProve':
-        throw new Error('Unexpected recipe type');
-      default:
-        throw new Error('Unexpected recipe type');
-    }
-    return sender.wallet.signTransaction(tx, (payload) => sender.unshieldedKeystore.signData(payload));
+    return sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload));
   })
-  .then((tx) => sender.wallet.finalizeTransaction({ type: 'TransactionToProve', transaction: tx }))
+  .then((tx) => sender.wallet.finalizeRecipe(tx))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));
 
 const finalSenderState = await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));

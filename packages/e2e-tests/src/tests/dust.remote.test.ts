@@ -72,7 +72,7 @@ describe('Dust tests', () => {
         (payload) => wallet.unshieldedKeystore.signData(payload),
       );
 
-      const finalizedDustTx = await wallet.wallet.finalizeTransaction(dustRegistrationRecipe);
+      const finalizedDustTx = await wallet.wallet.finalizeRecipe(dustRegistrationRecipe);
       const dustRegistrationTxid = await wallet.wallet.submitTransaction(finalizedDustTx);
       expect(dustRegistrationTxid).toBeDefined();
       logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
@@ -120,18 +120,14 @@ describe('Dust tests', () => {
         (payload) => wallet.unshieldedKeystore.signData(payload),
       );
 
-      const balancedTransactionRecipe = await wallet.wallet.balanceTransaction(
+      const balancedTransactionRecipe = await wallet.wallet.balanceUnprovenTransaction(
         wallet.shieldedSecretKeys,
         wallet.dustSecretKey,
         dustDeregistrationRecipe.transaction,
         new Date(Date.now() + 30 * 60 * 1000),
       );
 
-      if (balancedTransactionRecipe.type !== 'TransactionToProve') {
-        throw new Error('Expected a transaction to prove');
-      }
-
-      const finalizedDustTx = await wallet.wallet.finalizeTransaction(balancedTransactionRecipe);
+      const finalizedDustTx = await wallet.wallet.finalizeRecipe(balancedTransactionRecipe);
       const dustDeregistrationTxid = await wallet.wallet.submitTransaction(finalizedDustTx);
       expect(dustDeregistrationTxid).toBeDefined();
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);

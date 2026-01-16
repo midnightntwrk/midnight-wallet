@@ -10,17 +10,5 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-
-export type TransactionImbalances = Readonly<{
-  guaranteed: Imbalances;
-  fallible: Imbalances;
-}>;
-export const TransactionImbalances = new (class {
-  empty = (): TransactionImbalances => {
-    return {
-      guaranteed: Imbalances.empty(),
-      fallible: Imbalances.empty(),
-    };
-  };
-})();
+export * from './helpers.js';
+export * from './proving.js';

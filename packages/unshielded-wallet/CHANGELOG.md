@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 1.0.0-beta.18
+
+### Patch Changes
+
+- eec1ddb: feat: rewrite balancing recipes
+- a768341: Use fallible section to enable usage of more than 1 pair of Night input/output
+
 ## 1.0.0-beta.17
 
 ### Patch Changes

@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   InMemoryTransactionHistoryStorage,
@@ -30,6 +30,7 @@ import { CombinedSwapInputs, CombinedSwapOutputs, WalletFacade } from '../src/in
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { makeProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -145,10 +146,13 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
+    const provingService = makeProvingService(configuration.provingServerUrl);
 
-    const { shielded: walletAShieldedStateBefore } = await rx.firstValueFrom(walletAFacade.state());
-    const { shielded: walletBShieldedStateBefore } = await rx.firstValueFrom(walletBFacade.state());
+    const facadeAState = await waitForFullySynced(walletAFacade);
+    const facadeBState = await waitForFullySynced(walletBFacade);
+
+    const { shielded: walletAShieldedStateBefore } = facadeAState;
+    const { shielded: walletBShieldedStateBefore } = facadeBState;
 
     const nativeShieldedTokenType = '0000000000000000000000000000000000000000000000000000000000000002';
     const nativeShieldedTokenAmount = tokenValue(10n);
@@ -159,7 +163,7 @@ describe('Swaps', () => {
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
     const shieldedWalletAAddress = ShieldedAddress.codec
-      .encode(NetworkId.NetworkId.Undeployed, await walletAFacade.shielded.getAddress())
+      .encode(configuration.networkId, await walletAFacade.shielded.getAddress())
       .asString();
 
     const desiredInputs: CombinedSwapInputs = {
@@ -181,28 +185,26 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTx = await walletAFacade.initSwap(
+    const swapTxRecipe = await walletAFacade.initSwap(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
       ttl,
     );
 
-    const finalizedSwapTx = await walletAFacade.finalizeTransaction({
-      type: 'TransactionToProve',
-      transaction: swapTx,
-    });
+    // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
+    const unboundSwapTx = await provingService.proveTransaction(swapTxRecipe.transaction);
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
-    const walletBBalancedTx = await walletBFacade.balanceTransaction(
+    const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      finalizedSwapTx,
+      unboundSwapTx,
       new Date(Date.now() + 60 * 60 * 1000),
     );
 
-    const finalizedTx = await walletBFacade.finalizeTransaction(walletBBalancedTx);
+    const finalizedTx = await walletBFacade.finalizeRecipe(walletBBalancedTxRecipe);
 
     const txHash = await walletBFacade.submitTransaction(finalizedTx);
 
@@ -268,38 +270,32 @@ describe('Swaps', () => {
       },
     ];
 
-    const swapTx = await walletAFacade.initSwap(
+    const swapTxRecipe = await walletAFacade.initSwap(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
       ttl,
     );
 
-    const signedSwapTx = await walletAFacade.signTransaction(swapTx, (payload) => {
+    const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
       return unshieldedWalletAKeystore.signData(payload);
     });
 
-    // assuming the tx is added to a pool and wallet B picks it up
+    const finalizedSwapTx = await walletAFacade.finalizeRecipe(signedSwapTxRecipe);
 
-    const walletBBalancedTx = await walletBFacade.balanceTransaction(
+    // the tx is picked up by another wallet (wallet B)
+    const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
       ledger.DustSecretKey.fromSeed(dustWalletBSeed),
-      signedSwapTx,
+      finalizedSwapTx,
       ttl,
     );
 
-    if (walletBBalancedTx.type !== 'TransactionToProve') {
-      throw new Error('Expected TransactionToProve');
-    }
-
-    const walletBSignedTx = await walletBFacade.signTransaction(walletBBalancedTx.transaction, (payload) => {
+    const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {
       return unshieldedWalletBKeystore.signData(payload);
     });
 
-    const finalizedTx = await walletBFacade.finalizeTransaction({
-      ...walletBBalancedTx,
-      transaction: walletBSignedTx,
-    });
+    const finalizedTx = await walletBFacade.finalizeRecipe(walletBSignedTxRecipe);
 
     const txHash = await walletAFacade.submitTransaction(finalizedTx);
 
