@@ -349,6 +349,11 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Provides estimate of the fee of issuing registration transaction with provided UTxOs
+   * @param nightUtxos - Night UTxOs to use for the registration
+   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s), that would be used for paying the fee. These include data that allows to compute when the fee could be paid
+   */
   async estimateRegistration(nightUtxos: readonly UtxoWithMeta[]): Promise<{
     fee: bigint;
     dustGenerationEstimations: ReadonlyArray<DustCoinsAndBalances.UtxoWithFullDustDetails>;
