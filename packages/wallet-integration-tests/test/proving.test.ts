@@ -13,7 +13,7 @@
 import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Schedule, Duration } from 'effect';
+import { Effect, Either, Schedule, Duration, Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';
 import { getNonDustImbalance } from './utils.js';
@@ -56,13 +56,59 @@ const proofServerContainerResource = Effect.acquireRelease(
   Effect.retry(Schedule.spaced(Duration.millis(10))),
 );
 
+function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTransaction>>(
+  implName: string,
+  makeService: () => Effect.Effect<T, unknown, Scope.Scope>,
+) {
+  describe(`${implName} implementation of ProvingService`, () => {
+    const testUnprovenTx = makeTransaction();
+
+    it('does transform unproven transaction into final, proven transaction', async () => {
+      const finalTx = await Effect.gen(function* () {
+        const service = yield* makeService();
+        return yield* service.prove(testUnprovenTx);
+      }).pipe(Effect.scoped, Effect.runPromise);
+
+      expect(finalTx).toBeInstanceOf(ledger.Transaction);
+      expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(-42n);
+    });
+  });
+}
+
+runInterfaceTests('Default Proving', () => Effect.succeed(Proving.makeDefaultProvingService({})));
+
+runInterfaceTests('Server Proving', () =>
+  pipe(
+    proofServerContainerResource,
+    Effect.map((proofServerUrl) =>
+      Proving.makeServerProvingService({
+        provingServerUrl: proofServerUrl,
+      }),
+    ),
+  ),
+);
+
 describe('Default Proving Service', () => {
   const testUnprovenTx = makeTransaction();
 
   it('does transform unproven transaction into final, proven transaction', async () => {
     const finalTx = await Effect.gen(function* () {
+      const service = Proving.makeDefaultProvingService({});
+      return yield* service.prove(testUnprovenTx);
+    }).pipe(Effect.scoped, Effect.runPromise);
+
+    expect(finalTx).toBeInstanceOf(ledger.Transaction);
+    expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(-42n);
+  });
+});
+
+describe('Server Proving Service', () => {
+  const testUnprovenTx = makeTransaction();
+
+  it('does transform unproven transaction into final, proven transaction', async () => {
+    const finalTx = await Effect.gen(function* () {
       const proofServerUrl = yield* proofServerContainerResource;
-      const service = Proving.makeDefaultProvingService({
+      const service = Proving.makeServerProvingService({
         provingServerUrl: proofServerUrl,
       });
 
@@ -75,7 +121,7 @@ describe('Default Proving Service', () => {
 
   it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const result = await Effect.gen(function* () {
-      const misconfiguredService = Proving.makeDefaultProvingService({
+      const misconfiguredService = Proving.makeServerProvingService({
         provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
@@ -94,7 +140,7 @@ describe('Default Proving Service', () => {
   it('does fail with wallet error instance when proving fails (e.g. due to connection error)', async () => {
     const result = await Effect.gen(function* () {
       const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
-      const misconfiguredService = Proving.makeDefaultProvingService({
+      const misconfiguredService = Proving.makeServerProvingService({
         provingServerUrl: proofServerUrl,
       });
       return yield* misconfiguredService.prove(testUnprovenTx);

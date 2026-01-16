@@ -27,7 +27,6 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Buffer } from 'buffer';
 
-const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);
 const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v3/graphql`;
 const INDEXER_WS_URL = `wss://indexer.preview.midnight.network/api/v3/graphql/ws`;
 
@@ -39,7 +38,6 @@ export const defaultConfiguration: Configuration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`wss://rpc.preview.midnight.network`),
-  provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,

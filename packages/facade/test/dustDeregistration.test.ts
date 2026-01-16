@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DefaultV1Configuration, Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -61,7 +61,7 @@ describe('Dust Deregistration', () => {
   const unshieldedWalletKeystore = createKeystore(unshieldedWalletSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultV1Configuration & Proving.ServerProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -88,7 +88,10 @@ describe('Dust Deregistration', () => {
   let walletFacade: WalletFacade;
 
   beforeEach(async () => {
-    const Shielded = ShieldedWallet(configuration);
+    const Shielded = CustomShieldedWallet(
+      configuration,
+      new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
+    );
     const shieldedWallet = Shielded.startWithShieldedSeed(shieldedWalletSeed);
 
     const Dust = DustWallet({

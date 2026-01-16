@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DefaultV1Configuration, Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
@@ -73,7 +73,7 @@ describe('Dust Registration', () => {
   const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultV1Configuration & Proving.ServerProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -113,7 +113,10 @@ describe('Dust Registration', () => {
     dustReceiverSeed = getDustSeed(RECEIVER_SEED);
     unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
 
-    const Shielded = ShieldedWallet(configuration);
+    const Shielded = CustomShieldedWallet(
+      configuration,
+      new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
+    );
     const shieldedSender = Shielded.startWithShieldedSeed(shieldedSenderSeed);
     const shieldedReceiver = Shielded.startWithShieldedSeed(shieldedReceiverSeed);
 
