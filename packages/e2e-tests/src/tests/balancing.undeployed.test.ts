@@ -108,17 +108,17 @@ describe('Transaction balancing examples', () => {
         },
       ];
 
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         funded.unshieldedKeystore.signData(payload),
       );
-      const provenTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
-      const id = await funded.wallet.submitTransaction(provenTx);
+      const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
+      const id = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + id);
       await utils.waitForFacadePendingClear(funded.wallet);
       const finalState = await utils.waitForSyncFacade(funded.wallet);
@@ -140,7 +140,7 @@ describe('Transaction balancing examples', () => {
       );
       logger.info('Dust registration recipe:');
       logger.info(dustRegistrationRecipe.transaction.toString());
-      const finalizedDustTx = await sender.wallet.finalizeTransaction(dustRegistrationRecipe);
+      const finalizedDustTx = await sender.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info(finalizedDustTx.toString());
       logger.info('Submitting dust registration transaction');
       const dustRegistrationTxid = await sender.wallet.submitTransaction(finalizedDustTx);
@@ -193,14 +193,14 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await sender.wallet.finalizeTransaction(txToProve);
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(sender.wallet);
@@ -268,14 +268,14 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await sender.wallet.finalizeTransaction(txToProve);
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(sender.wallet);
@@ -367,14 +367,14 @@ describe('Transaction balancing examples', () => {
           ],
         },
       ];
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await sender.wallet.finalizeTransaction(txToProve);
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(sender.wallet);

@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 1.0.0-beta.16
+
+### Patch Changes
+
+- eec1ddb: feat: rewrite balancing recipes
+- aa3c5d7: Batch events for processing for better responsiveness and performance
+
 ## 1.0.0-beta.15
 
 ### Patch Changes

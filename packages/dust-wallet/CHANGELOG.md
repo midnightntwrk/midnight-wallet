@@ -1,5 +1,16 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 1.0.0-beta.15
+
+### Patch Changes
+
+- eec1ddb: feat: rewrite balancing recipes
+- aa3c5d7: Batch events for processing for better responsiveness and performance
+- a768341: Use fallible section to enable usage of more than 1 pair of Night input/output
+- Updated dependencies [eec1ddb]
+- Updated dependencies [aa3c5d7]
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0-beta.16
+
 ## 1.0.0-beta.14
 
 ### Patch Changes

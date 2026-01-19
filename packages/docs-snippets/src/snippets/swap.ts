@@ -57,11 +57,16 @@ const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
     ],
     new Date(Date.now() + 30 * 60 * 1000),
   )
-  .then((tx) => alice.wallet.finalizeTransaction({ type: 'TransactionToProve', transaction: tx }));
+  .then((recipe) => alice.wallet.finalizeRecipe(recipe));
 
 await bob.wallet
-  .balanceTransaction(bob.shieldedSecretKeys, bob.dustSecretKey, aliceSwapTx, new Date(Date.now() + 30 * 60 * 1000))
-  .then((recipe) => bob.wallet.finalizeTransaction(recipe))
+  .balanceFinalizedTransaction(
+    bob.shieldedSecretKeys,
+    bob.dustSecretKey,
+    aliceSwapTx,
+    new Date(Date.now() + 30 * 60 * 1000),
+  )
+  .then((recipe) => bob.wallet.finalizeRecipe(recipe))
   .then((tx) => bob.wallet.submitTransaction(tx));
 
 const didShieldedChange = (state: FacadeState, initialState: FacadeState) => {

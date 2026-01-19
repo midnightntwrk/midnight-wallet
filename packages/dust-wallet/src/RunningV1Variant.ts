@@ -10,19 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule } from 'effect';
+import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
 import {
   DustSecretKey,
   nativeToken,
   Signature,
   SignatureVerifyingKey,
-  updatedValue,
   FinalizedTransaction,
   UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Proving, ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   WalletRuntimeError,
   Variant,
@@ -33,7 +32,7 @@ import { DustToken, UtxoWithMeta } from './types/Dust.js';
 import { KeysCapability } from './Keys.js';
 import { SyncCapability, SyncService } from './Sync.js';
 import { SimulatorState } from './Simulator.js';
-import { CoinsAndBalancesCapability, CoinSelection } from './CoinsAndBalances.js';
+import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { TransactingCapability } from './Transacting.js';
 import { SubmissionService, SubmitTransactionMethod } from './Submission.js';
 import { DustCoreWallet } from './DustCoreWallet.js';
@@ -181,36 +180,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
       Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
-      Effect.bind('utxosWithDustValue', ({ currentState, blockData }) =>
-        LedgerOps.ledgerTry(() => {
-          const dustPublicKey = this.#v1Context.keysCapability.getDustPublicKey(currentState);
-          return nightUtxos.map((utxo) => {
-            const genInfo = {
-              value: utxo.value,
-              owner: dustPublicKey,
-              nonce: LedgerOps.randomNonce(),
-              dtime: undefined,
-            };
-            const dustValue = updatedValue(
-              utxo.ctime,
-              0n,
-              genInfo,
-              currentTime ?? blockData.timestamp,
-              currentState.state.params,
-            );
-            return { token: utxo, value: dustValue };
-          });
-        }),
-      ),
-      Effect.flatMap(({ utxosWithDustValue, blockData }) => {
+      Effect.let('currentTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
+      Effect.let('utxosWithDustValue', ({ currentState, currentTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
+        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(currentState, nightUtxos, currentTime);
+      }),
+      Effect.flatMap(({ utxosWithDustValue, currentTime }) => {
         return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(
-            currentTime ?? blockData.timestamp,
-            ttl,
-            utxosWithDustValue,
-            nightVerifyingKey,
-            dustReceiverAddress,
-          )
+          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
           .pipe(EitherOps.toEffect);
       }),
     );
@@ -219,54 +195,57 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
 
-  calculateFee(transaction: AnyTransaction): Effect.Effect<bigint, WalletError.WalletError> {
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError.WalletError> {
     return pipe(
       this.#v1Context.syncService.blockData(),
       Effect.map((blockData) =>
-        this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+        pipe(
+          transactions,
+          Arr.map((transaction) =>
+            this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
+          ),
+          ArrayOps.sumBigInt,
+        ),
       ),
     );
   }
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.syncService.blockData(),
         Effect.flatMap((blockData) =>
-          this.#v1Context.transactingCapability.addFeePayment(
+          this.#v1Context.transactingCapability.balanceTransactions(
             secretKey,
             state,
-            transaction,
+            transactions,
             ttl,
             currentTime ?? blockData.timestamp,
             blockData.ledgerParameters,
           ),
         ),
-        Effect.map(({ recipe, newState }) => [recipe, newState] as const),
       );
     });
   }
 
-  finalizeTransaction(
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
-  ): Effect.Effect<TTransaction, WalletError.WalletError> {
+  proveTransaction(transaction: UnprovenTransaction): Effect.Effect<TTransaction, WalletError.WalletError> {
     return this.#v1Context.provingService
-      .prove(recipe)
+      .prove(transaction)
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertRecipe(state, recipe)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );
@@ -281,7 +260,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       .pipe(
         Effect.tapError(() =>
           SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revert(state, transaction)),
+            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
           ),
         ),
       );

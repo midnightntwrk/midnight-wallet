@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-unshielded-wallet",
-  "version": "1.0.0-beta.17",
+  "version": "1.0.0-beta.18",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,7 +30,7 @@
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
     "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.16",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "rxjs": "^7.5"
   },
   "scripts": {
@@ -46,6 +46,7 @@
   },
   "devDependencies": {
     "eslint": "^9.37.0",
+    "fast-check": "^4.5.3",
     "prettier": "^3.7.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",

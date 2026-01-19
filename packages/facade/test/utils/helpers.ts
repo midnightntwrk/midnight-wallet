@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { WalletFacade } from '../src/index.js';
+import { FacadeState, WalletFacade } from '../../src/index.js';
 import * as rx from 'rxjs';
 
 export const getShieldedSeed = (seed: string): Uint8Array => {
@@ -70,8 +70,8 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
 
 export const tokenValue = (value: bigint): bigint => value * 10n ** 6n;
 
-export const waitForFullySynced = async (facade: WalletFacade): Promise<void> => {
-  await rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.isSynced)));
+export const waitForFullySynced = async (facade: WalletFacade): Promise<FacadeState> => {
+  return await rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.isSynced)));
 };
 
 export const sleep = (secs: number): Promise<void> => {

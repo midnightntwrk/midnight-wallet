@@ -97,15 +97,15 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
       logger.info('Sending transaction...');
-      const provenTx = await funded.wallet.finalizeTransaction(txToProve);
-      const txId = await funded.wallet.submitTransaction(provenTx);
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
+      const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
@@ -186,16 +186,16 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         funded.unshieldedKeystore.signData(payload),
       );
-      const finalizedTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
@@ -211,6 +211,7 @@ describe('Token transfer', () => {
 
       // await utils.waitForFacadePendingClear(fundedFacade);
       // const finalState = await utils.waitForSyncFacade(fundedFacade);
+      await utils.waitForFacadePendingClear(funded.wallet);
       const finalState = await firstValueFrom(
         funded.wallet.state().pipe(
           tap((state) => {
@@ -221,7 +222,7 @@ describe('Token transfer', () => {
         ),
       );
       logger.info(`Wallet 1 available coins: ${finalState.unshielded.availableCoins.length}`);
-      expect(finalState.dust.walletBalance(new Date())).toBeLessThan(initialDustBalance);
+      expect(finalState.dust.walletBalance(new Date(3 * 1000))).toBeLessThan(initialDustBalance);
       expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBe(initialUnshieldedBalance - outputValue);
       expect(finalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
         initialState.unshielded.availableCoins.length,
@@ -301,14 +302,14 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
       logger.info('Sending transaction...');
-      const provenTx = await funded.wallet.finalizeTransaction(txToProve);
+      const provenTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(provenTx);
       logger.info('Transaction id: ' + txId);
 
@@ -383,16 +384,16 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
       logger.info('Sending transaction...');
-      const provenTx = await funded.wallet.finalizeTransaction(txToProve);
-      const txId = await funded.wallet.submitTransaction(provenTx);
-      const txFees = await funded.wallet.calculateTransactionFee(provenTx);
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
+      const txId = await funded.wallet.submitTransaction(finalizedTx);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -492,17 +493,17 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
       logger.info('Sending transaction...');
-      const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         funded.unshieldedKeystore.signData(payload),
       );
-      const finalizedTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
+      const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
@@ -570,12 +571,9 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const provenTx = await funded.wallet.finalizeTransaction({
-        type: 'TransactionToProve',
-        transaction: unprovenTx,
-      });
+      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
       await expect(
-        Promise.all([funded.wallet.submitTransaction(provenTx), funded.wallet.submitTransaction(provenTx)]),
+        Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
@@ -617,13 +615,13 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
-      await expect(funded.wallet.finalizeTransaction(txToProve)).rejects.toThrow();
+      await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
 
       // const pendingState = await waitForPending(fundedFacade);
       // logger.info(pendingState);
@@ -673,14 +671,14 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
-      const provenTx = await funded.wallet.finalizeTransaction(txToProve);
-      await expect(funded.wallet.submitTransaction(provenTx)).rejects.toThrow();
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
+      await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
       expect(finalState.balances[dustTokenHash]).toBe(balance);
@@ -787,14 +785,14 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
-      const provenTx = await funded.wallet.finalizeTransaction(txToProve);
-      await expect(funded.wallet.submitTransaction(provenTx)).rejects.toThrow(
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
+      await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow(
         `Insufficient Funds: could not balance 02000000000000000000000000000000000000000000000000000000000000000000`,
       );
     },
@@ -1035,13 +1033,10 @@ describe('Token transfer', () => {
       );
       const offer = ledger.ZswapOffer.fromOutput(output, tokenTypeHash, outputValueNativeToken);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
-      const provenTx = await funded.wallet.finalizeTransaction({
-        type: 'TransactionToProve',
-        transaction: unprovenTx,
-      });
+      const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
 
       await expect(
-        Promise.all([funded.wallet.submitTransaction(provenTx), funded.wallet.submitTransaction(provenTx)]),
+        Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
@@ -1091,13 +1086,13 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         funded.shieldedSecretKeys,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(),
       );
-      await expect(funded.wallet.finalizeTransaction(txToProve)).rejects.toThrow();
+      await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
       expect(finalState).toMatchObject(syncedState);
       expect(finalState.balances[dustTokenHash]).toBe(initialDustBalance);
@@ -1133,13 +1128,13 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await funded.wallet.transferTransaction(
+      const txRecipe = await funded.wallet.transferTransaction(
         incorrectSecretKey,
         funded.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 60 * 60 * 1000),
       );
-      await expect(funded.wallet.finalizeTransaction(txToProve)).rejects.toThrow('Failed to prove transaction');
+      await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow('Failed to prove transaction');
     },
     timeout,
   );

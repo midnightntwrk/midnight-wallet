@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "dev": {
+      "dependsOn": ["^dist", "typecheck"],
+      "inputs": ["index.html", "vite.config.ts", "src/**", "tsconfig.json", "tsconfig.build.json"],
+      "persistent": true,
+      "cache": false
+    }
+  }
+}

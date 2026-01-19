@@ -17,7 +17,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
@@ -129,42 +129,36 @@ describe('Dust Deregistration', () => {
     const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
-    const nightUtxosNotRegisteredForDustGenerationBeforeDeregistration =
-      walletStateWithNight.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === false);
-
     const nightUtxosRegisteredForDustGeneration = walletStateWithNight.unshielded.availableCoins.filter(
-      (coin) => coin.meta.registeredForDustGeneration === true,
+      (coin) => coin.meta.registeredForDustGeneration,
     );
 
     const deregisterTokens = 2;
-    const dustDeregistrationRecipe = await walletFacade.deregisterFromDustGeneration(
+    const dustDeregistrationTx = await walletFacade.deregisterFromDustGeneration(
       nightUtxosRegisteredForDustGeneration.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
       (payload) => unshieldedWalletKeystore.signData(payload),
     );
 
-    const balancedTransactionRecipe = await walletFacade.balanceTransaction(
+    const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
       ledger.DustSecretKey.fromSeed(dustWalletSeed),
-      dustDeregistrationRecipe.transaction,
+      dustDeregistrationTx.transaction,
       new Date(Date.now() + 30 * 60 * 1000),
     );
 
-    if (balancedTransactionRecipe.type !== 'TransactionToProve') {
-      throw new Error('Expected a transaction to prove');
-    }
+    const finalizedDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
 
-    // NOTE: we don't sign the transaction via "walletFacade.signTransaction" as
-    // the (de)registerFromDustGeneration method already adds the required signatures
-    const finalizedDustTx = await walletFacade.finalizeTransaction(balancedTransactionRecipe);
-    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalizedDustTx);
+    const dustDeregistrationTxHash = await walletFacade.submitTransaction(finalizedDustDeregistrationTx);
 
     expect(dustDeregistrationTxHash).toBeTypeOf('string');
 
-    const walletStateAfterRegistration = await rx.firstValueFrom(
+    const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(finalizedDustTx.transactionHash());
+          const txInHistory = await state.unshielded.transactionHistory.get(
+            finalizedDustDeregistrationTx.transactionHash(),
+          );
 
           return {
             state,
@@ -176,14 +170,12 @@ describe('Dust Deregistration', () => {
       ),
     );
 
-    const availableCoinsWithInfo = walletStateAfterRegistration.dust.availableCoinsWithFullInfo(new Date());
-    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterRegistration.unshielded.availableCoins.filter(
+    const availableCoinsWithInfo = walletStateAfterDeregistration.dust.availableCoinsWithFullInfo(new Date());
+    const nightUtxosNotRegisteredForDustGeneration = walletStateAfterDeregistration.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
 
     expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
-    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(
-      nightUtxosNotRegisteredForDustGenerationBeforeDeregistration.length + deregisterTokens,
-    );
+    expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(2);
   });
 });

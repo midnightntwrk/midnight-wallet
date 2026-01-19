@@ -23,10 +23,10 @@ import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstr
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { ProvingRecipe, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, Scope } from 'effect';
 import * as rx from 'rxjs';
-import { Balance, CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { Balance, CoinsAndBalancesCapability, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { DustCoreWallet } from './DustCoreWallet.js';
 import { KeysCapability } from './Keys.js';
 import { V1Tag } from './RunningV1Variant.js';
@@ -96,6 +96,13 @@ export class DustWalletState {
     return this.capabilities.coinsAndBalances.getAvailableCoinsWithFullInfo(this.state, time);
   }
 
+  estimateDustGeneration(
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    currentTime: Date,
+  ): ReadonlyArray<UtxoWithFullDustDetails> {
+    return this.capabilities.coinsAndBalances.estimateDustGeneration(this.state, nightUtxos, currentTime);
+  }
+
   serialize(): string {
     return this.capabilities.serialization.serialize(this.state);
   }
@@ -114,21 +121,18 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
     dustReceiverAddress: string | undefined,
   ): Promise<UnprovenTransaction>;
 
-  addDustGenerationSignature(
-    transaction: UnprovenTransaction,
-    signature: Signature,
-  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
+  addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
 
-  calculateFee(transaction: AnyTransaction): Promise<bigint>;
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>>;
+  ): Promise<UnprovenTransaction>;
 
-  finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction>;
+  proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction>;
 
   readonly submitTransaction: SubmitTransactionMethod<FinalizedTransaction>;
 
@@ -139,7 +143,9 @@ export interface DustWallet extends WalletLike.WalletLike<[Variant.VersionedVari
 
 export interface DustWalletClass extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]> {
   startWithSeed(seed: Uint8Array, dustParameters: DustParameters): DustWallet;
+
   startWithSecretKey(secretKey: DustSecretKey, dustParameters: DustParameters): DustWallet;
+
   restore(serializedState: string): DustWallet;
 }
 
@@ -200,10 +206,7 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
         .pipe(Effect.runPromise);
     }
 
-    addDustGenerationSignature(
-      transaction: UnprovenTransaction,
-      signature: Signature,
-    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
+    addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
@@ -211,31 +214,31 @@ export function DustWallet(configuration: DefaultV1Configuration): DustWalletCla
         .pipe(Effect.runPromise);
     }
 
-    calculateFee(transaction: AnyTransaction): Promise<bigint> {
+    calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.calculateFee(transaction),
+          [V1Tag]: (v1) => v1.calculateFee(transactions),
         })
         .pipe(Effect.runPromise);
     }
 
-    addFeePayment(
+    balanceTransactions(
       secretKey: DustSecretKey,
-      transaction: UnprovenTransaction,
+      transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<ProvingRecipe.ProvingRecipe<FinalizedTransaction>> {
+    ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.addFeePayment(secretKey, transaction, ttl, currentTime),
+          [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),
         })
         .pipe(Effect.runPromise);
     }
 
-    finalizeTransaction(recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>): Promise<FinalizedTransaction> {
+    proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.finalizeTransaction(recipe),
+          [V1Tag]: (v1) => v1.proveTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

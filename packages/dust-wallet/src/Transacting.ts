@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either } from 'effect';
+import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
   DustPublicKey,
@@ -24,7 +24,6 @@ import {
   SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
-  Utxo,
   UtxoOutput,
   UtxoSpend,
   FinalizedTransaction,
@@ -32,13 +31,14 @@ import {
   UnprovenTransaction,
   addressFromKey,
   LedgerParameters,
+  nativeToken,
 } from '@midnight-ntwrk/ledger-v7';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { ProvingRecipe, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { DustCoreWallet } from './DustCoreWallet.js';
-import { AnyTransaction, DustToken, NetworkId, TotalCostParameters, UnprovenDustSpend } from './types/index.js';
-import { CoinsAndBalancesCapability, CoinSelection, CoinWithValue } from './CoinsAndBalances.js';
+import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
+import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 
@@ -48,7 +48,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
-    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
@@ -56,27 +56,22 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError>;
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: TSecrets,
     state: TState,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: TState },
-    WalletError.WalletError
-  >;
+  ): Either.Either<[UnprovenTransaction, TState], WalletError.WalletError>;
 
-  revert(state: TState, tx: TTransaction): Either.Either<TState, WalletError.WalletError>;
-
-  revertRecipe(
+  revertTransaction(
     state: TState,
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
+    transaction: UnprovenTransaction | TTransaction,
   ): Either.Either<TState, WalletError.WalletError>;
 }
 
@@ -145,29 +140,50 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   createDustGenerationTransaction(
     currentTime: Date,
     ttl: Date,
-    nightUtxos: ReadonlyArray<CoinWithValue<Utxo>>,
+    nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: string | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
+    const makeOffer = (
+      utxos: ReadonlyArray<UtxoWithFullDustDetails>,
+    ): Option.Option<UnshieldedOffer<SignatureEnabled>> => {
+      if (utxos.length === 0) {
+        return Option.none();
+      }
+      const totalValue = pipe(
+        utxos,
+        IterableOps.map((coin) => coin.utxo.value),
+        BigIntOps.sumAll,
+      );
+      const inputs: UtxoSpend[] = utxos.map(({ utxo }) => ({
+        ...utxo,
+        owner: nightVerifyingKey,
+      }));
+      const output: UtxoOutput = {
+        owner: addressFromKey(nightVerifyingKey),
+        type: nativeToken().raw,
+        value: totalValue,
+      };
+
+      return Option.some(UnshieldedOffer.new(inputs, [output], []));
+    };
+
     return Either.gen(this, function* () {
       const receiver = dustReceiverAddress ? yield* this.#parseAddress(dustReceiverAddress) : undefined;
 
       return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
-        const intent = Intent.new(ttl);
-        const totalDustValue = nightUtxos.reduce((total, { value }) => total + value, 0n);
-        const inputs: UtxoSpend[] = nightUtxos.map(({ token: utxo }) => ({
-          ...utxo,
-          owner: nightVerifyingKey,
-        }));
 
-        const outputs: UtxoOutput[] = inputs.map((input) => ({
-          owner: addressFromKey(nightVerifyingKey),
-          type: input.type,
-          value: input.value,
-        }));
+        const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
-        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+        const totalDustValue = pipe(
+          splitResult.guaranteed,
+          IterableOps.map((coin) => coin.dust.generatedNow),
+          BigIntOps.sumAll,
+        );
+
+        const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
+        const maybeFallibleOffer = makeOffer(splitResult.fallible);
 
         const dustRegistration: DustRegistration<SignatureEnabled> = new DustRegistration(
           SignatureMarker.signature,
@@ -175,13 +191,36 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           receiver,
           dustReceiverAddress !== undefined ? totalDustValue : 0n,
         );
-
-        intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+        const dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
           ProofMarker.preProof,
           currentTime,
           [],
           [dustRegistration],
+        );
+
+        const intent = pipe(
+          Intent.new(ttl),
+          (intent) =>
+            Option.match(maybeGuaranteedOffer, {
+              onNone: () => intent,
+              onSome: (guaranteedOffer) => {
+                intent.guaranteedUnshieldedOffer = guaranteedOffer;
+                return intent;
+              },
+            }),
+          (intent) =>
+            Option.match(maybeFallibleOffer, {
+              onNone: () => intent,
+              onSome: (fallibleOffer) => {
+                intent.fallibleUnshieldedOffer = fallibleOffer;
+                return intent;
+              },
+            }),
+          (intent) => {
+            intent.dustActions = dustActions;
+            return intent;
+          },
         );
 
         return Transaction.fromParts(network, undefined, undefined, intent);
@@ -192,7 +231,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signatureData: Signature,
-  ): Either.Either<ProvingRecipe.ProvingRecipe<FinalizedTransaction>, WalletError.WalletError> {
+  ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
     return Either.gen(this, function* () {
       const intent = transaction.intents?.get(1);
       if (!intent) {
@@ -201,7 +240,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
       }
 
-      const { dustActions, guaranteedUnshieldedOffer } = intent;
+      const { dustActions, guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
       if (!dustActions) {
         return yield* Either.left(new WalletError.TransactingError({ message: 'No dustActions found in intent' }));
       }
@@ -252,6 +291,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         }
         newIntent.guaranteedUnshieldedOffer = guaranteedUnshieldedOffer.addSignatures(signatures);
 
+        if (fallibleUnshieldedOffer) {
+          const inputsLen = fallibleUnshieldedOffer.inputs.length;
+          const signatures: Signature[] = [];
+          for (let i = 0; i < inputsLen; ++i) {
+            signatures.push(fallibleUnshieldedOffer.signatures.at(i) ?? signatureData);
+          }
+          newIntent.fallibleUnshieldedOffer = fallibleUnshieldedOffer.addSignatures(signatures);
+        }
+
         // make a copy of transaction to avoid mutation
         const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
           signature.instance,
@@ -261,10 +309,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         );
         newTransaction.intents = newTransaction.intents!.set(1, newIntent);
 
-        return {
-          type: ProvingRecipe.TRANSACTION_TO_PROVE as typeof ProvingRecipe.TRANSACTION_TO_PROVE,
-          transaction: newTransaction,
-        };
+        return newTransaction;
       });
     });
   }
@@ -283,21 +328,20 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     return dustImbalance ? -dustImbalance[1] : totalFee;
   }
 
-  addFeePayment(
+  balanceTransactions(
     secretKey: DustSecretKey,
     state: DustCoreWallet,
-    transaction: UnprovenTransaction,
+    transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<
-    { recipe: ProvingRecipe.ProvingRecipe<FinalizedTransaction>; newState: DustCoreWallet },
-    WalletError.WalletError
-  > {
+  ): Either.Either<[UnprovenTransaction, DustCoreWallet], WalletError.WalletError> {
     const network = this.networkId;
-    const feeLeft = TransactingCapabilityImplementation.feeImbalance(
-      transaction,
-      this.calculateFee(transaction, ledgerParams),
+    const feeLeft = transactions.reduce(
+      (total, transaction) =>
+        total +
+        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
+      0n,
     );
 
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
@@ -321,6 +365,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         token: highestByValue.token,
       };
     }
+
     return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
       const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
@@ -329,58 +374,29 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         SignatureMarker.signature,
         ProofMarker.preProof,
         currentTime,
-        spends as UnprovenDustSpend[],
+        [...spends],
         [],
       );
 
       const feeTransaction = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
 
-      return {
-        newState: updatedState,
-        recipe: {
-          type: ProvingRecipe.TRANSACTION_TO_PROVE,
-          transaction: transaction.merge(feeTransaction),
-        },
-      };
+      return [feeTransaction, updatedState];
     });
   }
 
-  revert(state: DustCoreWallet, tx: TTransaction): Either.Either<DustCoreWallet, WalletError.WalletError> {
+  revertTransaction(
+    state: DustCoreWallet,
+    transaction: UnprovenTransaction | TTransaction,
+  ): Either.Either<DustCoreWallet, WalletError.WalletError> {
     return Either.try({
-      try: () => state.revertTransaction(tx),
+      try: () => state.revertTransaction(transaction),
       catch: (err) => {
         return new WalletError.OtherWalletError({
-          message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
+          message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });
       },
     });
-  }
-
-  revertRecipe(
-    state: DustCoreWallet,
-    recipe: ProvingRecipe.ProvingRecipe<TTransaction>,
-  ): Either.Either<DustCoreWallet, WalletError.WalletError> {
-    const doRevert = (tx: UnprovenTransaction) => {
-      return Either.try({
-        try: () => state.revertTransaction(tx),
-        catch: (err) => {
-          return new WalletError.OtherWalletError({
-            message: `Error while reverting transaction ${tx.identifiers().at(0)!}`,
-            cause: err,
-          });
-        },
-      });
-    };
-
-    switch (recipe.type) {
-      case ProvingRecipe.TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transaction);
-      case ProvingRecipe.BALANCE_TRANSACTION_TO_PROVE:
-        return doRevert(recipe.transactionToProve);
-      case ProvingRecipe.NOTHING_TO_PROVE:
-        return Either.right(state);
-    }
   }
 
   #parseAddress(addr: string): Either.Either<DustPublicKey, WalletError.AddressError> {

@@ -90,7 +90,7 @@ describe('V1 Variant', () => {
         coinSelection: chooseCoin,
         keysCapability: makeDefaultKeysCapability(),
       }));
-      const spiedRevert = vi.spyOn(transacting, 'revert');
+      const spiedRevert = vi.spyOn(transacting, 'revertTransaction');
       spiedRevert.mockImplementation((state, transaction) => {
         if (Encoding.encodeHex(transaction.serialize()) === Encoding.encodeHex(theTransaction.serialize())) {
           // Returning a completely different state allows to later test that it is properly connected, without invoking the actual logic

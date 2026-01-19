@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-dust-wallet",
-  "version": "1.0.0-beta.14",
+  "version": "1.0.0-beta.15",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -31,9 +31,9 @@
     "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.16",
     "@midnight-ntwrk/wallet-sdk-node-client": "1.0.0-beta.12",
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.0.0-beta.13",
-    "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.15",
+    "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.16",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
-    "effect": "^3.17.3",
+    "effect": "^3.19.14",
     "rxjs": "^7.5"
   },
   "scripts": {
