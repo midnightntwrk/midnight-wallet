@@ -149,7 +149,7 @@ describe('Set up test wallet', () => {
         receiver.unshieldedKeystore.getPublicKey(),
         (payload) => receiver.unshieldedKeystore.signData(payload),
       );
-      const finalizedDustTx = await receiver.wallet.finalizeTransaction(dustRegistrationRecipe);
+      const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info('Submitting dust registration transaction...');
       const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       expect(dustRegistrationTxid).toBeDefined();
