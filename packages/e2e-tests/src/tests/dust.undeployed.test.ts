@@ -88,17 +88,17 @@ describe('Dust tests', () => {
     ];
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
-    const txToProve = await funded.wallet.transferTransaction(
+    const txRecipe = await funded.wallet.transferTransaction(
       funded.shieldedSecretKeys,
       funded.dustSecretKey,
       outputsToCreate,
       ttl,
     );
-    const signedTx = await funded.wallet.signTransaction(txToProve.transaction, (payload) =>
+    const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
       funded.unshieldedKeystore.signData(payload),
     );
-    const provenTx = await funded.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
-    const txId = await funded.wallet.submitTransaction(provenTx);
+    const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
+    const txId = await funded.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + txId);
 
     logger.info('Waiting for finalized balance...');
@@ -125,7 +125,7 @@ describe('Dust tests', () => {
       (payload) => receiver.unshieldedKeystore.signData(payload),
     );
 
-    const finalizedDustTx = await receiver.wallet.finalizeTransaction(dustRegistrationRecipe);
+    const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
     const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
     logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
 
@@ -248,18 +248,14 @@ describe('Dust tests', () => {
         (payload) => receiver.unshieldedKeystore.signData(payload),
       );
 
-      const balancedTransactionRecipe = await receiver.wallet.balanceTransaction(
+      const balancedTransactionRecipe = await receiver.wallet.balanceUnprovenTransaction(
         receiver.shieldedSecretKeys,
         receiver.dustSecretKey,
         dustDeregistrationRecipe.transaction,
         new Date(Date.now() + 30 * 60 * 1000),
       );
 
-      if (balancedTransactionRecipe.type !== 'TransactionToProve') {
-        throw new Error('Expected a transaction to prove');
-      }
-
-      const finalizedDustTx = await receiver.wallet.finalizeTransaction(balancedTransactionRecipe);
+      const finalizedDustTx = await receiver.wallet.finalizeRecipe(balancedTransactionRecipe);
       const dustDeregistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       logger.info(`Dust de-registration tx id: ${dustDeregistrationTxid}`);
 
@@ -324,17 +320,17 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiver.wallet.transferTransaction(
+      const txRecipe = await receiver.wallet.transferTransaction(
         receiver.shieldedSecretKeys,
         receiver.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const signedTx = await receiver.wallet.signTransaction(txToProve.transaction, (payload) =>
+      const signedTxRecipe = await receiver.wallet.signRecipe(txRecipe, (payload) =>
         receiver.unshieldedKeystore.signData(payload),
       );
-      const provenTx = await receiver.wallet.finalizeTransaction({ ...txToProve, transaction: signedTx });
-      const txId = await receiver.wallet.submitTransaction(provenTx);
+      const finalizedTx = await receiver.wallet.finalizeRecipe(signedTxRecipe);
+      const txId = await receiver.wallet.submitTransaction(finalizedTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);
       await utils.waitForFacadePendingClear(receiver.wallet);
@@ -387,14 +383,14 @@ describe('Dust tests', () => {
         },
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
-      const txToProve = await receiver.wallet.transferTransaction(
+      const txRecipe = await receiver.wallet.transferTransaction(
         receiver.shieldedSecretKeys,
         receiver.dustSecretKey,
         outputsToCreate,
         ttl,
       );
-      const provenTx = await receiver.wallet.finalizeTransaction(txToProve);
-      const txId = await receiver.wallet.submitTransaction(provenTx);
+      const finalizedTx = await receiver.wallet.finalizeRecipe(txRecipe);
+      const txId = await receiver.wallet.submitTransaction(finalizedTx);
       expect(txId).toBeDefined();
       logger.info('Transaction id: ' + txId);
       await utils.waitForFacadePendingClear(receiver.wallet);

@@ -133,17 +133,17 @@ describe('Token transfer', () => {
         },
       ];
 
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      logger.info(txToProve);
-      const provenTx = await sender.wallet.finalizeTransaction(txToProve);
-      logger.info(provenTx.toString());
+      logger.info(txRecipe);
+      const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
+      logger.info(finalizedTx.toString());
       logger.info('Submitting tx:');
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 
@@ -245,14 +245,14 @@ describe('Token transfer', () => {
           ],
         },
       ];
-      const txToProve = await sender.wallet.transferTransaction(
+      const txRecipe = await sender.wallet.transferTransaction(
         sender.shieldedSecretKeys,
         sender.dustSecretKey,
         outputsToCreate,
         new Date(Date.now() + 30 * 60 * 1000),
       );
-      const provenTx = await sender.wallet.finalizeTransaction(txToProve);
-      const txId = await sender.wallet.submitTransaction(provenTx);
+      const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
+      const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePending(sender.wallet);

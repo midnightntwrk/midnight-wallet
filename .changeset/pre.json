@@ -17,7 +17,8 @@
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.4",
     "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.6",
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1",
-    "@midnight-ntwrk/wallet-sdk-docs-snippets": "1.0.0-beta.1"
+    "@midnight-ntwrk/wallet-sdk-docs-snippets": "1.0.0-beta.1",
+    "@midnight-ntwrk/wallet-test-website": "1.0.0-beta.0"
   },
   "changesets": [
     "better-candles-take",
@@ -28,6 +29,7 @@
     "cyan-planes-sit",
     "dirty-tires-try",
     "dull-frogs-reply",
+    "early-animals-strive",
     "easy-parts-fry",
     "every-maps-tie",
     "famous-donkeys-sink",
@@ -39,7 +41,10 @@
     "lovely-parents-stop",
     "metal-impalas-dream",
     "mighty-vans-occur",
+    "modern-carpets-bow",
+    "neat-cities-juggle",
     "neat-radios-stick",
+    "nine-badgers-hammer",
     "orange-cycles-run",
     "perky-days-grin",
     "quick-walls-agree",

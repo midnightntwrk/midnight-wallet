@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { sampleIntentHash } from '@midnight-ntwrk/ledger-v7';
 import { UnshieldedUpdate, UpdateStatus, UtxoWithMeta } from '../UnshieldedState.js';
 
 export const generateMockUtxoWithMeta = (owner: string, type: string): UtxoWithMeta =>
@@ -27,7 +26,7 @@ export const generateMockLedgerUtxo = (owner: string, type: string): ledger.Utxo
   value: BigInt(Math.ceil(Math.random() * 100)),
   owner,
   type,
-  intentHash: sampleIntentHash(),
+  intentHash: ledger.sampleIntentHash(),
   outputNo: Math.floor(Math.random() * 100),
 });
 

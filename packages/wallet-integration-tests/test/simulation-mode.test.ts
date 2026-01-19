@@ -79,7 +79,7 @@ describe('Working in simulation mode', () => {
       });
 
       yield* Effect.promise(async () => {
-        const recipe = await senderWallet.transferTransaction(senderKeys, [
+        const unprovenTx = await senderWallet.transferTransaction(senderKeys, [
           {
             type: shieldedTokenType,
             amount: 42n,
@@ -88,7 +88,7 @@ describe('Working in simulation mode', () => {
               .then((addr) => ShieldedAddress.codec.encode(Wallet.configuration.networkId, addr).asString()),
           },
         ]);
-        const tx = await senderWallet.finalizeTransaction(recipe);
+        const tx = await senderWallet.finalizeTransaction(unprovenTx);
         await senderWallet.submitTransaction(tx);
       }).pipe(Effect.forkScoped);
 
