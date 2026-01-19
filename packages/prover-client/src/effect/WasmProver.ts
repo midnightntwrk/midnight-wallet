@@ -71,7 +71,10 @@ const callProverWorker = <RResponse>(
           .then((result) => {
             worker.postMessage({ op, keyLocation, result });
           })
-          .catch(reject);
+          .catch((e: Error) => {
+            worker.terminate();
+            reject(e);
+          });
       } else if (op === 'getParams') {
         const { k } = decoded;
         kmProvider
@@ -79,14 +82,24 @@ const callProverWorker = <RResponse>(
           .then((result) => {
             worker.postMessage({ op, k, result });
           })
-          .catch(reject);
+          .catch((e: Error) => {
+            worker.terminate();
+            reject(e);
+          });
       } else if (op === 'result') {
         const { value } = decoded;
+        worker.terminate();
         resolve(value as RResponse);
       }
     });
-    worker.addEventListener('error', reject);
-    setTimeout(() => reject(new Error(`${op} action timed out`)), MAX_TIME_TO_PROCESS);
+    worker.addEventListener('error', (e: ErrorEvent) => {
+      worker.terminate();
+      reject(Error(e.message));
+    });
+    setTimeout(() => {
+      worker.terminate();
+      reject(new Error(`${op} action timed out`));
+    }, MAX_TIME_TO_PROCESS);
   });
 };
 
@@ -145,6 +158,8 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('Failed to fetch at attempt', i + 1, url, e);
+        // cooldown a bit before retrying
+        await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, i + 1)));
       }
     }
     throw new Error(`Failed to fetch ${url} after ${retries} attempts`);
