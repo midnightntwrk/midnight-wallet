@@ -30,7 +30,7 @@ const startContainer = (container: GenericContainer): Effect.Effect<StartedTestC
 export const runNodeContainer = (
   adjustment: (t: GenericContainer) => GenericContainer = identity,
 ): Effect.Effect<StartedTestContainer, Error, Scope.Scope> => {
-  const container = new GenericContainer('ghcr.io/midnight-ntwrk/midnight-node:0.20.0-alpha.1')
+  const container = new GenericContainer('ghcr.io/midnight-ntwrk/midnight-node:0.20.0-rc.1')
     .withEnvironment({
       CFG_PRESET: 'dev',
       SIDECHAIN_BLOCK_BENEFICIARY: '04bcf7ad3be7a5c790460be82a713af570f22e0f801f6659ab8e84a52be6969e',
@@ -64,9 +64,7 @@ export const runTxGenerator = (
   },
   adjustment: (t: GenericContainer) => GenericContainer = identity,
 ): Effect.Effect<StartedTestContainer, Error, Scope.Scope> => {
-  const container: GenericContainer = new GenericContainer(
-    'ghcr.io/midnight-ntwrk/midnight-node-toolkit:0.20.0-alpha.1',
-  )
+  const container: GenericContainer = new GenericContainer('ghcr.io/midnight-ntwrk/midnight-node-toolkit:0.20.0-rc.1')
     .withBindMounts([{ source: config.destPath, target: '/tmp', mode: 'rw' }])
     .withCommand([
       'generate-txs',
