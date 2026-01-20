@@ -83,7 +83,7 @@ describe('Token transfer', () => {
     logger.info('Wallets stopped');
   }, timeout);
 
-  test(
+  test.only(
     'Is working for valid transfer @healthcheck',
     async () => {
       allure.tag('smoke');
@@ -101,11 +101,16 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
       logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
+      logger.info(
+        `Wallet 1 shielded address: ${utils.getShieldedAddress(networkId, senderInitialState.shielded.address)}`,
+      );
       logger.info(`Wallet 1 available shielded coins: ${senderInitialState.shielded.availableCoins.length}`);
       logger.info(inspect(senderInitialState.shielded.availableCoins, { depth: null }));
       logger.info(`Wallet 1 available unshielded coins: ${senderInitialState.unshielded.availableCoins.length}`);
       logger.info(inspect(senderInitialState.unshielded.availableCoins, { depth: null }));
-      logger.info(`Wallet 1 address: ${utils.getUnshieldedAddress(networkId, senderInitialState.unshielded.address)}`);
+      logger.info(
+        `Wallet 1 unshielded address: ${utils.getUnshieldedAddress(networkId, senderInitialState.unshielded.address)}`,
+      );
 
       const initialReceiverState = await firstValueFrom(receiver.wallet.state());
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;

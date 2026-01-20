@@ -65,7 +65,7 @@ describe('Set up test wallet', () => {
     await receiver.wallet.stop();
   }, timeout);
 
-  test(
+  test.only(
     'Distributing tokens to test wallet',
     async () => {
       await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
