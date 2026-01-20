@@ -60,14 +60,14 @@ describe('Dust tests', () => {
       );
 
       const unregisteredUtxosNumber = unregisteredNightUtxos.length;
-      expect(unregisteredUtxosNumber, 'No unregistered UTXOs found').toBeGreaterThan(0);
+      expect(unregisteredUtxosNumber, 'Not enough unregistered UTXOs found').toBeGreaterThan(1);
       logger.info(`utxo length: ${unregisteredUtxosNumber}`);
 
-      const firstNightUtxo = unregisteredNightUtxos[0];
-      logger.info(`Registering UTXO: ${inspect(unregisteredNightUtxos, { depth: null })}`);
+      const firstTwoNightUtxos = unregisteredNightUtxos.slice(0, 2);
+      logger.info(`Registering UTXOs: ${inspect(firstTwoNightUtxos, { depth: null })}`);
 
       const dustRegistrationRecipe = await wallet.wallet.registerNightUtxosForDustGeneration(
-        [firstNightUtxo],
+        firstTwoNightUtxos,
         wallet.unshieldedKeystore.getPublicKey(),
         (payload) => wallet.unshieldedKeystore.signData(payload),
       );
@@ -88,14 +88,15 @@ describe('Dust tests', () => {
             (s) =>
               s.unshielded.availableCoins.filter(
                 (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === true,
-              ).length > registeredNightUtxos.length && s.isSynced === true,
+              ).length >=
+                registeredNightUtxos.length + 2 && s.isSynced === true,
           ),
         ),
       );
       const finalNightUtxos = finalWalletState.unshielded.availableCoins.filter(
         (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === true,
       );
-      expect(finalNightUtxos.length).toBe(registeredNightUtxos.length + 1);
+      expect(finalNightUtxos.length).toBe(registeredNightUtxos.length + 2);
     },
     timeout,
   );
@@ -111,11 +112,11 @@ describe('Dust tests', () => {
         (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === true,
       );
       logger.info(`Registered night UTXOs: ${inspect(registeredNightUtxos, { depth: null })}`);
-      expect(registeredNightUtxos.length).toBeGreaterThan(0);
+      expect(registeredNightUtxos.length, 'Not enough registered UTXOs found').toBeGreaterThan(1);
 
-      const firstRegisteredNightUtxo = registeredNightUtxos[0];
+      const firstTwoRegisteredNightUtxos = registeredNightUtxos.slice(0, 2);
       const dustDeregistrationRecipe = await wallet.wallet.deregisterFromDustGeneration(
-        [firstRegisteredNightUtxo],
+        firstTwoRegisteredNightUtxos,
         wallet.unshieldedKeystore.getPublicKey(),
         (payload) => wallet.unshieldedKeystore.signData(payload),
       );

@@ -406,6 +406,21 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
     ),
   );
 
+export const waitForRegisteredTokens = (wallet: WalletFacade) =>
+  rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.tap((s) => {
+        const registeredTokens = s.unshielded.availableCoins.filter(
+          (coin) => coin.meta.registeredForDustGeneration === true,
+        );
+        logger.info(`registered tokens: ${registeredTokens.length}`);
+      }),
+      rx.filter(
+        (s) => s.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === true).length > 0,
+      ),
+    ),
+  );
+
 // export const waitForTxInHistory = async (txId: string, wallet: ShieldedWallet) =>
 //   firstValueFrom(
 //     wallet.state.pipe(
