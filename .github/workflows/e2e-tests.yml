@@ -112,22 +112,22 @@ jobs:
         with:
           ref: ${{ inputs.branch || github.ref }}
 
-      # - name: Determine the latest successful run ID with appropriate artifact
-      #   continue-on-error: true
-      #   env:
-      #     GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-      #   run: |
-      #       LATEST_RUN_ID=$(./.github/scripts/find_run_id.sh ${{ github.repository }} "Healthcheck - ${{ inputs.deployment }}" ".sync_cache")
-      #       echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
-      #       mkdir -p ${{ env.SYNC_CACHE }}
+      - name: Determine the latest successful run ID with appropriate artifact
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+        run: |
+          LATEST_RUN_ID=$(./.github/scripts/find_run_id.sh ${{ github.repository }} "Healthcheck - ${{ inputs.network }}" ".sync_cache")
+          echo "LATEST_RUN_ID=$LATEST_RUN_ID" >> $GITHUB_ENV
+          mkdir -p ${{ env.SYNC_CACHE }}
 
-      # - uses: actions/download-artifact@v4
-      #   continue-on-error: true
-      #   with:
-      #     run-id: ${{ env.LATEST_RUN_ID }}
-      #     path: ${{ env.SYNC_CACHE }}
-      #     github-token: ${{ env.MIDNIGHT_GH_TOKEN }}
-      #     name: .sync_cache
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          run-id: ${{ env.LATEST_RUN_ID }}
+          path: ${{ env.SYNC_CACHE }}
+          github-token: ${{ env.MIDNIGHT_GH_TOKEN }}
+          name: .sync_cache
 
       - name: Debug
         run: ls -a -R ./packages/e2e-tests
