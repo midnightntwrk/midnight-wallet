@@ -402,6 +402,61 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
+  it('should allow spending multiple Dust tokens', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000n;
+
+      // reward & claim Night tokens
+      const rewardNight = yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      expect(rewardNight.blockNumber).toBe(1n);
+      yield* waitForTx(stateRef, 1);
+
+      let simulatorState = yield* simulator.getLatestState();
+      let nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(1);
+
+      // get more night tokens with a different amount
+      const newNightTokenAmount = 140_000_000_000n;
+      const rewardNight2 = yield* simulator.rewardNight(walletAddress, newNightTokenAmount, nightVerifyingKey);
+      expect(rewardNight2.blockNumber).toBe(2n);
+      simulatorState = yield* simulator.getLatestState();
+      expect(simulatorState.lastTxResult!.type).toBe('success');
+      yield* waitForTx(stateRef, 2);
+
+      // get one more night token with a different amount
+      const newNightTokenAmount2 = 160_000_000_000n;
+      const rewardNight3 = yield* simulator.rewardNight(walletAddress, newNightTokenAmount2, nightVerifyingKey);
+      expect(rewardNight3.blockNumber).toBe(3n);
+      simulatorState = yield* simulator.getLatestState();
+      expect(simulatorState.lastTxResult!.type).toBe('success');
+      yield* waitForTx(stateRef, 3);
+
+      // verify we have 3 Night tokens
+      nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(3);
+
+      // register Night tokens
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 4);
+      simulatorState = yield* simulator.getLatestState();
+
+      const walletState = yield* SubscriptionRef.get(stateRef);
+      const availableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
+        walletState,
+        toTxTime(simulatorState.lastTxNumber),
+      );
+      expect(availableCoins.length).toBe(2);
+
+      nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(2);
+      expect(nightTokensWithMeta.some((token) => token.value === newNightTokenAmount + newNightTokenAmount2)).toBe(
+        true,
+      );
+    }).pipe(Effect.runPromise);
+  });
+
   it('spend the only Dust token', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
