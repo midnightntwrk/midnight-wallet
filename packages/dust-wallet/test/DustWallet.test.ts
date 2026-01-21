@@ -441,7 +441,6 @@ describe('DustWallet', () => {
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
       yield* waitForTx(stateRef, 4);
       simulatorState = yield* simulator.getLatestState();
-      console.log(simulatorState.lastTx?.toString());
 
       const walletState = yield* SubscriptionRef.get(stateRef);
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
