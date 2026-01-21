@@ -40,6 +40,8 @@ describe('Token transfer', () => {
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
   const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
+  const filenameWallet = `${fundedSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
+  const filenameWallet2 = `${receivingSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
   let sender: utils.WalletInit;
   let receiver: utils.WalletInit;
@@ -54,8 +56,8 @@ describe('Token transfer', () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
-    wallet = await utils.initWalletWithSeed(fundedSeed, fixture);
-    wallet2 = await utils.initWalletWithSeed(receivingSeed, fixture);
+    wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
+    wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
 
     const initialState = await utils.waitForSyncFacade(wallet.wallet);
     const initialNativeBalance = initialState.shielded.balances[nativeToken1Raw];
@@ -76,8 +78,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterEach(async () => {
-    // await utils.saveState(sender, filenameWallet);
-    // await utils.saveState(receiver, filenameWallet2);
+    await utils.saveState(wallet.wallet, filenameWallet);
+    await utils.saveState(wallet2.wallet, filenameWallet2);
     await sender.wallet.stop();
     await receiver.wallet.stop();
     logger.info('Wallets stopped');
