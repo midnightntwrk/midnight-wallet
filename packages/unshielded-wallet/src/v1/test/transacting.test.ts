@@ -16,7 +16,7 @@ import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstracti
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { ArrayOps, DateOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { Array as Arr, pipe, Record as Rec } from 'effect';
+import { Array as Arr, HashMap, pipe, Record as Rec } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { createKeystore, PublicKey } from '../../KeyStore.js';
@@ -184,6 +184,39 @@ describe('Unshielded wallet transacting', () => {
         // There are/should be other tests verifying intent contents. Here we only want to ensure usage of a proper section
         expect(theIntent.fallibleUnshieldedOffer).toBeUndefined();
         expect(theIntent.guaranteedUnshieldedOffer).toBeDefined();
+      }),
+    );
+  });
+
+  it('revert clears pending coins after makeTransfer', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(outputs, Rec.values, Arr.flatten);
+
+        // Make a transfer - this should move coins from available to pending
+        const { newState, transaction } = transacting
+          .makeTransfer(wallet, outputsToUse, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+
+        // Verify that some coins are now pending
+        const pendingCountAfterTransfer = HashMap.size(newState.state.pendingUtxos);
+        const availableCountAfterTransfer = HashMap.size(newState.state.availableUtxos);
+        expect(pendingCountAfterTransfer).toBeGreaterThan(0);
+
+        // Revert the transaction - this should move coins back from pending to available
+        const revertedWallet = transacting.revert(newState, transaction).pipe(EitherOps.getOrThrowLeft);
+
+        // Verify that pending coins are cleared and moved back to available
+        expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
+        expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(
+          availableCountAfterTransfer + pendingCountAfterTransfer,
+        );
+
+        // Verify the reverted wallet has the same available coins as the original wallet
+        expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(HashMap.size(wallet.state.availableUtxos));
       }),
     );
   });
