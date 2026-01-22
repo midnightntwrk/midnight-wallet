@@ -349,13 +349,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<CoreWallet, WalletError> {
     return pipe(
       this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
-      Arr.reduce(
-        Either.right(wallet) as Either.Either<CoreWallet, WalletError>,
-        (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
-          pipe(
-            walletAcc,
-            Either.flatMap((w) => CoreWallet.rollbackUtxo(w, utxo)),
-          ),
+      Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((w) => CoreWallet.rollbackUtxo(w, utxo)),
+        ),
       ),
     );
   }

@@ -220,4 +220,50 @@ describe('Unshielded wallet transacting', () => {
       }),
     );
   });
+
+  it('revert only clears pending coins for the reverted transaction', () => {
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    fc.assert(
+      fc.property(walletAndTransfersArbitrary(), ({ wallet, outputs }) => {
+        const outputsToUse = pipe(outputs, Rec.values, Arr.flatten);
+
+        const [firstOutput, ...remainingOutputs] = outputsToUse;
+
+        const firstOutputMapped = [
+          {
+            ...firstOutput,
+            amount: 1n,
+          },
+        ];
+
+        const { newState: stateAfterTx1, transaction: tx1 } = transacting
+          .makeTransfer(wallet, firstOutputMapped, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+        const pendingCountAfterTx1 = HashMap.size(stateAfterTx1.state.pendingUtxos);
+        expect(pendingCountAfterTx1).toBeGreaterThan(0);
+
+        const { newState: stateAfterTx2, transaction: tx2 } = transacting
+          .makeTransfer(stateAfterTx1, remainingOutputs, ttl)
+          .pipe(EitherOps.getOrThrowLeft);
+
+        const pendingCountAfterTx2 = HashMap.size(stateAfterTx2.state.pendingUtxos);
+        expect(pendingCountAfterTx2).toBeGreaterThan(pendingCountAfterTx1);
+
+        const walletAfterRevert = transacting.revert(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
+
+        const pendingCountAfterRevert = HashMap.size(walletAfterRevert.state.pendingUtxos);
+        expect(pendingCountAfterRevert).toBe(pendingCountAfterTx2 - pendingCountAfterTx1);
+        expect(pendingCountAfterRevert).toBeGreaterThan(0);
+
+        const walletAfterBothReverts = transacting.revert(walletAfterRevert, tx2).pipe(EitherOps.getOrThrowLeft);
+
+        expect(HashMap.size(walletAfterBothReverts.state.pendingUtxos)).toBe(0);
+        expect(HashMap.size(walletAfterBothReverts.state.availableUtxos)).toBe(
+          HashMap.size(wallet.state.availableUtxos),
+        );
+      }),
+    );
+  });
 });
