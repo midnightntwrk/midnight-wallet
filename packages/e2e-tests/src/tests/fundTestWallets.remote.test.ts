@@ -27,19 +27,17 @@ import { inspect } from 'node:util';
  * @group testnet
  */
 
-describe('Token transfer', () => {
-  if (
-    process.env['SEED2'] === undefined ||
-    process.env['SEED'] === undefined ||
-    process.env['SEED_STABLE'] === undefined
-  ) {
+// Purpose of this script is to setup up the test wallets used for remote tests.
+// SEED should be a wallet with funds e.g. faucet wallet
+// SEED2 should be a wallet to receive funds to be used for testting
+describe('Set up test wallet', () => {
+  if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {
     logger.info('SEED or SEED2 or SEED_STABLE env vars not set');
     exit(1);
   }
   const getFixture = useTestContainersFixture();
   const fundedSeed = process.env['SEED'];
-  const ReceiverSeed = process.env['SEED_STABLE'];
-  const StableSeed = process.env['SEED_STABLE'];
+  const ReceiverSeed = process.env['SEED2'];
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
@@ -95,7 +93,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 2 address: ${receiverUnshieldedAddress}`);
       logger.info(inspect(initialReceiverState.shielded.availableCoins, { depth: null }));
       logger.info(inspect(initialReceiverState.unshielded.availableCoins, { depth: null }));
-
+      // Sending shielded and unshielded tokens to receiver wallet
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -131,13 +129,31 @@ describe('Token transfer', () => {
         sender.unshieldedKeystore.signData(payload),
       );
       logger.info('Transaction to prove...');
-      logger.info(signedTxRecipe);
+      logger.info(signedTxRecipe.type.toString());
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
       logger.info(finalizedTx.toString());
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
+
+      // Register unshielded tokens for dust generation
+      await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
+      const receiverStateAfterTransfer = await utils.waitForSyncFacade(receiver.wallet);
+      const unregisteredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
+      );
+      expect(unregisteredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
+      const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
+        [unregisteredNightUtxos[0]],
+        receiver.unshieldedKeystore.getPublicKey(),
+        (payload) => receiver.unshieldedKeystore.signData(payload),
+      );
+      const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
+      logger.info('Submitting dust registration transaction...');
+      const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
+      expect(dustRegistrationTxid).toBeDefined();
+      logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
     },
     syncTimeout,
   );
@@ -148,9 +164,7 @@ describe('Token transfer', () => {
       const nativeToken1Amount = utils.tNightAmount(25n);
       const nativeToken2Amount = utils.tNightAmount(50n);
 
-      const stable = await utils.initWalletWithSeed(StableSeed, fixture);
-
-      await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(stable.wallet)]);
+      await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
       const initialState = await firstValueFrom(sender.wallet.state());
       const initialNativeToken1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNativeToken2Balance = initialState.shielded.balances[nativeToken2Raw];
@@ -163,7 +177,7 @@ describe('Token transfer', () => {
       logger.info(inspect(initialState.shielded.availableCoins, { depth: null }));
       logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
 
-      const initialReceiverState = await firstValueFrom(stable.wallet.state());
+      const initialReceiverState = await firstValueFrom(receiver.wallet.state());
       const initialReceiverNativeToken1Balance = initialReceiverState.shielded.balances[nativeToken1Raw];
       const initialReceiverNativeToken2Balance = initialReceiverState.shielded.balances[nativeToken2Raw];
       const receiverShieldedAddress = utils.getShieldedAddress(networkId, initialReceiverState.shielded.address);
@@ -204,14 +218,14 @@ describe('Token transfer', () => {
       logger.info(signedTxRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(finalizedTx);
+      logger.info(finalizedTx.toString());
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(sender.wallet);
-      await utils.waitForFacadePendingClear(stable.wallet);
-      const finalReceiverState = await firstValueFrom(stable.wallet.state());
+      await utils.waitForFacadePendingClear(receiver.wallet);
+      const finalReceiverState = await firstValueFrom(receiver.wallet.state());
       expect(finalReceiverState.shielded.balances[nativeToken1Raw]).toBe(nativeToken1Amount);
       expect(finalReceiverState.shielded.balances[nativeToken2Raw]).toBe(nativeToken2Amount);
     },

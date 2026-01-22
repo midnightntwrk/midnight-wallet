@@ -281,7 +281,7 @@ export function CustomUnshieldedWallet<
     }
 
     revertTransaction(
-      transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+      transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
     ): Promise<void> {
       return this.runtime
         .dispatch({

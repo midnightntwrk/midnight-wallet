@@ -42,6 +42,8 @@ describe('Token transfer', () => {
   const syncTimeout = 30 * 60 * 1000; //  30 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = utils.tNightAmount(10n);
+  const filenameWallet = `${seedFunded.substring(0, 7)}-${TestContainersFixture.network}.state`;
+  const filenameWallet2 = `${seed.substring(0, 7)}-${TestContainersFixture.network}.state`;
 
   let sender: utils.WalletInit;
   let receiver: utils.WalletInit;
@@ -54,8 +56,8 @@ describe('Token transfer', () => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
 
-    wallet = await utils.initWalletWithSeed(seedFunded, fixture);
-    wallet2 = await utils.initWalletWithSeed(seed, fixture);
+    wallet = await utils.provideWallet(filenameWallet, seedFunded, fixture);
+    wallet2 = await utils.provideWallet(filenameWallet2, seed, fixture);
     logger.info('Two wallets started');
 
     const date = new Date();
@@ -73,11 +75,8 @@ describe('Token transfer', () => {
   }, syncTimeout);
 
   afterEach(async () => {
-    // const filenameWallet = `${senderSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
-    // const filenameWallet2 = `${receiverSeed.substring(0, 7)}-${TestContainersFixture.network}.state`;
-
-    // await utils.saveState(sender, filenameWallet);
-    // await utils.saveState(receiver, filenameWallet2);
+    await utils.saveState(wallet.wallet, filenameWallet);
+    await utils.saveState(wallet2.wallet, filenameWallet2);
     await sender.wallet.stop();
     await receiver.wallet.stop();
     logger.info('Wallets stopped');
@@ -101,11 +100,16 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
       logger.info(`Wallet 1 available dust: ${initialDustBalance}`);
+      logger.info(
+        `Wallet 1 shielded address: ${utils.getShieldedAddress(networkId, senderInitialState.shielded.address)}`,
+      );
       logger.info(`Wallet 1 available shielded coins: ${senderInitialState.shielded.availableCoins.length}`);
       logger.info(inspect(senderInitialState.shielded.availableCoins, { depth: null }));
       logger.info(`Wallet 1 available unshielded coins: ${senderInitialState.unshielded.availableCoins.length}`);
       logger.info(inspect(senderInitialState.unshielded.availableCoins, { depth: null }));
-      logger.info(`Wallet 1 address: ${utils.getUnshieldedAddress(networkId, senderInitialState.unshielded.address)}`);
+      logger.info(
+        `Wallet 1 unshielded address: ${utils.getUnshieldedAddress(networkId, senderInitialState.unshielded.address)}`,
+      );
 
       const initialReceiverState = await firstValueFrom(receiver.wallet.state());
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;

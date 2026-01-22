@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Either, Option, pipe } from 'effect';
+import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, SignError, TransactingError, WalletError } from './WalletError.js';
 import {
@@ -79,6 +79,11 @@ export interface TransactingCapability<TState> {
     transaction: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
+
+  revertTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -330,6 +335,27 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       }
       return transaction;
     });
+  }
+
+  /**
+   * Reverts a transaction by rolling back all inputs owned by this wallet
+   * @param wallet - The wallet to revert the transaction for
+   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or UnprovenTransaction)
+   * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
+   */
+  revertTransaction(
+    wallet: CoreWallet,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Either.Either<CoreWallet, WalletError> {
+    return pipe(
+      this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
+      Arr.reduce(Either.right(wallet), (walletAcc: Either.Either<CoreWallet, WalletError>, utxo: ledger.Utxo) =>
+        pipe(
+          walletAcc,
+          Either.flatMap((w) => CoreWallet.rollbackUtxo(w, utxo)),
+        ),
+      ),
+    );
   }
 
   /**

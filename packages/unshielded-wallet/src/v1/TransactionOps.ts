@@ -48,6 +48,10 @@ export type TransactionOps = {
     offerType: 'guaranteed' | 'fallible',
   ): Either.Either<ledger.UnshieldedOffer<ledger.SignatureEnabled>, WalletError>;
   isIntentBound(intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): boolean;
+  extractOwnInputs(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    signatureVerifyingKey: ledger.SignatureVerifyingKey,
+  ): ledger.Utxo[];
 };
 
 export const TransactionOps: TransactionOps = {
@@ -161,5 +165,34 @@ export const TransactionOps: TransactionOps = {
   },
   isIntentBound(intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): boolean {
     return intent.binding.instance === 'binding';
+  },
+  extractOwnInputs(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+    signatureVerifyingKey: ledger.SignatureVerifyingKey,
+  ): ledger.Utxo[] {
+    const segments = TransactionOps.getSegments(transaction);
+
+    return pipe(
+      segments,
+      Arr.flatMap((segment) => {
+        const intent = transaction.intents?.get(segment);
+
+        if (!intent) {
+          return [];
+        }
+
+        const { guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
+
+        const ownedInputsfromGuaranteedSection = guaranteedUnshieldedOffer?.inputs
+          ? guaranteedUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
+          : [];
+
+        const ownedInputsfromFallibleSection = fallibleUnshieldedOffer
+          ? fallibleUnshieldedOffer.inputs.filter((input) => input.owner === signatureVerifyingKey)
+          : [];
+
+        return [...ownedInputsfromGuaranteedSection, ...ownedInputsfromFallibleSection];
+      }),
+    );
   },
 };

@@ -30,7 +30,7 @@ import {
   type UnprovenTransactionBalanceResult,
 } from './Transacting.js';
 import { type UnboundTransaction } from './TransactionOps.js';
-import { OtherWalletError, type WalletError } from './WalletError.js';
+import { type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
@@ -206,13 +206,10 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   }
 
   revertTransaction(
-    _transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Effect.Effect<void, WalletError> {
-    return SubscriptionRef.updateEffect(this.#context.stateRef, (_state) => {
-      // It's not there yet, so we just fail
-      // return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
-
-      return Effect.fail(new OtherWalletError({ message: 'Revert is not implemented' }));
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });
   }
 

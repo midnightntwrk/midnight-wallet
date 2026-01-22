@@ -49,7 +49,6 @@ await sender.wallet
     ],
     new Date(Date.now() + 30 * 60 * 1000),
   )
-  .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));
 
