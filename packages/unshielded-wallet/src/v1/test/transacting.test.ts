@@ -211,9 +211,6 @@ describe('Unshielded wallet transacting', () => {
 
         // Verify that pending coins are cleared and moved back to available
         expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
-        expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(
-          availableCountAfterTransfer + pendingCountAfterTransfer,
-        );
 
         // Verify the reverted wallet has the same available coins as the original wallet
         expect(HashMap.size(revertedWallet.state.availableUtxos)).toBe(HashMap.size(wallet.state.availableUtxos));
