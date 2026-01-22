@@ -13,12 +13,12 @@
 import {
   NodeClient,
   PolkadotNodeClient as EffectNodeClient,
-  SubmissionEvent,
-  NodeClientError,
-  Config,
+  type SubmissionEvent,
+  type NodeClientError,
+  type Config,
 } from './effect/index.js';
 import { Effect, Exit, pipe, Scope } from 'effect';
-import { Observable } from '@polkadot/types/types';
+import { type Observable } from '@polkadot/types/types';
 import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient.js';

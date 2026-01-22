@@ -22,10 +22,10 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
+  type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { Buffer } from 'buffer';
+import { type Buffer } from 'buffer';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);
 const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v3/graphql`;

@@ -11,24 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  Bindingish,
+  type Bindingish,
   DustLocalState,
-  DustNullifier,
-  DustParameters,
-  DustPublicKey,
-  DustSecretKey,
-  Proofish,
-  Signaturish,
-  Transaction,
-  Event,
+  type DustNullifier,
+  type DustParameters,
+  type DustPublicKey,
+  type DustSecretKey,
+  type Proofish,
+  type Signaturish,
+  type Transaction,
+  type Event,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, pipe } from 'effect';
-import { DustToken, DustTokenWithNullifier } from './types/Dust.js';
-import { CoinWithValue } from './CoinsAndBalances.js';
-import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
+import { type DustToken, type DustTokenWithNullifier } from './types/Dust.js';
+import { type CoinWithValue } from './CoinsAndBalances.js';
+import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;

@@ -10,40 +10,48 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Scope, Types, Either } from 'effect';
-import { Expect, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
-import { DustSecretKey, FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
-import { WalletRuntimeError, VariantBuilder, Variant } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Effect, Scope, type Types, type Either } from 'effect';
+import { type Expect, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
 import {
-  SyncService,
-  SyncCapability,
-  DefaultSyncConfiguration,
+  type WalletRuntimeError,
+  type VariantBuilder,
+  type Variant,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { Proving, type WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import {
+  type SyncService,
+  type SyncCapability,
+  type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
   makeDefaultSyncService,
-  WalletSyncUpdate,
+  type WalletSyncUpdate,
 } from './Sync.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { DustCoreWallet } from './DustCoreWallet.js';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import {
   chooseCoin,
-  CoinsAndBalancesCapability,
-  CoinSelection,
-  DefaultCoinsAndBalancesContext,
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type DefaultCoinsAndBalancesContext,
   makeDefaultCoinsAndBalancesCapability,
 } from './CoinsAndBalances.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TransactingCapability,
+  type TransactingCapability,
 } from './Transacting.js';
-import { NetworkId } from './types/ledger.js';
-import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission.js';
-import { DustToken } from './types/Dust.js';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
-import { TotalCostParameters } from './types/transaction.js';
+import { type NetworkId } from './types/ledger.js';
+import {
+  type DefaultSubmissionConfiguration,
+  makeDefaultSubmissionService,
+  type SubmissionService,
+} from './Submission.js';
+import { type DustToken } from './types/Dust.js';
+import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import { type TotalCostParameters } from './types/transaction.js';
 
 export type BaseV1Configuration = {
   networkId: NetworkId;

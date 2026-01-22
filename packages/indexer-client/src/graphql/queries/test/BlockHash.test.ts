@@ -15,9 +15,9 @@ import { Effect, Option } from 'effect';
 import { randomUUID } from 'node:crypto';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { DockerComposeEnvironment, Wait, type StartedDockerComposeEnvironment } from 'testcontainers';
-import { Mock, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { type Mock, afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { HttpQueryClient } from '../../../effect/index.js';
-import { BlockHashQuery, BlockHashQueryVariables } from '../../generated/graphql.js';
+import { type BlockHashQuery, type BlockHashQueryVariables } from '../../generated/graphql.js';
 import { BlockHash } from '../BlockHash.js';
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;

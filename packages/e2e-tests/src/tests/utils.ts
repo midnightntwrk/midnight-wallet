@@ -15,12 +15,16 @@ import * as rx from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
-import * as fs from 'node:fs';
-import { ShieldedWallet, ShieldedWalletClass, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
+import type * as fs from 'node:fs';
+import {
+  ShieldedWallet,
+  type ShieldedWalletClass,
+  type ShieldedWalletState,
+} from '@midnight-ntwrk/wallet-sdk-shielded';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -28,10 +32,10 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
+  type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { type DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
 // place this somewhere better?
 export const Segments = {

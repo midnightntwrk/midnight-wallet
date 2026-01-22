@@ -12,10 +12,10 @@
 // limitations under the License.
 import { Either, Schema } from 'effect';
 import {
-  TransactionHistoryStorage,
+  type TransactionHistoryStorage,
   TransactionHistoryEntrySchema,
-  TransactionHistoryEntry,
-  TransactionHash,
+  type TransactionHistoryEntry,
+  type TransactionHash,
 } from './TransactionHistoryStorage.js';
 
 const TransactionHistorySchema = Schema.Map({

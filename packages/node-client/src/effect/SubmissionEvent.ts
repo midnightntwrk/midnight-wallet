@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { SerializedMnTransaction } from './NodeClient.js';
+import { type SerializedMnTransaction } from './NodeClient.js';
 
 export type HexString = string;
 

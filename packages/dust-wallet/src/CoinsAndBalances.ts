@@ -13,9 +13,15 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
-import { DustCoreWallet } from './DustCoreWallet.js';
-import { KeysCapability } from './Keys.js';
-import { DustGenerationDetails, DustGenerationInfo, DustToken, DustTokenFullInfo, UtxoWithMeta } from './types/Dust.js';
+import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type KeysCapability } from './Keys.js';
+import {
+  type DustGenerationDetails,
+  type DustGenerationInfo,
+  type DustToken,
+  type DustTokenFullInfo,
+  type UtxoWithMeta,
+} from './types/Dust.js';
 
 export type Balance = bigint;
 

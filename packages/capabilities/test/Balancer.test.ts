@@ -12,15 +12,21 @@
 // limitations under the License.
 import {
   createShieldedCoinInfo,
-  QualifiedShieldedCoinInfo,
-  RawTokenType,
+  type QualifiedShieldedCoinInfo,
+  type RawTokenType,
   sampleRawTokenType,
-  ShieldedCoinInfo,
+  type ShieldedCoinInfo,
   shieldedToken,
 } from '@midnight-ntwrk/ledger-v7';
 import * as fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
-import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index.js';
+import {
+  chooseCoin,
+  type CoinSelection,
+  getBalanceRecipe,
+  Imbalances,
+  type TransactionCostModel,
+} from '../src/index.js';
 
 const createQualifiedCoin = (tokenType: string, value: bigint) => ({
   ...createShieldedCoinInfo(tokenType, value),

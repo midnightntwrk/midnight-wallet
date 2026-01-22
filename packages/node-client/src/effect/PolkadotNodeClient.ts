@@ -12,19 +12,19 @@
 // limitations under the License.
 import '../gen/augment-api.js';
 
-import { ApiPromise, SubmittableResult, WsProvider } from '@polkadot/api';
+import { ApiPromise, type SubmittableResult, WsProvider } from '@polkadot/api';
 import {
   Duration,
   Effect,
   Either,
   Layer,
-  ParseResult,
+  type ParseResult,
   pipe,
   Schedule,
   Schema,
-  Scope,
+  type Scope,
   Stream,
-  StreamEmit,
+  type StreamEmit,
 } from 'effect';
 import * as NodeClient from './NodeClient.js';
 import * as SubmissionEvent from './SubmissionEvent.js';

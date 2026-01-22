@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect, vi } from 'vitest';
-import { DefaultV1Variant, V1Builder } from '../V1Builder.js';
+import { type DefaultV1Variant, V1Builder } from '../V1Builder.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from '../WalletError.js';
 import { Effect, Either, Encoding, Option, pipe, Ref, SubscriptionRef } from 'effect';
-import { SubmissionService } from '../Submission.js';
+import { type SubmissionService } from '../Submission.js';
 import { makeDefaultTransactingCapability } from '../Transacting.js';
 import { NodeContext } from '@effect/platform-node';
 import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';

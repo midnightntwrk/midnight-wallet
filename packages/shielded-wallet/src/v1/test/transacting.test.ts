@@ -25,10 +25,10 @@ import { makeDefaultKeysCapability } from '../Keys.js';
 import { makeSimulatorProvingService } from '../Proving.js';
 import { CoreWallet } from '../CoreWallet.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeSimulatorTransactingCapability,
-  TokenTransfer,
+  type TokenTransfer,
 } from '../Transacting.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';

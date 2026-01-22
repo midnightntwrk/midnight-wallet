@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { FileSystem } from '@effect/platform';
-import { Effect, Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 import path from 'path';
-import { StartedNetwork } from 'testcontainers';
+import { type StartedNetwork } from 'testcontainers';
 import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
-import { PlatformError } from '@effect/platform/Error';
+import { type PlatformError } from '@effect/platform/Error';
 import { NodeContext } from '@effect/platform-node';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';

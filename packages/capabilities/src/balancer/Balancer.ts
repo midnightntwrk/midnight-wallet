@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CounterOffer, TransactionCostModel } from './CounterOffer.js';
-import { CoinRecipe, Imbalance, Imbalances, TokenType, TokenValue } from './Imbalances.js';
+import { CounterOffer, type TransactionCostModel } from './CounterOffer.js';
+import { type CoinRecipe, type Imbalance, type Imbalances, type TokenType, type TokenValue } from './Imbalances.js';
 
 export class InsufficientFundsError extends Error {
   readonly tokenType: TokenType;

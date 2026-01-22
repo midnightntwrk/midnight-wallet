@@ -58,6 +58,7 @@ export const defaultConfig = tsLint.config(
           varsIgnorePattern: '^_',
         },
       ],
+      '@typescript-eslint/consistent-type-imports': ['warn', { fixStyle: 'inline-type-imports' }],
       '@typescript-eslint/no-namespace': [
         'error',
         // Ensure that we allow namespace declarations to support Effect style typing.

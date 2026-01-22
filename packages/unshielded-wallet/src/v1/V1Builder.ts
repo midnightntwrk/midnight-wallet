@@ -10,38 +10,42 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Scope, Types } from 'effect';
-import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletRuntimeError } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Effect, type Either, Scope, type Types } from 'effect';
+import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  DefaultSyncContext,
-  DefaultSyncConfiguration,
-  SyncCapability,
-  SyncService,
+  type Variant,
+  type VariantBuilder,
+  type WalletRuntimeError,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
+import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import {
+  type DefaultSyncContext,
+  type DefaultSyncConfiguration,
+  type SyncCapability,
+  type SyncService,
   makeDefaultSyncService,
   makeDefaultSyncCapability,
 } from './Sync.js';
-import { WalletSyncUpdate, UnshieldedUpdate } from './SyncSchema.js';
+import { type WalletSyncUpdate, type UnshieldedUpdate } from './SyncSchema.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TransactingCapability,
+  type TransactingCapability,
 } from './Transacting.js';
-import { WalletError } from './WalletError.js';
-import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
-import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type WalletError } from './WalletError.js';
+import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet.js';
 import {
-  DefaultTransactionHistoryConfiguration,
-  TransactionHistoryService,
+  type DefaultTransactionHistoryConfiguration,
+  type TransactionHistoryService,
   makeDefaultTransactionHistoryService,
 } from './TransactionHistory.js';
-import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { createKeystore, PublicKey } from '../KeyStore.js';
 
 export type BaseV1Configuration = {

@@ -13,14 +13,14 @@
 import { Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
 import {
   NodeClient,
-  NodeClientError,
+  type NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
-import { FinalizedTransaction, ProofErasedTransaction } from '@midnight-ntwrk/ledger-v7';
+import { type FinalizedTransaction, type ProofErasedTransaction } from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { Simulator } from './Simulator.js';
-import { NetworkId } from './types/ledger.js';
+import { type Simulator } from './Simulator.js';
+import { type NetworkId } from './types/ledger.js';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;

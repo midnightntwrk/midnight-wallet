@@ -14,10 +14,10 @@
 
 import {
   addressFromKey,
-  Signature,
-  SignatureVerifyingKey,
+  type Signature,
+  type SignatureVerifyingKey,
   signData,
-  UserAddress,
+  type UserAddress,
   signatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v7';
 

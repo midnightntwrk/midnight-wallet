@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { SubmissionEvent } from './SubmissionEvent.js';
+import { type SubmissionEvent } from './SubmissionEvent.js';
 
 export class SubmissionError extends Data.TaggedError('SubmissionError')<{
   message: string;

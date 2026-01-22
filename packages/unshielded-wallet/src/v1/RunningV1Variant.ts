@@ -10,33 +10,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, pipe, Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
+import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  WalletRuntimeError,
-  Variant,
+  type WalletRuntimeError,
+  type Variant,
   StateChange,
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { SerializationCapability } from './Serialization.js';
-import { SyncCapability, SyncService } from './Sync.js';
-import { WalletSyncUpdate } from './SyncSchema.js';
+import { type SerializationCapability } from './Serialization.js';
+import { type SyncCapability, type SyncService } from './Sync.js';
+import { type WalletSyncUpdate } from './SyncSchema.js';
 import {
-  TransactingCapability,
-  TokenTransfer,
-  FinalizedTransactionBalanceResult,
-  UnboundTransactionBalanceResult,
-  UnprovenTransactionBalanceResult,
+  type TransactingCapability,
+  type TokenTransfer,
+  type FinalizedTransactionBalanceResult,
+  type UnboundTransactionBalanceResult,
+  type UnprovenTransactionBalanceResult,
 } from './Transacting.js';
-import { UnboundTransaction } from './TransactionOps.js';
-import { WalletError } from './WalletError.js';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
-import { CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { CoreWallet } from './CoreWallet.js';
-import { TransactionHistoryService } from './TransactionHistory.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { type UnboundTransaction } from './TransactionOps.js';
+import { type WalletError } from './WalletError.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
+import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type CoreWallet } from './CoreWallet.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedId = state.progress?.appliedId ?? 0n;

@@ -10,12 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
-import { SerializedTransaction, SerializedUnprovenTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
-  InvalidProtocolSchemeError,
+  type InvalidProtocolSchemeError,
   ClientError,
   ServerError,
   HttpURL,
@@ -56,9 +55,9 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
 
   private request(
     path: string,
-    transaction: SerializedUnprovenTransaction | SerializedTransaction,
+    payload: Uint8Array,
     failurePrefix: string,
-  ): Effect.Effect<SerializedTransaction, ClientError | ServerError> {
+  ): Effect.Effect<Uint8Array, ClientError | ServerError> {
     const concatBytes = (chunks: Uint8Array[]): Effect.Effect<Uint8Array> =>
       Effect.promise((): Promise<Uint8Array> => BlobOps.getBytes(new Blob(chunks)));
 
@@ -73,7 +72,7 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     const url = HttpURL.HttpURL(new URL(path, this.baseUrl));
 
     const proveTxRequest = pipe(
-      Effect.succeed(transaction),
+      Effect.succeed(payload),
       Effect.map((body) => HttpClientRequest.post(url).pipe(HttpClientRequest.bodyUint8Array(body))),
       Effect.flatMap(HttpClient.execute),
       Effect.flatMap((response: HttpClientResponse.HttpClientResponse) =>
@@ -95,7 +94,6 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
 
     return proveTxRequest.pipe(
-      Effect.map(SerializedTransaction),
       Effect.catchTags({
         RequestError: (err) => new ClientError({ message: `Failed to connect to Proof Server: ${err.message}` }),
         ResponseError: (err) =>
@@ -107,11 +105,10 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     );
   }
 
-  private serverProverProvider = (): ledger.ProvingProvider => ({
+  private readonly serverProverProvider = (): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
       pipe(
         Effect.succeed(ledger.createCheckPayload(serializedPreimage)),
-        Effect.map(SerializedTransaction),
         Effect.flatMap((tx) => this.request(CHECK_TX_PATH, tx, 'Failed to check')),
         Effect.map((response) => ledger.parseCheckResult(response)),
         Effect.runPromise,
@@ -123,7 +120,6 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
     ): Promise<Uint8Array> =>
       pipe(
         Effect.succeed(ledger.createProvingPayload(serializedPreimage, overwriteBindingInput)),
-        Effect.map(SerializedUnprovenTransaction),
         Effect.flatMap((tx) => this.request(PROVE_TX_PATH, tx, 'Failed to prove')),
         Effect.runPromise,
       ),

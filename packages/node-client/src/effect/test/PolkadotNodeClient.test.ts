@@ -14,7 +14,7 @@ import { describe, it, vi, expect, beforeAll, afterAll } from 'vitest';
 import { PolkadotNodeClient } from '../PolkadotNodeClient.js';
 import * as NodeClient from '../NodeClient.js';
 import * as SubmissionEvent from '../SubmissionEvent.js';
-import { StartedTestContainer } from 'testcontainers';
+import { type StartedTestContainer } from 'testcontainers';
 import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
 import { TestTransactions } from '../../testing/index.js';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';

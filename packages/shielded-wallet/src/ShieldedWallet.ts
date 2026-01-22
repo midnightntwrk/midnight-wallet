@@ -10,26 +10,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Scope } from 'effect';
-import * as rx from 'rxjs';
-import { BalancingResult } from './v1/Transacting.js';
-import { SerializationCapability } from './v1/Serialization.js';
-import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory.js';
-import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances.js';
-import { KeysCapability } from './v1/Keys.js';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  ShieldedAddress,
-  ShieldedCoinPublicKey,
-  ShieldedEncryptionPublicKey,
+  type BaseV1Configuration,
+  type DefaultV1Configuration,
+  V1Builder,
+  V1Tag,
+  type V1Variant,
+  CoreWallet,
+} from './v1/index.js';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Effect, Either, type Scope } from 'effect';
+import * as rx from 'rxjs';
+import { type BalancingResult } from './v1/Transacting.js';
+import { type SerializationCapability } from './v1/Serialization.js';
+import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
+import { type KeysCapability } from './v1/Keys.js';
+import {
+  type ShieldedAddress,
+  type ShieldedCoinPublicKey,
+  type ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { SubmissionEvent, SubmissionEventCases } from './v1/Submission.js';
-import { TokenTransfer } from './v1/Transacting.js';
-import { WalletSyncUpdate } from './v1/Sync.js';
-import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type SubmissionEvent, type SubmissionEventCases } from './v1/Submission.js';
+import { type TokenTransfer } from './v1/Transacting.js';
+import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
 export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;

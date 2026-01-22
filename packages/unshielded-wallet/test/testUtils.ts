@@ -13,11 +13,11 @@
 import { sampleIntentHash } from '@midnight-ntwrk/ledger-v7';
 import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
+import { type UnshieldedUpdate, type UtxoWithMeta } from '../src/v1/SyncSchema.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DefaultV1Configuration } from '../src/v1/index.js';
+import { type DefaultV1Configuration } from '../src/v1/index.js';
 import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
-import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
+import { type UnshieldedWallet, type UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
 /**
  * TODO: place in separate package with more additional mock functions

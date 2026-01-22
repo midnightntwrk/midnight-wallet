@@ -11,30 +11,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  DustParameters,
-  DustPublicKey,
+  type DustParameters,
+  type DustPublicKey,
   DustSecretKey,
-  FinalizedTransaction,
-  Signature,
-  SignatureVerifyingKey,
-  UnprovenTransaction,
+  type FinalizedTransaction,
+  type Signature,
+  type SignatureVerifyingKey,
+  type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { Effect, Either, Scope } from 'effect';
+import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { Balance, CoinsAndBalancesCapability, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
+import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { DustCoreWallet } from './DustCoreWallet.js';
-import { KeysCapability } from './Keys.js';
+import { type KeysCapability } from './Keys.js';
 import { V1Tag } from './RunningV1Variant.js';
-import { SerializationCapability } from './Serialization.js';
-import { SubmitTransactionMethod } from './Submission.js';
-import { DustToken, DustTokenFullInfo, UtxoWithMeta } from './types/Dust.js';
-import { AnyTransaction } from './types/ledger.js';
-import { DefaultV1Configuration, DefaultV1Variant, V1Builder } from './V1Builder.js';
+import { type SerializationCapability } from './Serialization.js';
+import { type SubmitTransactionMethod } from './Submission.js';
+import { type DustToken, type DustTokenFullInfo, type UtxoWithMeta } from './types/Dust.js';
+import { type AnyTransaction } from './types/ledger.js';
+import { type DefaultV1Configuration, type DefaultV1Variant, V1Builder } from './V1Builder.js';
 
 export type DustWalletCapabilities = {
   serialization: SerializationCapability<DustCoreWallet, null, string>;

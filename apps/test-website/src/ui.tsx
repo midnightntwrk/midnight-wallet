@@ -14,8 +14,8 @@
  */
 
 import React, { useEffect } from 'react';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import * as rx from 'rxjs';
+import { type WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import type * as rx from 'rxjs';
 
 const useAnimationFrame = (callback: (delta: number) => void) => {
   // Use useRef for mutable variables that we want to persist

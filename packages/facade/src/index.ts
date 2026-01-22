@@ -10,15 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { combineLatest, map, Observable } from 'rxjs';
-import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { combineLatest, map, type Observable } from 'rxjs';
+import { type ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { type UnshieldedWallet, type UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Array as Arr, pipe } from 'effect';
 import {
-  AnyTransaction,
-  DustWallet,
-  DustWalletState,
-  CoinsAndBalances as DustCoinsAndBalances,
+  type AnyTransaction,
+  type DustWallet,
+  type DustWalletState,
+  type CoinsAndBalances as DustCoinsAndBalances,
 } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 
