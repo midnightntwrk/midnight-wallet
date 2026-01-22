@@ -10,26 +10,32 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { BaseV1Configuration, DefaultV1Configuration, V1Builder, V1Tag, V1Variant, CoreWallet } from './v1/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Scope } from 'effect';
-import * as rx from 'rxjs';
-import { BalancingResult } from './v1/Transacting.js';
-import { SerializationCapability } from './v1/Serialization.js';
-import { ProgressUpdate, TransactionHistoryCapability } from './v1/TransactionHistory.js';
-import { AvailableCoin, CoinsAndBalancesCapability, PendingCoin } from './v1/CoinsAndBalances.js';
-import { KeysCapability } from './v1/Keys.js';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  ShieldedAddress,
-  ShieldedCoinPublicKey,
-  ShieldedEncryptionPublicKey,
+  type BaseV1Configuration,
+  type DefaultV1Configuration,
+  V1Builder,
+  V1Tag,
+  type V1Variant,
+  CoreWallet,
+} from './v1/index.js';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Effect, Either, type Scope } from 'effect';
+import * as rx from 'rxjs';
+import { type BalancingResult } from './v1/Transacting.js';
+import { type SerializationCapability } from './v1/Serialization.js';
+import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
+import { type KeysCapability } from './v1/Keys.js';
+import {
+  type ShieldedAddress,
+  type ShieldedCoinPublicKey,
+  type ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { SubmissionEvent, SubmissionEventCases } from './v1/Submission.js';
-import { TokenTransfer } from './v1/Transacting.js';
-import { WalletSyncUpdate } from './v1/Sync.js';
-import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type TokenTransfer } from './v1/Transacting.js';
+import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
 export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -103,14 +109,6 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
   }
 }
 
-export type SubmitTransactionMethod<TTransaction> = {
-  (transaction: TTransaction, waitForStatus: 'Submitted'): Promise<SubmissionEventCases.Submitted>;
-  (transaction: TTransaction, waitForStatus: 'InBlock'): Promise<SubmissionEventCases.InBlock>;
-  (transaction: TTransaction, waitForStatus: 'Finalized'): Promise<SubmissionEventCases.Finalized>;
-  (transaction: TTransaction): Promise<SubmissionEventCases.InBlock>;
-  (transaction: TTransaction, waitForStatus?: 'Submitted' | 'InBlock' | 'Finalized'): Promise<SubmissionEvent>;
-};
-
 export type ShieldedWallet = CustomizedShieldedWallet<
   ledger.ZswapSecretKeys,
   ledger.FinalizedTransaction,
@@ -125,14 +123,11 @@ export type ShieldedWalletClass = CustomizedShieldedWalletClass<
   string
 >;
 
-export interface CustomizedShieldedWallet<
+export type ShieldedWalletAPI<
   TStartAux = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
-  TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> extends WalletLike.WalletLike<
-  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
-> {
+> = {
   readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
   start(secretKeys: TStartAux): Promise<void>;
@@ -156,21 +151,35 @@ export interface CustomizedShieldedWallet<
 
   finalizeTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction>;
 
-  readonly submitTransaction: SubmitTransactionMethod<TTransaction>;
-
   serializeState(): Promise<TSerialized>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
 
   getAddress(): Promise<ShieldedAddress>;
-}
+
+  revertTransaction(
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Promise<void>;
+
+  stop(): Promise<void>;
+};
+
+export type CustomizedShieldedWallet<
+  TStartAux = ledger.ZswapSecretKeys,
+  TTransaction = ledger.FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
+  TSerialized = string,
+> = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
+  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
+
+export type DefaultShieldedConfiguration = DefaultV1Configuration;
 
 export interface CustomizedShieldedWalletClass<
   TStartAux = ledger.ZswapSecretKeys,
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-  TConfig extends BaseV1Configuration = DefaultV1Configuration,
+  TConfig extends BaseV1Configuration = DefaultShieldedConfiguration,
 > extends WalletLike.BaseWalletClass<
   [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
@@ -296,14 +305,15 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    submitTransaction: SubmitTransactionMethod<TTransaction> = ((
-      tx: TTransaction,
-      waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
-    ) => {
+    revertTransaction(
+      transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    ): Promise<void> {
       return this.runtime
-        .dispatch({ [V1Tag]: (v1) => v1.submitTransaction(tx, waitForStatus) })
+        .dispatch({
+          [V1Tag]: (v1) => v1.revertTransaction(transaction),
+        })
         .pipe(Effect.runPromise);
-    }) as SubmitTransactionMethod<TTransaction>;
+    }
 
     waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized, TTransaction>> {
       return rx.firstValueFrom(

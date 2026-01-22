@@ -21,6 +21,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./submission": {
+      "types": "./dist/submission.d.ts",
+      "import": "./dist/submission.js"
     }
   },
   "dependencies": {

@@ -14,12 +14,10 @@ import { describe, vi, it, expect, afterAll, beforeAll } from 'vitest';
 import { TestTransactions } from '@midnight-ntwrk/wallet-sdk-node-client/testing';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Chunk, Effect, Option, pipe, Stream, Console, Exit, Scope } from 'effect';
-import { makeDefaultSubmissionService } from '../Submission.js';
+import { makeDefaultSubmissionServiceEffect } from '../submission.js';
 import { PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { NodeContext } from '@effect/platform-node';
-import { generateTxs, getTestTxsPath } from '../../test/genTxs.js';
-import { StartedTestContainer } from 'testcontainers';
-import { randomUUID } from 'crypto';
+import { type StartedTestContainer } from 'testcontainers';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 100_000 });
 
@@ -50,19 +48,17 @@ const getFinalizedBlockHashes = (client: PolkadotNodeClient): Effect.Effect<stri
   );
 };
 
-const initEnv = (proofServerUrl: string, TxsFileName: string) =>
+const initEnv = () =>
   Effect.gen(function* () {
-    const network = yield* TestContainers.createNetwork();
-    const node = yield* TestContainers.runNodeContainer((c) =>
-      c.withNetwork(network).withNetworkAliases('midnight-node'),
-    );
-    yield* generateTxs(`ws://midnight-node:9944`, proofServerUrl, network, TxsFileName);
+    const node = yield* TestContainers.runNodeContainer((c) => c.withNetworkAliases('midnight-node'));
     const nodeURL = new URL(`ws://127.0.0.1:${node.getMappedPort(9944)}`);
-    const submission = makeDefaultSubmissionService({
+    const submission = makeDefaultSubmissionServiceEffect({
       relayURL: nodeURL,
     });
     yield* Effect.addFinalizer(() => submission.close().pipe(Effect.andThen(Console.log('Closed submission service'))));
-    const testTx = yield* TestTransactions.load(getTestTxsPath(TxsFileName)).pipe(Effect.map((txs) => txs.initial_tx));
+    const testTx = yield* TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
+      Effect.map((txs) => txs.initial_tx),
+    );
     return { nodeURL, submission, testTx };
   });
 
@@ -89,10 +85,7 @@ describe.skip('Default Submission', () => {
   it('submits and exits cleanly', async () => {
     const result = await pipe(
       Effect.gen(function* () {
-        const { submission, testTx } = yield* initEnv(
-          `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-          `${randomUUID()}.json`,
-        );
+        const { submission, testTx } = yield* initEnv();
         yield* submission.submitTransaction(testTx, 'Submitted');
       }),
       Effect.scoped,
@@ -103,13 +96,10 @@ describe.skip('Default Submission', () => {
     expect(Exit.isSuccess(result)).toBe(true);
   });
 
-  it.only('submits transactions waiting for submission event', async () => {
+  it('submits transactions waiting for submission event', async () => {
     const { submissionResult, checkResult } = await pipe(
       Effect.gen(function* () {
-        const { submission, nodeURL, testTx } = yield* initEnv(
-          `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-          `${randomUUID()}.json`,
-        );
+        const { submission, nodeURL, testTx } = yield* initEnv();
         const submissionResult = yield* submission.submitTransaction(testTx, 'Submitted');
         const checkResult = yield* PolkadotNodeClient.make({ nodeURL: nodeURL }).pipe(
           Effect.flatMap((client) => Effect.promise(() => client.api.rpc.author.pendingExtrinsics())),
@@ -129,10 +119,7 @@ describe.skip('Default Submission', () => {
   it('submits transactions waiting for in-block event', async () => {
     const { submissionResult, checkResult } = await pipe(
       Effect.gen(function* () {
-        const { submission, nodeURL, testTx } = yield* initEnv(
-          `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-          `${randomUUID()}.json`,
-        );
+        const { submission, nodeURL, testTx } = yield* initEnv();
         const submissionResult = yield* submission.submitTransaction(testTx, 'InBlock');
         const checkResult = yield* PolkadotNodeClient.make({ nodeURL: nodeURL }).pipe(
           Effect.flatMap((client) => getExtrinsicHashes(client, submissionResult.blockHash)),
@@ -155,10 +142,7 @@ describe.skip('Default Submission', () => {
   it('submits transactions waiting for finalized event', async () => {
     const { submissionResult, checkResult } = await pipe(
       Effect.gen(function* () {
-        const { submission, nodeURL, testTx } = yield* initEnv(
-          `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-          `${randomUUID()}.json`,
-        );
+        const { submission, nodeURL, testTx } = yield* initEnv();
         const submissionResult = yield* submission.submitTransaction(testTx, 'Finalized');
         const checkResult = yield* PolkadotNodeClient.make({ nodeURL: nodeURL }).pipe(
           Effect.flatMap((client) =>
@@ -182,10 +166,7 @@ describe.skip('Default Submission', () => {
 
   it('exits cleanly', () => {
     return Effect.gen(function* () {
-      const { submission } = yield* initEnv(
-        `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-        `${randomUUID()}.json`,
-      );
+      const { submission } = yield* initEnv();
       yield* submission.close();
     }).pipe(Effect.scoped, Effect.provide(NodeContext.layer), Effect.runPromise);
   });
