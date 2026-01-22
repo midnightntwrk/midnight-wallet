@@ -13,33 +13,37 @@
 import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
-  DustPublicKey,
+  type DustPublicKey,
   DustRegistration,
-  DustSecretKey,
+  type DustSecretKey,
   Intent,
-  PreBinding,
-  PreProof,
-  Signature,
+  type PreBinding,
+  type PreProof,
+  type Signature,
   SignatureEnabled,
-  SignatureVerifyingKey,
+  type SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
-  UtxoOutput,
-  UtxoSpend,
-  FinalizedTransaction,
-  ProofErasedTransaction,
-  UnprovenTransaction,
+  type UtxoOutput,
+  type UtxoSpend,
+  type FinalizedTransaction,
+  type ProofErasedTransaction,
+  type UnprovenTransaction,
   addressFromKey,
-  LedgerParameters,
+  type LedgerParameters,
   nativeToken,
 } from '@midnight-ntwrk/ledger-v7';
 import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { DustCoreWallet } from './DustCoreWallet.js';
-import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
-import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
+import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type AnyTransaction, type DustToken, type NetworkId, type TotalCostParameters } from './types/index.js';
+import {
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type UtxoWithFullDustDetails,
+} from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 
 export interface TransactingCapability<TSecrets, TState, TTransaction> {
@@ -71,7 +75,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
 
   revertTransaction(
     state: TState,
-    transaction: UnprovenTransaction | TTransaction,
+    transaction: TTransaction | AnyTransaction,
   ): Either.Either<TState, WalletError.WalletError>;
 }
 

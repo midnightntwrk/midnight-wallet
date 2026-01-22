@@ -12,8 +12,8 @@
 // limitations under the License.
 import { pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactionImbalances } from './TransactionImbalances.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { type TransactionImbalances } from './TransactionImbalances.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 
 export type TransactionOps<Tx> = {
   getImbalances(tx: Tx): TransactionImbalances;

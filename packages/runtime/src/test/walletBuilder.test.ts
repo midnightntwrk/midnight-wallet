@@ -11,19 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Equal, type Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { StateChange, Variant, VariantBuilder, WalletLike } from '../abstractions/index.js';
-import { Runtime } from '../Runtime.js';
+import { StateChange, type Variant, type VariantBuilder, type WalletLike } from '../abstractions/index.js';
+import { type Runtime } from '../Runtime.js';
 import { isRange, reduceToChunk, toProtocolStateArray } from '../testing/utils.js';
 import {
-  NumericRange,
+  type NumericRange,
   NumericRangeBuilder,
-  NumericRangeMultiplier,
+  type NumericRangeMultiplier,
   NumericRangeMultiplierBuilder,
-  RangeConfig,
+  type RangeConfig,
 } from '../testing/variants.js';
 import { WalletBuilder } from '../WalletBuilder.js';
 

@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import type { Role } from '@midnight-ntwrk/wallet-sdk-hd';
-import { AccountKey, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
+import { type AccountKey, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { Buffer } from 'buffer';
 
 function deriveRoleKey(accountKey: AccountKey, role: Role, addressIndex: number = 0): Buffer {

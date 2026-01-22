@@ -13,7 +13,7 @@
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
-import { ProvingError, WalletError } from './WalletError.js';
+import { ProvingError, type WalletError } from './WalletError.js';
 
 export interface ProvingService<TTransaction> {
   prove(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError>;

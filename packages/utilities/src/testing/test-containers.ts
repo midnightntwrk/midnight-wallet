@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, identity, Scope } from 'effect';
-import { GenericContainer, Network, StartedNetwork, Wait, type StartedTestContainer } from 'testcontainers';
+import { Effect, identity, type Scope } from 'effect';
+import { GenericContainer, Network, type StartedNetwork, Wait, type StartedTestContainer } from 'testcontainers';
 import { getPortPromise } from 'portfinder';
 
 export const createNetwork = (): Effect.Effect<StartedNetwork, never, Scope.Scope> =>

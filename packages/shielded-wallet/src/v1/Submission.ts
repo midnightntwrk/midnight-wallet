@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Deferred, Effect, Encoding, Exit, pipe, Scope } from 'effect';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from './WalletError.js';
-import { Simulator } from './Simulator.js';
+import { type Simulator } from './Simulator.js';
 import {
   NodeClient,
-  NodeClientError,
+  type NodeClientError,
   PolkadotNodeClient,
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';

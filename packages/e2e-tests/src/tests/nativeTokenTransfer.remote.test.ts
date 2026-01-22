@@ -13,12 +13,12 @@
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
 import * as allure from 'allure-js-commons';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 
 /**
  * Tests performing a token transfer

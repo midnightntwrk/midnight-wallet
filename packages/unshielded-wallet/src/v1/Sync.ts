@@ -10,16 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Scope, Stream, Schema, pipe, Either } from 'effect';
+import { type Scope, Stream, Schema, pipe, Either } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import { type Simulator, type SimulatorState } from './Simulator.js';
 import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, WalletError } from './WalletError.js';
+import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryService } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
+import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 
 export interface SyncService<TState, TUpdate> {
   updates: (state: TState) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;

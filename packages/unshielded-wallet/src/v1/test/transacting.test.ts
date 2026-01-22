@@ -24,10 +24,10 @@ import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TokenTransfer,
+  type TokenTransfer,
 } from '../Transacting.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
 

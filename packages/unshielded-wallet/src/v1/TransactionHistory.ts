@@ -10,8 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage, TransactionHistoryEntry, TransactionHash } from '../storage/index.js';
-import { UnshieldedUpdate } from './SyncSchema.js';
+import {
+  type TransactionHistoryStorage,
+  type TransactionHistoryEntry,
+  type TransactionHash,
+} from '../storage/index.js';
+import { type UnshieldedUpdate } from './SyncSchema.js';
 
 export interface TransactionHistoryService<SyncUpdate> {
   create(update: SyncUpdate): Promise<void>;

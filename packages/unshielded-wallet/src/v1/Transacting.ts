@@ -11,20 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { InsufficientFundsError, OtherWalletError, SignError, TransactingError, WalletError } from './WalletError.js';
 import {
-  BalanceRecipe,
-  CoinSelection,
+  InsufficientFundsError,
+  OtherWalletError,
+  SignError,
+  TransactingError,
+  type WalletError,
+} from './WalletError.js';
+import {
+  type BalanceRecipe,
+  type CoinSelection,
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { TransactionOps, UnboundTransaction, IntentOf } from './TransactionOps.js';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
+import { TransactionOps, type UnboundTransaction, type IntentOf } from './TransactionOps.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const GUARANTEED_SEGMENT = 0;

@@ -10,7 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage, TransactionHash, TransactionHistoryEntry } from './TransactionHistoryStorage.js';
+import {
+  type TransactionHistoryStorage,
+  type TransactionHash,
+  type TransactionHistoryEntry,
+} from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
   create(_entry: TransactionHistoryEntry): Promise<void> {

@@ -10,15 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Error, FileSystem } from '@effect/platform';
+import { type Error, FileSystem } from '@effect/platform';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
-import { Scope } from 'effect/Scope';
-import { StartedNetwork } from 'testcontainers';
+import { type Scope } from 'effect/Scope';
+import { type StartedNetwork } from 'testcontainers';
 import { normalizeTxs } from './normalize-txs.js';
 
 export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>;

@@ -15,10 +15,10 @@ import {
   Intent,
   LedgerParameters,
   nativeToken,
-  ProofErasedTransaction,
+  type ProofErasedTransaction,
   Transaction,
   UnshieldedOffer,
-  UserAddress,
+  type UserAddress,
 } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -27,11 +27,18 @@ import { beforeEach, describe, it } from '@vitest/runner';
 import { BigInt as BI, Chunk, Effect, Scope, Stream, SubscriptionRef } from 'effect';
 
 import { expect, vi } from 'vitest';
-import { DustCoreWallet, RunningV1Variant, Transacting, UtxoWithMeta, V1Builder, V1Variant } from '../src/index.js';
-import { Simulator, SimulatorState } from '../src/Simulator.js';
+import {
+  DustCoreWallet,
+  type RunningV1Variant,
+  Transacting,
+  type UtxoWithMeta,
+  V1Builder,
+  type V1Variant,
+} from '../src/index.js';
+import { Simulator, type SimulatorState } from '../src/Simulator.js';
 import * as Submission from '../src/Submission.js';
-import { makeSimulatorSyncCapability, makeSimulatorSyncService, SimulatorSyncUpdate } from '../src/Sync.js';
-import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore.js';
+import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/Sync.js';
+import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
 vi.setConfig({ testTimeout: 1 * 1000 });

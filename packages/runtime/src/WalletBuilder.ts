@@ -10,12 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Exit, Scope, Types } from 'effect';
+import { Effect, Exit, Scope, type Types } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions/index.js';
-import { StateOf } from './abstractions/Variant.js';
-import { ObservableOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Variant, type VariantBuilder, type WalletLike, WalletRuntimeError } from './abstractions/index.js';
+import { type StateOf } from './abstractions/Variant.js';
+import { ObservableOps, HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as Runtime from './Runtime.js';
 
 /**

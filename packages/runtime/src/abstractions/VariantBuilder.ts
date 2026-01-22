@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { AnyVariant, VersionedVariant } from './Variant.js';
+import { type ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type AnyVariant, type VersionedVariant } from './Variant.js';
 
 /**
  * Builds a target {@link Variant} object from internal build state.

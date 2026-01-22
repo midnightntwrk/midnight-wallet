@@ -17,17 +17,17 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import {
-  CoinsAndBalances,
-  DefaultRunningV1,
-  DefaultV1Configuration,
-  DefaultV1Variant,
-  Keys,
+  type CoinsAndBalances,
+  type DefaultRunningV1,
+  type DefaultV1Configuration,
+  type DefaultV1Variant,
+  type Keys,
   V1Builder,
   CoreWallet,
   V1Tag,
-  Transacting,
+  type Transacting,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
@@ -37,7 +37,7 @@ import os from 'node:os';
 import prand from 'pure-rand';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
 import { getShieldedSeed } from './utils.js';

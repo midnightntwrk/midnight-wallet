@@ -12,14 +12,14 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
+import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, type Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import { type Simulator, type SimulatorState } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, WalletError } from './WalletError.js';
+import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryCapability } from './TransactionHistory.js';
+import { type TransactionHistoryCapability } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {

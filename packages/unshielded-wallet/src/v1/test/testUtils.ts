@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { UnshieldedUpdate, UpdateStatus, UtxoWithMeta } from '../UnshieldedState.js';
+import { type UnshieldedUpdate, type UpdateStatus, UtxoWithMeta } from '../UnshieldedState.js';
 
 export const generateMockUtxoWithMeta = (owner: string, type: string): UtxoWithMeta =>
   new UtxoWithMeta({

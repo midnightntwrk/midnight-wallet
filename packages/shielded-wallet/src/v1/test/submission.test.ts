@@ -18,7 +18,7 @@ import { makeDefaultSubmissionService } from '../Submission.js';
 import { PolkadotNodeClient } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { NodeContext } from '@effect/platform-node';
 import { generateTxs, getTestTxsPath } from '../../test/genTxs.js';
-import { StartedTestContainer } from 'testcontainers';
+import { type StartedTestContainer } from 'testcontainers';
 import { randomUUID } from 'crypto';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 100_000 });

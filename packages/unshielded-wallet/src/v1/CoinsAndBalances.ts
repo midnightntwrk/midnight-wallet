@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CoreWallet } from './CoreWallet.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { type CoreWallet } from './CoreWallet.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 import { pipe } from 'effect';
 import { RecordOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { UnshieldedState, UtxoWithMeta } from './UnshieldedState.js';
+import { UnshieldedState, type UtxoWithMeta } from './UnshieldedState.js';
 
 export type Balances = Record<ledger.RawTokenType, bigint>;
 

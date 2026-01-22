@@ -13,7 +13,7 @@
 import { Either, pipe, Schema } from 'effect';
 import { WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
-import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
 
 export type SerializationCapability<TWallet, TSerialized> = {

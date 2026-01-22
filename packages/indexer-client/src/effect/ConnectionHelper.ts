@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as Either from 'effect/Either';
-import { URLError, FailedToDeriveWebSocketUrlError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type URLError, FailedToDeriveWebSocketUrlError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
 export const deriveWebSocketUrl = (url: URL | string): Either.Either<string, URLError> => {
   const httpUrl = typeof url === 'string' ? new URL(url) : url;

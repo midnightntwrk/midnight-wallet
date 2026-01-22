@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
-import { PublicKey } from '../KeyStore.js';
-import { UnshieldedState, UnshieldedUpdate } from './UnshieldedState.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { createSyncProgress, type SyncProgress, type SyncProgressData } from './SyncProgress.js';
+import { type PublicKey } from '../KeyStore.js';
+import { UnshieldedState, type UnshieldedUpdate } from './UnshieldedState.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Either, Array as Arr, pipe } from 'effect';
-import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, WalletError } from './WalletError.js';
+import { ApplyTransactionError, RollbackUtxoError, SpendUtxoError, type WalletError } from './WalletError.js';
 
 export type CoreWallet = Readonly<{
   state: UnshieldedState;
