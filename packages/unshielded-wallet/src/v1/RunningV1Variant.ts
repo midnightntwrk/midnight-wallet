@@ -198,11 +198,18 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     });
   }
 
-  signTransaction(
+  signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
-    return this.#v1Context.transactingCapability.signTransaction(transaction, signSegment);
+    return this.#v1Context.transactingCapability.signUnprovenTransaction(transaction, signSegment);
+  }
+
+  signUnboundTransaction(
+    transaction: UnboundTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Effect.Effect<UnboundTransaction, WalletError> {
+    return this.#v1Context.transactingCapability.signUnboundTransaction(transaction, signSegment);
   }
 
   serializeState(state: CoreWallet): TSerialized {

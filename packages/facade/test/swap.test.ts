@@ -183,10 +183,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
@@ -195,10 +200,14 @@ describe('Swaps', () => {
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
     const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       unboundSwapTx,
-      new Date(Date.now() + 60 * 60 * 1000),
+      {
+        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      },
     );
 
     const finalizedTx = await walletBFacade.finalizeRecipe(walletBBalancedTxRecipe);
@@ -268,10 +277,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
@@ -282,10 +296,14 @@ describe('Swaps', () => {
 
     // the tx is picked up by another wallet (wallet B)
     const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,
-      ttl,
+      {
+        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {
