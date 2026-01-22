@@ -23,13 +23,14 @@
       "import": "./dist/index.js"
     },
     "./submission": {
-      "types": "./dist/submission.d.ts",
-      "import": "./dist/submission.js"
+      "types": "./dist/submission/index.d.ts",
+      "import": "./dist/submission/index.js"
     }
   },
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
+    "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*",
     "effect": "^3.19.14"
   },
   "devDependencies": {

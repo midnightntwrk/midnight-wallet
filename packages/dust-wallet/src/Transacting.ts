@@ -42,7 +42,7 @@ import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } fr
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 
-export interface TransactingCapability<TSecrets, TState, TTransaction> {
+export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   readonly networkId: NetworkId;
   readonly costParams: TotalCostParameters;
   createDustGenerationTransaction(
@@ -69,10 +69,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
     ledgerParams: LedgerParameters,
   ): Either.Either<[UnprovenTransaction, TState], WalletError.WalletError>;
 
-  revertTransaction(
-    state: TState,
-    transaction: UnprovenTransaction | TTransaction,
-  ): Either.Either<TState, WalletError.WalletError>;
+  revertTransaction(state: TState, transaction: AnyTransaction): Either.Either<TState, WalletError.WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
