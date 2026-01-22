@@ -13,19 +13,23 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { getShieldedSeed, waitForSyncFacade } from './utils.js';
 import * as allure from 'allure-js-commons';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
+  type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
+import {
+  makeDefaultSubmissionService,
+  type SubmissionService,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 /**
  * Syncing tests
@@ -58,6 +62,9 @@ describe('Syncing', () => {
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
       const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+      const submissionService: SubmissionService<ledger.FinalizedTransaction> = makeDefaultSubmissionService(
+        fixture.getWalletConfig(),
+      );
 
       async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
@@ -78,7 +85,7 @@ describe('Syncing', () => {
         }
 
         for (let i = 0; i < seeds.length; i++) {
-          facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i]);
+          facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i], submissionService);
           await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
         }
       }

@@ -10,37 +10,37 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  BaseV1Configuration,
-  DefaultV1Configuration,
+  type BaseV1Configuration,
+  type DefaultV1Configuration,
   V1Builder,
   V1Tag,
-  V1Variant,
+  type V1Variant,
   CoreWallet,
-  UnboundTransaction,
+  type UnboundTransaction,
 } from './v1/index.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Scope } from 'effect';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { SerializationCapability } from './v1/Serialization.js';
-import { TransactionHistoryService } from './v1/TransactionHistory.js';
-import { CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
-import { KeysCapability } from './v1/Keys.js';
+import { type SerializationCapability } from './v1/Serialization.js';
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
+import { type KeysCapability } from './v1/Keys.js';
 import {
-  TokenTransfer,
-  FinalizedTransactionBalanceResult,
-  UnboundTransactionBalanceResult,
-  UnprovenTransactionBalanceResult,
+  type TokenTransfer,
+  type FinalizedTransactionBalanceResult,
+  type UnboundTransactionBalanceResult,
+  type UnprovenTransactionBalanceResult,
 } from './v1/Transacting.js';
-import { WalletSyncUpdate } from './v1/SyncSchema.js';
-import { UtxoWithMeta } from './v1/UnshieldedState.js';
-import { Variant, VariantBuilder, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { PublicKey } from './KeyStore.js';
-import { SyncProgress } from './v1/SyncProgress.js';
-import { UnshieldedUpdate } from './v1/SyncSchema.js';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type WalletSyncUpdate } from './v1/SyncSchema.js';
+import { type UtxoWithMeta } from './v1/UnshieldedState.js';
+import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { type PublicKey } from './KeyStore.js';
+import { type SyncProgress } from './v1/SyncProgress.js';
+import { type UnshieldedUpdate } from './v1/SyncSchema.js';
+import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
@@ -101,12 +101,15 @@ export class UnshieldedWalletState<TSerialized = string> {
 
 export type UnshieldedWallet = CustomizedUnshieldedWallet<WalletSyncUpdate, string>;
 
-export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<WalletSyncUpdate, string, DefaultV1Configuration>;
+export type DefaultUnshieldedConfiguration = DefaultV1Configuration;
 
-export interface CustomizedUnshieldedWallet<
-  TSyncUpdate = WalletSyncUpdate,
-  TSerialized = string,
-> extends WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]> {
+export type UnshieldedWalletClass = CustomizedUnshieldedWalletClass<
+  WalletSyncUpdate,
+  string,
+  DefaultUnshieldedConfiguration
+>;
+
+export type UnshieldedWalletAPI<TSerialized = string> = {
   readonly state: rx.Observable<UnshieldedWalletState<TSerialized>>;
 
   start(): Promise<void>;
@@ -134,8 +137,20 @@ export interface CustomizedUnshieldedWallet<
 
   waitForSyncedState(allowedGap?: bigint): Promise<UnshieldedWalletState<TSerialized>>;
 
+  revertTransaction(
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+  ): Promise<void>;
+
   getAddress(): Promise<UnshieldedAddress>;
-}
+
+  stop(): Promise<void>;
+};
+
+export type CustomizedUnshieldedWallet<
+  TSyncUpdate = WalletSyncUpdate,
+  TSerialized = string,
+> = UnshieldedWalletAPI<TSerialized> &
+  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate>>]>;
 
 export interface CustomizedUnshieldedWalletClass<
   TSyncUpdate = WalletSyncUpdate,
@@ -261,6 +276,16 @@ export function CustomUnshieldedWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.signTransaction(transaction, signSegment),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    revertTransaction(
+      transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
+    ): Promise<void> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.revertTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }
