@@ -41,13 +41,14 @@ describe('Balance constant', () => {
   const expectedTokenTwoBalance = utils.tNightAmount(50n);
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
-  // const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
+  const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
   const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
 
   let wallet: utils.WalletInit;
+  let fixture: TestContainersFixture;
 
   beforeEach(async () => {
-    const fixture = getFixture();
+    fixture = getFixture();
 
     wallet = await utils.initWalletWithSeed(seed, fixture);
   }, syncTimeout);
@@ -89,7 +90,10 @@ describe('Balance constant', () => {
       allure.feature('Wallet state');
       allure.story('Balance constant');
 
-      const syncedState = await utils.waitForSyncFacade(wallet.wallet);
+      await utils.saveState(wallet.wallet, filename);
+      const restoredWallet = await utils.provideWallet(filename, seed, fixture);
+      const syncedState = await utils.waitForSyncFacade(restoredWallet.wallet);
+
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
       expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
       expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);

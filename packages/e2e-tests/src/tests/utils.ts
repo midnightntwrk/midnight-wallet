@@ -156,7 +156,7 @@ export const provideWallet = async (
   filename: string,
   seed: string,
   fixture: TestContainersFixture,
-): Promise<WalletFacade> => {
+): Promise<WalletInit> => {
   const walletConfig = fixture.getWalletConfig();
   const dustWalletConfig = fixture.getDustWalletConfig();
   const Wallet = ShieldedWallet(walletConfig);
@@ -165,6 +165,10 @@ export const provideWallet = async (
     logger.warn('SYNC_CACHE env var not set');
     exit(1);
   }
+
+  const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
+  const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
+  const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
 
   const readIfExists = async (p: string): Promise<string | undefined> => {
     try {
@@ -179,14 +183,15 @@ export const provideWallet = async (
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
     restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists),
-    restoreDustWallet(`${directoryPath}/dust-${filename}`, dustWalletConfig, readIfExists),
+    restoreDustWallet(`${directoryPath}/dust-${filename}`, { ...walletConfig, ...dustWalletConfig }, readIfExists),
   ]);
 
   if (!restoredShielded || !restoredUnshielded || !restoredDust) {
     logger.info('Building wallet facade from scratch');
-    return (await initWalletWithSeed(seed, fixture)).wallet;
+    return initWalletWithSeed(seed, fixture);
   } else {
     const restoredWallet = new WalletFacade(restoredShielded, restoredUnshielded, restoredDust);
+    await restoredWallet.start(shieldedSecretKeys, dustSecretKey);
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
     const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
@@ -195,10 +200,11 @@ export const provideWallet = async (
     logger.info(`Apply gap: ${applyGap}`);
     if ((applyGap ?? 0) < 0) {
       logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
-      return (await initWalletWithSeed(seed, fixture)).wallet;
+      await restoredWallet.stop();
+      return initWalletWithSeed(seed, fixture);
     } else {
       logger.info('Successfully restored wallet facade.');
-      return restoredWallet;
+      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
     }
   }
 };
