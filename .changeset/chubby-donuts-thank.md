@@ -7,6 +7,7 @@
 ---
 
 - expose functions for reverting pending coins from a transaction
-- extract submission into capabilities package
-- integrate submission to the WalletFacade
-- make facade revert transaction upon submission failure
+- extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package
+- integrate submission to the `WalletFacade`
+- make `WalletFacade` revert transaction upon submission failure
+- add alternative method for initialization of `WalletFacade`
