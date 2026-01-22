@@ -171,6 +171,7 @@ export class WalletFacade {
     ttl: Date,
     options?: { payFees?: boolean },
   ): Promise<FinalizedTransactionRecipe> {
+    const { payFees = true } = options ?? {};
     const unshieldedBalancing = await this.unshielded.balanceFinalizedTransaction(tx);
     const shieldedBalancing = await this.shielded.balanceTransaction(zswapSecretKeys, tx);
 
@@ -178,7 +179,7 @@ export class WalletFacade {
 
     let balancingTransaction: ledger.UnprovenTransaction;
 
-    if (options?.payFees !== false) {
+    if (payFees) {
       const feeBalancingTransaction = await this.payFees(
         dustSecretKeys,
         mergedBalancing ? [tx, mergedBalancing] : [tx],
@@ -207,6 +208,7 @@ export class WalletFacade {
     ttl: Date,
     options?: { payFees?: boolean },
   ): Promise<UnboundTransactionRecipe> {
+    const { payFees = true } = options ?? {};
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
     const balancedUnshieldedTx = await this.unshielded.balanceUnboundTransaction(tx);
     const shieldedBalancingTx = await this.shielded.balanceTransaction(zswapSecretKeys, tx);
@@ -216,7 +218,7 @@ export class WalletFacade {
 
     let balancingTransaction: ledger.UnprovenTransaction;
 
-    if (options?.payFees !== false) {
+    if (payFees) {
       // Add fee payment - pass shielded balancing if present, otherwise just calculate fee for base tx
       const transactionsToPayFeesFor = shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx];
       const feeBalancingTransaction = await this.payFees(dustSecretKeys, transactionsToPayFeesFor, ttl);
@@ -245,6 +247,7 @@ export class WalletFacade {
     ttl: Date,
     options?: { payFees?: boolean },
   ): Promise<UnprovenTransactionRecipe> {
+    const { payFees = true } = options ?? {};
     // For unproven transactions, unshielded balancing happens in place
     const balancedUnshieldedTx = await this.unshielded.balanceUnprovenTransaction(tx);
     const shieldedBalancingTx = await this.shielded.balanceTransaction(zswapSecretKeys, tx);
@@ -257,7 +260,7 @@ export class WalletFacade {
 
     let balancedTransaction: ledger.UnprovenTransaction;
 
-    if (options?.payFees !== false) {
+    if (payFees) {
       const feeBalancingTransaction = await this.payFees(dustSecretKeys, [mergedTx], ttl);
       balancedTransaction = mergedTx.merge(feeBalancingTransaction);
     } else {
@@ -338,7 +341,9 @@ export class WalletFacade {
     dustSecretKey: ledger.DustSecretKey,
     outputs: CombinedTokenTransfer[],
     ttl: Date,
+    options?: { payFees?: boolean },
   ): Promise<UnprovenTransactionRecipe> {
+    const { payFees = true } = options ?? {};
     const unshieldedOutputs = outputs
       .filter((output) => output.type === 'unshielded')
       .flatMap((output) => output.outputs);
@@ -362,12 +367,18 @@ export class WalletFacade {
 
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
-    // Add fee payment
-    const feeBalancingTransaction = await this.payFees(dustSecretKey, [mergedTxs], ttl);
+    let transaction: ledger.UnprovenTransaction;
+
+    if (payFees) {
+      const feeBalancingTransaction = await this.payFees(dustSecretKey, [mergedTxs], ttl);
+      transaction = mergedTxs.merge(feeBalancingTransaction);
+    } else {
+      transaction = mergedTxs;
+    }
 
     return {
       type: 'UNPROVEN_TRANSACTION',
-      transaction: mergedTxs.merge(feeBalancingTransaction),
+      transaction,
     };
   }
 
@@ -410,6 +421,7 @@ export class WalletFacade {
     ttl: Date,
     options?: { payFees?: boolean },
   ): Promise<UnprovenTransactionRecipe> {
+    const { payFees = true } = options ?? {};
     const { shielded: shieldedInputs, unshielded: unshieldedInputs } = desiredInputs;
 
     const shieldedOutputs = desiredOutputs
@@ -445,10 +457,8 @@ export class WalletFacade {
       throw Error('Unexpected transaction state.');
     }
 
-    // Pay fees unless explicitly disabled (default: true when options or payFees omitted)
-    if (options?.payFees !== false) {
+    if (payFees) {
       const feeBalancingTransaction = await this.payFees(dustSecretKey, [combinedTx], ttl);
-
       combinedTx = combinedTx.merge(feeBalancingTransaction);
     }
 

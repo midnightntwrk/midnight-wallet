@@ -17,7 +17,21 @@
       {
         "name": "@effect/language-service",
         "namespaceImportPackages": ["effect", "@effect/*"],
-        "diagnosticSeverity": {}
+        "diagnosticSeverity": {
+          "deterministicKeys": "error"
+        },
+        "importAliases": {
+          "Array": "EArray",
+          "Record": "ERecord",
+          "Number": "ENumber",
+          "String": "EString",
+          "Boolean": "EBoolean",
+          "Function": "EFunction"
+        },
+        "keyPatterns": [
+          { "target": "service", "pattern": "default", "skipLeadingPath": ["src/"] },
+          { "target": "error", "pattern": "default", "skipLeadingPath": ["src/"] }
+        ]
       }
     ],
     "noPropertyAccessFromIndexSignature": true,
