@@ -43,7 +43,7 @@ yarn test-undeployed -- -t @smoke
 To run tests from a specific file:
 
 ```shell
-yarn test-e2e -- packages/e2e-tests/src/tests/emptyWallet.universal.test.ts
+yarn test-e2e src/tests/emptyWallet.universal.test.ts
 ```
 
 ## Tests Guide
