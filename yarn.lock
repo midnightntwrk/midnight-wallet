@@ -2441,6 +2441,7 @@ __metadata:
     "@polkadot/types-known": "npm:^16.3.1"
     "@polkadot/types-support": "npm:^16.3.1"
     "@types/bn.js": "npm:^5.2.0"
+    "@types/tar-stream": "npm:^3"
     "@types/yargs": "npm:^17.0.33"
     bn.js: "npm:^5.2.2"
     effect: "npm:^3.19.14"
@@ -2449,6 +2450,7 @@ __metadata:
     publint: "npm:~0.3.14"
     rimraf: "npm:^6.0.1"
     rxjs: "npm:^7.5"
+    tar-stream: "npm:^3.1.7"
     testcontainers: "npm:^11.10.0"
     tsx: "npm:^4.20.4"
     typescript: "npm:^5.9.3"
@@ -4111,6 +4113,15 @@ __metadata:
     "@types/node": "npm:*"
     "@types/ssh2-streams": "npm:*"
   checksum: 10c0/95c52fd3438dedae6a59ca87b6558cb36568db6b9144c6c8a28c168739e04c51e27c02908aae14950b7b5020e1c40fea039b1203ae2734c356a40a050fd51c84
+  languageName: node
+  linkType: hard
+
+"@types/tar-stream@npm:^3":
+  version: 3.1.4
+  resolution: "@types/tar-stream@npm:3.1.4"
+  dependencies:
+    "@types/node": "npm:*"
+  checksum: 10c0/1ee17888b0532f9907788e3e9d60ef25fd5e376c4a09b40aa6ece407fa67ad3d11d25780914ed6360e50451d3039a4e248696c780dcba410779c2d37842afd19
   languageName: node
   linkType: hard
 
@@ -10792,7 +10803,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tar-stream@npm:^3.0.0, tar-stream@npm:^3.1.5":
+"tar-stream@npm:^3.0.0, tar-stream@npm:^3.1.5, tar-stream@npm:^3.1.7":
   version: 3.1.7
   resolution: "tar-stream@npm:3.1.7"
   dependencies:
