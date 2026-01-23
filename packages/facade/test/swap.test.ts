@@ -203,7 +203,7 @@ describe('Swaps', () => {
       unboundSwapTx,
       {
         zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       },
       {
         ttl: new Date(Date.now() + 60 * 60 * 1000),
@@ -299,7 +299,7 @@ describe('Swaps', () => {
       finalizedSwapTx,
       {
         zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       },
       {
         ttl,

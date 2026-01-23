@@ -144,7 +144,7 @@ describe('Dust Deregistration', () => {
       dustDeregistrationTx.transaction,
       {
         zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustWalletSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletSeed),
       },
       {
         ttl: new Date(Date.now() + 30 * 60 * 1000),

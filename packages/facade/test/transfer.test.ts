@@ -286,7 +286,7 @@ describe('Wallet Facade Transfer', () => {
       arbitraryTx,
       {
         zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
         ttl: new Date(Date.now() + 30 * 60 * 1000),
@@ -333,7 +333,7 @@ describe('Wallet Facade Transfer', () => {
       arbitraryTx,
       {
         zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        dustSecretKeys: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
         ttl: new Date(Date.now() + 30 * 60 * 1000),
