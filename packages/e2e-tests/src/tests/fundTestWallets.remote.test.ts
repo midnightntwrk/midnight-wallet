@@ -65,7 +65,7 @@ describe('Set up test wallet', () => {
     await receiver.wallet.stop();
   }, timeout);
 
-  test.only(
+  test(
     'Distributing tokens to test wallet',
     async () => {
       await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
@@ -129,7 +129,7 @@ describe('Set up test wallet', () => {
         sender.unshieldedKeystore.signData(payload),
       );
       logger.info('Transaction to prove...');
-      logger.info(signedTxRecipe);
+      logger.info(signedTxRecipe.type.toString());
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
       logger.info(finalizedTx.toString());
@@ -140,12 +140,12 @@ describe('Set up test wallet', () => {
       // Register unshielded tokens for dust generation
       await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
       const receiverStateAfterTransfer = await utils.waitForSyncFacade(receiver.wallet);
-      const registeredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
-        (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === true,
+      const unregisteredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
       );
-      expect(registeredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
+      expect(unregisteredNightUtxos.length, 'No unregistered UTXOs found').toBeGreaterThan(0);
       const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
-        [registeredNightUtxos[0]],
+        [unregisteredNightUtxos[0]],
         receiver.unshieldedKeystore.getPublicKey(),
         (payload) => receiver.unshieldedKeystore.signData(payload),
       );
@@ -218,7 +218,7 @@ describe('Set up test wallet', () => {
       logger.info(signedTxRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(signedTxRecipe);
       logger.info('Submitting transaction...');
-      logger.info(finalizedTx);
+      logger.info(finalizedTx.toString());
       const txId = await sender.wallet.submitTransaction(finalizedTx);
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);

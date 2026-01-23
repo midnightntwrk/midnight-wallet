@@ -77,9 +77,8 @@ on:
         required: false
       branch:
         type: string
-        description: Branch to run the tests against
+        description: Branch to run the tests against (defaults to caller's ref)
         required: false
-        default: 'main'
     secrets:
       GH_USERNAME:
         required: true
@@ -111,7 +110,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
         with:
-          ref: ${{ inputs.branch }}
+          ref: ${{ inputs.branch || github.ref }}
 
       # - name: Determine the latest successful run ID with appropriate artifact
       #   continue-on-error: true

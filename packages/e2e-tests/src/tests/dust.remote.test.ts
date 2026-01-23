@@ -12,7 +12,7 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
-import { useTestContainersFixture } from './test-fixture.js';
+import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -27,15 +27,17 @@ describe('Dust tests', () => {
   const getFixture = useTestContainersFixture();
   const seed = process.env['SEED'];
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
+  const filenameWallet = `${seed.substring(0, 7)}-${TestContainersFixture.network}.state`;
   const timeout = 600_000;
   let wallet: utils.WalletInit;
 
   beforeEach(async () => {
     const fixture = getFixture();
-    wallet = await utils.initWalletWithSeed(seed, fixture);
+    wallet = await utils.provideWallet(filenameWallet, seed, fixture);
   });
 
   afterEach(async () => {
+    await utils.saveState(wallet.wallet, filenameWallet);
     await wallet.wallet.stop();
     logger.info('Wallet stopped');
   });
