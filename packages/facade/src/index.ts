@@ -193,14 +193,14 @@ export class WalletFacade {
     },
     options: {
       ttl: Date;
-      tokenTypesToBalance?: TokenKindsToBalance;
+      tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<FinalizedTransactionRecipe> {
     const { zswapSecretKeys, dustSecretKey } = secretKeys;
-    const { ttl, tokenTypesToBalance = 'all' } = options;
+    const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
-      TokenKindsToBalance.toFlags(tokenTypesToBalance);
+      TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
     const unshieldedBalancingTx = shouldBalanceUnshielded
@@ -241,14 +241,14 @@ export class WalletFacade {
     },
     options: {
       ttl: Date;
-      tokenTypesToBalance?: TokenKindsToBalance;
+      tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnboundTransactionRecipe> {
     const { zswapSecretKeys, dustSecretKey } = secretKeys;
-    const { ttl, tokenTypesToBalance = 'all' } = options;
+    const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
-      TokenKindsToBalance.toFlags(tokenTypesToBalance);
+      TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded
@@ -295,14 +295,14 @@ export class WalletFacade {
     },
     options: {
       ttl: Date;
-      tokenTypesToBalance?: TokenKindsToBalance;
+      tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnprovenTransactionRecipe> {
     const { zswapSecretKeys, dustSecretKey } = secretKeys;
-    const { ttl, tokenTypesToBalance = 'all' } = options;
+    const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
-      TokenKindsToBalance.toFlags(tokenTypesToBalance);
+      TokenKindsToBalance.toFlags(tokenKindsToBalance);
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded
