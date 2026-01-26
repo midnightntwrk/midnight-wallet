@@ -124,10 +124,14 @@ describe('Dust tests', () => {
       );
 
       const balancedTransactionRecipe = await wallet.wallet.balanceUnprovenTransaction(
-        wallet.shieldedSecretKeys,
-        wallet.dustSecretKey,
         dustDeregistrationRecipe.transaction,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: wallet.shieldedSecretKeys,
+          dustSecretKey: wallet.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
 
       const finalizedDustTx = await wallet.wallet.finalizeRecipe(balancedTransactionRecipe);

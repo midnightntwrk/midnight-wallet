@@ -149,10 +149,14 @@ describe('Token transfer', () => {
       ];
 
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       logger.info('Signing tx...');
       logger.info(txRecipe);
@@ -259,10 +263,14 @@ describe('Token transfer', () => {
       ];
       logger.info('Transfer transaction...');
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       logger.info('Transaction to prove...');
       logger.info(txRecipe);
@@ -318,7 +326,6 @@ describe('Token transfer', () => {
     }
 
     const swapTx = await sender.wallet.initSwap(
-      sender.shieldedSecretKeys,
       { shielded: { [shieldedToken1]: 1000000n } },
       [
         {
@@ -332,17 +339,28 @@ describe('Token transfer', () => {
           ],
         },
       ],
-      ttl,
+      {
+        shieldedSecretKeys: sender.shieldedSecretKeys,
+        dustSecretKey: sender.dustSecretKey,
+      },
+      {
+        ttl,
+        payFees: false,
+      },
     );
     const finalizedTx = await sender.wallet.finalizeRecipe(swapTx);
     const wallet1TxId = await sender.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + wallet1TxId);
 
     const wallet2BalancedTx = await receiver.wallet.balanceFinalizedTransaction(
-      receiver.shieldedSecretKeys,
-      receiver.dustSecretKey,
       finalizedTx,
-      ttl,
+      {
+        shieldedSecretKeys: receiver.shieldedSecretKeys,
+        dustSecretKey: receiver.dustSecretKey,
+      },
+      {
+        ttl,
+      },
     );
     const finalizedSwapTx = await receiver.wallet.finalizeRecipe(wallet2BalancedTx);
     const wallet2TxId = await receiver.wallet.submitTransaction(finalizedSwapTx);
@@ -461,10 +479,14 @@ describe('Token transfer', () => {
       ];
 
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(),
+        },
       );
       await expect(sender.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
       // const pendingState = await waitForPending(walletFunded);
@@ -511,7 +533,16 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, outputsToCreate, new Date()),
+        sender.wallet.transferTransaction(
+          outputsToCreate,
+          {
+            shieldedSecretKeys: sender.shieldedSecretKeys,
+            dustSecretKey: sender.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow(`Address parsing error: invalidAddress`);
     },
     timeout,
@@ -548,10 +579,14 @@ describe('Token transfer', () => {
       ];
       try {
         const txRecipe = await sender.wallet.transferTransaction(
-          sender.shieldedSecretKeys,
-          sender.dustSecretKey,
           outputsToCreate,
-          new Date(),
+          {
+            shieldedSecretKeys: sender.shieldedSecretKeys,
+            dustSecretKey: sender.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
         );
         const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
         await sender.wallet.submitTransaction(finalizedTx);
@@ -591,7 +626,16 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, outputsToCreate, new Date()),
+        sender.wallet.transferTransaction(
+          outputsToCreate,
+          {
+            shieldedSecretKeys: sender.shieldedSecretKeys,
+            dustSecretKey: sender.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -623,7 +667,16 @@ describe('Token transfer', () => {
       ];
 
       await expect(
-        sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, outputsToCreate, new Date()),
+        sender.wallet.transferTransaction(
+          outputsToCreate,
+          {
+            shieldedSecretKeys: sender.shieldedSecretKeys,
+            dustSecretKey: sender.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow('The amount needs to be positive');
     },
     timeout,
@@ -641,7 +694,16 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(
-        sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, [], new Date()),
+        sender.wallet.transferTransaction(
+          [],
+          {
+            shieldedSecretKeys: sender.shieldedSecretKeys,
+            dustSecretKey: sender.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow('At least one shielded or unshielded output is required.');
     },
     timeout,
@@ -673,7 +735,16 @@ describe('Token transfer', () => {
     ];
 
     await expect(
-      sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, outputsToCreate, new Date()),
+      sender.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(),
+        },
+      ),
     ).rejects.toThrow(
       'Address parsing error: mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043',
     );
@@ -704,7 +775,16 @@ describe('Token transfer', () => {
     ];
 
     await expect(
-      sender.wallet.transferTransaction(sender.shieldedSecretKeys, sender.dustSecretKey, outputsToCreate, new Date()),
+      sender.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(),
+        },
+      ),
     ).rejects.toThrow('Address parsing error: bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297');
   });
 });

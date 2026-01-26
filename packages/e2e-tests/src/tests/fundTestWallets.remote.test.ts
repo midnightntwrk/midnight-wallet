@@ -118,10 +118,14 @@ describe('Set up test wallet', () => {
       ];
 
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       logger.info('Signing tx...');
       logger.info(txRecipe);
@@ -204,10 +208,14 @@ describe('Set up test wallet', () => {
       ];
 
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       logger.info('Signing tx...');
       logger.info(txRecipe);
