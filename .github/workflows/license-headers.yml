@@ -19,7 +19,7 @@ jobs:
         uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
       - name: Check License Headers
-        uses: apache/skywalking-eyes/header@61275cc80d0798a405cb070f7d3a8aaf7cf2c2c1 # main
+        uses: apache/skywalking-eyes/header@0630b017b4e34f27f0d8719c873d703fb31ec8de # main
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -35,7 +35,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Fix License Headers
-        uses: apache/skywalking-eyes/header@61275cc80d0798a405cb070f7d3a8aaf7cf2c2c1 # main
+        uses: apache/skywalking-eyes/header@0630b017b4e34f27f0d8719c873d703fb31ec8de # main
         with:
           mode: fix
         env:
