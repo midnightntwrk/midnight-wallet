@@ -172,7 +172,7 @@ describe('Wallet Facade Transfer', () => {
         },
       ],
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
@@ -227,7 +227,7 @@ describe('Wallet Facade Transfer', () => {
     const transactionRecipe = await senderFacade.transferTransaction(
       tokenTransfer,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
@@ -285,7 +285,7 @@ describe('Wallet Facade Transfer', () => {
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
       arbitraryTx,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
@@ -332,7 +332,7 @@ describe('Wallet Facade Transfer', () => {
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
       arbitraryTx,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {

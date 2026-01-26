@@ -206,7 +206,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnprovenTransaction(
         arbitraryTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['shielded'] },
@@ -232,7 +232,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnprovenTransaction(
         arbitraryTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['unshielded'] },
@@ -258,7 +258,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnprovenTransaction(
         arbitraryTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['dust'] },
@@ -270,6 +270,7 @@ describe('Optional Balancing', () => {
       expect(imbalances.unshielded).toBeLessThan(0n);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
+      console.log('imbalances', imbalances);
       expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify shielded is NOT balanced (imbalance < 0n)
@@ -283,7 +284,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnprovenTransaction(
         arbitraryTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl },
@@ -313,7 +314,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['shielded'] },
@@ -348,7 +349,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['unshielded'] },
@@ -373,7 +374,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['dust'] },
@@ -409,7 +410,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl },
@@ -455,7 +456,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceFinalizedTransaction(
         finalizedTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['shielded'] },
@@ -480,7 +481,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceFinalizedTransaction(
         finalizedTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['unshielded'] },
@@ -505,7 +506,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceFinalizedTransaction(
         finalizedTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, tokenKindsToBalance: ['dust'] },
@@ -530,7 +531,7 @@ describe('Optional Balancing', () => {
       const recipe = await facade.balanceFinalizedTransaction(
         finalizedTx,
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl },
@@ -572,7 +573,7 @@ describe('Optional Balancing', () => {
           },
         ],
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, payFees: false },
@@ -606,7 +607,7 @@ describe('Optional Balancing', () => {
           },
         ],
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, payFees: true },
@@ -637,7 +638,7 @@ describe('Optional Balancing', () => {
           },
         ],
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, payFees: false },
@@ -666,7 +667,7 @@ describe('Optional Balancing', () => {
           },
         ],
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
         },
         { ttl, payFees: true },

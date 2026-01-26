@@ -188,7 +188,7 @@ export class WalletFacade {
   async balanceFinalizedTransaction(
     tx: ledger.FinalizedTransaction,
     secretKeys: {
-      zswapSecretKeys: ledger.ZswapSecretKeys;
+      shieldedSecretKeys: ledger.ZswapSecretKeys;
       dustSecretKey: ledger.DustSecretKey;
     },
     options: {
@@ -196,7 +196,7 @@ export class WalletFacade {
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<FinalizedTransactionRecipe> {
-    const { zswapSecretKeys, dustSecretKey } = secretKeys;
+    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
@@ -208,7 +208,7 @@ export class WalletFacade {
       : undefined;
 
     const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(zswapSecretKeys, tx)
+      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
       : undefined;
 
     // Step 2: Merge unshielded and shielded balancing
@@ -236,7 +236,7 @@ export class WalletFacade {
   async balanceUnboundTransaction(
     tx: UnboundTransaction,
     secretKeys: {
-      zswapSecretKeys: ledger.ZswapSecretKeys;
+      shieldedSecretKeys: ledger.ZswapSecretKeys;
       dustSecretKey: ledger.DustSecretKey;
     },
     options: {
@@ -244,7 +244,7 @@ export class WalletFacade {
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnboundTransactionRecipe> {
-    const { zswapSecretKeys, dustSecretKey } = secretKeys;
+    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
@@ -252,7 +252,7 @@ export class WalletFacade {
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(zswapSecretKeys, tx)
+      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
       : undefined;
 
     // For unbound transactions, unshielded balancing happens in place not with a balancing transaction
@@ -290,7 +290,7 @@ export class WalletFacade {
   async balanceUnprovenTransaction(
     tx: ledger.UnprovenTransaction,
     secretKeys: {
-      zswapSecretKeys: ledger.ZswapSecretKeys;
+      shieldedSecretKeys: ledger.ZswapSecretKeys;
       dustSecretKey: ledger.DustSecretKey;
     },
     options: {
@@ -298,7 +298,7 @@ export class WalletFacade {
       tokenKindsToBalance?: TokenKindsToBalance;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { zswapSecretKeys, dustSecretKey } = secretKeys;
+    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, tokenKindsToBalance = 'all' } = options;
 
     const { shouldBalanceDust, shouldBalanceShielded, shouldBalanceUnshielded } =
@@ -306,7 +306,7 @@ export class WalletFacade {
 
     // Step 1: Run unshielded and shielded balancing
     const shieldedBalancingTx = shouldBalanceShielded
-      ? await this.shielded.balanceTransaction(zswapSecretKeys, tx)
+      ? await this.shielded.balanceTransaction(shieldedSecretKeys, tx)
       : undefined;
 
     // For unproven transactions, unshielded balancing happens in place
@@ -412,7 +412,7 @@ export class WalletFacade {
   async transferTransaction(
     outputs: CombinedTokenTransfer[],
     secretKeys: {
-      zswapSecretKeys: ledger.ZswapSecretKeys;
+      shieldedSecretKeys: ledger.ZswapSecretKeys;
       dustSecretKey: ledger.DustSecretKey;
     },
     options: {
@@ -420,7 +420,7 @@ export class WalletFacade {
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { zswapSecretKeys, dustSecretKey } = secretKeys;
+    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = true } = options;
 
     const unshieldedOutputs = outputs
@@ -435,7 +435,7 @@ export class WalletFacade {
 
     const shieldedTx =
       shieldedOutputs.length > 0
-        ? await this.shielded.transferTransaction(zswapSecretKeys, shieldedOutputs)
+        ? await this.shielded.transferTransaction(shieldedSecretKeys, shieldedOutputs)
         : undefined;
 
     const unshieldedTx =
@@ -489,7 +489,7 @@ export class WalletFacade {
     desiredInputs: CombinedSwapInputs,
     desiredOutputs: CombinedSwapOutputs[],
     secretKeys: {
-      zswapSecretKeys: ledger.ZswapSecretKeys;
+      shieldedSecretKeys: ledger.ZswapSecretKeys;
       dustSecretKey: ledger.DustSecretKey;
     },
     options: {
@@ -497,7 +497,7 @@ export class WalletFacade {
       payFees?: boolean;
     },
   ): Promise<UnprovenTransactionRecipe> {
-    const { zswapSecretKeys, dustSecretKey } = secretKeys;
+    const { shieldedSecretKeys, dustSecretKey } = secretKeys;
     const { ttl, payFees = false } = options;
 
     const { shielded: shieldedInputs, unshielded: unshieldedInputs } = desiredInputs;
@@ -521,7 +521,7 @@ export class WalletFacade {
 
     const shieldedTx =
       hasShieldedPart && shieldedInputs !== undefined
-        ? await this.shielded.initSwap(zswapSecretKeys, shieldedInputs, shieldedOutputs)
+        ? await this.shielded.initSwap(shieldedSecretKeys, shieldedInputs, shieldedOutputs)
         : undefined;
 
     const unshieldedTx =
@@ -588,8 +588,12 @@ export class WalletFacade {
     };
   }
 
-  async start(zswapSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
-    await Promise.all([this.shielded.start(zswapSecretKeys), this.unshielded.start(), this.dust.start(dustSecretKey)]);
+  async start(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
+    await Promise.all([
+      this.shielded.start(shieldedSecretKeys),
+      this.unshielded.start(),
+      this.dust.start(dustSecretKey),
+    ]);
   }
 
   async stop(): Promise<void> {

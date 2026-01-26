@@ -181,7 +181,7 @@ describe('Dust Registration', () => {
     const transferTxRecipe = await senderFacade.transferTransaction(
       tokenTransfer,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
       },
       {
@@ -293,7 +293,7 @@ describe('Dust Registration', () => {
       .transferTransaction(
         [transfersToMake],
         {
-          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
           dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
         },
         {

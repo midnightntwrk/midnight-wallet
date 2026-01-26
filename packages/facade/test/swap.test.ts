@@ -186,7 +186,7 @@ describe('Swaps', () => {
       desiredInputs,
       desiredOutputs,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
       },
       {
@@ -202,7 +202,7 @@ describe('Swaps', () => {
     const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
       unboundSwapTx,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       },
       {
@@ -280,7 +280,7 @@ describe('Swaps', () => {
       desiredInputs,
       desiredOutputs,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
       },
       {
@@ -298,7 +298,7 @@ describe('Swaps', () => {
     const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
       finalizedSwapTx,
       {
-        zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
         dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       },
       {
