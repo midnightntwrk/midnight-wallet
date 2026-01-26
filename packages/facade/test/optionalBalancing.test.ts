@@ -32,16 +32,20 @@ import { makeProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
-const getImbalance = (
+const getImbalances = (
   tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   segmentIndex: number,
-  tokenType: 'shielded' | 'unshielded' | 'dust',
-): bigint | undefined => {
-  const [, value] = Array.from(tx.imbalances(segmentIndex)).find(([t, value]) =>
-    t.tag == tokenType ? value : undefined,
-  ) ?? [undefined, BigInt(0)];
+): { dust: bigint; shielded: bigint; unshielded: bigint } => {
+  const imbalances = Array.from(tx.imbalances(segmentIndex));
 
-  return value;
+  return imbalances.reduce(
+    (acc, [tokenType, value]) => {
+      acc[tokenType.tag] += value;
+
+      return acc;
+    },
+    { dust: 0n, shielded: 0n, unshielded: 0n },
+  );
 };
 
 describe('TokenKindsToBalance.toFlags', () => {
@@ -170,7 +174,6 @@ describe('Optional Balancing', () => {
   const shieldedTokenType = ledger.shieldedToken().raw;
   const unshieldedTokenType = ledger.unshieldedToken().raw;
 
-  // Helper to create arbitrary shielded output transaction (creates shielded imbalance)
   const createArbitraryTx = (networkId: NetworkId.NetworkId): ledger.UnprovenTransaction => {
     const coin = ledger.createShieldedCoinInfo(shieldedTokenType, tokenValue(1n));
     const zswapOutput = ledger.ZswapOutput.new(
@@ -208,14 +211,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['shielded'] },
       );
 
+      const imbalances = getImbalances(recipe.transaction, 0);
+
       // Verify shielded IS balanced (imbalance = 0n)
-      expect(getImbalance(recipe.transaction, 0, 'shielded')).toEqual(0n);
+      expect(imbalances.shielded).toEqual(0n);
 
       // Verify dust is NOT balanced (dust imbalance = 0n - no surplus)
-      expect(getImbalance(recipe.transaction, 0, 'dust')).toEqual(0n);
+      expect(imbalances.dust).toEqual(0n);
 
       // Verify unshielded is NOT balanced (unshielded imbalance < 0)
-      expect(getImbalance(recipe.transaction, 0, 'unshielded')).toBeLessThan(0n);
+      expect(imbalances.unshielded).toBeLessThan(0n);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -232,14 +237,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['unshielded'] },
       );
 
+      const imbalances = getImbalances(recipe.transaction, 0);
+
       // Verify unshielded IS balanced (imbalance = 0n)
-      expect(getImbalance(recipe.transaction, 0, 'unshielded')).toBe(0n);
+      expect(imbalances.unshielded).toBe(0n);
 
       // Verify dust is NOT balanced (dust imbalance = 0n - no surplus)
-      expect(getImbalance(recipe.transaction, 0, 'dust')).toEqual(0n);
+      expect(imbalances.dust).toEqual(0n);
 
       // Verify shielded is NOT balanced (imbalance < 0n)
-      expect(getImbalance(recipe.transaction, 0, 'shielded')).toBeLessThan(0n);
+      expect(imbalances.shielded).toBeLessThan(0n);
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
@@ -256,14 +263,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['dust'] },
       );
 
+      const imbalances = getImbalances(recipe.transaction, 0);
+
       // Verify unshielded is NOT balanced (imbalance < 0n)
-      expect(getImbalance(recipe.transaction, 0, 'unshielded')).toBeLessThan(0n);
+      expect(imbalances.unshielded).toBeLessThan(0n);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
-      expect(getImbalance(recipe.transaction, 0, 'dust')).toBeGreaterThan(0n);
+      expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify shielded is NOT balanced (imbalance < 0n)
-      expect(getImbalance(recipe.transaction, 0, 'shielded')).toBeLessThan(0n);
+      expect(imbalances.shielded).toBeLessThan(0n);
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
@@ -279,14 +288,16 @@ describe('Optional Balancing', () => {
         { ttl },
       );
 
+      const imbalances = getImbalances(recipe.transaction, 0);
+
       // Verify unshielded IS balanced (imbalance = 0n)
-      expect(getImbalance(recipe.transaction, 0, 'unshielded')).toEqual(0n);
+      expect(imbalances.unshielded).toEqual(0n);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
-      expect(getImbalance(recipe.transaction, 0, 'dust')).toBeGreaterThan(0n);
+      expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify shielded IS balanced (imbalance = 0n)
-      expect(getImbalance(recipe.transaction, 0, 'shielded')).toEqual(0n);
+      expect(imbalances.shielded).toEqual(0n);
     });
   });
 
@@ -310,17 +321,20 @@ describe('Optional Balancing', () => {
       // Verify balancing transaction exists (shielded balancing creates a balancing tx)
       expect(recipe.balancingTransaction).toBeDefined();
 
+      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
+      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+
       // Verify shielded IS balanced (provides surplus to offset base tx deficit)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'shielded')).toBeGreaterThan(0n);
+      expect(balancingImbalances.shielded).toBeGreaterThan(0n);
 
       // Verify dust is NOT balanced (dust imbalance = 0n - no surplus)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'dust')).toEqual(0n);
+      expect(balancingImbalances.dust).toEqual(0n);
 
       // Verify unshielded is NOT balanced (unshielded imbalance = 0n - no contribution)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'unshielded')).toEqual(0n);
+      expect(balancingImbalances.unshielded).toEqual(0n);
 
       // Verify base tx unshielded is NOT balanced (unshielded imbalance < 0n)
-      expect(getImbalance(recipe.baseTransaction, 0, 'unshielded')).toBeLessThan(0n);
+      expect(baseImbalances.unshielded).toBeLessThan(0n);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -342,8 +356,10 @@ describe('Optional Balancing', () => {
       // Verify balancing transaction does NOT exist (unshielded balancing occurs in place)
       expect(recipe.balancingTransaction).toBeUndefined();
 
+      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+
       // Verify base transaction IS balanced (unshielded = 0n)
-      expect(getImbalance(recipe.baseTransaction, 0, 'unshielded')).toEqual(0n);
+      expect(baseImbalances.unshielded).toEqual(0n);
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
@@ -365,17 +381,21 @@ describe('Optional Balancing', () => {
       // Verify balancing transaction exists with dust fees
       expect(recipe.balancingTransaction).toBeDefined();
 
+      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
+
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'dust')).toBeGreaterThan(0n);
+      expect(balancingImbalances.dust).toBeGreaterThan(0n);
 
       // Verify shielded is NOT balanced (shielded imbalance = 0n - no contribution)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'shielded')).toEqual(0n);
+      expect(balancingImbalances.shielded).toEqual(0n);
 
       // Verify unshielded is NOT balanced (unshielded imbalance = 0n - no contribution)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'unshielded')).toEqual(0n);
+      expect(balancingImbalances.unshielded).toEqual(0n);
+
+      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
 
       // Verify base tx unshielded is NOT balanced (unshielded imbalance < 0n)
-      expect(getImbalance(recipe.baseTransaction, 0, 'unshielded')).toBeLessThan(0n);
+      expect(baseImbalances.unshielded).toBeLessThan(0n);
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
@@ -397,17 +417,20 @@ describe('Optional Balancing', () => {
       // Verify balancing transaction exists
       expect(recipe.balancingTransaction).toBeDefined();
 
+      const balancingImbalances = getImbalances(recipe.balancingTransaction!, 0);
+      const baseImbalances = getImbalances(recipe.baseTransaction, 0);
+
       // Verify shielded IS balanced (provides surplus to offset base tx deficit)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'shielded')).toBeGreaterThan(0n);
+      expect(balancingImbalances.shielded).toBeGreaterThan(0n);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'dust')).toBeGreaterThan(0n);
+      expect(balancingImbalances.dust).toBeGreaterThan(0n);
 
       // Verify unshielded is NOT balanced in balancingTransaction (unshielded imbalance = 0n)
-      expect(getImbalance(recipe.balancingTransaction!, 0, 'unshielded')).toBe(0n);
+      expect(balancingImbalances.unshielded).toBe(0n);
 
       // Verify unshielded IS balanced in baseTransaction (unshielded imbalance = 0n)
-      expect(getImbalance(recipe.baseTransaction, 0, 'unshielded')).toBe(0n);
+      expect(baseImbalances.unshielded).toBe(0n);
     });
   });
 
@@ -437,14 +460,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['shielded'] },
       );
 
+      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+
       // Verify balancing transaction has shielded balancing (shielded imbalance > 0n - surplus)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'shielded')).toBeGreaterThan(0n);
+      expect(imbalances.shielded).toBeGreaterThan(0n);
 
       // Verify dust is NOT balanced (no dust contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'dust')).toBe(0n);
+      expect(imbalances.dust).toBe(0n);
 
       // Verify unshielded is NOT balanced (no unshielded contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'unshielded')).toBe(0n);
+      expect(imbalances.unshielded).toBe(0n);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -460,14 +485,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['unshielded'] },
       );
 
+      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+
       // Verify shielded is NOT balanced (no shielded contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'shielded')).toBe(0n);
+      expect(imbalances.shielded).toBe(0n);
 
       // Verify dust is NOT balanced (no dust contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'dust')).toBe(0n);
+      expect(imbalances.dust).toBe(0n);
 
       // Verify unshielded is balanced (unshielded imbalance > 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'unshielded')).toBeGreaterThan(0n);
+      expect(imbalances.unshielded).toBeGreaterThan(0n);
     });
 
     it('only balances dust when tokenKindsToBalance is ["dust"]', async () => {
@@ -483,14 +510,16 @@ describe('Optional Balancing', () => {
         { ttl, tokenKindsToBalance: ['dust'] },
       );
 
+      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+
       // Verify shielded is NOT balanced (no shielded contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'shielded')).toBe(0n);
+      expect(imbalances.shielded).toBe(0n);
 
       // Verify dust IS balanced (dust imbalance > 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'dust')).toBeGreaterThan(0n);
+      expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify unshielded is NOT balanced (no unshielded contribution, imbalance = 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'unshielded')).toBe(0n);
+      expect(imbalances.unshielded).toBe(0n);
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
@@ -506,14 +535,16 @@ describe('Optional Balancing', () => {
         { ttl },
       );
 
+      const imbalances = getImbalances(recipe.balancingTransaction, 0);
+
       // Verify shielded is balanced (shielded imbalance > 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'shielded')).toBeGreaterThan(0n);
+      expect(imbalances.shielded).toBeGreaterThan(0n);
 
       // Verify dust IS balanced (dust imbalance > 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'dust')).toBeGreaterThan(0n);
+      expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify unshielded is balanced (unshielded contribution > 0)
-      expect(getImbalance(recipe.balancingTransaction, 0, 'unshielded')).toBeGreaterThan(0n);
+      expect(imbalances.unshielded).toBeGreaterThan(0n);
     });
   });
 });
