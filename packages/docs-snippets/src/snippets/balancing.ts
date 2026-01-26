@@ -43,10 +43,14 @@ const makeTransactionBlueprint = () => {
 
 await sender.wallet
   .balanceUnprovenTransaction(
-    sender.shieldedSecretKeys,
-    sender.dustSecretKey,
     makeTransactionBlueprint(),
-    new Date(Date.now() + 30 * 60 * 1000),
+    {
+      shieldedSecretKeys: sender.shieldedSecretKeys,
+      dustSecretKey: sender.dustSecretKey,
+    },
+    {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    },
   )
   .then((recipe) => {
     return sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload));
