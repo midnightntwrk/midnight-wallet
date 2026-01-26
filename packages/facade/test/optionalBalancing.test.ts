@@ -29,6 +29,7 @@ import { TokenKindsToBalance, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeProvingService } from './utils/proving.js';
+import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -545,6 +546,136 @@ describe('Optional Balancing', () => {
 
       // Verify unshielded is balanced (unshielded contribution > 0)
       expect(imbalances.unshielded).toBeGreaterThan(0n);
+    });
+  });
+
+  describe('initSwap', () => {
+    it('does not pay fees when payFees is false', async () => {
+      const { shielded: shieldedState } = await facade.waitForSyncedState();
+
+      const recipe = await facade.initSwap(
+        {
+          shielded: {
+            [shieldedTokenType]: tokenValue(1n),
+          },
+        },
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: false },
+      );
+
+      const imbalances = getImbalances(recipe.transaction, 0);
+
+      // Verify dust fees are NOT paid (dust imbalance = 0n)
+      expect(imbalances.dust).toEqual(0n);
+    });
+
+    it('pays fees when payFees is true', async () => {
+      const { shielded: shieldedState } = await facade.waitForSyncedState();
+
+      const recipe = await facade.initSwap(
+        {
+          shielded: {
+            [shieldedTokenType]: tokenValue(1n),
+          },
+        },
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: true },
+      );
+
+      const imbalances = getImbalances(recipe.transaction, 0);
+
+      // Verify dust fees ARE paid (dust imbalance > 0n)
+      expect(imbalances.dust).toBeGreaterThan(0n);
+    });
+  });
+
+  describe('transferTransaction', () => {
+    it('does not pay fees when payFees is false', async () => {
+      const { shielded: shieldedState } = await facade.waitForSyncedState();
+
+      const recipe = await facade.transferTransaction(
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: false },
+      );
+
+      const imbalances = getImbalances(recipe.transaction, 0);
+
+      // Verify dust fees are NOT paid (dust imbalance = 0n)
+      expect(imbalances.dust).toEqual(0n);
+    });
+
+    it('pays fees when payFees is true', async () => {
+      const { shielded: shieldedState } = await facade.waitForSyncedState();
+
+      const recipe = await facade.transferTransaction(
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          zswapSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: true },
+      );
+
+      const imbalances = getImbalances(recipe.transaction, 0);
+
+      // Verify dust fees ARE paid (dust imbalance > 0n)
+      expect(imbalances.dust).toBeGreaterThan(0n);
     });
   });
 });
