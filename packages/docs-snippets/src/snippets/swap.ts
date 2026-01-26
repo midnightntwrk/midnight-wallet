@@ -41,7 +41,6 @@ console.log(
 
 const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
   .initSwap(
-    alice.shieldedSecretKeys,
     { shielded: { [shieldedToken1]: 1_000_000n } },
     [
       {
@@ -55,16 +54,26 @@ const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
         ],
       },
     ],
-    new Date(Date.now() + 30 * 60 * 1000),
+    {
+      shieldedSecretKeys: alice.shieldedSecretKeys,
+      dustSecretKey: alice.dustSecretKey,
+    },
+    {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    },
   )
   .then((recipe) => alice.wallet.finalizeRecipe(recipe));
 
 await bob.wallet
   .balanceFinalizedTransaction(
-    bob.shieldedSecretKeys,
-    bob.dustSecretKey,
     aliceSwapTx,
-    new Date(Date.now() + 30 * 60 * 1000),
+    {
+      shieldedSecretKeys: bob.shieldedSecretKeys,
+      dustSecretKey: bob.dustSecretKey,
+    },
+    {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    },
   )
   .then((recipe) => bob.wallet.finalizeRecipe(recipe))
   .then((tx) => bob.wallet.submitTransaction(tx));

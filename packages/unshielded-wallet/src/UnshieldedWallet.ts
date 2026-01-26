@@ -125,10 +125,15 @@ export interface CustomizedUnshieldedWallet<
     ttl: Date,
   ): Promise<ledger.UnprovenTransaction>;
 
-  signTransaction(
+  signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction>;
+
+  signUnboundTransaction(
+    transaction: UnboundTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Promise<UnboundTransaction>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -254,13 +259,24 @@ export function CustomUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    signTransaction(
+    signUnprovenTransaction(
       transaction: ledger.UnprovenTransaction,
       signSegment: (data: Uint8Array) => ledger.Signature,
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.signTransaction(transaction, signSegment),
+          [V1Tag]: (v1) => v1.signUnprovenTransaction(transaction, signSegment),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    signUnboundTransaction(
+      transaction: UnboundTransaction,
+      signSegment: (data: Uint8Array) => ledger.Signature,
+    ): Promise<UnboundTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.signUnboundTransaction(transaction, signSegment),
         })
         .pipe(Effect.runPromise);
     }

@@ -33,8 +33,6 @@ const receiverAddress = await rx.firstValueFrom(
 
 await sender.wallet
   .transferTransaction(
-    sender.shieldedSecretKeys,
-    sender.dustSecretKey,
     [
       {
         type: 'shielded',
@@ -47,7 +45,13 @@ await sender.wallet
         ],
       },
     ],
-    new Date(Date.now() + 30 * 60 * 1000),
+    {
+      shieldedSecretKeys: sender.shieldedSecretKeys,
+      dustSecretKey: sender.dustSecretKey,
+    },
+    {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    },
   )
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));
