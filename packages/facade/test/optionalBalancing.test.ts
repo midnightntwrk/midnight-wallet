@@ -25,7 +25,7 @@ import {
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { TokenKindsToBalance, WalletFacade } from '../src/index.js';
+import { WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeProvingService } from './utils/proving.js';
@@ -48,44 +48,6 @@ const getImbalances = (
     { dust: 0n, shielded: 0n, unshielded: 0n },
   );
 };
-
-describe('TokenKindsToBalance.toFlags', () => {
-  it('returns all flags true for "all"', () => {
-    const flags = TokenKindsToBalance.toFlags('all');
-    expect(flags).toEqual({
-      shouldBalanceUnshielded: true,
-      shouldBalanceShielded: true,
-      shouldBalanceDust: true,
-    });
-  });
-
-  it('returns only shielded flag for ["shielded"]', () => {
-    const flags = TokenKindsToBalance.toFlags(['shielded']);
-    expect(flags).toEqual({
-      shouldBalanceUnshielded: false,
-      shouldBalanceShielded: true,
-      shouldBalanceDust: false,
-    });
-  });
-
-  it('returns only unshielded flag for ["unshielded"]', () => {
-    const flags = TokenKindsToBalance.toFlags(['unshielded']);
-    expect(flags).toEqual({
-      shouldBalanceUnshielded: true,
-      shouldBalanceShielded: false,
-      shouldBalanceDust: false,
-    });
-  });
-
-  it('returns only dust flag for ["dust"]', () => {
-    const flags = TokenKindsToBalance.toFlags(['dust']);
-    expect(flags).toEqual({
-      shouldBalanceUnshielded: false,
-      shouldBalanceShielded: false,
-      shouldBalanceDust: true,
-    });
-  });
-});
 
 describe('Optional Balancing', () => {
   const environmentId = randomUUID();
@@ -270,7 +232,6 @@ describe('Optional Balancing', () => {
       expect(imbalances.unshielded).toBeLessThan(0n);
 
       // Verify dust IS balanced (dust imbalance > 0n - surplus)
-      console.log('imbalances', imbalances);
       expect(imbalances.dust).toBeGreaterThan(0n);
 
       // Verify shielded is NOT balanced (imbalance < 0n)

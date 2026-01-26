@@ -24,11 +24,11 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-export type TokenKind = 'dust' | 'shielded' | 'unshielded';
+type TokenKind = 'dust' | 'shielded' | 'unshielded';
 
-export type TokenKindsToBalance = 'all' | TokenKind[];
+type TokenKindsToBalance = 'all' | TokenKind[];
 
-export const TokenKindsToBalance = new (class {
+const TokenKindsToBalance = new (class {
   allTokenKinds = ['shielded', 'unshielded', 'dust'];
   toFlags = (tokenKinds: TokenKindsToBalance) => {
     return pipe(
