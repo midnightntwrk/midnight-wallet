@@ -47,7 +47,6 @@ describe('V1 Variant', () => {
           indexerClientConnection: {
             indexerHttpUrl: 'http://localhost:8080',
           },
-          provingServerUrl: new URL('http://localhost:6300'),
         });
       const secretKeys = ledger.ZswapSecretKeys.fromSeed(
         WalletSeed.fromString('0000000000000000000000000000000000000000000000000000000000000001'),
@@ -73,7 +72,6 @@ describe('V1 Variant', () => {
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
       },
-      provingServerUrl: new URL('http://localhost:6300'),
     };
     const expectedState = CoreWallet.initEmpty(
       ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
