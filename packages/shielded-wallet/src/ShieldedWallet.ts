@@ -91,8 +91,9 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.transactionHistory.progress(this.state);
   }
 
-  get transactionHistory(): readonly TTransaction[] {
-    return this.capabilities.transactionHistory.transactionHistory(this.state);
+  // get transactionHistory(): readonly TTransaction[] {
+  get transactionHistory(): TransactionHistoryCapability<CoreWallet, TTransaction> {
+    return this.capabilities.transactionHistory; // transactionHistory(this.state);
   }
 
   constructor(

@@ -41,7 +41,11 @@ import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability 
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
-import { makeDefaultTransactionHistoryCapability, type TransactionHistoryCapability } from './TransactionHistory.js';
+import {
+  DefaultTransactionHistoryConfiguration,
+  makeDefaultTransactionHistoryCapability,
+  type TransactionHistoryCapability,
+} from './TransactionHistory.js';
 import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
@@ -51,7 +55,8 @@ export type BaseV1Configuration = {
 export type DefaultV1Configuration = BaseV1Configuration &
   DefaultSyncConfiguration &
   DefaultProvingConfiguration &
-  DefaultTransactingConfiguration;
+  DefaultTransactingConfiguration &
+  DefaultTransactionHistoryConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -360,7 +365,14 @@ export class V1Builder<
 
   withTransactionHistoryDefaults(
     this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
-  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux> {
+  ): V1Builder<
+    TConfig & DefaultTransactionHistoryConfiguration,
+    TContext,
+    TSerialized,
+    TSyncUpdate,
+    ledger.FinalizedTransaction,
+    TStartAux
+  > {
     return this.withTransactionHistory(makeDefaultTransactionHistoryCapability);
   }
 

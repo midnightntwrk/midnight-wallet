@@ -28,10 +28,10 @@ const convertUpdateToEntry = ({ transaction, status }: UnshieldedUpdate): Transa
   return {
     id: transaction.id,
     hash: transaction.hash,
-    protocolVersion: transaction.protocolVersion,
+    protocolVersion: transaction.protocolVersion, // TODO up to here  + coins recevied/spent..
     identifiers: transaction.identifiers ? transaction.identifiers : [],
-    status,
-    timestamp: transaction.block?.timestamp ?? null,
+    status, //SUCCEEDED>..
+    timestamp: transaction.block?.timestamp ?? null, // TODO we might need the indexer team...
     fees: transaction.fees?.paidFees ?? null,
   };
 };

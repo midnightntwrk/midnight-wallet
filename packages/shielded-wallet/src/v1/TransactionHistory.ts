@@ -12,6 +12,11 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CoreWallet } from './CoreWallet.js';
+import { TransactionHistoryStorage, TransactionHistoryEntry, TransactionHash } from '../storage/index.js';
+
+export type DefaultTransactionHistoryConfiguration = {
+  txHistoryStorage: TransactionHistoryStorage;
+};
 
 export type ProgressUpdate = {
   appliedIndex: bigint | undefined;
@@ -21,23 +26,56 @@ export type ProgressUpdate = {
 };
 
 export type TransactionHistoryCapability<TState, TTransaction> = {
-  updateTxHistory(state: TState, newTxs: TTransaction[]): TState;
-  transactionHistory(state: TState): readonly TTransaction[];
+  // updateTxHistory(state: TState, newTxs: TTransaction[]): TState;
+  // transactionHistory(state: TState): readonly TTransaction[];
+  create(state: TState, changes: ledger.ZswapStateChanges): Promise<void>;
+  get(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
+  getAll(): AsyncIterableIterator<TransactionHistoryEntry>;
+  delete(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
   progress(state: TState): ProgressUpdate;
 };
 
-export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCapability<
-  CoreWallet,
-  ledger.FinalizedTransaction
-> => {
+const convertUpdateToEntry = (state: CoreWallet, changes: ledger.ZswapStateChanges): TransactionHistoryEntry => {
   return {
-    updateTxHistory: (state: CoreWallet, newTxs: ledger.FinalizedTransaction[]): CoreWallet => {
-      return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);
+    hash: changes.source,
+    protocolVersion: Number(state.protocolVersion),
+    status: 'SUCCESS',
+    receivedCoins: changes.receivedCoins,
+    spentCoins: changes.spentCoins,
+  };
+};
+
+export const makeDefaultTransactionHistoryCapability = (
+  config: DefaultTransactionHistoryConfiguration,
+  _getContext: () => unknown,
+): TransactionHistoryCapability<CoreWallet, TransactionHistoryEntry> => {
+  const { txHistoryStorage } = config;
+
+  return {
+    // updateTxHistory: (state: CoreWallet, newTxs: TransactionHistoryEntry[]): CoreWallet => {
+    //   return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);
+    // },
+    // transactionHistory: (state: CoreWallet): readonly TransactionHistoryEntry[] => {
+    //   return state.txHistoryArray;
+    // },
+
+    create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
+      const entry = convertUpdateToEntry(state, changes);
+      console.log('IAN !! here is the entry i will add to the history', entry);
+      await txHistoryStorage.create(entry);
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.FinalizedTransaction[] => {
-      return state.txHistoryArray;
+    get: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      return await txHistoryStorage.get(hash);
     },
+    getAll: (): AsyncIterableIterator<TransactionHistoryEntry> => {
+      return txHistoryStorage.getAll();
+    },
+    delete: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      return txHistoryStorage.delete(hash);
+    },
+
     progress: (state: CoreWallet): ProgressUpdate => {
+      // TODO IAN Need to move this, why is it in the history capability ?
       return {
         appliedIndex: state.progress.appliedIndex,
         highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
@@ -53,12 +91,32 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
   ledger.ProofErasedTransaction
 > => {
   return {
-    updateTxHistory: (state: CoreWallet, newTxs: ledger.ProofErasedTransaction[]): CoreWallet => {
-      return CoreWallet.updateTxHistory(state, newTxs as unknown as readonly ledger.FinalizedTransaction[]); // @TODO fix this cast
+    // updateTxHistory: (state: CoreWallet, newTxs: ledger.ProofErasedTransaction[]): CoreWallet => {
+    //   return CoreWallet.updateTxHistory(state, newTxs as unknown as readonly ledger.FinalizedTransaction[]); // @TODO fix this cast
+    // },
+    // transactionHistory: (state: CoreWallet): readonly ledger.ProofErasedTransaction[] => {
+    //   return state.txHistoryArray as unknown as readonly ledger.ProofErasedTransaction[]; // @TODO fix this cast
+    // },
+    create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
+      const entry = convertUpdateToEntry(state, changes);
+      // await txHistoryStorage.create(entry);
+      return Promise.resolve();
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.ProofErasedTransaction[] => {
-      return state.txHistoryArray as unknown as readonly ledger.ProofErasedTransaction[]; // @TODO fix this cast
+    get: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      // return await txHistoryStorage.get(hash);
+      return Promise.resolve(undefined);
     },
+    getAll: (): AsyncIterableIterator<TransactionHistoryEntry> => {
+      // return txHistoryStorage.getAll();
+      return (async function* (): AsyncIterableIterator<TransactionHistoryEntry> {
+        // empty
+      })();
+    },
+    delete: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      // return txHistoryStorage.delete(hash);
+      return Promise.resolve(undefined);
+    },
+
     progress: (state: CoreWallet): ProgressUpdate => {
       return {
         appliedIndex: state.progress.appliedIndex,
@@ -70,16 +128,36 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
   };
 };
 
+// TODO IAN - Why is this here ? We are not using it.
 export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCapability<
   CoreWallet,
-  ledger.FinalizedTransaction
+  TransactionHistoryEntry
 > => {
   return {
-    updateTxHistory: (state: CoreWallet): CoreWallet => {
-      return state;
+    // updateTxHistory: (state: CoreWallet): CoreWallet => {
+    //   return state;
+    // },
+    // transactionHistory: (state: CoreWallet): readonly TransactionHistoryEntry[] => {
+    //   return state.txHistoryArray;
+    // },
+    create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
+      const entry = convertUpdateToEntry(state, changes);
+      // await txHistoryStorage.create(entry);
+      return Promise.resolve();
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.FinalizedTransaction[] => {
-      return state.txHistoryArray;
+    get: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      // return await txHistoryStorage.get(hash);
+      return Promise.resolve(undefined);
+    },
+    getAll: (): AsyncIterableIterator<TransactionHistoryEntry> => {
+      // return txHistoryStorage.getAll();
+      return (async function* (): AsyncIterableIterator<TransactionHistoryEntry> {
+        // empty
+      })();
+    },
+    delete: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
+      // return txHistoryStorage.delete(hash);
+      return Promise.resolve(undefined);
     },
     progress: (state: CoreWallet): ProgressUpdate => {
       return {
