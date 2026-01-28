@@ -75,7 +75,7 @@ export interface TransactingCapability<TState> {
     transaction: ledger.UnprovenTransaction,
   ): Either.Either<[UnprovenTransactionBalanceResult, CoreWallet], WalletError>;
 
-  signTransaction(
+  signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
@@ -84,6 +84,11 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
+
+  signUnboundTransaction(
+    transaction: UnboundTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Either.Either<UnboundTransaction, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -318,10 +323,30 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
-  signTransaction(
+  signUnprovenTransaction(
     transaction: ledger.UnprovenTransaction,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError> {
+    return this.#signTransactionInternal(transaction, signSegment);
+  }
+
+  signUnboundTransaction(
+    transaction: UnboundTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Either.Either<UnboundTransaction, WalletError> {
+    return this.#signTransactionInternal(transaction, signSegment);
+  }
+
+  /**
+   * Internal method to sign either an unproven or unbound transaction
+   * @param transaction - The transaction to sign
+   * @param signSegment - The signing function
+   * @returns The signed transaction if successful, otherwise an error
+   */
+  #signTransactionInternal<T extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: T,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Either.Either<T, WalletError> {
     return Either.gen(this, function* () {
       const segments = this.txOps.getSegments(transaction);
       if (!segments.length) {
@@ -331,7 +356,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);
         const signature = signSegment(signedData);
-        transaction = yield* this.txOps.addSignature(transaction, signature, segment);
+        transaction = (yield* this.txOps.addSignature(transaction, signature, segment)) as T;
       }
       return transaction;
     });

@@ -136,10 +136,14 @@ describe('Token transfer', () => {
       ];
 
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       logger.info(txRecipe);
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
@@ -248,10 +252,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await sender.wallet.transferTransaction(
-        sender.shieldedSecretKeys,
-        sender.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       const finalizedTx = await sender.wallet.finalizeRecipe(txRecipe);
       const txId = await sender.wallet.submitTransaction(finalizedTx);

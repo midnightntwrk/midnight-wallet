@@ -110,7 +110,6 @@ const restoreUnshieldedWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      logger.info(`Unshielded serialize: ${serialized}`);
       const keyStore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
       const wallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -138,7 +137,6 @@ const restoreDustWallet = async (
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      logger.info(`Dust serialize: ${serialized}`);
       const DustInstance = DustWallet({
         ...walletConfig,
         costParameters: walletConfig?.costParameters ?? {

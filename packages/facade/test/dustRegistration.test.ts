@@ -171,10 +171,14 @@ describe('Dust Registration', () => {
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const transferTxRecipe = await senderFacade.transferTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const signedTransferTxRecipe = await senderFacade.signRecipe(transferTxRecipe, (payload) =>
@@ -279,10 +283,14 @@ describe('Dust Registration', () => {
 
     await senderFacade
       .transferTransaction(
-        ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-        ledger.DustSecretKey.fromSeed(dustSenderSeed),
         [transfersToMake],
-        DateOps.addSeconds(new Date(), 1800),
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+        },
+        {
+          ttl: DateOps.addSeconds(new Date(), 1800),
+        },
       )
       .then((recipe) => senderFacade.signRecipe(recipe, (payload) => unshieldedSenderKeystore.signData(payload)))
       .then((signedTxRecipe) => senderFacade.finalizeRecipe(signedTxRecipe))

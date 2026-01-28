@@ -26,8 +26,6 @@ await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced))
 
 await sender.wallet
   .transferTransaction(
-    sender.shieldedSecretKeys,
-    sender.dustSecretKey,
     [
       {
         type: 'unshielded',
@@ -40,7 +38,13 @@ await sender.wallet
         ],
       },
     ],
-    new Date(Date.now() + 30 * 60 * 1000),
+    {
+      shieldedSecretKeys: sender.shieldedSecretKeys,
+      dustSecretKey: sender.dustSecretKey,
+    },
+    {
+      ttl: new Date(Date.now() + 30 * 60 * 1000),
+    },
   )
   .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))

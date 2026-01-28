@@ -2,4 +2,4 @@
 '@midnight-ntwrk/wallet-sdk-unshielded-wallet': patch
 ---
 
-feat: adds tx revet option to unshielded wallet
+feat: adds tx revert option to unshielded wallet

@@ -137,10 +137,14 @@ describe('Dust Deregistration', () => {
     );
 
     const balancingRecipe = await walletFacade.balanceUnprovenTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletSeed),
       dustDeregistrationTx.transaction,
-      new Date(Date.now() + 30 * 60 * 1000),
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      },
     );
 
     const finalizedDustDeregistrationTx = await walletFacade.finalizeRecipe(balancingRecipe);
