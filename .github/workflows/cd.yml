@@ -4,6 +4,8 @@ env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
   MIDNIGHTCI_GPG_PRIVATE_KEY: ${{ secrets.MIDNIGHTCI_GPG_PRIVATE_KEY }}
+  VERDACCIO_TOKEN: ${{ secrets.VERDACCIO_AUTH_TOKEN }}
+  VERDACCIO_URL: ${{ secrets.VERDACCIO_URL }}
 
 on:
   workflow_dispatch:
@@ -20,7 +22,7 @@ permissions: {}
 jobs:
   release:
     name: Release
-    runs-on: ubuntu-latest-8-core-x64
+    runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
@@ -39,8 +41,7 @@ jobs:
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
           # This is required for the npm publish step
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: ${{ env.VERDACCIO_URL }}
           scope: '@midnight-ntwrk'
 
       - name: Enable corepack
@@ -48,7 +49,12 @@ jobs:
 
       - name: Configure yarn
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmRegistryServer' "${{ env.VERDACCIO_URL }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.VERDACCIO_TOKEN }}"
+
+          # Fallback registry
+          yarn config set npmRegistryServer "${{ env.VERDACCIO_URL }}"
+          yarn config set npmAuthToken "${{ env.VERDACCIO_TOKEN }}"
 
       - name: Import GPG key
         id: gpg
@@ -81,11 +87,11 @@ jobs:
 
         env:
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ env.VERDACCIO_TOKEN }}
 
   canary:
     name: Canary (snapshot publish)
-    runs-on: ubuntu-latest-8-core-x64
+    runs-on: ubuntu-latest
     permissions:
       packages: write
       contents: read
@@ -101,8 +107,7 @@ jobs:
           node-version-file: '.nvmrc'
           cache: 'yarn'
           cache-dependency-path: 'yarn.lock'
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
-          registry-url: 'https://npm.pkg.github.com'
+          registry-url: ${{ env.VERDACCIO_URL }}
           scope: '@midnight-ntwrk'
 
       - name: Enable corepack
@@ -110,14 +115,18 @@ jobs:
 
       - name: Configure yarn
         run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmRegistryServer' "${{ env.VERDACCIO_URL }}"
+          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.VERDACCIO_TOKEN }}"
+
+          yarn config set npmRegistryServer "${{ env.VERDACCIO_URL }}"
+          yarn config set npmAuthToken "${{ env.VERDACCIO_TOKEN }}"
 
       - name: Install dependencies
         run: yarn install --immutable
 
       - name: Snapshot version + publish canary
         env:
-          NODE_AUTH_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ env.VERDACCIO_TOKEN }}
           GITHUB_TOKEN: ${{ env.MIDNIGHT_GH_TOKEN }}
         run: |
           set -euo pipefail

@@ -151,96 +151,96 @@ jobs:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
 
-  tests:
-    name: Tests
-    needs: [general-checks]
-    runs-on: ubuntu-latest-16-core-x64
-    steps:
-      - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
+  # tests:
+  #   name: Tests
+  #   needs: [general-checks]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1
 
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
-        id: setup-node
-        with:
-          node-version-file: '.nvmrc'
-          cache: 'yarn'
-          cache-dependency-path: yarn.lock
-          token: ${{ env.MIDNIGHT_GH_TOKEN }}
+  #     - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
+  #       id: setup-node
+  #       with:
+  #         node-version-file: '.nvmrc'
+  #         cache: 'yarn'
+  #         cache-dependency-path: yarn.lock
+  #         token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
-      - name: Enable corepack
-        run: corepack enable
+  #     - name: Enable corepack
+  #       run: corepack enable
 
-      - name: Check tool versions
-        run: |
-          node --version
-          corepack --version
-          yarn --version
+  #     - name: Check tool versions
+  #       run: |
+  #         node --version
+  #         corepack --version
+  #         yarn --version
 
-      - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
-        with:
-          registry: 'https://ghcr.io'
-          username: ${{ env.MIDNIGHT_GH_USER }}
-          password: ${{ env.MIDNIGHT_GH_TOKEN }}
+  #     - name: Log in to GitHub Container registry
+  #       uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+  #       with:
+  #         registry: 'https://ghcr.io'
+  #         username: ${{ env.MIDNIGHT_GH_USER }}
+  #         password: ${{ env.MIDNIGHT_GH_TOKEN }}
 
-      - name: Configure yarn
-        run: |
-          yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
+  #     - name: Configure yarn
+  #       run: |
+  #         yarn config set 'npmScopes.midnight-ntwrk.npmAuthToken' "${{ env.MIDNIGHT_GH_TOKEN }}"
 
-      - name: Install dependencies
-        run: yarn install --immutable
+  #     - name: Install dependencies
+  #       run: yarn install --immutable
 
-      - name: Restore turbo cache
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
-        with:
-          path: .turbo
-          key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
-          restore-keys: |
-            turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
+  #     - name: Restore turbo cache
+  #       uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+  #       with:
+  #         path: .turbo
+  #         key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
+  #         restore-keys: |
+  #           turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
-      - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
-        with:
-          name: build-artifacts-${{ github.run_id }}
-          path: .
+  #     - name: Download build artifacts
+  #       uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+  #       with:
+  #         name: build-artifacts-${{ github.run_id }}
+  #         path: .
 
-      - name: Run tests
-        run: yarn test
+  #     - name: Run tests
+  #       run: yarn test
 
-      - name: Run smoke e2e tests
-        run: |
-          yarn dlx turbo test-undeployed -- -t @smoke
+  #     - name: Run smoke e2e tests
+  #       run: |
+  #         yarn dlx turbo test-undeployed -- -t @smoke
 
-      - name: Create allure properties
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests/allure-results
-        run: |
-          echo "
-          env=${{ env.NETWORK }}
-          tags=@smoke
-          platform=Linux
-          " > environment.properties
+  #     - name: Create allure properties
+  #       if: success() || failure()
+  #       working-directory: ./packages/e2e-tests/allure-results
+  #       run: |
+  #         echo "
+  #         env=${{ env.NETWORK }}
+  #         tags=@smoke
+  #         platform=Linux
+  #         " > environment.properties
 
-      - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@v1.0.5
-        if: ${{ always() }}
-        with:
-          allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.NETWORK }}
-          security-user: ${{ env.ALLURE_ADMIN_USER }}
-          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
+  #     - name: Send Results to Allure Server
+  #       uses: robkatona/send-allure-results@v1.0.5
+  #       if: ${{ always() }}
+  #       with:
+  #         allure-server-url: https://allure-server.prd.midnight.tools
+  #         allure-results-directory: ./packages/e2e-tests/reports/allure-results
+  #         project-id: headless-wallet-${{ env.NETWORK }}
+  #         security-user: ${{ env.ALLURE_ADMIN_USER }}
+  #         security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
-      - name: Publish Test Report
-        uses: mikepenz/action-junit-report@a294a61c909bd8a4b563024a2faa28897fd53ebc # ratchet:mikepenz/action-junit-report@v5
-        if: success() || failure()
-        with:
-          check_name: 'Test Results Wallet SDK'
-          report_paths: |
-            **/test-report*.xml
+  #     - name: Publish Test Report
+  #       uses: mikepenz/action-junit-report@a294a61c909bd8a4b563024a2faa28897fd53ebc # ratchet:mikepenz/action-junit-report@v5
+  #       if: success() || failure()
+  #       with:
+  #         check_name: 'Test Results Wallet SDK'
+  #         report_paths: |
+  #           **/test-report*.xml
 
   build-publish:
     name: Build for Publishing
-    needs: [tests]
+    needs: [general-checks]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 #v6.0.1

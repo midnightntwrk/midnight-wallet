@@ -1,0 +1,35 @@
+name: Sync Upstream
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout target branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+
+      - name: Add Upstream Remote
+        # REPLACE THE URL BELOW with the original source repo URL
+        run: git remote add upstream https://github.com/midnightntwrk/midnight-wallet.git
+
+      - name: Fetch and Merge Upstream
+        run: |
+          git fetch upstream
+          # Try to merge automatically. If conflicts exist, this step will fail safely.
+          git merge upstream/main --allow-unrelated-histories
+          git push origin main
