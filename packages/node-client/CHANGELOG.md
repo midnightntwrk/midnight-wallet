@@ -1,5 +1,22 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.0.0
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+- f7aac06: Update blockchain dependencies to latest versions:
+  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
+  - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
+
+- 8b8d708: chore: update ledger to version 7.0.0-rc.1
+- fb55d52: chore: initialize baseline release after introducing Changesets
+- fb55d52: chore: force re-release after workspace failure
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+- fb55d52: chore: bump ledger to version 6.1.0-beta.5
+
 ## 1.0.0-beta.13
 
 ### Patch Changes
