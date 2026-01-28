@@ -93,21 +93,16 @@ describe('Dust Deregistration', () => {
   let walletFacade: WalletFacade;
 
   beforeEach(async () => {
-    const Shielded = ShieldedWallet(configuration);
-    const shieldedWallet = Shielded.startWithShieldedSeed(shieldedWalletSeed);
-
-    const Dust = DustWallet(configuration);
-
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    const dustWallet = Dust.startWithSeed(dustWalletSeed, dustParameters);
 
-    const unshieldedWallet = UnshieldedWallet(configuration).startWithPublicKey(
-      PublicKey.fromKeyStore(unshieldedWalletKeystore),
-    );
-
-    const submissionService = makeDefaultSubmissionService(configuration);
-
-    walletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet, submissionService);
+    walletFacade = await WalletFacade.init({
+      configuration,
+      shielded: (configuration) => ShieldedWallet(configuration).startWithShieldedSeed(shieldedWalletSeed),
+      unshielded: (configuration) =>
+        UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletKeystore)),
+      dust: (configuration) => DustWallet(configuration).startWithSeed(dustWalletSeed, dustParameters),
+      submissionService: (configuration) => makeDefaultSubmissionService(configuration),
+    });
 
     await walletFacade.start(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),

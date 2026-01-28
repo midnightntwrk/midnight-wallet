@@ -117,14 +117,14 @@ describe('Dust Registration', () => {
     unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-    senderFacade = WalletFacade.init({
+    senderFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
-    receiverFacade = WalletFacade.init({
+    receiverFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>

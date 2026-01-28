@@ -109,7 +109,7 @@ describe('Swaps', () => {
   beforeEach(async () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-    walletAFacade = WalletFacade.init({
+    walletAFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedWalletASeed),
       unshielded: (config) =>
@@ -119,7 +119,7 @@ describe('Swaps', () => {
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
-    walletBFacade = WalletFacade.init({
+    walletBFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedWalletBSeed),
       unshielded: (config) =>

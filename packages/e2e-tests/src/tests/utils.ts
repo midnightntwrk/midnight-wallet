@@ -37,10 +37,6 @@ import {
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import {
-  makeDefaultSubmissionService,
-  type SubmissionService,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 // place this somewhere better?
 export const Segments = {
@@ -169,7 +165,7 @@ export const provideWallet = async (
   const walletConfig = fixture.getWalletConfig();
   const dustWalletConfig = fixture.getDustWalletConfig();
   const Wallet = ShieldedWallet(walletConfig);
-  const submissionService: SubmissionService<ledger.FinalizedTransaction> = makeDefaultSubmissionService(walletConfig);
+
   const directoryPath = process.env['SYNC_CACHE'];
   if (!directoryPath) {
     logger.warn('SYNC_CACHE env var not set');
@@ -200,7 +196,16 @@ export const provideWallet = async (
     logger.info('Building wallet facade from scratch');
     return initWalletWithSeed(seed, fixture);
   } else {
-    const restoredWallet = new WalletFacade(restoredShielded, restoredUnshielded, restoredDust, submissionService);
+    const restoredWallet = await WalletFacade.init({
+      configuration: {
+        ...walletConfig,
+        ...dustWalletConfig,
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      },
+      shielded: () => restoredShielded,
+      unshielded: () => restoredUnshielded,
+      dust: () => restoredDust,
+    });
     await restoredWallet.start(shieldedSecretKeys, dustSecretKey);
     // check if wallet is syncing correctly
     await waitForSyncProgress(restoredWallet);
@@ -274,19 +279,18 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
   const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(getShieldedSeed(seed));
   const dustSecretKey = ledger.DustSecretKey.fromSeed(getDustSeed(seed));
   const unshieldedKeystore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
-  const submissionService: SubmissionService<ledger.FinalizedTransaction> = makeDefaultSubmissionService(walletConfig);
 
-  const shieldedWallet = ShieldedWallet(walletConfig).startWithShieldedSeed(getShieldedSeed(seed));
-  const dustWallet = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() }).startWithSeed(
-    getDustSeed(seed),
-    ledger.LedgerParameters.initialParameters().dust,
-  );
-  const unshieldedWallet = UnshieldedWallet({
-    ...walletConfig,
-    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-  }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
-
-  const facade: WalletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet, submissionService);
+  const facade: WalletFacade = await WalletFacade.init({
+    configuration: {
+      ...walletConfig,
+      ...fixture.getDustWalletConfig(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    },
+    shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(getShieldedSeed(seed)),
+    unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
+    dust: (config) =>
+      DustWallet(config).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
+  });
   await facade.start(shieldedSecretKeys, dustSecretKey);
   return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };

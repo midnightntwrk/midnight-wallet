@@ -26,10 +26,6 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
-import {
-  makeDefaultSubmissionService,
-  type SubmissionService,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 /**
  * Syncing tests
@@ -62,9 +58,6 @@ describe('Syncing', () => {
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
       const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-      const submissionService: SubmissionService<ledger.FinalizedTransaction> = makeDefaultSubmissionService(
-        fixture.getWalletConfig(),
-      );
 
       async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
@@ -85,7 +78,16 @@ describe('Syncing', () => {
         }
 
         for (let i = 0; i < seeds.length; i++) {
-          facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i], submissionService);
+          facades[i] = await WalletFacade.init({
+            configuration: {
+              ...fixture.getWalletConfig(),
+              ...fixture.getDustWalletConfig(),
+              txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+            },
+            shielded: () => shieldedWallets[i],
+            unshielded: () => unshieldedWallets[i],
+            dust: () => dustWallets[i],
+          });
           await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
         }
       }

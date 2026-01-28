@@ -133,6 +133,15 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration;
 
+type MaybePromise<T> = T | Promise<T>;
+export type InitParams<TConfig extends DefaultConfiguration> = {
+  configuration: TConfig;
+  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
+  shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
+  unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
+  dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
+};
+
 export class WalletFacade {
   static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
@@ -140,19 +149,15 @@ export class WalletFacade {
     return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
   }
 
-  static init<TConfig extends DefaultConfiguration>(initParams: {
-    configuration: TConfig;
-    submissionService?: (config: TConfig) => SubmissionService<ledger.FinalizedTransaction>;
-    shielded: (config: TConfig) => ShieldedWalletAPI;
-    unshielded: (config: TConfig) => UnshieldedWalletAPI;
-    dust: (config: TConfig) => DustWalletAPI;
-  }): WalletFacade {
-    const submissionService = initParams.submissionService
-      ? initParams.submissionService(initParams.configuration)
-      : WalletFacade.makeDefaultSubmissionService(initParams.configuration);
-    const shielded = initParams.shielded(initParams.configuration);
-    const unshielded = initParams.unshielded(initParams.configuration);
-    const dust = initParams.dust(initParams.configuration);
+  static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
+    const submissionService = await Promise.resolve(
+      initParams.submissionService
+        ? initParams.submissionService(initParams.configuration)
+        : WalletFacade.makeDefaultSubmissionService(initParams.configuration),
+    );
+    const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
+    const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
+    const dust = await Promise.resolve(initParams.dust(initParams.configuration));
     return new WalletFacade(shielded, unshielded, dust, submissionService);
   }
 
@@ -161,7 +166,7 @@ export class WalletFacade {
   readonly dust: DustWalletAPI;
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
 
-  constructor(
+  private constructor(
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI,

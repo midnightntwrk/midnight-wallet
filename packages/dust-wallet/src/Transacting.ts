@@ -42,6 +42,8 @@ import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } fr
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 
+// This interface should abstract over the transaction types used
+// It does not do so now for historical reasons
 export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   readonly networkId: NetworkId;
   readonly costParams: TotalCostParameters;

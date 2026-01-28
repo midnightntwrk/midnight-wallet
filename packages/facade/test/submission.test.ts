@@ -56,7 +56,7 @@ describe('Facade submission', () => {
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
-    const facade: WalletFacade = WalletFacade.init({
+    const facade: WalletFacade = await WalletFacade.init({
       configuration,
       submissionService: () => fakeSubmission,
       shielded: (config) => {
@@ -111,7 +111,13 @@ describe('Facade submission', () => {
       close = () => Promise.resolve();
     })();
 
-    const facade: WalletFacade = new WalletFacade(shielded, unshielded, dust, fakeSubmission);
+    const facade: WalletFacade = await WalletFacade.init({
+      configuration: config,
+      shielded: () => shielded,
+      unshielded: () => unshielded,
+      dust: () => dust,
+      submissionService: () => fakeSubmission,
+    });
 
     const spiedShieldedRevert = vi.spyOn(shielded, 'revertTransaction');
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');

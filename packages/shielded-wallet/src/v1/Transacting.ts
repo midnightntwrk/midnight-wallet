@@ -37,6 +37,8 @@ export interface TokenTransfer {
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
+// This interface should abstract over the transaction types used
+// It does not do so now for historical reasons
 export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   balanceTransaction(
     secrets: TSecrets,
