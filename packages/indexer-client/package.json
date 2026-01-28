@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-indexer-client",
-  "version": "1.0.0-beta.16",
+  "version": "1.0.0-beta.17",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -30,7 +30,7 @@
     "@effect/platform": "^0.90.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.11",
     "effect": "^3.19.14",
     "graphql": "^16.11.0",
     "graphql-http": "^1.22.4",

@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-capabilities
 
+## 3.0.0-beta.12
+
+### Patch Changes
+
+- f7aac06: Update blockchain dependencies to latest versions:
+  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
+  - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
+
+- Updated dependencies [f7aac06]
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.12
+
 ## 3.0.0-beta.11
 
 ### Patch Changes
