@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import { vi } from 'vitest';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   Effect,
   Stream,
@@ -103,6 +103,7 @@ const createMockSubscriptionFn = (
         zswapLedgerEvents: {
           id,
           raw: mockEventHex,
+          protocolVersion: 1,
           maxId: totalRecords,
         },
       })),
@@ -183,8 +184,8 @@ describe('Wallet subscription', () => {
       await Effect.gen(function* () {
         const syncService = makeEventsSyncService({
           indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
           batchSize,
         });
@@ -225,8 +226,8 @@ describe('Wallet subscription', () => {
       await Effect.gen(function* () {
         const syncService = makeEventsSyncService({
           indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
         });
 

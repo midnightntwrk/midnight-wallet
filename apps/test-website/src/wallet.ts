@@ -11,23 +11,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type Buffer } from 'buffer';
 
 const PROOF_SERVER_PORT = Number.parseInt(globalThis.process?.env?.['PROOF_SERVER_PORT'] ?? '6300', 10);
-const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v3/graphql`;
-const INDEXER_WS_URL = `wss://indexer.preview.midnight.network/api/v3/graphql/ws`;
+const INDEXER_HTTP_URL = `https://indexer.preview.midnight.network/api/v4/graphql`;
+const INDEXER_WS_URL = `wss://indexer.preview.midnight.network/api/v4/graphql/ws`;
 
 export type Configuration = DefaultConfiguration;
 export const defaultConfiguration: Configuration = {
@@ -42,7 +43,8 @@ export const defaultConfiguration: Configuration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+  unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
 };
 
 export const init = async (

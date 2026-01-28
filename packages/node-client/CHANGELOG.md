@@ -6,7 +6,7 @@
 
 - 3f14055: chore: bump ledger to version 6.1.0-alpha.6
 - f7aac06: Update blockchain dependencies to latest versions:
-  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Upgrade `@midnight-ntwrk/ledger-v8` from `7.0.0-rc.1` to `7.0.0` (stable release)
   - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
   - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
 
@@ -22,7 +22,7 @@
 ### Patch Changes
 
 - f7aac06: Update blockchain dependencies to latest versions:
-  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Upgrade `@midnight-ntwrk/ledger-v8` from `7.0.0-rc.1` to `7.0.0` (stable release)
   - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
   - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
 

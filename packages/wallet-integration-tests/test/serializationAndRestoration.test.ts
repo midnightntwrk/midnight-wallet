@@ -15,7 +15,7 @@ import {
   type ShieldedWalletClass,
   type ShieldedWalletState,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -23,7 +23,8 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed } from './utils.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -49,12 +50,13 @@ describe('Wallet serialization and restoration', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   });
 

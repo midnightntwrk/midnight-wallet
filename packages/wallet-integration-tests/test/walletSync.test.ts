@@ -11,7 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolState,
+  ProtocolVersion,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -27,9 +32,10 @@ import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 
 import os from 'node:os';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 120_000 });
 
@@ -61,12 +67,13 @@ describe('Wallet Sync', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   });
 
@@ -111,10 +118,17 @@ describe('Wallet Sync', () => {
     const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
+    // TODO IAN Genesis balances changed by 10x after node upgrade from 0.20.0-rc.6 to 0.22.0-rc.1
+    // Original expected values (each has one more trailing zero than the new values):
+    // expect(balances).toStrictEqual({
+    //   '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n, // 2,500,000,000,000,000
+    //   '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,  //   500,000,000,000,000
+    //   '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n,  //   500,000,000,000,000
+    // });
     expect(balances).toStrictEqual({
-      '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000000': 250000000000000n, // 250,000,000,000,000
+      '0000000000000000000000000000000000000000000000000000000000000001': 50000000000000n, //  50,000,000,000,000
+      '0000000000000000000000000000000000000000000000000000000000000002': 50000000000000n, //  50,000,000,000,000
     });
   });
 });

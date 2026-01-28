@@ -14,6 +14,8 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean; }
   Int: { input: number; output: number; }
   Float: { input: number; output: number; }
+  CardanoRewardAddress: { input: string; output: string; }
+  DustAddress: { input: string; output: string; }
   HexEncoded: { input: string; output: string; }
   Unit: { input: null; output: null; }
   UnshieldedAddress: { input: string; output: string; }
@@ -34,6 +36,8 @@ export type Block = {
   parent: Maybe<Block>;
   /** The protocol version. */
   protocolVersion: Scalars['Int']['output'];
+  /** The system parameters (governance) at this block height. */
+  systemParameters: SystemParameters;
   /** The UNIX timestamp. */
   timestamp: Scalars['Int']['output'];
   /** The transactions within this block. */
@@ -58,13 +62,24 @@ export type CollapsedMerkleTree = {
   update: Scalars['HexEncoded']['output'];
 };
 
+/** Committee member for an epoch. */
+export type CommitteeMember = {
+  auraPubkeyHex: Maybe<Scalars['String']['output']>;
+  epochNo: Scalars['Int']['output'];
+  expectedSlots: Scalars['Int']['output'];
+  poolIdHex: Maybe<Scalars['String']['output']>;
+  position: Scalars['Int']['output'];
+  sidechainPubkeyHex: Scalars['String']['output'];
+  spoSkHex: Maybe<Scalars['String']['output']>;
+};
+
 /** A contract action. */
 export type ContractAction = {
   address: Scalars['HexEncoded']['output'];
-  chainState: Scalars['HexEncoded']['output'];
   state: Scalars['HexEncoded']['output'];
   transaction: Transaction;
   unshieldedBalances: Array<ContractBalance>;
+  zswapState: Scalars['HexEncoded']['output'];
 };
 
 /** Either a block offset or a transaction offset. */
@@ -90,8 +105,6 @@ export type ContractBalance = {
 export type ContractCall = ContractAction & {
   /** The hex-encoded serialized address. */
   address: Scalars['HexEncoded']['output'];
-  /** The hex-encoded serialized contract-specific zswap state. */
-  chainState: Scalars['HexEncoded']['output'];
   /** Contract deploy for this contract call. */
   deploy: ContractDeploy;
   /** The entry point. */
@@ -102,34 +115,58 @@ export type ContractCall = ContractAction & {
   transaction: Transaction;
   /** Unshielded token balances held by this contract. */
   unshieldedBalances: Array<ContractBalance>;
+  /** The hex-encoded serialized contract-specific zswap state. */
+  zswapState: Scalars['HexEncoded']['output'];
 };
 
 /** A contract deployment. */
 export type ContractDeploy = ContractAction & {
   /** The hex-encoded serialized address. */
   address: Scalars['HexEncoded']['output'];
-  /** The hex-encoded serialized contract-specific zswap state. */
-  chainState: Scalars['HexEncoded']['output'];
   /** The hex-encoded serialized state. */
   state: Scalars['HexEncoded']['output'];
   /** Transaction for this contract deploy. */
   transaction: Transaction;
   /** Unshielded token balances held by this contract. */
   unshieldedBalances: Array<ContractBalance>;
+  /** The hex-encoded serialized contract-specific zswap state. */
+  zswapState: Scalars['HexEncoded']['output'];
 };
 
 /** A contract update. */
 export type ContractUpdate = ContractAction & {
   /** The hex-encoded serialized address. */
   address: Scalars['HexEncoded']['output'];
-  /** The hex-encoded serialized contract-specific zswap state. */
-  chainState: Scalars['HexEncoded']['output'];
   /** The hex-encoded serialized state. */
   state: Scalars['HexEncoded']['output'];
   /** Transaction for this contract update. */
   transaction: Transaction;
   /** Unshielded token balances held by this contract after the update. */
   unshieldedBalances: Array<ContractBalance>;
+  /** The hex-encoded serialized contract-specific zswap state. */
+  zswapState: Scalars['HexEncoded']['output'];
+};
+
+/** The D-parameter controlling validator committee composition. */
+export type DParameter = {
+  /** Number of permissioned candidates. */
+  numPermissionedCandidates: Scalars['Int']['output'];
+  /** Number of registered candidates. */
+  numRegisteredCandidates: Scalars['Int']['output'];
+};
+
+/** D-parameter change record for history queries. */
+export type DParameterChange = {
+  /** The hex-encoded block hash where this parameter became effective. */
+  blockHash: Scalars['HexEncoded']['output'];
+  /** The block height where this parameter became effective. */
+  blockHeight: Scalars['Int']['output'];
+  /** Number of permissioned candidates. */
+  numPermissionedCandidates: Scalars['Int']['output'];
+  /** Number of registered candidates. */
+  numRegisteredCandidates: Scalars['Int']['output'];
+  /** The UNIX timestamp when this parameter became effective. */
+  timestamp: Scalars['Int']['output'];
 };
 
 export type DustGenerationDtimeUpdate = DustLedgerEvent & {
@@ -137,24 +174,32 @@ export type DustGenerationDtimeUpdate = DustLedgerEvent & {
   id: Scalars['Int']['output'];
   /** The maximum ID of all dust ledger events. */
   maxId: Scalars['Int']['output'];
+  /** The protocol version. */
+  protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized event. */
   raw: Scalars['HexEncoded']['output'];
 };
 
-/** DUST generation status for a specific Cardano stake key. */
+/** DUST generation status for a specific Cardano reward address. */
 export type DustGenerationStatus = {
-  /** The hex-encoded Cardano stake key. */
-  cardanoStakeKey: Scalars['HexEncoded']['output'];
-  /** Current DUST capacity. */
+  /** The Bech32-encoded Cardano reward address (e.g., stake_test1... or stake1...). */
+  cardanoRewardAddress: Scalars['CardanoRewardAddress']['output'];
+  /** Current generated DUST capacity in SPECK. */
   currentCapacity: Scalars['String']['output'];
-  /** The hex-encoded associated DUST address if registered. */
-  dustAddress: Maybe<Scalars['HexEncoded']['output']>;
-  /** Generation rate in Specks per second. */
+  /** The Bech32m-encoded associated DUST address if registered. */
+  dustAddress: Maybe<Scalars['DustAddress']['output']>;
+  /** DUST generation rate in SPECK per second. */
   generationRate: Scalars['String']['output'];
-  /** NIGHT balance backing generation. */
+  /** Maximum DUST capacity in SPECK. */
+  maxCapacity: Scalars['String']['output'];
+  /** NIGHT balance backing generation in STAR. */
   nightBalance: Scalars['String']['output'];
-  /** Whether this stake key is registered. */
+  /** Whether this reward address is registered. */
   registered: Scalars['Boolean']['output'];
+  /** Cardano UTXO output index for update/unregister operations. */
+  utxoOutputIndex: Maybe<Scalars['Int']['output']>;
+  /** Cardano UTXO transaction hash for update/unregister operations. */
+  utxoTxHash: Maybe<Scalars['HexEncoded']['output']>;
 };
 
 export type DustInitialUtxo = DustLedgerEvent & {
@@ -164,6 +209,8 @@ export type DustInitialUtxo = DustLedgerEvent & {
   maxId: Scalars['Int']['output'];
   /** The dust output. */
   output: DustOutput;
+  /** The protocol version. */
+  protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized event. */
   raw: Scalars['HexEncoded']['output'];
 };
@@ -172,6 +219,7 @@ export type DustInitialUtxo = DustLedgerEvent & {
 export type DustLedgerEvent = {
   id: Scalars['Int']['output'];
   maxId: Scalars['Int']['output'];
+  protocolVersion: Scalars['Int']['output'];
   raw: Scalars['HexEncoded']['output'];
 };
 
@@ -186,8 +234,35 @@ export type DustSpendProcessed = DustLedgerEvent & {
   id: Scalars['Int']['output'];
   /** The maximum ID of all dust ledger events. */
   maxId: Scalars['Int']['output'];
+  /** The protocol version. */
+  protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized event. */
   raw: Scalars['HexEncoded']['output'];
+};
+
+/** Current epoch information. */
+export type EpochInfo = {
+  durationSeconds: Scalars['Int']['output'];
+  elapsedSeconds: Scalars['Int']['output'];
+  epochNo: Scalars['Int']['output'];
+};
+
+/** SPO performance for an epoch. */
+export type EpochPerf = {
+  epochNo: Scalars['Int']['output'];
+  expected: Scalars['Int']['output'];
+  identityLabel: Maybe<Scalars['String']['output']>;
+  poolIdHex: Maybe<Scalars['String']['output']>;
+  produced: Scalars['Int']['output'];
+  spoSkHex: Scalars['String']['output'];
+  stakeSnapshot: Maybe<Scalars['String']['output']>;
+  validatorClass: Maybe<Scalars['String']['output']>;
+};
+
+/** First valid epoch for an SPO identity. */
+export type FirstValidEpoch = {
+  firstValidEpoch: Scalars['Int']['output'];
+  idKey: Scalars['String']['output'];
 };
 
 export type Mutation = {
@@ -212,17 +287,81 @@ export type ParamChange = DustLedgerEvent & {
   id: Scalars['Int']['output'];
   /** The maximum ID of all dust ledger events. */
   maxId: Scalars['Int']['output'];
+  /** The protocol version. */
+  protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized event. */
   raw: Scalars['HexEncoded']['output'];
+};
+
+/** Pool metadata from Cardano. */
+export type PoolMetadata = {
+  hexId: Maybe<Scalars['String']['output']>;
+  homepageUrl: Maybe<Scalars['String']['output']>;
+  logoUrl: Maybe<Scalars['String']['output']>;
+  name: Maybe<Scalars['String']['output']>;
+  poolIdHex: Scalars['String']['output'];
+  ticker: Maybe<Scalars['String']['output']>;
+};
+
+/** Presence event for an SPO in an epoch. */
+export type PresenceEvent = {
+  epochNo: Scalars['Int']['output'];
+  idKey: Scalars['String']['output'];
+  source: Scalars['String']['output'];
+  status: Maybe<Scalars['String']['output']>;
 };
 
 export type Query = {
   /** Find a block for the given optional offset; if not present, the latest block is returned. */
   block: Maybe<Block>;
+  /** Get committee membership for an epoch. */
+  committee: Array<CommitteeMember>;
   /** Find a contract action for the given address and optional offset. */
   contractAction: Maybe<ContractAction>;
-  /** Get DUST generation status for specific Cardano stake keys. */
+  /** Get current epoch information. */
+  currentEpochInfo: Maybe<EpochInfo>;
+  /** Get the full history of D-parameter changes for governance auditability. */
+  dParameterHistory: Array<DParameterChange>;
+  /** Get DUST generation status for specific Cardano reward addresses. */
   dustGenerationStatus: Array<DustGenerationStatus>;
+  /** Get epoch performance for all SPOs. */
+  epochPerformance: Array<EpochPerf>;
+  /** Get epoch utilization (produced/expected ratio). */
+  epochUtilization: Maybe<Scalars['Float']['output']>;
+  /** Get pool metadata by pool ID. */
+  poolMetadata: Maybe<PoolMetadata>;
+  /** List pool metadata with pagination. */
+  poolMetadataList: Array<PoolMetadata>;
+  /** Get first valid epoch for each SPO identity. */
+  registeredFirstValidEpochs: Array<FirstValidEpoch>;
+  /** Get raw presence events for an epoch range. */
+  registeredPresence: Array<PresenceEvent>;
+  /** Get registration statistics for an epoch range. */
+  registeredSpoSeries: Array<RegisteredStat>;
+  /** Get cumulative registration totals for an epoch range. */
+  registeredTotalsSeries: Array<RegisteredTotals>;
+  /** Get SPO with metadata by pool ID. */
+  spoByPoolId: Maybe<Spo>;
+  /** Get composite SPO data (identity + metadata + performance). */
+  spoCompositeByPoolId: Maybe<SpoComposite>;
+  /** Get total count of SPOs. */
+  spoCount: Maybe<Scalars['Int']['output']>;
+  /** List SPO identities with pagination. */
+  spoIdentities: Array<SpoIdentity>;
+  /** Get SPO identity by pool ID. */
+  spoIdentityByPoolId: Maybe<SpoIdentity>;
+  /** List SPOs with optional search. */
+  spoList: Array<Spo>;
+  /** Get SPO performance by SPO key. */
+  spoPerformanceBySpoSk: Array<EpochPerf>;
+  /** Get latest SPO performance entries. */
+  spoPerformanceLatest: Array<EpochPerf>;
+  /** Get stake distribution with search and ordering. */
+  stakeDistribution: Array<StakeShare>;
+  /** Get SPO identifiers ordered by performance. */
+  stakePoolOperators: Array<Scalars['String']['output']>;
+  /** Get the full history of Terms and Conditions changes for governance auditability. */
+  termsAndConditionsHistory: Array<TermsAndConditionsChange>;
   /** Find transactions for the given offset. */
   transactions: Array<Transaction>;
 };
@@ -233,6 +372,11 @@ export type QueryBlockArgs = {
 };
 
 
+export type QueryCommitteeArgs = {
+  epoch: Scalars['Int']['input'];
+};
+
+
 export type QueryContractActionArgs = {
   address: Scalars['HexEncoded']['input'];
   offset: InputMaybe<ContractActionOffset>;
@@ -240,12 +384,130 @@ export type QueryContractActionArgs = {
 
 
 export type QueryDustGenerationStatusArgs = {
-  cardanoStakeKeys: Array<Scalars['HexEncoded']['input']>;
+  cardanoRewardAddresses: Array<Scalars['CardanoRewardAddress']['input']>;
+};
+
+
+export type QueryEpochPerformanceArgs = {
+  epoch: Scalars['Int']['input'];
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryEpochUtilizationArgs = {
+  epoch: Scalars['Int']['input'];
+};
+
+
+export type QueryPoolMetadataArgs = {
+  poolIdHex: Scalars['String']['input'];
+};
+
+
+export type QueryPoolMetadataListArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+  withNameOnly: InputMaybe<Scalars['Boolean']['input']>;
+};
+
+
+export type QueryRegisteredFirstValidEpochsArgs = {
+  uptoEpoch: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryRegisteredPresenceArgs = {
+  fromEpoch: Scalars['Int']['input'];
+  toEpoch: Scalars['Int']['input'];
+};
+
+
+export type QueryRegisteredSpoSeriesArgs = {
+  fromEpoch: Scalars['Int']['input'];
+  toEpoch: Scalars['Int']['input'];
+};
+
+
+export type QueryRegisteredTotalsSeriesArgs = {
+  fromEpoch: Scalars['Int']['input'];
+  toEpoch: Scalars['Int']['input'];
+};
+
+
+export type QuerySpoByPoolIdArgs = {
+  poolIdHex: Scalars['String']['input'];
+};
+
+
+export type QuerySpoCompositeByPoolIdArgs = {
+  poolIdHex: Scalars['String']['input'];
+};
+
+
+export type QuerySpoIdentitiesArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QuerySpoIdentityByPoolIdArgs = {
+  poolIdHex: Scalars['String']['input'];
+};
+
+
+export type QuerySpoListArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QuerySpoPerformanceBySpoSkArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+  spoSkHex: Scalars['String']['input'];
+};
+
+
+export type QuerySpoPerformanceLatestArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type QueryStakeDistributionArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
+  offset: InputMaybe<Scalars['Int']['input']>;
+  orderByStakeDesc: InputMaybe<Scalars['Boolean']['input']>;
+  search: InputMaybe<Scalars['String']['input']>;
+};
+
+
+export type QueryStakePoolOperatorsArgs = {
+  limit: InputMaybe<Scalars['Int']['input']>;
 };
 
 
 export type QueryTransactionsArgs = {
   offset: TransactionOffset;
+};
+
+/** Registration statistics for an epoch. */
+export type RegisteredStat = {
+  dparam: Maybe<Scalars['Float']['output']>;
+  epochNo: Scalars['Int']['output'];
+  federatedInvalidCount: Scalars['Int']['output'];
+  federatedValidCount: Scalars['Int']['output'];
+  registeredInvalidCount: Scalars['Int']['output'];
+  registeredValidCount: Scalars['Int']['output'];
+};
+
+/** Cumulative registration totals for an epoch. */
+export type RegisteredTotals = {
+  epochNo: Scalars['Int']['output'];
+  newlyRegistered: Scalars['Int']['output'];
+  totalRegistered: Scalars['Int']['output'];
 };
 
 /** A regular Midnight transaction. */
@@ -330,6 +592,66 @@ export type ShieldedTransactionsProgress = {
   highestRelevantEndIndex: Scalars['Int']['output'];
 };
 
+/** SPO with optional metadata. */
+export type Spo = {
+  auraPubkeyHex: Maybe<Scalars['String']['output']>;
+  homepageUrl: Maybe<Scalars['String']['output']>;
+  logoUrl: Maybe<Scalars['String']['output']>;
+  name: Maybe<Scalars['String']['output']>;
+  poolIdHex: Scalars['String']['output'];
+  sidechainPubkeyHex: Scalars['String']['output'];
+  ticker: Maybe<Scalars['String']['output']>;
+  validatorClass: Scalars['String']['output'];
+};
+
+/** Composite SPO data (identity + metadata + performance). */
+export type SpoComposite = {
+  identity: Maybe<SpoIdentity>;
+  metadata: Maybe<PoolMetadata>;
+  performance: Array<EpochPerf>;
+};
+
+/** SPO identity information. */
+export type SpoIdentity = {
+  auraPubkeyHex: Maybe<Scalars['String']['output']>;
+  mainchainPubkeyHex: Scalars['String']['output'];
+  poolIdHex: Scalars['String']['output'];
+  sidechainPubkeyHex: Scalars['String']['output'];
+  validatorClass: Scalars['String']['output'];
+};
+
+/**
+ * Stake share information for an SPO.
+ *
+ * Values are sourced from mainchain pool data (e.g., Blockfrost) and keyed by Cardano pool_id.
+ */
+export type StakeShare = {
+  /** Current active stake in lovelace. */
+  activeStake: Maybe<Scalars['String']['output']>;
+  /** Declared pledge in lovelace. */
+  declaredPledge: Maybe<Scalars['String']['output']>;
+  /** Pool homepage URL from metadata. */
+  homepageUrl: Maybe<Scalars['String']['output']>;
+  /** Number of live delegators. */
+  liveDelegators: Maybe<Scalars['Int']['output']>;
+  /** Current live pledge in lovelace. */
+  livePledge: Maybe<Scalars['String']['output']>;
+  /** Saturation ratio (0.0 to 1.0+). */
+  liveSaturation: Maybe<Scalars['Float']['output']>;
+  /** Current live stake in lovelace. */
+  liveStake: Maybe<Scalars['String']['output']>;
+  /** Pool logo URL from metadata. */
+  logoUrl: Maybe<Scalars['String']['output']>;
+  /** Pool name from metadata. */
+  name: Maybe<Scalars['String']['output']>;
+  /** Cardano pool ID (56-character hex string). */
+  poolIdHex: Scalars['String']['output'];
+  /** Stake share as a fraction of total stake. */
+  stakeShare: Maybe<Scalars['Float']['output']>;
+  /** Pool ticker from metadata. */
+  ticker: Maybe<Scalars['String']['output']>;
+};
+
 export type Subscription = {
   /**
    * Subscribe to blocks starting at the given offset or at the latest block if the offset is
@@ -390,6 +712,14 @@ export type SubscriptionZswapLedgerEventsArgs = {
   id: InputMaybe<Scalars['Int']['input']>;
 };
 
+/** System parameters at a specific block height. */
+export type SystemParameters = {
+  /** The D-parameter controlling validator committee composition. */
+  dParameter: DParameter;
+  /** The current Terms and Conditions, if any have been set. */
+  termsAndConditions: Maybe<TermsAndConditions>;
+};
+
 /** A system Midnight transaction. */
 export type SystemTransaction = Transaction & {
   /** The block for this transaction. */
@@ -412,6 +742,28 @@ export type SystemTransaction = Transaction & {
   unshieldedSpentOutputs: Array<UnshieldedUtxo>;
   /** Zswap ledger events of this transaction. */
   zswapLedgerEvents: Array<ZswapLedgerEvent>;
+};
+
+/** Terms and Conditions agreement. */
+export type TermsAndConditions = {
+  /** The hex-encoded hash of the Terms and Conditions document. */
+  hash: Scalars['HexEncoded']['output'];
+  /** The URL where the Terms and Conditions can be found. */
+  url: Scalars['String']['output'];
+};
+
+/** Terms and Conditions change record for history queries. */
+export type TermsAndConditionsChange = {
+  /** The hex-encoded block hash where this T&C version became effective. */
+  blockHash: Scalars['HexEncoded']['output'];
+  /** The block height where this T&C version became effective. */
+  blockHeight: Scalars['Int']['output'];
+  /** The hex-encoded hash of the Terms and Conditions document. */
+  hash: Scalars['HexEncoded']['output'];
+  /** The UNIX timestamp when this T&C version became effective. */
+  timestamp: Scalars['Int']['output'];
+  /** The URL where the Terms and Conditions can be found. */
+  url: Scalars['String']['output'];
 };
 
 /** A Midnight transaction. */
@@ -508,6 +860,8 @@ export type ZswapLedgerEvent = {
   id: Scalars['Int']['output'];
   /** The maximum ID of all zswap ledger events. */
   maxId: Scalars['Int']['output'];
+  /** The protocol version. */
+  protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized event. */
   raw: Scalars['HexEncoded']['output'];
 };
@@ -532,6 +886,13 @@ export type DisconnectMutationVariables = Exact<{
 
 
 export type DisconnectMutation = { disconnect: null };
+
+export type TransactionHistoryDetailQueryVariables = Exact<{
+  transactionHash: Scalars['HexEncoded']['input'];
+}>;
+
+
+export type TransactionHistoryDetailQuery = { transactions: Array<{ __typename: 'RegularTransaction', hash: string, transactionResult: { status: TransactionResultStatus }, block: { timestamp: number } } | { __typename: 'SystemTransaction', hash: string, block: { timestamp: number } }> };
 
 export type TransactionStatusQueryVariables = Exact<{
   transactionId: Scalars['HexEncoded']['input'];
@@ -568,14 +929,15 @@ export type ZswapEventsSubscriptionVariables = Exact<{
 }>;
 
 
-export type ZswapEventsSubscription = { zswapLedgerEvents: { id: number, raw: string, maxId: number } };
+export type ZswapEventsSubscription = { zswapLedgerEvents: { id: number, raw: string, protocolVersion: number, maxId: number } };
 
 
 export const BlockHashDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"BlockHash"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"BlockOffset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"block"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"ledgerParameters"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}}]}}]} as unknown as DocumentNode<BlockHashQuery, BlockHashQueryVariables>;
 export const ConnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Connect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ViewingKey"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"connect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"viewingKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}}}]}]}}]} as unknown as DocumentNode<ConnectMutation, ConnectMutationVariables>;
 export const DisconnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Disconnect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"disconnect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}]}}]} as unknown as DocumentNode<DisconnectMutation, DisconnectMutationVariables>;
+export const TransactionHistoryDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionHistoryDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"hash"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionHistoryDetailQuery, TransactionHistoryDetailQueryVariables>;
 export const TransactionStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"identifier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"__typename"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionStatusQuery, TransactionStatusQueryVariables>;
 export const DustLedgerEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"DustLedgerEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustLedgerEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}}]}}]}}]} as unknown as DocumentNode<DustLedgerEventsSubscription, DustLedgerEventsSubscriptionVariables>;
 export const ShieldedTransactionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ShieldedTransactions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"index"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"shieldedTransactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"index"},"value":{"kind":"Variable","name":{"kind":"Name","value":"index"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ShieldedTransactionsProgress"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"highestEndIndex"}},{"kind":"Field","name":{"kind":"Name","value":"highestCheckedEndIndex"}},{"kind":"Field","name":{"kind":"Name","value":"highestRelevantEndIndex"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RelevantTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transaction"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"fees"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"paidFees"}},{"kind":"Field","name":{"kind":"Name","value":"estimatedFees"}}]}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"collapsedMerkleTree"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ShieldedTransactionsSubscription, ShieldedTransactionsSubscriptionVariables>;
 export const UnshieldedTransactionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"UnshieldedTransactions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"address"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedAddress"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unshieldedTransactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"address"},"value":{"kind":"Variable","name":{"kind":"Name","value":"address"}}},{"kind":"Argument","name":{"kind":"Name","value":"transactionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"transaction"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"fees"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"paidFees"}},{"kind":"Field","name":{"kind":"Name","value":"estimatedFees"}}]}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdUtxos"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"owner"}},{"kind":"Field","name":{"kind":"Name","value":"tokenType"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"outputIndex"}},{"kind":"Field","name":{"kind":"Name","value":"intentHash"}},{"kind":"Field","name":{"kind":"Name","value":"ctime"}},{"kind":"Field","name":{"kind":"Name","value":"registeredForDustGeneration"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spentUtxos"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"owner"}},{"kind":"Field","name":{"kind":"Name","value":"tokenType"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"outputIndex"}},{"kind":"Field","name":{"kind":"Name","value":"intentHash"}},{"kind":"Field","name":{"kind":"Name","value":"ctime"}},{"kind":"Field","name":{"kind":"Name","value":"registeredForDustGeneration"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedTransactionsProgress"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"highestTransactionId"}}]}}]}}]}}]} as unknown as DocumentNode<UnshieldedTransactionsSubscription, UnshieldedTransactionsSubscriptionVariables>;
-export const ZswapEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ZswapEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"zswapLedgerEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}}]}}]}}]} as unknown as DocumentNode<ZswapEventsSubscription, ZswapEventsSubscriptionVariables>;
+export const ZswapEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ZswapEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"zswapLedgerEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}}]}}]}}]} as unknown as DocumentNode<ZswapEventsSubscription, ZswapEventsSubscriptionVariables>;

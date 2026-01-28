@@ -10,17 +10,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { V1Builder, Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, type ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
-  InMemoryTransactionHistoryStorage,
   PublicKey,
+  type UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { pipe } from 'effect';
 import { randomUUID } from 'node:crypto';
@@ -76,8 +77,8 @@ describe('Wallet Facade Transfer', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
-        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
+        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql/ws`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
@@ -90,7 +91,8 @@ describe('Wallet Facade Transfer', () => {
         additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
     };
   });
 
@@ -115,7 +117,7 @@ describe('Wallet Facade Transfer', () => {
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
-      configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
+      configuration,
       shielded: (config) =>
         CustomShieldedWallet(
           config,
@@ -179,11 +181,23 @@ describe('Wallet Facade Transfer', () => {
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    expect(submittedTxIdentifier).toBeTypeOf('string');
 
-    expect(submittedTxHash).toBeTypeOf('string');
+    // Wait for the transaction to appear in sender's transaction history
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap((s) => s.shielded.transactionHistory.get(finalizedTxHash)),
+        rx.filter((entry): entry is ShieldedTransactionHistoryEntry => entry !== undefined),
+        rx.timeout(30_000),
+      ),
+    );
 
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
+
+    // Verify the receiver got the transferred coin
     const isValid = await rx.firstValueFrom(
       receiverFacade
         .state()

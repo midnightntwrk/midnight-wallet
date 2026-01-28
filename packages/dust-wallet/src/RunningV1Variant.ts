@@ -18,7 +18,7 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';

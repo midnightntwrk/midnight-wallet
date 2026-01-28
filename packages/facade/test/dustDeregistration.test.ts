@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -21,12 +21,12 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import {
   createKeystore,
   PublicKey,
-  InMemoryTransactionHistoryStorage,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
@@ -68,8 +68,8 @@ describe('Dust Deregistration', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
-        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
+        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql/ws`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
@@ -82,7 +82,8 @@ describe('Dust Deregistration', () => {
         additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
     };
   });
 

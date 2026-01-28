@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
@@ -85,6 +85,7 @@ export const CoreWallet = {
     const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
     const progress = createSyncProgress();
     const protocolVersion = ProtocolVersion.MinSupportedVersion;
+    return { state: localState, publicKeys, networkId, coinHashes, progress, protocolVersion };
     return { state: localState, publicKeys, networkId, coinHashes, progress, protocolVersion };
   },
 
@@ -165,15 +166,22 @@ export const CoreWallet = {
     return { ...wallet, state: newState, coinHashes: newCoinHashes };
   },
 
-  replayEvents(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys, events: ledger.Event[]): CoreWallet {
-    const newState = wallet.state.replayEvents(secretKeys, events);
+  replayEventsWithChanges(
+    wallet: CoreWallet,
+    secretKeys: ledger.ZswapSecretKeys,
+    events: ledger.Event[],
+  ): [CoreWallet, ledger.ZswapStateChanges[]] {
+    const stateWithChanges = wallet.state.replayEventsWithChanges(secretKeys, events);
+    const newState = stateWithChanges.state;
     const newCoinHashes = CoinHashesMap.updateWithCoins(
       secretKeys,
       wallet.coinHashes,
       CoinHashesMap.pickAllCoins(newState),
     );
 
-    return { ...wallet, state: newState, coinHashes: newCoinHashes };
+    const updatedWallet = { ...wallet, state: newState, coinHashes: newCoinHashes };
+
+    return [updatedWallet, stateWithChanges.changes];
   },
 
   updateProgress(

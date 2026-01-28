@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export const WalletError = {
@@ -52,6 +52,7 @@ export type WalletError =
   | SyncWalletError
   | InvalidCoinHashesError
   | TransactingError
+  | TransactionHistoryError
   | LedgerOps.LedgerError;
 
 export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
@@ -92,6 +93,11 @@ export class InvalidCoinHashesError extends Data.TaggedError('Wallet.InvalidCoin
 }> {}
 
 export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
   message: string;
   cause?: unknown;
 }> {}

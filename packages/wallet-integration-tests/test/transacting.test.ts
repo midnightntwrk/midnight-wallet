@@ -10,7 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolState,
+  ProtocolVersion,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -20,7 +25,6 @@ import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import {
   type CoinsAndBalances,
-  type DefaultRunningV1,
   type DefaultV1Configuration,
   type DefaultV1Variant,
   type Keys,
@@ -29,7 +33,7 @@ import {
   V1Tag,
   type Transacting,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';
@@ -42,6 +46,7 @@ import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
 import { getShieldedSeed } from './utils.js';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 type TokenTransfer = Transacting.TokenTransfer;
 
@@ -84,7 +89,7 @@ describe.skip('Wallet transacting', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
@@ -93,6 +98,7 @@ describe.skip('Wallet transacting', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   });
 
@@ -192,7 +198,7 @@ describe.skip('Wallet transacting', () => {
 
     const result = await wallet.runtime
       .dispatch({
-        [V1Tag]: (v1: DefaultRunningV1) => {
+        [V1Tag]: (v1) => {
           const transferOutputs = rawOutputs.map(({ amount, type, receiverAddress }): TokenTransfer => {
             return {
               amount,

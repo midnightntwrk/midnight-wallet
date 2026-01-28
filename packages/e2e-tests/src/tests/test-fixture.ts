@@ -17,11 +17,12 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { type MidnightNetwork } from './utils.js';
 import { logger } from './logger.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -131,23 +132,23 @@ export class TestContainersFixture {
   public getIndexerUri(): string {
     switch (TestContainersFixture.network) {
       case 'testnet': {
-        return 'https://indexer.testnet-02.midnight.network/api/v3/graphql';
+        return 'https://indexer.testnet-02.midnight.network/api/v4/graphql';
       }
       case 'devnet': {
-        return 'https://indexer.devnet.midnight.network/api/v3/graphql';
+        return 'https://indexer.devnet.midnight.network/api/v4/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.midnight.network/api/v3/graphql';
+        return 'https://indexer.qanet.midnight.network/api/v4/graphql';
       }
       case 'preview': {
-        return 'https://indexer.preview.midnight.network/api/v3/graphql';
+        return 'https://indexer.preview.midnight.network/api/v4/graphql';
       }
       case 'preprod': {
-        return 'https://indexer.preprod.midnight.network/api/v3/graphql';
+        return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
-        return `http://localhost:${indexerPort}/api/v3/graphql`;
+        return `http://localhost:${indexerPort}/api/v4/graphql`;
       }
       default: {
         throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
@@ -158,23 +159,23 @@ export class TestContainersFixture {
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.network) {
       case 'testnet': {
-        return 'wss://indexer.testnet-02.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.testnet-02.midnight.network/api/v4/graphql/ws';
       }
       case 'devnet': {
-        return 'wss://indexer.devnet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer.qanet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.qanet.midnight.network/api/v4/graphql/ws';
       }
       case 'preview': {
-        return 'wss://indexer.preview.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
       }
       case 'preprod': {
-        return 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
-        return `ws://localhost:${indexerPort}/api/v3/graphql/ws`;
+        return `ws://localhost:${indexerPort}/api/v4/graphql/ws`;
       }
       default: {
         throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
@@ -237,6 +238,7 @@ export class TestContainersFixture {
       provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   }
 

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 import { ProverClient, HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { Effect, pipe } from 'effect';

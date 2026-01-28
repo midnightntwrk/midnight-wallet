@@ -19,7 +19,7 @@ import {
   signData,
   UserAddress,
   signatureVerifyingKey,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 
 export interface UnshieldedKeystore {
   getSecretKey(): Buffer;

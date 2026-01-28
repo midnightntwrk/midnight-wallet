@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
@@ -55,7 +55,10 @@ describe('Working in simulation mode', () => {
           .withProving(Proving.makeSimulatorProvingService)
           .withCoinSelectionDefaults()
           .withTransacting(Transacting.makeSimulatorTransactingCapability)
-          .withTransactionHistory(TransactionHistory.makeSimulatorTransactionHistoryCapability)
+          .withTransactionHistory(
+            TransactionHistory.makeSimulatorTransactionHistoryCapability,
+            TransactionHistory.makeSimulatorTransactionHistoryService,
+          )
           .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
           .withCoinsAndBalancesDefaults()
           .withKeysDefaults()

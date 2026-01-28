@@ -2,8 +2,6 @@
   "name": "@midnight-ntwrk/wallet-sdk-indexer-client",
   "version": "1.1.0-rc.1",
   "type": "module",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -50,7 +48,7 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "gql:codegen": "graphql-codegen",
+    "gql:codegen": "graphql-codegen --config ./codegen.ts",
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

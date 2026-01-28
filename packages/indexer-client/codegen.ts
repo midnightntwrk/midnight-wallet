@@ -22,12 +22,15 @@ import type { CodegenConfig } from '@graphql-codegen/cli';
 //
 
 export default {
+  importExtension: '.js',
+  emitLegacyCommonJSImports: false,
   generates: {
     './src/graphql/generated/': {
       documents: ['./src/graphql/queries/*.ts', './src/graphql/subscriptions/*.ts'],
       schema: './indexer.gql',
       preset: 'client',
       config: {
+        emitLegacyCommonJSImports: false,
         avoidOptionals: true,
         skipTypename: true,
         skipTypeNameForRoot: true,
@@ -46,6 +49,8 @@ export default {
           HexEncoded: 'string',
           ViewingKey: 'string',
           UnshieldedAddress: 'string',
+          CardanoRewardAddress: 'string',
+          DustAddress: 'string',
         },
         namingConvention: {
           transformUnderscore: true,

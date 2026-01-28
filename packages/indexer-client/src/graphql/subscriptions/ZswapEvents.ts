@@ -20,6 +20,7 @@ export const ZswapEvents = Subscription.make(
       zswapLedgerEvents(id: $id) {
         id
         raw
+        protocolVersion
         maxId
       }
     }

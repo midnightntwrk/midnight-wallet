@@ -20,7 +20,7 @@ import {
   CoreWallet,
   type UnboundTransaction,
 } from './v1/index.js';
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';

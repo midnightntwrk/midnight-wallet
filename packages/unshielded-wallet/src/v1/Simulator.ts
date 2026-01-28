@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef, Clock } from 'effect';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
@@ -62,6 +62,8 @@ export class Simulator {
         parentBlockHash: hash,
         secondsSinceEpoch: number,
         secondsSinceEpochErr: 1,
+        // Approximate previous block time as one second earlier, clamped at zero.
+        lastBlockTime: number === 0n ? 0n : number - 1n,
       })),
     );
 

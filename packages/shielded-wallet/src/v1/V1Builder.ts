@@ -10,8 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, type Either, Scope, type Types } from 'effect';
+
 import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type Variant,
@@ -41,7 +42,13 @@ import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability 
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
-import { makeDefaultTransactionHistoryCapability, type TransactionHistoryCapability } from './TransactionHistory.js';
+import {
+  DefaultTransactionHistoryConfiguration,
+  makeDefaultTransactionHistoryCapability,
+  makeDefaultTransactionHistoryService,
+  type TransactionHistoryCapability,
+  type TransactionHistoryService,
+} from './TransactionHistory.js';
 import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
@@ -51,7 +58,8 @@ export type BaseV1Configuration = {
 export type DefaultV1Configuration = BaseV1Configuration &
   DefaultSyncConfiguration &
   DefaultProvingConfiguration &
-  DefaultTransactingConfiguration;
+  DefaultTransactingConfiguration &
+  DefaultTransactionHistoryConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -69,7 +77,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Varian
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+  transactionHistory: TransactionHistoryCapability;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -135,6 +143,7 @@ export class V1Builder<
       provingService: undefined,
       transactingCapability: undefined,
       transactionHistoryCapability: undefined,
+      transactionHistoryService: undefined,
     });
   }
 
@@ -360,8 +369,15 @@ export class V1Builder<
 
   withTransactionHistoryDefaults(
     this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
-  ): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux> {
-    return this.withTransactionHistory(makeDefaultTransactionHistoryCapability);
+  ): V1Builder<
+    TConfig & DefaultTransactionHistoryConfiguration,
+    TContext,
+    TSerialized,
+    TSyncUpdate,
+    ledger.FinalizedTransaction,
+    TStartAux
+  > {
+    return this.withTransactionHistory(makeDefaultTransactionHistoryCapability, makeDefaultTransactionHistoryService);
   }
 
   withTransactionHistory<
@@ -371,7 +387,11 @@ export class V1Builder<
     transactionHistoryCapability: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryCapability<CoreWallet, TTransaction>,
+    ) => TransactionHistoryCapability,
+    transactionHistoryService: (
+      configuration: TTransactionHistoryConfig,
+      getContext: () => TTransactionHistoryContext,
+    ) => TransactionHistoryService,
   ): V1Builder<
     TConfig & TTransactionHistoryConfig,
     TContext & TTransactionHistoryContext,
@@ -390,6 +410,7 @@ export class V1Builder<
     >({
       ...this.#buildState,
       transactionHistoryCapability,
+      transactionHistoryService,
     });
   }
 
@@ -484,6 +505,7 @@ export class V1Builder<
       coinsAndBalancesCapability,
       keysCapability,
       transactionHistoryCapability,
+      transactionHistoryService,
     } = this.#buildState;
 
     const getContext = (): RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> => context;
@@ -498,6 +520,7 @@ export class V1Builder<
       provingService: provingService(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
       transactionHistoryCapability: transactionHistoryCapability(configuration, getContext),
+      transactionHistoryService: transactionHistoryService(configuration, getContext),
     };
 
     return context;
@@ -549,11 +572,15 @@ declare namespace V1Builder {
     ) => CoinsAndBalancesCapability<CoreWallet>;
   };
 
-  type HasTransactionHistory<TConfig, TContext, TTransaction> = {
+  type HasTransactionHistory<TConfig, TContext> = {
     readonly transactionHistoryCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactionHistoryCapability<CoreWallet, TTransaction>;
+    ) => TransactionHistoryCapability;
+    readonly transactionHistoryService: (
+      configuration: TConfig,
+      getContext: () => TContext,
+    ) => TransactionHistoryService;
   };
 
   type HasKeys<TConfig, TContext> = {
@@ -571,7 +598,7 @@ declare namespace V1Builder {
       HasProving<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &
-      HasTransactionHistory<TConfig, TContext, TTransaction>
+      HasTransactionHistory<TConfig, TContext>
   >;
   type PartialBuildState<
     TConfig = object,
@@ -609,6 +636,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'coinsAndBalancesCapability',
     'keysCapability',
     'transactionHistoryCapability',
+    'transactionHistoryService',
   ] as const;
   /**
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly

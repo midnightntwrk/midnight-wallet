@@ -25,7 +25,7 @@ while maintaining verifiability. It provides:
 
 ```typescript
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
@@ -34,8 +34,8 @@ const configuration = {
   provingServerUrl: new URL('http://localhost:6300'),
   relayURL: new URL('ws://localhost:9944'),
   indexerClientConnection: {
-    indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-    indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+    indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+    indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   },
 };
 

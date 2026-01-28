@@ -35,7 +35,7 @@ import { randomBytes } from 'node:crypto';
 // Configuration for the wallet
 const configuration = {
   networkId: 'testnet', // or 'mainnet', 'undeployed'
-  indexerUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+  indexerUrl: 'ws://localhost:8088/api/v4/graphql/ws',
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
 };
 

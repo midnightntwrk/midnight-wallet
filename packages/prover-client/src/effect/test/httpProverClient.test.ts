@@ -20,7 +20,7 @@ import {
   Transaction,
   ZswapOffer,
   ZswapOutput,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { Effect } from 'effect';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';

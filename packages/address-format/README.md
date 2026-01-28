@@ -30,7 +30,7 @@ For transparent transactions on the Midnight network.
 ```typescript
 import { UnshieldedAddress, MidnightBech32m, mainnet } from '@midnight-ntwrk/wallet-sdk-address-format';
 import type { NetworkId } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { addressFromKey, signatureVerifyingKey } from '@midnight-ntwrk/ledger-v7';
+import { addressFromKey, signatureVerifyingKey } from '@midnight-ntwrk/ledger-v8';
 import { randomBytes } from 'node:crypto';
 
 const networkId: NetworkId = 'preview';
@@ -66,7 +66,7 @@ import {
   MidnightBech32m,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import type { NetworkId } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomBytes } from 'node:crypto';
 
 const networkId: NetworkId = 'preview';
@@ -99,7 +99,7 @@ For fee token operations on the Midnight network.
 ```typescript
 import { DustAddress, MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import type { NetworkId } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomBytes } from 'node:crypto';
 
 const networkId: NetworkId = 'preview';
