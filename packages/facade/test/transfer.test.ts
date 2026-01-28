@@ -103,14 +103,14 @@ describe('Wallet Facade Transfer', () => {
 
   beforeEach(async () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    senderFacade = WalletFacade.init({
+    senderFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
-    receiverFacade = WalletFacade.init({
+    receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>
@@ -151,8 +151,6 @@ describe('Wallet Facade Transfer', () => {
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
     const unprovenTxRecipe = await senderFacade.transferTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
       [
         {
           type: 'shielded',
@@ -165,7 +163,13 @@ describe('Wallet Facade Transfer', () => {
           ],
         },
       ],
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
@@ -213,10 +217,14 @@ describe('Wallet Facade Transfer', () => {
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const transactionRecipe = await senderFacade.transferTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
       tokenTransfer,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
@@ -267,10 +275,14 @@ describe('Wallet Facade Transfer', () => {
     const arbitraryTx = ledger.Transaction.fromParts(configuration.networkId, outputOffer);
 
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
       arbitraryTx,
-      new Date(Date.now() + 30 * 60 * 1000),
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      },
     );
 
     const finalizedArbitraryTx = await senderFacade.finalizeRecipe(balancingTxRecipe);
@@ -310,10 +322,14 @@ describe('Wallet Facade Transfer', () => {
     const arbitraryTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, undefined, undefined, intent);
 
     const balancingTxRecipe = await senderFacade.balanceUnprovenTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
-      ledger.DustSecretKey.fromSeed(dustSenderSeed),
       arbitraryTx,
-      new Date(Date.now() + 30 * 60 * 1000),
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 30 * 60 * 1000),
+      },
     );
 
     // Sign the balancing transaction before finalizing

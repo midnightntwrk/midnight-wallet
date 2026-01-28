@@ -109,7 +109,7 @@ describe('Swaps', () => {
   beforeEach(async () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-    walletAFacade = WalletFacade.init({
+    walletAFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedWalletASeed),
       unshielded: (config) =>
@@ -119,7 +119,7 @@ describe('Swaps', () => {
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
-    walletBFacade = WalletFacade.init({
+    walletBFacade = await WalletFacade.init({
       configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedWalletBSeed),
       unshielded: (config) =>
@@ -187,10 +187,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
@@ -199,10 +204,14 @@ describe('Swaps', () => {
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
     const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       unboundSwapTx,
-      new Date(Date.now() + 60 * 60 * 1000),
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      },
     );
 
     const finalizedTx = await walletBFacade.finalizeRecipe(walletBBalancedTxRecipe);
@@ -272,10 +281,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
@@ -286,10 +300,14 @@ describe('Swaps', () => {
 
     // the tx is picked up by another wallet (wallet B)
     const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {

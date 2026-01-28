@@ -133,7 +133,7 @@ describe.skip('PolkadotNodeClient', () => {
     });
   });
 
-  it.only('does submit a transaction', async () => {
+  it('does submit a transaction', async () => {
     const submitAllTransactions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),

@@ -68,7 +68,7 @@ const initWalletWithSeed = async (seed: Buffer) => {
   const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
   const unshieldedKeystore = createKeystore(derivationResult.keys[Roles.NightExternal], configuration.networkId);
 
-  const wallet: WalletFacade = WalletFacade.init({
+  const wallet: WalletFacade = await WalletFacade.init({
     configuration,
     shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),

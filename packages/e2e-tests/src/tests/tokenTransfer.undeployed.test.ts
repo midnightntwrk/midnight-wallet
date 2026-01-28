@@ -100,10 +100,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
@@ -189,10 +193,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         funded.unshieldedKeystore.signData(payload),
@@ -305,10 +313,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       logger.info('Sending transaction...');
       const provenTx = await funded.wallet.finalizeRecipe(txRecipe);
@@ -387,10 +399,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
@@ -496,10 +512,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       logger.info('Sending transaction...');
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
@@ -610,10 +630,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       logger.info('Sending transaction...');
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
@@ -646,7 +670,6 @@ describe('Token transfer', () => {
       // Init swap token 1
       const swapCoin1Tx: ledger.FinalizedTransaction = await receiver1.wallet
         .initSwap(
-          receiver1.shieldedSecretKeys,
           { shielded: { [shieldedToken1]: outputValue } },
           [
             {
@@ -663,7 +686,11 @@ describe('Token transfer', () => {
               ],
             },
           ],
-          new Date(Date.now() + 30 * 60 * 1000),
+          {
+            shieldedSecretKeys: receiver1.shieldedSecretKeys,
+            dustSecretKey: receiver1.dustSecretKey,
+          },
+          { ttl: new Date(Date.now() + 30 * 60 * 1000) },
         )
         .then((tx) => receiver1.wallet.finalizeRecipe(tx));
       logger.info('Swap coin 1 transaction prepared');
@@ -671,7 +698,6 @@ describe('Token transfer', () => {
       // Init swap token 2
       const swapCoin2Tx: ledger.FinalizedTransaction = await receiver2.wallet
         .initSwap(
-          receiver2.shieldedSecretKeys,
           { shielded: { [shieldedToken2]: outputValue } },
           [
             {
@@ -688,7 +714,11 @@ describe('Token transfer', () => {
               ],
             },
           ],
-          new Date(Date.now() + 30 * 60 * 1000),
+          {
+            shieldedSecretKeys: receiver2.shieldedSecretKeys,
+            dustSecretKey: receiver2.dustSecretKey,
+          },
+          { ttl: new Date(Date.now() + 30 * 60 * 1000) },
         )
         .then((tx) => receiver2.wallet.finalizeRecipe(tx));
       logger.info('Swap coin 2 transaction prepared');
@@ -706,10 +736,12 @@ describe('Token transfer', () => {
       );
 
       const balancedTransactionRecipe = await receiver3.wallet.balanceFinalizedTransaction(
-        receiver3.shieldedSecretKeys,
-        receiver3.dustSecretKey,
         swapCoin1Tx.merge(swapCoin2Tx),
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: receiver3.shieldedSecretKeys,
+          dustSecretKey: receiver3.dustSecretKey,
+        },
+        { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
 
       const finalizeDustTx = await receiver3.wallet.finalizeRecipe(balancedTransactionRecipe);
@@ -806,10 +838,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
 
@@ -862,10 +898,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
@@ -904,7 +944,16 @@ describe('Token transfer', () => {
         },
       ];
       await expect(
-        funded.wallet.transferTransaction(funded.shieldedSecretKeys, funded.dustSecretKey, outputsToCreate, new Date()),
+        funded.wallet.transferTransaction(
+          outputsToCreate,
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow(`Address parsing error: invalidAddress`);
     },
     timeout,
@@ -938,10 +987,14 @@ describe('Token transfer', () => {
       ];
       await expect(
         funded.wallet.transferTransaction(
-          funded.shieldedSecretKeys,
-          funded.dustSecretKey,
           outputsToCreate,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(Date.now() + 60 * 60 * 1000),
+          },
         ),
       ).rejects.toThrow(`Insufficient funds`);
     },
@@ -976,10 +1029,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow(
@@ -1018,10 +1075,14 @@ describe('Token transfer', () => {
       ];
       await expect(
         funded.wallet.transferTransaction(
-          funded.shieldedSecretKeys,
-          funded.dustSecretKey,
           outputsToCreate,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(Date.now() + 60 * 60 * 1000),
+          },
         ),
       ).rejects.toThrow(`Error: Couldn't deserialize u128 from a BigInt outside u128::MIN..u128::MAX bounds`);
     },
@@ -1054,10 +1115,14 @@ describe('Token transfer', () => {
       ];
       await expect(
         funded.wallet.transferTransaction(
-          funded.shieldedSecretKeys,
-          funded.dustSecretKey,
           outputsToCreate,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(Date.now() + 60 * 60 * 1000),
+          },
         ),
       ).rejects.toThrow('The amount needs to be positive');
     },
@@ -1089,10 +1154,14 @@ describe('Token transfer', () => {
 
       await expect(
         funded.wallet.transferTransaction(
-          funded.shieldedSecretKeys,
-          funded.dustSecretKey,
           outputsToCreate,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(Date.now() + 60 * 60 * 1000),
+          },
         ),
       ).rejects.toThrow('The amount needs to be positive');
     },
@@ -1123,10 +1192,13 @@ describe('Token transfer', () => {
 
       await expect(
         funded.wallet.initSwap(
-          funded.shieldedSecretKeys,
           desiredInputs,
           desiredOutputs,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          { ttl: new Date(Date.now() + 60 * 60 * 1000) },
         ),
       ).rejects.toThrow('The amount needs to be positive');
     },
@@ -1159,10 +1231,13 @@ describe('Token transfer', () => {
 
       await expect(
         funded.wallet.initSwap(
-          funded.shieldedSecretKeys,
           desiredInputs,
           desiredOutputs,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          { ttl: new Date(Date.now() + 60 * 60 * 1000) },
         ),
       ).rejects.toThrow('The input amounts need to be positive');
     },
@@ -1181,7 +1256,16 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       await expect(
-        funded.wallet.transferTransaction(funded.shieldedSecretKeys, funded.dustSecretKey, [], new Date()),
+        funded.wallet.transferTransaction(
+          [],
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: funded.dustSecretKey,
+          },
+          {
+            ttl: new Date(),
+          },
+        ),
       ).rejects.toThrow('At least one shielded or unshielded output is required.');
     },
     timeout,
@@ -1277,10 +1361,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(),
+        },
       );
       await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
@@ -1319,10 +1407,14 @@ describe('Token transfer', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        incorrectSecretKey,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 60 * 60 * 1000),
+        {
+          shieldedSecretKeys: incorrectSecretKey,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
       );
       await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow('Failed to prove transaction');
     },
@@ -1356,10 +1448,14 @@ describe('Token transfer', () => {
       ];
       await expect(
         funded.wallet.transferTransaction(
-          funded.shieldedSecretKeys,
-          incorrectDustKey,
           outputsToCreate,
-          new Date(Date.now() + 60 * 60 * 1000),
+          {
+            shieldedSecretKeys: funded.shieldedSecretKeys,
+            dustSecretKey: incorrectDustKey,
+          },
+          {
+            ttl: new Date(Date.now() + 60 * 60 * 1000),
+          },
         ),
       ).rejects.toThrow("Error from ledger: attempted to spend Dust UTXO that's not in the wallet state:");
     },
