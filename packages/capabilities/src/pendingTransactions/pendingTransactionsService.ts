@@ -17,7 +17,7 @@ import {
 import * as PendingTransactions from './pendingTransactions.js';
 import * as rx from 'rxjs';
 import { HttpQueryClient, QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { TransactionStatus } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { TransactionStatus, TransactionStatusQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { EitherOps, ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export type PendingTransactionsService<TTransaction> = {
@@ -102,7 +102,7 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
   }
 
   start(): Promise<void> {
-    return this.#effectService.startPolling(Stream.tick(Duration.seconds(5))).pipe(
+    return this.#effectService.startPolling(Stream.tick(Duration.seconds(1))).pipe(
       Effect.provide(
         HttpQueryClient.layer({
           url: this.#configuration.indexerClientConnection.indexerHttpUrl,
@@ -110,7 +110,8 @@ export class PendingTransactionsServiceImpl<TTransaction> implements PendingTran
       ),
       Effect.provideService(Scope.Scope, this.#scope),
       Effect.provide(DefaultServices.liveServices),
-      Effect.runPromise,
+      Effect.runFork,
+      () => Promise.resolve(),
     );
   }
 
@@ -178,13 +179,12 @@ export class PendingTransactionsServiceEffectImpl<
                 status: 'FAILURE',
                 segments: [],
               };
-              return this.#txTrait.hasTTLExpired(item.tx, now) ? [{ ...item, result: failedResult }] : [];
+              return this.#txTrait.hasTTLExpired(item.tx, item.creationTime, now)
+                ? [{ ...item, result: failedResult }]
+                : [];
             },
           });
         });
-      }),
-      Stream.tapError((error) => {
-        return Effect.logWarning(error, 'Observed error in PendingTransactionsService, retrying');
       }),
       Stream.retry(
         pipe(
@@ -205,8 +205,10 @@ export class PendingTransactionsServiceEffectImpl<
   }
 
   addPendingTransaction(tx: TTransaction): Effect.Effect<void> {
-    return SubscriptionRef.update(this.#state, (state) => {
-      return PendingTransactions.addPendingTransaction(state, tx, this.#txTrait);
+    return SubscriptionRef.updateEffect(this.#state, (state) => {
+      return DateTime.now.pipe(
+        Effect.andThen((now) => PendingTransactions.addPendingTransaction(state, tx, now, this.#txTrait)),
+      );
     });
   }
 
@@ -233,7 +235,15 @@ export class PendingTransactionsServiceEffectImpl<
   ): Effect.Effect<Option.Option<PendingTransactions.TransactionResult>, Error, QueryClient> {
     return Effect.gen(this, function* () {
       const statusQuery = yield* TransactionStatus;
-      const result = yield* statusQuery({ transactionId: this.#txTrait.firstId(tx) });
+      const result = yield* statusQuery({ transactionId: this.#txTrait.firstId(tx) }).pipe(
+        Effect.catchAll((error) => {
+          const fallback: TransactionStatusQuery = { transactions: [] };
+          return pipe(
+            Effect.logWarning(error, 'Observed error in PendingTransactionsService, retrying'),
+            Effect.as(fallback),
+          );
+        }),
+      );
 
       return pipe(
         result.transactions,

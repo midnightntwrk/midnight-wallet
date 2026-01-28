@@ -56,6 +56,7 @@ describe('Facade submission', () => {
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
+
     const facade: WalletFacade = await WalletFacade.init({
       configuration,
       submissionService: () => fakeSubmission,

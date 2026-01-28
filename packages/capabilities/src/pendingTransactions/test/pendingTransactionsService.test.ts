@@ -13,7 +13,6 @@ import {
   Option,
   Order,
   pipe,
-  Queue,
   Scope,
   Stream,
   SubscriptionRef,
@@ -115,7 +114,7 @@ const FakeTransaction = new (class {
       // One tx is included in the other (we don't care which is which) if intersection of ids is equal to one of them
       return HashSet.size(intersectionSet) === smallerSize;
     },
-    hasTTLExpired: (tx, now: DateTime.Utc) => {
+    hasTTLExpired: (tx, _txCreationTime: DateTime.Utc, now: DateTime.Utc) => {
       const ttlDateTime = DateTime.make(tx.ttlSeconds * 1000).pipe(Option.getOrThrow);
       const diff = DateTime.distance(ttlDateTime, now); // if now is after ttl the diff will be positive
       const result = diff > 0;
@@ -192,10 +191,7 @@ class FakeTransactionStatus {
     txns: readonly FakeTransaction[],
     result: TransactionResult,
   ): Effect.Effect<void, never, never> => {
-    return Effect.forEach(txns, (tx) => this.registerResult(tx, result)).pipe(
-      Effect.andThen(SubscriptionRef.get(this.#state)),
-      Effect.andThen((state) => Effect.sync(() => {})),
-    );
+    return Effect.forEach(txns, (tx) => this.registerResult(tx, result));
   };
 
   readonly awaitAllQueried = () => {
@@ -222,7 +218,6 @@ describe('Pending Transactions Service (Effect)', () => {
       fc.asyncProperty(FakeTransaction.batchArbitrary(), (fakeTransactions) => {
         return Effect.gen(function* () {
           const service = new PendingTransactionsServiceEffectImpl(FakeTransaction.txTrait);
-          const queue = yield* Queue.unbounded<PendingTransactions.PendingTransactions<FakeTransaction>>();
 
           const fiber = service.state().pipe(
             Stream.takeUntil((state) => PendingTransactions.all(state).length == fakeTransactions.length),
@@ -466,7 +461,6 @@ describe('Pending Transactions Service (Effect)', () => {
 
               yield* TestClock.setTime(nowSeconds * 1000).pipe(
                 Effect.andThen(service.startPolling(Stream.make(undefined))),
-                Effect.provide(TestContext.TestContext),
                 Effect.provideService(TransactionStatus.tag, fakeTxStatus.runQuery),
                 Effect.provideService(QueryClient, {} as unknown as QueryClient.Service),
                 Effect.scoped,
@@ -493,7 +487,7 @@ describe('Pending Transactions Service (Effect)', () => {
               for (const item of allFailed) {
                 expect(item.result.status).toEqual('FAILURE');
               }
-            }).pipe(Effect.runPromise);
+            }).pipe(Effect.provide(TestContext.TestContext), Effect.runPromise);
           },
         ),
       );

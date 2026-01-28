@@ -31,13 +31,14 @@ import {
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Array as Arr, pipe } from 'effect';
-import { combineLatest, map, type Observable } from 'rxjs';
+import { combineLatest, map, type Observable, firstValueFrom, Subscription, concatMap } from 'rxjs';
 import {
   DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
   PendingTransactionsService,
   PendingTransactionsServiceImpl,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
+import { finalizedTransactionTrait } from './transaction.js';
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
@@ -169,23 +170,13 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultSubmissionConfiguration &
   DefaultPendingTransactionsServiceConfiguration;
 
-export type MaybePromise<T> = Promise<T> | T;
-
+type MaybePromise<T> = T | Promise<T>;
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
   pendingTransactionsService?: (
     config: TConfig,
   ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
-  shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
-  unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
-  dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
-};
-
-type MaybePromise<T> = T | Promise<T>;
-export type InitParams<TConfig extends DefaultConfiguration> = {
-  configuration: TConfig;
-  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
   shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
   unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
   dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
@@ -203,7 +194,7 @@ export class WalletFacade {
   ): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
     return PendingTransactionsServiceImpl.init<ledger.FinalizedTransaction>({
       configuration: config,
-      txTrait: PendingTransactions.TransactionTrait.Finalized,
+      txTrait: finalizedTransactionTrait,
     });
   }
 
@@ -229,6 +220,7 @@ export class WalletFacade {
   readonly dust: DustWalletAPI;
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
+  #pendingSubscription: Subscription;
 
   private constructor(
     shieldedWallet: ShieldedWalletAPI,
@@ -242,6 +234,13 @@ export class WalletFacade {
     this.dust = dustWallet;
     this.submissionService = submissionService;
     this.pendingTransactionsService = pendingTransactionsService;
+    this.#pendingSubscription = this.pendingTransactionsService
+      .state()
+      .pipe(
+        concatMap((pending) => PendingTransactions.allFailed(pending)),
+        concatMap((item) => this.revert(item.tx)),
+      )
+      .subscribe();
   }
 
   private defaultTtl(): Date {
@@ -284,23 +283,33 @@ export class WalletFacade {
   }
 
   state(): Observable<FacadeState> {
-    return combineLatest([this.shielded.state, this.unshielded.state, this.dust.state]).pipe(
-      map(([shieldedState, unshieldedState, dustState]) => new FacadeState(shieldedState, unshieldedState, dustState)),
+    return combineLatest([
+      this.shielded.state,
+      this.unshielded.state,
+      this.dust.state,
+      this.pendingTransactionsService.state(),
+    ]).pipe(
+      map(
+        ([shieldedState, unshieldedState, dustState, pending]) =>
+          new FacadeState(shieldedState, unshieldedState, dustState, pending),
+      ),
     );
   }
 
   async waitForSyncedState(): Promise<FacadeState> {
-    const [shieldedState, unshieldedState, dustState] = await Promise.all([
+    const [shieldedState, unshieldedState, dustState, pending] = await Promise.all([
       this.shielded.waitForSyncedState(),
       this.unshielded.waitForSyncedState(),
       this.dust.waitForSyncedState(),
+      firstValueFrom(this.pendingTransactionsService.state()),
     ]);
 
-    return new FacadeState(shieldedState, unshieldedState, dustState);
+    return new FacadeState(shieldedState, unshieldedState, dustState, pending);
   }
 
   async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
     try {
+      await this.pendingTransactionsService.addPendingTransaction(tx);
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
       return tx.identifiers().at(-1)!;
@@ -469,8 +478,8 @@ export class WalletFacade {
           }
           case 'UNBOUND_TRANSACTION': {
             const finalizedBalancingTx = recipe.balancingTransaction
-          ? await this.finalizeTransaction(recipe.balancingTransaction)
-          : undefined;
+              ? await this.finalizeTransaction(recipe.balancingTransaction)
+              : undefined;
             const finalizedTransaction = recipe.baseTransaction.bind();
             return finalizedBalancingTx ? finalizedTransaction.merge(finalizedBalancingTx) : finalizedTransaction;
           }
@@ -741,7 +750,7 @@ export class WalletFacade {
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
-    ]);
+    ]).then(() => this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction));
   }
 
   async start(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
@@ -749,10 +758,18 @@ export class WalletFacade {
       this.shielded.start(shieldedSecretKeys),
       this.unshielded.start(),
       this.dust.start(dustSecretKey),
+      this.pendingTransactionsService.start(),
     ]);
   }
 
   async stop(): Promise<void> {
-    await Promise.all([this.shielded.stop(), this.unshielded.stop(), this.dust.stop(), this.submissionService.close()]);
+    await Promise.all([
+      this.shielded.stop(),
+      this.unshielded.stop(),
+      this.dust.stop(),
+      this.submissionService.close(),
+      this.pendingTransactionsService.stop(),
+      Promise.resolve(this.#pendingSubscription?.unsubscribe()),
+    ]);
   }
 }

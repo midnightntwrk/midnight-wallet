@@ -1,11 +1,11 @@
-import { Array as Arr, DateTime, Effect, Either, Order, ParseResult, pipe, Schema } from 'effect';
+import { Array as Arr, DateTime, Either, Order, ParseResult, pipe, Schema } from 'effect';
 
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];
   firstId: (tx: TTransaction) => string;
   areAllTxIdsIncluded: (tx: TTransaction, txIds: readonly string[]) => boolean;
   isOneIncludedInOther: (tx: TTransaction, otherTx: TTransaction) => boolean;
-  hasTTLExpired: (tx: TTransaction, now: DateTime.Utc) => boolean;
+  hasTTLExpired: (tx: TTransaction, txCreationTime: DateTime.Utc, now: DateTime.Utc) => boolean;
   serialize: (tx: TTransaction) => Uint8Array;
   deserialize: (serialized: Uint8Array) => TTransaction;
   isTx: (tx: unknown) => tx is TTransaction;
@@ -25,6 +25,7 @@ export type TransactionResult = FailedTransactionResult | SuccessTransactionResu
 
 export type PendingItem<TTransaction> = Readonly<{
   tx: TTransaction;
+  creationTime: DateTime.Utc;
 }>;
 export type CheckedItem<TTransaction> = PendingItem<TTransaction> & { result: TransactionResult };
 export type PendingTransactionsItem<TTransaction> = PendingItem<TTransaction> | CheckedItem<TTransaction>;
@@ -74,13 +75,14 @@ export const empty = <TTransaction>(): PendingTransactions<TTransaction> => {
 export const addPendingTransaction = <TTransaction>(
   state: PendingTransactions<TTransaction>,
   tx: TTransaction,
+  now: DateTime.Utc,
   txTrait: TransactionTrait<TTransaction>,
 ): PendingTransactions<TTransaction> => {
   const [rest, foundMatching] = pipe(
     state.all,
     Arr.partition((item) => txTrait.isOneIncludedInOther(tx, item.tx)),
   );
-  const allMatchingTransactions = Arr.append(foundMatching, { tx });
+  const allMatchingTransactions = Arr.append(foundMatching, { tx, creationTime: now });
   const theBiggestMatchingTx = Arr.max(
     allMatchingTransactions,
     pipe(
@@ -123,21 +125,26 @@ export const saveResult = <TTransaction>(
 //It has to stay immutable in the code now. Any changes made should be separate schemas with fallbacks/conversions
 type Serialized<TTransaction> = Readonly<{
   version: 'v1';
-  transactions: readonly TTransaction[];
+  transactions: readonly PendingItem<TTransaction>[];
 }>;
 
 export const SerializedSchema = <TTransaction>(
   txTrait: TransactionTrait<TTransaction>,
-): Schema.Schema<Serialized<TTransaction>, Serialized<string>> => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- it's pointless in this place as we don't care about the input data type really
+): Schema.Schema<Serialized<TTransaction>, any> => {
   const TxSchema = Schema.declare<TTransaction>((tx: unknown): tx is TTransaction => txTrait.isTx(tx));
   const TxFromHex: Schema.Schema<TTransaction, string> = Schema.transform(Schema.Uint8ArrayFromHex, TxSchema, {
     encode: (tx): Uint8Array => txTrait.serialize(tx),
     decode: (bytes) => txTrait.deserialize(bytes),
   });
+  const TxItemSchema = Schema.Struct({
+    tx: TxFromHex,
+    creationTime: Schema.DateTimeUtc,
+  });
 
   return Schema.Struct({
     version: Schema.Literal('v1'),
-    transactions: Schema.Array(TxFromHex),
+    transactions: Schema.Array(TxItemSchema),
   });
 };
 
@@ -162,7 +169,7 @@ export const toSerialized = <TTransaction>(
 ): Serialized<TTransaction> => {
   return {
     version: 'v1',
-    transactions: all(pendingTransactions),
+    transactions: pendingTransactions.all,
   };
 };
 
@@ -170,6 +177,6 @@ export const fromSerialized = <TTransaction>(
   serialized: Serialized<TTransaction>,
 ): PendingTransactions<TTransaction> => {
   return {
-    all: serialized.transactions.map((tx) => ({ tx })),
+    all: serialized.transactions,
   };
 };

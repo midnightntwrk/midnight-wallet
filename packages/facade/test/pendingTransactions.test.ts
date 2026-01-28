@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
@@ -6,19 +6,26 @@ import {
   PublicKey,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import crypto from 'node:crypto';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { WalletFacade } from '../src/index.js';
-import { sleep } from './utils/index.js';
+import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as rx from 'rxjs';
+import { finalizedTransactionTrait } from '../src/transaction.js';
+
+vi.setConfig({ testTimeout: 20_000, hookTimeout: 120_000 });
 
 describe('Wallet Facade handling pending transactions', () => {
-  it('reverts transaction after it misses and was not submitted yet', async () => {
-    const config = {
+  let configuration: DefaultConfiguration;
+
+  let facade: WalletFacade;
+  let shielded: ShieldedWallet;
+  let unshielded: UnshieldedWallet;
+  let dust: DustWallet;
+  beforeEach(async () => {
+    configuration = {
       networkId: NetworkId.NetworkId.Undeployed,
       relayURL: new URL('http://localhost:9944'),
       indexerClientConnection: {
@@ -31,37 +38,49 @@ describe('Wallet Facade handling pending transactions', () => {
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
-    const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithShieldedSeed(seed);
-    const unshielded = UnshieldedWallet(config).startWithPublicKey(
-      PublicKey.fromKeyStore(createKeystore(seed, config.networkId)),
-    );
-    const dust = DustWallet(config).startWithSeed(seed, ledger.LedgerParameters.initialParameters().dust);
-    const fakeSubmission = new (class implements SubmissionService<ledger.FinalizedTransaction> {
-      submitTransaction = () => Promise.reject(new Error('Submission failed'));
-      close = () => Promise.resolve();
-    })();
+    const seed = '0000000000000000000000000000000000000000000000000000000000000001';
+    const shieldedSeed = getShieldedSeed(seed);
+    const unshieldedSeed = getUnshieldedSeed(seed);
+    const dustSeed = getDustSeed(seed);
+    const unshieldedKeystore = createKeystore(unshieldedSeed, configuration.networkId);
+    shielded = ShieldedWallet(configuration).startWithShieldedSeed(shieldedSeed);
+    unshielded = UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+    dust = DustWallet(configuration).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust);
 
-    const facade: WalletFacade = new WalletFacade(shielded, unshielded, dust, fakeSubmission);
+    facade = await WalletFacade.init({
+      configuration,
+      shielded: () => shielded,
+      unshielded: () => unshielded,
+      dust: () => dust,
+    });
+    await facade?.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
+  });
+  afterEach(async () => {
+    await facade?.stop();
+  });
 
+  it('reverts transaction after it misses TTL and was not submitted yet', async () => {
     const spiedShieldedRevert = vi.spyOn(shielded, 'revertTransaction');
     const spiedUnshieldedRevert = vi.spyOn(unshielded, 'revertTransaction');
     const spiedDustRevert = vi.spyOn(dust, 'revertTransaction');
 
     const ttl = new Date(Date.now() + 10);
-    const transaction = ledger.Transaction.fromParts(config.networkId, undefined, undefined, ledger.Intent.new(ttl));
+    const transaction = ledger.Transaction.fromParts(
+      configuration.networkId,
+      undefined,
+      undefined,
+      ledger.Intent.new(ttl),
+    );
 
-    const finalized = await facade.finalizeTransaction(transaction); //Any action involving wallet should save transaction to pending
+    const finalized = await facade.finalizeTransaction(transaction); //Submission and finalization actions do save transactions
 
     const state = await rx.firstValueFrom(facade.state());
 
-    await sleep(5); //Buffer for processing
+    await sleep(2); //Buffer for processing
 
     expect(spiedShieldedRevert).toHaveBeenCalled();
     expect(spiedUnshieldedRevert).toHaveBeenCalled();
     expect(spiedDustRevert).toHaveBeenCalled();
-    expect(
-      PendingTransactions.has(state.pendingTransactions, finalized, PendingTransactions.TransactionTrait.Finalized),
-    );
+    expect(PendingTransactions.has(state.pending, finalized, finalizedTransactionTrait)).toBe(true);
   });
 });
