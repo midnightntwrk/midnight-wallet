@@ -184,6 +184,14 @@ the wallet is restarted. **Workaround:** Restart the wallet or re-sync to clear 
 
 ---
 
+**Issue:** Transaction history not implemented for shielded and dust wallets
+
+**Description:** The shielded and dust wallets do not currently track transaction history. While the unshielded wallet
+maintains transaction records, the shielded and dust wallets only track coin balances without historical transaction
+data.
+
+---
+
 ### Packages
 
 | Package                                        | Version | Description                                                                                                                                                             |
