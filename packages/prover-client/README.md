@@ -10,7 +10,8 @@ npm install @midnight-ntwrk/wallet-sdk-prover-client
 
 ## Overview
 
-This package provides a client for submitting transactions to a Proof Server that generates zero-knowledge proofs. It is used to finalize shielded transactions by converting unproven transactions into proven ones.
+This package provides a client for submitting transactions to a Proof Server that generates zero-knowledge proofs. It is
+used to finalize shielded transactions by converting unproven transactions into proven ones.
 
 ## Usage
 
@@ -31,10 +32,7 @@ const provenTransaction = await proverClient.proveTransaction(unprovenTransactio
 ### With Custom Cost Model
 
 ```typescript
-const provenTransaction = await proverClient.proveTransaction(
-  unprovenTransaction,
-  customCostModel
-);
+const provenTransaction = await proverClient.proveTransaction(unprovenTransaction, customCostModel);
 ```
 
 ## API
@@ -47,7 +45,7 @@ class HttpProverClient {
 
   proveTransaction<S extends Signaturish, B extends Bindingish>(
     transaction: Transaction<S, PreProof, B>,
-    costModel?: CostModel
+    costModel?: CostModel,
   ): Promise<Transaction<S, Proof, B>>;
 }
 ```
