@@ -1,5 +1,19 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 1.0.0
+
+### Minor Changes
+
+- fb55d52: chore: add network id for qanet
+
+### Patch Changes
+
+- a06ccf3: Adds missing main property in the package.json file for the abstractions package
+- fb55d52: chore: initialize baseline release after introducing Changesets
+- fb55d52: chore: force re-release after workspace failure
+- bcef7d8: Allow TX creation with no own outputs
+- fb55d52: chore: bump ledger to version 6.1.0-beta.5
+
 ## 1.0.0-beta.10
 
 ### Patch Changes
