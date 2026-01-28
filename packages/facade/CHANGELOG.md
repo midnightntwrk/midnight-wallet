@@ -1,5 +1,75 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 1.0.0
+
+### Patch Changes
+
+- 3f14055: chore: bump ledger to version 6.1.0-alpha.6
+- 390c797: Adds optional balancing support and refactors wallet facade API methods.
+
+  **Breaking Changes:**
+  - All balancing methods (`balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`) now
+    accept parameters as grouped objects (`secretKeys` and `options`) instead of individual parameters
+  - The `transferTransaction` and `initSwap` methods now group parameters into `secretKeys` and `options` objects
+  - Renamed `signTransaction` to `signUnprovenTransaction`
+
+  **New Features:**
+  - Add `options.tokenKindsToBalance` parameter to balancing methods, allowing selective balancing of specific token
+    types (dust, shielded, unshielded) instead of always balancing all types
+  - Add `options.payFees` parameter to `transferTransaction` and `initSwap` methods to control fee payment
+  - Add new `signUnboundTransaction` method
+
+  **Internal Changes:**
+  - `balancingTransaction` is now optional in `UnboundTransactionRecipe` when only unshielded balancing is performed
+
+- fb55d52: Introduce more convenient API for Bech32m address encoding/decoding Remove network id from Dust wallet
+  initialization methods (so they are read from the configuration) Introduce FacadeState and add a getter to check for
+  sync status of whole facade wallet Introduce CompositeDerivation for HD wallet, so that it is possible to derive keys
+  for multiple roles at once
+- eec1ddb: feat: rewrite balancing recipes
+- f7aac06: Update blockchain dependencies to latest versions:
+  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
+  - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
+
+- 8b8d708: chore: update ledger to version 7.0.0-rc.1
+- fb55d52: chore: initialize baseline release after introducing Changesets
+- fb55d52: chore: force re-release after workspace failure
+- a768341: Expose a method enabling to estimate requirements for issuing a Dust designation tx
+- dae514d: chore: update ledger to 7.0.0-alpha.1
+- bcef7d8: Allow TX creation with no own outputs
+- fb55d52: chore: bump ledger to version 6.1.0-beta.5
+- 2c4a115: fix: fixes unshielded state sync update
+- b9865cf: feat: rewrite unshielded wallet runtime
+- Updated dependencies [3f14055]
+- Updated dependencies [390c797]
+- Updated dependencies [fb55d52]
+- Updated dependencies [fb55d52]
+- Updated dependencies [eec1ddb]
+- Updated dependencies [f7aac06]
+- Updated dependencies [fb55d52]
+- Updated dependencies [a06ccf3]
+- Updated dependencies [aef8d4b]
+- Updated dependencies [8b8d708]
+- Updated dependencies [fb55d52]
+- Updated dependencies [fb55d52]
+- Updated dependencies [aa3c5d7]
+- Updated dependencies [a768341]
+- Updated dependencies [fb55d52]
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+- Updated dependencies [fb55d52]
+- Updated dependencies [fb55d52]
+- Updated dependencies [283ff55]
+- Updated dependencies [446331c]
+- Updated dependencies [b9865cf]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@1.0.0
+  - @midnight-ntwrk/wallet-sdk-shielded@1.0.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@1.0.0
+  - @midnight-ntwrk/wallet-sdk-hd@3.0.0
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+
 ## 1.0.0-beta.17
 
 ### Patch Changes
