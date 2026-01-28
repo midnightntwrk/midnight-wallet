@@ -1,5 +1,38 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 1.0.0-beta.19
+
+### Patch Changes
+
+- 390c797: Adds optional balancing support and refactors wallet facade API methods.
+
+  **Breaking Changes:**
+  - All balancing methods (`balanceFinalizedTransaction`, `balanceUnboundTransaction`, `balanceUnprovenTransaction`) now
+    accept parameters as grouped objects (`secretKeys` and `options`) instead of individual parameters
+  - The `transferTransaction` and `initSwap` methods now group parameters into `secretKeys` and `options` objects
+  - Renamed `signTransaction` to `signUnprovenTransaction`
+
+  **New Features:**
+  - Add `options.tokenKindsToBalance` parameter to balancing methods, allowing selective balancing of specific token
+    types (dust, shielded, unshielded) instead of always balancing all types
+  - Add `options.payFees` parameter to `transferTransaction` and `initSwap` methods to control fee payment
+  - Add new `signUnboundTransaction` method
+
+  **Internal Changes:**
+  - `balancingTransaction` is now optional in `UnboundTransactionRecipe` when only unshielded balancing is performed
+
+- f7aac06: Update blockchain dependencies to latest versions:
+  - Upgrade `@midnight-ntwrk/ledger-v7` from `7.0.0-rc.1` to `7.0.0` (stable release)
+  - Update `indexer-standalone` Docker image from `3.0.0-alpha.25` to `3.0.0-rc.1`
+  - Update `midnight-node` Docker image from `0.20.0-rc.1` to `0.20.0-rc.6`
+
+- 446331c: feat: adds tx revert option to unshielded wallet
+- Updated dependencies [f7aac06]
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.0-beta.12
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.0.0-beta.12
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.0.0-beta.17
+
 ## 1.0.0-beta.18
 
 ### Patch Changes
