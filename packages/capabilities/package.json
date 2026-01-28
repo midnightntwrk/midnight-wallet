@@ -25,12 +25,18 @@
     "./submission": {
       "types": "./dist/submission/index.d.ts",
       "import": "./dist/submission/index.js"
+    },
+    "./pendingTransactions": {
+      "types": "./dist/pendingTransactions/index.d.ts",
+      "import": "./dist/pendingTransactions/index.js"
     }
   },
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "@midnight-ntwrk/wallet-sdk-node-client": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-node-client": "1.0.0-beta.12",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.16",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
     "effect": "^3.19.14"
   },
   "devDependencies": {
