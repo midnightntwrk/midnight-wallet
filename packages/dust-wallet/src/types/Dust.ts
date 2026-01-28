@@ -30,12 +30,32 @@ export type DustTokenFullInfo = DustGenerationDetails & {
   token: DustToken;
 };
 
+/**
+ * Details of Dust generation/decay
+ */
 export type DustGenerationDetails = {
-  dtime: Date | undefined; // when the backing Night UTxO was spent
-  maxCap: bigint; // maximum capacity (gen.value * night_dust_ratio)
-  maxCapReachedAt: Date; // ctime + timeToCapSeconds
+  /**
+   * When the backing Night UTxO was spent
+   */
+  dtime: Date | undefined;
+  /**
+   * Maximum capacity (in Specks)
+   * `gen.value * night_dust_ratio`
+   */
+  maxCap: bigint;
+  /**
+   * When the maximum capacity is reached.
+   * `ctime + timeToCapSeconds`
+   */
+  maxCapReachedAt: Date;
+  /**
+   * Current amount of Dust available (in Specks)
+   */
   generatedNow: bigint;
-  rate: bigint; // the slope of generation and decay for a specific dust UTXO (gen.value * generation_decay_rate)
+  /**
+   * The slope of generation and decay for this specific Dust UTxO (`gen.value * generation_decay_rate`)
+   */
+  rate: bigint;
 };
 
 export type DustGenerationInfo = {

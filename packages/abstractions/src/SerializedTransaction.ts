@@ -21,3 +21,12 @@ export type SerializedTransaction = Brand.Branded<Uint8Array, 'SerializedTransac
  * Constructs a branded `Uint8Array` representing serialized transaction data.
  */
 export const SerializedTransaction = Brand.nominal<SerializedTransaction>();
+
+export const of = (serialized: Uint8Array): SerializedTransaction => {
+  return SerializedTransaction(serialized);
+};
+
+export const from = <T extends { serialize: () => Uint8Array }>(serializable: T): SerializedTransaction => {
+  const serialized = serializable.serialize();
+  return SerializedTransaction(serialized);
+};

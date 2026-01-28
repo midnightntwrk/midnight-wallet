@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Array as Arr, Effect, Encoding, pipe, Scope, Stream, SubscriptionRef, Clock } from 'effect';
+import { Array as Arr, Effect, Encoding, pipe, type Scope, Stream, SubscriptionRef, Clock } from 'effect';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -132,7 +132,7 @@ export class Simulator {
     this.state$ = state$;
   }
 
-  submitRegularTx(tx: ledger.ProofErasedTransaction): Effect.Effect<{ blockNumber: bigint; blockHash: string }> {
+  submitTransaction(tx: ledger.ProofErasedTransaction): Effect.Effect<{ blockNumber: bigint; blockHash: string }> {
     return pipe(
       this.#stateRef,
       SubscriptionRef.modifyEffect((simulatorState) =>

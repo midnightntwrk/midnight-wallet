@@ -206,7 +206,7 @@ describe('Unshielded wallet transacting', () => {
         expect(pendingCountAfterTransfer).toBeGreaterThan(0);
 
         // Revert the transaction - this should move coins back from pending to available
-        const revertedWallet = transacting.revert(newState, transaction).pipe(EitherOps.getOrThrowLeft);
+        const revertedWallet = transacting.revertTransaction(newState, transaction).pipe(EitherOps.getOrThrowLeft);
 
         // Verify that pending coins are cleared and moved back to available
         expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
@@ -247,12 +247,14 @@ describe('Unshielded wallet transacting', () => {
         const pendingCountAfterTx2 = HashMap.size(stateAfterTx2.state.pendingUtxos);
         expect(pendingCountAfterTx2).toBeGreaterThan(pendingCountAfterTx1);
 
-        const walletAfterRevert = transacting.revert(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
+        const walletAfterRevert = transacting.revertTransaction(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
 
         const pendingCountAfterRevert = HashMap.size(walletAfterRevert.state.pendingUtxos);
         expect(pendingCountAfterRevert).toBe(pendingCountAfterTx2 - pendingCountAfterTx1);
 
-        const walletAfterBothReverts = transacting.revert(walletAfterRevert, tx2).pipe(EitherOps.getOrThrowLeft);
+        const walletAfterBothReverts = transacting
+          .revertTransaction(walletAfterRevert, tx2)
+          .pipe(EitherOps.getOrThrowLeft);
 
         expect(HashMap.size(walletAfterBothReverts.state.pendingUtxos)).toBe(0);
         expect(HashMap.size(walletAfterBothReverts.state.availableUtxos)).toBe(

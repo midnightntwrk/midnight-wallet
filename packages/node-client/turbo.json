@@ -12,8 +12,12 @@
     },
     "gen-test-tx": {
       "inputs": ["scripts/**", "src/testing/**", "package.json"],
-      "outputs": ["src/resources"],
+      "outputs": ["resources/**"],
+      "cache": false, // There are time constraints, etc. so the script handles caching itself
       "dependsOn": ["typecheck-script"]
+    },
+    "test": {
+      "dependsOn": ["$TURBO_EXTENDS$", "gen-test-tx"]
     }
   }
 }

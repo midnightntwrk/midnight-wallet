@@ -10,17 +10,28 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { combineLatest, map, Observable } from 'rxjs';
-import { ShieldedWalletState, type ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { Array as Arr, pipe } from 'effect';
-import {
-  AnyTransaction,
-  DustWallet,
-  DustWalletState,
-  CoinsAndBalances as DustCoinsAndBalances,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
+import {
+  type DefaultSubmissionConfiguration,
+  makeDefaultSubmissionService,
+  type SubmissionService,
+} from '@midnight-ntwrk/wallet-sdk-capabilities';
+import {
+  type AnyTransaction,
+  type DefaultDustConfiguration,
+  type CoinsAndBalances as DustCoinsAndBalances,
+  type DustWalletAPI,
+  type DustWalletState,
+} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import {
+  type DefaultShieldedConfiguration,
+  type ShieldedWalletAPI,
+  type ShieldedWalletState,
+} from '@midnight-ntwrk/wallet-sdk-shielded';
+import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { type UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { Array as Arr, pipe } from 'effect';
+import { combineLatest, map, type Observable } from 'rxjs';
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
@@ -63,6 +74,32 @@ export type UnprovenTransactionRecipe = {
 };
 
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
+
+export const BalancingRecipe = {
+  isRecipe: (value: unknown): value is BalancingRecipe => {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'type' in value &&
+      typeof value.type === 'string' &&
+      ['FINALIZED_TRANSACTION', 'UNBOUND_TRANSACTION', 'UNPROVEN_TRANSACTION'].includes(value.type)
+    );
+  },
+  getTransactions: (recipe: BalancingRecipe): readonly AnyTransaction[] => {
+    switch (recipe.type) {
+      case 'FINALIZED_TRANSACTION': {
+        return [recipe.originalTransaction, recipe.balancingTransaction];
+      }
+      case 'UNBOUND_TRANSACTION': {
+        const balancingPart = recipe.balancingTransaction ? [recipe.balancingTransaction] : [];
+        return [recipe.baseTransaction, ...balancingPart];
+      }
+      case 'UNPROVEN_TRANSACTION': {
+        return [recipe.transaction];
+      }
+    }
+  },
+};
 
 export interface TokenTransfer {
   type: ledger.RawTokenType;
@@ -113,15 +150,54 @@ export class FacadeState {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-export class WalletFacade {
-  readonly shielded: ShieldedWallet;
-  readonly unshielded: UnshieldedWallet;
-  readonly dust: DustWallet;
+export type DefaultConfiguration = DefaultUnshieldedConfiguration &
+  DefaultShieldedConfiguration &
+  DefaultDustConfiguration &
+  DefaultSubmissionConfiguration;
 
-  constructor(shieldedWallet: ShieldedWallet, unshieldedWallet: UnshieldedWallet, dustWallet: DustWallet) {
+type MaybePromise<T> = T | Promise<T>;
+export type InitParams<TConfig extends DefaultConfiguration> = {
+  configuration: TConfig;
+  submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
+  shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
+  unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
+  dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
+};
+
+export class WalletFacade {
+  static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
+    config: TConfig,
+  ): SubmissionService<ledger.FinalizedTransaction> {
+    return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
+  }
+
+  static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
+    const submissionService = await Promise.resolve(
+      initParams.submissionService
+        ? initParams.submissionService(initParams.configuration)
+        : WalletFacade.makeDefaultSubmissionService(initParams.configuration),
+    );
+    const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
+    const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
+    const dust = await Promise.resolve(initParams.dust(initParams.configuration));
+    return new WalletFacade(shielded, unshielded, dust, submissionService);
+  }
+
+  readonly shielded: ShieldedWalletAPI;
+  readonly unshielded: UnshieldedWalletAPI;
+  readonly dust: DustWalletAPI;
+  readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
+
+  private constructor(
+    shieldedWallet: ShieldedWalletAPI,
+    unshieldedWallet: UnshieldedWalletAPI,
+    dustWallet: DustWalletAPI,
+    submissionService: SubmissionService<ledger.FinalizedTransaction>,
+  ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
     this.dust = dustWallet;
+    this.submissionService = submissionService;
   }
 
   private defaultTtl(): Date {
@@ -180,9 +256,14 @@ export class WalletFacade {
   }
 
   async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
-    await this.shielded.submitTransaction(tx, 'Finalized');
+    try {
+      await this.submissionService.submitTransaction(tx, 'Finalized');
 
-    return tx.identifiers().at(-1)!;
+      return tx.identifiers().at(-1)!;
+    } catch (error) {
+      await this.revert(tx);
+      throw error;
+    }
   }
 
   async balanceFinalizedTransaction(
@@ -454,6 +535,11 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Provides estimate of the fee of issuing registration transaction with provided UTxOs
+   * @param nightUtxos - Night UTxOs to use for the registration
+   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s), that would be used for paying the fee. These include data that allows to compute when the fee could be paid
+   */
   async estimateRegistration(nightUtxos: readonly UtxoWithMeta[]): Promise<{
     fee: bigint;
     dustGenerationEstimations: ReadonlyArray<DustCoinsAndBalances.UtxoWithFullDustDetails>;
@@ -588,6 +674,23 @@ export class WalletFacade {
     };
   }
 
+  async revert(txOrRecipe: AnyTransaction | BalancingRecipe): Promise<void> {
+    // avoid instanceof check
+    const transactionsToRevert = BalancingRecipe.isRecipe(txOrRecipe)
+      ? BalancingRecipe.getTransactions(txOrRecipe)
+      : [txOrRecipe];
+
+    await Promise.all(transactionsToRevert.map((tx) => this.revertTransaction(tx)));
+  }
+
+  async revertTransaction(tx: AnyTransaction): Promise<void> {
+    await Promise.all([
+      this.shielded.revertTransaction(tx),
+      this.unshielded.revertTransaction(tx),
+      this.dust.revertTransaction(tx),
+    ]);
+  }
+
   async start(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
     await Promise.all([
       this.shielded.start(shieldedSecretKeys),
@@ -597,6 +700,6 @@ export class WalletFacade {
   }
 
   async stop(): Promise<void> {
-    await Promise.all([this.shielded.stop(), this.unshielded.stop(), this.dust.stop()]);
+    await Promise.all([this.shielded.stop(), this.unshielded.stop(), this.dust.stop(), this.submissionService.close()]);
   }
 }

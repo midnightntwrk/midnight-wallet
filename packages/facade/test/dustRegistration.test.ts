@@ -11,14 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { Array as Arr, Order, pipe } from 'effect';
-import { Observable } from 'rxjs';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { type Observable } from 'rxjs';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getShieldedSeed,
@@ -34,10 +33,10 @@ import {
   UnshieldedWallet,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
+  type UnshieldedKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { CombinedTokenTransfer, FacadeState, WalletFacade } from '../src/index.js';
+import { type CombinedTokenTransfer, type DefaultConfiguration, type FacadeState, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -70,10 +69,9 @@ describe('Dust Registration', () => {
   const unshieldedSenderSeed = getUnshieldedSeed(SENDER_SEED);
   const dustSenderSeed = getDustSeed(SENDER_SEED);
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
-  const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -90,6 +88,11 @@ describe('Dust Registration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      costParameters: {
+        additionalFeeOverhead: 300_000_000_000_000n,
+        feeBlocksMargin: 5,
+      },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -112,34 +115,23 @@ describe('Dust Registration', () => {
     unshieldedReceiverSeed = getUnshieldedSeed(RECEIVER_SEED);
     dustReceiverSeed = getDustSeed(RECEIVER_SEED);
     unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
-
-    const Shielded = ShieldedWallet(configuration);
-    const shieldedSender = Shielded.startWithShieldedSeed(shieldedSenderSeed);
-    const shieldedReceiver = Shielded.startWithShieldedSeed(shieldedReceiverSeed);
-
-    const Dust = DustWallet({
-      ...configuration,
-      costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
-        feeBlocksMargin: 5,
-      },
-    });
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    const dustSender = Dust.startWithSeed(dustSenderSeed, dustParameters);
-    const dustReceiver = Dust.startWithSeed(dustReceiverSeed, dustParameters);
 
-    const unshieldedSender = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore));
-
-    const unshieldedReceiver = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: unshieldedTxHistoryStorage,
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore));
-
-    senderFacade = new WalletFacade(shieldedSender, unshieldedSender, dustSender);
-    receiverFacade = new WalletFacade(shieldedReceiver, unshieldedReceiver, dustReceiver);
+    senderFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
+      unshielded: (config) =>
+        UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
+    });
+    receiverFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
+      unshielded: (config) =>
+        UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
+      submissionService: (config) => WalletFacade.makeDefaultSubmissionService(config),
+    });
 
     await Promise.all([
       senderFacade.start(

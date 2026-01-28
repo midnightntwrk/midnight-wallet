@@ -64,17 +64,17 @@ export const UnshieldedState = {
       };
     }),
 
-  rollbackSpend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> =>
-    Either.gen(function* () {
-      const hash = UtxoHash(utxo.utxo);
-      if (!HashMap.has(state.pendingUtxos, hash)) {
-        return yield* Either.left(new UtxoNotFoundError({ utxo: utxo.utxo }));
-      }
-      return {
-        availableUtxos: HashMap.set(state.availableUtxos, hash, utxo),
-        pendingUtxos: HashMap.remove(state.pendingUtxos, hash),
-      };
-    }),
+  rollbackSpend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> => {
+    // Rollbacks can't fail due to a utxo not found as it is possible and expected if there is a race between sync and revert call
+    const hash = UtxoHash(utxo.utxo);
+    if (!HashMap.has(state.pendingUtxos, hash)) {
+      return Either.right(state);
+    }
+    return Either.right({
+      availableUtxos: HashMap.set(state.availableUtxos, hash, utxo),
+      pendingUtxos: HashMap.remove(state.pendingUtxos, hash),
+    });
+  },
 
   spendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, UtxoNotFoundError> =>
     Either.gen(function* () {

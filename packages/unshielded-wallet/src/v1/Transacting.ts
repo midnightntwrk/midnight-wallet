@@ -80,9 +80,9 @@ export interface TransactingCapability<TState> {
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
 
-  revert(
+  revertTransaction(
     wallet: CoreWallet,
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
 
   signUnboundTransaction(
@@ -368,9 +368,9 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
    */
-  revert(
+  revertTransaction(
     wallet: CoreWallet,
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError> {
     return pipe(
       this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),

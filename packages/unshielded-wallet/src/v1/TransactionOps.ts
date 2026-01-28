@@ -49,7 +49,7 @@ export type TransactionOps = {
   ): Either.Either<ledger.UnshieldedOffer<ledger.SignatureEnabled>, WalletError>;
   isIntentBound(intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): boolean;
   extractOwnInputs(
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[];
 };
@@ -167,7 +167,7 @@ export const TransactionOps: TransactionOps = {
     return intent.binding.instance === 'binding';
   },
   extractOwnInputs(
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
     signatureVerifyingKey: ledger.SignatureVerifyingKey,
   ): ledger.Utxo[] {
     const segments = TransactionOps.getSegments(transaction);

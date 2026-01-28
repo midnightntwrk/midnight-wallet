@@ -10,24 +10,24 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Encoding, pipe, Scope, Stream, SubscriptionRef } from 'effect';
+import { Effect, type Either, Encoding, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
 import {
   LedgerState,
-  BlockContext,
-  UserAddress,
+  type BlockContext,
+  type UserAddress,
   ClaimRewardsTransaction,
   SignatureErased,
-  SignatureVerifyingKey,
+  type SignatureVerifyingKey,
   Transaction,
   WellFormedStrictness,
-  TransactionResult,
+  type TransactionResult,
   TransactionContext,
-  ProofErasedTransaction,
-  SyntheticCost,
+  type ProofErasedTransaction,
+  type SyntheticCost,
 } from '@midnight-ntwrk/ledger-v7';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
-import { NetworkId } from './types/ledger.js';
+import { type NetworkId } from './types/ledger.js';
 
 export type SimulatorState = Readonly<{
   networkId: NetworkId;
@@ -170,7 +170,7 @@ export class Simulator {
     );
   }
 
-  submitRegularTx(
+  submitTransaction(
     tx: ProofErasedTransaction,
     blockFullness?: SyntheticCost,
   ): Effect.Effect<{ blockNumber: bigint; blockHash: string }, LedgerOps.LedgerError> {

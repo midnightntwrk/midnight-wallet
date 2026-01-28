@@ -11,35 +11,38 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, Either, Scope, Types } from 'effect';
-import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletRuntimeError } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { DefaultProvingConfiguration, makeDefaultProvingService, ProvingService } from './Proving.js';
-import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
+import { Effect, type Either, Scope, type Types } from 'effect';
+import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  DefaultSyncContext,
-  DefaultSyncConfiguration,
-  SyncCapability,
-  SyncService,
-  WalletSyncUpdate,
+  type Variant,
+  type VariantBuilder,
+  type WalletRuntimeError,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type DefaultProvingConfiguration, makeDefaultProvingService, type ProvingService } from './Proving.js';
+import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
+import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import {
+  type DefaultSyncContext,
+  type DefaultSyncConfiguration,
+  type SyncCapability,
+  type SyncService,
+  type WalletSyncUpdate,
   makeEventsSyncService,
   makeEventsSyncCapability,
 } from './Sync.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TransactingCapability,
+  type TransactingCapability,
 } from './Transacting.js';
-import { WalletError } from './WalletError.js';
-import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
-import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission.js';
-import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type WalletError } from './WalletError.js';
+import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
-import { makeDefaultTransactionHistoryCapability, TransactionHistoryCapability } from './TransactionHistory.js';
-import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { makeDefaultTransactionHistoryCapability, type TransactionHistoryCapability } from './TransactionHistory.js';
+import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 
 export type BaseV1Configuration = {
   networkId: NetworkId.NetworkId;
@@ -48,8 +51,7 @@ export type BaseV1Configuration = {
 export type DefaultV1Configuration = BaseV1Configuration &
   DefaultSyncConfiguration &
   DefaultProvingConfiguration &
-  DefaultTransactingConfiguration &
-  DefaultSubmissionConfiguration;
+  DefaultTransactingConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -124,7 +126,6 @@ export class V1Builder<
       .withTransactionHistoryDefaults()
       .withKeysDefaults()
       .withProvingDefaults()
-      .withSubmissionDefaults()
       .withCoinSelectionDefaults() as DefaultV1Builder;
   }
 
@@ -133,7 +134,6 @@ export class V1Builder<
       ...this.#buildState,
       provingService: undefined,
       transactingCapability: undefined,
-      submissionService: undefined,
       transactionHistoryCapability: undefined,
     });
   }
@@ -413,45 +413,6 @@ export class V1Builder<
     });
   }
 
-  withSubmission<TSubmissionConfig, TSubmissionContext extends Partial<RunningV1Variant.AnyContext>>(
-    submissionService: (
-      config: TSubmissionConfig,
-      getContext: () => TSubmissionContext,
-    ) => SubmissionService<TTransaction>,
-  ): V1Builder<
-    TConfig & TSubmissionConfig,
-    TContext & TSubmissionContext,
-    TSerialized,
-    TSyncUpdate,
-    TTransaction,
-    TStartAux
-  > {
-    return new V1Builder<
-      TConfig & TSubmissionConfig,
-      TContext & TSubmissionContext,
-      TSerialized,
-      TSyncUpdate,
-      TTransaction,
-      TStartAux
-    >({
-      ...this.#buildState,
-      submissionService,
-    });
-  }
-
-  withSubmissionDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
-  ): V1Builder<
-    TConfig & DefaultSubmissionConfiguration,
-    TContext,
-    TSerialized,
-    TSyncUpdate,
-    ledger.FinalizedTransaction,
-    TStartAux
-  > {
-    return this.withSubmission(makeDefaultSubmissionService);
-  }
-
   build(
     this: V1Builder<
       TConfig,
@@ -480,7 +441,6 @@ export class V1Builder<
         Scope.Scope
       > {
         return Effect.gen(function* () {
-          yield* Effect.addFinalizer(() => v1Context.submissionService.close());
           const scope = yield* Scope.Scope;
           return new RunningV1Variant(scope, context, v1Context);
         });
@@ -523,7 +483,6 @@ export class V1Builder<
       coinSelection,
       coinsAndBalancesCapability,
       keysCapability,
-      submissionService,
       transactionHistoryCapability,
     } = this.#buildState;
 
@@ -538,7 +497,6 @@ export class V1Builder<
       keysCapability: keysCapability(configuration, getContext),
       provingService: provingService(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
-      submissionService: submissionService(configuration, getContext),
       transactionHistoryCapability: transactionHistoryCapability(configuration, getContext),
     };
 
@@ -602,10 +560,6 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
-  type HasSubmission<TConfig, TContext, TTransaction> = {
-    readonly submissionService: (configuration: TConfig, getContext: () => TContext) => SubmissionService<TTransaction>;
-  };
-
   /**
    * The internal build state of {@link V1Builder}.
    */
@@ -615,7 +569,6 @@ declare namespace V1Builder {
       HasTransacting<TConfig, TContext, TTransaction> &
       HasCoinSelection<TConfig, TContext> &
       HasProving<TConfig, TContext, TTransaction> &
-      HasSubmission<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &
       HasTransactionHistory<TConfig, TContext, TTransaction>
@@ -655,7 +608,6 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'provingService',
     'coinsAndBalancesCapability',
     'keysCapability',
-    'submissionService',
     'transactionHistoryCapability',
   ] as const;
   /**
@@ -666,33 +618,3 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
   >;
   return allBuildStateKeys.every((key) => typeof buildState[key] == 'function');
 };
-
-/** @internal */
-declare namespace _V1BuilderMethods {
-  type WithSyncDefaults = 'withSyncDefaults';
-  type WithSyncMethod = 'withSync';
-  type WithTransactingMethod = 'withTransacting';
-  type WithTransactingDefaults = 'withTransactingDefaults';
-  type WithSerializationMethod = 'withSerialization';
-  type WithSerializationDefaults = 'withSerializationDefaults';
-  type WithCoinsAndBalancesDefaults = 'withCoinsAndBalancesDefaults';
-  type WithKeysDefaults = 'withKeysDefaults';
-  type WithTransactionHistoryDefaults = 'withTransactionHistoryDefaults';
-  type AllSyncMethods = WithSyncDefaults | WithSyncMethod;
-  type AllTransactingMethods = WithTransactingMethod | WithTransactingDefaults;
-  type AllSerializationMethods = WithSerializationMethod | WithSerializationDefaults;
-  type AllProvingMethods = 'withProving' | 'withProvingDefaults';
-  type AllSubmissionMethods = 'withSubmission' | 'withSubmissionDefaults';
-  type AllCoinsAndBalancesMethods = 'withCoinsAndBalancesDefaults';
-  type AllKeysMethods = 'withKeysDefaults';
-  type AllTransactionHistoryMethods = 'withTransactionHistoryDefaults';
-  type AllMethods =
-    | AllSyncMethods
-    | AllTransactingMethods
-    | AllSerializationMethods
-    | AllProvingMethods
-    | AllSubmissionMethods
-    | AllCoinsAndBalancesMethods
-    | AllKeysMethods
-    | AllTransactionHistoryMethods;
-}

@@ -11,11 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { SubmissionEvent } from './SubmissionEvent.js';
+import { type SubmissionEvent } from './SubmissionEvent.js';
+import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export class SubmissionError extends Data.TaggedError('SubmissionError')<{
   message: string;
-  txData: Uint8Array;
+  txData: SerializedTransaction.SerializedTransaction;
   cause?: unknown;
 }> {}
 export class ConnectionError extends Data.TaggedError('ConnectionError')<{
@@ -24,7 +25,7 @@ export class ConnectionError extends Data.TaggedError('ConnectionError')<{
 }> {}
 export class TransactionProgressError extends Data.TaggedError('TransactionProgressError')<{
   message: string;
-  txData: Uint8Array;
+  txData: SerializedTransaction.SerializedTransaction;
   desiredStage: SubmissionEvent['_tag'];
 }> {}
 export class ParseError extends Data.TaggedError('ParseError')<{

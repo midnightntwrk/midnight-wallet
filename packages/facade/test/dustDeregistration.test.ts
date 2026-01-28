@@ -11,11 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
@@ -26,9 +25,10 @@ import {
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { makeDefaultSubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -61,7 +61,7 @@ describe('Dust Deregistration', () => {
   const unshieldedWalletKeystore = createKeystore(unshieldedWalletSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -78,6 +78,11 @@ describe('Dust Deregistration', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      costParameters: {
+        additionalFeeOverhead: 300_000_000_000_000n,
+        feeBlocksMargin: 5,
+      },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -88,25 +93,16 @@ describe('Dust Deregistration', () => {
   let walletFacade: WalletFacade;
 
   beforeEach(async () => {
-    const Shielded = ShieldedWallet(configuration);
-    const shieldedWallet = Shielded.startWithShieldedSeed(shieldedWalletSeed);
-
-    const Dust = DustWallet({
-      ...configuration,
-      costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
-        feeBlocksMargin: 5,
-      },
-    });
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    const dustWallet = Dust.startWithSeed(dustWalletSeed, dustParameters);
 
-    const unshieldedWallet = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletKeystore));
-
-    walletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
+    walletFacade = await WalletFacade.init({
+      configuration,
+      shielded: (configuration) => ShieldedWallet(configuration).startWithShieldedSeed(shieldedWalletSeed),
+      unshielded: (configuration) =>
+        UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletKeystore)),
+      dust: (configuration) => DustWallet(configuration).startWithSeed(dustWalletSeed, dustParameters),
+      submissionService: (configuration) => makeDefaultSubmissionService(configuration),
+    });
 
     await walletFacade.start(
       ledger.ZswapSecretKeys.fromSeed(shieldedWalletSeed),

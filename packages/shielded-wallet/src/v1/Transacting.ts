@@ -37,7 +37,9 @@ export interface TokenTransfer {
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
-export interface TransactingCapability<TSecrets, TState, TTransaction> {
+// This interface should abstract over the transaction types used
+// It does not do so now for historical reasons
+export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   balanceTransaction(
     secrets: TSecrets,
     state: TState,
@@ -62,7 +64,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
   revertTransaction(
     state: TState,
-    transaction: TTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<TState, WalletError>;
 }
 

@@ -10,16 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { describe, it, vi, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, vi, expect, beforeEach, afterEach } from 'vitest';
 import { PolkadotNodeClient } from '../PolkadotNodeClient.js';
 import * as NodeClient from '../NodeClient.js';
 import * as SubmissionEvent from '../SubmissionEvent.js';
-import { StartedTestContainer } from 'testcontainers';
+import { type StartedTestContainer, Wait } from 'testcontainers';
 import { Array as EArray, Chunk, Effect, Either, Exit, Order, pipe, Random, Scope, Stream } from 'effect';
 import { TestTransactions } from '../../testing/index.js';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { NodeContext } from '@effect/platform-node';
-import { generateTxs, getTestTxsPath } from './gen-txs.js';
+import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 const clientLayer = (nodePort: number) =>
   PolkadotNodeClient.layer({
@@ -29,34 +29,33 @@ const clientLayer = (nodePort: number) =>
 // It takes some time to pass through enough rounds of consensus, even in tests
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
+// There are issues with replaying transactions after node restart
 describe.skip('PolkadotNodeClient', () => {
   let scope: Scope.CloseableScope | undefined = undefined;
   let node: StartedTestContainer | undefined = undefined;
 
-  beforeAll(async () => {
-    await Effect.gen(function* () {
-      scope = yield* Scope.make();
-
-      const network = yield* TestContainers.createNetwork().pipe(Effect.provideService(Scope.Scope, scope));
-
+  beforeEach(async () => {
+    return Effect.gen(function* () {
       node = yield* TestContainers.runNodeContainer((c) =>
-        c.withNetwork(network).withNetworkAliases('midnight-node'),
-      ).pipe(Effect.provideService(Scope.Scope, scope));
-
-      const proofServer = yield* TestContainers.runProofServerContainer().pipe(
-        Effect.provideService(Scope.Scope, scope),
+        c.withNetworkAliases('midnight-node').withWaitStrategy(Wait.forLogMessage('Imported #1')),
       );
-
-      yield* generateTxs(
-        `ws://midnight-node:9944`,
-        `http://127.0.0.1:${proofServer.getMappedPort(6300)}`,
-        network,
-      ).pipe(Effect.provideService(Scope.Scope, scope));
-
-      return [node, scope];
-    }).pipe(Effect.provide(NodeContext.layer), Effect.scoped, Effect.runPromise);
+    }).pipe(
+      Effect.provide(NodeContext.layer),
+      Effect.provideServiceEffect(
+        Scope.Scope,
+        Scope.make().pipe(
+          Effect.tap((builtScope) =>
+            Effect.sync(() => {
+              scope = builtScope;
+            }),
+          ),
+        ),
+      ),
+      Effect.runPromise,
+    );
   });
-  afterAll(async () => {
+
+  afterEach(async () => {
     if (scope) {
       await pipe(Scope.close(scope, Exit.void), Effect.runPromise);
     }
@@ -65,8 +64,11 @@ describe.skip('PolkadotNodeClient', () => {
   it('does report an error if transaction fails well-formedness check upon submission', async () => {
     const result = await pipe(
       Effect.gen(function* () {
-        const transactions = yield* TestTransactions.load(getTestTxsPath());
-        return yield* NodeClient.sendMidnightTransactionAndWait(transactions.unbalanced_tx.serialize(), 'Submitted');
+        const transactions = yield* TestTransactions.load(TestTransactions.defaultPaths.fullPath);
+        return yield* NodeClient.sendMidnightTransactionAndWait(
+          SerializedTransaction.from(transactions.unbalanced_tx),
+          'Submitted',
+        );
       }),
       Effect.either,
       Effect.provide(clientLayer(node!.getMappedPort(9944))),
@@ -101,11 +103,13 @@ describe.skip('PolkadotNodeClient', () => {
       });
     };
 
-    const allSubmissions = TestTransactions.load(getTestTxsPath()).pipe(
+    const allSubmissions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
       Stream.mapEffect((tx) => modifyTx(tx.serialize())),
-      Stream.mapEffect((serializedTx) => NodeClient.sendMidnightTransactionAndWait(serializedTx, 'Submitted')),
+      Stream.mapEffect((serializedTx) =>
+        NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.of(serializedTx), 'Submitted'),
+      ),
       Stream.either,
       Stream.runCollect,
     );
@@ -130,10 +134,10 @@ describe.skip('PolkadotNodeClient', () => {
   });
 
   it('does submit a transaction', async () => {
-    const submitAllTransactions = TestTransactions.load(getTestTxsPath()).pipe(
+    const submitAllTransactions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
-      Stream.mapEffect((tx) => NodeClient.sendMidnightTransactionAndWait(tx.serialize(), 'InBlock')),
+      Stream.mapEffect((tx) => NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(tx), 'InBlock')),
       Stream.runDrain,
     );
 
@@ -149,11 +153,11 @@ describe.skip('PolkadotNodeClient', () => {
   });
 
   it.concurrent('does emit subsequent events', async () => {
-    const submitAndCollectEvents = TestTransactions.load(getTestTxsPath()).pipe(
+    const submitAndCollectEvents = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
       Stream.take(1),
-      Stream.flatMap((tx) => NodeClient.sendMidnightTransaction(tx.serialize())),
+      Stream.flatMap((tx) => NodeClient.sendMidnightTransaction(SerializedTransaction.from(tx))),
       Stream.runCollect,
       Effect.map(Chunk.toArray),
     );
@@ -177,8 +181,8 @@ describe.skip('PolkadotNodeClient', () => {
     // );
   });
 
-  it.skip("is able to submit transaction after node's unavailability", async () => {
-    const first2Transactions = TestTransactions.load(getTestTxsPath()).pipe(
+  it("is able to submit transaction after node's unavailability", async () => {
+    const first2Transactions = TestTransactions.load(TestTransactions.defaultPaths.fullPath).pipe(
       Stream.fromEffect,
       Stream.flatMap(TestTransactions.streamAllValid),
       Stream.take(2),
@@ -189,13 +193,13 @@ describe.skip('PolkadotNodeClient', () => {
     const program = (node: StartedTestContainer) =>
       Effect.gen(function* () {
         const [tx1, tx2] = yield* first2Transactions;
-        yield* NodeClient.sendMidnightTransactionAndWait(tx1.serialize(), 'InBlock');
+        yield* NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(tx1), 'InBlock');
         yield* Effect.promise(() =>
           node.restart({
             timeout: 10_000,
           }),
         );
-        yield* NodeClient.sendMidnightTransactionAndWait(tx2.serialize(), 'InBlock');
+        yield* NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(tx2), 'InBlock');
       });
 
     const result = await pipe(
