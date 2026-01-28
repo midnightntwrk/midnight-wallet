@@ -12,6 +12,11 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CoreWallet } from './CoreWallet.js';
+import { TransactionHistoryStorage, TransactionHistoryEntry, TransactionHash } from '../storage/index.js';
+
+export type DefaultTransactionHistoryConfiguration = {
+  txHistoryStorage: TransactionHistoryStorage;
+};
 
 export type ProgressUpdate = {
   appliedIndex: bigint | undefined;
@@ -26,10 +31,24 @@ export type TransactionHistoryCapability<TState, TTransaction> = {
   progress(state: TState): ProgressUpdate;
 };
 
-export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCapability<
-  CoreWallet,
-  ledger.FinalizedTransaction
-> => {
+const convertUpdateToEntry = ({ transaction, status }: UnshieldedUpdate): TransactionHistoryEntry => {
+  return {
+    id: transaction.id,
+    hash: transaction.hash,
+    protocolVersion: transaction.protocolVersion, // TODO up to here  + coins recevied/spent..
+    identifiers: transaction.identifiers ? transaction.identifiers : [],
+    status, //SUCCEEDED>..
+    timestamp: transaction.block?.timestamp ?? null, // TODO we might need the indexer team...
+    fees: transaction.fees?.paidFees ?? null,
+  };
+};
+
+export const makeDefaultTransactionHistoryCapability = (
+  config: DefaultTransactionHistoryConfiguration,
+  _getContext: () => unknown,
+): TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction> => {
+  const { txHistoryStorage } = config;
+
   return {
     updateTxHistory: (state: CoreWallet, newTxs: ledger.FinalizedTransaction[]): CoreWallet => {
       return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);

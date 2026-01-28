@@ -225,6 +225,21 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         });
       }
 
+      // return wrappedUpdate.secretKeys((keys) => {
+      //   return CoreWallet.updateProgress(
+      //     CoreWallet.replayEvents(
+      //       state,
+      //       keys,
+      //       wrappedUpdate.updates.map((u) => u.event),
+      //     ),
+      //     {
+      //       highestRelevantWalletIndex,
+      //       appliedIndex: nextIndex,
+      //       isConnected: true,
+      //     },
+      //   );
+      // });
+
       return wrappedUpdate.secretKeys((keys) => {
         return CoreWallet.updateProgress(
           CoreWallet.replayEvents(

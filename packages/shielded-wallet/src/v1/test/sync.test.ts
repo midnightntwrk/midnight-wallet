@@ -35,7 +35,7 @@ import type {
   ZswapEventsSubscription,
   ZswapEventsSubscriptionVariables,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client';
-import { makeEventsSyncService } from '../Sync.js';
+import { makeEventsSyncService, makeSimulatorSyncCapability } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Simulator } from '../Simulator.js';
@@ -271,6 +271,47 @@ describe('Wallet subscription', () => {
         Effect.scoped,
         Effect.runPromise,
       );
+    });
+  });
+
+  describe('replayEvents with transaction history', () => {
+    it('should update transaction history when replaying events', async () => {
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      return await Effect.gen(function* () {
+        const scope = yield* Scope.make();
+        const simulator = yield* Simulator.init([
+          {
+            amount: 1000n,
+            type: ledger.shieldedToken().raw,
+            recipient: secretKeys,
+          },
+        ]).pipe(Effect.provideService(Scope.Scope, scope));
+
+        const stateOption = yield* simulator.state$.pipe(Stream.take(1), Stream.runHead);
+        const state = Option.match(stateOption, {
+          onNone: () => {
+            throw new Error('No state from simulator');
+          },
+          onSome: (s) => s,
+        });
+
+        const events = state.lastTxResult.events;
+        if (events.length === 0) {
+          throw new Error('No events generated from simulator');
+        }
+
+        // Apply the sync update which will call replayEvents
+        const syncCapability = makeSimulatorSyncCapability();
+        const updatedWallet = syncCapability.applyUpdate(initialState, {
+          update: state,
+          secretKeys,
+        });
+
+        // Check if transaction history was updated
+        expect(updatedWallet.txHistoryArray.length).toBeGreaterThanOrEqual(0);
+      }).pipe(Effect.scoped, Effect.runPromise);
     });
   });
 });

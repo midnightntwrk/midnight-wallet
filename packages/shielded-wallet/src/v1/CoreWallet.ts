@@ -76,7 +76,7 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress;
   networkId: string;
-  txHistoryArray: readonly ledger.FinalizedTransaction[];
+  txHistoryArray: readonly ledger.FinalizedTransaction[]; // TODO - change to transactionHistoryEntry....
   coinHashes: CoinHashesMap;
 }>;
 
@@ -172,14 +172,38 @@ export const CoreWallet = {
   },
 
   replayEvents(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys, events: ledger.Event[]): CoreWallet {
-    const newState = wallet.state.replayEvents(secretKeys, events);
+    const stateWithChanges = wallet.state.replayEventsWithChanges(secretKeys, events);
+    const newState = stateWithChanges.state;
     const newCoinHashes = CoinHashesMap.updateWithCoins(
       secretKeys,
       wallet.coinHashes,
       CoinHashesMap.pickAllCoins(newState),
     );
 
-    return { ...wallet, state: newState, coinHashes: newCoinHashes };
+    const updatedWallet = { ...wallet, state: newState, coinHashes: newCoinHashes };
+
+    console.log('State changes', JSON.stringify(stateWithChanges.changes, null, 2));
+
+    // Extract transactions from state changes and update transaction history
+    const newTransactions = stateWithChanges.changes.map((change) => {
+      try {
+        console.log('Change', JSON.stringify(change, null, 2));
+      } catch (error) {
+        console.log('I HAVE AN ERROR!!!', error);
+        return null;
+      }
+    });
+
+    console.log('Length of new transactions', newTransactions.length);
+
+    // Only update if we found any valid transactions
+    if (newTransactions.length > 0) {
+      console.log('I HAVE NEW TRANSACTIONS!!!', newTransactions.length);
+
+      // return CoreWallet.updateTxHistory(updatedWallet, newTransactions);
+    }
+
+    return updatedWallet;
   },
 
   updateProgress(
