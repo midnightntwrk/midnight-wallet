@@ -10,7 +10,8 @@ npm install @midnight-ntwrk/wallet-sdk-dust-wallet
 
 ## Overview
 
-The Dust Wallet handles fee token (dust) operations on the Midnight network. Dust tokens are required to pay transaction fees. This package provides:
+The Dust Wallet handles dust operations on the Midnight network. Dust tokens are required to pay transaction fees. This
+package provides:
 
 - Dust coin management and tracking
 - Balance synchronization with the network
@@ -45,11 +46,7 @@ const syncedState = await dustWallet.waitForSyncedState();
 
 ```typescript
 // Add fee balancing to a transaction
-const feeBalancingTx = await dustWallet.balanceTransactions(
-  dustSecretKey,
-  [transactionToBalance],
-  ttl
-);
+const feeBalancingTx = await dustWallet.balanceTransactions(dustSecretKey, [transactionToBalance], ttl);
 ```
 
 ### Calculating Fees
@@ -68,14 +65,11 @@ const dustGenerationTx = await dustWallet.createDustGenerationTransaction(
   ttl,
   nightUtxos,
   nightVerifyingKey,
-  dustReceiverAddress
+  dustReceiverAddress,
 );
 
 // Add signature for dust registration
-const signedTx = await dustWallet.addDustGenerationSignature(
-  dustGenerationTx,
-  signature
-);
+const signedTx = await dustWallet.addDustGenerationSignature(dustGenerationTx, signature);
 ```
 
 ## Exports

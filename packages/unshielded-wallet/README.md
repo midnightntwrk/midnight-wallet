@@ -30,6 +30,7 @@ import {
   PublicKey,
   InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
 const configuration = {
@@ -38,8 +39,8 @@ const configuration = {
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
 };
 
-// Create a keystore from a seed (32 bytes)
-const seed = new Uint8Array(32); // Your wallet seed
+// Create a keystore from a random unshielded seed
+const seed = randomBytes(32);
 const keystore = createKeystore(seed, configuration.networkId);
 
 // Create and start the wallet

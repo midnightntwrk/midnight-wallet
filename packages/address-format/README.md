@@ -35,7 +35,7 @@ import { randomBytes } from 'node:crypto';
 
 const networkId: NetworkId = 'preview';
 
-// Derive an unshielded address from a 32-byte secret key
+// Derive an unshielded address from a random unshielded secret key
 const secretKey = randomBytes(32);
 const publicKey = signatureVerifyingKey(secretKey.toString('hex'));
 const addressHex = addressFromKey(publicKey);

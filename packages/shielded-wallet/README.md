@@ -26,6 +26,7 @@ while maintaining verifiability. It provides:
 ```typescript
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
 const configuration = {
@@ -38,8 +39,8 @@ const configuration = {
   },
 };
 
-// Create secret keys from a seed (32 bytes)
-const seed = new Uint8Array(32); // Your Zswap seed
+// Create secret keys from a shielded seed
+const seed = randomBytes(32);
 const shieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
 
 // Create and start the wallet
@@ -52,7 +53,7 @@ await shieldedWallet.start(shieldedSecretKeys);
 ### Alternative: Start with Seed Directly
 
 ```typescript
-// Start directly with a seed (32 bytes)
+// Start directly with a shielded seed
 const shieldedWallet = ShieldedWallet(configuration).startWithShieldedSeed(seed);
 await shieldedWallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
 ```

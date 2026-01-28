@@ -2,15 +2,15 @@
 
 ### Version 1.0.0
 
-**Version:** 1.0.0
-**Date:** 2026-01-28
-**Environment:** Preprod, Preview
+**Version:** 1.0.0 **Date:** 2026-01-28 **Environment:** Preprod, Preview
 
 ---
 
 ### High-level summary
 
-This is the initial stable release of the Midnight Wallet SDK, a TypeScript wallet implementation for the Midnight Network. It provides complete support for Midnight's three-token system: unshielded tokens, shielded tokens with zero-knowledge proofs, and Dust for fee payments.
+This is the initial stable release of the Midnight Wallet SDK, a TypeScript wallet implementation for the Midnight
+Network. It provides complete support for Midnight's three-token system: unshielded tokens, shielded tokens with
+zero-knowledge proofs, and Dust for fee payments.
 
 ---
 
@@ -30,7 +30,7 @@ This release is relevant for developers who:
 - Full support for unshielded tokens (including Night)
 - Full support for shielded tokens with zero-knowledge proofs
 - Dust management for transaction fee payments
-- HD wallet key derivation (BIP-32/BIP-44/CIP-1852)
+- HD wallet key derivation
 - Bech32m address encoding and decoding
 - Transaction balancing across all token types
 - Atomic swap support
@@ -41,15 +41,20 @@ This release is relevant for developers who:
 
 **Wallet Facade**
 
-**Description:** Unified API that orchestrates shielded, unshielded, and dust wallets through a single interface. Handles transaction balancing, transfers, and swaps. This is the main entry point for most developers, abstracting the complexity of managing three separate wallet types.
+**Description:** Unified API that orchestrates shielded, unshielded, and dust wallets through a single interface.
+Handles transaction balancing, transfers, and swaps. This is the main entry point for most developers, abstracting the
+complexity of managing three separate wallet types.
 
-**Examples:** [initialization.ts](packages/docs-snippets/src/snippets/initialization.ts), [combined-transfer.ts](packages/docs-snippets/src/snippets/combined-transfer.ts)
+**Examples:** [initialization.ts](packages/docs-snippets/src/snippets/initialization.ts),
+[combined-transfer.ts](packages/docs-snippets/src/snippets/combined-transfer.ts)
 
 ---
 
 **Unshielded Wallet**
 
-**Description:** Manages Night and other unshielded tokens using a UTxO model with Schnorr signatures. Tracks UTxOs, creates offers for swaps, and provides inputs/outputs for transaction balancing. Use this for transparent token operations.
+**Description:** Manages Night and other unshielded tokens using a UTxO model with Schnorr signatures. Tracks UTxOs,
+creates offers for swaps, and provides inputs/outputs for transaction balancing. Use this for transparent token
+operations.
 
 **Example:** [unshielded-transfer.ts](packages/docs-snippets/src/snippets/unshielded-transfer.ts)
 
@@ -57,7 +62,9 @@ This release is relevant for developers who:
 
 **Shielded Wallet**
 
-**Description:** Manages privacy-preserving shielded tokens using Zswap zero-knowledge proofs. Handles ZK proof generation, coin commitment tracking, and encrypted output decryption. Token values and addresses are hidden from observers while maintaining verifiability.
+**Description:** Manages privacy-preserving shielded tokens using Zswap zero-knowledge proofs. Handles ZK proof
+generation, coin commitment tracking, and encrypted output decryption. Token values and addresses are hidden from
+observers while maintaining verifiability.
 
 **Example:** [shielded-transfer.ts](packages/docs-snippets/src/snippets/shielded-transfer.ts)
 
@@ -65,7 +72,9 @@ This release is relevant for developers who:
 
 **Dust Wallet**
 
-**Description:** Manages Dust, the fee payment resource generated from Night holdings. Handles Dust address designation, balance tracking, and automatic fee payment during transaction balancing. Required for submitting any transaction on the network.
+**Description:** Manages Dust, the fee payment resource generated from Night holdings. Handles Dust address designation,
+balance tracking, and automatic fee payment during transaction balancing. Required for submitting any transaction on the
+network.
 
 **Example:** [designation.ts](packages/docs-snippets/src/snippets/designation.ts)
 
@@ -73,7 +82,8 @@ This release is relevant for developers who:
 
 **HD Wallet**
 
-**Description:** Derives cryptographic keys from a seed following BIP-32/BIP-44/CIP-1852 standards. Generates keys for unshielded (secp256k1), shielded (JubJub curve), and Dust (BLS12-381 curve) operations from a single mnemonic or seed.
+**Description:** Derives cryptographic keys from a seed following BIP-32/BIP-44/CIP-1852 standards. Generates keys for
+unshielded (secp256k1), shielded (JubJub curve), and Dust (BLS12-381 curve) operations from a single mnemonic or seed.
 
 **Example:** [hd.no-net.ts](packages/docs-snippets/src/snippets/hd.no-net.ts)
 
@@ -81,7 +91,8 @@ This release is relevant for developers who:
 
 **Address Format**
 
-**Description:** Encodes and decodes Midnight addresses using Bech32m format. Supports three address types with network identifiers:
+**Description:** Encodes and decodes Midnight addresses using Bech32m format. Supports three address types with network
+identifiers:
 
 - `mn_addr` - Unshielded payment addresses
 - `mn_shield-addr` - Shielded payment addresses
@@ -93,7 +104,9 @@ This release is relevant for developers who:
 
 **Transaction Balancing**
 
-**Description:** Automatically provides inputs to cover outputs, creates change outputs for surplus, and adds Dust spends for fees. Works across all token types in a single transaction. This is the core operation that enables transfers, contract interactions, and swaps.
+**Description:** Automatically provides inputs to cover outputs, creates change outputs for surplus, and adds Dust
+spends for fees. Works across all token types in a single transaction. This is the core operation that enables
+transfers, contract interactions, and swaps.
 
 **Example:** [balancing.ts](packages/docs-snippets/src/snippets/balancing.ts)
 
@@ -101,7 +114,9 @@ This release is relevant for developers who:
 
 **Atomic Swaps**
 
-**Description:** Enables trustless token exchanges between parties using Midnight's offer system. Offers can be merged into a single transaction that hides the exchanged amounts from observers. Currently supports shielded-only or unshielded-only swaps.
+**Description:** Enables trustless token exchanges between parties using Midnight's offer system. Offers can be merged
+into a single transaction that hides the exchanged amounts from observers. Currently supports shielded-only or
+unshielded-only swaps.
 
 **Example:** [swap.ts](packages/docs-snippets/src/snippets/swap.ts)
 
@@ -116,7 +131,8 @@ This release is relevant for developers who:
 - Configure prover service endpoint URL
 - Ensure prover service is running and accessible
 
-**Impact:** Zero-knowledge proofs for shielded transactions and Dust spends require an external prover service. The wallet cannot submit shielded transactions without this configuration.
+**Impact:** Zero-knowledge proofs for shielded transactions and Dust spends require an external prover service. The
+wallet cannot submit shielded transactions without this configuration.
 
 ---
 
@@ -162,8 +178,9 @@ N/A - Initial release.
 
 **Issue:** Pending coins not cleared on transaction failure
 
-**Description:** When transaction submission or proof generation fails, coins marked as pending are not automatically released. This can cause the wallet to report lower available balances until the pending state is manually cleared or the wallet is restarted.
-**Workaround:** Restart the wallet or re-sync to clear stale pending state.
+**Description:** When transaction submission or proof generation fails, coins marked as pending are not automatically
+released. This can cause the wallet to report lower available balances until the pending state is manually cleared or
+the wallet is restarted. **Workaround:** Restart the wallet or re-sync to clear stale pending state.
 
 ---
 
@@ -192,7 +209,8 @@ N/A - Initial release.
 - SDK Documentation: [link-to-docs]
 - Examples: [packages/docs-snippets](packages/docs-snippets)
 - GitHub Repository: [midnightntwrk/midnight-wallet](https://github.com/midnightntwrk/midnight-wallet)
-- DApp Connector API: [midnightntwrk/midnight-dapp-connector-api](https://github.com/midnightntwrk/midnight-dapp-connector-api)
+- DApp Connector API:
+  [midnightntwrk/midnight-dapp-connector-api](https://github.com/midnightntwrk/midnight-dapp-connector-api)
 
 ---
 
