@@ -11,5 +11,5 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export * from './UnshieldedWallet.js';
-export * from './storage/index.js';
+export { type UnshieldedTransactionHistoryEntry } from './v1/TransactionHistory.js';
 export * from './KeyStore.js';

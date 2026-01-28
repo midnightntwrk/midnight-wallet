@@ -10,84 +10,136 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { Schema } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 
-export type ProgressUpdate = {
-  appliedIndex: bigint | undefined;
-  highestRelevantWalletIndex: bigint | undefined;
-  highestIndex: bigint | undefined;
-  highestRelevantIndex: bigint | undefined;
+export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
+  type: Schema.String,
+  nonce: Schema.String,
+  value: Schema.BigInt,
+  mt_index: Schema.BigInt,
+});
+
+export type QualifiedShieldedCoinInfo = Schema.Schema.Type<typeof QualifiedShieldedCoinInfoSchema>;
+
+export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
+  hash: TransactionHistoryStorage.TransactionHashSchema,
+  protocolVersion: Schema.Number,
+  status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+});
+
+export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
+
+export type DefaultTransactionHistoryConfiguration = {
+  shieldedTxHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>;
 };
 
-export type TransactionHistoryCapability<TState, TTransaction> = {
-  updateTxHistory(state: TState, newTxs: TTransaction[]): TState;
-  transactionHistory(state: TState): readonly TTransaction[];
-  progress(state: TState): ProgressUpdate;
+// TODO IAN - This is being changed to an alternative location!
+
+// export type ProgressUpdate = {
+//   appliedIndex: bigint | undefined;
+//   highestRelevantWalletIndex: bigint | undefined;
+//   highestIndex: bigint | undefined;
+//   highestRelevantIndex: bigint | undefined;
+// };
+
+export type TransactionHistoryCapability<TState> = {
+  create(state: TState, changes: ledger.ZswapStateChanges): Promise<void>;
+  get(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
+  getAll(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
+  delete(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
+  // progress(state: TState): ProgressUpdate;
 };
 
-export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCapability<
-  CoreWallet,
-  ledger.FinalizedTransaction
-> => {
+const convertUpdateToEntry = (
+  state: CoreWallet,
+  changes: ledger.ZswapStateChanges,
+): ShieldedTransactionHistoryEntry => {
   return {
-    updateTxHistory: (state: CoreWallet, newTxs: ledger.FinalizedTransaction[]): CoreWallet => {
-      return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);
-    },
-    transactionHistory: (_state: CoreWallet): [] => {
-      return [];
-    },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
-    },
+    hash: changes.source,
+    protocolVersion: Number(state.protocolVersion),
+    status: 'SUCCESS',
+    receivedCoins: changes.receivedCoins,
+    spentCoins: changes.spentCoins,
   };
 };
 
-export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryCapability<
-  CoreWallet,
-  ledger.ProofErasedTransaction
-> => {
+export const makeDefaultTransactionHistoryCapability = (
+  config: DefaultTransactionHistoryConfiguration,
+  _getContext: () => unknown,
+): TransactionHistoryCapability<CoreWallet> => {
+  const { shieldedTxHistoryStorage } = config;
+
   return {
-    updateTxHistory: (state: CoreWallet, newTxs: ledger.ProofErasedTransaction[]): CoreWallet => {
-      return CoreWallet.updateTxHistory(state, newTxs as unknown as readonly ledger.FinalizedTransaction[]); // @TODO fix this cast
+    create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
+      // TODO IAN Hardcode protocol version to 1 - maybe....
+      const entry = convertUpdateToEntry(state, changes);
+      console.log('IAN !! here is the entry i will add to the history', entry);
+      await shieldedTxHistoryStorage.create(entry);
     },
-    transactionHistory: (_state: CoreWallet): [] => {
-      return [];
+    get: async (
+      hash: TransactionHistoryStorage.TransactionHash,
+    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
+      return shieldedTxHistoryStorage.get(hash);
     },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
+    getAll: (): AsyncIterableIterator<ShieldedTransactionHistoryEntry> => {
+      return shieldedTxHistoryStorage.getAll();
     },
+    delete: async (
+      hash: TransactionHistoryStorage.TransactionHash,
+    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
+      return shieldedTxHistoryStorage.delete(hash);
+    },
+
+    // progress: (state: CoreWallet): ProgressUpdate => {
+    //   // TODO IAN Need to move this, why is it in the history capability ?
+    //   return {
+    //     appliedIndex: state.progress.appliedIndex,
+    //     highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+    //     highestIndex: state.progress.highestIndex,
+    //     highestRelevantIndex: state.progress.highestRelevantIndex,
+    //   };
+    // },
   };
 };
 
-export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCapability<
-  CoreWallet,
-  ledger.FinalizedTransaction
-> => {
+export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryCapability<CoreWallet> => {
   return {
-    updateTxHistory: (state: CoreWallet): CoreWallet => {
-      return state;
+    create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
+      const entry = convertUpdateToEntry(state, changes);
+      // await txHistoryStorage.create(entry);
+      return Promise.resolve();
     },
-    transactionHistory: (_state: CoreWallet): [] => {
-      return [];
+    get: async (
+      hash: TransactionHistoryStorage.TransactionHash,
+    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
+      // return await txHistoryStorage.get(hash);
+      return Promise.resolve(undefined);
     },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
+    getAll: (): AsyncIterableIterator<ShieldedTransactionHistoryEntry> => {
+      // return txHistoryStorage.getAll();
+      return (async function* (): AsyncIterableIterator<ShieldedTransactionHistoryEntry> {
+        // empty
+      })();
     },
+    delete: async (
+      hash: TransactionHistoryStorage.TransactionHash,
+    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
+      // return txHistoryStorage.delete(hash);
+      return Promise.resolve(undefined);
+    },
+
+    // progress: (state: CoreWallet): ProgressUpdate => {
+    //   return {
+    //     appliedIndex: state.progress.appliedIndex,
+    //     highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+    //     highestIndex: state.progress.highestIndex,
+    //     highestRelevantIndex: state.progress.highestRelevantIndex,
+    //   };
+    // },
   };
 };

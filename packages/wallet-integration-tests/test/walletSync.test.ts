@@ -11,7 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolState,
+  ProtocolVersion,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -30,6 +35,7 @@ import os from 'node:os';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 120_000 });
 
@@ -67,6 +73,7 @@ describe('Wallet Sync', () => {
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   });
 

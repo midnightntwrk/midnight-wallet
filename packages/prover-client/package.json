@@ -2,9 +2,6 @@
   "name": "@midnight-ntwrk/wallet-sdk-prover-client",
   "version": "1.1.0-rc.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -19,10 +16,18 @@
   },
   "exports": {
     ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./effect": {
+      "development": {
+        "types": "./src/effect/index.ts",
+        "import": "./src/effect/index.ts"
+      },
       "types": "./dist/effect/index.d.ts",
       "import": "./dist/effect/index.js"
     }
