@@ -127,8 +127,12 @@ jobs:
             yarn changeset pre exit
           fi
 
+          # Generate snapshot suffix
+          SHORT_SHA=$(git rev-parse --short=7 HEAD)
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+
           # Apply snapshot versions
-          yarn changeset version --snapshot canary
+          yarn changeset version --snapshot canary.${TIMESTAMP}-${SHORT_SHA}
 
           # Install dependencies with the new snapshot versions
           yarn install --mode=update-lockfile
