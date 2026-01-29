@@ -122,8 +122,10 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Temporarily exit pre-mode so snapshots are allowed
-          yarn changeset pre exit
+          # Only exit pre-mode if actually in pre mode (not already exited)
+          if grep -q '"mode": "pre"' .changeset/pre.json 2>/dev/null; then
+            yarn changeset pre exit
+          fi
 
           # Apply snapshot versions
           yarn changeset version --snapshot canary
