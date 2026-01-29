@@ -200,8 +200,8 @@ describe('Transaction balancing examples', () => {
       const txRecipe = await sender.wallet.transferTransaction(
         outputsToCreate,
         {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
         },
         {
           ttl,
@@ -279,8 +279,8 @@ describe('Transaction balancing examples', () => {
       const txRecipe = await sender.wallet.transferTransaction(
         outputsToCreate,
         {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
         },
         {
           ttl,
@@ -382,8 +382,8 @@ describe('Transaction balancing examples', () => {
       const txRecipe = await sender.wallet.transferTransaction(
         outputsToCreate,
         {
-          shieldedSecretKeys: funded.shieldedSecretKeys,
-          dustSecretKey: funded.dustSecretKey,
+          shieldedSecretKeys: sender.shieldedSecretKeys,
+          dustSecretKey: sender.dustSecretKey,
         },
         {
           ttl,
