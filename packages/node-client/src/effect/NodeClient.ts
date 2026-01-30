@@ -13,14 +13,13 @@
 import { Context, Effect, Option, Stream } from 'effect';
 import * as SubmissionEvent from './SubmissionEvent.js';
 import * as NodeClientError from './NodeClientError.js';
+import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
-export type SerializedMnTransaction = Uint8Array;
-
-export type Genesis = { readonly transactions: readonly SerializedMnTransaction[] };
+export type Genesis = { readonly transactions: readonly SerializedTransaction.SerializedTransaction[] };
 
 export interface Service {
   sendMidnightTransaction(
-    serializedTransaction: SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
   ): Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError>;
   getGenesis(): Effect.Effect<Genesis, NodeClientError.NodeClientError>;
 }
@@ -31,7 +30,7 @@ export const getGenesisTransactions = (): Effect.Effect<Genesis, NodeClientError
   NodeClient.pipe(Effect.flatMap((client) => client.getGenesis()));
 
 export const sendMidnightTransaction = (
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
 ): Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError, NodeClient> =>
   NodeClient.pipe(
     Stream.fromEffect,
@@ -39,23 +38,23 @@ export const sendMidnightTransaction = (
   );
 
 export function sendMidnightTransactionAndWait(
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
   waitFor: SubmissionEvent.Cases.Submitted['_tag'],
 ): Effect.Effect<SubmissionEvent.Cases.Submitted, NodeClientError.NodeClientError, NodeClient>;
 export function sendMidnightTransactionAndWait(
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
   waitFor: SubmissionEvent.Cases.InBlock['_tag'],
 ): Effect.Effect<SubmissionEvent.Cases.InBlock, NodeClientError.NodeClientError, NodeClient>;
 export function sendMidnightTransactionAndWait(
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
   waitFor: SubmissionEvent.Cases.Finalized['_tag'],
 ): Effect.Effect<SubmissionEvent.Cases.Finalized, NodeClientError.NodeClientError, NodeClient>;
 export function sendMidnightTransactionAndWait(
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
   waitFor: SubmissionEvent.SubmissionEvent['_tag'],
 ): Effect.Effect<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError, NodeClient>;
 export function sendMidnightTransactionAndWait(
-  serializedTransaction: SerializedMnTransaction,
+  serializedTransaction: SerializedTransaction.SerializedTransaction,
   waitFor: SubmissionEvent.SubmissionEvent['_tag'],
 ): Effect.Effect<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError, NodeClient> {
   return sendMidnightTransaction(serializedTransaction).pipe(

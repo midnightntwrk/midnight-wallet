@@ -13,15 +13,15 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { getShieldedSeed, waitForSyncFacade } from './utils.js';
 import * as allure from 'allure-js-commons';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
-  UnshieldedKeystore,
+  type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -78,7 +78,16 @@ describe('Syncing', () => {
         }
 
         for (let i = 0; i < seeds.length; i++) {
-          facades[i] = new WalletFacade(shieldedWallets[i], unshieldedWallets[i], dustWallets[i]);
+          facades[i] = await WalletFacade.init({
+            configuration: {
+              ...fixture.getWalletConfig(),
+              ...fixture.getDustWalletConfig(),
+              txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+            },
+            shielded: () => shieldedWallets[i],
+            unshielded: () => unshieldedWallets[i],
+            dust: () => dustWallets[i],
+          });
           await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
         }
       }
