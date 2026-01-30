@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -25,7 +24,7 @@ import {
   PublicKey,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { WalletFacade } from '../src/index.js';
+import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeProvingService } from './utils/proving.js';
@@ -86,7 +85,7 @@ describe('Optional Balancing', () => {
   const unshieldedKeystore = createKeystore(unshieldedSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();

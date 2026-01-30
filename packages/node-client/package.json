@@ -76,7 +76,7 @@
     "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",
     "polkadot-typegen": "tsx ./scripts/generate-types.ts",
     "gen-test-tx": "DEBUG='testcontainers:containers' tsx ./scripts/generate-test-tx.ts",
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "DEBUG='testcontainers:containers' vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
