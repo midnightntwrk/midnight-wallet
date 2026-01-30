@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "3.0.0-beta.11",
+  "version": "3.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -28,9 +28,9 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "@midnight-ntwrk/wallet-sdk-node-client": "1.0.0-beta.12",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0",
+    "@midnight-ntwrk/wallet-sdk-node-client": "1.0.0",
     "effect": "^3.19.14"
   },
   "devDependencies": {
