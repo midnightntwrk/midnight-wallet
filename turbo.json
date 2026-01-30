@@ -30,12 +30,14 @@
     },
     "typecheck": {
       "inputs": [
+        "*.tsbuildinfo",
         "test/**/*.{ts,tsx}",
         "src/**/*.{ts,tsx}",
         "scripts/**/*.ts",
         "tsconfig*.json",
         "$TURBO_ROOT$/tsconfig.base.json"
       ],
+      "outputs": ["*.tsbuildinfo"],
       "outputLogs": "new-only",
       "dependsOn": ["^dist"]
     },
