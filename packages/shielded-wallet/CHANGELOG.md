@@ -1,5 +1,24 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 2.0.0
+
+### Major Changes
+
+- f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
+  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+    into the `WalletFacade`
+  - make `WalletFacade` revert transaction upon submission failure
+  - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
+    This will allow non-breaking future initialization changes when e.g. new services are being integrated into the
+    facade.
+
+### Patch Changes
+
+- Updated dependencies [f52d01d]
+- Updated dependencies [f52d01d]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0
+
 ## 1.0.0
 
 ### Patch Changes
