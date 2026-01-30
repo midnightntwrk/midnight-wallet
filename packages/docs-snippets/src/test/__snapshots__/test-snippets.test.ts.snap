@@ -42,7 +42,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
           value: 500000000000000n,
-          mt_index: 8n
+          mt_index: 7n
         },
         commitment: '6b6318563b292f67d17670dd3ec2667ab153ab8ca8646065726eed5aecb89e48',
         nullifier: '46a44b0881ad4b756cec2298f0533facf204c17aed2f221efd85795b447e19a5'
@@ -52,7 +52,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
           value: 500000000000000n,
-          mt_index: 14n
+          mt_index: 16n
         },
         commitment: 'af1d43ccf415e0dac454c3d28375c0dfb9987e9b0f419086a7ecd6763573c823',
         nullifier: '4ecfa9bf0bc0d95e1a5eb15a9e6b3ab5e8ff5deeea9c95c01d7f3c50acfcab8f'
@@ -62,7 +62,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
           value: 500000000000000n,
-          mt_index: 7n
+          mt_index: 6n
         },
         commitment: '6a907829f15fed14875afdb6e714d97992c87905f87f1af5883711de64ebf237',
         nullifier: '51638c0e2fe9eccdfbd6d3e7227fe516509656b958b1f25f65520050eb8eae2b'
@@ -82,7 +82,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
           value: 500000000000000n,
-          mt_index: 1n
+          mt_index: 2n
         },
         commitment: '2579239562540918ba6c269e5f951c169e4bfde29e2fd90c7f54b9707943ea8c',
         nullifier: '8a91c3f36f61fac27aedfcac7391138b8b822602e7c85028de2d85a5f5ad616f'
@@ -92,7 +92,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
           value: 500000000000000n,
-          mt_index: 0n
+          mt_index: 1n
         },
         commitment: '234f90b63bd5e5d8d0116f8cec73c6723ba3d916e4d733dd7e023621e637a4cf',
         nullifier: 'bf7895e39b1e0aecacdd35b94d22c66c17d806e3a23550bea6f80aefbfd9f93d'
@@ -102,7 +102,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000001',
           nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
           value: 500000000000000n,
-          mt_index: 25n
+          mt_index: 26n
         },
         commitment: 'f6e04f33a938d45cde5a07bbec39fa5db4351f471b92d7fb5d3947da9f47ccc7',
         nullifier: 'c1cdca1b3b1ef4d265a90cf006462b8facb3b2bec23d61654620f8622e292a69'
@@ -115,7 +115,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
           value: 500000000000000n,
-          mt_index: 8n
+          mt_index: 7n
         },
         commitment: '6b6318563b292f67d17670dd3ec2667ab153ab8ca8646065726eed5aecb89e48',
         nullifier: '46a44b0881ad4b756cec2298f0533facf204c17aed2f221efd85795b447e19a5'
@@ -125,7 +125,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
           value: 500000000000000n,
-          mt_index: 14n
+          mt_index: 16n
         },
         commitment: 'af1d43ccf415e0dac454c3d28375c0dfb9987e9b0f419086a7ecd6763573c823',
         nullifier: '4ecfa9bf0bc0d95e1a5eb15a9e6b3ab5e8ff5deeea9c95c01d7f3c50acfcab8f'
@@ -135,7 +135,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
           value: 500000000000000n,
-          mt_index: 7n
+          mt_index: 6n
         },
         commitment: '6a907829f15fed14875afdb6e714d97992c87905f87f1af5883711de64ebf237',
         nullifier: '51638c0e2fe9eccdfbd6d3e7227fe516509656b958b1f25f65520050eb8eae2b'
@@ -155,7 +155,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
           value: 500000000000000n,
-          mt_index: 1n
+          mt_index: 2n
         },
         commitment: '2579239562540918ba6c269e5f951c169e4bfde29e2fd90c7f54b9707943ea8c',
         nullifier: '8a91c3f36f61fac27aedfcac7391138b8b822602e7c85028de2d85a5f5ad616f'
@@ -165,7 +165,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000000',
           nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
           value: 500000000000000n,
-          mt_index: 0n
+          mt_index: 1n
         },
         commitment: '234f90b63bd5e5d8d0116f8cec73c6723ba3d916e4d733dd7e023621e637a4cf',
         nullifier: 'bf7895e39b1e0aecacdd35b94d22c66c17d806e3a23550bea6f80aefbfd9f93d'
@@ -175,7 +175,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           type: '0000000000000000000000000000000000000000000000000000000000000001',
           nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
           value: 500000000000000n,
-          mt_index: 25n
+          mt_index: 26n
         },
         commitment: 'f6e04f33a938d45cde5a07bbec39fa5db4351f471b92d7fb5d3947da9f47ccc7',
         nullifier: 'c1cdca1b3b1ef4d265a90cf006462b8facb3b2bec23d61654620f8622e292a69'

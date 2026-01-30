@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "3.0.0-beta.11",
+  "version": "3.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -32,15 +32,15 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "@midnight-ntwrk/wallet-sdk-node-client": "1.0.0-beta.12",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.0.0-beta.16",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0-beta.10",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-node-client": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.0.0",
     "effect": "^3.19.14"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v7": "7.0.0-rc.1",
+    "@midnight-ntwrk/ledger-v7": "^7.0.0",
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
     "prettier": "^3.7.0",

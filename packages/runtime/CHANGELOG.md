@@ -1,5 +1,33 @@
 # @midnight-ntwrk/wallet-sdk-runtime
 
+## 1.0.0
+
+### Patch Changes
+
+- fb55d52: chore: initialize baseline release after introducing Changesets
+- fb55d52: chore: force re-release after workspace failure
+- bcef7d8: Allow TX creation with no own outputs
+- Updated dependencies [fb55d52]
+- Updated dependencies [f7aac06]
+- Updated dependencies [a06ccf3]
+- Updated dependencies [aef8d4b]
+- Updated dependencies [8b8d708]
+- Updated dependencies [fb55d52]
+- Updated dependencies [fb55d52]
+- Updated dependencies [dae514d]
+- Updated dependencies [bcef7d8]
+- Updated dependencies [fb55d52]
+- Updated dependencies [fb55d52]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0
+  - @midnight-ntwrk/wallet-sdk-abstractions@1.0.0
+
+## 1.0.0-beta.12
+
+### Patch Changes
+
+- Updated dependencies [f7aac06]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.0-beta.11
+
 ## 1.0.0-beta.11
 
 ### Patch Changes
