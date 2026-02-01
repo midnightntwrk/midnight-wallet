@@ -16,14 +16,22 @@ const TransactionHashSchema = Schema.String;
 
 export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
 
+/** Schema for a single coin in received/spent lists (QualifiedShieldedCoinInfo from ledger) */
+export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
+  type: Schema.String,
+  nonce: Schema.String,
+  value: Schema.BigInt,
+  mt_index: Schema.BigInt,
+});
+
+export type QualifiedShieldedCoinInfo = Schema.Schema.Type<typeof QualifiedShieldedCoinInfoSchema>;
+
 export const TransactionHistoryEntrySchema = Schema.Struct({
-  id: Schema.Number,
   hash: TransactionHashSchema,
   protocolVersion: Schema.Number,
-  identifiers: Schema.Array(Schema.String),
-  timestamp: Schema.Date,
-  fees: Schema.NullOr(Schema.BigInt),
   status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
 });
 
 export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;

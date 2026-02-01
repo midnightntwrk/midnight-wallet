@@ -15,6 +15,7 @@ import { WalletError } from './WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { TransactionHistoryEntrySchema } from '../storage/TransactionHistoryStorage.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -103,7 +104,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
     }),
-    txHistory: Schema.Array(HexedTx()),
+    txHistory: Schema.Array(TransactionHistoryEntrySchema),
     state: HexedState(),
     protocolVersion: Schema.BigInt,
     offset: Schema.optional(Schema.BigInt),

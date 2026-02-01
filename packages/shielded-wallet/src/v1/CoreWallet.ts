@@ -15,6 +15,7 @@ import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
 import { InvalidCoinHashesError, WalletError } from './WalletError.js';
+import { TransactionHistoryEntry } from '../storage/TransactionHistoryStorage.js';
 
 export type PublicKeys = {
   coinPublicKey: ledger.CoinPublicKey;
@@ -76,7 +77,7 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress;
   networkId: string;
-  txHistoryArray: readonly ledger.FinalizedTransaction[]; // TODO - change to transactionHistoryEntry....
+  txHistoryArray: readonly TransactionHistoryEntry[];
   coinHashes: CoinHashesMap;
 }>;
 
@@ -104,7 +105,7 @@ export const CoreWallet = {
   restore(
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
-    txHistory: readonly ledger.FinalizedTransaction[],
+    txHistory: readonly TransactionHistoryEntry[],
     syncProgress: Omit<SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: string,
@@ -125,7 +126,7 @@ export const CoreWallet = {
   restoreWithCoinHashes(
     publicKeys: PublicKeys,
     localState: ledger.ZswapLocalState,
-    txHistory: readonly ledger.FinalizedTransaction[],
+    txHistory: readonly TransactionHistoryEntry[],
     coinHashes: CoinHashesMap,
     syncProgress: SyncProgressData,
     protocolVersion: bigint,
@@ -171,7 +172,11 @@ export const CoreWallet = {
     return { ...wallet, state: newState, coinHashes: newCoinHashes };
   },
 
-  replayEvents(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys, events: ledger.Event[]): CoreWallet {
+  replayEventsWithChanges(
+    wallet: CoreWallet,
+    secretKeys: ledger.ZswapSecretKeys,
+    events: ledger.Event[],
+  ): [CoreWallet, ledger.ZswapStateChanges[]] {
     const stateWithChanges = wallet.state.replayEventsWithChanges(secretKeys, events);
     const newState = stateWithChanges.state;
     const newCoinHashes = CoinHashesMap.updateWithCoins(
@@ -182,28 +187,7 @@ export const CoreWallet = {
 
     const updatedWallet = { ...wallet, state: newState, coinHashes: newCoinHashes };
 
-    console.log('State changes', JSON.stringify(stateWithChanges.changes, null, 2));
-
-    // Extract transactions from state changes and update transaction history
-    const newTransactions = stateWithChanges.changes.map((change) => {
-      try {
-        console.log('Change', JSON.stringify(change, null, 2));
-      } catch (error) {
-        console.log('I HAVE AN ERROR!!!', error);
-        return null;
-      }
-    });
-
-    console.log('Length of new transactions', newTransactions.length);
-
-    // Only update if we found any valid transactions
-    if (newTransactions.length > 0) {
-      console.log('I HAVE NEW TRANSACTIONS!!!', newTransactions.length);
-
-      // return CoreWallet.updateTxHistory(updatedWallet, newTransactions);
-    }
-
-    return updatedWallet;
+    return [updatedWallet, stateWithChanges.changes];
   },
 
   updateProgress(
@@ -226,9 +210,13 @@ export const CoreWallet = {
     return { ...wallet, progress: updatedProgress };
   },
 
-  addTransaction(wallet: CoreWallet, tx: ledger.FinalizedTransaction): CoreWallet {
-    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, tx] };
-  },
+  // addTransaction(wallet: CoreWallet, tx: ledger.FinalizedTransaction): CoreWallet {
+  //   // TODO IAN - This was the old way of doing history! WE used to call it from the
+  //  UpdateTxHistory
+  //   // return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, tx] };
+  //   // TODO Might need to accept changes her e- not sure..
+  //   return { ...wallet, txHistoryArray: [...wallet.txHistoryArray] };
+  // },
 
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
   revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
@@ -238,9 +226,10 @@ export const CoreWallet = {
     return wallet;
   },
 
-  updateTxHistory(wallet: CoreWallet, newTxs: readonly ledger.FinalizedTransaction[]): CoreWallet {
-    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, ...newTxs] };
-  },
+  // TODO - do we need this, probably not....
+  // updateTxHistory(wallet: CoreWallet, newTxs: readonly ledger.FinalizedTransaction[]): CoreWallet {
+  //   return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, ...newTxs] };
+  // },
 
   spendCoins(
     wallet: CoreWallet,

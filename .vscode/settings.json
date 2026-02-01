@@ -23,5 +23,6 @@
   },
   "files.watcherExclude": {
     "**/target": true
-  }
+  },
+  "bun.test.enable": false
 }

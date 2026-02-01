@@ -206,7 +206,10 @@ export const makeEventsSyncService = (
   };
 };
 
-export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeEventsSyncCapability = (
+  _config: DefaultSyncConfiguration,
+  getContext: () => DefaultSyncContext,
+): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
       if (wrappedUpdate.updates.length === 0) {
@@ -225,34 +228,31 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         });
       }
 
-      // return wrappedUpdate.secretKeys((keys) => {
-      //   return CoreWallet.updateProgress(
-      //     CoreWallet.replayEvents(
-      //       state,
-      //       keys,
-      //       wrappedUpdate.updates.map((u) => u.event),
-      //     ),
-      //     {
-      //       highestRelevantWalletIndex,
-      //       appliedIndex: nextIndex,
-      //       isConnected: true,
-      //     },
-      //   );
-      // });
+      // TODO - this is where I call the
+      const { transactionHistoryCapability } = getContext();
+      // void transactionHistoryCapability.create(update);
 
+      // TODO This is where i need to do the call to the changes etc as
       return wrappedUpdate.secretKeys((keys) => {
-        return CoreWallet.updateProgress(
-          CoreWallet.replayEvents(
-            state,
-            keys,
-            wrappedUpdate.updates.map((u) => u.event),
-          ),
-          {
-            highestRelevantWalletIndex,
-            appliedIndex: nextIndex,
-            isConnected: true,
-          },
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
+        const [newState, changesArray]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
+          state,
+          keys,
+          wrappedUpdate.updates.map((u) => u.event),
         );
+
+        changesArray.forEach((changes) => {
+          console.log('IAN !!!changes', changes);
+          void transactionHistoryCapability.create(newState, changes);
+        });
+
+        // TODO I wonder if the newState has the updated txHistory Now ? Becasue it was updated via create I think.
+
+        return CoreWallet.updateProgress(newState, {
+          highestRelevantWalletIndex,
+          appliedIndex: nextIndex,
+          isConnected: true,
+        });
       });
     },
   };
@@ -286,7 +286,10 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         secretKeys,
       } = update;
 
-      return CoreWallet.replayEvents(state, secretKeys, events);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- CoreWallet.replayEventsWithChanges types are correct; upstream CoreWallet type errors cause inference to fail
+      const [newState] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- newState is CoreWallet; upstream type errors cause inference to fail
+      return newState;
     },
   };
 };

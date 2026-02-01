@@ -10,8 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration, TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import {
+  InMemoryTransactionHistoryStorage as ShieldedInMemoryTransactionHistoryStorage,
+  ShieldedWallet,
+} from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -87,7 +90,7 @@ describe('Wallet Facade Transfer', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(), // TODO - need to get this sfromt eh correct place!!!
+      txHistoryStorage: new ShieldedInMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -187,9 +190,11 @@ describe('Wallet Facade Transfer', () => {
     // TODO IAN - QUICK TEST!!!!!
     const shieldedState = await rx.firstValueFrom(senderFacade.shielded.state);
     const txHistory = shieldedState.transactionHistory;
-    const txInHistory = txHistory.find((tx) => tx.identifiers().includes(submittedTxHash));
+    const txInHistory = await txHistory.get(submittedTxHash);
+    // const txInHistory = txHistory.find((tx) => tx.identifiers().includes(submittedTxHash));
     expect(txInHistory).toBeDefined();
-    expect(txInHistory?.identifiers().includes(submittedTxHash)).toBe(true);
+    expect(txInHistory?.hash).toBe(submittedTxHash);
+    // expect(txInHistory?.identifiers().includes(submittedTxHash)).toBe(true);
 
     const isValid = await rx.firstValueFrom(
       receiverFacade
