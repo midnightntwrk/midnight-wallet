@@ -189,15 +189,19 @@ describe('Wallet Facade Transfer', () => {
 
     expect(submittedTxHash).toBeTypeOf('string');
 
-    // Check that transaction history contains the submitted transaction hash
-    // TODO IAN - QUICK TEST!!!!!
-    const shieldedState = await rx.firstValueFrom(senderFacade.shielded.state);
-    const txHistory = shieldedState.transactionHistory;
-    const txInHistory = await txHistory.get(submittedTxHash);
-    // const txInHistory = txHistory.find((tx) => tx.identifiers().includes(submittedTxHash));
-    expect(txInHistory).toBeDefined();
-    expect(txInHistory?.hash).toBe(submittedTxHash);
-    // expect(txInHistory?.identifiers().includes(submittedTxHash)).toBe(true);
+    // Check that transaction history contains the submitted transaction hash (wait for sync to record it)
+    const senderStateWithTxInHistory = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.mergeMap(async (state) => {
+          const txInHistory = await state.shielded.transactionHistory.get(submittedTxHash);
+          return { state, txFound: txInHistory !== undefined, txInHistory };
+        }),
+        rx.filter(({ txFound }) => txFound),
+        rx.take(1),
+      ),
+    );
+    expect(senderStateWithTxInHistory.txInHistory).toBeDefined();
+    expect(senderStateWithTxInHistory.txInHistory?.hash).toBe(submittedTxHash);
 
     const isValid = await rx.firstValueFrom(
       receiverFacade

@@ -229,8 +229,6 @@ export const makeEventsSyncCapability = (
       }
 
       const { transactionHistoryCapability } = getContext();
-      // void transactionHistoryCapability.create(update);
-
       // TODO This is where i need to do the call to the changes etc as
       return wrappedUpdate.secretKeys((keys) => {
         const [newState, changesArray]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
@@ -240,7 +238,6 @@ export const makeEventsSyncCapability = (
         );
 
         changesArray.forEach((changes) => {
-          console.log('IAN !!!changes', changes);
           void transactionHistoryCapability.create(newState, changes);
         });
 

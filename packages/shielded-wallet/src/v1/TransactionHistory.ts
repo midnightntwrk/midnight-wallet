@@ -61,6 +61,7 @@ export const makeDefaultTransactionHistoryCapability = (
 
     create: async (state: CoreWallet, changes: ledger.ZswapStateChanges): Promise<void> => {
       const entry = convertUpdateToEntry(state, changes);
+      console.log('IAN !! here is the entry i will add to the history', entry);
       await txHistoryStorage.create(entry);
     },
     get: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
