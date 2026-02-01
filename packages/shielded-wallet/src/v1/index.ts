@@ -25,3 +25,4 @@ export * as Submission from './Submission.js';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
 export * from './TransactionOps.js';
+export * from '../storage/index.js';

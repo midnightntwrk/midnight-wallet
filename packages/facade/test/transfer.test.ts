@@ -10,11 +10,11 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
+  DefaultV1Configuration,
   InMemoryTransactionHistoryStorage as ShieldedInMemoryTransactionHistoryStorage,
-  ShieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -34,6 +34,9 @@ import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-a
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { pipe } from 'effect';
+
+// TODO IAN - Mixing shielded and unshielded and dust in the same test, the DefaultV1Configuration can come form all locations.
+// Can we improve this ?
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
