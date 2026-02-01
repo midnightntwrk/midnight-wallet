@@ -228,13 +228,11 @@ export const makeEventsSyncCapability = (
         });
       }
 
-      // TODO - this is where I call the
       const { transactionHistoryCapability } = getContext();
       // void transactionHistoryCapability.create(update);
 
       // TODO This is where i need to do the call to the changes etc as
       return wrappedUpdate.secretKeys((keys) => {
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
         const [newState, changesArray]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
           state,
           keys,
@@ -245,8 +243,6 @@ export const makeEventsSyncCapability = (
           console.log('IAN !!!changes', changes);
           void transactionHistoryCapability.create(newState, changes);
         });
-
-        // TODO I wonder if the newState has the updated txHistory Now ? Becasue it was updated via create I think.
 
         return CoreWallet.updateProgress(newState, {
           highestRelevantWalletIndex,
