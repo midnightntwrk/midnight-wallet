@@ -27,8 +27,8 @@
     "testcontainers": "^11.10.0"
   },
   "devDependencies": {
-    "eslint": "^9.32.0",
-    "prettier": "^3.7.0",
+    "eslint": "^9.39.1",
+    "prettier": "^3.8.1",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   }
