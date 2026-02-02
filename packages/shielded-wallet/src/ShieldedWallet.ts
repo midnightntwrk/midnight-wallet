@@ -37,11 +37,11 @@ import { type WalletSyncUpdate } from './v1/Sync.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
-export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
+export type ShieldedWalletCapabilities<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+  transactionHistory: TransactionHistoryCapability<CoreWallet>;
 };
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
@@ -91,8 +91,7 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.transactionHistory.progress(this.state);
   }
 
-  // get transactionHistory(): readonly TTransaction[] {
-  get transactionHistory(): TransactionHistoryCapability<CoreWallet, TTransaction> {
+  get transactionHistory(): TransactionHistoryCapability<CoreWallet> {
     return this.capabilities.transactionHistory; // transactionHistory(this.state);
   }
 

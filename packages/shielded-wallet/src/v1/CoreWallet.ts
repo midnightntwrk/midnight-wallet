@@ -77,7 +77,6 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress;
   networkId: string;
-  txHistoryArray: readonly TransactionHistoryEntry[];
   coinHashes: CoinHashesMap;
 }>;
 
@@ -87,7 +86,7 @@ export const CoreWallet = {
     const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
     const progress = createSyncProgress();
     const protocolVersion = ProtocolVersion.MinSupportedVersion;
-    return { state: localState, publicKeys, networkId, coinHashes, txHistoryArray: [], progress, protocolVersion };
+    return { state: localState, publicKeys, networkId, coinHashes, progress, protocolVersion };
   },
 
   empty(publicKeys: PublicKeys, networkId: string): CoreWallet {
@@ -96,7 +95,6 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes: CoinHashesMap.empty,
-      txHistoryArray: [],
       progress: createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -117,7 +115,6 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes,
-      txHistoryArray: txHistory,
       progress: createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -126,7 +123,6 @@ export const CoreWallet = {
   restoreWithCoinHashes(
     publicKeys: PublicKeys,
     localState: ledger.ZswapLocalState,
-    txHistory: readonly TransactionHistoryEntry[],
     coinHashes: CoinHashesMap,
     syncProgress: SyncProgressData,
     protocolVersion: bigint,
@@ -141,7 +137,6 @@ export const CoreWallet = {
           publicKeys,
           networkId,
           coinHashes,
-          txHistoryArray: txHistory,
           progress: createSyncProgress(syncProgress),
           protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
         }),
@@ -210,14 +205,6 @@ export const CoreWallet = {
     return { ...wallet, progress: updatedProgress };
   },
 
-  // addTransaction(wallet: CoreWallet, tx: ledger.FinalizedTransaction): CoreWallet {
-  //   // TODO IAN - This was the old way of doing history! WE used to call it from the
-  //  UpdateTxHistory
-  //   // return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, tx] };
-  //   // TODO Might need to accept changes her e- not sure..
-  //   return { ...wallet, txHistoryArray: [...wallet.txHistoryArray] };
-  // },
-
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
   revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
     wallet: CoreWallet,
@@ -225,11 +212,6 @@ export const CoreWallet = {
   ): CoreWallet {
     return wallet;
   },
-
-  // TODO - do we need this, probably not....
-  // updateTxHistory(wallet: CoreWallet, newTxs: readonly ledger.FinalizedTransaction[]): CoreWallet {
-  //   return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, ...newTxs] };
-  // },
 
   spendCoins(
     wallet: CoreWallet,

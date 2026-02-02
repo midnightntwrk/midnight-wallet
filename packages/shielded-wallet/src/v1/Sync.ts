@@ -41,7 +41,7 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction>;
+  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet>;
 };
 
 const Uint8ArraySchema = Schema.declare(
@@ -231,13 +231,13 @@ export const makeEventsSyncCapability = (
       const { transactionHistoryCapability } = getContext();
       // TODO This is where i need to do the call to the changes etc as
       return wrappedUpdate.secretKeys((keys) => {
-        const [newState, changesArray]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
+        const [newState, changes]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
           state,
           keys,
           wrappedUpdate.updates.map((u) => u.event),
         );
 
-        changesArray.forEach((changes) => {
+        changes.forEach((changes) => {
           void transactionHistoryCapability.create(newState, changes);
         });
 

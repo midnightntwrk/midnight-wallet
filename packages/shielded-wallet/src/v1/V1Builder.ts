@@ -74,7 +74,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Varian
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+  transactionHistory: TransactionHistoryCapability<CoreWallet>;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -383,7 +383,7 @@ export class V1Builder<
     transactionHistoryCapability: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryCapability<CoreWallet, TTransaction>,
+    ) => TransactionHistoryCapability<CoreWallet>,
   ): V1Builder<
     TConfig & TTransactionHistoryConfig,
     TContext & TTransactionHistoryContext,
@@ -561,11 +561,11 @@ declare namespace V1Builder {
     ) => CoinsAndBalancesCapability<CoreWallet>;
   };
 
-  type HasTransactionHistory<TConfig, TContext, TTransaction> = {
+  type HasTransactionHistory<TConfig, TContext> = {
     readonly transactionHistoryCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactionHistoryCapability<CoreWallet, TTransaction>;
+    ) => TransactionHistoryCapability<CoreWallet>;
   };
 
   type HasKeys<TConfig, TContext> = {
@@ -583,7 +583,7 @@ declare namespace V1Builder {
       HasProving<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &
-      HasTransactionHistory<TConfig, TContext, TTransaction>
+      HasTransactionHistory<TConfig, TContext>
   >;
   type PartialBuildState<
     TConfig = object,
