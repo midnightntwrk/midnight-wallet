@@ -21,6 +21,7 @@ import {
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage as ShieldedInMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { pipe } from 'effect';
 import { randomUUID } from 'node:crypto';
@@ -90,7 +91,7 @@ describe('Wallet Facade Transfer', () => {
         additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new ShieldedInMemoryTransactionHistoryStorage(),
     };
   });
 

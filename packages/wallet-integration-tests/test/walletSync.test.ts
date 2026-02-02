@@ -20,6 +20,7 @@ import {
   V1Builder,
   type CoreWallet,
   V1Tag,
+  InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
@@ -67,6 +68,7 @@ describe('Wallet Sync', () => {
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
