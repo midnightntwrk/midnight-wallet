@@ -183,7 +183,7 @@ describe('Wallet Facade Transfer', () => {
     // TODO IAN - QUICK TEST!!!!!
     const shieldedState = await rx.firstValueFrom(senderFacade.shielded.state);
     const txHistory = shieldedState.transactionHistory;
-    console.log('IAN !!! Checking if ${submittedTxHash} is in the history');
+    console.log(`IAN !!! Checking if ${submittedTxHash} is in the history`);
     const txInHistory = await txHistory.get(submittedTxHash);
     // const txInHistory = txHistory.find((tx) => tx.identifiers().includes(submittedTxHash));
     expect(txInHistory).toBeDefined();
