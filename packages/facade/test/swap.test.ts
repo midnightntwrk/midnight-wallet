@@ -10,26 +10,31 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration, Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { randomUUID } from 'node:crypto';
-import os from 'node:os';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import {
   InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import * as rx from 'rxjs';
-import { CombinedSwapInputs, CombinedSwapOutputs, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type CombinedSwapInputs,
+  type CombinedSwapOutputs,
+  type DefaultConfiguration,
+  WalletFacade,
+} from '../src/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { makeProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
@@ -70,7 +75,7 @@ describe('Swaps', () => {
   const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration & Proving.ServerProvingConfiguration;
+  let configuration: DefaultConfiguration & Proving.ServerProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -87,6 +92,11 @@ describe('Swaps', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      costParameters: {
+        additionalFeeOverhead: 900_000_000_000_000n,
+        feeBlocksMargin: 5,
+      },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -98,36 +108,34 @@ describe('Swaps', () => {
   let walletBFacade: WalletFacade;
 
   beforeEach(async () => {
-    const Shielded = CustomShieldedWallet(
-      configuration,
-      new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
-    );
-    const shieldedWalletA = Shielded.startWithShieldedSeed(shieldedWalletASeed);
-    const shieldedWalletB = Shielded.startWithShieldedSeed(shieldedWalletBSeed);
-
-    const unshieldedWalletA = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore));
-
-    const unshieldedWalletB = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore));
-
-    const Dust = DustWallet({
-      ...configuration,
-      costParameters: {
-        additionalFeeOverhead: 900_000_000_000_000n,
-        feeBlocksMargin: 5,
-      },
-    });
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    const dustWalletA = Dust.startWithSeed(dustWalletASeed, dustParameters);
-    const dustWalletB = Dust.startWithSeed(dustWalletBSeed, dustParameters);
 
-    walletAFacade = new WalletFacade(shieldedWalletA, unshieldedWalletA, dustWalletA);
-    walletBFacade = new WalletFacade(shieldedWalletB, unshieldedWalletB, dustWalletB);
+    walletAFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) => CustomShieldedWallet(
+        config,
+        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
+      ).startWithShieldedSeed(shieldedWalletASeed),
+      unshielded: (config) =>
+        UnshieldedWallet({
+          ...config,
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
+    });
+    walletBFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) => CustomShieldedWallet(
+        config,
+        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
+      ).startWithShieldedSeed(shieldedWalletBSeed),
+      unshielded: (config) =>
+        UnshieldedWallet({
+          ...config,
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
+    });
 
     await Promise.all([
       walletAFacade.start(
@@ -186,10 +194,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
@@ -198,10 +211,14 @@ describe('Swaps', () => {
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
     const walletBBalancedTxRecipe = await walletBFacade.balanceUnboundTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       unboundSwapTx,
-      new Date(Date.now() + 60 * 60 * 1000),
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl: new Date(Date.now() + 60 * 60 * 1000),
+      },
     );
 
     const finalizedTx = await walletBFacade.finalizeRecipe(walletBBalancedTxRecipe);
@@ -271,10 +288,15 @@ describe('Swaps', () => {
     ];
 
     const swapTxRecipe = await walletAFacade.initSwap(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
       desiredInputs,
       desiredOutputs,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletASeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletASeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const signedSwapTxRecipe = await walletAFacade.signRecipe(swapTxRecipe, (payload) => {
@@ -285,10 +307,14 @@ describe('Swaps', () => {
 
     // the tx is picked up by another wallet (wallet B)
     const walletBBalancedTxRecipe = await walletBFacade.balanceFinalizedTransaction(
-      ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
-      ledger.DustSecretKey.fromSeed(dustWalletBSeed),
       finalizedSwapTx,
-      ttl,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedWalletBSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustWalletBSeed),
+      },
+      {
+        ttl,
+      },
     );
 
     const walletBSignedTxRecipe = await walletBFacade.signRecipe(walletBBalancedTxRecipe, (payload) => {

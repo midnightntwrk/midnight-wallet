@@ -10,40 +10,43 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Scope, Types, Either } from 'effect';
-import { Expect, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
-import { DustSecretKey, FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
-import { WalletRuntimeError, VariantBuilder, Variant } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Effect, Scope, type Types, type Either } from 'effect';
+import { type Expect, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
 import {
-  SyncService,
-  SyncCapability,
-  DefaultSyncConfiguration,
+  type WalletRuntimeError,
+  type VariantBuilder,
+  type Variant,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { Proving, type WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import {
+  type SyncService,
+  type SyncCapability,
+  type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
   makeDefaultSyncService,
-  WalletSyncUpdate,
+  type WalletSyncUpdate,
 } from './Sync.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { DustCoreWallet } from './DustCoreWallet.js';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import {
   chooseCoin,
-  CoinsAndBalancesCapability,
-  CoinSelection,
-  DefaultCoinsAndBalancesContext,
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type DefaultCoinsAndBalancesContext,
   makeDefaultCoinsAndBalancesCapability,
 } from './CoinsAndBalances.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TransactingCapability,
+  type TransactingCapability,
 } from './Transacting.js';
-import { NetworkId } from './types/ledger.js';
-import { DefaultSubmissionConfiguration, makeDefaultSubmissionService, SubmissionService } from './Submission.js';
-import { DustToken } from './types/Dust.js';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
-import { TotalCostParameters } from './types/transaction.js';
+import { type NetworkId } from './types/ledger.js';
+import { type DustToken } from './types/Dust.js';
+import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import { type TotalCostParameters } from './types/transaction.js';
 
 export type BaseV1Configuration = {
   networkId: NetworkId;
@@ -103,7 +106,6 @@ export class V1Builder<
       .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
-      .withSubmissionDefaults()
       .withProvingDefaults()
       .withCoinSelectionDefaults() as DefaultV1Builder;
   }
@@ -113,7 +115,6 @@ export class V1Builder<
       ...this.#buildState,
       provingService: undefined,
       transactingCapability: undefined,
-      submissionService: undefined,
     });
   }
 
@@ -361,45 +362,6 @@ export class V1Builder<
     });
   }
 
-  withSubmission<TSubmissionConfig, TSubmissionContext extends Partial<RunningV1Variant.AnyContext>>(
-    submissionService: (
-      config: TSubmissionConfig,
-      getContext: () => TSubmissionContext,
-    ) => SubmissionService<TTransaction>,
-  ): V1Builder<
-    TConfig & TSubmissionConfig,
-    TContext & TSubmissionContext,
-    TSerialized,
-    TSyncUpdate,
-    TTransaction,
-    TStartAux
-  > {
-    return new V1Builder<
-      TConfig & TSubmissionConfig,
-      TContext & TSubmissionContext,
-      TSerialized,
-      TSyncUpdate,
-      TTransaction,
-      TStartAux
-    >({
-      ...this.#buildState,
-      submissionService,
-    });
-  }
-
-  withSubmissionDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, FinalizedTransaction, TStartAux>,
-  ): V1Builder<
-    TConfig & DefaultSubmissionConfiguration,
-    TContext,
-    TSerialized,
-    TSyncUpdate,
-    FinalizedTransaction,
-    TStartAux
-  > {
-    return this.withSubmission(makeDefaultSubmissionService);
-  }
-
   build(
     this: V1Builder<
       TConfig,
@@ -425,7 +387,6 @@ export class V1Builder<
         Scope.Scope
       > {
         return Effect.gen(function* () {
-          yield* Effect.addFinalizer(() => v1Context.submissionService.close());
           const scope = yield* Scope.Scope;
           return new RunningV1Variant(scope, context, v1Context);
         });
@@ -464,7 +425,6 @@ export class V1Builder<
       coinSelection,
       coinsAndBalancesCapability,
       keysCapability,
-      submissionService,
     } = this.#buildState;
 
     const getContext = (): RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> => context;
@@ -478,7 +438,6 @@ export class V1Builder<
       keysCapability: keysCapability(configuration, getContext),
       provingService: provingService(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
-      submissionService: submissionService(configuration, getContext),
     };
 
     return context;
@@ -534,10 +493,6 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<DustCoreWallet>;
   };
 
-  type HasSubmission<TConfig, TContext, TTransaction> = {
-    readonly submissionService: (configuration: TConfig, getContext: () => TContext) => SubmissionService<TTransaction>;
-  };
-
   /**
    * The internal build state of {@link V1Builder}.
    */
@@ -547,7 +502,6 @@ declare namespace V1Builder {
       HasTransacting<TConfig, TContext, TTransaction> &
       HasCoinSelection<TConfig, TContext> &
       HasProving<TConfig, TContext, TTransaction> &
-      HasSubmission<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext>
   >;
@@ -586,7 +540,6 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'provingService',
     'coinsAndBalancesCapability',
     'keysCapability',
-    'submissionService',
   ] as const;
   /**
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly

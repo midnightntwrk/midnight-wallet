@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { SerializedMnTransaction } from './NodeClient.js';
+import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export type HexString = string;
 
@@ -20,21 +20,21 @@ export const { Submitted, InBlock, Finalized, $match: match, $is: is } = Data.ta
 export declare namespace Cases {
   export type Submitted = {
     _tag: 'Submitted';
-    tx: SerializedMnTransaction;
+    tx: SerializedTransaction.SerializedTransaction;
     txHash: HexString;
   };
   export type InBlock = {
     _tag: 'InBlock';
     blockHash: HexString;
     blockHeight: bigint;
-    tx: SerializedMnTransaction;
+    tx: SerializedTransaction.SerializedTransaction;
     txHash: HexString;
   };
   export type Finalized = {
     _tag: 'Finalized';
     blockHash: HexString;
     blockHeight: bigint;
-    tx: SerializedMnTransaction;
+    tx: SerializedTransaction.SerializedTransaction;
     txHash: HexString;
   };
 }

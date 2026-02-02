@@ -24,6 +24,10 @@ export type CoinWithValue<TToken> = {
   value: Balance;
 };
 
+/**
+ * Type describing a Night UTxO together with details of estimated Dust generation.
+ * It is meant to be primarily used for fee estimation of Dust registration transaction
+ */
 export type UtxoWithFullDustDetails = Readonly<{
   utxo: UtxoWithMeta;
   dust: DustGenerationDetails;

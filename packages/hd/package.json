@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-hd",
-  "version": "3.0.0-beta.8",
+  "version": "3.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -39,7 +39,7 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",

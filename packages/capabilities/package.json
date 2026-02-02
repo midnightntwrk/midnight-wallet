@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-capabilities",
-  "version": "3.0.0-beta.11",
+  "version": "3.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -21,15 +21,26 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./submission": {
+      "types": "./dist/submission/index.d.ts",
+      "import": "./dist/submission/index.js"
+    },
+    "./pendingTransactions": {
+      "types": "./dist/pendingTransactions/index.d.ts",
+      "import": "./dist/pendingTransactions/index.js"
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-node-client": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.0.0",
     "effect": "^3.19.14"
   },
   "devDependencies": {
-    "@midnight-ntwrk/ledger-v7": "7.0.0-rc.1",
+    "@midnight-ntwrk/ledger-v7": "^7.0.0",
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
     "prettier": "^3.7.0",
@@ -39,7 +50,7 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",

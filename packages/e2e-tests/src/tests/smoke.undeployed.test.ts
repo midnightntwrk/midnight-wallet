@@ -136,10 +136,14 @@ describe('Smoke tests', () => {
         },
       ];
       const txRecipe = await funded.wallet.transferTransaction(
-        funded.shieldedSecretKeys,
-        funded.dustSecretKey,
         outputsToCreate,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 30 * 60 * 1000),
+        },
       );
       const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
         unshieldedFundedKeyStore.signData(payload),

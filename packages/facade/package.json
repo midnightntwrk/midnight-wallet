@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-facade",
-  "version": "1.0.0-beta.16",
+  "version": "1.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -24,17 +24,18 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v7": "7.0.0-rc.1",
-    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0-beta.10",
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0-beta.11",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "1.0.0-beta.15",
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0-beta.8",
-    "@midnight-ntwrk/wallet-sdk-shielded": "1.0.0-beta.16",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "1.0.0-beta.18",
+    "@midnight-ntwrk/ledger-v7": "^7.0.0",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-shielded": "^1.0.0",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "^1.0.0",
     "rxjs": "^7.5"
   },
   "devDependencies": {
-    "@midnight-ntwrk/wallet-sdk-prover-client": "1.0.0-beta.13",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.0.0",
     "eslint": "^9.37.0",
     "prettier": "^3.7.0",
     "publint": "~0.3.14",
@@ -44,7 +45,7 @@
     "vitest": "^4.0.16"
   },
   "scripts": {
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",

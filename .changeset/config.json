@@ -13,6 +13,10 @@
     "@midnight-ntwrk/wallet-sdk-docs-snippets",
     "@midnight-ntwrk/wallet-test-website"
   ],
+  "snapshot": {
+    "useCalculatedVersion": true,
+    "prereleaseTemplate": "{tag}"
+  },
   "privatePackages": {
     "version": true,
     "tag": false

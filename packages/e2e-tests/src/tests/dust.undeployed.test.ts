@@ -101,10 +101,12 @@ describe('Dust tests', () => {
 
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const txRecipe = await funded.wallet.transferTransaction(
-      funded.shieldedSecretKeys,
-      funded.dustSecretKey,
       outputsToCreate,
-      ttl,
+      {
+        shieldedSecretKeys: funded.shieldedSecretKeys,
+        dustSecretKey: funded.dustSecretKey,
+      },
+      { ttl },
     );
     const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
       funded.unshieldedKeystore.signData(payload),
@@ -232,10 +234,12 @@ describe('Dust tests', () => {
       );
 
       const balancedTransactionRecipe = await receiver.wallet.balanceUnprovenTransaction(
-        receiver.shieldedSecretKeys,
-        receiver.dustSecretKey,
         dustDeregistrationRecipe.transaction,
-        new Date(Date.now() + 30 * 60 * 1000),
+        {
+          shieldedSecretKeys: receiver.shieldedSecretKeys,
+          dustSecretKey: receiver.dustSecretKey,
+        },
+        { ttl: new Date(Date.now() + 30 * 60 * 1000) },
       );
 
       const finalizedDustTx = await receiver.wallet.finalizeRecipe(balancedTransactionRecipe);
@@ -327,10 +331,12 @@ describe('Dust tests', () => {
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
       const txRecipe = await receiver.wallet.transferTransaction(
-        receiver.shieldedSecretKeys,
-        receiver.dustSecretKey,
         outputsToCreate,
-        ttl,
+        {
+          shieldedSecretKeys: receiver.shieldedSecretKeys,
+          dustSecretKey: receiver.dustSecretKey,
+        },
+        { ttl },
       );
       const finalizedTx = await receiver.wallet.finalizeRecipe(txRecipe);
       const txId = await receiver.wallet.submitTransaction(finalizedTx);
@@ -409,10 +415,12 @@ describe('Dust tests', () => {
       ];
       const ttl = new Date(Date.now() + 30 * 60 * 1000);
       const txRecipe = await receiver.wallet.transferTransaction(
-        receiver.shieldedSecretKeys,
-        receiver.dustSecretKey,
         outputsToCreate,
-        ttl,
+        {
+          shieldedSecretKeys: receiver.shieldedSecretKeys,
+          dustSecretKey: receiver.dustSecretKey,
+        },
+        { ttl },
       );
       const signedTxRecipe = await receiver.wallet.signRecipe(txRecipe, (payload) =>
         receiver.unshieldedKeystore.signData(payload),
