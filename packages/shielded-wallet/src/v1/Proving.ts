@@ -44,30 +44,36 @@ export const makeProvingService = (
   };
 };
 
-export type DefaultProvingConfiguration = {
+export type WasmProvingConfiguration = {
   keyMaterialProvider?: KeyMaterialProvider;
 };
 
-export const makeDefaultProvingService = (
-  configuration: DefaultProvingConfiguration,
-): ProvingService<ledger.FinalizedTransaction> => {
-  const proverLayer = WasmProver.layer({
-    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
-  });
-  return makeProvingService(proverLayer);
-};
-
-export type ServerProvingConfiguration = {
+export type ProvingServerConfiguration = {
   provingServerUrl: URL;
 };
 
+export type DefaultProvingConfiguration = ProvingServerConfiguration;
+
+export const makeDefaultProvingService = (
+  configuration: DefaultProvingConfiguration,
+): ProvingService<ledger.FinalizedTransaction> => makeServerProvingService(configuration);
+
 export const makeServerProvingService = (
-  configuration: ServerProvingConfiguration,
+  configuration: ProvingServerConfiguration,
 ): ProvingService<ledger.FinalizedTransaction> => {
   const clientLayer = HttpProverClient.layer({
     url: configuration.provingServerUrl,
   });
   return makeProvingService(clientLayer);
+};
+
+export const makeWasmProvingService = (
+  configuration: WasmProvingConfiguration,
+): ProvingService<ledger.FinalizedTransaction> => {
+  const proverLayer = WasmProver.layer({
+    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
+  });
+  return makeProvingService(proverLayer);
 };
 
 export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> => {

@@ -70,7 +70,7 @@ describe('Wallet Facade Transfer', () => {
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration & Proving.ServerProvingConfiguration;
+  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -106,20 +106,22 @@ describe('Wallet Facade Transfer', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     senderFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => CustomShieldedWallet(
-        config,
-        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
-      ).startWithShieldedSeed(shieldedSenderSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
-      shielded: (config) => CustomShieldedWallet(
-        config,
-        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
-      ).startWithShieldedSeed(shieldedReceiverSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),

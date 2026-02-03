@@ -10,9 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-// TODO: check
-import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
@@ -73,7 +71,7 @@ describe('Dust Registration', () => {
   const unshieldedSenderKeystore = createKeystore(unshieldedSenderSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration & Proving.ServerProvingConfiguration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -121,14 +119,14 @@ describe('Dust Registration', () => {
 
     senderFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => CustomShieldedWallet(config, new V1Builder().withDefaults().withProving(Proving.makeServerProvingService)).startWithShieldedSeed(shieldedSenderSeed),
+      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => CustomShieldedWallet(config, new V1Builder().withDefaults().withProving(Proving.makeServerProvingService)).startWithShieldedSeed(shieldedReceiverSeed),
+      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),

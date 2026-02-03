@@ -234,6 +234,7 @@ export class TestContainersFixture {
         indexerHttpUrl: this.getIndexerUri(),
         indexerWsUrl: this.getIndexerWsUri(),
       },
+      provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
     };

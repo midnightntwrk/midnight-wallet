@@ -75,7 +75,7 @@ function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTran
   });
 }
 
-runInterfaceTests('Default Proving', () => Effect.succeed(Proving.makeDefaultProvingService({})));
+runInterfaceTests('Wasm Proving', () => Effect.succeed(Proving.makeWasmProvingService({})));
 
 runInterfaceTests('Server Proving', () =>
   pipe(
@@ -88,12 +88,12 @@ runInterfaceTests('Server Proving', () =>
   ),
 );
 
-describe('Default Proving Service', () => {
+describe('Wasm Proving Service', () => {
   const testUnprovenTx = makeTransaction();
 
   it('does transform unproven transaction into final, proven transaction', async () => {
     const finalTx = await Effect.gen(function* () {
-      const service = Proving.makeDefaultProvingService({});
+      const service = Proving.makeWasmProvingService({});
       return yield* service.prove(testUnprovenTx);
     }).pipe(Effect.scoped, Effect.runPromise);
 

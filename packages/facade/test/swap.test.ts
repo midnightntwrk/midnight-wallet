@@ -35,7 +35,7 @@ import {
   WalletFacade,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-import { makeProvingService } from './utils/proving.js';
+import { makeWasmProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
 
@@ -75,7 +75,7 @@ describe('Swaps', () => {
   const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration & Proving.ServerProvingConfiguration;
+  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -112,10 +112,11 @@ describe('Swaps', () => {
 
     walletAFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => CustomShieldedWallet(
-        config,
-        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
-      ).startWithShieldedSeed(shieldedWalletASeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -125,10 +126,11 @@ describe('Swaps', () => {
     });
     walletBFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => CustomShieldedWallet(
-        config,
-        new V1Builder().withDefaults().withProving(Proving.makeServerProvingService),
-      ).startWithShieldedSeed(shieldedWalletBSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -154,7 +156,7 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeProvingService(configuration.provingServerUrl);
+    const provingService = makeWasmProvingService(configuration.keyMaterialProvider);
 
     const facadeAState = await waitForFullySynced(walletAFacade);
     const facadeBState = await waitForFullySynced(walletBFacade);
