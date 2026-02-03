@@ -47,13 +47,10 @@ describe('WasmProver', () => {
       async () => {
         await Effect.gen(function* () {
           const proveClient = yield* ProverClient.ProverClient;
-
           const spendCoinAmount = 1_000n;
 
           const validTx = makeValidTransaction(spendCoinAmount);
-
           const tx = yield* proveClient.proveTransaction(validTx, CostModel.initialCostModel());
-
           const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
 
           // workaround because imbalances keys are objects, while js compares them by reference

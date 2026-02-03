@@ -33,7 +33,7 @@ export declare namespace ProverClient {
   }
 
   /**
-   * Provides wasm-related configuration for {@link ProverClient} implementations.
+   * Provides wasm-related configuration for {@link KeyMaterialProvider} implementations.
    */
   interface WasmConfig {
     /** The Key Material Provider. */

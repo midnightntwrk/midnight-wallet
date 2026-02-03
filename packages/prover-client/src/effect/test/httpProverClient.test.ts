@@ -107,11 +107,7 @@ describe('HttpProverClient', () => {
           expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
         }).pipe(
           Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
-          Effect.catchAll((err) => {
-            // eslint-disable-next-line no-console
-            console.error(err);
-            return Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`);
-          }),
+          Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );
       },
