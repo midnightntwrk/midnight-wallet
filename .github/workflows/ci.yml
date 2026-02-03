@@ -127,7 +127,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -198,7 +198,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -342,7 +342,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: build-publish-artifacts-${{ github.run_id }}
           path: .
