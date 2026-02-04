@@ -104,17 +104,9 @@ console.dir(
       'pendingCoins',
       'totalCoins',
       'progress',
-      'transactionHistory',
       'address',
     ]),
-    dust: pick(syncedState.dust, [
-      'totalCoins',
-      'availableCoins',
-      'pendingCoins',
-      'progress',
-      'dustPublicKey',
-      'dustAddress',
-    ]),
+    dust: pick(syncedState.dust, ['totalCoins', 'availableCoins', 'pendingCoins', 'progress', 'publicKey', 'address']),
   },
   { depth: null },
 );

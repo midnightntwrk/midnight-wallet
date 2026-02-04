@@ -373,12 +373,6 @@ exports[`Snippet outputs > with network > should output the correct result for '
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
-    transactionHistory: {
-      create: [AsyncFunction: create],
-      get: [AsyncFunction: get],
-      getAll: [Function: getAll],
-      delete: [AsyncFunction: delete]
-    },
     address: UnshieldedAddress {
       data: Buffer(32) [Uint8Array] [
         188,  97,  13, 208, 124,  82, 245, 144,
@@ -494,6 +488,15 @@ exports[`Snippet outputs > with network > should output the correct result for '
       highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
       highestRelevantIndex: 0n
+    },
+    publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+    address: DustAddress {
+      data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
+        type: 'dust',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
     }
   }
 }
