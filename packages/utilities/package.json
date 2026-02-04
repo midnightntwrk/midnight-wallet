@@ -3,9 +3,6 @@
   "description": "Domain-agnostic utilities for the wallet SDK - common operations and types",
   "version": "1.0.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -20,18 +17,34 @@
   },
   "exports": {
     ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./networking": {
+      "development": {
+        "types": "./src/networking/index.ts",
+        "import": "./src/networking/index.ts"
+      },
       "types": "./dist/networking/index.d.ts",
       "import": "./dist/networking/index.js"
     },
     "./types": {
+      "development": {
+        "types": "./src/types.ts",
+        "import": "./src/types.ts"
+      },
       "types": "./dist/types.d.ts",
       "import": "./dist/types.js"
     },
     "./testing": {
+      "development": {
+        "types": "./src/testing/index.ts",
+        "import": "./src/testing/index.ts"
+      },
       "types": "./dist/testing/index.d.ts",
       "import": "./dist/testing/index.js"
     }
