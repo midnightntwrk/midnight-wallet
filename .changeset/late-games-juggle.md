@@ -7,7 +7,6 @@
 ## Added
 
 - Implemented WebAssembly (WASM) proving provider as an alternative to server-based proving
-- Exposed `WasmProver` implementation with configurable key material provider
 - Added `ProverClient.WasmConfig` interface for WASM prover configuration
 - Introduced Web Worker-based proof generation with message-based communication
 - Added comprehensive test coverage for both server and WASM proving services
