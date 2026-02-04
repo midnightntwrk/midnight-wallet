@@ -1,0 +1,189 @@
+// This file is part of MIDNIGHT-WALLET-SDK.
+// Copyright (C) 2025 Midnight Foundation
+// SPDX-License-Identifier: Apache-2.0
+// Licensed under the Apache License, Version 2.0 (the "License");
+// You may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+import {
+  Bindingish,
+  DustLocalState,
+  DustNullifier,
+  DustParameters,
+  DustPublicKey,
+  DustSecretKey,
+  Proofish,
+  Signaturish,
+  Transaction,
+  Event,
+} from '@midnight-ntwrk/ledger-v7';
+import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { Array as Arr, pipe } from 'effect';
+import { DustToken, DustTokenWithNullifier } from './types/Dust.js';
+import { CoinWithValue } from './CoinsAndBalances.js';
+import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
+
+export type PublicKey = {
+  publicKey: DustPublicKey;
+};
+
+export const PublicKey = {
+  fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
+    return {
+      publicKey: secretKey.publicKey,
+    };
+  },
+};
+
+export class CoreWallet {
+  readonly state: DustLocalState;
+  readonly publicKey: PublicKey;
+  readonly protocolVersion: ProtocolVersion.ProtocolVersion;
+
+  readonly progress: SyncProgress.SyncProgress;
+  readonly networkId: NetworkId;
+  readonly pendingDustTokens: Array<DustTokenWithNullifier>;
+
+  constructor(
+    state: DustLocalState,
+    publicKey: PublicKey,
+    networkId: NetworkId,
+    pendingDustTokens: Array<DustTokenWithNullifier> = [],
+    syncProgress?: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
+    protocolVersion: ProtocolVersion.ProtocolVersion = ProtocolVersion.MinSupportedVersion,
+  ) {
+    this.state = state;
+    this.publicKey = publicKey;
+    this.networkId = networkId;
+    this.pendingDustTokens = pendingDustTokens;
+    this.protocolVersion = protocolVersion;
+    this.progress = syncProgress ? SyncProgress.createSyncProgress(syncProgress) : SyncProgress.createSyncProgress();
+  }
+
+  static init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
+    return new CoreWallet(localState, PublicKey.fromSecretKey(secretKey), networkId);
+  }
+
+  static readonly initEmpty = (
+    dustParameters: DustParameters,
+    secretKey: DustSecretKey,
+    networkId: NetworkId,
+  ): CoreWallet => {
+    return CoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
+  };
+
+  static empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): CoreWallet {
+    return new CoreWallet(localState, publicKey, networkId);
+  }
+
+  static restore(
+    localState: DustLocalState,
+    publicKey: PublicKey,
+    pendingTokens: Array<DustTokenWithNullifier>,
+    syncProgress: SyncProgress.SyncProgressData,
+    protocolVersion: bigint,
+    networkId: NetworkId,
+  ): CoreWallet {
+    return new CoreWallet(
+      localState,
+      publicKey,
+      networkId,
+      pendingTokens,
+      syncProgress,
+      ProtocolVersion.ProtocolVersion(protocolVersion),
+    );
+  }
+
+  applyEvents(secretKey: DustSecretKey, events: Event[], currentTime: Date): CoreWallet {
+    if (!events.length) return this;
+
+    // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
+    const updatedState = this.state.replayEvents(secretKey, events).processTtls(currentTime);
+
+    let updatedPending = this.pendingDustTokens;
+    if (updatedPending.length) {
+      const newAvailable = updatedState.utxos.map((utxo) => utxo.nonce);
+      updatedPending = updatedPending.filter((pendingToken) => newAvailable.includes(pendingToken.nonce));
+    }
+
+    return new CoreWallet(updatedState, this.publicKey, this.networkId, updatedPending, this.progress);
+  }
+
+  applyFailed(tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
+    const removedPending: DustNullifier[] = [];
+    let updatedState = this.state;
+    if (tx.intents) {
+      const pendingTokensMap = CoreWallet.pendingDustTokensToMap(this.pendingDustTokens);
+      for (const intent of tx.intents.values()) {
+        if (intent.dustActions && intent.dustActions.spends) {
+          for (const spend of intent.dustActions.spends) {
+            const pending = pendingTokensMap.get(spend.oldNullifier);
+            if (pending === undefined) continue;
+            removedPending.push(spend.oldNullifier);
+            updatedState = updatedState.processTtls(
+              DateOps.addSeconds(pending.ctime, this.state.params.dustGracePeriodSeconds),
+            );
+          }
+        }
+      }
+    }
+    const pendingLeft = this.pendingDustTokens.filter((token) => !removedPending.includes(token.nullifier));
+    return new CoreWallet(updatedState, this.publicKey, this.networkId, pendingLeft, this.progress);
+  }
+
+  revertTransaction<TTransaction extends Transaction<Signaturish, Proofish, Bindingish>>(tx: TTransaction): CoreWallet {
+    return this.applyFailed(tx);
+  }
+
+  updateProgress({
+    appliedIndex,
+    highestRelevantWalletIndex,
+    highestIndex,
+    highestRelevantIndex,
+    isConnected,
+  }: Partial<SyncProgress.SyncProgressData>): CoreWallet {
+    const updatedProgress = SyncProgress.createSyncProgress({
+      appliedIndex: appliedIndex ?? this.progress.appliedIndex,
+      highestRelevantWalletIndex: highestRelevantWalletIndex ?? this.progress.highestRelevantWalletIndex,
+      highestIndex: highestIndex ?? this.progress.highestIndex,
+      highestRelevantIndex: highestRelevantIndex ?? this.progress.highestRelevantIndex,
+      isConnected: isConnected ?? this.progress.isConnected,
+    });
+
+    return new CoreWallet(this.state, this.publicKey, this.networkId, this.pendingDustTokens, updatedProgress);
+  }
+
+  spendCoins(
+    secretKey: DustSecretKey,
+    coins: ReadonlyArray<CoinWithValue<DustToken>>,
+    currentTime: Date,
+  ): [ReadonlyArray<UnprovenDustSpend>, CoreWallet] {
+    const [output, newState, newPending] = pipe(
+      coins,
+      Arr.reduce(
+        [[], this.state, this.pendingDustTokens],
+        (
+          [spends, localState]: [ReadonlyArray<UnprovenDustSpend>, DustLocalState, Array<DustTokenWithNullifier>],
+          { token: coinToSpend, value: takeFee },
+        ) => {
+          const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, currentTime);
+          const newPending = [...this.pendingDustTokens, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
+          return [Arr.append(spends, dustSpend), newState, newPending];
+        },
+      ),
+    );
+    const updatedState = new CoreWallet(newState, this.publicKey, this.networkId, newPending, this.progress);
+    return [output, updatedState];
+  }
+
+  static pendingDustTokensToMap(tokens: Array<DustTokenWithNullifier>): Map<DustNullifier, DustToken> {
+    return new Map<DustNullifier, DustToken>(tokens.map(({ nullifier, ...token }) => [nullifier, token]));
+  }
+}
