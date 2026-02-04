@@ -131,14 +131,13 @@ describe('DustWallet', () => {
       const simulatorState = yield* simulator.getLatestState();
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
-      const state = yield* SubscriptionRef.get(stateRef);
 
       const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
         currentTime,
         ttl,
         nightTokens,
         nightVerifyingKey,
-        new DustAddress(state.publicKey.publicKey),
+        undefined,
       );
 
       const balancingTransaction = yield* wallet.balanceTransactions(
