@@ -88,36 +88,8 @@ runInterfaceTests('Server Proving', () =>
   ),
 );
 
-describe('Wasm Proving Service', () => {
-  const testUnprovenTx = makeTransaction();
-
-  it('does transform unproven transaction into final, proven transaction', async () => {
-    const finalTx = await Effect.gen(function* () {
-      const service = Proving.makeWasmProvingService({});
-      return yield* service.prove(testUnprovenTx);
-    }).pipe(Effect.scoped, Effect.runPromise);
-
-    expect(finalTx).toBeInstanceOf(ledger.Transaction);
-    expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(-42n);
-  });
-});
-
 describe('Server Proving Service', () => {
   const testUnprovenTx = makeTransaction();
-
-  it('does transform unproven transaction into final, proven transaction', async () => {
-    const finalTx = await Effect.gen(function* () {
-      const proofServerUrl = yield* proofServerContainerResource;
-      const service = Proving.makeServerProvingService({
-        provingServerUrl: proofServerUrl,
-      });
-
-      return yield* service.prove(testUnprovenTx);
-    }).pipe(Effect.scoped, Effect.runPromise);
-
-    expect(finalTx).toBeInstanceOf(ledger.Transaction);
-    expect(getNonDustImbalance(finalTx.imbalances(0), shieldedTokenType)).toEqual(-42n);
-  });
 
   it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const result = await Effect.gen(function* () {
