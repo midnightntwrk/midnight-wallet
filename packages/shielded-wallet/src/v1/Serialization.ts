@@ -103,7 +103,6 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       coinPublicKey: Schema.String,
       encryptionPublicKey: Schema.String,
     }),
-    txHistory: Schema.Array(HexedTx()),
     state: HexedState(),
     protocolVersion: Schema.BigInt,
     offset: Schema.optional(Schema.BigInt),
@@ -119,7 +118,6 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
     serialize: (wallet) => {
       const buildSnapshot = (w: CoreWallet): Snapshot => ({
         publicKeys: w.publicKeys,
-        txHistory: w.txHistoryArray,
         state: w.state,
         protocolVersion: w.protocolVersion,
         networkId: w.networkId,
@@ -138,7 +136,6 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
           CoreWallet.restoreWithCoinHashes(
             snapshot.publicKeys,
             snapshot.state,
-            snapshot.txHistory,
             snapshot.coinHashes,
             {
               appliedIndex: snapshot.offset ?? 0n,

@@ -16,7 +16,7 @@ import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DefaultV1Configuration } from '../src/v1/index.js';
-import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
+import { createUnshieldedTransactionHistoryStorage } from '../src/index.js';
 import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
 /**
@@ -113,7 +113,7 @@ export const createWalletConfig = (
       indexerHttpUrl: `http://localhost:${indexerPort}/api/v3/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
-    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    txHistoryStorage: createUnshieldedTransactionHistoryStorage(),
   };
 
   return { ...defaultConfig, ...overrides };

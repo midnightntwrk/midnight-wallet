@@ -41,7 +41,7 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction>;
+  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet>;
 };
 
 const Uint8ArraySchema = Schema.declare(
@@ -206,7 +206,10 @@ export const makeEventsSyncService = (
   };
 };
 
-export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeEventsSyncCapability = (
+  _config: DefaultSyncConfiguration,
+  getContext: () => DefaultSyncContext,
+): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
       if (wrappedUpdate.updates.length === 0) {
@@ -225,19 +228,24 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         });
       }
 
+      const { transactionHistoryCapability } = getContext();
+      // TODO This is where i need to do the call to the changes etc as
       return wrappedUpdate.secretKeys((keys) => {
-        return CoreWallet.updateProgress(
-          CoreWallet.replayEvents(
-            state,
-            keys,
-            wrappedUpdate.updates.map((u) => u.event),
-          ),
-          {
-            highestRelevantWalletIndex,
-            appliedIndex: nextIndex,
-            isConnected: true,
-          },
+        const [newState, changes]: [CoreWallet, ledger.ZswapStateChanges[]] = CoreWallet.replayEventsWithChanges(
+          state,
+          keys,
+          wrappedUpdate.updates.map((u) => u.event),
         );
+
+        changes.forEach((changes) => {
+          void transactionHistoryCapability.create(newState, changes);
+        });
+
+        return CoreWallet.updateProgress(newState, {
+          highestRelevantWalletIndex,
+          appliedIndex: nextIndex,
+          isConnected: true,
+        });
       });
     },
   };
@@ -271,7 +279,10 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         secretKeys,
       } = update;
 
-      return CoreWallet.replayEvents(state, secretKeys, events);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call -- CoreWallet.replayEventsWithChanges types are correct; upstream CoreWallet type errors cause inference to fail
+      const [newState] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return -- newState is CoreWallet; upstream type errors cause inference to fail
+      return newState;
     },
   };
 };

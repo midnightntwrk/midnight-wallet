@@ -1,8 +1,11 @@
 {
-  "name": "@midnight-ntwrk/wallet-sdk-runtime",
-  "description": "Runtime for the wallet variants",
+  "name": "@midnight-ntwrk/wallet-sdk-abstractions",
+  "description": "Domain-specific abstractions for the wallet SDK",
   "version": "1.0.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -17,27 +20,22 @@
   },
   "exports": {
     ".": {
-      "development": {
-        "types": "./src/index.ts",
-        "import": "./src/index.ts"
-      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./abstractions": {
-      "development": {
-        "types": "./src/abstractions/index.ts",
-        "import": "./src/abstractions/index.ts"
-      },
-      "types": "./dist/abstractions/index.d.ts",
-      "import": "./dist/abstractions/index.js"
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0",
-    "effect": "^3.19.14",
-    "rxjs": "^7.5"
+    "effect": "^3.19.14"
+  },
+  "devDependencies": {
+    "eslint": "^9.37.0",
+    "fast-check": "^4.2.0",
+    "prettier": "^3.7.0",
+    "publint": "~0.3.14",
+    "rimraf": "^6.0.1",
+    "to-words": "^4.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.16"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
@@ -49,14 +47,5 @@
     "dist:publish": "tsc -b ./tsconfig.publish.json",
     "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
     "publint": "publint --strict"
-  },
-  "devDependencies": {
-    "eslint": "^9.32.0",
-    "fast-check": "^4.2.0",
-    "prettier": "^3.7.0",
-    "publint": "~0.3.14",
-    "rimraf": "^6.0.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
   }
 }

@@ -16,7 +16,7 @@ import {
   type ShieldedWalletState,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { InMemoryTransactionHistoryStorage, type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
@@ -55,6 +55,7 @@ describe('Wallet serialization and restoration', () => {
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 

@@ -28,6 +28,7 @@ import {
   CoreWallet,
   V1Tag,
   type Transacting,
+  InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
@@ -93,6 +94,7 @@ describe.skip('Wallet transacting', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
