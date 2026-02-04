@@ -509,7 +509,7 @@ describe('Optional Balancing', () => {
 
   describe('initSwap', () => {
     it('does not pay fees when payFees is false', async () => {
-      const receiverAddress = await facade.shielded.getAddress();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -523,7 +523,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress,
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -543,7 +543,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const receiverAddress = await facade.shielded.getAddress();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -557,7 +557,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress,
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -579,7 +579,7 @@ describe('Optional Balancing', () => {
 
   describe('transferTransaction', () => {
     it('does not pay fees when payFees is false', async () => {
-      const receiverAddress = await facade.shielded.getAddress();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -588,7 +588,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress,
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -608,7 +608,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const receiverAddress = await facade.shielded.getAddress();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -617,7 +617,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress,
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
