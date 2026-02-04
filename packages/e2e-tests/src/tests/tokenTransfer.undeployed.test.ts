@@ -1045,7 +1045,7 @@ describe('Token transfer', () => {
             ttl: new Date(Date.now() + 60 * 60 * 1000),
           },
         ),
-      ).rejects.toThrow(`Error: Couldn't deserialize u128 from a BigInt outside u128::MIN..u128::MAX bounds`);
+      ).rejects.toThrow(`Failed to process desired outputs`);
     },
     timeout,
   );

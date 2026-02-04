@@ -186,6 +186,8 @@ describe('Smoke tests', () => {
     timeout,
   );
 
+  // TODO @QA - update to test the restored state properly
+  // NOTE: tx history is not part of state anymore
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
@@ -198,7 +200,6 @@ describe('Smoke tests', () => {
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await funded.wallet.shielded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(0);
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
@@ -291,7 +292,7 @@ describe('Smoke tests', () => {
       const restoredState = await restoredWallet.waitForSyncedState();
       logger.info(restoredState);
       expect(restoredState.publicKey).toBe(publicKey);
-      expect(restoredState.address).toBeInstanceOf(address);
+      expect(restoredState.address.equals(address)).toBe(true);
       expect(restoredState.balance(new Date(3 * 1000))).toBe(dustBalance);
       await restoredWallet.stop();
     },

@@ -141,16 +141,15 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      // await shieldedWallet.waitForSyncedState();
+      const initialState = await shieldedWallet.waitForSyncedState();
       const serialized = await shieldedWallet.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(0);
       expect(Number(stateObject.offset)).toBeGreaterThanOrEqual(0);
       expect(stateObject.state).toBeTruthy();
 
       const restoredWallet = Wallet.restore(serialized);
       const newState = await firstValueFrom(restoredWallet.state);
-      expect(newState.address.coinPublicKeyString()).toMatch(/^[0-9a-f]{64}$/);
+      expect(newState.address.equals(initialState.address)).toEqual(true);
       // compareStates(newState, state);
       // expect(state.syncProgress?.lag?.applyGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.applyGap ?? 0);
       // expect(state.syncProgress?.lag?.sourceGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.sourceGap ?? 0);
@@ -208,7 +207,7 @@ describe('Fresh wallet with empty state', () => {
       await restoredWallet.start(dustSecretKey);
       const restoredState = await firstValueFrom(restoredWallet.state);
       expect(publicKey).toBe(restoredState.publicKey);
-      expect(address).toBe(restoredState.address);
+      expect(address.equals(restoredState.address)).toEqual(true);
     },
     timeout,
   );
@@ -291,7 +290,7 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
       const state = await firstValueFrom(wallet.wallet.shielded.state);
-      expect(state.transactionHistory).toHaveLength(0);
+      expect(() => state.transactionHistory).toThrow();
     },
     timeout,
   );
@@ -419,7 +418,6 @@ describe('Fresh wallet with empty state', () => {
       // allure.story('Wallet returns Bech32m encryption public key');
       const walletState = await firstValueFrom(wallet.wallet.dust.state);
       const dustAddress = walletState.address;
-      expect(dustAddress).toBeTruthy();
       expect(dustAddress).toBeInstanceOf(DustAddress);
     },
     timeout,
