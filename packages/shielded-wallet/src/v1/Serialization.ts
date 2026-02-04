@@ -15,7 +15,6 @@ import { WalletError } from './WalletError.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { TransactionHistoryEntrySchema } from '../storage/TransactionHistoryStorage.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;

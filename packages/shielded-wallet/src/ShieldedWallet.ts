@@ -24,7 +24,8 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+// import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -87,9 +88,17 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.keys.getAddress(this.state);
   }
 
-  get progress(): ProgressUpdate {
-    return this.capabilities.transactionHistory.progress(this.state);
-  }
+  // TODO IAN progress is removed at the moment!! But we might need it back
+
+  // get progress(): ProgressUpdate {
+  //   // return this.capabilities.transactionHistory.progress(this.state);
+  //   return {
+  //     appliedIndex: state.progress.appliedIndex,
+  //     highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+  //     highestIndex: state.progress.highestIndex,
+  //     highestRelevantIndex: state.progress.highestRelevantIndex,
+  //   };
+  // }
 
   get transactionHistory(): TransactionHistoryCapability<CoreWallet> {
     return this.capabilities.transactionHistory; // transactionHistory(this.state);

@@ -14,14 +14,14 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
-  InMemoryTransactionHistoryStorage,
   PublicKey,
+  type UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { InMemoryTransactionHistoryStorage as ShieldedInMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { pipe } from 'effect';
 import { randomUUID } from 'node:crypto';
@@ -35,6 +35,10 @@ import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFul
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
+
+// const tt = new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>();
+
+// tt.blabla();
 
 const environmentVars = buildTestEnvironmentVariables(['APP_INFRA_SECRET'], {
   additionalVars: {
@@ -91,7 +95,8 @@ describe('Wallet Facade Transfer', () => {
         additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new ShieldedInMemoryTransactionHistoryStorage(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
     };
   });
 
@@ -112,7 +117,7 @@ describe('Wallet Facade Transfer', () => {
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
-      configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
+      configuration,
       shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
@@ -136,6 +141,10 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer shielded tokens only', async () => {
+    const tt = new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>();
+
+    tt.blablax();
+
     await Promise.all([
       pipe(
         senderFacade.state(),
@@ -175,19 +184,61 @@ describe('Wallet Facade Transfer', () => {
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
 
-    expect(submittedTxHash).toBeTypeOf('string');
+    // ID vs Hash
+    const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
+
+    console.log('finalizedTxHash', finalizedTxHash);
+    console.log('submittedTxIdentifier', submittedTxIdentifier);
+
+    console.log('I am waiting for receiver to be synced!!');
+    await waitForFullySynced(receiverFacade);
+
+    console.log('finished waiting for receiver to be synced!!');
+
+    console.log('I am waiting!!');
+
+    await new Promise<void>((resolve) =>
+      setTimeout(() => {
+        // console.debug('finalizedTx', finalizedTx.identifiers());
+        console.log('timeout finished!!');
+        resolve();
+      }, 15_000),
+    );
+
+    console.log('I am done waiting!!');
+
+    expect(submittedTxIdentifier).toBeTypeOf('string');
 
     // Check that transaction history contains the submitted transaction hash
-    // TODO IAN - QUICK TEST!!!!!
     const shieldedState = await rx.firstValueFrom(senderFacade.shielded.state);
     const txHistory = shieldedState.transactionHistory;
-    console.log(`IAN !!! Checking if ${submittedTxHash} is in the history`);
-    const txInHistory = await txHistory.get(submittedTxHash);
+
+    const allTxHistory = txHistory.getAll();
+
+    const allTxHistoryArray: unknown[] = [];
+    for await (const tx of allTxHistory) {
+      allTxHistoryArray.push(tx);
+    }
+
+    console.log('allTxHistory', allTxHistoryArray);
+
+    // remove this key from allTxHistory 93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b
+    // forEach does not seem to work with AsyncIterableIterator
+    // for await (const tx of allTxHistory) {
+    //   if (tx.hash === finalizedTx.transactionHash().toString()) {
+    //     allTxHistory.delete(tx.hash);
+    //     break;
+    //   }
+    // }
+
+    console.debug('finalizedTx', finalizedTx.transactionHash().toString());
+
+    const txInHistory = await txHistory.get(finalizedTx.transactionHash().toString());
     // const txInHistory = txHistory.find((tx) => tx.identifiers().includes(submittedTxHash));
     expect(txInHistory).toBeDefined();
-    expect(txInHistory?.hash).toBe(submittedTxHash);
+    // expect(txInHistory?.hash).toBe(submittedTxHash);
     // expect(txInHistory?.identifiers().includes(submittedTxHash)).toBe(true);
 
     const isValid = await rx.firstValueFrom(

@@ -5,6 +5,7 @@
     "target": "ESNext",
     "lib": ["ESNext"],
     "moduleResolution": "NodeNext",
+    "customConditions": ["development"],
     "strict": true,
     "declaration": true,
     "declarationMap": true,

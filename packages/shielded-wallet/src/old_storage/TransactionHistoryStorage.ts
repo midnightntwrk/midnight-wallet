@@ -36,6 +36,11 @@ export const TransactionHistoryEntrySchema = Schema.Struct({
 
 export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;
 
+// Move to abstraction...
+//TODO IAN
+
+// Own implmentation for each wallet using the same interface !
+
 export interface TransactionHistoryStorage {
   create(entry: TransactionHistoryEntry): Promise<void>;
   delete(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;

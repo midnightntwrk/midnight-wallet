@@ -23,5 +23,9 @@ export * as Simulator from './Simulator.js';
 export * as WalletError from './WalletError.js';
 export * from './CoreWallet.js';
 export * from './TransactionOps.js';
-export * as TransactionHistoryStorage from '../storage/index.js';
+// export {
+//   InMemoryTransactionHistoryStorage,
+//   NoOpTransactionHistoryStorage,
+//   type TransactionHistoryStorage,
+// } from '@midnight-ntwrk/wallet-sdk-abstractions';
 export * as UnshieldedState from './UnshieldedState.js';

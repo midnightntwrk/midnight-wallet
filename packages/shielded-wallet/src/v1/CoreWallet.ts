@@ -15,7 +15,7 @@ import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
 import { InvalidCoinHashesError, WalletError } from './WalletError.js';
-import { TransactionHistoryEntry } from '../storage/TransactionHistoryStorage.js';
+import { TransactionHistoryEntry } from './TransactionHistory.js';
 
 export type PublicKeys = {
   coinPublicKey: ledger.CoinPublicKey;
@@ -184,6 +184,8 @@ export const CoreWallet = {
 
     return [updatedWallet, stateWithChanges.changes];
   },
+
+  // TODO IAN ProgressUpdate should move here from the TransactionHistory capability
 
   updateProgress(
     wallet: CoreWallet,
