@@ -17,11 +17,11 @@ import { Buffer } from 'buffer';
 import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
 
 const sender = await initWalletWithSeed(
-  Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
+  Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'),
 );
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
-await sender.wallet.waitForSyncedState();
+await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
 await sender.wallet
   .transferTransaction(

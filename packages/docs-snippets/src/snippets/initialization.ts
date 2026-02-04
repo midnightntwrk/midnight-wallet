@@ -94,7 +94,6 @@ console.dir(
       'pendingCoins',
       'totalCoins',
       'progress',
-      'transactionHistory',
       'coinPublicKey',
       'encryptionPublicKey',
       'address',

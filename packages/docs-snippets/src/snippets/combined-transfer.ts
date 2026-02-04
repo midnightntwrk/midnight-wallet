@@ -23,8 +23,7 @@ const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
-const receiverShieldedAddress = await receiver.wallet.shielded.getAddress();
-const receiverUnshieldedAddress = await receiver.wallet.unshielded.getAddress();
+await rx.firstValueFrom(receiver.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
 await sender.wallet
   .transferTransaction(
@@ -34,7 +33,7 @@ await sender.wallet
         outputs: [
           {
             amount: 1_000_000n,
-            receiverAddress: receiverUnshieldedAddress,
+            receiverAddress: await receiver.wallet.unshielded.getAddress(),
             type: ledger.unshieldedToken().raw,
           },
         ],
@@ -44,7 +43,7 @@ await sender.wallet
         outputs: [
           {
             amount: 1_000_000n,
-            receiverAddress: receiverShieldedAddress,
+            receiverAddress: await receiver.wallet.shielded.getAddress(),
             type: ledger.shieldedToken().raw,
           },
         ],

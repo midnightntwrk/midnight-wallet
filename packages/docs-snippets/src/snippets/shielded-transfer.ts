@@ -21,7 +21,9 @@ const sender = await initWalletWithSeed(
 );
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
-await receiver.wallet.waitForSyncedState();
+await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+
+await rx.firstValueFrom(receiver.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
 await sender.wallet
   .transferTransaction(
