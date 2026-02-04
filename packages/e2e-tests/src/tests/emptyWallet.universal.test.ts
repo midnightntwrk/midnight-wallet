@@ -28,7 +28,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { logger } from './logger.js';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
 
 /**
@@ -105,7 +105,7 @@ describe('Fresh wallet with empty state', () => {
 
     const entropy = Buffer.from(KeyManagement.util.mnemonicWordsToEntropy(mnemonics), 'hex');
     try {
-      Wallet.startWithShieldedSeed(entropy);
+      Wallet.startWithSeed(entropy);
       // If we reach here, no error was thrown
       expect(true).toBe(true);
     } catch (error) {
@@ -129,9 +129,9 @@ describe('Fresh wallet with empty state', () => {
 
   test('Unable to start wallet with invalid seed', () => {
     const shortSeed = Buffer.from('12345', 'hex');
-    expect(() => Wallet.startWithShieldedSeed(shortSeed)).toThrowError('Expected 32-byte seed');
+    expect(() => Wallet.startWithSeed(shortSeed)).toThrowError('Expected 32-byte seed');
     const invalidSeed = Buffer.from('"000000000000000000000000000000000000000000000000000000000000009', 'hex');
-    expect(() => Wallet.startWithShieldedSeed(invalidSeed)).toThrowError('Expected 32-byte seed');
+    expect(() => Wallet.startWithSeed(invalidSeed)).toThrowError('Expected 32-byte seed');
   });
 
   test(
@@ -196,8 +196,8 @@ describe('Fresh wallet with empty state', () => {
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
       const state = await utils.waitForSyncFacade(wallet.wallet);
-      const publicKey = state.dust.dustPublicKey;
-      const address = state.dust.dustAddress;
+      const publicKey = state.dust.publicKey;
+      const address = state.dust.address;
       const serialized = await wallet.wallet.dust.serializeState();
       const stateObject = await JSON.parse(serialized);
       expect(stateObject.publicKey.publicKey).toContain(publicKey);
@@ -207,8 +207,8 @@ describe('Fresh wallet with empty state', () => {
       const restoredWallet = Dust.restore(serialized);
       await restoredWallet.start(dustSecretKey);
       const restoredState = await firstValueFrom(restoredWallet.state);
-      expect(publicKey).toBe(restoredState.dustPublicKey);
-      expect(address).toBe(restoredState.dustAddress);
+      expect(publicKey).toBe(restoredState.publicKey);
+      expect(address).toBe(restoredState.address);
     },
     timeout,
   );
@@ -394,7 +394,7 @@ describe('Fresh wallet with empty state', () => {
     'Dust wallet returns empty balance',
     async () => {
       const walletState = await firstValueFrom(wallet.wallet.dust.state);
-      expect(walletState.walletBalance(new Date())).toBe(0n);
+      expect(walletState.balance(new Date())).toBe(0n);
     },
     timeout,
   );
@@ -403,7 +403,7 @@ describe('Fresh wallet with empty state', () => {
     'Dust wallet returns valid public key',
     async () => {
       const walletState = await firstValueFrom(wallet.wallet.dust.state);
-      const publicKey = walletState.dustPublicKey;
+      const publicKey = walletState.publicKey;
       expect(publicKey).toBeTruthy();
       expect(publicKey).toBeTypeOf('bigint');
     },
@@ -418,10 +418,9 @@ describe('Fresh wallet with empty state', () => {
       // allure.feature('Wallet state - Bech32m');
       // allure.story('Wallet returns Bech32m encryption public key');
       const walletState = await firstValueFrom(wallet.wallet.dust.state);
-      const dustAddress = walletState.dustAddress;
-      logger.info(`Dust Address: ${dustAddress}`);
+      const dustAddress = walletState.address;
       expect(dustAddress).toBeTruthy();
-      utils.validateNetworkInAddress(String(dustAddress));
+      expect(dustAddress).toBeInstanceOf(DustAddress);
     },
     timeout,
   );

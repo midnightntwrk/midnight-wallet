@@ -21,7 +21,7 @@ const sender = await initWalletWithSeed(
 );
 const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
-await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+await sender.wallet.waitForSyncedState();
 
 await sender.wallet
   .transferTransaction(
@@ -31,7 +31,7 @@ await sender.wallet
         outputs: [
           {
             amount: 1_000_000n,
-            receiverAddress: receiver.unshieldedKeystore.getBech32Address().toString(),
+            receiverAddress: await receiver.wallet.unshielded.getAddress(),
             type: ledger.unshieldedToken().raw,
           },
         ],

@@ -13,7 +13,7 @@
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { DustCoreWallet } from './DustCoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
@@ -71,10 +71,10 @@ const SnapshotSchema = Schema.Struct({
 
 type Snapshot = Schema.Schema.Type<typeof SnapshotSchema>;
 
-export const makeDefaultV1SerializationCapability = (): SerializationCapability<DustCoreWallet, null, string> => {
+export const makeDefaultV1SerializationCapability = (): SerializationCapability<CoreWallet, null, string> => {
   return {
     serialize: (wallet) => {
-      const buildSnapshot = (w: DustCoreWallet): Snapshot => ({
+      const buildSnapshot = (w: CoreWallet): Snapshot => ({
         publicKey: w.publicKey,
         state: w.state,
         protocolVersion: w.protocolVersion,
@@ -84,7 +84,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
     },
-    deserialize: (aux, serialized): Either.Either<DustCoreWallet, WalletError.WalletError> => {
+    deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError.WalletError> => {
       return pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
@@ -92,7 +92,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>
-              DustCoreWallet.restore(
+              CoreWallet.restore(
                 snapshot.state,
                 snapshot.publicKey,
                 [],

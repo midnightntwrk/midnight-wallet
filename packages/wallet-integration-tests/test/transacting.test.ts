@@ -110,16 +110,13 @@ describe.skip('Wallet transacting', () => {
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
 
-  const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): string => {
-    const address =
-      state instanceof ledger.ZswapSecretKeys
-        ? new ShieldedAddress(
-            ShieldedCoinPublicKey.fromHexString(state.coinPublicKey),
-            ShieldedEncryptionPublicKey.fromHexString(state.encryptionPublicKey),
-          )
-        : keys!.getAddress(state);
-
-    return ShieldedAddress.codec.encode(Wallet.configuration.networkId, address).asString();
+  const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
+    return state instanceof ledger.ZswapSecretKeys
+      ? new ShieldedAddress(
+          ShieldedCoinPublicKey.fromHexString(state.coinPublicKey),
+          ShieldedEncryptionPublicKey.fromHexString(state.encryptionPublicKey),
+        )
+      : keys!.getAddress(state);
   };
 
   const waitForSync = (wallet: Wallet): Promise<CoreWallet> => {

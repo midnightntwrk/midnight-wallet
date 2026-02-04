@@ -62,7 +62,7 @@ describe('Syncing', () => {
       async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
         for (let i = 0; i < seeds.length; i++) {
           unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
-          shieldedWallets[i] = Wallet.startWithShieldedSeed(seeds[i]);
+          shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
           dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
         }
 

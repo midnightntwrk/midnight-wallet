@@ -12,7 +12,6 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
@@ -105,14 +104,14 @@ describe('Wallet Facade Transfer', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     senderFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
@@ -145,9 +144,7 @@ describe('Wallet Facade Transfer', () => {
       waitForFullySynced(receiverFacade),
     ]);
 
-    const ledgerReceiverAddress = ShieldedAddress.codec
-      .encode(configuration.networkId, await receiverFacade.shielded.getAddress())
-      .asString();
+    const receiverAddress = await receiverFacade.shielded.getAddress();
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
     const unprovenTxRecipe = await senderFacade.transferTransaction(
@@ -157,7 +154,7 @@ describe('Wallet Facade Transfer', () => {
           outputs: [
             {
               type: ledger.shieldedToken().raw,
-              receiverAddress: ledgerReceiverAddress,
+              receiverAddress,
               amount: tokenValue(1n),
             },
           ],
@@ -198,7 +195,7 @@ describe('Wallet Facade Transfer', () => {
       waitForFullySynced(receiverFacade),
     ]);
 
-    const unshieldedReceiverState = await rx.firstValueFrom(receiverFacade.unshielded.state);
+    const receiverAddress = await receiverFacade.unshielded.getAddress();
 
     const tokenTransfer: CombinedTokenTransfer[] = [
       {
@@ -206,9 +203,7 @@ describe('Wallet Facade Transfer', () => {
         outputs: [
           {
             amount: tokenValue(1n),
-            receiverAddress: UnshieldedAddress.codec
-              .encode(configuration.networkId, unshieldedReceiverState.address)
-              .asString(),
+            receiverAddress,
             type: ledger.unshieldedToken().raw,
           },
         ],

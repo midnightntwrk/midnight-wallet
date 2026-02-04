@@ -105,16 +105,11 @@ const makeOutputOffer = (args: {
   return ledger.ZswapOffer.fromOutput(output, coinToUse.type, coinToUse.value);
 };
 
-const encodeAddress = (keys: ledger.ZswapSecretKeys): string => {
-  return ShieldedAddress.codec
-    .encode(
-      NetworkId.NetworkId.Undeployed,
-      new ShieldedAddress(
-        ShieldedCoinPublicKey.fromHexString(keys.coinPublicKey),
-        ShieldedEncryptionPublicKey.fromHexString(keys.encryptionPublicKey),
-      ),
-    )
-    .asString();
+const createAddress = (keys: ledger.ZswapSecretKeys): ShieldedAddress => {
+  return new ShieldedAddress(
+    ShieldedCoinPublicKey.fromHexString(keys.coinPublicKey),
+    ShieldedEncryptionPublicKey.fromHexString(keys.encryptionPublicKey),
+  );
 };
 
 const makeTransferOutput = (args: {
@@ -126,7 +121,7 @@ const makeTransferOutput = (args: {
   return {
     type: typeAndValue.tokenType,
     amount: typeAndValue.value,
-    receiverAddress: encodeAddress(keys),
+    receiverAddress: createAddress(keys),
   };
 };
 

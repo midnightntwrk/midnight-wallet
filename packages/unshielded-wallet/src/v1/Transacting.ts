@@ -25,14 +25,14 @@ import {
 import { TransactionOps, UnboundTransaction, IntentOf } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const GUARANTEED_SEGMENT = 0;
 
 export interface TokenTransfer {
   readonly amount: bigint;
   readonly type: ledger.RawTokenType;
-  readonly receiverAddress: string;
+  readonly receiverAddress: UnshieldedAddress;
 }
 
 export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
@@ -233,9 +233,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const ledgerOutputs = outputs.map((output) => {
         return {
           value: output.amount,
-          owner: UnshieldedAddress.codec
-            .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
-            .data.toString('hex'),
+          owner: output.receiverAddress.data.toString('hex'),
           type: output.type,
         };
       });
@@ -297,9 +295,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const ledgerOutputs = desiredOutputs.map((output) => ({
         value: output.amount,
-        owner: UnshieldedAddress.codec
-          .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
-          .data.toString('hex'),
+        owner: output.receiverAddress.data.toString('hex'),
         type: output.type,
       }));
 
