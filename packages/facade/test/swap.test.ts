@@ -12,8 +12,9 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   InMemoryTransactionHistoryStorage,
   PublicKey,
@@ -33,9 +34,9 @@ import {
   WalletFacade,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-import { makeProvingService } from './utils/proving.js';
+import { makeWasmProvingService } from './utils/proving.js';
 
-vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
 
@@ -73,7 +74,7 @@ describe('Swaps', () => {
   const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration;
+  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -110,7 +111,11 @@ describe('Swaps', () => {
 
     walletAFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedWalletASeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -120,7 +125,11 @@ describe('Swaps', () => {
     });
     walletBFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedWalletBSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -146,7 +155,7 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeProvingService(configuration.provingServerUrl);
+    const provingService = makeWasmProvingService(configuration.keyMaterialProvider);
 
     const facadeAState = await waitForFullySynced(walletAFacade);
     const facadeBState = await waitForFullySynced(walletBFacade);

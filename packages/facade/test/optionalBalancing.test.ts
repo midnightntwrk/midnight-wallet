@@ -27,7 +27,7 @@ import {
 import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { makeProvingService } from './utils/proving.js';
+import { makeServerProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -262,7 +262,7 @@ describe('Optional Balancing', () => {
 
   describe('balanceUnboundTransaction', () => {
     it('only balances shielded when tokenKindsToBalance is ["shielded"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -297,7 +297,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -322,7 +322,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -358,7 +358,7 @@ describe('Optional Balancing', () => {
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -398,7 +398,7 @@ describe('Optional Balancing', () => {
     let finalizedTx: ledger.FinalizedTransaction;
 
     beforeAll(async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.proveTransaction(arbitraryTx);

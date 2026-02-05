@@ -11,10 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { ProverClient, HttpProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
+import { ProverClient, HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { Effect, pipe } from 'effect';
 
-export const makeProvingService = (
+export const makeServerProvingService = (
   provingServerUrl: URL,
 ): {
   proveTransaction: (
@@ -23,6 +24,31 @@ export const makeProvingService = (
 } => {
   const clientLayer = HttpProverClient.layer({
     url: provingServerUrl,
+  });
+
+  return {
+    proveTransaction(
+      transaction: ledger.UnprovenTransaction,
+    ): Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>> {
+      return pipe(
+        ProverClient.ProverClient,
+        Effect.flatMap((client) => client.proveTransaction(transaction, ledger.CostModel.initialCostModel())),
+        Effect.provide(clientLayer),
+        Effect.runPromise,
+      );
+    },
+  };
+};
+
+export const makeWasmProvingService = (
+  keyMaterialProvider?: KeyMaterialProvider,
+): {
+  proveTransaction: (
+    transaction: ledger.UnprovenTransaction,
+  ) => Promise<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>;
+} => {
+  const clientLayer = WasmProver.layer({
+    keyMaterialProvider: keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
   });
 
   return {
