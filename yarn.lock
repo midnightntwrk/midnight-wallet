@@ -2471,6 +2471,7 @@ __metadata:
     "@midnight-ntwrk/ledger-v7": "npm:7.0.0"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:1.0.0"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0"
+    "@midnight-ntwrk/zkir-v2": "npm:2.1.0"
     effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     prettier: "npm:^3.7.0"
@@ -2479,6 +2480,7 @@ __metadata:
     testcontainers: "npm:^11.10.0"
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.0.16"
+    web-worker: "npm:^1.5.0"
   languageName: unknown
   linkType: soft
 
@@ -2520,6 +2522,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.0.0"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.0"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0"
+    "@midnight-ntwrk/zkir-v2": "npm:2.1.0"
     "@polkadot/types": "npm:^16.4.1"
     "@scure/base": "npm:^1.1.9"
     effect: "npm:^3.19.14"
@@ -2626,6 +2629,13 @@ __metadata:
     scale-ts: "npm:^1.1.0"
     ws: "npm:^8.8.1"
   checksum: 10c0/8d02651668a82560b4866fcc670780768ecbba0ee4e93f7ca0cfa673fde95868615908160b7b86391ddcc32a8c167f6f383c7a20f95650851d726a6aef889a9b
+  languageName: node
+  linkType: hard
+
+"@midnight-ntwrk/zkir-v2@npm:2.1.0":
+  version: 2.1.0
+  resolution: "@midnight-ntwrk/zkir-v2@npm:2.1.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fzkir-v2%2F2.1.0%2Fb3c8b9720535d7e62b86c5ff8341a13a46eb5c7e"
+  checksum: 10c0/cf139a9dc6834d5e4036af6c65a40d384a02e66c4ef14d1e948fc690be62ce1bcf79d468efb2df719ff573c1825251c9c65630f287fbc76d2026482a13b907ef
   languageName: node
   linkType: hard
 
@@ -11608,6 +11618,13 @@ __metadata:
   version: 3.3.3
   resolution: "web-streams-polyfill@npm:3.3.3"
   checksum: 10c0/64e855c47f6c8330b5436147db1c75cb7e7474d924166800e8e2aab5eb6c76aac4981a84261dd2982b3e754490900b99791c80ae1407a9fa0dcff74f82ea3a7f
+  languageName: node
+  linkType: hard
+
+"web-worker@npm:^1.5.0":
+  version: 1.5.0
+  resolution: "web-worker@npm:1.5.0"
+  checksum: 10c0/d42744757422803c73ca64fa51e1ce994354ace4b8438b3f740425a05afeb8df12dd5dadbf6b0839a08dbda56c470d7943c0383854c4fb1ae40ab874eb10427a
   languageName: node
   linkType: hard
 

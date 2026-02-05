@@ -14,7 +14,8 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { V1Builder, Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   InMemoryTransactionHistoryStorage,
   PublicKey,
@@ -69,7 +70,7 @@ describe('Wallet Facade Transfer', () => {
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration;
+  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -105,14 +106,22 @@ describe('Wallet Facade Transfer', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     senderFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSenderSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
     });
     receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedReceiverSeed),
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithShieldedSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
