@@ -28,7 +28,6 @@ import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeServerProvingService } from './utils/proving.js';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -119,7 +118,7 @@ describe('Optional Balancing', () => {
   beforeEach(async () => {
     facade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSeed),
       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
     });
@@ -510,7 +509,7 @@ describe('Optional Balancing', () => {
 
   describe('initSwap', () => {
     it('does not pay fees when payFees is false', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -524,7 +523,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -544,7 +543,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -558,7 +557,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -580,7 +579,7 @@ describe('Optional Balancing', () => {
 
   describe('transferTransaction', () => {
     it('does not pay fees when payFees is false', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -589,7 +588,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -609,7 +608,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -618,7 +617,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],

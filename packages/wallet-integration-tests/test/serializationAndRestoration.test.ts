@@ -69,7 +69,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an non-empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const wallet = Wallet.startWithShieldedSeed(seed);
+    const wallet = Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();
@@ -94,7 +94,7 @@ describe('Wallet serialization and restoration', () => {
 
   it('allows to restore an empty wallet from the serialized state', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000009');
-    const wallet = Wallet.startWithShieldedSeed(seed);
+    const wallet = Wallet.startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       const syncedState: ShieldedWalletState = await wallet.waitForSyncedState();

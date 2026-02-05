@@ -12,7 +12,6 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
@@ -116,7 +115,7 @@ describe('Swaps', () => {
         CustomShieldedWallet(
           config,
           new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithShieldedSeed(shieldedWalletASeed),
+        ).startWithSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -130,7 +129,7 @@ describe('Swaps', () => {
         CustomShieldedWallet(
           config,
           new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithShieldedSeed(shieldedWalletBSeed),
+        ).startWithSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -172,9 +171,7 @@ describe('Swaps', () => {
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
-    const shieldedWalletAAddress = ShieldedAddress.codec
-      .encode(configuration.networkId, await walletAFacade.shielded.getAddress())
-      .asString();
+    const shieldedWalletAAddress = await walletAFacade.shielded.getAddress();
 
     const desiredInputs: CombinedSwapInputs = {
       shielded: {
@@ -281,9 +278,7 @@ describe('Swaps', () => {
           {
             type: unshieldedTokenType,
             amount: swapForAmount,
-            receiverAddress: UnshieldedAddress.codec
-              .encode(configuration.networkId, walletAUnshieldedStateBefore.address)
-              .asString(),
+            receiverAddress: walletAUnshieldedStateBefore.address,
           },
         ],
       },

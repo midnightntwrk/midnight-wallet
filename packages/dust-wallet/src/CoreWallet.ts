@@ -42,7 +42,7 @@ export const PublicKey = {
   },
 };
 
-export class DustCoreWallet {
+export class CoreWallet {
   readonly state: DustLocalState;
   readonly publicKey: PublicKey;
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
@@ -67,20 +67,20 @@ export class DustCoreWallet {
     this.progress = syncProgress ? SyncProgress.createSyncProgress(syncProgress) : SyncProgress.createSyncProgress();
   }
 
-  static init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): DustCoreWallet {
-    return new DustCoreWallet(localState, PublicKey.fromSecretKey(secretKey), networkId);
+  static init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
+    return new CoreWallet(localState, PublicKey.fromSecretKey(secretKey), networkId);
   }
 
   static readonly initEmpty = (
     dustParameters: DustParameters,
     secretKey: DustSecretKey,
     networkId: NetworkId,
-  ): DustCoreWallet => {
-    return DustCoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
+  ): CoreWallet => {
+    return CoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
   };
 
-  static empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): DustCoreWallet {
-    return new DustCoreWallet(localState, publicKey, networkId);
+  static empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): CoreWallet {
+    return new CoreWallet(localState, publicKey, networkId);
   }
 
   static restore(
@@ -90,8 +90,8 @@ export class DustCoreWallet {
     syncProgress: SyncProgress.SyncProgressData,
     protocolVersion: bigint,
     networkId: NetworkId,
-  ): DustCoreWallet {
-    return new DustCoreWallet(
+  ): CoreWallet {
+    return new CoreWallet(
       localState,
       publicKey,
       networkId,
@@ -101,7 +101,7 @@ export class DustCoreWallet {
     );
   }
 
-  applyEvents(secretKey: DustSecretKey, events: Event[], currentTime: Date): DustCoreWallet {
+  applyEvents(secretKey: DustSecretKey, events: Event[], currentTime: Date): CoreWallet {
     if (!events.length) return this;
 
     // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
@@ -113,14 +113,14 @@ export class DustCoreWallet {
       updatedPending = updatedPending.filter((pendingToken) => newAvailable.includes(pendingToken.nonce));
     }
 
-    return new DustCoreWallet(updatedState, this.publicKey, this.networkId, updatedPending, this.progress);
+    return new CoreWallet(updatedState, this.publicKey, this.networkId, updatedPending, this.progress);
   }
 
-  applyFailed(tx: Transaction<Signaturish, Proofish, Bindingish>): DustCoreWallet {
+  applyFailed(tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
     const removedPending: DustNullifier[] = [];
     let updatedState = this.state;
     if (tx.intents) {
-      const pendingTokensMap = DustCoreWallet.pendingDustTokensToMap(this.pendingDustTokens);
+      const pendingTokensMap = CoreWallet.pendingDustTokensToMap(this.pendingDustTokens);
       for (const intent of tx.intents.values()) {
         if (intent.dustActions && intent.dustActions.spends) {
           for (const spend of intent.dustActions.spends) {
@@ -135,12 +135,10 @@ export class DustCoreWallet {
       }
     }
     const pendingLeft = this.pendingDustTokens.filter((token) => !removedPending.includes(token.nullifier));
-    return new DustCoreWallet(updatedState, this.publicKey, this.networkId, pendingLeft, this.progress);
+    return new CoreWallet(updatedState, this.publicKey, this.networkId, pendingLeft, this.progress);
   }
 
-  revertTransaction<TTransaction extends Transaction<Signaturish, Proofish, Bindingish>>(
-    tx: TTransaction,
-  ): DustCoreWallet {
+  revertTransaction<TTransaction extends Transaction<Signaturish, Proofish, Bindingish>>(tx: TTransaction): CoreWallet {
     return this.applyFailed(tx);
   }
 
@@ -150,7 +148,7 @@ export class DustCoreWallet {
     highestIndex,
     highestRelevantIndex,
     isConnected,
-  }: Partial<SyncProgress.SyncProgressData>): DustCoreWallet {
+  }: Partial<SyncProgress.SyncProgressData>): CoreWallet {
     const updatedProgress = SyncProgress.createSyncProgress({
       appliedIndex: appliedIndex ?? this.progress.appliedIndex,
       highestRelevantWalletIndex: highestRelevantWalletIndex ?? this.progress.highestRelevantWalletIndex,
@@ -159,14 +157,14 @@ export class DustCoreWallet {
       isConnected: isConnected ?? this.progress.isConnected,
     });
 
-    return new DustCoreWallet(this.state, this.publicKey, this.networkId, this.pendingDustTokens, updatedProgress);
+    return new CoreWallet(this.state, this.publicKey, this.networkId, this.pendingDustTokens, updatedProgress);
   }
 
   spendCoins(
     secretKey: DustSecretKey,
     coins: ReadonlyArray<CoinWithValue<DustToken>>,
     currentTime: Date,
-  ): [ReadonlyArray<UnprovenDustSpend>, DustCoreWallet] {
+  ): [ReadonlyArray<UnprovenDustSpend>, CoreWallet] {
     const [output, newState, newPending] = pipe(
       coins,
       Arr.reduce(
@@ -181,7 +179,7 @@ export class DustCoreWallet {
         },
       ),
     );
-    const updatedState = new DustCoreWallet(newState, this.publicKey, this.networkId, newPending, this.progress);
+    const updatedState = new CoreWallet(newState, this.publicKey, this.networkId, newPending, this.progress);
     return [output, updatedState];
   }
 

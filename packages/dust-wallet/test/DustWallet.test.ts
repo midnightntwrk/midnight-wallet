@@ -29,7 +29,7 @@ import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission'
 
 import { expect, vi } from 'vitest';
 import {
-  DustCoreWallet,
+  CoreWallet,
   type RunningV1Variant,
   Transacting,
   type UtxoWithMeta,
@@ -71,7 +71,7 @@ const toTxTime = (secs: number | bigint): Date => new Date(Number(secs) * 1000);
 
 const getCurrentTime = (simulatorState: SimulatorState) => DateOps.addSeconds(toTxTime(simulatorState.lastTxNumber), 1);
 
-const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>, txTime: bigint | number) => {
+const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>, txTime: bigint | number) => {
   const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txTime)));
   return Stream.runLast(stream);
 };
@@ -87,7 +87,7 @@ describe('DustWallet', () => {
   const dustParameters = LedgerParameters.initialParameters().dust;
   let walletVariant: WalletVariant;
   let wallet: RunningWallet;
-  let stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>;
+  let stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>;
   let simulator: Simulator;
   let keyStore: UnshieldedKeystore;
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
@@ -104,7 +104,7 @@ describe('DustWallet', () => {
         ttl,
         nightTokens,
         nightVerifyingKey,
-        DustAddress.encodePublicKey(NETWORK, lastState.publicKey.publicKey),
+        new DustAddress(lastState.publicKey.publicKey),
       );
 
       const intent = registerForDustTransaction.intents!.get(1);
@@ -187,7 +187,7 @@ describe('DustWallet', () => {
           costParameters,
         });
 
-      const initialState = DustCoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
+      const initialState = CoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
       stateRef = yield* SubscriptionRef.make(initialState);
       wallet = yield* walletVariant.start({ stateRef }).pipe(Effect.provideService(Scope.Scope, scope));
       yield* wallet.startSyncInBackground(dustSecretKey);

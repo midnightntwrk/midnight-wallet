@@ -67,7 +67,7 @@ describe('Funded wallet', () => {
         state.unshielded.balances['0000000000000000000000000000000000000000000000000000000000000002'],
       ).toBeUndefined();
       expect(state.dust.totalCoins).toHaveLength(5);
-      expect(state.dust.walletBalance(new Date())).toBe(12500000000000000000000000n);
+      expect(state.dust.balance(new Date())).toBe(12500000000000000000000000n);
     },
     timeout,
   );
