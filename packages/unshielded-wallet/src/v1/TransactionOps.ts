@@ -77,6 +77,7 @@ export const TransactionOps: TransactionOps = {
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[] {
     return transaction.intents?.keys().toArray() ?? [];
   },
+  // @TODO - https://shielded.atlassian.net/browse/PM-21260
   addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
     transaction: TTransaction,
     signature: ledger.Signature,
