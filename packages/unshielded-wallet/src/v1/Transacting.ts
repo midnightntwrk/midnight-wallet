@@ -352,7 +352,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);
         const signature = signSegment(signedData);
-        transaction = (yield* this.txOps.addSignature(transaction, signature, segment)) as T;
+        transaction = yield* this.txOps.addSignature<T>(transaction, signature, segment);
       }
       return transaction;
     });
