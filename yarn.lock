@@ -2236,7 +2236,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-address-format@workspace:packages/address-format"
   dependencies:
     "@midnight-ntwrk/ledger-v7": "npm:7.0.0"
-    "@scure/base": "npm:^1.2.6"
+    "@scure/base": "npm:^2.0.0"
     "@subsquid/scale-codec": "npm:^4.0.1"
     "@types/node": "npm:22.17.0"
     eslint: "npm:^9.37.0"
@@ -2349,7 +2349,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-hd@workspace:packages/hd"
   dependencies:
     "@ethereumjs/wallet": "npm:^3.0.0-alpha.1"
-    "@scure/base": "npm:^1.1.9"
+    "@scure/base": "npm:^2.0.0"
     "@scure/bip32": "npm:^1.6.2"
     "@scure/bip39": "npm:^1.5.4"
     eslint: "npm:^9.37.0"
@@ -2524,7 +2524,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.0"
     "@midnight-ntwrk/zkir-v2": "npm:2.1.0"
     "@polkadot/types": "npm:^16.4.1"
-    "@scure/base": "npm:^1.1.9"
+    "@scure/base": "npm:^2.0.0"
     effect: "npm:^3.19.14"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.2.0"
@@ -3808,10 +3808,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:^1.1.9, @scure/base@npm:^1.2.6, @scure/base@npm:~1.2.5":
+"@scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:~1.2.5":
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
+  languageName: node
+  linkType: hard
+
+"@scure/base@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "@scure/base@npm:2.0.0"
+  checksum: 10c0/7d999c7bebf053bb49cb706fdc6c5366737cff0f7f7518f52d32d7f7ad7b898904f03673648a2af5c4f22396f5c05f1d8bddbf010d6595052d07ba8163d506ad
   languageName: node
   linkType: hard
 
