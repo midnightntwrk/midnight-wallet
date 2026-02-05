@@ -352,7 +352,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);
         const signature = signSegment(signedData);
-        transaction = (yield* this.txOps.addSignature(transaction, signature, segment)) as T;
+        transaction = yield* this.txOps.addSignature<T>(transaction, signature, segment);
       }
       return transaction;
     });
@@ -489,6 +489,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   * @TODO - https://shielded.atlassian.net/browse/PM-21260
    */
   #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
     wallet: CoreWallet,
