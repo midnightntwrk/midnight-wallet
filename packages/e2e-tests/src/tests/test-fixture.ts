@@ -13,14 +13,15 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { MidnightNetwork } from './utils.js';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
+import { type MidnightNetwork } from './utils.js';
 import { logger } from './logger.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { getComposeDirectory, buildTestEnvironmentVariables } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -227,7 +228,7 @@ export class TestContainersFixture {
     }
   }
 
-  public getWalletConfig(): DefaultV1Configuration {
+  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration {
     return {
       indexerClientConnection: {
         indexerHttpUrl: this.getIndexerUri(),

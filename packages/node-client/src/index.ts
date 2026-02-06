@@ -13,13 +13,14 @@
 import {
   NodeClient,
   PolkadotNodeClient as EffectNodeClient,
-  SubmissionEvent,
-  NodeClientError,
-  Config,
+  type SubmissionEvent,
+  type NodeClientError,
+  type Config,
 } from './effect/index.js';
 import { Effect, Exit, pipe, Scope } from 'effect';
-import { Observable } from '@polkadot/types/types';
+import { type Observable } from '@polkadot/types/types';
 import { ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export { Config, makeConfig, DEFAULT_CONFIG } from './effect/PolkadotNodeClient.js';
 
@@ -44,25 +45,25 @@ export class PolkadotNodeClient {
   }
 
   sendMidnightTransaction(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
   ): Observable<SubmissionEvent.SubmissionEvent> {
     return ObservableOps.fromStream(this.#effectClient.sendMidnightTransaction(serializedTransaction));
   }
 
   sendMidnightTransactionAndWait(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
     waitFor: SubmissionEvent.Cases.Submitted['_tag'],
   ): Promise<SubmissionEvent.Cases.Submitted>;
   sendMidnightTransactionAndWait(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
     waitFor: SubmissionEvent.Cases.InBlock['_tag'],
   ): Promise<SubmissionEvent.Cases.InBlock>;
   sendMidnightTransactionAndWait(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
     waitFor: SubmissionEvent.Cases.Finalized['_tag'],
   ): Promise<SubmissionEvent.Cases.Finalized>;
   sendMidnightTransactionAndWait(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
     waitFor: SubmissionEvent.SubmissionEvent['_tag'],
   ): Promise<SubmissionEvent.SubmissionEvent> {
     const runRequest = <A>(

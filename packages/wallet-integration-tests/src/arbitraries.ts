@@ -71,7 +71,7 @@ export const outputsArbitrary = <TRecipient>(
 
 export const swapParamsArbitrary = (
   balances: Record<ledger.RawTokenType, bigint>,
-  selfAddress: string,
+  selfAddress: ShieldedAddress,
 ): fc.Arbitrary<{
   inputs: Record<ledger.RawTokenType, bigint>;
   outputs: TokenTransfer[];

@@ -54,7 +54,7 @@ await shieldedWallet.start(shieldedSecretKeys);
 
 ```typescript
 // Start directly with a shielded seed
-const shieldedWallet = ShieldedWallet(configuration).startWithShieldedSeed(seed);
+const shieldedWallet = ShieldedWallet(configuration).startWithSeed(seed);
 await shieldedWallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
 ```
 

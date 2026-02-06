@@ -15,7 +15,6 @@ import * as rx from 'rxjs';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Buffer } from 'buffer';
 import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
@@ -24,12 +23,7 @@ const receiver = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
 await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
-const receiverAddress = await rx.firstValueFrom(
-  receiver.wallet.state().pipe(
-    rx.filter((s) => s.isSynced),
-    rx.map((s) => MidnightBech32m.encode('undeployed', s.shielded.address).toString()),
-  ),
-);
+await rx.firstValueFrom(receiver.wallet.state().pipe(rx.filter((s) => s.isSynced)));
 
 await sender.wallet
   .transferTransaction(
@@ -39,7 +33,7 @@ await sender.wallet
         outputs: [
           {
             amount: 1_000_000n,
-            receiverAddress: receiver.unshieldedKeystore.getBech32Address().toString(),
+            receiverAddress: await receiver.wallet.unshielded.getAddress(),
             type: ledger.unshieldedToken().raw,
           },
         ],
@@ -49,7 +43,7 @@ await sender.wallet
         outputs: [
           {
             amount: 1_000_000n,
-            receiverAddress,
+            receiverAddress: await receiver.wallet.shielded.getAddress(),
             type: ledger.shieldedToken().raw,
           },
         ],

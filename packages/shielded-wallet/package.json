@@ -37,6 +37,7 @@
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.0.0",
     "@midnight-ntwrk/wallet-sdk-runtime": "1.0.0",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0",
+    "@midnight-ntwrk/zkir-v2": "2.1.0",
     "@scure/base": "^1.1.9",
     "effect": "^3.19.14",
     "isomorphic-ws": "^5.0.0",
@@ -46,7 +47,7 @@
     "ws": "^8.18.3"
   },
   "scripts": {
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "test": "vitest run",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",

@@ -72,7 +72,7 @@ describe('Set up test wallet', () => {
       const initialState = await firstValueFrom(sender.wallet.state());
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
-      const initialDustBalance = initialState.dust.walletBalance(new Date());
+      const initialDustBalance = initialState.dust.balance(new Date());
 
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
@@ -86,11 +86,11 @@ describe('Set up test wallet', () => {
       const initialReceiverState = await firstValueFrom(receiver.wallet.state());
       const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
       const initialReceiverUnshieldedBalance = initialReceiverState.unshielded.balances[unshieldedTokenRaw];
-      const receiverUnshieldedAddress = utils.getUnshieldedAddress(networkId, initialReceiverState.unshielded.address);
-      logger.info(`Receiver unshielded address: ${receiverUnshieldedAddress}`);
+      const receiverUnshieldedAddress = initialReceiverState.unshielded.address;
+      // logger.info(`Receiver unshielded address: ${receiverUnshieldedAddress}`);
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance} shielded tokens`);
       logger.info(`Wallet 2: ${initialReceiverUnshieldedBalance} unshielded tokens`);
-      logger.info(`Wallet 2 address: ${receiverUnshieldedAddress}`);
+      // logger.info(`Wallet 2 address: ${receiverUnshieldedAddress}`);
       logger.info(inspect(initialReceiverState.shielded.availableCoins, { depth: null }));
       logger.info(inspect(initialReceiverState.unshielded.availableCoins, { depth: null }));
       // Sending shielded and unshielded tokens to receiver wallet
@@ -101,7 +101,7 @@ describe('Set up test wallet', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+              receiverAddress: initialReceiverState.shielded.address,
             },
           ],
         },
@@ -172,7 +172,7 @@ describe('Set up test wallet', () => {
       const initialState = await firstValueFrom(sender.wallet.state());
       const initialNativeToken1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNativeToken2Balance = initialState.shielded.balances[nativeToken2Raw];
-      const initialDustBalance = initialState.dust.walletBalance(new Date());
+      const initialDustBalance = initialState.dust.balance(new Date());
 
       logger.info(`Wallet 1: ${initialNativeToken1Balance} native 1 tokens`);
       logger.info(`Wallet 1: ${initialNativeToken2Balance} native 2 tokens`);
@@ -184,8 +184,7 @@ describe('Set up test wallet', () => {
       const initialReceiverState = await firstValueFrom(receiver.wallet.state());
       const initialReceiverNativeToken1Balance = initialReceiverState.shielded.balances[nativeToken1Raw];
       const initialReceiverNativeToken2Balance = initialReceiverState.shielded.balances[nativeToken2Raw];
-      const receiverShieldedAddress = utils.getShieldedAddress(networkId, initialReceiverState.shielded.address);
-      logger.info(`Receiver shielded address: ${receiverShieldedAddress}`);
+      const receiverShieldedAddress = initialReceiverState.shielded.address;
       logger.info(`Wallet 2: ${initialReceiverNativeToken1Balance} native 1 tokens`);
       logger.info(`Wallet 2: ${initialReceiverNativeToken2Balance} native 2 tokens`);
 

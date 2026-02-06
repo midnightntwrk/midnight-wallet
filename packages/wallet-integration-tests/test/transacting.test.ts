@@ -17,17 +17,17 @@ import {
   ShieldedEncryptionPublicKey,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { Variant, WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import {
-  CoinsAndBalances,
-  DefaultRunningV1,
-  DefaultV1Configuration,
-  DefaultV1Variant,
-  Keys,
+  type CoinsAndBalances,
+  type DefaultRunningV1,
+  type DefaultV1Configuration,
+  type DefaultV1Variant,
+  type Keys,
   V1Builder,
   CoreWallet,
   V1Tag,
-  Transacting,
+  type Transacting,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, pipe } from 'effect';
@@ -37,7 +37,8 @@ import os from 'node:os';
 import prand from 'pure-rand';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment } from 'testcontainers';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
+import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
 import { getShieldedSeed } from './utils.js';
@@ -62,7 +63,7 @@ const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: str
  */
 describe.skip('Wallet transacting', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultV1Configuration & Submission.DefaultSubmissionConfiguration;
 
   beforeEach(async () => {
     const environmentId = randomUUID();
@@ -107,17 +108,15 @@ describe.skip('Wallet transacting', () => {
   let wallet2: Wallet;
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
+  let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
 
-  const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): string => {
-    const address =
-      state instanceof ledger.ZswapSecretKeys
-        ? new ShieldedAddress(
-            ShieldedCoinPublicKey.fromHexString(state.coinPublicKey),
-            ShieldedEncryptionPublicKey.fromHexString(state.encryptionPublicKey),
-          )
-        : keys!.getAddress(state);
-
-    return ShieldedAddress.codec.encode(Wallet.configuration.networkId, address).asString();
+  const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
+    return state instanceof ledger.ZswapSecretKeys
+      ? new ShieldedAddress(
+          ShieldedCoinPublicKey.fromHexString(state.coinPublicKey),
+          ShieldedEncryptionPublicKey.fromHexString(state.encryptionPublicKey),
+        )
+      : keys!.getAddress(state);
   };
 
   const waitForSync = (wallet: Wallet): Promise<CoreWallet> => {
@@ -148,6 +147,7 @@ describe.skip('Wallet transacting', () => {
   };
 
   beforeEach(async () => {
+    submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
@@ -205,7 +205,7 @@ describe.skip('Wallet transacting', () => {
             Effect.flatMap((tx) =>
               Effect.all({
                 transaction: Effect.succeed(tx),
-                submissionResult: v1.submitTransaction(tx, 'Finalized'),
+                submissionResult: submissionService.submitTransaction(tx, 'Finalized'),
               }),
             ),
           );
@@ -249,7 +249,7 @@ describe.skip('Wallet transacting', () => {
             ])
             .pipe(
               Effect.flatMap((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
-              Effect.flatMap((tx) => v1.submitTransaction(tx, 'Finalized')),
+              Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
             ),
       })
       .pipe(Effect.runPromise);
@@ -288,7 +288,7 @@ describe.skip('Wallet transacting', () => {
               pipe(
                 v1.balanceTransaction(wallet2Keys, tx),
                 Effect.andThen((unprovenTx) => v1.finalizeTransaction(unprovenTx!)),
-                Effect.tap((tx) => v1.submitTransaction(tx, 'Finalized')),
+                Effect.tap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
               ),
           });
         }),
