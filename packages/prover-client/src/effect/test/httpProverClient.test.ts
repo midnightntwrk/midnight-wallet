@@ -85,7 +85,7 @@ describe('HttpProverClient', () => {
     }, timeout_minutes(1));
 
     it(
-      'should prove a valid transaction',
+      'should prove a valid transaction using the default server prover',
       async () => {
         await Effect.gen(function* () {
           const proveClient = yield* ProverClient.ProverClient;
@@ -107,6 +107,37 @@ describe('HttpProverClient', () => {
           expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
         }).pipe(
           Effect.provide(HttpProverClient.layer({ url: `http://127.0.0.1:${proofServerPort()}` })),
+          Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
+          Effect.runPromise,
+        );
+      },
+      timeout_minutes(5),
+    );
+
+    it(
+      'should prove a valid transaction using a custom prover',
+      async () => {
+        await Effect.gen(function* () {
+          const proveClient = yield* HttpProverClient.create({
+            url: `http://127.0.0.1:${proofServerPort()}`,
+          });
+
+          const spendCoinAmount = 1_000n;
+
+          const validTx = makeValidTransaction(spendCoinAmount);
+
+          const tx = yield* proveClient.proveTransaction(validTx, CostModel.initialCostModel());
+
+          const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
+
+          // workaround because imbalances keys are objects, while js compares them by reference
+          const filteredImbalances = Array.from(imbalances.entries()).filter(
+            ([tokenType, tokenValue]) => tokenType.tag === shieldedTokenType.tag && tokenValue <= spendCoinAmount,
+          );
+
+          expect(filteredImbalances.length).toEqual(1);
+          expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
+        }).pipe(
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
           Effect.runPromise,
         );

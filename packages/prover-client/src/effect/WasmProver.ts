@@ -27,6 +27,12 @@ export const layer: (config: ProverClient.WasmConfig) => Layer.Layer<ProverClien
   config,
 ) => Layer.effect(ProverClient, Effect.succeed(new WasmProverImpl(config.keyMaterialProvider)));
 
+export const create = (
+  config: ProverClient.WasmConfig,
+): Effect.Effect<ProverClient.Service, InvalidProtocolSchemeError> => {
+  return Effect.succeed(new WasmProverImpl(config.keyMaterialProvider));
+};
+
 const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
 
 const LookupKeySchema = Schema.Struct({
@@ -143,6 +149,10 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
         }),
       ),
     );
+  }
+
+  asProvingProvider() {
+    return this.wasmProverProvider();
   }
 }
 
