@@ -12,34 +12,38 @@
 // limitations under the License.
 import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
 import {
-  DustSecretKey,
+  type DustSecretKey,
   nativeToken,
-  Signature,
-  SignatureVerifyingKey,
-  FinalizedTransaction,
-  UnprovenTransaction,
+  type Signature,
+  type SignatureVerifyingKey,
+  type FinalizedTransaction,
+  type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { type Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
-  WalletRuntimeError,
-  Variant,
+  type WalletRuntimeError,
+  type Variant,
   StateChange,
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { DustToken, UtxoWithMeta } from './types/Dust.js';
-import { KeysCapability } from './Keys.js';
-import { SyncCapability, SyncService } from './Sync.js';
-import { SimulatorState } from './Simulator.js';
-import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
-import { TransactingCapability } from './Transacting.js';
-import { SubmissionService, SubmitTransactionMethod } from './Submission.js';
-import { DustCoreWallet } from './DustCoreWallet.js';
-import { SerializationCapability } from './Serialization.js';
-import { AnyTransaction } from './types/ledger.js';
+import { type DustToken, type UtxoWithMeta } from './types/Dust.js';
+import { type KeysCapability } from './Keys.js';
+import { type SyncCapability, type SyncService } from './Sync.js';
+import { type SimulatorState } from './Simulator.js';
+import {
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type UtxoWithFullDustDetails,
+} from './CoinsAndBalances.js';
+import { type TransactingCapability } from './Transacting.js';
+import { type CoreWallet } from './CoreWallet.js';
+import { type SerializationCapability } from './Serialization.js';
+import { type AnyTransaction } from './types/ledger.js';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
-const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet>[] => {
+const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
   const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
   const highestIndex = state.progress?.highestIndex ?? 0n;
@@ -51,10 +55,7 @@ const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (
-  previous: DustCoreWallet,
-  current: DustCoreWallet,
-): StateChange.StateChange<DustCoreWallet>[] => {
+const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return previous.protocolVersion != current.protocolVersion
     ? [
         StateChange.VersionChange({
@@ -68,14 +69,13 @@ const protocolVersionChange = (
 
 export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
-    serializationCapability: SerializationCapability<DustCoreWallet, null, TSerialized>;
-    syncService: SyncService<DustCoreWallet, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<DustCoreWallet, TSyncUpdate>;
-    transactingCapability: TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>;
+    serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
+    syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    transactingCapability: TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
     provingService: Proving.ProvingService<TTransaction>;
-    coinsAndBalancesCapability: CoinsAndBalancesCapability<DustCoreWallet>;
-    keysCapability: KeysCapability<DustCoreWallet>;
-    submissionService: SubmissionService<TTransaction>;
+    coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+    keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<DustToken>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -88,18 +88,18 @@ export type DefaultRunningV1 = RunningV1Variant<string, SimulatorState, Finalize
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V1Tag,
-  DustCoreWallet
+  CoreWallet
 > {
   __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
-  readonly #context: Variant.VariantContext<DustCoreWallet>;
+  readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
-  readonly state: Stream.Stream<StateChange.StateChange<DustCoreWallet>, WalletRuntimeError>;
+  readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
   constructor(
     scope: Scope.Scope,
-    context: Variant.VariantContext<DustCoreWallet>,
+    context: Variant.VariantContext<CoreWallet>,
     v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
   ) {
     this.#scope = scope;
@@ -108,13 +108,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: DustCoreWallet, current: DustCoreWallet) => {
+          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
             return [current, [previous, current]] as const;
           }),
         ),
       ),
       Stream.mapConcat(
-        ([previous, current]: readonly [DustCoreWallet, DustCoreWallet]): StateChange.StateChange<DustCoreWallet>[] => {
+        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
           // TODO: emit progress only upon actual change
           return [
             StateChange.State({ state: current }),
@@ -172,7 +172,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: string | undefined,
+    dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(WalletError.WalletError.other('Token of a non-Night type received'));
@@ -251,18 +251,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       );
   }
 
-  submitTransaction: SubmitTransactionMethod<TTransaction> = ((
-    transaction: TTransaction,
-    waitForStatus: 'Submitted' | 'InBlock' | 'Finalized' = 'InBlock',
-  ) => {
-    return this.#v1Context.submissionService
-      .submitTransaction(transaction, waitForStatus)
-      .pipe(
-        Effect.tapError(() =>
-          SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
-          ),
-        ),
-      );
-  }) as SubmitTransactionMethod<TTransaction>;
+  revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError.WalletError> {
+    return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
+      return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
+    });
+  }
 }

@@ -187,7 +187,6 @@ exports[`Snippet outputs > with network > should output the correct result for '
       highestIndex: 0n,
       highestRelevantIndex: 0n
     },
-    transactionHistory: [],
     coinPublicKey: ShieldedCoinPublicKey {
       data: Buffer(32) [Uint8Array] [
          27, 212, 248,  39, 190, 151, 255,   1,
@@ -374,12 +373,6 @@ exports[`Snippet outputs > with network > should output the correct result for '
       isStrictlyComplete: [Function: isStrictlyComplete],
       isCompleteWithin: [Function: isCompleteWithin]
     },
-    transactionHistory: {
-      create: [AsyncFunction: create],
-      get: [AsyncFunction: get],
-      getAll: [Function: getAll],
-      delete: [AsyncFunction: delete]
-    },
     address: UnshieldedAddress {
       data: Buffer(32) [Uint8Array] [
         188,  97,  13, 208, 124,  82, 245, 144,
@@ -496,8 +489,15 @@ exports[`Snippet outputs > with network > should output the correct result for '
       highestIndex: 0n,
       highestRelevantIndex: 0n
     },
-    dustPublicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-    dustAddress: 'mn_dust_undeployed1w0l54txthpu8q05j9j9ttk3j5dyu5766dc9zkz2s435vdglzwdr35dw790y'
+    publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+    address: DustAddress {
+      data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
+      [Symbol(MidnightBech32m)]: Bech32mCodec {
+        type: 'dust',
+        dataToBytes: [Function (anonymous)],
+        dataFromBytes: [Function (anonymous)]
+      }
+    }
   }
 }
 ",

@@ -13,7 +13,7 @@
 
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { ArrayOps, DateOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, HashMap, pipe, Record as Rec } from 'effect';
@@ -61,8 +61,7 @@ const outputArbitrary = (tokenType: ledger.RawTokenType, value: bigint): fc.Arbi
     receiverAddress: fc
       .uint8Array({ minLength: 32, maxLength: 32 })
       .map((bytes) => Buffer.from(bytes))
-      .map((bytes) => new UnshieldedAddress(bytes))
-      .map((addr) => MidnightBech32m.encode(NetworkId.NetworkId.Undeployed, addr).toString()),
+      .map((bytes) => new UnshieldedAddress(bytes)),
   });
 };
 
@@ -206,7 +205,7 @@ describe('Unshielded wallet transacting', () => {
         expect(pendingCountAfterTransfer).toBeGreaterThan(0);
 
         // Revert the transaction - this should move coins back from pending to available
-        const revertedWallet = transacting.revert(newState, transaction).pipe(EitherOps.getOrThrowLeft);
+        const revertedWallet = transacting.revertTransaction(newState, transaction).pipe(EitherOps.getOrThrowLeft);
 
         // Verify that pending coins are cleared and moved back to available
         expect(HashMap.size(revertedWallet.state.pendingUtxos)).toBe(0);
@@ -247,12 +246,14 @@ describe('Unshielded wallet transacting', () => {
         const pendingCountAfterTx2 = HashMap.size(stateAfterTx2.state.pendingUtxos);
         expect(pendingCountAfterTx2).toBeGreaterThan(pendingCountAfterTx1);
 
-        const walletAfterRevert = transacting.revert(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
+        const walletAfterRevert = transacting.revertTransaction(stateAfterTx2, tx1).pipe(EitherOps.getOrThrowLeft);
 
         const pendingCountAfterRevert = HashMap.size(walletAfterRevert.state.pendingUtxos);
         expect(pendingCountAfterRevert).toBe(pendingCountAfterTx2 - pendingCountAfterTx1);
 
-        const walletAfterBothReverts = transacting.revert(walletAfterRevert, tx2).pipe(EitherOps.getOrThrowLeft);
+        const walletAfterBothReverts = transacting
+          .revertTransaction(walletAfterRevert, tx2)
+          .pipe(EitherOps.getOrThrowLeft);
 
         expect(HashMap.size(walletAfterBothReverts.state.pendingUtxos)).toBe(0);
         expect(HashMap.size(walletAfterBothReverts.state.availableUtxos)).toBe(

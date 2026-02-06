@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, identity, Scope } from 'effect';
-import { GenericContainer, Network, StartedNetwork, Wait, type StartedTestContainer } from 'testcontainers';
+import { Effect, identity, type Scope } from 'effect';
+import { GenericContainer, Network, type StartedNetwork, Wait, type StartedTestContainer } from 'testcontainers';
 import { getPortPromise } from 'portfinder';
 
 export const createNetwork = (): Effect.Effect<StartedNetwork, never, Scope.Scope> =>
@@ -54,31 +54,33 @@ export const runProofServerContainer = (
   return startContainer(adjustment(container));
 };
 
+type TxGeneratorContainerConfig = {
+  nodeUrl: string;
+  proofServerUrl: string;
+  destPath: string;
+  fileName: string;
+  txsPerBatch: number;
+  batches: number;
+};
+
 export const runTxGenerator = (
-  config: {
-    nodeUrl: string;
-    destPath: string;
-    fileName: string;
-    txsPerBatch: number;
-    batches: number;
-  },
+  config: TxGeneratorContainerConfig,
   adjustment: (t: GenericContainer) => GenericContainer = identity,
 ): Effect.Effect<StartedTestContainer, Error, Scope.Scope> => {
-  const container: GenericContainer = new GenericContainer('ghcr.io/midnight-ntwrk/midnight-node-toolkit:0.20.0-rc.1')
-    .withBindMounts([{ source: config.destPath, target: '/tmp', mode: 'rw' }])
-    .withCommand([
+  const container: GenericContainer = new GenericContainer(
+    'ghcr.io/midnight-ntwrk/midnight-node-toolkit:0.20.0-rc.1',
+  ).withCommand(
+    [
       'generate-txs',
-      '--src-url',
-      config.nodeUrl,
-      '--dest-file',
-      `/tmp/${config.fileName}`,
-      'batches',
-      '--num-batches',
-      String(config.batches),
-      '--num-txs-per-batch',
-      String(config.txsPerBatch),
-    ])
-    .withWaitStrategy(Wait.forLogMessage('✓ generated transactions'));
+      '--dust-warp',
+      ['--src-url', config.nodeUrl],
+      ['--proof-server', config.proofServerUrl],
+      ['--dest-file', `/tmp/${config.fileName}`],
+      ['batches'],
+      ['--num-batches', String(config.batches)],
+      ['--num-txs-per-batch', String(config.txsPerBatch)],
+    ].flat(),
+  );
 
   return startContainer(adjustment(container));
 };

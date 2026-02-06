@@ -10,29 +10,33 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { randomUUID } from 'node:crypto';
-import os from 'node:os';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import {
   InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { randomUUID } from 'node:crypto';
+import os from 'node:os';
 import * as rx from 'rxjs';
-import { CombinedSwapInputs, CombinedSwapOutputs, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { makeProvingService } from './utils/proving.js';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type CombinedSwapInputs,
+  type CombinedSwapOutputs,
+  type DefaultConfiguration,
+  WalletFacade,
+} from '../src/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
+import { makeWasmProvingService } from './utils/proving.js';
 
-vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });
+vi.setConfig({ testTimeout: 300_000, hookTimeout: 200_000 });
 
 const environmentId = randomUUID();
 
@@ -70,7 +74,7 @@ describe('Swaps', () => {
   const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration;
+  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -87,6 +91,11 @@ describe('Swaps', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      costParameters: {
+        additionalFeeOverhead: 900_000_000_000_000n,
+        feeBlocksMargin: 5,
+      },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -98,33 +107,36 @@ describe('Swaps', () => {
   let walletBFacade: WalletFacade;
 
   beforeEach(async () => {
-    const Shielded = ShieldedWallet(configuration);
-    const shieldedWalletA = Shielded.startWithShieldedSeed(shieldedWalletASeed);
-    const shieldedWalletB = Shielded.startWithShieldedSeed(shieldedWalletBSeed);
-
-    const unshieldedWalletA = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore));
-
-    const unshieldedWalletB = UnshieldedWallet({
-      ...configuration,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-    }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore));
-
-    const Dust = DustWallet({
-      ...configuration,
-      costParameters: {
-        additionalFeeOverhead: 900_000_000_000_000n,
-        feeBlocksMargin: 5,
-      },
-    });
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
-    const dustWalletA = Dust.startWithSeed(dustWalletASeed, dustParameters);
-    const dustWalletB = Dust.startWithSeed(dustWalletBSeed, dustParameters);
 
-    walletAFacade = new WalletFacade(shieldedWalletA, unshieldedWalletA, dustWalletA);
-    walletBFacade = new WalletFacade(shieldedWalletB, unshieldedWalletB, dustWalletB);
+    walletAFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithSeed(shieldedWalletASeed),
+      unshielded: (config) =>
+        UnshieldedWallet({
+          ...config,
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
+    });
+    walletBFacade = await WalletFacade.init({
+      configuration,
+      shielded: (config) =>
+        CustomShieldedWallet(
+          config,
+          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
+        ).startWithSeed(shieldedWalletBSeed),
+      unshielded: (config) =>
+        UnshieldedWallet({
+          ...config,
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
+      dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
+    });
 
     await Promise.all([
       walletAFacade.start(
@@ -143,7 +155,7 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeProvingService(configuration.provingServerUrl);
+    const provingService = makeWasmProvingService(configuration.keyMaterialProvider);
 
     const facadeAState = await waitForFullySynced(walletAFacade);
     const facadeBState = await waitForFullySynced(walletBFacade);
@@ -159,9 +171,7 @@ describe('Swaps', () => {
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 
-    const shieldedWalletAAddress = ShieldedAddress.codec
-      .encode(configuration.networkId, await walletAFacade.shielded.getAddress())
-      .asString();
+    const shieldedWalletAAddress = await walletAFacade.shielded.getAddress();
 
     const desiredInputs: CombinedSwapInputs = {
       shielded: {
@@ -268,9 +278,7 @@ describe('Swaps', () => {
           {
             type: unshieldedTokenType,
             amount: swapForAmount,
-            receiverAddress: UnshieldedAddress.codec
-              .encode(configuration.networkId, walletAUnshieldedStateBefore.address)
-              .asString(),
+            receiverAddress: walletAUnshieldedStateBefore.address,
           },
         ],
       },

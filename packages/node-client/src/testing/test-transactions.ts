@@ -10,16 +10,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Error, FileSystem } from '@effect/platform';
+import { type Error, FileSystem } from '@effect/platform';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { TestContainers } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import { Effect, Encoding, ParseResult, pipe, Random, Schema, Stream } from 'effect';
-import { Scope } from 'effect/Scope';
-import { StartedNetwork } from 'testcontainers';
+import { Duration, Effect, Encoding, DateTime, ParseResult, pipe, Random, Schema, Stream, Option } from 'effect';
+import { type Scope } from 'effect/Scope';
+import { type StartedNetwork, type StartedTestContainer, Wait } from 'testcontainers';
 import { normalizeTxs } from './normalize-txs.js';
+import * as tar from 'tar-stream';
+import * as path from 'node:path';
+
+export type Paths = {
+  readonly outputPath: string;
+  readonly fileName: string;
+  readonly fullPath: string;
+};
+const Paths = {
+  make: (outputPath: string, fileName: string): Paths => {
+    return {
+      outputPath,
+      fileName,
+      fullPath: path.resolve(outputPath, fileName),
+    };
+  },
+};
+export const defaultPaths = pipe(
+  path.dirname(new URL(import.meta.url).pathname),
+  (currentDir) => path.resolve(currentDir, '..', '..', 'temp-resources'),
+  (outputPath) => Paths.make(outputPath, 'test-txs.json'),
+);
 
 export type FinalizedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.Binding>;
 
@@ -77,16 +99,28 @@ export const streamAllValid = (txs: TestTransactions): Stream.Stream<FinalizedTr
   return Stream.concat(initial, batches);
 };
 
+export const getTTL = (txs: TestTransactions): Effect.Effect<Option.Option<DateTime.Utc>, never, never> => {
+  return streamAllValid(txs).pipe(
+    Stream.mapConcat((tx) => tx.intents ?? []),
+    Stream.map(([_, intent]) => intent.ttl),
+    Stream.mapConcat((ttl) => pipe(ttl, DateTime.make, Option.toArray)),
+    Stream.runFold(Option.none<DateTime.Utc>(), (acc, ttl) =>
+      Option.match(acc, {
+        onNone: () => Option.some(ttl),
+        onSome: (accValue) => Option.some(DateTime.min(accValue, ttl)),
+      }),
+    ),
+  );
+};
+
 export const genUnbalancedTx = (): Effect.Effect<
-  SerializedTransaction,
+  SerializedTransaction.SerializedTransaction,
   ClientError | ServerError,
   ProverClient.ProverClient
 > =>
   Effect.Do.pipe(
     Effect.bind('value', () => Random.nextIntBetween(1, 100_000_000).pipe(Effect.map((nr) => BigInt(nr)))),
-    Effect.bind('shieldedTokenType', () =>
-      Effect.succeed(ledger.shieldedToken() as unknown as { type: 'shielded'; raw: string }),
-    ),
+    Effect.bind('shieldedTokenType', () => Effect.succeed(ledger.shieldedToken())),
     Effect.let('unprovenTx', ({ value, shieldedTokenType }) => {
       const recipient = ledger.ZswapSecretKeys.fromSeed(new Uint8Array(32).fill(0));
       const coin = ledger.createShieldedCoinInfo(shieldedTokenType.raw, value);
@@ -97,9 +131,9 @@ export const genUnbalancedTx = (): Effect.Effect<
     Effect.flatMap(({ unprovenTx }) =>
       Effect.gen(function* () {
         const proverClient = yield* ProverClient.ProverClient;
-        const provedTx = yield* proverClient.proveTransaction(unprovenTx, ledger.CostModel.initialCostModel());
+        const provenTx = yield* proverClient.proveTransaction(unprovenTx, ledger.CostModel.initialCostModel());
 
-        return SerializedTransaction(provedTx.bind().serialize());
+        return SerializedTransaction.from(provenTx.bind());
       }),
     ),
   );
@@ -133,27 +167,72 @@ const generateUnbalancedTransaction = (proofServerUrl: string) => {
   );
 };
 
+type TestTransactionsEnvironment = {
+  nodeContainer: StartedTestContainer;
+  hostProofServerContainer: StartedTestContainer;
+  networkProofServerContainer: StartedTestContainer;
+  network: StartedNetwork;
+};
+
 export const generateTestTransactions = (
-  nodeUrl: string,
-  proofServerUrl: string,
-  network: StartedNetwork,
-  outputPath: string,
-  fileName: string,
+  environment: TestTransactionsEnvironment,
+  paths: Paths,
 ): Effect.Effect<void, Error | Error.PlatformError, FileSystem.FileSystem | Scope> =>
   Effect.gen(function* () {
-    const [, unbalancedTx] = yield* Effect.all([
-      TestContainers.runTxGenerator(
-        {
-          nodeUrl: nodeUrl,
-          destPath: outputPath,
-          fileName: fileName,
-          txsPerBatch: 1,
-          batches: 1,
-        },
-        (c) => c.withNetwork(network),
-      ),
-      generateUnbalancedTransaction(proofServerUrl),
-    ]);
+    const fs = yield* FileSystem.FileSystem;
 
-    yield* normalizeAndSaveUnbalancedTx(`${outputPath}/${fileName}`, unbalancedTx);
+    const [startedContainer, unbalancedTx] = yield* Effect.all(
+      [
+        TestContainers.runTxGenerator(
+          {
+            nodeUrl: `ws://${environment.nodeContainer.getHostname()}:9944`,
+            proofServerUrl: `http://${environment.networkProofServerContainer.getHostname()}:6300`,
+            destPath: paths.outputPath,
+            fileName: paths.fileName,
+            txsPerBatch: 1,
+            batches: 1,
+          },
+          (c) => c.withNetwork(environment.network).withWaitStrategy(Wait.forLogMessage('generated transactions')),
+        ),
+        generateUnbalancedTransaction(`http://localhost:${environment.hostProofServerContainer.getMappedPort(6300)}`),
+      ],
+      { concurrency: 'unbounded' },
+    );
+
+    yield* Effect.sleep(Duration.seconds(1));
+
+    const stoppedContainer = yield* Effect.promise(() => startedContainer.stop({ remove: false }));
+
+    yield* Effect.log('copying archive from container');
+
+    yield* Effect.promise(() => stoppedContainer.copyArchiveFromContainer(`/tmp/${paths.fileName}`)).pipe(
+      Effect.flatMap((stream) =>
+        pipe(
+          stream,
+          (s) => s.pipe(tar.extract()),
+          (s) => Stream.fromAsyncIterable<tar.Entry, Error>(s, (error) => error as Error),
+          Stream.tapBoth({
+            onSuccess: (entry) => Effect.log('entry after extract', entry),
+            onFailure: (error) => Effect.log(error),
+          }),
+          Stream.tapBoth({
+            onSuccess: (entry) => Effect.log('entry', entry),
+            onFailure: (error) => Effect.log(error),
+          }),
+          Stream.mapEffect((entry) =>
+            Stream.fromAsyncIterable<Buffer, Error>(entry, (error) => error as Error).pipe(
+              Stream.tapBoth({
+                onSuccess: (chunk) => Effect.log('chunk', chunk),
+                onFailure: (error) => Effect.log(error),
+              }),
+              Stream.run(fs.sink(paths.fullPath)),
+            ),
+          ),
+          Stream.runDrain,
+          Effect.andThen(Effect.log('done')),
+        ),
+      ),
+    );
+
+    yield* normalizeAndSaveUnbalancedTx(paths.fullPath, unbalancedTx);
   });

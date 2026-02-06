@@ -15,7 +15,7 @@ import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
-import { AddressError, InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
+import { InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
 import {
   BalanceRecipe,
   CoinSelection,
@@ -23,7 +23,7 @@ import {
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { MidnightBech32m, ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
 import { TransactionOps } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
@@ -32,12 +32,14 @@ import { KeysCapability } from './Keys.js';
 export interface TokenTransfer {
   readonly amount: bigint;
   readonly type: ledger.RawTokenType;
-  readonly receiverAddress: string;
+  readonly receiverAddress: ShieldedAddress;
 }
 
 export type BalancingResult = ledger.UnprovenTransaction | undefined;
 
-export interface TransactingCapability<TSecrets, TState, TTransaction> {
+// This interface should abstract over the transaction types used
+// It does not do so now for historical reasons
+export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   balanceTransaction(
     secrets: TSecrets,
     state: TState,
@@ -62,7 +64,7 @@ export interface TransactingCapability<TSecrets, TState, TTransaction> {
   //The reason is that they primarily make sense in a wallet flavour only able to issue transactions
   revertTransaction(
     state: TState,
-    transaction: TTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<TState, WalletError>;
 }
 
@@ -398,61 +400,48 @@ export class TransactingCapabilityImplementation<
     });
   }
 
-  #parseAddress(addr: string) {
+  #processDesiredOutputs(state: CoreWallet, transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>) {
     return Either.try({
       try: () => {
-        const repr = MidnightBech32m.parse(addr);
-        return ShieldedAddress.codec.decode(this.networkId, repr);
+        const initialOffersAndCoins = pipe(
+          transfers,
+          Arr.map((transfer) => {
+            const { receiverAddress, type, amount } = transfer;
+            const coin = ledger.createShieldedCoinInfo(type, amount);
+            const output = ledger.ZswapOutput.new(
+              coin,
+              0,
+              receiverAddress.coinPublicKey.toHexString(),
+              receiverAddress.encryptionPublicKey.toHexString(),
+            );
+            const outputOffer = ledger.ZswapOffer.fromOutput(output, type, amount);
+
+            return {
+              coin,
+              outputOffer,
+              isForSelf: receiverAddress.coinPublicKey.equals(this.getKeys().getCoinPublicKey(state)),
+            };
+          }),
+        );
+        const selfCoins = Arr.flatMap(
+          initialOffersAndCoins,
+          ({ coin, isForSelf }): readonly ledger.ShieldedCoinInfo[] => {
+            if (isForSelf) {
+              return [coin];
+            } else {
+              return [];
+            }
+          },
+        );
+
+        return { initialOffersAndCoins, selfCoins };
       },
       catch: (err) => {
-        return new AddressError({
-          message: `Address parsing error: ${addr}`,
-          originalAddress: addr,
+        return new OtherWalletError({
+          message: 'Failed to process desired outputs',
           cause: err,
         });
       },
-    });
-  }
-
-  #processDesiredOutputs(state: CoreWallet, transfers: Arr.NonEmptyReadonlyArray<TokenTransfer>) {
-    return Either.gen(this, function* () {
-      const initialOffersAndCoins = yield* pipe(
-        transfers,
-        Arr.map((transfer) => {
-          return pipe(
-            this.#parseAddress(transfer.receiverAddress),
-            Either.map((address) => {
-              const coin = ledger.createShieldedCoinInfo(transfer.type, transfer.amount);
-              const output = ledger.ZswapOutput.new(
-                coin,
-                0,
-                address.coinPublicKey.toHexString(),
-                address.encryptionPublicKey.toHexString(),
-              );
-              const outputOffer = ledger.ZswapOffer.fromOutput(output, transfer.type, transfer.amount);
-
-              return {
-                coin,
-                outputOffer,
-                isForSelf: address.coinPublicKey.equals(this.getKeys().getCoinPublicKey(state)),
-              };
-            }),
-          );
-        }),
-        Either.all,
-      );
-      const selfCoins = Arr.flatMap(
-        initialOffersAndCoins,
-        ({ coin, isForSelf }): readonly ledger.ShieldedCoinInfo[] => {
-          if (isForSelf) {
-            return [coin];
-          } else {
-            return [];
-          }
-        },
-      );
-
-      return { initialOffersAndCoins, selfCoins };
     });
   }
 

@@ -14,7 +14,6 @@ import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { FacadeState } from '@midnight-ntwrk/wallet-sdk-facade';
 
 const alice = await initWalletWithSeed(
@@ -49,7 +48,7 @@ const aliceSwapTx: ledger.FinalizedTransaction = await alice.wallet
           {
             type: shieldedToken2,
             amount: 1_000_000n,
-            receiverAddress: MidnightBech32m.encode('undeployed', aliceInitialState.shielded.address).toString(),
+            receiverAddress: aliceInitialState.shielded.address,
           },
         ],
       },
