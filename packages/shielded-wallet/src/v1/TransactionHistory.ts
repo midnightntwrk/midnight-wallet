@@ -34,8 +34,8 @@ export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCap
     updateTxHistory: (state: CoreWallet, newTxs: ledger.FinalizedTransaction[]): CoreWallet => {
       return newTxs.reduce((acc, tx) => CoreWallet.addTransaction(acc, tx), state);
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.FinalizedTransaction[] => {
-      return state.txHistoryArray;
+    transactionHistory: (_state: CoreWallet): [] => {
+      return [];
     },
     progress: (state: CoreWallet): ProgressUpdate => {
       return {
@@ -56,8 +56,8 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
     updateTxHistory: (state: CoreWallet, newTxs: ledger.ProofErasedTransaction[]): CoreWallet => {
       return CoreWallet.updateTxHistory(state, newTxs as unknown as readonly ledger.FinalizedTransaction[]); // @TODO fix this cast
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.ProofErasedTransaction[] => {
-      return state.txHistoryArray as unknown as readonly ledger.ProofErasedTransaction[]; // @TODO fix this cast
+    transactionHistory: (_state: CoreWallet): [] => {
+      return [];
     },
     progress: (state: CoreWallet): ProgressUpdate => {
       return {
@@ -78,8 +78,8 @@ export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCap
     updateTxHistory: (state: CoreWallet): CoreWallet => {
       return state;
     },
-    transactionHistory: (state: CoreWallet): readonly ledger.FinalizedTransaction[] => {
-      return state.txHistoryArray;
+    transactionHistory: (_state: CoreWallet): [] => {
+      return [];
     },
     progress: (state: CoreWallet): ProgressUpdate => {
       return {

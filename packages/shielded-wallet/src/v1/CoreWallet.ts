@@ -76,7 +76,6 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress;
   networkId: string;
-  txHistoryArray: readonly ledger.FinalizedTransaction[];
   coinHashes: CoinHashesMap;
 }>;
 
@@ -86,7 +85,7 @@ export const CoreWallet = {
     const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
     const progress = createSyncProgress();
     const protocolVersion = ProtocolVersion.MinSupportedVersion;
-    return { state: localState, publicKeys, networkId, coinHashes, txHistoryArray: [], progress, protocolVersion };
+    return { state: localState, publicKeys, networkId, coinHashes, progress, protocolVersion };
   },
 
   empty(publicKeys: PublicKeys, networkId: string): CoreWallet {
@@ -95,7 +94,6 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes: CoinHashesMap.empty,
-      txHistoryArray: [],
       progress: createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -104,7 +102,6 @@ export const CoreWallet = {
   restore(
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
-    txHistory: readonly ledger.FinalizedTransaction[],
     syncProgress: Omit<SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: string,
@@ -116,7 +113,6 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes,
-      txHistoryArray: txHistory,
       progress: createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -125,7 +121,6 @@ export const CoreWallet = {
   restoreWithCoinHashes(
     publicKeys: PublicKeys,
     localState: ledger.ZswapLocalState,
-    txHistory: readonly ledger.FinalizedTransaction[],
     coinHashes: CoinHashesMap,
     syncProgress: SyncProgressData,
     protocolVersion: bigint,
@@ -140,7 +135,6 @@ export const CoreWallet = {
           publicKeys,
           networkId,
           coinHashes,
-          txHistoryArray: txHistory,
           progress: createSyncProgress(syncProgress),
           protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
         }),
@@ -202,8 +196,9 @@ export const CoreWallet = {
     return { ...wallet, progress: updatedProgress };
   },
 
-  addTransaction(wallet: CoreWallet, tx: ledger.FinalizedTransaction): CoreWallet {
-    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, tx] };
+  // TODO: Remove after tx history is implemented
+  addTransaction(wallet: CoreWallet, _tx: ledger.FinalizedTransaction): CoreWallet {
+    return wallet;
   },
 
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
@@ -214,8 +209,9 @@ export const CoreWallet = {
     return wallet;
   },
 
-  updateTxHistory(wallet: CoreWallet, newTxs: readonly ledger.FinalizedTransaction[]): CoreWallet {
-    return { ...wallet, txHistoryArray: [...wallet.txHistoryArray, ...newTxs] };
+  // TODO: Remove after tx history is implemented
+  updateTxHistory(wallet: CoreWallet, _newTxs: readonly ledger.FinalizedTransaction[]): CoreWallet {
+    return wallet;
   },
 
   spendCoins(

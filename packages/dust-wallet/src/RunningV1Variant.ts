@@ -38,11 +38,12 @@ import {
   type UtxoWithFullDustDetails,
 } from './CoinsAndBalances.js';
 import { type TransactingCapability } from './Transacting.js';
-import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
-const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet>[] => {
+const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
   const highestRelevantWalletIndex = state.progress?.highestRelevantWalletIndex ?? 0n;
   const highestIndex = state.progress?.highestIndex ?? 0n;
@@ -54,10 +55,7 @@ const progress = (state: DustCoreWallet): StateChange.StateChange<DustCoreWallet
   return [StateChange.ProgressUpdate({ sourceGap, applyGap })];
 };
 
-const protocolVersionChange = (
-  previous: DustCoreWallet,
-  current: DustCoreWallet,
-): StateChange.StateChange<DustCoreWallet>[] => {
+const protocolVersionChange = (previous: CoreWallet, current: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   return previous.protocolVersion != current.protocolVersion
     ? [
         StateChange.VersionChange({
@@ -71,13 +69,13 @@ const protocolVersionChange = (
 
 export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
-    serializationCapability: SerializationCapability<DustCoreWallet, null, TSerialized>;
-    syncService: SyncService<DustCoreWallet, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<DustCoreWallet, TSyncUpdate>;
-    transactingCapability: TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>;
+    serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
+    syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    transactingCapability: TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
     provingService: Proving.ProvingService<TTransaction>;
-    coinsAndBalancesCapability: CoinsAndBalancesCapability<DustCoreWallet>;
-    keysCapability: KeysCapability<DustCoreWallet>;
+    coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+    keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<DustToken>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -90,18 +88,18 @@ export type DefaultRunningV1 = RunningV1Variant<string, SimulatorState, Finalize
 
 export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux> implements Variant.RunningVariant<
   typeof V1Tag,
-  DustCoreWallet
+  CoreWallet
 > {
   __polyTag__: typeof V1Tag = V1Tag;
   readonly #scope: Scope.Scope;
-  readonly #context: Variant.VariantContext<DustCoreWallet>;
+  readonly #context: Variant.VariantContext<CoreWallet>;
   readonly #v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>;
 
-  readonly state: Stream.Stream<StateChange.StateChange<DustCoreWallet>, WalletRuntimeError>;
+  readonly state: Stream.Stream<StateChange.StateChange<CoreWallet>, WalletRuntimeError>;
 
   constructor(
     scope: Scope.Scope,
-    context: Variant.VariantContext<DustCoreWallet>,
+    context: Variant.VariantContext<CoreWallet>,
     v1Context: RunningV1Variant.Context<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
   ) {
     this.#scope = scope;
@@ -110,13 +108,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     this.state = Stream.fromEffect(context.stateRef.get).pipe(
       Stream.flatMap((initialState) =>
         context.stateRef.changes.pipe(
-          Stream.mapAccum(initialState, (previous: DustCoreWallet, current: DustCoreWallet) => {
+          Stream.mapAccum(initialState, (previous: CoreWallet, current: CoreWallet) => {
             return [current, [previous, current]] as const;
           }),
         ),
       ),
       Stream.mapConcat(
-        ([previous, current]: readonly [DustCoreWallet, DustCoreWallet]): StateChange.StateChange<DustCoreWallet>[] => {
+        ([previous, current]: readonly [CoreWallet, CoreWallet]): StateChange.StateChange<CoreWallet>[] => {
           // TODO: emit progress only upon actual change
           return [
             StateChange.State({ state: current }),
@@ -174,7 +172,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: string | undefined,
+    dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(WalletError.WalletError.other('Token of a non-Night type received'));

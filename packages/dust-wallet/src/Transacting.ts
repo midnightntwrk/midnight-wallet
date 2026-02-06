@@ -13,7 +13,6 @@
 import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
-  DustPublicKey,
   DustRegistration,
   DustSecretKey,
   Intent,
@@ -33,10 +32,10 @@ import {
   LedgerParameters,
   nativeToken,
 } from '@midnight-ntwrk/ledger-v7';
-import { MidnightBech32m, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { DustCoreWallet } from './DustCoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
 import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
@@ -52,7 +51,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: string | undefined,
+    dustReceiverAddress: DustAddress | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
 
   addDustGenerationSignature(
@@ -81,14 +80,14 @@ export type DefaultTransactingConfiguration = {
 
 export type DefaultTransactingContext = {
   coinSelection: CoinSelection<DustToken>;
-  coinsAndBalancesCapability: CoinsAndBalancesCapability<DustCoreWallet>;
-  keysCapability: KeysCapability<DustCoreWallet>;
+  coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
+  keysCapability: KeysCapability<CoreWallet>;
 };
 
 export const makeDefaultTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<DustSecretKey, DustCoreWallet, FinalizedTransaction> => {
+): TransactingCapability<DustSecretKey, CoreWallet, FinalizedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -101,7 +100,7 @@ export const makeDefaultTransactingCapability = (
 export const makeSimulatorTransactingCapability = (
   config: DefaultTransactingConfiguration,
   getContext: () => DefaultTransactingContext,
-): TransactingCapability<DustSecretKey, DustCoreWallet, ProofErasedTransaction> => {
+): TransactingCapability<DustSecretKey, CoreWallet, ProofErasedTransaction> => {
   return new TransactingCapabilityImplementation(
     config.networkId,
     config.costParameters,
@@ -113,21 +112,21 @@ export const makeSimulatorTransactingCapability = (
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
-  DustCoreWallet,
+  CoreWallet,
   TTransaction
 > {
   public readonly networkId: string;
   public readonly costParams: TotalCostParameters;
   public readonly getCoinSelection: () => CoinSelection<DustToken>;
-  readonly getCoins: () => CoinsAndBalancesCapability<DustCoreWallet>;
-  readonly getKeys: () => KeysCapability<DustCoreWallet>;
+  readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
+  readonly getKeys: () => KeysCapability<CoreWallet>;
 
   constructor(
     networkId: NetworkId,
     costParams: TotalCostParameters,
     getCoinSelection: () => CoinSelection<DustToken>,
-    getCoins: () => CoinsAndBalancesCapability<DustCoreWallet>,
-    getKeys: () => KeysCapability<DustCoreWallet>,
+    getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
+    getKeys: () => KeysCapability<CoreWallet>,
   ) {
     this.getCoins = getCoins;
     this.networkId = networkId;
@@ -141,7 +140,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
-    dustReceiverAddress: string | undefined,
+    dustReceiverAddress: DustAddress | undefined,
   ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
     const makeOffer = (
       utxos: ReadonlyArray<UtxoWithFullDustDetails>,
@@ -168,7 +167,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     };
 
     return Either.gen(this, function* () {
-      const receiver = dustReceiverAddress ? yield* this.#parseAddress(dustReceiverAddress) : undefined;
+      const receiver = dustReceiverAddress ? dustReceiverAddress.data : undefined;
 
       return yield* LedgerOps.ledgerTry(() => {
         const network = this.networkId;
@@ -329,12 +328,12 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
   balanceTransactions(
     secretKey: DustSecretKey,
-    state: DustCoreWallet,
+    state: CoreWallet,
     transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction, DustCoreWallet], WalletError.WalletError> {
+  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError.WalletError> {
     const network = this.networkId;
     const feeLeft = transactions.reduce(
       (total, transaction) =>
@@ -384,30 +383,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   revertTransaction(
-    state: DustCoreWallet,
+    state: CoreWallet,
     transaction: UnprovenTransaction | TTransaction,
-  ): Either.Either<DustCoreWallet, WalletError.WalletError> {
+  ): Either.Either<CoreWallet, WalletError.WalletError> {
     return Either.try({
       try: () => state.revertTransaction(transaction),
       catch: (err) => {
         return new WalletError.OtherWalletError({
           message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
-          cause: err,
-        });
-      },
-    });
-  }
-
-  #parseAddress(addr: string): Either.Either<DustPublicKey, WalletError.AddressError> {
-    return Either.try({
-      try: () => {
-        const repr = MidnightBech32m.parse(addr);
-        return DustAddress.codec.decode(this.networkId, repr).data;
-      },
-      catch: (err) => {
-        return new WalletError.AddressError({
-          message: `Address parsing error: ${addr}`,
-          originalAddress: addr,
           cause: err,
         });
       },

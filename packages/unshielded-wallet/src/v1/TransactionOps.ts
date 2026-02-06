@@ -32,11 +32,11 @@ export type TransactionOps = {
     segment: number,
   ) => Either.Either<Uint8Array, WalletError>;
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[];
-  addSignature(
-    transaction: ledger.UnprovenTransaction | UnboundTransaction,
+  addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
     signature: ledger.Signature,
     segment: number,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError>;
+  ): Either.Either<TTransaction, WalletError>;
   getImbalances(
     transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
     segment: number,
@@ -77,55 +77,48 @@ export const TransactionOps: TransactionOps = {
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[] {
     return transaction.intents?.keys().toArray() ?? [];
   },
-  addSignature(
-    transaction: ledger.UnprovenTransaction,
+  // @TODO - https://shielded.atlassian.net/browse/PM-21260
+  addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
+    transaction: TTransaction,
     signature: ledger.Signature,
     segment: number,
-  ): Either.Either<ledger.UnprovenTransaction, WalletError> {
+  ): Either.Either<TTransaction, WalletError> {
     return Either.gen(function* () {
       if (!transaction.intents || transaction.intents.size === 0) {
         return yield* Either.left(new TransactingError({ message: 'No intents found in the transaction' }));
       }
 
-      const originalIntent = yield* Either.fromNullable(
-        transaction.intents?.get(segment),
-        () => new TransactingError({ message: 'Intent with a given segment was not found' }),
-      );
+      const intent = transaction.intents?.get(segment) as IntentOf<TTransaction> | undefined;
 
-      if (TransactionOps.isIntentBound(originalIntent)) {
+      if (!intent) {
+        return yield* Either.left(new TransactingError({ message: `Intent with id ${segment} was not found` }));
+      }
+
+      if (TransactionOps.isIntentBound(intent)) {
         return yield* Either.left(new TransactingError({ message: `Intent at segment ${segment} is already bound` }));
       }
 
-      const clonedIntent = yield* Either.try({
-        try: () =>
-          ledger.Intent.deserialize<ledger.SignatureEnabled, ledger.PreProof, ledger.PreBinding>(
-            'signature',
-            'pre-proof',
-            'pre-binding',
-            originalIntent.serialize(),
-          ),
-        catch: (error) => new TransactingError({ message: 'Failed to clone intent', cause: error }),
-      });
-
-      if (clonedIntent.fallibleUnshieldedOffer) {
-        clonedIntent.fallibleUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
-          clonedIntent.fallibleUnshieldedOffer,
+      if (intent.fallibleUnshieldedOffer) {
+        intent.fallibleUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
+          intent.fallibleUnshieldedOffer,
           signature,
           segment,
           'fallible',
         );
       }
 
-      if (clonedIntent.guaranteedUnshieldedOffer) {
-        clonedIntent.guaranteedUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
-          clonedIntent.guaranteedUnshieldedOffer,
+      if (intent.guaranteedUnshieldedOffer) {
+        intent.guaranteedUnshieldedOffer = yield* TransactionOps.addSignaturesToOffer(
+          intent.guaranteedUnshieldedOffer,
           signature,
           segment,
           'guaranteed',
         );
       }
 
-      transaction.intents = transaction.intents?.set(segment, clonedIntent);
+      (transaction.intents as Map<number, IntentOf<TTransaction>>) = (
+        transaction.intents as Map<number, IntentOf<TTransaction>>
+      ).set(segment, intent);
 
       return transaction;
     });

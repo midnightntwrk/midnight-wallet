@@ -97,7 +97,7 @@ describe('Dust Deregistration', () => {
 
     walletFacade = await WalletFacade.init({
       configuration,
-      shielded: (configuration) => ShieldedWallet(configuration).startWithShieldedSeed(shieldedWalletSeed),
+      shielded: (configuration) => ShieldedWallet(configuration).startWithSeed(shieldedWalletSeed),
       unshielded: (configuration) =>
         UnshieldedWallet(configuration).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletKeystore)),
       dust: (configuration) => DustWallet(configuration).startWithSeed(dustWalletSeed, dustParameters),

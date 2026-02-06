@@ -61,7 +61,7 @@ describe('Facade submission', () => {
       configuration,
       submissionService: () => fakeSubmission,
       shielded: (config) => {
-        const mockedShielded = vi.mockObject(ShieldedWallet(config).startWithShieldedSeed(seed));
+        const mockedShielded = vi.mockObject(ShieldedWallet(config).startWithSeed(seed));
         mockedShielded.start.mockResolvedValue(undefined);
         return mockedShielded;
       },
@@ -102,7 +102,7 @@ describe('Facade submission', () => {
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
     const seed = crypto.randomBytes(32);
-    const shielded = ShieldedWallet(config).startWithShieldedSeed(seed);
+    const shielded = ShieldedWallet(config).startWithSeed(seed);
     const unshielded = UnshieldedWallet(config).startWithPublicKey(
       PublicKey.fromKeyStore(createKeystore(seed, config.networkId)),
     );

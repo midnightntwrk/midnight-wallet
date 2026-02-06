@@ -91,8 +91,12 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.transactionHistory.progress(this.state);
   }
 
-  get transactionHistory(): readonly TTransaction[] {
-    return this.capabilities.transactionHistory.transactionHistory(this.state);
+  /**
+   * Transaction history for the wallet.
+   * @throws Error - Not yet implemented
+   */
+  get transactionHistory(): never {
+    throw new Error('Transaction history is not yet implemented for ShieldedWallet');
   }
 
   constructor(
@@ -184,7 +188,7 @@ export interface CustomizedShieldedWalletClass<
   [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
   configuration: TConfig;
-  startWithShieldedSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
+  startWithSeed(seed: Uint8Array): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   startWithSecretKeys(
     secretKeys: ledger.ZswapSecretKeys,
   ): CustomizedShieldedWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
@@ -230,7 +234,7 @@ export function CustomShieldedWallet<
       );
     }
 
-    static startWithShieldedSeed(seed: Uint8Array): CustomShieldedWalletImplementation {
+    static startWithSeed(seed: Uint8Array): CustomShieldedWalletImplementation {
       const secretKeys: ledger.ZswapSecretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
       return CustomShieldedWalletImplementation.startWithSecretKeys(secretKeys);
     }

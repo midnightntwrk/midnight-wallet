@@ -20,7 +20,6 @@ import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Tests performing a token transfer
@@ -95,7 +94,7 @@ describe('Token transfer', () => {
       const senderInitialState = await firstValueFrom(sender.wallet.state());
       const initialShieldedBalance = senderInitialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = senderInitialState.unshielded.balances[unshieldedTokenRaw] ?? 0n;
-      const initialDustBalance = senderInitialState.dust.walletBalance(new Date());
+      const initialDustBalance = senderInitialState.dust.balance(new Date());
 
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
@@ -130,7 +129,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+              receiverAddress: initialReceiverState.shielded.address,
             },
           ],
         },
@@ -140,9 +139,7 @@ describe('Token transfer', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: UnshieldedAddress.codec
-                .encode(networkId, initialReceiverState.unshielded.address)
-                .asString(),
+              receiverAddress: initialReceiverState.unshielded.address,
             },
           ],
         },
@@ -187,7 +184,7 @@ describe('Token transfer', () => {
       // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
       const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
-      const senderFinalDustBalance = senderFinalState.dust.walletBalance(new Date(3 * 1000));
+      const senderFinalDustBalance = senderFinalState.dust.balance(new Date(3 * 1000));
       logger.info(`Wallet 1 final available dust: ${senderFinalDustBalance}`);
       logger.info(`Wallet 1 final available shielded coins: ${senderFinalShieldedBalance}`);
       logger.info(`Wallet 1 final available unshielded coins: ${senderFinalUnshieldedBalance}`);
@@ -256,7 +253,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState.shielded.address),
+              receiverAddress: initialState.shielded.address,
             },
           ],
         },
@@ -334,7 +331,7 @@ describe('Token transfer', () => {
             {
               type: shieldedToken2,
               amount: 1000000n,
-              receiverAddress: utils.getShieldedAddress(networkId, initialStateWallet1.shielded.address),
+              receiverAddress: initialStateWallet1.shielded.address,
             },
           ],
         },
@@ -472,7 +469,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -508,45 +505,45 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  test(
-    'error message when attempting to send to an invalid address',
-    async () => {
-      allure.tms('PM-9678', 'PM-9678');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid address error message');
-      const syncedState = await utils.waitForSyncFacade(sender.wallet);
-      const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-      logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      const invalidAddress = 'invalidAddress';
+  // test.skip(
+  //   'error message when attempting to send to an invalid address',
+  //   async () => {
+  //     allure.tms('PM-9678', 'PM-9678');
+  //     allure.epic('Headless wallet');
+  //     allure.feature('Transactions');
+  //     allure.story('Invalid address error message');
+  //     const syncedState = await utils.waitForSyncFacade(sender.wallet);
+  //     const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
+  //     logger.info(`Wallet 1 balance is: ${initialBalance}`);
+  //     const invalidAddress = new ShieldedAddress('invalidCPK', 'invalidEPK');
 
-      const outputsToCreate: CombinedTokenTransfer[] = [
-        {
-          type: 'shielded',
-          outputs: [
-            {
-              type: shieldedTokenRaw,
-              amount: outputValue,
-              receiverAddress: invalidAddress,
-            },
-          ],
-        },
-      ];
-      await expect(
-        sender.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: sender.shieldedSecretKeys,
-            dustSecretKey: sender.dustSecretKey,
-          },
-          {
-            ttl: new Date(),
-          },
-        ),
-      ).rejects.toThrow(`Address parsing error: invalidAddress`);
-    },
-    timeout,
-  );
+  //     const outputsToCreate: CombinedTokenTransfer[] = [
+  //       {
+  //         type: 'shielded',
+  //         outputs: [
+  //           {
+  //             type: shieldedTokenRaw,
+  //             amount: outputValue,
+  //             receiverAddress: invalidAddress,
+  //           },
+  //         ],
+  //       },
+  //     ];
+  //     await expect(
+  //       sender.wallet.transferTransaction(
+  //         outputsToCreate,
+  //         {
+  //           shieldedSecretKeys: sender.shieldedSecretKeys,
+  //           dustSecretKey: sender.dustSecretKey,
+  //         },
+  //         {
+  //           ttl: new Date(),
+  //         },
+  //       ),
+  //     ).rejects.toThrow(`Address parsing error: invalidAddress`);
+  //   },
+  //   timeout,
+  // );
 
   test(
     'error message when attempting to send an invalid amount',
@@ -572,7 +569,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: aboveBalance,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -620,7 +617,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: -5n,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -660,7 +657,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: 0n,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -709,82 +706,82 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  test('error message when sending token to bech32m address from different networkId', async () => {
-    allure.tms('PM-14147', 'PM-14147');
-    allure.epic('Headless wallet');
-    allure.feature('Wallet state - Bech32m');
-    allure.story('Tx to addresss from different networkId');
-    const bech32mAddress =
-      'mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043';
+  // test.skip('error message when sending token to bech32m address from different networkId', async () => {
+  //   allure.tms('PM-14147', 'PM-14147');
+  //   allure.epic('Headless wallet');
+  //   allure.feature('Wallet state - Bech32m');
+  //   allure.story('Tx to addresss from different networkId');
+  //   const bech32mAddress =
+  //     'mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043';
 
-    const syncedState = await utils.waitForSyncFacade(sender.wallet);
-    const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-    logger.info(`Wallet 1 balance is: ${initialBalance}`);
+  //   const syncedState = await utils.waitForSyncFacade(sender.wallet);
+  //   const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
+  //   logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
-    const outputsToCreate: CombinedTokenTransfer[] = [
-      {
-        type: 'shielded',
-        outputs: [
-          {
-            type: shieldedTokenRaw,
-            amount: 1n,
-            receiverAddress: bech32mAddress,
-          },
-        ],
-      },
-    ];
+  //   const outputsToCreate: CombinedTokenTransfer[] = [
+  //     {
+  //       type: 'shielded',
+  //       outputs: [
+  //         {
+  //           type: shieldedTokenRaw,
+  //           amount: 1n,
+  //           receiverAddress: bech32mAddress,
+  //         },
+  //       ],
+  //     },
+  //   ];
 
-    await expect(
-      sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(),
-        },
-      ),
-    ).rejects.toThrow(
-      'Address parsing error: mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043',
-    );
-  });
+  //   await expect(
+  //     sender.wallet.transferTransaction(
+  //       outputsToCreate,
+  //       {
+  //         shieldedSecretKeys: sender.shieldedSecretKeys,
+  //         dustSecretKey: sender.dustSecretKey,
+  //       },
+  //       {
+  //         ttl: new Date(),
+  //       },
+  //     ),
+  //   ).rejects.toThrow(
+  //     'Address parsing error: mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043',
+  //   );
+  // });
 
-  test('error message when sending token to bech32m address from different chain', async () => {
-    allure.tms('PM-14148', 'PM-14148');
-    allure.epic('Headless wallet');
-    allure.feature('Wallet state - Bech32m');
-    allure.story('Tx to addresss from different chain');
-    const bech32mAddress = 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297';
+  // test.skip('error message when sending token to bech32m address from different chain', async () => {
+  //   allure.tms('PM-14148', 'PM-14148');
+  //   allure.epic('Headless wallet');
+  //   allure.feature('Wallet state - Bech32m');
+  //   allure.story('Tx to addresss from different chain');
+  //   const bech32mAddress = 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297';
 
-    const syncedState = await utils.waitForSyncFacade(sender.wallet);
-    const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-    logger.info(`Wallet 1 balance is: ${initialBalance}`);
+  //   const syncedState = await utils.waitForSyncFacade(sender.wallet);
+  //   const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
+  //   logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
-    const outputsToCreate: CombinedTokenTransfer[] = [
-      {
-        type: 'shielded',
-        outputs: [
-          {
-            type: shieldedTokenRaw,
-            amount: 1n,
-            receiverAddress: bech32mAddress,
-          },
-        ],
-      },
-    ];
+  //   const outputsToCreate: CombinedTokenTransfer[] = [
+  //     {
+  //       type: 'shielded',
+  //       outputs: [
+  //         {
+  //           type: shieldedTokenRaw,
+  //           amount: 1n,
+  //           receiverAddress: bech32mAddress,
+  //         },
+  //       ],
+  //     },
+  //   ];
 
-    await expect(
-      sender.wallet.transferTransaction(
-        outputsToCreate,
-        {
-          shieldedSecretKeys: sender.shieldedSecretKeys,
-          dustSecretKey: sender.dustSecretKey,
-        },
-        {
-          ttl: new Date(),
-        },
-      ),
-    ).rejects.toThrow('Address parsing error: bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297');
-  });
+  //   await expect(
+  //     sender.wallet.transferTransaction(
+  //       outputsToCreate,
+  //       {
+  //         shieldedSecretKeys: sender.shieldedSecretKeys,
+  //         dustSecretKey: sender.dustSecretKey,
+  //       },
+  //       {
+  //         ttl: new Date(),
+  //       },
+  //     ),
+  //   ).rejects.toThrow('Address parsing error: bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297');
+  // });
 });

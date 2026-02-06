@@ -27,8 +27,7 @@ import {
 import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { makeProvingService } from './utils/proving.js';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { makeServerProvingService } from './utils/proving.js';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -119,7 +118,7 @@ describe('Optional Balancing', () => {
   beforeEach(async () => {
     facade = await WalletFacade.init({
       configuration,
-      shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(shieldedSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSeed),
       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
     });
@@ -263,7 +262,7 @@ describe('Optional Balancing', () => {
 
   describe('balanceUnboundTransaction', () => {
     it('only balances shielded when tokenKindsToBalance is ["shielded"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -298,7 +297,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -323,7 +322,7 @@ describe('Optional Balancing', () => {
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -359,7 +358,7 @@ describe('Optional Balancing', () => {
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
@@ -399,7 +398,7 @@ describe('Optional Balancing', () => {
     let finalizedTx: ledger.FinalizedTransaction;
 
     beforeAll(async () => {
-      const provingService = makeProvingService(configuration.provingServerUrl);
+      const provingService = makeServerProvingService(configuration.provingServerUrl);
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
       const unboundTx = await provingService.proveTransaction(arbitraryTx);
@@ -510,7 +509,7 @@ describe('Optional Balancing', () => {
 
   describe('initSwap', () => {
     it('does not pay fees when payFees is false', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -524,7 +523,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -544,7 +543,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.initSwap(
         {
@@ -558,7 +557,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -580,7 +579,7 @@ describe('Optional Balancing', () => {
 
   describe('transferTransaction', () => {
     it('does not pay fees when payFees is false', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -589,7 +588,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
@@ -609,7 +608,7 @@ describe('Optional Balancing', () => {
     });
 
     it('pays fees when payFees is true', async () => {
-      const { shielded: shieldedState } = await facade.waitForSyncedState();
+      const { shielded } = await facade.waitForSyncedState();
 
       const recipe = await facade.transferTransaction(
         [
@@ -618,7 +617,7 @@ describe('Optional Balancing', () => {
             outputs: [
               {
                 type: shieldedTokenType,
-                receiverAddress: MidnightBech32m.encode('undeployed', shieldedState.address).toString(),
+                receiverAddress: shielded.address,
                 amount: tokenValue(1n),
               },
             ],
