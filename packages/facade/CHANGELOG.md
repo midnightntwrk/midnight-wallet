@@ -1,5 +1,77 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 2.0.0-rc.0
+
+### Major Changes
+
+- f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
+  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+    into the `WalletFacade`
+  - make `WalletFacade` revert transaction upon submission failure
+  - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
+    This will allow non-breaking future initialization changes when e.g. new services are being integrated into the
+    facade.
+- 1409b6b: Standardize wallet APIs across shielded, unshielded, and dust wallets
+
+  ### Breaking Changes
+
+  **Dust Wallet:**
+  - Rename `DustCoreWallet` to `CoreWallet` for consistency
+  - Rename `walletBalance()` to `balance()` on `DustWalletState`
+  - Rename `dustPublicKey` to `publicKey` and `dustAddress` to `address` on state objects
+  - Rename `getDustPublicKey()` to `getPublicKey()` and `getDustAddress()` to `getAddress()` on `KeysCapability`
+  - Add `getAddress(): Promise<DustAddress>` method to `DustWalletAPI`
+  - Change `dustReceiverAddress` parameter type from `string` to `DustAddress` in transaction methods
+
+  **Shielded Wallet:**
+  - Rename `startWithShieldedSeed()` to `startWithSeed()` for consistency
+  - Add `getAddress(): Promise<ShieldedAddress>` method
+  - Change `receiverAddress` parameter type from `string` to `ShieldedAddress` in transfer methods
+  - Transaction history getter now throws "not yet implemented" error
+
+  **Facade:**
+  - `TokenTransfer` interface now requires typed addresses (`ShieldedAddress` or `UnshieldedAddress`) instead of strings
+  - Split `CombinedTokenTransfer` into `ShieldedTokenTransfer` and `UnshieldedTokenTransfer` types
+  - Address encoding/decoding is now handled internally - consumers pass address objects directly
+
+  ### Migration Guide
+
+  **Before:**
+
+  ```typescript
+  const address = MidnightBech32m.encode('undeployed', state.shielded.address).toString();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+  **After:**
+
+  ```typescript
+  const address = await wallet.shielded.getAddress();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+### Minor Changes
+
+- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+  checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
+  be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
+  - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
+    finalized (it can't happen earlier because unproven transactions contain copies of secret keys for proving
+    purposes). Whenever a pending transaction is reported as failed - it is reverted. The pending transactions service
+    state is also reported in the facade state for serialization purposes and to enable UI reporting.
+
+### Patch Changes
+
+- Updated dependencies [f52d01d]
+- Updated dependencies [c6f6f3e]
+- Updated dependencies [f52d01d]
+- Updated dependencies [aa7ede2]
+- Updated dependencies [1409b6b]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0-rc.0
+
 ## 1.0.0
 
 ### Patch Changes
