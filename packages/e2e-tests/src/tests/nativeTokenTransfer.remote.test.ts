@@ -13,7 +13,6 @@
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
@@ -48,13 +47,11 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  let networkId: NetworkId.NetworkId;
   const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
   const timeout = 600_000;
 
   beforeEach(async () => {
     fixture = getFixture();
-    networkId = fixture.getNetworkId();
 
     wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
     wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
@@ -99,7 +96,7 @@ describe('Token transfer', () => {
       const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNative2Balance = initialState.shielded.balances[nativeToken2Raw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
-      const initialDustBalance = initialState.dust.walletBalance(new Date());
+      const initialDustBalance = initialState.dust.balance(new Date());
       logger.info(`Wallet 1: ${initialNative1Balance} native 1 tokens`);
       logger.info(`Wallet 1: ${initialNative2Balance} native 2 tokens`);
       logger.info(`Wallet 1: ${initialUnshieldedBalance} shielded tokens`);
@@ -124,12 +121,12 @@ describe('Token transfer', () => {
             {
               type: nativeToken1Raw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+              receiverAddress: initialReceiverState.shielded.address,
             },
             {
               type: nativeToken2Raw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialReceiverState.shielded.address),
+              receiverAddress: initialReceiverState.shielded.address,
             },
           ],
         },
@@ -186,7 +183,7 @@ describe('Token transfer', () => {
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
       const senderFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
-      const senderFinalDustBalance = finalState.dust.walletBalance(new Date(3 * 1000));
+      const senderFinalDustBalance = finalState.dust.balance(new Date(3 * 1000));
       logger.info(`Wallet 1 final available dust: ${senderFinalDustBalance}`);
       logger.info(`Wallet 1 final available shielded coins: ${senderFinalShieldedBalance1}`);
       logger.info(`Wallet 2 final available shielded coins: ${senderFinalShieldedBalance2}`);
@@ -246,7 +243,7 @@ describe('Token transfer', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(networkId, initialState.shielded.address),
+              receiverAddress: initialState.shielded.address,
             },
           ],
         },

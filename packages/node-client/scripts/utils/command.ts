@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Cause, Console, Data, Effect, Exit, Fiber, pipe, Stream } from 'effect';
-import { Command, CommandExecutor, Error } from '@effect/platform';
+import { type Cause, Console, Data, Effect, Exit, Fiber, pipe, Stream } from 'effect';
+import { type Command, type CommandExecutor, type Error } from '@effect/platform';
 
 const printStream = <E, R>(stream: Stream.Stream<Uint8Array, E, R>): Effect.Effect<Fiber.Fiber<void, E>, never, R> =>
   pipe(stream, Stream.decodeText('utf-8'), Stream.splitLines, Stream.tap(Console.log), Stream.runDrain, Effect.fork);

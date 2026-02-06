@@ -25,14 +25,14 @@ import {
 import { TransactionOps, UnboundTransaction, IntentOf } from './TransactionOps.js';
 import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const GUARANTEED_SEGMENT = 0;
 
 export interface TokenTransfer {
   readonly amount: bigint;
   readonly type: ledger.RawTokenType;
-  readonly receiverAddress: string;
+  readonly receiverAddress: UnshieldedAddress;
 }
 
 export type FinalizedTransactionBalanceResult = ledger.UnprovenTransaction | undefined;
@@ -80,9 +80,9 @@ export interface TransactingCapability<TState> {
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Either.Either<ledger.UnprovenTransaction, WalletError>;
 
-  revert(
+  revertTransaction(
     wallet: CoreWallet,
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError>;
 
   signUnboundTransaction(
@@ -233,9 +233,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const ledgerOutputs = outputs.map((output) => {
         return {
           value: output.amount,
-          owner: UnshieldedAddress.codec
-            .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
-            .data.toString('hex'),
+          owner: output.receiverAddress.data.toString('hex'),
           type: output.type,
         };
       });
@@ -297,9 +295,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       const ledgerOutputs = desiredOutputs.map((output) => ({
         value: output.amount,
-        owner: UnshieldedAddress.codec
-          .decode(networkId, MidnightBech32m.parse(output.receiverAddress))
-          .data.toString('hex'),
+        owner: output.receiverAddress.data.toString('hex'),
         type: output.type,
       }));
 
@@ -356,7 +352,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);
         const signature = signSegment(signedData);
-        transaction = (yield* this.txOps.addSignature(transaction, signature, segment)) as T;
+        transaction = yield* this.txOps.addSignature<T>(transaction, signature, segment);
       }
       return transaction;
     });
@@ -368,9 +364,9 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
    */
-  revert(
+  revertTransaction(
     wallet: CoreWallet,
-    transaction: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
   ): Either.Either<CoreWallet, WalletError> {
     return pipe(
       this.txOps.extractOwnInputs(transaction, wallet.publicKey.publicKey),
@@ -493,6 +489,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
+   * @TODO - https://shielded.atlassian.net/browse/PM-21260
    */
   #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
     wallet: CoreWallet,

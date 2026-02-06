@@ -20,7 +20,6 @@ import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  *
@@ -69,7 +68,7 @@ describe('Dust tests', () => {
           {
             type: shieldedTokenRaw,
             amount: outputValue,
-            receiverAddress: utils.getShieldedAddress(fixture.getNetworkId(), receiverInitialState.shielded.address),
+            receiverAddress: receiverInitialState.shielded.address,
           },
         ],
       },
@@ -78,9 +77,7 @@ describe('Dust tests', () => {
         outputs: [
           {
             amount: outputValue,
-            receiverAddress: UnshieldedAddress.codec
-              .encode(fixture.getNetworkId(), receiverInitialState.unshielded.address)
-              .asString(),
+            receiverAddress: receiverInitialState.unshielded.address,
             type: unshieldedTokenRaw,
           },
         ],
@@ -90,9 +87,7 @@ describe('Dust tests', () => {
         outputs: [
           {
             amount: outputValue,
-            receiverAddress: UnshieldedAddress.codec
-              .encode(fixture.getNetworkId(), receiverInitialState.unshielded.address)
-              .asString(),
+            receiverAddress: receiverInitialState.unshielded.address,
             type: unshieldedTokenRaw,
           },
         ],
@@ -161,11 +156,11 @@ describe('Dust tests', () => {
       const receiverDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
           rx.tap((s) => {
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > 1000n),
-          rx.map((s) => s.dust.walletBalance(new Date())),
+          rx.filter((s) => s.dust.balance(new Date()) > 1000n),
+          rx.map((s) => s.dust.balance(new Date())),
         ),
       );
 
@@ -204,11 +199,11 @@ describe('Dust tests', () => {
       const receiverDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
           rx.tap((s) => {
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > 7n * 10n ** 14n),
-          rx.map((s) => s.dust.walletBalance(new Date())),
+          rx.filter((s) => s.dust.balance(new Date()) > 7n * 10n ** 14n),
+          rx.map((s) => s.dust.balance(new Date())),
         ),
       );
 
@@ -219,7 +214,7 @@ describe('Dust tests', () => {
       const initialNightBalance = walletStateBeforeDeregister.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Initial Night Balance: ${initialNightBalance}`);
 
-      const initialDustBalance = walletStateBeforeDeregister.dust.walletBalance(new Date());
+      const initialDustBalance = walletStateBeforeDeregister.dust.balance(new Date());
       logger.info(`Initial Dust Balance: ${initialDustBalance}`);
 
       const registeredNightUtxos = walletStateBeforeDeregister.unshielded.availableCoins.filter(
@@ -251,11 +246,11 @@ describe('Dust tests', () => {
       const finalDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
           rx.tap((s) => {
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) == 0n),
-          rx.map((s) => s.dust.walletBalance(new Date())),
+          rx.filter((s) => s.dust.balance(new Date()) == 0n),
+          rx.map((s) => s.dust.balance(new Date())),
         ),
       );
 
@@ -285,11 +280,11 @@ describe('Dust tests', () => {
       const receiverDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
           rx.tap((s) => {
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > 7n * 10n ** 14n),
-          rx.map((s) => s.dust.walletBalance(new Date())),
+          rx.filter((s) => s.dust.balance(new Date()) > 7n * 10n ** 14n),
+          rx.map((s) => s.dust.balance(new Date())),
         ),
       );
 
@@ -302,14 +297,14 @@ describe('Dust tests', () => {
               (coin) => coin.meta.registeredForDustGeneration === true,
             );
             logger.info(`registered tokens: ${registeredTokens.length}`);
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
           rx.filter(
             (s) =>
               s.unshielded.availableCoins.filter((coin) => coin.meta.registeredForDustGeneration === true).length > 0,
           ),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > 1000n),
+          rx.filter((s) => s.dust.balance(new Date()) > 1000n),
         ),
       );
 
@@ -324,7 +319,7 @@ describe('Dust tests', () => {
             {
               type: shieldedTokenRaw,
               amount: initialshieldedBalance,
-              receiverAddress: utils.getShieldedAddress(fixture.getNetworkId(), initialFundedState.shielded.address),
+              receiverAddress: initialFundedState.shielded.address,
             },
           ],
         },
@@ -370,11 +365,11 @@ describe('Dust tests', () => {
       const receiverDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(
           rx.tap((s) => {
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > 7n * 10n ** 14n),
-          rx.map((s) => s.dust.walletBalance(new Date())),
+          rx.filter((s) => s.dust.balance(new Date()) > 7n * 10n ** 14n),
+          rx.map((s) => s.dust.balance(new Date())),
         ),
       );
 
@@ -388,10 +383,10 @@ describe('Dust tests', () => {
               (coin) => coin.meta.registeredForDustGeneration === true,
             );
             logger.info(`registered tokens: ${registeredTokens.length}`);
-            const dustBalance = s.dust.walletBalance(new Date());
+            const dustBalance = s.dust.balance(new Date());
             logger.info(`Dust balance: ${dustBalance}`);
           }),
-          rx.filter((s) => s.dust.walletBalance(new Date()) > s.unshielded.balances[unshieldedTokenRaw] * 5n),
+          rx.filter((s) => s.dust.balance(new Date()) > s.unshielded.balances[unshieldedTokenRaw] * 5n),
         ),
       );
 
@@ -405,9 +400,7 @@ describe('Dust tests', () => {
           outputs: [
             {
               amount: initialUnshieldedBalance,
-              receiverAddress: UnshieldedAddress.codec
-                .encode(fixture.getNetworkId(), initialFundedState.unshielded.address)
-                .asString(),
+              receiverAddress: initialFundedState.unshielded.address,
               type: ledger.unshieldedToken().raw,
             },
           ],

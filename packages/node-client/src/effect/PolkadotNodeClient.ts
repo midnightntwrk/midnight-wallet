@@ -12,25 +12,26 @@
 // limitations under the License.
 import '../gen/augment-api.js';
 
-import { ApiPromise, SubmittableResult, WsProvider } from '@polkadot/api';
+import { ApiPromise, type SubmittableResult, WsProvider } from '@polkadot/api';
 import {
   Duration,
   Effect,
   Either,
   Layer,
-  ParseResult,
+  type ParseResult,
   pipe,
   Schedule,
   Schema,
-  Scope,
+  type Scope,
   Stream,
-  StreamEmit,
+  type StreamEmit,
 } from 'effect';
 import * as NodeClient from './NodeClient.js';
 import * as SubmissionEvent from './SubmissionEvent.js';
 import * as NodeClientError from './NodeClientError.js';
 import BN from 'bn.js';
 import { u8aToHex } from '@polkadot/util';
+import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 export type Config = {
   nodeURL: URL;
@@ -105,7 +106,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
   }
 
   sendMidnightTransaction(
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
   ): Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError> {
     const outputStream: Stream.Stream<SubmissionEvent.SubmissionEvent, NodeClientError.NodeClientError> = Stream.async(
       (emit) => {
@@ -136,7 +137,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
   }
 
   getGenesis(): Effect.Effect<
-    { readonly transactions: readonly NodeClient.SerializedMnTransaction[] },
+    { readonly transactions: readonly SerializedTransaction.SerializedTransaction[] },
     NodeClientError.NodeClientError
   > {
     return Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash)).pipe(
@@ -147,7 +148,8 @@ export class PolkadotNodeClient implements NodeClient.Service {
             .filter(
               (extrinsic) => extrinsic.method.section === 'midnight' && extrinsic.method.method === 'sendMnTransaction',
             )
-            .map((extrinsic) => extrinsic.method.args[0].toU8a()),
+            .map((extrinsic) => extrinsic.method.args[0].toU8a())
+            .map(SerializedTransaction.of),
         };
       }),
       Effect.mapError(
@@ -161,7 +163,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
   }
 
   #handleSubmissionResult = (
-    serializedTransaction: NodeClient.SerializedMnTransaction,
+    serializedTransaction: SerializedTransaction.SerializedTransaction,
     emit: StreamEmit.Emit<never, NodeClientError.NodeClientError, SubmissionEvent.SubmissionEvent, void>,
     unsubscribe: () => Promise<void>,
   ) => {

@@ -10,26 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { HttpProverClient, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Effect, pipe } from 'effect';
+import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
+import { HttpProverClient, WasmProver, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { Effect, Layer, pipe } from 'effect';
 import { ProvingError, WalletError } from './WalletError.js';
 
 export interface ProvingService<TTransaction> {
   prove(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError>;
 }
 
-export type DefaultProvingConfiguration = {
-  provingServerUrl: URL;
-};
-
-export const makeDefaultProvingService = (
-  configuration: DefaultProvingConfiguration,
+export const makeProvingService = (
+  clientLayer: Layer.Layer<ProverClient.ProverClient, InvalidProtocolSchemeError>,
 ): ProvingService<ledger.FinalizedTransaction> => {
-  const clientLayer = HttpProverClient.layer({
-    url: configuration.provingServerUrl,
-  });
-
   return {
     prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.FinalizedTransaction, WalletError> {
       return pipe(
@@ -48,6 +42,38 @@ export const makeDefaultProvingService = (
       );
     },
   };
+};
+
+export type WasmProvingConfiguration = {
+  keyMaterialProvider?: KeyMaterialProvider;
+};
+
+export type ProvingServerConfiguration = {
+  provingServerUrl: URL;
+};
+
+export type DefaultProvingConfiguration = ProvingServerConfiguration;
+
+export const makeDefaultProvingService = (
+  configuration: DefaultProvingConfiguration,
+): ProvingService<ledger.FinalizedTransaction> => makeServerProvingService(configuration);
+
+export const makeServerProvingService = (
+  configuration: ProvingServerConfiguration,
+): ProvingService<ledger.FinalizedTransaction> => {
+  const clientLayer = HttpProverClient.layer({
+    url: configuration.provingServerUrl,
+  });
+  return makeProvingService(clientLayer);
+};
+
+export const makeWasmProvingService = (
+  configuration: WasmProvingConfiguration,
+): ProvingService<ledger.FinalizedTransaction> => {
+  const proverLayer = WasmProver.layer({
+    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
+  });
+  return makeProvingService(proverLayer);
 };
 
 export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> => {
