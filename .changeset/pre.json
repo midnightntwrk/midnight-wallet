@@ -20,5 +20,11 @@
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0",
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1"
   },
-  "changesets": []
+  "changesets": [
+    "chubby-donuts-thank",
+    "cold-lizards-join",
+    "four-tables-cross",
+    "late-games-juggle",
+    "standardize-wallet-apis"
+  ]
 }
