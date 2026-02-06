@@ -15,23 +15,30 @@ import {
   Intent,
   LedgerParameters,
   nativeToken,
-  ProofErasedTransaction,
+  type ProofErasedTransaction,
   Transaction,
   UnshieldedOffer,
-  UserAddress,
+  type UserAddress,
 } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { BigInt as BI, Chunk, Effect, Scope, Stream, SubscriptionRef } from 'effect';
+import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 import { expect, vi } from 'vitest';
-import { DustCoreWallet, RunningV1Variant, Transacting, UtxoWithMeta, V1Builder, V1Variant } from '../src/index.js';
-import { Simulator, SimulatorState } from '../src/Simulator.js';
-import * as Submission from '../src/Submission.js';
-import { makeSimulatorSyncCapability, makeSimulatorSyncService, SimulatorSyncUpdate } from '../src/Sync.js';
-import { createUnshieldedKeystore, UnshieldedKeystore } from './UnshieldedKeyStore.js';
+import {
+  CoreWallet,
+  type RunningV1Variant,
+  Transacting,
+  type UtxoWithMeta,
+  V1Builder,
+  type V1Variant,
+} from '../src/index.js';
+import { Simulator, type SimulatorState } from '../src/Simulator.js';
+import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/Sync.js';
+import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
 vi.setConfig({ testTimeout: 1 * 1000 });
@@ -64,7 +71,7 @@ const toTxTime = (secs: number | bigint): Date => new Date(Number(secs) * 1000);
 
 const getCurrentTime = (simulatorState: SimulatorState) => DateOps.addSeconds(toTxTime(simulatorState.lastTxNumber), 1);
 
-const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>, txTime: bigint | number) => {
+const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>, txTime: bigint | number) => {
   const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txTime)));
   return Stream.runLast(stream);
 };
@@ -80,9 +87,10 @@ describe('DustWallet', () => {
   const dustParameters = LedgerParameters.initialParameters().dust;
   let walletVariant: WalletVariant;
   let wallet: RunningWallet;
-  let stateRef: SubscriptionRef.SubscriptionRef<DustCoreWallet>;
+  let stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>;
   let simulator: Simulator;
   let keyStore: UnshieldedKeystore;
+  let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
 
   const registerNightTokens = (wallet: RunningWallet, nightTokens: Array<UtxoWithMeta>, nightVerifyingKey: string) => {
     return Effect.gen(function* () {
@@ -96,7 +104,7 @@ describe('DustWallet', () => {
         ttl,
         nightTokens,
         nightVerifyingKey,
-        DustAddress.encodePublicKey(NETWORK, lastState.publicKey.publicKey),
+        new DustAddress(lastState.publicKey.publicKey),
       );
 
       const intent = registerForDustTransaction.intents!.get(1);
@@ -105,7 +113,7 @@ describe('DustWallet', () => {
       const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(registerForDustTransaction, signature);
 
       const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
-      const result = yield* wallet.submitTransaction(transaction);
+      const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
       expect(latestSimulatorState.lastTxResult?.type).toBe('success');
@@ -147,7 +155,7 @@ describe('DustWallet', () => {
       const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(balancedTransaction, signature);
 
       const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
-      const result = yield* wallet.submitTransaction(transaction);
+      const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
       expect(latestSimulatorState.lastTxResult?.type).toBe('success');
@@ -172,7 +180,6 @@ describe('DustWallet', () => {
         .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
         .withCoinsAndBalancesDefaults()
         .withKeysDefaults()
-        .withSubmission(Submission.makeSimulatorSubmissionService())
         .withSerializationDefaults()
         .build({
           simulator,
@@ -180,10 +187,12 @@ describe('DustWallet', () => {
           costParameters,
         });
 
-      const initialState = DustCoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
+      const initialState = CoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);
       stateRef = yield* SubscriptionRef.make(initialState);
       wallet = yield* walletVariant.start({ stateRef }).pipe(Effect.provideService(Scope.Scope, scope));
       yield* wallet.startSyncInBackground(dustSecretKey);
+
+      submissionService = Submission.makeSimulatorSubmissionService<ProofErasedTransaction>('InBlock')({ simulator });
     }).pipe(Effect.scoped, Effect.runPromise),
   );
 
@@ -381,7 +390,7 @@ describe('DustWallet', () => {
 
       const provenTransaction = yield* wallet.proveTransaction(balancedTransaction);
 
-      yield* wallet.submitTransaction(provenTransaction);
+      yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       yield* waitForTx(stateRef, 4);
 
       simulatorState = yield* simulator.getLatestState();
@@ -537,7 +546,7 @@ describe('DustWallet', () => {
       // validate fee imbalance
       expect(Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee)).toBe(0n);
 
-      yield* wallet.submitTransaction(provenTransaction);
+      yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       yield* waitForTx(stateRef, 11);
 
       walletState = yield* SubscriptionRef.get(stateRef);

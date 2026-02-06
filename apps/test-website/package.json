@@ -34,7 +34,7 @@
     "testcontainers": "^11.10.0"
   },
   "scripts": {
-    "typecheck": "tsc -b ./tsconfig.json",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "lint": "eslint --max-warnings 0",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,json,yaml,yml,md}\"",

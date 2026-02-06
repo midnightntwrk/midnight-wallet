@@ -11,13 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import {
   Proving,
   Simulator,
-  Submission,
   Sync,
   Transacting,
   TransactionHistory,
@@ -60,9 +59,11 @@ describe('Working in simulation mode', () => {
           .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
           .withCoinsAndBalancesDefaults()
           .withKeysDefaults()
-          .withSubmission(Submission.makeSimulatorSubmissionService())
           .withSerializationDefaults(),
       );
+      const submissionService = Submission.makeSimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({
+        simulator,
+      });
 
       const senderWallet = Wallet.startWithSecretKeys(senderKeys);
       const receiverWallet = Wallet.startWithSecretKeys(receiverKeys);
@@ -83,14 +84,14 @@ describe('Working in simulation mode', () => {
           {
             type: shieldedTokenType,
             amount: 42n,
-            receiverAddress: await receiverWallet
-              .getAddress()
-              .then((addr) => ShieldedAddress.codec.encode(Wallet.configuration.networkId, addr).asString()),
+            receiverAddress: await receiverWallet.getAddress(),
           },
         ]);
-        const tx = await senderWallet.finalizeTransaction(unprovenTx);
-        await senderWallet.submitTransaction(tx);
-      }).pipe(Effect.forkScoped);
+        return await senderWallet.finalizeTransaction(unprovenTx);
+      }).pipe(
+        Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'InBlock')),
+        Effect.forkScoped,
+      );
 
       const finalBalance = yield* Effect.promise(() =>
         pipe(

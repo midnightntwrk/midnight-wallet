@@ -24,7 +24,7 @@ import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilit
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Simulator, SimulatorState } from './Simulator.js';
-import { DustCoreWallet } from './DustCoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
 
@@ -135,11 +135,11 @@ export const WalletSyncUpdate = {
 };
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
-): SyncService<DustCoreWallet, DustSecretKey, WalletSyncUpdate> => {
+): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
   const indexerSyncService = makeIndexerSyncService(config);
   return {
     updates: (
-      state: DustCoreWallet,
+      state: CoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<WalletSyncUpdate, WalletError.WalletError, Scope.Scope> => {
       const batchSize = 10;
@@ -185,7 +185,7 @@ export const makeDefaultSyncService = (
 export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError.WalletError, Scope.Scope>;
   subscribeWallet: (
-    state: DustCoreWallet,
+    state: CoreWallet,
   ) => Stream.Stream<WalletSyncSubscription, WalletError.WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError.WalletError, Scope.Scope>;
 };
@@ -217,7 +217,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       );
     },
     subscribeWallet(
-      state: DustCoreWallet,
+      state: CoreWallet,
     ): Stream.Stream<WalletSyncSubscription, WalletError.WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
 
@@ -238,9 +238,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
-export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, WalletSyncUpdate> => {
+export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
-    applyUpdate(state: DustCoreWallet, wrappedUpdate: WalletSyncUpdate): DustCoreWallet {
+    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
       const { updates, secretKeys } = wrappedUpdate;
 
       // Nothing to update yet
@@ -270,9 +270,9 @@ export const makeDefaultSyncCapability = (): SyncCapability<DustCoreWallet, Wall
 
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
-): SyncService<DustCoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
+): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: DustCoreWallet, secretKey: DustSecretKey) =>
+    updates: (_state: CoreWallet, secretKey: DustSecretKey) =>
       config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
     blockData: (): Effect.Effect<BlockData> => {
       return Effect.gen(function* () {
@@ -289,8 +289,8 @@ export const makeSimulatorSyncService = (
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<DustCoreWallet, SimulatorSyncUpdate> => ({
-  applyUpdate: (state: DustCoreWallet, update: SimulatorSyncUpdate) =>
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => ({
+  applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) =>
     state
       .applyEvents(
         update.secretKey,

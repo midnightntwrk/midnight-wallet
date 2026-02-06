@@ -32,7 +32,7 @@ await sender.wallet
         outputs: [
           {
             amount: 500_000_000_000_000n,
-            receiverAddress: unshieldedKeystore.getBech32Address().toString(),
+            receiverAddress: await wallet.unshielded.getAddress(),
             type: ledger.nativeToken().raw,
           },
         ],

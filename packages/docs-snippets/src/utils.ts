@@ -11,20 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import type { DefaultV1Configuration as DustConfiguration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import type { DefaultV1Configuration as ShieldedConfiguration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey as UnshieldedPublicKey,
-  type UnshieldedKeystore,
   UnshieldedWallet,
+  type UnshieldedKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { Buffer } from 'buffer';
+import { type Buffer } from 'buffer';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
@@ -32,7 +30,7 @@ const PROOF_SERVER_PORT = Number.parseInt(process.env['PROOF_SERVER_PORT'] ?? '6
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v3/graphql`;
 const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v3/graphql/ws`;
 
-const configuration: ShieldedConfiguration & DustConfiguration & { indexerUrl: string } = {
+const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   costParameters: {
     additionalFeeOverhead: 300_000_000_000_000_000n,
@@ -44,7 +42,7 @@ const configuration: ShieldedConfiguration & DustConfiguration & { indexerUrl: s
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  indexerUrl: INDEXER_WS_URL,
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
 };
 
 export const initWalletWithSeed = async (
@@ -76,17 +74,16 @@ export const initWalletWithSeed = async (
   const dustSecretKey = ledger.DustSecretKey.fromSeed(derivationResult.keys[Roles.Dust]);
   const unshieldedKeystore = createKeystore(derivationResult.keys[Roles.NightExternal], configuration.networkId);
 
-  const shieldedWallet = ShieldedWallet(configuration).startWithSecretKeys(shieldedSecretKeys);
-  const dustWallet = DustWallet(configuration).startWithSecretKey(
-    dustSecretKey,
-    ledger.LedgerParameters.initialParameters().dust,
-  );
-  const unshieldedWallet = UnshieldedWallet({
-    ...configuration,
-    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-  }).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore));
+  const wallet: WalletFacade = await WalletFacade.init({
+    configuration,
+    shielded: (config) => ShieldedWallet(config).startWithSecretKeys(shieldedSecretKeys),
+    unshielded: (config) =>
+      UnshieldedWallet(config).startWithPublicKey(UnshieldedPublicKey.fromKeyStore(unshieldedKeystore)),
+    dust: (config) =>
+      DustWallet(config).startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust),
+  });
 
-  const facade: WalletFacade = new WalletFacade(shieldedWallet, unshieldedWallet, dustWallet);
-  await facade.start(shieldedSecretKeys, dustSecretKey);
-  return { wallet: facade, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
+  await wallet.start(shieldedSecretKeys, dustSecretKey);
+
+  return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };

@@ -51,7 +51,7 @@
   },
   "scripts": {
     "gql:codegen": "graphql-codegen",
-    "typecheck": "tsc -b ./tsconfig.json --noEmit",
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
     "test": "vitest run",

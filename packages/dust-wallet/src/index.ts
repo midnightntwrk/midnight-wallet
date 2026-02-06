@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './DustCoreWallet.js';
+export * from './CoreWallet.js';
 export * from './DustWallet.js';
 export * as Keys from './Keys.js';
 export * as Simulator from './Simulator.js';
