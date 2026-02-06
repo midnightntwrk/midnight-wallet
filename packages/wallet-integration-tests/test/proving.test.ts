@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect, Either, Schedule, Duration, Scope, pipe } from 'effect';
@@ -77,6 +78,14 @@ function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTran
 
 runInterfaceTests('Wasm Proving', () => Effect.succeed(Proving.makeWasmProvingService({})));
 
+runInterfaceTests('Custom Wasm Prover', () =>
+  pipe(
+    WasmProver.create({ keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() }),
+    Effect.map((service) => service.asProvingProvider()),
+    Effect.map((provider) => Proving.fromProvingProvider(provider)),
+  ),
+);
+
 runInterfaceTests('Server Proving', () =>
   pipe(
     proofServerContainerResource,
@@ -85,6 +94,19 @@ runInterfaceTests('Server Proving', () =>
         provingServerUrl: proofServerUrl,
       }),
     ),
+  ),
+);
+
+runInterfaceTests('Custom Server Prover', () =>
+  pipe(
+    proofServerContainerResource,
+    Effect.flatMap((proofServerUrl) =>
+      HttpProverClient.create({
+        url: proofServerUrl,
+      }),
+    ),
+    Effect.map((client) => client.asProvingProvider()),
+    Effect.map((provider) => Proving.fromProvingProvider(provider)),
   ),
 );
 
