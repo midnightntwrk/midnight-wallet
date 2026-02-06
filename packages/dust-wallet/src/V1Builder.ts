@@ -28,7 +28,7 @@ import {
   type WalletSyncUpdate,
 } from './Sync.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { type DustCoreWallet } from './DustCoreWallet.js';
+import { type CoreWallet } from './CoreWallet.js';
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import {
   chooseCoin,
@@ -65,14 +65,14 @@ export type DefaultV1Variant = V1Variant<string, WalletSyncUpdate, FinalizedTran
 
 export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Variant.Variant<
   typeof V1Tag,
-  DustCoreWallet,
-  DustCoreWallet, // null,
+  CoreWallet,
+  CoreWallet, // null,
   RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData>
 > & {
-  deserializeState: (serialized: TSerialized) => Either.Either<DustCoreWallet, WalletError.WalletError>;
-  coinsAndBalances: CoinsAndBalancesCapability<DustCoreWallet>;
-  keys: KeysCapability<DustCoreWallet>;
-  serialization: SerializationCapability<DustCoreWallet, null, TSerialized>;
+  deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError.WalletError>;
+  coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
+  keys: KeysCapability<CoreWallet>;
+  serialization: SerializationCapability<CoreWallet, null, TSerialized>;
 };
 
 export type DefaultV1Builder = V1Builder<
@@ -149,11 +149,11 @@ export class V1Builder<
     syncService: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
-    ) => SyncService<DustCoreWallet, TStartAux, TSyncUpdate>,
+    ) => SyncService<CoreWallet, TStartAux, TSyncUpdate>,
     syncCapability: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
-    ) => SyncCapability<DustCoreWallet, TSyncUpdate>,
+    ) => SyncCapability<CoreWallet, TSyncUpdate>,
   ): V1Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return new V1Builder<
       TConfig & TSyncConfig,
@@ -181,7 +181,7 @@ export class V1Builder<
     serializationCapability: (
       configuration: TSerializationConfig,
       getContext: () => TSerializationContext,
-    ) => SerializationCapability<DustCoreWallet, null, TSerialized>,
+    ) => SerializationCapability<CoreWallet, null, TSerialized>,
   ): V1Builder<
     TConfig & TSerializationConfig,
     TContext & TSerializationContext,
@@ -220,7 +220,7 @@ export class V1Builder<
     transactingCapability: (
       config: TTransactingConfig,
       getContext: () => TTransactingContext,
-    ) => TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>,
+    ) => TransactingCapability<DustSecretKey, CoreWallet, TTransaction>,
   ): V1Builder<
     TConfig & TTransactingConfig,
     TContext & TTransactingContext,
@@ -320,7 +320,7 @@ export class V1Builder<
     coinsAndBalancesCapability: (
       configuration: TBalancesConfig,
       getContext: () => TBalancesContext,
-    ) => CoinsAndBalancesCapability<DustCoreWallet>,
+    ) => CoinsAndBalancesCapability<CoreWallet>,
   ): V1Builder<
     TConfig & TBalancesConfig,
     TContext & TBalancesContext,
@@ -347,7 +347,7 @@ export class V1Builder<
   }
 
   withKeys<TKeysConfig, TKeysContext extends Partial<RunningV1Variant.AnyContext>>(
-    keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<DustCoreWallet>,
+    keysCapability: (configuration: TKeysConfig, getContext: () => TKeysContext) => KeysCapability<CoreWallet>,
   ): V1Builder<TConfig & TKeysConfig, TContext & TKeysContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return new V1Builder<
       TConfig & TKeysConfig,
@@ -380,7 +380,7 @@ export class V1Builder<
       keys: v1Context.keysCapability,
       serialization: v1Context.serializationCapability,
       start(
-        context: Variant.VariantContext<DustCoreWallet>,
+        context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<
         RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>,
         WalletRuntimeError,
@@ -395,7 +395,7 @@ export class V1Builder<
         // TODO: re-implement
         return Effect.succeed(prevState);
       },
-      deserializeState: (serialized: TSerialized): Either.Either<DustCoreWallet, WalletError.WalletError> => {
+      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError.WalletError> => {
         return v1Context.serializationCapability.deserialize(null, serialized);
       },
     };
@@ -450,25 +450,25 @@ declare namespace V1Builder {
     readonly syncService: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SyncService<DustCoreWallet, TStartAux, TSyncUpdate>;
+    ) => SyncService<CoreWallet, TStartAux, TSyncUpdate>;
     readonly syncCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SyncCapability<DustCoreWallet, TSyncUpdate>;
+    ) => SyncCapability<CoreWallet, TSyncUpdate>;
   };
 
   type HasTransacting<TConfig, TContext, TTransaction> = {
     readonly transactingCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactingCapability<DustSecretKey, DustCoreWallet, TTransaction>;
+    ) => TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
   };
 
   type HasSerialization<TConfig, TContext, TSerialized> = {
     readonly serializationCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SerializationCapability<DustCoreWallet, null, TSerialized>;
+    ) => SerializationCapability<CoreWallet, null, TSerialized>;
   };
 
   type HasCoinSelection<TConfig, TContext> = {
@@ -486,11 +486,11 @@ declare namespace V1Builder {
     readonly coinsAndBalancesCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => CoinsAndBalancesCapability<DustCoreWallet>;
+    ) => CoinsAndBalancesCapability<CoreWallet>;
   };
 
   type HasKeys<TConfig, TContext> = {
-    readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<DustCoreWallet>;
+    readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
   /**

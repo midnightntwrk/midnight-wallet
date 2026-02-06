@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
@@ -85,9 +84,7 @@ describe('Working in simulation mode', () => {
           {
             type: shieldedTokenType,
             amount: 42n,
-            receiverAddress: await receiverWallet
-              .getAddress()
-              .then((addr) => ShieldedAddress.codec.encode(Wallet.configuration.networkId, addr).asString()),
+            receiverAddress: await receiverWallet.getAddress(),
           },
         ]);
         return await senderWallet.finalizeTransaction(unprovenTx);

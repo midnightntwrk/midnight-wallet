@@ -13,7 +13,7 @@
 
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { MidnightBech32m, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { ArrayOps, DateOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, HashMap, pipe, Record as Rec } from 'effect';
@@ -61,8 +61,7 @@ const outputArbitrary = (tokenType: ledger.RawTokenType, value: bigint): fc.Arbi
     receiverAddress: fc
       .uint8Array({ minLength: 32, maxLength: 32 })
       .map((bytes) => Buffer.from(bytes))
-      .map((bytes) => new UnshieldedAddress(bytes))
-      .map((addr) => MidnightBech32m.encode(NetworkId.NetworkId.Undeployed, addr).toString()),
+      .map((bytes) => new UnshieldedAddress(bytes)),
   });
 };
 

@@ -12,7 +12,6 @@
 // limitations under the License.
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { randomBytes } from 'node:crypto';
@@ -56,7 +55,7 @@ describe('Transaction balancing examples', () => {
 
       const initialState = await utils.waitForSyncFacade(funded.wallet);
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialDustBalance = initialState.dust.walletBalance(new Date());
+      const initialDustBalance = initialState.dust.balance(new Date());
       logger.info(`Funded Wallet: ${initialDustBalance} tDUST`);
       logger.info(`Funded Wallet: ${initialShieldedBalance} shielded tokens`);
       logger.info(`Funded Wallet available coins: ${initialState.shielded.availableCoins.length}`);
@@ -65,14 +64,6 @@ describe('Transaction balancing examples', () => {
 
       sender = await utils.initWalletWithSeed(senderSeed, fixture);
       const senderInitialstate = await utils.waitForSyncFacade(sender.wallet);
-      const shieldedWalletAddress = utils.getShieldedAddress(
-        NetworkId.NetworkId.Undeployed,
-        senderInitialstate.shielded.address,
-      );
-      const unshieldedWalletAddress = utils.getUnshieldedAddress(
-        NetworkId.NetworkId.Undeployed,
-        senderInitialstate.unshielded.address,
-      );
       const senderInitialAvailableUnshieldedCoins = senderInitialstate.unshielded.availableCoins.length;
 
       const outputsToCreate: CombinedTokenTransfer[] = [
@@ -82,17 +73,17 @@ describe('Transaction balancing examples', () => {
             {
               type: shieldedTokenRaw,
               amount: output100,
-              receiverAddress: shieldedWalletAddress,
+              receiverAddress: senderInitialstate.shielded.address,
             },
             {
               type: shieldedTokenRaw,
               amount: output50,
-              receiverAddress: shieldedWalletAddress,
+              receiverAddress: senderInitialstate.shielded.address,
             },
             {
               type: shieldedTokenRaw,
               amount: output30,
-              receiverAddress: shieldedWalletAddress,
+              receiverAddress: senderInitialstate.shielded.address,
             },
           ],
         },
@@ -101,7 +92,7 @@ describe('Transaction balancing examples', () => {
           outputs: [
             {
               amount: unshieldedAmount,
-              receiverAddress: unshieldedWalletAddress,
+              receiverAddress: senderInitialstate.unshielded.address,
               type: unshieldedTokenRaw,
             },
           ],
@@ -174,14 +165,14 @@ describe('Transaction balancing examples', () => {
 
       const initialState = await utils.waitForSyncFacade(sender.wallet);
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
-      const initialDustBalance = initialState.dust.walletBalance(new Date(Date.now() + 60 * 60 * 1000));
+      const initialDustBalance = initialState.dust.balance(new Date(Date.now() + 60 * 60 * 1000));
       logger.info(initialState.shielded.balances);
       logger.info(`Wallet 1: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 available coins: ${initialState.shielded.availableCoins.length}`);
       logger.info(initialState.shielded.availableCoins);
 
       const initialState2 = await utils.waitForSyncFacade(receiver1.wallet);
-      const initialDustBalance2 = initialState2.dust.walletBalance(new Date());
+      const initialDustBalance2 = initialState2.dust.balance(new Date());
       logger.info(`Wallet 2: ${initialDustBalance2} tDUST`);
       logger.info(`Wallet 2 available coins: ${initialState2.shielded.availableCoins.length}`);
 
@@ -192,7 +183,7 @@ describe('Transaction balancing examples', () => {
             {
               type: shieldedTokenRaw,
               amount: output35,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -271,7 +262,7 @@ describe('Transaction balancing examples', () => {
             {
               type: shieldedTokenRaw,
               amount: output,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -364,17 +355,17 @@ describe('Transaction balancing examples', () => {
             {
               type: shieldedTokenRaw,
               amount: nativeTokenOutput,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
             {
               type: shieldedTokenRaw,
               amount: nativeTokenOutput,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState3.shielded.address),
+              receiverAddress: initialState3.shielded.address,
             },
             {
               type: shieldedTokenRaw,
               amount: nativeTokenOutput,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState4.shielded.address),
+              receiverAddress: initialState4.shielded.address,
             },
           ],
         },
@@ -449,7 +440,7 @@ describe('Transaction balancing examples', () => {
       const initialState = await utils.waitForSyncFacade(receiver1.wallet);
       logger.info(initialState.shielded.balances);
       logger.info(`Wallet receiver1 available coins: ${initialState.shielded.availableCoins.length}`);
-      logger.info(`Wallet receiver1 dust coins: ${initialState.dust.walletBalance(new Date())}`);
+      logger.info(`Wallet receiver1 dust coins: ${initialState.dust.balance(new Date())}`);
       logger.info(`Wallet receiver1 available shielded tokens: ${initialState.shielded.balances[shieldedTokenRaw]}`);
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -458,7 +449,7 @@ describe('Transaction balancing examples', () => {
             {
               type: shieldedTokenRaw,
               amount: output10,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState.shielded.address),
+              receiverAddress: initialState.shielded.address,
             },
           ],
         },

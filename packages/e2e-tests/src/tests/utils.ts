@@ -284,7 +284,7 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
       ...fixture.getDustWalletConfig(),
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     },
-    shielded: (config) => ShieldedWallet(config).startWithShieldedSeed(getShieldedSeed(seed)),
+    shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
     dust: (config) =>
       DustWallet(config).startWithSeed(getDustSeed(seed), ledger.LedgerParameters.initialParameters().dust),
@@ -471,8 +471,10 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
 //   return { ...otherProps, normalized };
 // }
 
-export const getTransactionHistoryIds = (state: ShieldedWalletState) => {
-  return state.transactionHistory.map((tx) => tx.identifiers());
+/** Disabled until tx history is implemented in the shielded wallet */
+export const getTransactionHistoryIds = (_state: ShieldedWalletState) => {
+  // return state.transactionHistory.map((tx) => tx.identifiers());
+  return [];
 };
 
 // export function compareStates(state1: ShieldedWalletState, state2: ShieldedWalletState) {

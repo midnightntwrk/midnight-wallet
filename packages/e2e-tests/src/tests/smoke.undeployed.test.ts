@@ -29,7 +29,6 @@ import {
   InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Smoke tests
@@ -118,7 +117,7 @@ describe('Smoke tests', () => {
             {
               type: shieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: utils.getShieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.shielded.address),
+              receiverAddress: initialState2.shielded.address,
             },
           ],
         },
@@ -128,9 +127,7 @@ describe('Smoke tests', () => {
             {
               type: unshieldedTokenRaw,
               amount: outputValue,
-              receiverAddress: UnshieldedAddress.codec
-                .encode(NetworkId.NetworkId.Undeployed, initialState2.unshielded.address)
-                .asString(),
+              receiverAddress: initialState2.unshielded.address,
             },
           ],
         },
@@ -189,6 +186,8 @@ describe('Smoke tests', () => {
     timeout,
   );
 
+  // TODO @QA - update to test the restored state properly
+  // NOTE: tx history is not part of state anymore
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
@@ -201,7 +200,6 @@ describe('Smoke tests', () => {
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await funded.wallet.shielded.serializeState();
       const stateObject = JSON.parse(serialized);
-      expect(stateObject.txHistory).toHaveLength(0);
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
@@ -278,9 +276,9 @@ describe('Smoke tests', () => {
       allure.story('Building with discardTxHistory undefined');
 
       const initialState = await utils.waitForSyncFacade(funded.wallet);
-      const publicKey = initialState.dust.dustPublicKey;
-      const address = initialState.dust.dustAddress;
-      const dustBalance = initialState.dust.walletBalance(new Date(3 * 1000));
+      const publicKey = initialState.dust.publicKey;
+      const address = initialState.dust.address;
+      const dustBalance = initialState.dust.balance(new Date(3 * 1000));
       const serialized = await funded.wallet.dust.serializeState();
       logger.info(`serializeState: ${serialized}`);
       const stateObject = JSON.parse(serialized);
@@ -293,9 +291,9 @@ describe('Smoke tests', () => {
       await restoredWallet.start(funded.dustSecretKey);
       const restoredState = await restoredWallet.waitForSyncedState();
       logger.info(restoredState);
-      expect(restoredState.dustPublicKey).toBe(publicKey);
-      expect(restoredState.dustAddress).toBe(address);
-      expect(restoredState.walletBalance(new Date(3 * 1000))).toBe(dustBalance);
+      expect(restoredState.publicKey).toBe(publicKey);
+      expect(restoredState.address.equals(address)).toBe(true);
+      expect(restoredState.balance(new Date(3 * 1000))).toBe(dustBalance);
       await restoredWallet.stop();
     },
     timeout,
