@@ -12,25 +12,32 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
-import { HttpProverClient, WasmProver, ProverClient } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
-import { InvalidProtocolSchemeError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { Effect, Layer, pipe } from 'effect';
+import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
+import { ClientError, InvalidProtocolSchemeError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { Effect, pipe } from 'effect';
 import { ProvingError, WalletError } from './WalletError.js';
 
 export interface ProvingService<TTransaction> {
   prove(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError>;
 }
 
-export const makeProvingService = (
-  clientLayer: Layer.Layer<ProverClient.ProverClient, InvalidProtocolSchemeError>,
+export const fromProvingProviderEffect = (
+  provider: Effect.Effect<ledger.ProvingProvider, InvalidProtocolSchemeError>,
 ): ProvingService<ledger.FinalizedTransaction> => {
   return {
     prove(transaction: ledger.UnprovenTransaction): Effect.Effect<ledger.FinalizedTransaction, WalletError> {
       return pipe(
-        ProverClient.ProverClient,
-        Effect.flatMap((client) => client.proveTransaction(transaction, ledger.CostModel.initialCostModel())),
+        provider,
+        Effect.flatMap((provider) =>
+          Effect.tryPromise({
+            try: () => transaction.prove(provider, ledger.CostModel.initialCostModel()),
+            catch: (error) =>
+              error instanceof ClientError || error instanceof ServerError
+                ? error
+                : new ClientError({ message: 'Failed to prove transaction', cause: error }),
+          }),
+        ),
         Effect.map((transaction) => transaction.bind()),
-        Effect.provide(clientLayer),
         Effect.catchAll((error) =>
           Effect.fail(
             new ProvingError({
@@ -42,6 +49,10 @@ export const makeProvingService = (
       );
     },
   };
+};
+
+export const fromProvingProvider = (provider: ledger.ProvingProvider): ProvingService<ledger.FinalizedTransaction> => {
+  return fromProvingProviderEffect(Effect.succeed(provider));
 };
 
 export type WasmProvingConfiguration = {
@@ -61,19 +72,25 @@ export const makeDefaultProvingService = (
 export const makeServerProvingService = (
   configuration: ProvingServerConfiguration,
 ): ProvingService<ledger.FinalizedTransaction> => {
-  const clientLayer = HttpProverClient.layer({
-    url: configuration.provingServerUrl,
-  });
-  return makeProvingService(clientLayer);
+  return pipe(
+    HttpProverClient.create({
+      url: configuration.provingServerUrl,
+    }),
+    Effect.map((client) => client.asProvingProvider()),
+    fromProvingProviderEffect,
+  );
 };
 
 export const makeWasmProvingService = (
   configuration: WasmProvingConfiguration,
 ): ProvingService<ledger.FinalizedTransaction> => {
-  const proverLayer = WasmProver.layer({
-    keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
-  });
-  return makeProvingService(proverLayer);
+  return pipe(
+    WasmProver.create({
+      keyMaterialProvider: configuration.keyMaterialProvider ?? WasmProver.makeDefaultKeyMaterialProvider(),
+    }),
+    Effect.map((prover) => prover.asProvingProvider()),
+    fromProvingProviderEffect,
+  );
 };
 
 export const makeSimulatorProvingService = (): ProvingService<ledger.ProofErasedTransaction> => {

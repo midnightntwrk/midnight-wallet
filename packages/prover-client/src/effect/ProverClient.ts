@@ -52,5 +52,7 @@ export declare namespace ProverClient {
       tx: ledger.Transaction<S, ledger.PreProof, B>,
       costModel?: ledger.CostModel,
     ): Effect.Effect<ledger.Transaction<S, ledger.Proof, B>, ClientError | ServerError>;
+
+    asProvingProvider(): ledger.ProvingProvider;
   }
 }

@@ -19,7 +19,7 @@ import {
   InvalidProtocolSchemeError,
   ServerError,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { BlobOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { BlobOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 
 const PROVE_TX_PATH = '/prove';
@@ -45,6 +45,17 @@ export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverCli
       }),
     ),
   );
+
+export const create = (
+  config: ProverClient.ServerConfig,
+): Effect.Effect<ProverClient.Service, InvalidProtocolSchemeError> => {
+  return pipe(
+    HttpURL.make(new URL(config.url)),
+    Either.map((baseUrl) => new HttpProverClientImpl(baseUrl)),
+    EitherOps.toEffect,
+    Effect.map((client) => ProverClient.of(client)),
+  );
+};
 
 class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
   constructor(baseUrl: HttpURL.HttpUrl) {
@@ -143,5 +154,9 @@ class HttpProverClientImpl implements Context.Tag.Service<ProverClient> {
         }),
       ),
     );
+  }
+
+  asProvingProvider() {
+    return this.serverProverProvider();
   }
 }
