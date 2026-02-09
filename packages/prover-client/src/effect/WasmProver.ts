@@ -198,7 +198,7 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
   const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
   const ver = 9;
 
-  const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+  const fetchWithRetry = async (url: string, retries = 5): Promise<Response> => {
     for (let i = 0; i < retries; i++) {
       try {
         return await fetch(url);
