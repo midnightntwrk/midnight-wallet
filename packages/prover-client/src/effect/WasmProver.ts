@@ -33,11 +33,13 @@ export const CheckOperationSchema = Schema.Struct({
   op: Schema.Literal('check'),
   args: Schema.Tuple(Schema.Uint8Array),
 });
+type CheckOperationSchema = Schema.Schema.Type<typeof CheckOperationSchema>;
 
 export const ProveOperationSchema = Schema.Struct({
   op: Schema.Literal('prove'),
   args: Schema.Tuple(Schema.Uint8Array, Schema.Union(Schema.BigIntFromSelf, Schema.Undefined)),
 });
+type ProveOperationSchema = Schema.Schema.Type<typeof ProveOperationSchema>;
 
 export const LookupKeyRequestSchema = Schema.Struct({
   op: Schema.Literal('lookupKey'),
@@ -76,17 +78,9 @@ const MessageDataSchema = Schema.Union(LookupKeyRequestSchema, GetParamsRequestS
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
 
-type CallProverWorker =
-  | {
-      kmProvider: KeyMaterialProvider;
-      op: 'check';
-      args: [Uint8Array];
-    }
-  | {
-      kmProvider: KeyMaterialProvider;
-      op: 'prove';
-      args: [Uint8Array, (bigint | undefined)?];
-    };
+type CallProverWorker = {
+  kmProvider: KeyMaterialProvider;
+} & (ProveOperationSchema | CheckOperationSchema);
 
 const callProverWorker = <RResponse>({ kmProvider, op, args }: CallProverWorker): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
