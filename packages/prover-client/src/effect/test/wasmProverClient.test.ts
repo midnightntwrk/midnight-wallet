@@ -30,66 +30,86 @@ const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
 const wasmConfig = { keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() };
 
 describe('WasmProver', () => {
-  describe('with available wasm prover', () => {
-    const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
-    const makeValidTransaction = (spendCoinAmount: bigint) => {
-      const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
-      const cpk = sampleCoinPublicKey();
-      const epk = sampleEncryptionPublicKey();
-      const output = ZswapOutput.new(spendCoin, 0, cpk, epk);
-      const unprovenOffer = ZswapOffer.fromOutput(output, shieldedTokenType.raw, spendCoinAmount);
+  const shieldedTokenType = shieldedToken() as { raw: string; tag: 'shielded' };
+  const makeValidTransaction = (spendCoinAmount: bigint) => {
+    const spendCoin = createShieldedCoinInfo(shieldedTokenType.raw, spendCoinAmount);
+    const cpk = sampleCoinPublicKey();
+    const epk = sampleEncryptionPublicKey();
+    const output = ZswapOutput.new(spendCoin, 0, cpk, epk);
+    const unprovenOffer = ZswapOffer.fromOutput(output, shieldedTokenType.raw, spendCoinAmount);
 
-      return Transaction.fromParts('undeployed', unprovenOffer);
-    };
+    return Transaction.fromParts('undeployed', unprovenOffer);
+  };
 
-    it(
-      'should prove a valid transaction',
-      async () => {
-        await Effect.gen(function* () {
-          const proveClient = yield* ProverClient.ProverClient;
-          const spendCoinAmount = 1_000n;
+  it(
+    'should prove a valid transaction using the default wasm prover',
+    async () => {
+      await Effect.gen(function* () {
+        const proveClient = yield* ProverClient.ProverClient;
+        const spendCoinAmount = 1_000n;
 
-          const validTx = makeValidTransaction(spendCoinAmount);
-          const tx = yield* proveClient.proveTransaction(validTx, CostModel.initialCostModel());
-          const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
+        const validTx = makeValidTransaction(spendCoinAmount);
+        const tx = yield* proveClient.proveTransaction(validTx, CostModel.initialCostModel());
+        const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
 
-          // workaround because imbalances keys are objects, while js compares them by reference
-          const filteredImbalances = Array.from(imbalances.entries()).filter(
-            ([tokenType, tokenValue]) => tokenType.tag === shieldedTokenType.tag && tokenValue <= spendCoinAmount,
-          );
-
-          expect(filteredImbalances.length).toEqual(1);
-          expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
-        }).pipe(
-          Effect.provide(WasmProver.layer(wasmConfig)),
-          Effect.catchAll((err) => {
-            // eslint-disable-next-line no-console
-            console.error(err);
-            return Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`);
-          }),
-          Effect.runPromise,
+        // workaround because imbalances keys are objects, while js compares them by reference
+        const filteredImbalances = Array.from(imbalances.entries()).filter(
+          ([tokenType, tokenValue]) => tokenType.tag === shieldedTokenType.tag && tokenValue <= spendCoinAmount,
         );
-      },
-      timeout_minutes(5),
-    );
 
-    it(
-      'should fail to prove an invalid transaction',
-      async () => {
-        await Effect.gen(function* () {
-          const proveClient = yield* ProverClient.ProverClient;
+        expect(filteredImbalances.length).toEqual(1);
+        expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
+      }).pipe(
+        Effect.provide(WasmProver.layer(wasmConfig)),
+        Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
+        Effect.runPromise,
+      );
+    },
+    timeout_minutes(5),
+  );
 
-          const tx = makeValidTransaction(1n);
+  it(
+    'should prove a valid transaction using a custom wasm prover',
+    async () => {
+      await Effect.gen(function* () {
+        const provingService = yield* WasmProver.create(wasmConfig);
+        const spendCoinAmount = 1_000n;
 
-          yield* proveClient.proveTransaction(tx, CostModel.initialCostModel());
-        }).pipe(
-          Effect.catchAll(() => Effect.succeed(void 0)),
-          Effect.provide(WasmProver.layer(wasmConfig)),
-          Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
-          Effect.runPromise,
+        const validTx = makeValidTransaction(spendCoinAmount);
+        const tx = yield* provingService.proveTransaction(validTx, CostModel.initialCostModel());
+        const imbalances = tx.imbalances(0, tx.fees(LedgerParameters.initialParameters()));
+
+        // workaround because imbalances keys are objects, while js compares them by reference
+        const filteredImbalances = Array.from(imbalances.entries()).filter(
+          ([tokenType, tokenValue]) => tokenType.tag === shieldedTokenType.tag && tokenValue <= spendCoinAmount,
         );
-      },
-      timeout_minutes(5),
-    );
-  });
+
+        expect(filteredImbalances.length).toEqual(1);
+        expect(tx.fees(LedgerParameters.initialParameters())).not.toEqual(0n);
+      }).pipe(
+        Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
+        Effect.runPromise,
+      );
+    },
+    timeout_minutes(5),
+  );
+
+  it(
+    'should fail to prove an invalid transaction',
+    async () => {
+      await Effect.gen(function* () {
+        const proveClient = yield* ProverClient.ProverClient;
+
+        const tx = makeValidTransaction(1n);
+
+        yield* proveClient.proveTransaction(tx, CostModel.initialCostModel());
+      }).pipe(
+        Effect.catchAll(() => Effect.succeed(void 0)),
+        Effect.provide(WasmProver.layer(wasmConfig)),
+        Effect.catchAll((err) => Effect.fail(`Encountered unexpected '${err._tag}' error: ${err.message}`)),
+        Effect.runPromise,
+      );
+    },
+    timeout_minutes(5),
+  );
 });
