@@ -22,6 +22,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./balancer": {
+      "types": "./dist/balancer/index.d.ts",
+      "import": "./dist/balancer/index.js"
+    },
     "./submission": {
       "types": "./dist/submission/index.d.ts",
       "import": "./dist/submission/index.js"
