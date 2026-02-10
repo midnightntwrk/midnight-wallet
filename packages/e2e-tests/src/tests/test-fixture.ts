@@ -137,7 +137,7 @@ export class TestContainersFixture {
         return 'https://indexer.devnet.midnight.network/api/v3/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.dev.midnight.network/api/v3/graphql';
+        return 'https://indexer.qanet.midnight.network/api/v3/graphql';
       }
       case 'preview': {
         return 'https://indexer.preview.midnight.network/api/v3/graphql';
@@ -164,7 +164,7 @@ export class TestContainersFixture {
         return 'wss://indexer.devnet.midnight.network/api/v3/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer.qanet.dev.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.qanet.midnight.network/api/v3/graphql/ws';
       }
       case 'preview': {
         return 'wss://indexer.preview.midnight.network/api/v3/graphql/ws';
@@ -191,7 +191,7 @@ export class TestContainersFixture {
         return 'wss://rpc.devnet.midnight.network';
       }
       case 'qanet': {
-        return 'wss://rpc.qanet.dev.midnight.network';
+        return 'wss://rpc.qanet.midnight.network';
       }
       case 'preview': {
         return 'wss://rpc.preview.midnight.network';
