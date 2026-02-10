@@ -37,7 +37,7 @@ import {
   PendingTransactions,
   PendingTransactionsService,
   PendingTransactionsServiceImpl,
-} from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
+} from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { finalizedTransactionTrait } from './transaction.js';
 import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
