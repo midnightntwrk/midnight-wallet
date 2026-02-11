@@ -32,7 +32,7 @@ export const fromStream = <A, E = never>(stream: Stream.Stream<A, E>): Observabl
                 Chunk.forEach(values, (element) => {
                   subscriber.next(element);
                 });
-                return false;
+                return subscriber.closed;
               },
               onFailure(error) {
                 return Option.match(error, {
