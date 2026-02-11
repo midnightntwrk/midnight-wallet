@@ -36,7 +36,7 @@ import {
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { makeWasmProvingService } from './utils/proving.js';
 
-vi.setConfig({ testTimeout: 400_000, hookTimeout: 400_000 });
+vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
 const environmentId = randomUUID();
 

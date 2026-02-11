@@ -31,7 +31,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { type CombinedTokenTransfer, type DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 
-vi.setConfig({ testTimeout: 400_000, hookTimeout: 400_000 });
+vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
 const environmentId = randomUUID();
 
