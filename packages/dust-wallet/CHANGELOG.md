@@ -1,5 +1,19 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 2.0.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies [3843720]
+- Updated dependencies [330867f]
+- Updated dependencies [fe57cc3]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.0.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.1.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.1
+
 ## 2.0.0-rc.0
 
 ### Major Changes
