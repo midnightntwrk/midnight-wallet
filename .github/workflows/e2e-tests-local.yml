@@ -91,7 +91,7 @@ jobs:
           retention-days: 30
 
       - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 #v1
+        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report
