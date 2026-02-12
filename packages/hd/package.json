@@ -24,7 +24,7 @@
     }
   },
   "dependencies": {
-    "@scure/base": "^1.1.9",
+    "@scure/base": "^2.0.0",
     "@scure/bip32": "^1.6.2",
     "@scure/bip39": "^1.5.4"
   },
