@@ -29,7 +29,7 @@
     "@scure/bip39": "^1.5.4"
   },
   "devDependencies": {
-    "@ethereumjs/wallet": "^3.0.0-alpha.1",
+    "@ethereumjs/wallet": "^10.0.0",
     "eslint": "^9.37.0",
     "fast-check": "^4.2.0",
     "prettier": "^3.7.0",
