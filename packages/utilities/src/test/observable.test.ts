@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Fiber, identity, Stream, SubscriptionRef } from 'effect';
+import { Effect, Fiber, identity, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import * as ObservableOps from '../ObservableOps.js';
@@ -60,17 +60,27 @@ describe('Observable', () => {
       expect(iterationsYielded()).toBeLessThan(MAX_ITERATIONS);
     });
 
-    it('should not block SubscriptionRef updates after early unsubscribe', async () => {
-      const ref = Effect.runSync(SubscriptionRef.make(0));
-      const stream = Stream.concat(Stream.fromEffect(SubscriptionRef.get(ref)), ref.changes);
-      const observable = ObservableOps.fromStream(stream);
+    it('should signal stream closure as soon as subscription is closed', async () => {
+      let lastN = 0;
+      let wasClosed = false;
+      const stream = Stream.iterate(1, (n) => n + 1).pipe(
+        Stream.tap((n) =>
+          Effect.sync(() => {
+            lastN = n;
+          }),
+        ),
+        Stream.onDone(() =>
+          Effect.sync(() => {
+            wasClosed = true;
+          }),
+        ),
+      );
 
-      const first = await rx.firstValueFrom(observable);
-      expect(first).toEqual(0);
+      const result = await rx.firstValueFrom(ObservableOps.fromStream(stream));
 
-      await Effect.runPromise(SubscriptionRef.update(ref, (n) => n + 1));
-      const value = Effect.runSync(SubscriptionRef.get(ref));
-      expect(value).toEqual(1);
+      expect(result).toBe(1);
+      expect(lastN).toEqual(1);
+      expect(wasClosed).toBe(true);
     });
 
     it('should cleanup allocated resource in underlying Stream', async () => {
