@@ -6606,16 +6606,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fast-check@npm:^4.2.0":
-  version: 4.4.0
-  resolution: "fast-check@npm:4.4.0"
-  dependencies:
-    pure-rand: "npm:^7.0.0"
-  checksum: 10c0/8bd1a0c772cde26901f165356f91def147da6eee5c27b392944392ad0cf2412b0aac7dd1614cdc6c6bb58bb5bfed20eb9c3997a8c042162e3f090f6198964974
-  languageName: node
-  linkType: hard
-
-"fast-check@npm:^4.5.3":
+"fast-check@npm:^4.2.0, fast-check@npm:^4.5.3":
   version: 4.5.3
   resolution: "fast-check@npm:4.5.3"
   dependencies:
