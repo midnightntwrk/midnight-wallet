@@ -45,7 +45,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@3227f5311cb93ffd14d13e65d8cc400d30f4dd8a
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
