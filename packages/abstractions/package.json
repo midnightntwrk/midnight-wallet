@@ -33,7 +33,7 @@
     "prettier": "^3.7.0",
     "publint": "~0.3.14",
     "rimraf": "^6.0.1",
-    "to-words": "^4.5.1",
+    "to-words": "^5.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.16"
   },
