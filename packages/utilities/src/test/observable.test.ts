@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Fiber, identity, Stream } from 'effect';
+import { Effect, Fiber, identity, Stream, SubscriptionRef } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
 import * as ObservableOps from '../ObservableOps.js';
@@ -58,6 +58,19 @@ describe('Observable', () => {
 
       expect(collected.length).toEqual(TAKEN_ITERATIONS);
       expect(iterationsYielded()).toBeLessThan(MAX_ITERATIONS);
+    });
+
+    it('should not block SubscriptionRef updates after early unsubscribe', async () => {
+      const ref = Effect.runSync(SubscriptionRef.make(0));
+      const stream = Stream.concat(Stream.fromEffect(SubscriptionRef.get(ref)), ref.changes);
+      const observable = ObservableOps.fromStream(stream);
+
+      const first = await rx.firstValueFrom(observable);
+      expect(first).toEqual(0);
+
+      await Effect.runPromise(SubscriptionRef.update(ref, (n) => n + 1));
+      const value = Effect.runSync(SubscriptionRef.get(ref));
+      expect(value).toEqual(1);
     });
 
     it('should cleanup allocated resource in underlying Stream', async () => {
