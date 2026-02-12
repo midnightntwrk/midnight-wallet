@@ -23,7 +23,6 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
-import * as rx from 'rxjs';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const NODE_PORT = Number.parseInt(process.env['NODE_PORT'] ?? '9944', 10);
@@ -84,7 +83,7 @@ const initWalletWithSeed = async (seed: Buffer) => {
 const { wallet } = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
 );
-const syncedState = await rx.firstValueFrom(wallet.state().pipe(rx.filter((s) => s.isSynced)));
+const syncedState = await wallet.waitForSyncedState();
 console.log('Synced state:');
 console.dir(
   {
