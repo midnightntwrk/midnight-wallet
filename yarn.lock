@@ -1267,35 +1267,36 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ethereumjs/rlp@npm:^10.1.0":
-  version: 10.1.0
-  resolution: "@ethereumjs/rlp@npm:10.1.0"
+"@ethereumjs/rlp@npm:^10.1.1":
+  version: 10.1.1
+  resolution: "@ethereumjs/rlp@npm:10.1.1"
   bin:
     rlp: bin/rlp.cjs
-  checksum: 10c0/a66023aec0c7c05ca4a445b80343583892e393aa00f1efccdc7bb5fa70e58041b0351e858fb4b6c87d47c53c32128d7c124ff8a9f3367b7e684d278af71d9917
+  checksum: 10c0/2d83b370f29a85e21ebea115fdc0b4014de9e29ff21771a15def0c14b16bca86f039980029a8101a1c81718638a09d2d592c8ac1938e68d0f2c64cb065f6029a
   languageName: node
   linkType: hard
 
-"@ethereumjs/util@npm:^10.0.0-alpha.1":
-  version: 10.1.0
-  resolution: "@ethereumjs/util@npm:10.1.0"
+"@ethereumjs/util@npm:^10.0.0":
+  version: 10.1.1
+  resolution: "@ethereumjs/util@npm:10.1.1"
   dependencies:
-    "@ethereumjs/rlp": "npm:^10.1.0"
+    "@ethereumjs/rlp": "npm:^10.1.1"
+    "@noble/curves": "npm:^2.0.1"
+    "@noble/hashes": "npm:^2.0.1"
+  checksum: 10c0/d9f927b0031ff8c50f7fb2402016ceabde796c286f0d1cfbc21f5157cd0cabad87c28140800301f6e3b57e80405f4cd062d4a9f92f2ff2f8c50227547261d6db
+  languageName: node
+  linkType: hard
+
+"@ethereumjs/wallet@npm:^10.0.0":
+  version: 10.0.0
+  resolution: "@ethereumjs/wallet@npm:10.0.0"
+  dependencies:
+    "@ethereumjs/util": "npm:^10.0.0"
+    "@scure/base": "npm:^1.2.4"
     ethereum-cryptography: "npm:^3.2.0"
-  checksum: 10c0/1eec82607ba1b94da805917547ea476e92205a5f1576583a75b1dcdfb986e0ffeb73d5b0070773712e70384b1bc9c81866f447029b06f0ee2490b619b3c2a203
-  languageName: node
-  linkType: hard
-
-"@ethereumjs/wallet@npm:^3.0.0-alpha.1":
-  version: 3.0.0-alpha.1
-  resolution: "@ethereumjs/wallet@npm:3.0.0-alpha.1"
-  dependencies:
-    "@ethereumjs/util": "npm:^10.0.0-alpha.1"
-    "@scure/base": "npm:^1.1.7"
-    ethereum-cryptography: "npm:^3.0.0"
     js-md5: "npm:^0.8.3"
-    uuid: "npm:^9.0.1"
-  checksum: 10c0/d66e72196acd668369c2e2728a8394133ab7d62f228f5379b290abc77955b5d3703d8cd1b0ebab9f3e9ff2bdcc322b49d9ff6ad0520ef6bf05290c202b4a76ab
+    uuid: "npm:^11.1.0"
+  checksum: 10c0/3ff2807437b1ab57137983ebb641adcc8745775ad7be46d9c658f7bc526a99cd56deee2e06a2718ba028029300791c6fedb93dffbcb7462bbc24fb50f75c1e31
   languageName: node
   linkType: hard
 
@@ -2348,7 +2349,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-hd@workspace:packages/hd"
   dependencies:
-    "@ethereumjs/wallet": "npm:^3.0.0-alpha.1"
+    "@ethereumjs/wallet": "npm:^10.0.0"
     "@scure/base": "npm:^1.1.9"
     "@scure/bip32": "npm:^1.6.2"
     "@scure/bip39": "npm:^1.5.4"
@@ -2798,10 +2799,26 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@noble/curves@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "@noble/curves@npm:2.0.1"
+  dependencies:
+    "@noble/hashes": "npm:2.0.1"
+  checksum: 10c0/e0b329eb9229e862d3b7203e0444bd479e9ecf2d5990181908dad416aab69106717ca696fc7b12ad0eb19d710f58c454646b27ce517a4298ab9abc89a9bdb6ee
+  languageName: node
+  linkType: hard
+
 "@noble/hashes@npm:1.8.0, @noble/hashes@npm:^1.2.0, @noble/hashes@npm:^1.3.1, @noble/hashes@npm:^1.3.3, @noble/hashes@npm:~1.8.0":
   version: 1.8.0
   resolution: "@noble/hashes@npm:1.8.0"
   checksum: 10c0/06a0b52c81a6fa7f04d67762e08b2c476a00285858150caeaaff4037356dd5e119f45b2a530f638b77a5eeca013168ec1b655db41bae3236cb2e9d511484fc77
+  languageName: node
+  linkType: hard
+
+"@noble/hashes@npm:2.0.1, @noble/hashes@npm:^2.0.1":
+  version: 2.0.1
+  resolution: "@noble/hashes@npm:2.0.1"
+  checksum: 10c0/e81769ce21c3b1c80141a3b99bd001f17edea09879aa936692ae39525477386d696101cd573928a304806efb2b9fa751e1dd83241c67d0c84d30091e85c79bdb
   languageName: node
   linkType: hard
 
@@ -3808,7 +3825,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:^1.1.9, @scure/base@npm:^1.2.6, @scure/base@npm:~1.2.5":
+"@scure/base@npm:^1.1.1, @scure/base@npm:^1.1.7, @scure/base@npm:^1.1.9, @scure/base@npm:^1.2.4, @scure/base@npm:^1.2.6, @scure/base@npm:~1.2.5":
   version: 1.2.6
   resolution: "@scure/base@npm:1.2.6"
   checksum: 10c0/49bd5293371c4e062cb6ba689c8fe3ea3981b7bb9c000400dc4eafa29f56814cdcdd27c04311c2fec34de26bc373c593a1d6ca6d754398a488d587943b7c128a
@@ -6485,7 +6502,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethereum-cryptography@npm:^3.0.0, ethereum-cryptography@npm:^3.2.0":
+"ethereum-cryptography@npm:^3.2.0":
   version: 3.2.0
   resolution: "ethereum-cryptography@npm:3.2.0"
   dependencies:
@@ -11425,21 +11442,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^11.0.3":
+"uuid@npm:^11.0.3, uuid@npm:^11.1.0":
   version: 11.1.0
   resolution: "uuid@npm:11.1.0"
   bin:
     uuid: dist/esm/bin/uuid
   checksum: 10c0/34aa51b9874ae398c2b799c88a127701408cd581ee89ec3baa53509dd8728cbb25826f2a038f9465f8b7be446f0fbf11558862965b18d21c993684297628d4d3
-  languageName: node
-  linkType: hard
-
-"uuid@npm:^9.0.1":
-  version: 9.0.1
-  resolution: "uuid@npm:9.0.1"
-  bin:
-    uuid: dist/bin/uuid
-  checksum: 10c0/1607dd32ac7fc22f2d8f77051e6a64845c9bce5cd3dd8aa0070c074ec73e666a1f63c7b4e0f4bf2bc8b9d59dc85a15e17807446d9d2b17c8485fbc2147b27f9b
   languageName: node
   linkType: hard
 
