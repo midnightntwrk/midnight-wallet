@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import Worker from 'web-worker';
-import { Context, Effect, Encoding, Layer, Schema, pipe } from 'effect';
+import { Context, Effect, Layer, Schema, pipe } from 'effect';
 import { InvalidProtocolSchemeError, ClientError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
@@ -35,39 +35,73 @@ export const create = (
 
 const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
 
-const LookupKeySchema = Schema.Struct({
+export const CheckOperationSchema = Schema.Struct({
+  op: Schema.Literal('check'),
+  args: Schema.Tuple(Schema.Uint8Array),
+});
+type CheckOperationSchema = Schema.Schema.Type<typeof CheckOperationSchema>;
+
+export const ProveOperationSchema = Schema.Struct({
+  op: Schema.Literal('prove'),
+  args: Schema.Tuple(Schema.Uint8Array, Schema.Union(Schema.BigIntFromSelf, Schema.Undefined)),
+});
+type ProveOperationSchema = Schema.Schema.Type<typeof ProveOperationSchema>;
+
+export const LookupKeyRequestSchema = Schema.Struct({
   op: Schema.Literal('lookupKey'),
   keyLocation: Schema.String,
 });
 
-const GetParamsSchema = Schema.Struct({
+export const GetParamsRequestSchema = Schema.Struct({
   op: Schema.Literal('getParams'),
   k: Schema.Number,
 });
 
-const ResponseSchema = Schema.Struct({
+export const ResponseFromWorkerSchema = Schema.Struct({
   op: Schema.Literal('result'),
-  value: Schema.Union(Schema.Uint8ArrayFromBase64, Schema.Array(Schema.Union(Schema.BigIntFromSelf, Schema.Undefined))),
+  value: Schema.Union(Schema.Uint8Array, Schema.Array(Schema.Union(Schema.BigIntFromSelf, Schema.Undefined))),
 });
 
-const MessageDataSchema = Schema.Union(LookupKeySchema, GetParamsSchema, ResponseSchema);
+const ProvingKeyMaterialSchema = Schema.Struct({
+  proverKey: Schema.Uint8Array,
+  verifierKey: Schema.Uint8Array,
+  ir: Schema.Uint8Array,
+});
+
+export const LookupKeyOperationResultSchema = Schema.Struct({
+  op: Schema.Literal('lookupKey'),
+  keyLocation: Schema.String,
+  result: Schema.optional(ProvingKeyMaterialSchema),
+});
+
+export const GetParamsOperationResultSchema = Schema.Struct({
+  op: Schema.Literal('getParams'),
+  k: Schema.Number,
+  result: Schema.Uint8Array,
+});
+
+const MessageDataSchema = Schema.Union(LookupKeyRequestSchema, GetParamsRequestSchema, ResponseFromWorkerSchema);
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
 
-const callProverWorker = <RResponse>(
-  kmProvider: KeyMaterialProvider,
-  op: 'check' | 'prove',
-  args: [Uint8Array, (bigint | undefined)?],
-): Promise<RResponse> => {
+type CallProverWorker = {
+  kmProvider: KeyMaterialProvider;
+} & (ProveOperationSchema | CheckOperationSchema);
+
+const callProverWorker = <RResponse>({ kmProvider, op, args }: CallProverWorker): Promise<RResponse> => {
   return new Promise((resolve, reject) => {
     const currentFile = import.meta.url;
     const worker = new Worker(new URL(`../../dist/proof-worker.js`, currentFile), { type: 'module' });
 
     // initialize worker
-    worker.postMessage({ op, args: [Encoding.encodeBase64(args[0]), args[1]] });
+    worker.postMessage(
+      op === 'check'
+        ? Schema.encodeSync(CheckOperationSchema)({ op, args: [args[0]] })
+        : Schema.encodeSync(ProveOperationSchema)({ op, args: [args[0], args[1]] }),
+    );
 
     // a message from the worker
-    worker.addEventListener('message', ({ data }: { data: MessageData }) => {
+    worker.addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
       const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
       const { op } = decoded;
       if (op === 'lookupKey') {
@@ -75,7 +109,7 @@ const callProverWorker = <RResponse>(
         kmProvider
           .lookupKey(keyLocation)
           .then((result) => {
-            worker.postMessage({ op, keyLocation, result });
+            worker.postMessage(Schema.encodeSync(LookupKeyOperationResultSchema)({ op, keyLocation, result }));
           })
           .catch((e: Error) => {
             worker.terminate();
@@ -86,7 +120,7 @@ const callProverWorker = <RResponse>(
         kmProvider
           .getParams(k)
           .then((result) => {
-            worker.postMessage({ op, k, result });
+            worker.postMessage(Schema.encodeSync(GetParamsOperationResultSchema)({ op, k, result }));
           })
           .catch((e: Error) => {
             worker.terminate();
@@ -118,18 +152,21 @@ class WasmProverImpl implements Context.Tag.Service<ProverClient> {
 
   private wasmProverProvider = (keyMaterialProvider?: KeyMaterialProvider): ledger.ProvingProvider => ({
     check: async (serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> =>
-      callProverWorker<Array<bigint | undefined>>(keyMaterialProvider ?? this.keyMaterialProvider, 'check', [
-        serializedPreimage,
-      ]),
+      callProverWorker<Array<bigint | undefined>>({
+        kmProvider: keyMaterialProvider ?? this.keyMaterialProvider,
+        op: 'check',
+        args: [serializedPreimage],
+      }),
     prove: async (
       serializedPreimage: Uint8Array,
       _keyLocation: string,
       overwriteBindingInput?: bigint,
     ): Promise<Uint8Array> =>
-      callProverWorker<Uint8Array>(keyMaterialProvider ?? this.keyMaterialProvider, 'prove', [
-        serializedPreimage,
-        overwriteBindingInput,
-      ]),
+      callProverWorker<Uint8Array>({
+        kmProvider: keyMaterialProvider ?? this.keyMaterialProvider,
+        op: 'prove',
+        args: [serializedPreimage, overwriteBindingInput],
+      }),
   });
 
   proveTransaction<S extends ledger.Signaturish, B extends ledger.Bindingish>(
@@ -161,7 +198,7 @@ export const makeDefaultKeyMaterialProvider = (): KeyMaterialProvider => {
   const s3 = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
   const ver = 9;
 
-  const fetchWithRetry = async (url: string, retries = 3): Promise<Response> => {
+  const fetchWithRetry = async (url: string, retries = 5): Promise<Response> => {
     for (let i = 0; i < retries; i++) {
       try {
         return await fetch(url);
