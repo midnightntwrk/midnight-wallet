@@ -27,7 +27,7 @@
     }
   },
   "dependencies": {
-    "@effect/platform": "^0.90.0",
+    "@effect/platform": "^0.94.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "1.0.0",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.0",
