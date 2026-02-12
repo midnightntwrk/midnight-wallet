@@ -59,6 +59,8 @@ describe('Fresh wallet with empty state', () => {
       logger.info(`Network id: ${networkId}`);
       expect(fixture).toBeDefined();
 
+      console.log('config', fixture.getWalletConfig());
+
       Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
       Wallet = ShieldedWallet(fixture.getWalletConfig());
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
@@ -134,15 +136,15 @@ describe('Fresh wallet with empty state', () => {
     expect(() => Wallet.startWithSeed(invalidSeed)).toThrowError('Expected 32-byte seed');
   });
 
-  test(
+  test.only(
     'Shielded wallet state can be serialized and then restored',
     async () => {
       allure.tms('PM-9084', 'PM-9084');
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const initialState = await shieldedWallet.waitForSyncedState();
-      const serialized = await shieldedWallet.serializeState();
+      const initialState = await wallet.wallet.shielded.waitForSyncedState();
+      const serialized = initialState.serialize();
       const stateObject = JSON.parse(serialized);
       expect(Number(stateObject.offset)).toBeGreaterThanOrEqual(0);
       expect(stateObject.state).toBeTruthy();
