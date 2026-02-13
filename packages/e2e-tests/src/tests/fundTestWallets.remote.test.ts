@@ -68,7 +68,7 @@ describe('Set up test wallet', () => {
   test(
     'Distributing tokens to test wallet',
     async () => {
-      await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await firstValueFrom(sender.wallet.state());
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
@@ -143,7 +143,7 @@ describe('Set up test wallet', () => {
 
       // Register unshielded tokens for dust generation
       await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
-      const receiverStateAfterTransfer = await utils.waitForSyncFacade(receiver.wallet);
+      const receiverStateAfterTransfer = await receiver.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiverStateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.utxo.type === unshieldedTokenRaw && coin.meta.registeredForDustGeneration === false,
       );
@@ -168,7 +168,7 @@ describe('Set up test wallet', () => {
       const nativeToken1Amount = utils.tNightAmount(25n);
       const nativeToken2Amount = utils.tNightAmount(50n);
 
-      await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await firstValueFrom(sender.wallet.state());
       const initialNativeToken1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNativeToken2Balance = initialState.shielded.balances[nativeToken2Raw];

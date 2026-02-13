@@ -22,9 +22,11 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
 import {
+  createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
+  UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { logger } from './logger.js';
@@ -47,7 +49,10 @@ describe('Fresh wallet with empty state', () => {
 
   let Wallet: ShieldedWalletClass;
   let Dust: DustWalletClass;
+  let Unshielded: UnshieldedWalletClass;
   let shieldedWallet: ShieldedWallet;
+  let unshieldedWallet: UnshieldedWallet;
+  let dustWallet: DustWallet;
   let wallet: utils.WalletInit;
   let networkId: NetworkId.NetworkId;
   let fixture: TestContainersFixture;
@@ -58,16 +63,27 @@ describe('Fresh wallet with empty state', () => {
       networkId = fixture.getNetworkId();
       logger.info(`Network id: ${networkId}`);
       expect(fixture).toBeDefined();
+      const walletConfig = fixture.getWalletConfig();
+      const unshieldedKeystore = createKeystore(utils.getUnshieldedSeed(walletSeed), networkId);
 
-      Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
-      Wallet = ShieldedWallet(fixture.getWalletConfig());
+      Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
+      Wallet = ShieldedWallet(walletConfig);
+      Unshielded = UnshieldedWallet({ ...walletConfig, txHistoryStorage: new InMemoryTransactionHistoryStorage() });
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
+      unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
+      dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
+      await shieldedWallet.start(walletSecretKey);
+      await unshieldedWallet.start();
+      await dustWallet.start(dustSecretKey);
       wallet = await utils.initWalletWithSeed(walletSeed, fixture);
     });
   });
 
   afterEach(async () => {
     await wallet.wallet.stop();
+    await shieldedWallet.stop();
+    await unshieldedWallet.stop();
+    await dustWallet.stop();
   });
 
   test('Valid Midnight wallet can be built from a BIP32 compatible mnemonic seed phrase', () => {
@@ -150,9 +166,6 @@ describe('Fresh wallet with empty state', () => {
       const restoredWallet = Wallet.restore(serialized);
       const newState = await firstValueFrom(restoredWallet.state);
       expect(newState.address.equals(initialState.address)).toEqual(true);
-      // compareStates(newState, state);
-      // expect(state.syncProgress?.lag?.applyGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.applyGap ?? 0);
-      // expect(state.syncProgress?.lag?.sourceGap).toBeLessThanOrEqual(newState.syncProgress?.lag?.sourceGap ?? 0);
       await restoredWallet.stop();
     },
     timeout,
@@ -165,21 +178,14 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const walletState = await firstValueFrom(wallet.wallet.unshielded.state);
+      const walletState = await unshieldedWallet.waitForSyncedState();
       const walletAddress = UnshieldedAddress.codec.encode(fixture.getNetworkId(), walletState.address).asString();
-      const serialized = await wallet.wallet.unshielded.serializeState();
+      const serialized = await unshieldedWallet.serializeState();
       const stateObject = JSON.parse(serialized);
       logger.info(`Serialized unshielded wallet state: ${inspect(stateObject)}`);
       expect(stateObject.publicKey.publicKey).toHaveLength(64);
       expect(stateObject.publicKey.addressHex).toHaveLength(64);
-      const restoredWallet = UnshieldedWallet({
-        networkId: fixture.getNetworkId(),
-        indexerClientConnection: {
-          indexerHttpUrl: fixture.getIndexerUri(),
-          indexerWsUrl: fixture.getIndexerWsUri(),
-        },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-      }).restore(serialized);
+      const restoredWallet = Unshielded.restore(serialized);
       const newState = await firstValueFrom(restoredWallet.state);
       expect(UnshieldedAddress.codec.encode(fixture.getNetworkId(), newState.address).asString()).toBe(walletAddress);
       await restoredWallet.stop();
@@ -194,10 +200,10 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const state = await utils.waitForSyncFacade(wallet.wallet);
-      const publicKey = state.dust.publicKey;
-      const address = state.dust.address;
-      const serialized = await wallet.wallet.dust.serializeState();
+      const state = await dustWallet.waitForSyncedState();
+      const publicKey = state.publicKey;
+      const address = state.address;
+      const serialized = await dustWallet.serializeState();
       const stateObject = await JSON.parse(serialized);
       expect(stateObject.publicKey.publicKey).toContain(publicKey);
       expect(stateObject.state).toBeTruthy();

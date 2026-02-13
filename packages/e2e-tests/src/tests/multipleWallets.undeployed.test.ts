@@ -14,7 +14,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import { getShieldedSeed, waitForSyncFacade } from './utils.js';
+import { getShieldedSeed } from './utils.js';
 import * as allure from 'allure-js-commons';
 import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
@@ -111,7 +111,7 @@ describe('Syncing', () => {
       allure.story('Syncing wallets concurrently');
 
       const promises = facades.map((facade) => {
-        return waitForSyncFacade(facade);
+        return facade.waitForSyncedState();
       });
 
       await Promise.all(promises);
