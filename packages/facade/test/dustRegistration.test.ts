@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
@@ -31,13 +31,13 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import {
   createKeystore,
   UnshieldedWallet,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
+  UnshieldedTransactionHistoryEntry,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { type CombinedTokenTransfer, type DefaultConfiguration, type FacadeState, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
@@ -91,7 +91,8 @@ describe('Dust Registration', () => {
         additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
     };
   });
 

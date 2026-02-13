@@ -24,7 +24,8 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+// import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -36,12 +37,13 @@ import { type TokenTransfer } from './v1/Transacting.js';
 import { type WalletSyncUpdate } from './v1/Sync.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
+import { SyncProgress } from './v1/SyncProgress.js';
 
-export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
+export type ShieldedWalletCapabilities<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+  transactionHistory: TransactionHistoryCapability<CoreWallet>;
 };
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
@@ -87,16 +89,25 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.keys.getAddress(this.state);
   }
 
-  get progress(): ProgressUpdate {
-    return this.capabilities.transactionHistory.progress(this.state);
+  // TODO IAN - Added this and looks ok.... remove comment if it is...
+  get progress(): SyncProgress {
+    return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for ShieldedWallet');
+  // TODO IAN progress is removed at the moment!! But we might need it back
+
+  // get progress(): ProgressUpdate {
+  //   // return this.capabilities.transactionHistory.progress(this.state);
+  //   return {
+  //     appliedIndex: state.progress.appliedIndex,
+  //     highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
+  //     highestIndex: state.progress.highestIndex,
+  //     highestRelevantIndex: state.progress.highestRelevantIndex,
+  //   };
+  // }
+
+  get transactionHistory(): TransactionHistoryCapability<CoreWallet> {
+    return this.capabilities.transactionHistory; // transactionHistory(this.state);
   }
 
   constructor(

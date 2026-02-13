@@ -12,12 +12,13 @@
 // limitations under the License.
 /// <reference types="vitest" />
 /// <reference types="vitest/globals" />
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   test: {
     setupFiles: ['../../setup-env.ts'],
+    exclude: [...configDefaults.exclude, '**/dist/**'],
     environment: 'node',
     globals: true,
     coverage: {

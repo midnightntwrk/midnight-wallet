@@ -2,7 +2,83 @@
 
 exports[`Snippet outputs > with network > should output the correct result for 'balancing' 1`] = `
 [
-  "Unshielded transfer by balancing completed
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+I am setting the entry here...
+I am merging the entry here...
+Unshielded transfer by balancing completed
 Did sender send all its Night? false
 Did receiver receive all the Night? true
 ",
@@ -11,7 +87,128 @@ Did receiver receive all the Night? true
 
 exports[`Snippet outputs > with network > should output the correct result for 'combined-transfer' 1`] = `
 [
-  "Transfer completed;
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+I am setting the entry here...
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: 'a051eeea8eccaf533c067ab1e961678951560948b1e23d94483be82d0a0614c9',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [],
+  spentCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ]
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: 'a051eeea8eccaf533c067ab1e961678951560948b1e23d94483be82d0a0614c9',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '6da9cee67c160cbe4c12a06adeb3795921f1383c200010138ac30c31d9d3513c',
+      value: 499999999000000n,
+      mt_index: 28n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: 'a051eeea8eccaf533c067ab1e961678951560948b1e23d94483be82d0a0614c9',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '2717c2a7f1e664838e35a50a0f1e6171bdefb7c4aacbd0030727e447ef20016b',
+      value: 1000000n,
+      mt_index: 29n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+Transfer completed;
   Night balance: 1000000n
   shielded token balance: 1000000n
 ",
@@ -20,7 +217,84 @@ exports[`Snippet outputs > with network > should output the correct result for '
 
 exports[`Snippet outputs > with network > should output the correct result for 'designation' 1`] = `
 [
-  "Generating dust before designation: false
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+I am setting the entry here...
+I am merging the entry here...
+Generating dust before designation: false
+I am setting the entry here...
 Generating dust after designation: true
 ",
 ]
@@ -28,7 +302,81 @@ Generating dust after designation: true
 
 exports[`Snippet outputs > with network > should output the correct result for 'initialization' 1`] = `
 [
-  "Synced state:
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+Synced state:
 {
   shielded: {
     balances: {
@@ -185,7 +533,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 29n,
       highestRelevantWalletIndex: 29n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     coinPublicKey: ShieldedCoinPublicKey {
       data: Buffer(32) [Uint8Array] [
@@ -220,7 +571,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
           139,  42,  58, 189, 249, 113,  91, 112
         ]
       },
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'shield-addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -380,7 +731,7 @@ exports[`Snippet outputs > with network > should output the correct result for '
         203, 172, 199,  91, 134, 130,   2, 151,
          93, 111,  25, 190, 175,  55,  40,  75
       ],
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'addr',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -487,12 +838,15 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 50n,
       highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
     address: DustAddress {
       data: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
-      [Symbol(MidnightBech32m)]: Bech32mCodec {
+      Symbol(MidnightBech32m): Bech32mCodec {
         type: 'dust',
         dataToBytes: [Function (anonymous)],
         dataFromBytes: [Function (anonymous)]
@@ -506,15 +860,331 @@ exports[`Snippet outputs > with network > should output the correct result for '
 
 exports[`Snippet outputs > with network > should output the correct result for 'shielded-transfer' 1`] = `
 [
-  "Shielded transfer completed; shielded balance: 1000000n
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: 'd0f60bf4779f8305601e629b9d5c4c9b4b55d20c05dfec6cef178348f0410c78',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [],
+  spentCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ]
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: 'd0f60bf4779f8305601e629b9d5c4c9b4b55d20c05dfec6cef178348f0410c78',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'e5769240b6852f129316dd4e99aa4b5d0f7023dff62e80f7c539e7d5ee5d4c74',
+      value: 1000000n,
+      mt_index: 29n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+Shielded transfer completed; shielded balance: 1000000n
 ",
 ]
 `;
 
 exports[`Snippet outputs > with network > should output the correct result for 'swap' 1`] = `
 [
-  "Does Alice have specific shielded coin before swap? false
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '28d2effe2f444128e58a12b331cc8ae14083970ef47eefb22963d5b49bccc5e6',
+      value: 500000000000000n,
+      mt_index: 8n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: 'ae8bcfd087e92cfad377ccef2f94342b6a62612e531cbf6bfefa334cae6c11df',
+      value: 500000000000000n,
+      mt_index: 10n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'f194d4fae63509376a5587e25c28a9ddbd41d90f82c4cbd56a39058b09395455',
+      value: 500000000000000n,
+      mt_index: 14n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'b2e5073130b63e45bc807b05ea1b1ecc37282c3bcbaaaad6d8050cd5b1491b8f',
+      value: 500000000000000n,
+      mt_index: 19n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '85c37033fe897a7efbd01d89a3f0d29a9a34303ba576e5fd3ad2f4c2a0b501c3',
+      value: 500000000000000n,
+      mt_index: 21n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'fd0212f54743af9a0dbf529f7ec6220fe21765979b1adfd224f0fe53c3da48b3',
+      value: 500000000000000n,
+      mt_index: 24n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '93eaf6a24bb0f7e91e0d6749330d005abec4a9a664c500fbaa09ce47daccbfc8',
+      value: 500000000000000n,
+      mt_index: 27n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+Does Alice have specific shielded coin before swap? false
 Does Bob have specific shielded coin before swap? false
+IAN !! here is the entry i will add to the history {
+  hash: '7ac798cf4830a98b8bb5f8bfe935c251cf531cb0bdfb761c4b05c0b2bfa8264f',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [],
+  spentCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ]
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '7ac798cf4830a98b8bb5f8bfe935c251cf531cb0bdfb761c4b05c0b2bfa8264f',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: 'b7cf3f64339678e73a2fafcb4f31945d7fea02866da1d95a4d3466b79019a35e',
+      value: 499999999000000n,
+      mt_index: 28n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'f2eb353ffbbd6cc7ed39a98a32605da2e0fb0ecbbf52b828447ab8fe81d48fbc',
+      value: 1000000n,
+      mt_index: 30n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '7ac798cf4830a98b8bb5f8bfe935c251cf531cb0bdfb761c4b05c0b2bfa8264f',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: 'ac2c724ab5171387550904c66da43196f1b939e13d54fae2b1443084f181e042',
+      value: 1000000n,
+      mt_index: 29n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'c768c53b9dfe94dc3e72981a6bae4e9bda101a0b49870c049175bb0b86d0cdac',
+      value: 499999999000000n,
+      mt_index: 31n
+    }
+  ],
+  spentCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'fd0212f54743af9a0dbf529f7ec6220fe21765979b1adfd224f0fe53c3da48b3',
+      value: 500000000000000n,
+      mt_index: 24n
+    }
+  ]
+}
+I am merging the entry here...
 Does Alice have specific shielded coin after swap? true
 Does Bob have specific shielded coin after swap? true
 ",
@@ -523,7 +1193,83 @@ Does Bob have specific shielded coin after swap? true
 
 exports[`Snippet outputs > with network > should output the correct result for 'unshielded-transfer' 1`] = `
 [
-  "Unshielded transfer completed; night balance: 1000000n
+  "I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'dc5d3f068d5e57fe4482ec9f18206db4701f761c80d2ab1cd627eecb4cefcbac',
+      value: 500000000000000n,
+      mt_index: 1n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '06014a5577a0e6332600d5d2e8aa8c39a2ea87be69c8f397ac3bb2cacb9f1126',
+      value: 500000000000000n,
+      mt_index: 2n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '5e5943683d95c237825538e20f287975fbf25020f21a7ef0fae8bef8517fbbff',
+      value: 500000000000000n,
+      mt_index: 6n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: 'fa3a6316f5f1467106460093649f736a24dad01bd82dc652ce209269bcfa15cb',
+      value: 500000000000000n,
+      mt_index: 7n
+    }
+  ],
+  spentCoins: []
+}
+I am setting the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000000',
+      nonce: '1798ac8ed7e701e1f01a083ba4375ae2d9ac50c12f15c01358dc56ad38a95303',
+      value: 500000000000000n,
+      mt_index: 16n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+IAN !! here is the entry i will add to the history {
+  hash: '93ac2debc35ca3d3eb1a85051e3a6a1cab8e57b1caf4efd67665c8af34f6686b',
+  protocolVersion: 0,
+  status: 'SUCCESS',
+  receivedCoins: [
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000002',
+      nonce: 'cdec51cff753c64b32fc4f566c113497af9d9330e98200a48e3ed01f955be071',
+      value: 500000000000000n,
+      mt_index: 23n
+    },
+    {
+      type: '0000000000000000000000000000000000000000000000000000000000000001',
+      nonce: '25bae4bf1f5348d9f18bd67de5a7ed1850a7bc9643d09911ed19c2fe9188b56f',
+      value: 500000000000000n,
+      mt_index: 26n
+    }
+  ],
+  spentCoins: []
+}
+I am merging the entry here...
+I am setting the entry here...
+I am merging the entry here...
+Unshielded transfer completed; night balance: 1000000n
 ",
 ]
 `;

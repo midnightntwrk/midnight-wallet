@@ -2,9 +2,6 @@
   "name": "@midnight-ntwrk/wallet-sdk-facade",
   "version": "2.0.0-rc.1",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -19,6 +16,10 @@
   },
   "exports": {
     ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     }

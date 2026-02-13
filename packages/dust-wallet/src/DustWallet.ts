@@ -23,7 +23,7 @@ import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { type SyncProgress } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './CoinsAndBalances.js';
@@ -72,6 +72,13 @@ export class DustWalletState {
     return this.capabilities.keys.getAddress(this.state);
   }
 
+  get progress(): SyncProgress.SyncProgress {
+    return this.state.progress;
+  }
+
+  // TODO IAN - Old version - but does not work for types now
+
+  /*
   get progress(): TransactionHistory.ProgressUpdate {
     return {
       appliedIndex: this.state.progress.appliedIndex,
@@ -80,6 +87,7 @@ export class DustWalletState {
       highestRelevantIndex: this.state.progress.highestRelevantIndex,
     };
   }
+
 
   /**
    * Transaction history for the wallet.

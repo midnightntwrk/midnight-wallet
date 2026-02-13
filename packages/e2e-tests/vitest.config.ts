@@ -12,16 +12,16 @@
 // limitations under the License.
 /// <reference types="vitest" />
 import AllureReporter from 'allure-vitest/reporter';
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     setupFiles: ['allure-vitest/setup', '../../setup-env.ts'],
+    exclude: [...configDefaults.exclude, '**/dist/**'],
     environment: 'node',
     hookTimeout: 90_000,
     testTimeout: 90_000,
     globals: true,
-    exclude: ['node_modules', 'dist'],
     reporters: [
       'default',
       ['junit', { outputFile: './reports/test-report.xml' }],

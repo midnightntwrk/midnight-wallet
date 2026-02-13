@@ -3,9 +3,6 @@
   "description": "Runtime for the wallet variants",
   "version": "1.0.1-rc.0",
   "type": "module",
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
   "publishConfig": {
@@ -20,10 +17,18 @@
   },
   "exports": {
     ".": {
+      "development": {
+        "types": "./src/index.ts",
+        "import": "./src/index.ts"
+      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./abstractions": {
+      "development": {
+        "types": "./src/abstractions/index.ts",
+        "import": "./src/abstractions/index.ts"
+      },
       "types": "./dist/abstractions/index.d.ts",
       "import": "./dist/abstractions/index.js"
     }

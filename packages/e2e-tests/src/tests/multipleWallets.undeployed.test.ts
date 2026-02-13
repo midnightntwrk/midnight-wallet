@@ -19,13 +19,14 @@ import * as allure from 'allure-js-commons';
 import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * Syncing tests
@@ -73,7 +74,7 @@ describe('Syncing', () => {
               indexerHttpUrl: fixture.getIndexerUri(),
               indexerWsUrl: fixture.getIndexerWsUri(),
             },
-            txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+            unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
           }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
         }
 
@@ -82,7 +83,7 @@ describe('Syncing', () => {
             configuration: {
               ...fixture.getWalletConfig(),
               ...fixture.getDustWalletConfig(),
-              txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+              unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
             },
             shielded: () => shieldedWallets[i],
             unshielded: () => unshieldedWallets[i],
