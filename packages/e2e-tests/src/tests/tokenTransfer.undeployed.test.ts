@@ -67,7 +67,8 @@ describe('Token transfer', () => {
       allure.story('Valid native token transfer transaction');
 
       logger.info('Funding wallet 1 with native tokens...');
-      await Promise.all([utils.waitForSyncFacade(funded.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await utils.sleep(20); // wait for 2+ blocks to pass
+      await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date());
       const initialShieldedTokenBalance = initialState.shielded.balances[shieldedTokenRaw];
@@ -126,7 +127,7 @@ describe('Token transfer', () => {
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       await utils.waitForFacadePendingClear(funded.wallet);
-      const finalState = await utils.waitForSyncFacade(funded.wallet);
+      const finalState = await funded.wallet.waitForSyncedState();
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialShieldedTokenBalance - outputValue);
       expect(finalState.shielded.availableCoins.length).toBeLessThanOrEqual(
         initialState.shielded.availableCoins.length,
@@ -139,7 +140,7 @@ describe('Token transfer', () => {
       await utils.waitForFacadePendingClear(receiver.wallet);
       // // await waitForTxInHistory(String(txId), walletFacade.shielded);
       logger.info('pending wallet 2 cleared');
-      const finalState2 = await utils.waitForSyncFacade(receiver.wallet);
+      const finalState2 = await receiver.wallet.waitForSyncedState();
       logger.info(finalState2.shielded.balances);
       logger.info('wallet 2 waiting for funds...');
       logger.info(`Wallet 2 available coins: ${finalState2.shielded.availableCoins.length}`);
@@ -159,7 +160,7 @@ describe('Token transfer', () => {
     'Is working for unshielded token transfer @smoke @healthcheck',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
-      await Promise.all([utils.waitForSyncFacade(funded.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date()) ?? 0n;
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
@@ -214,7 +215,7 @@ describe('Token transfer', () => {
       // expect(pendingState.unshielded.totalCoins.length).toBe(initialState.unshielded.totalCoins.length);
 
       // await utils.waitForFacadePendingClear(fundedFacade);
-      // const finalState = await utils.waitForSyncFacade(fundedFacade);
+      // const finalState = await fundedFacade.waitForSyncedState();
       await utils.waitForFacadePendingClear(funded.wallet);
       const finalState = await rx.firstValueFrom(
         funded.wallet.state().pipe(
@@ -264,7 +265,7 @@ describe('Token transfer', () => {
       const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
 
       logger.info('Funding wallet 1 with native tokens...');
-      await Promise.all([utils.waitForSyncFacade(funded.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date()) ?? 0n;
       const initialShieldedToken1Balance = initialState.shielded.balances[nativeToken1Raw] ?? 0n;
@@ -322,7 +323,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${pendingState.dust.balance(new Date())} tDUST`);
 
       await utils.waitForFacadePendingClear(funded.wallet);
-      const finalState = await utils.waitForSyncFacade(funded.wallet);
+      const finalState = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       expect(finalState.shielded.balances[nativeToken1Raw]).toBe(initialShieldedToken1Balance - outputValueNativeToken);
       expect(finalState.shielded.balances[nativeToken2Raw]).toBe(initialShieldedToken1Balance - outputValueNativeToken);
@@ -336,7 +337,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 shielded token 2: ${finalState.shielded.balances[nativeToken2Raw]}`);
       logger.info(`Dust fees paid: ${initialDustBalance - finalState.dust.balance(new Date(3 * 1000))}`);
 
-      const finalState2 = await utils.waitForSyncFacade(receiver.wallet);
+      const finalState2 = await receiver.wallet.waitForSyncedState();
       logger.info(`Wallet 2 available coins: ${finalState2.shielded.availableCoins.length}`);
       logger.info(`Wallet 2: ${finalState2.dust.balance(new Date())} tDUST`);
       logger.info(`Wallet 2 shielded token 1: ${finalState2.shielded.balances[nativeToken1Raw]}`);
@@ -367,7 +368,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer self-transaction');
 
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      const initialState = await funded.wallet.waitForSyncedState();
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
       logger.info(`Wallet 1: ${initialBalance}`);
@@ -403,7 +404,7 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
-      const finalState = await utils.waitForSyncFacade(funded.wallet);
+      const finalState = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       // actually deducted fees are greater - PM-7721
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(initialBalance);
@@ -430,7 +431,7 @@ describe('Token transfer', () => {
       const receiverSeed1 = randomBytes(32).toString('hex');
       const receiverSeed2 = randomBytes(32).toString('hex');
 
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      const initialState = await funded.wallet.waitForSyncedState();
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -441,8 +442,8 @@ describe('Token transfer', () => {
 
       const receiver1 = await utils.initWalletWithSeed(receiverSeed1, fixture);
       const receiver2 = await utils.initWalletWithSeed(receiverSeed2, fixture);
-      const initialReceiver1State = await utils.waitForSyncFacade(receiver1.wallet);
-      const initialReceiver2State = await utils.waitForSyncFacade(receiver2.wallet);
+      const initialReceiver1State = await receiver1.wallet.waitForSyncedState();
+      const initialReceiver2State = await receiver2.wallet.waitForSyncedState();
       logger.info('Receiver wallets started');
 
       const outputsToCreate: CombinedTokenTransfer[] = [
@@ -519,9 +520,9 @@ describe('Token transfer', () => {
       // await utils.waitForFacadePendingClear(fundedFacade);
       await utils.waitForUnshieldedCoinUpdate(receiver1.wallet, 0);
       await utils.waitForUnshieldedCoinUpdate(receiver2.wallet, 0);
-      const finalState = await utils.waitForSyncFacade(funded.wallet);
-      const finalReceiver1State = await utils.waitForSyncFacade(receiver1.wallet);
-      const finalReceiver2State = await utils.waitForSyncFacade(receiver2.wallet);
+      const finalState = await funded.wallet.waitForSyncedState();
+      const finalReceiver1State = await receiver1.wallet.waitForSyncedState();
+      const finalReceiver2State = await receiver2.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Dust fees paid: ${initialDustBalance - txFees}`);
@@ -548,7 +549,7 @@ describe('Token transfer', () => {
       const receiverSeed2 = randomBytes(32).toString('hex');
       const receiverSeed3 = randomBytes(32).toString('hex');
 
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      const initialState = await funded.wallet.waitForSyncedState();
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -560,9 +561,9 @@ describe('Token transfer', () => {
       const receiver1 = await utils.initWalletWithSeed(receiverSeed1, fixture);
       const receiver2 = await utils.initWalletWithSeed(receiverSeed2, fixture);
       const receiver3 = await utils.initWalletWithSeed(receiverSeed3, fixture);
-      const initialReceiver1State = await utils.waitForSyncFacade(receiver1.wallet);
-      const initialReceiver2State = await utils.waitForSyncFacade(receiver2.wallet);
-      const initialReceiver3State = await utils.waitForSyncFacade(receiver3.wallet);
+      const initialReceiver1State = await receiver1.wallet.waitForSyncedState();
+      const initialReceiver2State = await receiver2.wallet.waitForSyncedState();
+      const initialReceiver3State = await receiver3.wallet.waitForSyncedState();
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -619,7 +620,7 @@ describe('Token transfer', () => {
 
       //register Night for Dust
       await utils.sleep(20);
-      const receiver3StateAfterTransfer = await utils.waitForSyncFacade(receiver3.wallet);
+      const receiver3StateAfterTransfer = await receiver3.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiver3StateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === false,
       );
@@ -685,17 +686,7 @@ describe('Token transfer', () => {
       logger.info('Swap coin 2 transaction prepared');
 
       // Pay fees and submit tx
-      await rx.firstValueFrom(
-        receiver3.wallet.state().pipe(
-          rx.tap((s) => {
-            const dustBalance = s.dust.balance(new Date());
-            logger.info(`Dust balance: ${dustBalance}`);
-          }),
-          rx.filter((s) => s.dust.balance(new Date()) > 12n * 10n ** 14n),
-          rx.map((s) => s.dust.balance(new Date())),
-        ),
-      );
-
+      await utils.waitForDustBalance(receiver3.wallet);
       const balancedTransactionRecipe = await receiver3.wallet.balanceFinalizedTransaction(
         swapCoin1Tx.merge(swapCoin2Tx),
         {
@@ -713,8 +704,8 @@ describe('Token transfer', () => {
       await utils.waitForFacadePendingClear(receiver1.wallet);
       await utils.waitForFacadePendingClear(receiver2.wallet);
 
-      const finalReceiver1State = await utils.waitForSyncFacade(receiver1.wallet);
-      const finalReceiver2State = await utils.waitForSyncFacade(receiver2.wallet);
+      const finalReceiver1State = await receiver1.wallet.waitForSyncedState();
+      const finalReceiver2State = await receiver2.wallet.waitForSyncedState();
 
       expect(finalReceiver1State.shielded.balances[shieldedToken2]).toBe(outputValue);
       expect(finalReceiver2State.shielded.balances[shieldedToken1]).toBe(outputValue);
@@ -733,7 +724,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid transaction');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
       const initialAvailableCoins = syncedState?.shielded.availableCoins.length ?? 0;
       const initialTotalCoins = syncedState?.shielded.totalCoins.length ?? 0;
@@ -776,7 +767,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Transaction not proved');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       const balance = 2500000000000000n;
@@ -836,7 +827,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Transaction not submitted');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       const balance = 2500000000000000n;
@@ -887,7 +878,7 @@ describe('Token transfer', () => {
   //     allure.epic('Headless wallet');
   //     allure.feature('Transactions');
   //     allure.story('Invalid address error message');
-  //     const syncedState = await utils.waitForSyncFacade(funded.wallet);
+  //     const syncedState = await funded.wallet.waitForSyncedState();
   //     const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
   //     logger.info(`Wallet 1 balance is: ${initialBalance}`);
   //     const invalidAddress = 'invalidAddress';
@@ -927,7 +918,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       const aboveBalanceAmount = initialBalance + 1n;
@@ -970,7 +961,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       // the max amount that we support: Rust u128 max.
@@ -1014,7 +1005,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
       // the max amount that we support: Rust u128 max. The entire Midnight supply
@@ -1057,7 +1048,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
@@ -1093,7 +1084,7 @@ describe('Token transfer', () => {
   test(
     'error message when attempting shielded transfer to send a zero amount',
     async () => {
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
@@ -1209,7 +1200,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
@@ -1238,7 +1229,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Invalid native token transaction');
       const initialState = await rx.firstValueFrom(funded.wallet.state());
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialDustBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       Object.entries(initialState.shielded.balances).forEach(([key, _]) => {
         if (key !== dustTokenHash) tokenTypeHash = key;
@@ -1250,7 +1241,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 balance is: ${initialDustBalance} tDUST`);
       logger.info(`Wallet 1 balance is: ${initialBalance} ${tokenTypeHash}`);
 
-      const syncedState2 = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState2 = await funded.wallet.waitForSyncedState();
       const initialDustBalance2 = syncedState2?.shielded.balances[dustTokenHash] ?? 0n;
       const initialBalance2 = syncedState2?.shielded.balances[tokenTypeHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialDustBalance2} tDUST`);
@@ -1289,7 +1280,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Transaction not proved');
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialDustBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       Object.entries(syncedState.shielded.balances).forEach(([key, _]) => {
         if (key !== dustTokenHash) tokenTypeHash = key;
@@ -1347,7 +1338,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
       const incorrectSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
@@ -1386,7 +1377,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Invalid amount error message');
       const incorrectDustKey = receiver.dustSecretKey;
-      const syncedState = await utils.waitForSyncFacade(funded.wallet);
+      const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 

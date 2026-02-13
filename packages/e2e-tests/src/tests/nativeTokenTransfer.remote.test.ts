@@ -56,7 +56,7 @@ describe('Token transfer', () => {
     wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
     wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
 
-    const initialState = await utils.waitForSyncFacade(wallet.wallet);
+    const initialState = await wallet.wallet.waitForSyncedState();
     const initialNativeBalance = initialState.shielded.balances[nativeToken1Raw];
     logger.info(`initial balance: ${initialNativeBalance}`);
 
@@ -91,7 +91,7 @@ describe('Token transfer', () => {
       allure.epic('Headless wallet');
       allure.feature('Transactions');
       allure.story('Valid transfer transaction using bech32m address');
-      await Promise.all([utils.waitForSyncFacade(sender.wallet), utils.waitForSyncFacade(receiver.wallet)]);
+      await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(sender.wallet.state());
       const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw];
       const initialNative2Balance = initialState.shielded.balances[nativeToken2Raw];
@@ -179,7 +179,7 @@ describe('Token transfer', () => {
           rx.filter((s) => s.shielded.availableCoins.length > initialNumAvailableShieldedCoins),
         ),
       );
-      const finalState = await utils.waitForSyncFacade(sender.wallet);
+      const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
       const senderFinalUnshieldedBalance = finalState.unshielded.balances[unshieldedTokenRaw];
@@ -203,7 +203,7 @@ describe('Token transfer', () => {
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
 
-      const finalState2 = await utils.waitForSyncFacade(receiver.wallet);
+      const finalState2 = await receiver.wallet.waitForSyncedState();
       const receiverFinalShieldedBalance1 = finalState2.shielded.balances[nativeToken1Raw];
       const receiverFinalShieldedBalance2 = finalState2.shielded.balances[nativeToken2Raw];
       const receiverFinalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
@@ -230,7 +230,7 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Valid transfer self-transaction');
 
-      const initialState = await utils.waitForSyncFacade(sender.wallet);
+      const initialState = await sender.wallet.waitForSyncedState();
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw];
       logger.info(initialState.shielded.availableCoins);
       logger.info(`Wallet 1: ${initialBalance}`);
@@ -264,7 +264,7 @@ describe('Token transfer', () => {
 
       await utils.waitForFacadePending(sender.wallet);
       await utils.waitForFacadePendingClear(sender.wallet);
-      const finalState = await utils.waitForSyncFacade(sender.wallet);
+      const finalState = await sender.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
       expect(finalState.shielded.pendingCoins.length).toBe(0);

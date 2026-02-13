@@ -67,7 +67,7 @@ describe('Balance constant', () => {
       allure.feature('Balance');
       allure.story('Balance constant when syncing from 0');
 
-      const syncedState = await utils.waitForSyncFacade(wallet.wallet);
+      const syncedState = await wallet.wallet.waitForSyncedState();
       logger.info(inspect(syncedState.shielded.availableCoins, { depth: null }));
       logger.info(inspect(syncedState.unshielded.availableCoins, { depth: null }));
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedShieldedBalance);
@@ -92,7 +92,7 @@ describe('Balance constant', () => {
 
       await utils.saveState(wallet.wallet, filename);
       const restoredWallet = await utils.provideWallet(filename, seed, fixture);
-      const syncedState = await utils.waitForSyncFacade(restoredWallet.wallet);
+      const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
       expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
       expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);

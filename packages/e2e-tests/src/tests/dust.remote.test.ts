@@ -45,7 +45,7 @@ describe('Dust tests', () => {
   test(
     'Able to register Night tokens for Dust generation @healthcheck',
     async () => {
-      const initialState = await utils.waitForSyncFacade(wallet.wallet);
+      const initialState = await wallet.wallet.waitForSyncedState();
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
       logger.info(`Wallet: ${initialUnshieldedBalance} unshielded tokens`);
@@ -106,7 +106,7 @@ describe('Dust tests', () => {
   test(
     'Able to deregister night tokens for dust decay @healthcheck',
     async () => {
-      const initialWalletState = await utils.waitForSyncFacade(wallet.wallet);
+      const initialWalletState = await wallet.wallet.waitForSyncedState();
       const initialDustBalance = initialWalletState.dust.balance(new Date());
       logger.info(`Initial Dust Balance: ${initialDustBalance}`);
 
