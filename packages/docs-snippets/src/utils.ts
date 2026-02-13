@@ -87,3 +87,12 @@ export const initWalletWithSeed = async (
 
   return { wallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
 };
+
+export const aFakeProvingProvider: ledger.ProvingProvider = {
+  check(_serializedPreimage: Uint8Array, _keyLocation: string): Promise<(bigint | undefined)[]> {
+    return Promise.resolve([]);
+  },
+  prove(_serializedPreimage: Uint8Array, _keyLocation: string, _overwriteBindingInput?: bigint): Promise<Uint8Array> {
+    return Promise.resolve(new Uint8Array(0));
+  },
+};

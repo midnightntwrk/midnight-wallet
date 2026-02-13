@@ -26,6 +26,16 @@ Generating dust after designation: true
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'dust-sponsorship' 1`] = `
+[
+  "User received night for main transaction 1000000000n
+Sponsored transfer completed
+Did sponsor receive their night back? true
+Did user spent all the Night? true
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'initialization' 1`] = `
 [
   "Synced state:
