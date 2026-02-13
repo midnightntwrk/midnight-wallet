@@ -2407,7 +2407,7 @@ __metadata:
     eslint: "npm:^9.32.0"
     eslint-config-prettier: "npm:^10.0.2"
     eslint-plugin-prettier: "npm:^5.2.3"
-    extensionless: "npm:^1.9.9"
+    extensionless: "npm:^2.0.0"
     prettier: "npm:^3.6.2"
     rimraf: "npm:^6.0.1"
     tslib: "npm:^2.8.1"
@@ -6590,10 +6590,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"extensionless@npm:^1.9.9":
-  version: 1.9.9
-  resolution: "extensionless@npm:1.9.9"
-  checksum: 10c0/ed5f6bc76496f0a49a95a5e3d00e613a500f96bc47e06b802b8f4c77ef42aa74f7c038ec92896886886e5cd75c69214d7dbcae6dda957abaec23d9d729f27b24
+"extensionless@npm:^2.0.0":
+  version: 2.0.6
+  resolution: "extensionless@npm:2.0.6"
+  checksum: 10c0/00f0cbf3676d7fb57ed3c4da64a6c6168f244f4c056f56d9af51b4952470474b296a1a9bd11d4d0ef97813848142bfa3bba6cc2bac5f5bb8af2e7ac808570a08
   languageName: node
   linkType: hard
 
