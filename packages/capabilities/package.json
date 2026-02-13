@@ -45,13 +45,13 @@
   },
   "devDependencies": {
     "@midnight-ntwrk/ledger-v7": "^7.0.0",
-    "eslint": "^9.37.0",
-    "fast-check": "^4.2.0",
-    "prettier": "^3.7.0",
-    "publint": "~0.3.14",
-    "rimraf": "^6.0.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "eslint": "9.39.1",
+    "fast-check": "4.4.0",
+    "prettier": "3.7.4",
+    "publint": "0.3.16",
+    "rimraf": "6.1.2",
+    "typescript": "5.9.3",
+    "vitest": "4.0.16"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
