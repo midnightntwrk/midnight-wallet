@@ -2403,7 +2403,7 @@ __metadata:
     "@vitest/ui": "npm:4.0.16"
     allure-js-commons: "npm:^3.3.0"
     allure-vitest: "npm:^3.3.0"
-    dotenv: "npm:^16.0.0"
+    dotenv: "npm:^17.0.0"
     eslint: "npm:^9.32.0"
     eslint-config-prettier: "npm:^10.0.2"
     eslint-plugin-prettier: "npm:^5.2.3"
@@ -5944,6 +5944,13 @@ __metadata:
   version: 16.6.1
   resolution: "dotenv@npm:16.6.1"
   checksum: 10c0/15ce56608326ea0d1d9414a5c8ee6dcf0fffc79d2c16422b4ac2268e7e2d76ff5a572d37ffe747c377de12005f14b3cc22361e79fc7f1061cce81f77d2c973dc
+  languageName: node
+  linkType: hard
+
+"dotenv@npm:^17.0.0":
+  version: 17.2.4
+  resolution: "dotenv@npm:17.2.4"
+  checksum: 10c0/901aeee9cb40860291bdb452f6ca66aada78438331a026b0bd86fd41b94a79752dbc6a8971f4f26e6cafef11b4a27bb12ea99c0cbe7dfa61791f194727f799e5
   languageName: node
   linkType: hard
 
