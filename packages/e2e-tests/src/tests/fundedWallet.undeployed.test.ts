@@ -51,7 +51,7 @@ describe('Funded wallet', () => {
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
       logger.info('Waiting for sync...');
-      const state = await utils.waitForSyncFacade(funded.wallet);
+      const state = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet synced. Shielded balance: ${inspect(state.shielded.balances)}`);
       expect(state.shielded.totalCoins).toHaveLength(7);
       expect(state.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
@@ -79,7 +79,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(funded.wallet);
+      const state = await funded.wallet.waitForSyncedState();
       const shieldedCoins = state.shielded.totalCoins;
       expect(shieldedCoins).toHaveLength(7);
       expect(utils.isArrayUnique(shieldedCoins.map((c) => c.coin.nonce))).toBeTruthy();
@@ -128,7 +128,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(funded.wallet);
+      const state = await funded.wallet.waitForSyncedState();
       const shieldedCoins = state.shielded.availableCoins;
       expect(shieldedCoins).toHaveLength(7);
       expect(utils.isArrayUnique(shieldedCoins.map((c) => c.coin.nonce))).toBeTruthy();
@@ -178,7 +178,7 @@ describe('Funded wallet', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - funded');
-      const state = await utils.waitForSyncFacade(funded.wallet);
+      const state = await funded.wallet.waitForSyncedState();
       expect(state.shielded.pendingCoins).toHaveLength(0);
       expect(state.unshielded.pendingCoins).toHaveLength(0);
       expect(state.dust.pendingCoins).toHaveLength(0);
@@ -193,7 +193,7 @@ describe('Funded wallet', () => {
   //     allure.epic('Headless wallet');
   //     allure.feature('Wallet state');
   //     allure.story('Wallet state properties - funded');
-  //     const state = await waitForSyncFacade(wallet);
+  //     const state = await wallet.waitForSyncedState();
   //     const txHistory = state.shielded.transactionHistory;
   //     expect(txHistory).toHaveLength(0);
   //     const expectedIdentifiers = new Map(

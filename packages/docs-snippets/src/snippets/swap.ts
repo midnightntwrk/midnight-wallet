@@ -23,8 +23,8 @@ const bob = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000002', 'hex'),
 );
 
-const aliceInitialState = await rx.firstValueFrom(alice.wallet.state().pipe(rx.filter((s) => s.isSynced)));
-const bobInitialState = await rx.firstValueFrom(bob.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+const aliceInitialState = await alice.wallet.waitForSyncedState();
+const bobInitialState = await bob.wallet.waitForSyncedState();
 
 const shieldedToken1 = '0000000000000000000000000000000000000000000000000000000000000001';
 const shieldedToken2 = '0000000000000000000000000000000000000000000000000000000000000002';

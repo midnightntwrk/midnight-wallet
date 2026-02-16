@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 2.0.0-rc.0
+
+### Major Changes
+
+- 3843720: Replace `SerializedUnprovenTransaction` with `SerializedTransaction`, a simplified type for holding
+  serialized transaction bytes
+
 ## 1.0.0
 
 ### Minor Changes

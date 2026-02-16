@@ -328,18 +328,6 @@ export const waitForSyncShielded = (wallet: ShieldedWallet) =>
     ),
   );
 
-export const waitForSyncFacade = async (facade: WalletFacade) =>
-  await rx.firstValueFrom(
-    facade.state().pipe(
-      rx.throttleTime(5_000),
-      rx.tap((state) => {
-        const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
-        logger.info(`Wallet facade behind by ${applyGap}`);
-      }),
-      rx.filter((state) => state.isSynced === true),
-    ),
-  );
-
 export const waitForFacadePending = (wallet: WalletFacade) =>
   rx.firstValueFrom(
     wallet.state().pipe(
@@ -376,6 +364,17 @@ export const waitForFacadePendingClear = (wallet: WalletFacade) =>
           state.unshielded.pendingCoins.length == 0 &&
           state.dust.pendingCoins.length == 0,
       ),
+    ),
+  );
+
+export const waitForDustBalance = (wallet: WalletFacade) =>
+  rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.tap((state) => {
+        const dustBalance = state.dust.balance(new Date());
+        logger.info(`Dust balance: ${dustBalance}, waiting for dust balance > 7 * 10^14...`);
+      }),
+      rx.filter((state) => state.dust.balance(new Date()) > 7n * 10n ** 14n),
     ),
   );
 

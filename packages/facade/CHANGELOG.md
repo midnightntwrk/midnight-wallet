@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 2.0.0-rc.1
+
+### Patch Changes
+
+- Updated dependencies [3843720]
+- Updated dependencies [fe57cc3]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.0.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.1
+
 ## 2.0.0-rc.0
 
 ### Major Changes

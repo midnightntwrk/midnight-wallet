@@ -1,5 +1,25 @@
 # @midnight-ntwrk/wallet-sdk-prover-client
 
+## 1.1.0-rc.1
+
+### Minor Changes
+
+- fe57cc3: Expose proving provider for custom prover integration
+  - Added `asProvingProvider()` method to `HttpProverClient` and `WasmProver` to expose underlying proving providers
+  - Added `create()` factory functions to `HttpProverClient` and `WasmProver` for direct instantiation without Effect
+    layers
+  - Added `fromProvingProvider()` and `fromProvingProviderEffect()` helper functions to `Proving` module for creating
+    proving services from custom providers
+  - Refactored `makeServerProvingService()` and `makeWasmProvingService()` to use the new provider-based approach
+  - Added comprehensive test coverage for custom prover workflows in both HTTP and WASM configurations
+
+### Patch Changes
+
+- Updated dependencies [3843720]
+- Updated dependencies [330867f]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.0
+
 ## 1.1.0-rc.0
 
 ### Minor Changes

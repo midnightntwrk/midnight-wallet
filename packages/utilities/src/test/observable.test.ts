@@ -60,6 +60,29 @@ describe('Observable', () => {
       expect(iterationsYielded()).toBeLessThan(MAX_ITERATIONS);
     });
 
+    it('should signal stream closure as soon as subscription is closed', async () => {
+      let lastN = 0;
+      let wasClosed = false;
+      const stream = Stream.iterate(1, (n) => n + 1).pipe(
+        Stream.tap((n) =>
+          Effect.sync(() => {
+            lastN = n;
+          }),
+        ),
+        Stream.onDone(() =>
+          Effect.sync(() => {
+            wasClosed = true;
+          }),
+        ),
+      );
+
+      const result = await rx.firstValueFrom(ObservableOps.fromStream(stream));
+
+      expect(result).toBe(1);
+      expect(lastN).toEqual(1);
+      expect(wasClosed).toBe(true);
+    });
+
     it('should cleanup allocated resource in underlying Stream', async () => {
       const { generator } = makeGenerator(MAX_ITERATIONS);
       const anyResource = 'A Resource';

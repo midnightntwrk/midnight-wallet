@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.0.1-rc.0
+
+### Patch Changes
+
+- 330867f: fix: prevent fromStream leaving dangling hub subscriber on early unsubscribe
+
 ## 1.0.0
 
 ### Patch Changes

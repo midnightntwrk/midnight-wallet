@@ -22,7 +22,7 @@ const sender = await initWalletWithSeed(
 );
 const { wallet, unshieldedKeystore } = await initWalletWithSeed(Buffer.from(generateRandomSeed()));
 
-await rx.firstValueFrom(sender.wallet.state().pipe(rx.filter((s) => s.isSynced)));
+await sender.wallet.waitForSyncedState();
 
 await sender.wallet
   .transferTransaction(

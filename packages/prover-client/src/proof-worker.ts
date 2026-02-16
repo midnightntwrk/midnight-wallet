@@ -10,22 +10,30 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Encoding, Schema } from 'effect';
+import { Schema } from 'effect';
 import { check, prove, type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import {
+  GetParamsOperationResultSchema,
+  CheckOperationSchema,
+  ProveOperationSchema,
+  LookupKeyOperationResultSchema,
+  ResponseFromWorkerSchema,
+  LookupKeyRequestSchema,
+  GetParamsRequestSchema,
+} from './effect/WasmProver.js';
 
 const MAX_TIME_TO_PROCESS = 10 * 60 * 1000;
 
 const keyMaterialProvider: KeyMaterialProvider = {
   lookupKey(keyLocation: string): Promise<ProvingKeyMaterial | undefined> {
     return new Promise((resolve, reject) => {
-      postMessage({ op: 'lookupKey', keyLocation });
+      postMessage(Schema.encodeSync(LookupKeyRequestSchema)({ op: 'lookupKey', keyLocation }));
 
-      const subscription = (message: {
-        data: { op: string; keyLocation: string; result: ProvingKeyMaterial | undefined };
-      }) => {
-        if (message.data.op === 'lookupKey' && message.data.keyLocation === keyLocation) {
+      const subscription = ({ data }: MessageEvent<MessageData>) => {
+        const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
+        if (decoded.op === 'lookupKey' && decoded.keyLocation === keyLocation) {
           removeEventListener('message', subscription);
-          resolve(message.data.result);
+          resolve(decoded.result);
         }
       };
 
@@ -35,12 +43,13 @@ const keyMaterialProvider: KeyMaterialProvider = {
   },
   getParams(k: number): Promise<Uint8Array> {
     return new Promise((resolve, reject) => {
-      postMessage({ op: 'getParams', k });
+      postMessage(Schema.encodeSync(GetParamsRequestSchema)({ op: 'getParams', k }));
 
-      const subscription = (message: { data: { op: string; k: number; result: Uint8Array } }) => {
-        if (message.data.op === 'getParams' && message.data.k === k) {
+      const subscription = ({ data }: MessageEvent<MessageData>) => {
+        const decoded = Schema.decodeUnknownSync(MessageDataSchema)(data);
+        if (decoded.op === 'getParams' && decoded.k === k) {
           removeEventListener('message', subscription);
-          resolve(message.data.result);
+          resolve(decoded.result);
         }
       };
 
@@ -50,31 +59,11 @@ const keyMaterialProvider: KeyMaterialProvider = {
   },
 };
 
-const CheckOperationSchema = Schema.Struct({
-  op: Schema.Literal('check'),
-  args: Schema.Tuple(Schema.Uint8ArrayFromBase64),
-});
-
-const ProveOperationSchema = Schema.Struct({
-  op: Schema.Literal('prove'),
-  args: Schema.Tuple(Schema.Uint8ArrayFromBase64, Schema.Union(Schema.BigIntFromSelf, Schema.Undefined)),
-});
-
-const LookupKeyOperationSchema = Schema.Struct({
-  op: Schema.Literal('lookupKey'),
-  keyLocation: Schema.String,
-});
-
-const GetParamsOperationSchema = Schema.Struct({
-  op: Schema.Literal('getParams'),
-  k: Schema.Number,
-});
-
 const MessageDataSchema = Schema.Union(
   CheckOperationSchema,
   ProveOperationSchema,
-  LookupKeyOperationSchema,
-  GetParamsOperationSchema,
+  LookupKeyOperationResultSchema,
+  GetParamsOperationResultSchema,
 );
 
 type MessageData = Schema.Schema.Type<typeof MessageDataSchema>;
@@ -88,10 +77,12 @@ addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
 
     check(a, keyMaterialProvider)
       .then((result) => {
-        postMessage({
-          op: 'result',
-          value: result,
-        });
+        postMessage(
+          Schema.encodeSync(ResponseFromWorkerSchema)({
+            op: 'result',
+            value: result,
+          }),
+        );
       })
       .catch((e) => {
         throw e;
@@ -101,10 +92,12 @@ addEventListener('message', ({ data }: MessageEvent<MessageData>) => {
 
     prove(a, keyMaterialProvider, b)
       .then((result) => {
-        postMessage({
-          op: 'result',
-          value: Encoding.encodeBase64(result),
-        });
+        postMessage(
+          Schema.encodeSync(ResponseFromWorkerSchema)({
+            op: 'result',
+            value: result,
+          }),
+        );
       })
       .catch((e) => {
         throw e;
