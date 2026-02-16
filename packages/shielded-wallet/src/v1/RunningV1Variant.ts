@@ -20,7 +20,6 @@ import {
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { type ProvingService } from './Proving.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
@@ -61,7 +60,6 @@ export declare namespace RunningV1Variant {
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
     syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
     transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
-    provingService: ProvingService<TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
@@ -190,18 +188,6 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         EitherOps.toEffect,
       );
     });
-  }
-
-  finalizeTransaction(transaction: ledger.UnprovenTransaction): Effect.Effect<TTransaction, WalletError> {
-    return this.#v1Context.provingService
-      .prove(transaction)
-      .pipe(
-        Effect.tapError(() =>
-          SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
-          ),
-        ),
-      );
   }
 
   revertTransaction(

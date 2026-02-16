@@ -89,13 +89,6 @@ const tx = await wallet.transferTransaction(shieldedSecretKeys, [
 const balancingTx = await wallet.balanceTransaction(shieldedSecretKeys, transactionToBalance);
 ```
 
-### Finalizing Transactions
-
-```typescript
-// Generates ZK proofs and finalizes the transaction
-const finalizedTx = await wallet.finalizeTransaction(unprovenTx);
-```
-
 ### Creating Swap Offers
 
 ```typescript

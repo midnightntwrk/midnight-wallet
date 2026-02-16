@@ -37,7 +37,7 @@ const configuration: DefaultConfiguration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
-  provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
+  proving: { type: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,

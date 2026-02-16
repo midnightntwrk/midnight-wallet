@@ -27,7 +27,7 @@ import {
 import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { makeServerProvingService } from './utils/proving.js';
+import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
@@ -94,9 +94,9 @@ describe('Optional Balancing', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
         indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
+      proving: {
+        type: 'wasm',
+      },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -262,11 +262,11 @@ describe('Optional Balancing', () => {
 
   describe('balanceUnboundTransaction', () => {
     it('only balances shielded when tokenKindsToBalance is ["shielded"]', async () => {
-      const provingService = makeServerProvingService(configuration.provingServerUrl);
+      const provingService = makeWasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const unboundTx = await provingService.proveTransaction(arbitraryTx);
+      const unboundTx = await provingService.prove(arbitraryTx);
 
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
@@ -297,11 +297,11 @@ describe('Optional Balancing', () => {
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
-      const provingService = makeServerProvingService(configuration.provingServerUrl);
+      const provingService = makeWasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const unboundTx = await provingService.proveTransaction(arbitraryTx);
+      const unboundTx = await provingService.prove(arbitraryTx);
 
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
@@ -322,11 +322,11 @@ describe('Optional Balancing', () => {
     });
 
     it('only adds dust fees when tokenKindsToBalance is ["dust"]', async () => {
-      const provingService = makeServerProvingService(configuration.provingServerUrl);
+      const provingService = makeWasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const unboundTx = await provingService.proveTransaction(arbitraryTx);
+      const unboundTx = await provingService.prove(arbitraryTx);
 
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
@@ -358,11 +358,11 @@ describe('Optional Balancing', () => {
     });
 
     it('balances all when tokenKindsToBalance is "all" (default)', async () => {
-      const provingService = makeServerProvingService(configuration.provingServerUrl);
+      const provingService = makeWasmProvingService();
       await facade.waitForSyncedState();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const unboundTx = await provingService.proveTransaction(arbitraryTx);
+      const unboundTx = await provingService.prove(arbitraryTx);
 
       const recipe = await facade.balanceUnboundTransaction(
         unboundTx,
@@ -398,10 +398,10 @@ describe('Optional Balancing', () => {
     let finalizedTx: ledger.FinalizedTransaction;
 
     beforeAll(async () => {
-      const provingService = makeServerProvingService(configuration.provingServerUrl);
+      const provingService = makeWasmProvingService();
 
       const arbitraryTx = createArbitraryTx(configuration.networkId);
-      const unboundTx = await provingService.proveTransaction(arbitraryTx);
+      const unboundTx = await provingService.prove(arbitraryTx);
 
       finalizedTx = unboundTx.bind();
     });

@@ -17,6 +17,12 @@ import {
   type SubmissionService,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import {
+  type DefaultProvingConfiguration,
+  makeProvingService,
+  type ProvingService,
+  type UnboundTransaction,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import {
   type AnyTransaction,
   type DefaultDustConfiguration,
   type CoinsAndBalances as DustCoinsAndBalances,
@@ -40,8 +46,6 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { finalizedTransactionTrait } from './transaction.js';
 import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-
-export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
 
@@ -176,7 +180,8 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultShieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
-  DefaultPendingTransactionsServiceConfiguration;
+  DefaultPendingTransactionsServiceConfiguration &
+  DefaultProvingConfiguration;
 
 type MaybePromise<T> = T | Promise<T>;
 export type InitParams<TConfig extends DefaultConfiguration> = {
@@ -185,6 +190,7 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   pendingTransactionsService?: (
     config: TConfig,
   ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
+  provingService?: (config: TConfig) => MaybePromise<ProvingService<UnboundTransaction>>;
   shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
   unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
   dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
@@ -206,6 +212,12 @@ export class WalletFacade {
     });
   }
 
+  static makeProvingService<TConfig extends DefaultProvingConfiguration>(
+    config: TConfig,
+  ): ProvingService<UnboundTransaction> {
+    return makeProvingService(config);
+  }
+
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
     const submissionService = await Promise.resolve(
       initParams.submissionService
@@ -217,10 +229,15 @@ export class WalletFacade {
         ? initParams.pendingTransactionsService(initParams.configuration)
         : WalletFacade.makeDefaultPendingTransactionsService(initParams.configuration),
     );
+    const provingService = await Promise.resolve(
+      initParams.provingService
+        ? initParams.provingService(initParams.configuration)
+        : WalletFacade.makeProvingService(initParams.configuration),
+    );
     const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
     const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    return new WalletFacade(shielded, unshielded, dust, submissionService, pendingTransactionsService);
+    return new WalletFacade(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
   }
 
   readonly shielded: ShieldedWalletAPI;
@@ -228,6 +245,7 @@ export class WalletFacade {
   readonly dust: DustWalletAPI;
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
+  readonly provingService: ProvingService<UnboundTransaction>;
   #pendingSubscription: Subscription;
 
   private constructor(
@@ -236,12 +254,14 @@ export class WalletFacade {
     dustWallet: DustWalletAPI,
     submissionService: SubmissionService<ledger.FinalizedTransaction>,
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
+    provingService: ProvingService<UnboundTransaction>,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
     this.dust = dustWallet;
     this.submissionService = submissionService;
     this.pendingTransactionsService = pendingTransactionsService;
+    this.provingService = provingService;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
@@ -551,9 +571,19 @@ export class WalletFacade {
   }
 
   async finalizeTransaction(tx: ledger.UnprovenTransaction): Promise<ledger.FinalizedTransaction> {
-    const finalizedTx = await this.shielded.finalizeTransaction(tx);
-    await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
-    return finalizedTx;
+    try {
+      const unboundTx = await this.provingService.prove(tx);
+      const finalizedTx = unboundTx.bind();
+      await this.pendingTransactionsService.addPendingTransaction(finalizedTx);
+      return finalizedTx;
+    } catch (error) {
+      await Promise.allSettled([
+        this.shielded.revertTransaction(tx),
+        this.unshielded.revertTransaction(tx),
+        this.dust.revertTransaction(tx),
+      ]);
+      throw error;
+    }
   }
 
   async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {

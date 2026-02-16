@@ -10,7 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import {
+  type ProvingServiceEffect,
+  makeWasmProvingServiceEffect,
+  fromProvingProvider,
+  makeServerProvingServiceEffect,
+  ProvingError,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
@@ -57,17 +63,17 @@ const proofServerContainerResource = Effect.acquireRelease(
   Effect.retry(Schedule.spaced(Duration.millis(10))),
 );
 
-function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTransaction>>(
-  implName: string,
-  makeService: () => Effect.Effect<T, unknown, Scope.Scope>,
-) {
-  describe(`${implName} implementation of ProvingService`, () => {
+function runInterfaceTests<
+  T extends ProvingServiceEffect<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>,
+>(implName: string, makeService: () => Effect.Effect<T, unknown, Scope.Scope>) {
+  describe(`${implName} implementation of ProvingServiceEffect`, () => {
     const testUnprovenTx = makeTransaction();
 
     it('does transform unproven transaction into final, proven transaction', async () => {
       const finalTx = await Effect.gen(function* () {
         const service = yield* makeService();
-        return yield* service.prove(testUnprovenTx);
+        const provenTx = yield* service.prove(testUnprovenTx);
+        return provenTx.bind();
       }).pipe(Effect.scoped, Effect.runPromise);
 
       expect(finalTx).toBeInstanceOf(ledger.Transaction);
@@ -76,13 +82,13 @@ function runInterfaceTests<T extends Proving.ProvingService<ledger.FinalizedTran
   });
 }
 
-runInterfaceTests('Wasm Proving', () => Effect.succeed(Proving.makeWasmProvingService({})));
+runInterfaceTests('Wasm Proving', () => Effect.succeed(makeWasmProvingServiceEffect()));
 
 runInterfaceTests('Custom Wasm Prover', () =>
   pipe(
     WasmProver.create({ keyMaterialProvider: WasmProver.makeDefaultKeyMaterialProvider() }),
     Effect.map((service) => service.asProvingProvider()),
-    Effect.map((provider) => Proving.fromProvingProvider(provider)),
+    Effect.map((provider) => fromProvingProvider(provider)),
   ),
 );
 
@@ -90,8 +96,8 @@ runInterfaceTests('Server Proving', () =>
   pipe(
     proofServerContainerResource,
     Effect.map((proofServerUrl) =>
-      Proving.makeServerProvingService({
-        provingServerUrl: proofServerUrl,
+      makeServerProvingServiceEffect({
+        url: proofServerUrl,
       }),
     ),
   ),
@@ -106,17 +112,17 @@ runInterfaceTests('Custom Server Prover', () =>
       }),
     ),
     Effect.map((client) => client.asProvingProvider()),
-    Effect.map((provider) => Proving.fromProvingProvider(provider)),
+    Effect.map((provider) => fromProvingProvider(provider)),
   ),
 );
 
 describe('Server Proving Service', () => {
   const testUnprovenTx = makeTransaction();
 
-  it('does fail with wallet error instance when proving fails (e.g. due to misconfiguration)', async () => {
+  it('does fail with proving error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const result = await Effect.gen(function* () {
-      const misconfiguredService = Proving.makeServerProvingService({
-        provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
+      const misconfiguredService = makeServerProvingServiceEffect({
+        url: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
     }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
@@ -126,16 +132,16 @@ describe('Server Proving Service', () => {
         throw new Error(`Unexpected success: ${result.toString()}`);
       },
       onLeft: (error) => {
-        expect(error).toBeInstanceOf(WalletError.ProvingError);
+        expect(error).toBeInstanceOf(ProvingError);
       },
     });
   });
 
-  it('does fail with wallet error instance when proving fails (e.g. due to connection error)', async () => {
+  it('does fail with proving error instance when proving fails (e.g. due to connection error)', async () => {
     const result = await Effect.gen(function* () {
       const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
-      const misconfiguredService = Proving.makeServerProvingService({
-        provingServerUrl: proofServerUrl,
+      const misconfiguredService = makeServerProvingServiceEffect({
+        url: proofServerUrl,
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
     }).pipe(Effect.either, Effect.runPromise);
@@ -145,7 +151,7 @@ describe('Server Proving Service', () => {
         throw new Error(`Unexpected success: ${result.toString()}`);
       },
       onLeft: (error) => {
-        expect(error).toBeInstanceOf(WalletError.ProvingError);
+        expect(error).toBeInstanceOf(ProvingError);
       },
     });
   });

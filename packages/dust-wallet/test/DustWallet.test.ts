@@ -21,7 +21,7 @@ import {
   type UserAddress,
 } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { BigInt as BI, Chunk, Effect, Scope, Stream, SubscriptionRef } from 'effect';
@@ -91,6 +91,7 @@ describe('DustWallet', () => {
   let simulator: Simulator;
   let keyStore: UnshieldedKeystore;
   let submissionService: Submission.SubmissionServiceEffect<ProofErasedTransaction>;
+  const provingService = makeSimulatorProvingServiceEffect();
 
   const registerNightTokens = (wallet: RunningWallet, nightTokens: Array<UtxoWithMeta>, nightVerifyingKey: string) => {
     return Effect.gen(function* () {
@@ -112,7 +113,7 @@ describe('DustWallet', () => {
       const signature = keyStore.signData(intentSignatureData);
       const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(registerForDustTransaction, signature);
 
-      const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
+      const transaction = yield* provingService.prove(dustGenerationTransaction);
       const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
@@ -154,7 +155,7 @@ describe('DustWallet', () => {
       const signature = keyStore.signData(intentSignatureData);
       const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(balancedTransaction, signature);
 
-      const transaction = yield* wallet.proveTransaction(dustGenerationTransaction);
+      const transaction = yield* provingService.prove(dustGenerationTransaction);
       const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
       const latestSimulatorState = yield* simulator.getLatestState();
       expect(result.blockHeight).toBe(latestSimulatorState.lastTxNumber);
@@ -174,7 +175,6 @@ describe('DustWallet', () => {
 
       walletVariant = new V1Builder()
         .withTransactionType<ProofErasedTransaction>()
-        .withProving(Proving.makeSimulatorProvingService)
         .withCoinSelectionDefaults()
         .withTransacting(Transacting.makeSimulatorTransactingCapability)
         .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
@@ -388,7 +388,7 @@ describe('DustWallet', () => {
 
       const balancedTransaction = transferTransaction.merge(balancingTransaction);
 
-      const provenTransaction = yield* wallet.proveTransaction(balancedTransaction);
+      const provenTransaction = yield* provingService.prove(balancedTransaction);
 
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       yield* waitForTx(stateRef, 4);
@@ -541,7 +541,7 @@ describe('DustWallet', () => {
 
       const balancedTransaction = transferTransaction.merge(balancingTransaction);
 
-      const provenTransaction = yield* wallet.proveTransaction(balancedTransaction);
+      const provenTransaction = yield* provingService.prove(balancedTransaction);
 
       // validate fee imbalance
       expect(Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee)).toBe(0n);

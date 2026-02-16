@@ -14,7 +14,6 @@ import {
   type DustParameters,
   type DustPublicKey,
   DustSecretKey,
-  type FinalizedTransaction,
   type Signature,
   type SignatureVerifyingKey,
   type UnprovenTransaction,
@@ -139,8 +138,6 @@ export type DustWalletAPI = {
     currentTime?: Date,
   ): Promise<UnprovenTransaction>;
 
-  proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction>;
-
   serializeState(): Promise<string>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<DustWalletState>;
@@ -246,14 +243,6 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),
-        })
-        .pipe(Effect.runPromise);
-    }
-
-    proveTransaction(transaction: UnprovenTransaction): Promise<FinalizedTransaction> {
-      return this.runtime
-        .dispatch({
-          [V1Tag]: (v1) => v1.proveTransaction(transaction),
         })
         .pipe(Effect.runPromise);
     }

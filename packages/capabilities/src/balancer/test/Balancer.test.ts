@@ -20,7 +20,7 @@ import {
 } from '@midnight-ntwrk/ledger-v7';
 import * as fc from 'fast-check';
 import { describe, expect, test } from 'vitest';
-import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../src/index.js';
+import { chooseCoin, CoinSelection, getBalanceRecipe, Imbalances, TransactionCostModel } from '../../index.js';
 
 const createQualifiedCoin = (tokenType: string, value: bigint) => ({
   ...createShieldedCoinInfo(tokenType, value),

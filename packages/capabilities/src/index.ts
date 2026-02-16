@@ -12,4 +12,5 @@
 // limitations under the License.
 export * from './balancer/index.js';
 export * from './pendingTransactions/index.js';
+export * from './proving/index.js';
 export * from './submission/index.js';

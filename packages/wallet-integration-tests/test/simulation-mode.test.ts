@@ -14,14 +14,8 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
-import {
-  Proving,
-  Simulator,
-  Sync,
-  Transacting,
-  TransactionHistory,
-  V1Builder,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import { Simulator, Sync, Transacting, TransactionHistory, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
@@ -52,7 +46,6 @@ describe('Working in simulation mode', () => {
         },
         new V1Builder()
           .withTransactionType<ledger.ProofErasedTransaction>()
-          .withProving(Proving.makeSimulatorProvingService)
           .withCoinSelectionDefaults()
           .withTransacting(Transacting.makeSimulatorTransactingCapability)
           .withTransactionHistory(TransactionHistory.makeSimulatorTransactionHistoryCapability)
@@ -61,6 +54,7 @@ describe('Working in simulation mode', () => {
           .withKeysDefaults()
           .withSerializationDefaults(),
       );
+      const provingService = makeSimulatorProvingServiceEffect();
       const submissionService = Submission.makeSimulatorSubmissionService<ledger.ProofErasedTransaction>('InBlock')({
         simulator,
       });
@@ -80,15 +74,15 @@ describe('Working in simulation mode', () => {
       });
 
       yield* Effect.promise(async () => {
-        const unprovenTx = await senderWallet.transferTransaction(senderKeys, [
+        return await senderWallet.transferTransaction(senderKeys, [
           {
             type: shieldedTokenType,
             amount: 42n,
             receiverAddress: await receiverWallet.getAddress(),
           },
         ]);
-        return await senderWallet.finalizeTransaction(unprovenTx);
       }).pipe(
+        Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
         Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'InBlock')),
         Effect.forkScoped,
       );

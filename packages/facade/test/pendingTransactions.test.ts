@@ -46,7 +46,7 @@ describe('Wallet Facade handling pending transactions', () => {
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
       },
-      provingServerUrl: new URL('http://localhost:6300'),
+      proving: { type: 'server', url: new URL('http://localhost:6300') },
       costParameters: {
         additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,

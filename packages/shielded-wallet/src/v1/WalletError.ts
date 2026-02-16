@@ -15,13 +15,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export const WalletError = {
-  proving(err: Error): WalletError {
-    return new ProvingError({
-      message: `Wallet proving error: ${err.message}`,
-      cause: err,
-    });
-  },
-
   other(err: unknown): WalletError {
     let message: string;
     if (err) {
@@ -44,7 +37,6 @@ export const WalletError = {
   },
 };
 export type WalletError =
-  | ProvingError
   | OtherWalletError
   | InsufficientFundsError
   | SubmissionError
@@ -53,11 +45,6 @@ export type WalletError =
   | InvalidCoinHashesError
   | TransactingError
   | LedgerOps.LedgerError;
-
-export class ProvingError extends Data.TaggedError('Wallet.Proving')<{
-  message: string;
-  cause: Error;
-}> {}
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
   message: string;

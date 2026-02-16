@@ -38,6 +38,12 @@ import prand from 'pure-rand';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
+import {
+  type DefaultProvingConfiguration,
+  makeProvingServiceEffect,
+  type ProvingServiceEffect,
+  type UnboundTransaction,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { outputsArbitrary, recipientArbitrary, swapParamsArbitrary } from '../src/arbitraries.js';
@@ -63,7 +69,7 @@ const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: str
  */
 describe.skip('Wallet transacting', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultV1Configuration & Submission.DefaultSubmissionConfiguration;
+  let configuration: DefaultV1Configuration & Submission.DefaultSubmissionConfiguration & DefaultProvingConfiguration;
 
   beforeEach(async () => {
     const environmentId = randomUUID();
@@ -86,9 +92,12 @@ describe.skip('Wallet transacting', () => {
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
+      proving: {
+        type: 'server',
+        url: new URL(
+          `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+        ),
+      },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -109,6 +118,7 @@ describe.skip('Wallet transacting', () => {
   let coinsAndBalances: CoinsAndBalances.CoinsAndBalancesCapability<CoreWallet>;
   let keys: Keys.KeysCapability<CoreWallet>;
   let submissionService: Submission.SubmissionServiceEffect<ledger.FinalizedTransaction>;
+  let provingService: ProvingServiceEffect<UnboundTransaction>;
 
   const getShieldedAddress = (state: CoreWallet | ledger.ZswapSecretKeys): ShieldedAddress => {
     return state instanceof ledger.ZswapSecretKeys
@@ -148,6 +158,7 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
+    provingService = makeProvingServiceEffect(configuration);
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);
@@ -201,7 +212,8 @@ describe.skip('Wallet transacting', () => {
             };
           });
           return v1.transferTransaction(walletKeys, transferOutputs).pipe(
-            Effect.flatMap((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
+            Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+            Effect.map((tx) => tx.bind()),
             Effect.flatMap((tx) =>
               Effect.all({
                 transaction: Effect.succeed(tx),
@@ -248,7 +260,8 @@ describe.skip('Wallet transacting', () => {
               },
             ])
             .pipe(
-              Effect.flatMap((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
+              Effect.flatMap((unprovenTx) => provingService.prove(unprovenTx)),
+              Effect.map((tx) => tx.bind()),
               Effect.flatMap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
             ),
       })
@@ -278,7 +291,8 @@ describe.skip('Wallet transacting', () => {
         [V1Tag]: (v1) =>
           pipe(
             v1.initSwap(walletKeys, swapParams.inputs, swapParams.outputs),
-            Effect.andThen((unprovenTx) => v1.finalizeTransaction(unprovenTx)),
+            Effect.andThen((unprovenTx) => provingService.prove(unprovenTx)),
+            Effect.map((tx) => tx.bind()),
           ),
       })
       .pipe(
@@ -287,7 +301,8 @@ describe.skip('Wallet transacting', () => {
             [V1Tag]: (v1) =>
               pipe(
                 v1.balanceTransaction(wallet2Keys, tx),
-                Effect.andThen((unprovenTx) => v1.finalizeTransaction(unprovenTx!)),
+                Effect.andThen((unprovenTx) => provingService.prove(unprovenTx!)),
+                Effect.map((tx) => tx.bind()),
                 Effect.tap((tx) => submissionService.submitTransaction(tx, 'Finalized')),
               ),
           });

@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Proving, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import {
@@ -34,7 +34,7 @@ import {
   WalletFacade,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-import { makeWasmProvingService } from './utils/proving.js';
+import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 300_000, hookTimeout: 200_000 });
 
@@ -74,7 +74,7 @@ describe('Swaps', () => {
   const unshieldedWalletBKeystore = createKeystore(unshieldedWalletBSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -84,9 +84,12 @@ describe('Swaps', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
         indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
+      proving: {
+        type: 'server',
+        url: new URL(
+          `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+        ),
+      },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -112,10 +115,7 @@ describe('Swaps', () => {
     walletAFacade = await WalletFacade.init({
       configuration,
       shielded: (config) =>
-        CustomShieldedWallet(
-          config,
-          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithSeed(shieldedWalletASeed),
+        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletASeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -126,10 +126,7 @@ describe('Swaps', () => {
     walletBFacade = await WalletFacade.init({
       configuration,
       shielded: (config) =>
-        CustomShieldedWallet(
-          config,
-          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithSeed(shieldedWalletBSeed),
+        CustomShieldedWallet(config, new V1Builder().withDefaults()).startWithSeed(shieldedWalletBSeed),
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
@@ -155,7 +152,7 @@ describe('Swaps', () => {
   });
 
   it('can perform a shielded swap', async () => {
-    const provingService = makeWasmProvingService(configuration.keyMaterialProvider);
+    const provingService = makeWasmProvingService();
 
     const facadeAState = await waitForFullySynced(walletAFacade);
     const facadeBState = await waitForFullySynced(walletBFacade);
@@ -205,7 +202,7 @@ describe('Swaps', () => {
     );
 
     // proving the tx instead of calling finalizeRecipe directly, because we want to test the balance of the unbound tx
-    const unboundSwapTx = await provingService.proveTransaction(swapTxRecipe.transaction);
+    const unboundSwapTx = await provingService.prove(swapTxRecipe.transaction);
 
     // assuming the tx is submitted to a dex pool and another wallet (wallet B) picks it up
 
