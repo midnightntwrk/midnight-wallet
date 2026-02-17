@@ -2225,7 +2225,7 @@ __metadata:
     prettier: "npm:^3.7.0"
     publint: "npm:~0.3.14"
     rimraf: "npm:^6.0.1"
-    to-words: "npm:^4.5.1"
+    to-words: "npm:^5.0.0"
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.0.16"
   languageName: unknown
@@ -2536,7 +2536,7 @@ __metadata:
     rxjs: "npm:^7.5"
     scale-ts: "npm:^1.1.0"
     testcontainers: "npm:^11.10.0"
-    to-words: "npm:^4.5.1"
+    to-words: "npm:^5.0.0"
     typescript: "npm:^5.9.3"
     vitest: "npm:^4.0.16"
     ws: "npm:^8.18.3"
@@ -10979,10 +10979,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"to-words@npm:^4.5.1":
-  version: 4.9.0
-  resolution: "to-words@npm:4.9.0"
-  checksum: 10c0/636d7c186b80fdd13ba4c9a73afa6f37a4f0004165f02fd9a1db185641d1dd351313fac248fd15ca0d657fb3bdfb6b66f7bfdddae7e89ab1880867825de67aa5
+"to-words@npm:^5.0.0":
+  version: 5.1.0
+  resolution: "to-words@npm:5.1.0"
+  checksum: 10c0/81c4c0fc7f600b40b903280473a36b4cd87279c80d06707b351e9073cd7c5c9b27f78f987ca11183497a0186f85998eb204ab40d1e8194b64cd8f01403a8bbad
   languageName: node
   linkType: hard
 
