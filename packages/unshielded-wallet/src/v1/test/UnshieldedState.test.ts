@@ -189,4 +189,24 @@ describe('UnshieldedState', () => {
     expect(HashMap.size(state.availableUtxos)).toEqual(1);
     expect(HashMap.size(state.pendingUtxos)).toEqual(0);
   });
+
+  it('should not throw when rollbackSpendByUtxo is called twice', () => {
+    const update = generateMockUpdate('SUCCESS', 1, 0);
+    const utxoToSpend = update.createdUtxos[0];
+
+    const state = pipe(
+      UnshieldedState.empty(),
+      (s) => UnshieldedState.applyUpdate(s, update),
+      getOrThrow,
+      (s) => UnshieldedState.spend(s, utxoToSpend),
+      getOrThrow,
+      (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
+      getOrThrow,
+      (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
+      getOrThrow,
+    );
+
+    expect(HashMap.size(state.availableUtxos)).toEqual(1);
+    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+  });
 });
