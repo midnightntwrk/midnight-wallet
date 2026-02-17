@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { Data, Either, HashMap } from 'effect';
+import { Data, Either, HashMap, Option, pipe } from 'effect';
 import { ApplyTransactionError, UtxoNotFoundError } from './WalletError.js';
 
 export interface UtxoMeta {
@@ -64,7 +64,7 @@ export const UnshieldedState = {
       };
     }),
 
-  rollbackSpend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, UtxoNotFoundError> => {
+  rollbackSpend: (state: UnshieldedState, utxo: UtxoWithMeta): Either.Either<UnshieldedState, never> => {
     // Rollbacks can't fail due to a utxo not found as it is possible and expected if there is a race between sync and revert call
     const hash = UtxoHash(utxo.utxo);
     if (!HashMap.has(state.pendingUtxos, hash)) {
@@ -86,15 +86,14 @@ export const UnshieldedState = {
       return yield* UnshieldedState.spend(state, found);
     }),
 
-  rollbackSpendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, UtxoNotFoundError> =>
-    Either.gen(function* () {
-      const hash = UtxoHash(utxo);
-      const found = yield* Either.fromOption(
-        HashMap.get(state.pendingUtxos, hash),
-        () => new UtxoNotFoundError({ utxo }),
-      );
-      return yield* UnshieldedState.rollbackSpend(state, found);
-    }),
+  rollbackSpendByUtxo: (state: UnshieldedState, utxo: ledger.Utxo): Either.Either<UnshieldedState, never> =>
+    pipe(
+      HashMap.get(state.pendingUtxos, UtxoHash(utxo)),
+      Option.match({
+        onNone: () => Either.right(state),
+        onSome: (found) => UnshieldedState.rollbackSpend(state, found),
+      }),
+    ),
 
   applyUpdate: (
     state: UnshieldedState,
