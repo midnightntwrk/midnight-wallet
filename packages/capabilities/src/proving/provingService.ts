@@ -71,38 +71,21 @@ export const fromProvingProvider = (provider: ledger.ProvingProvider): ProvingSe
 };
 
 export type ServerProvingConfiguration = {
-  url: URL;
+  provingServerUrl: URL;
 };
 
 export type WasmProvingConfiguration = {
   keyMaterialProvider?: KeyMaterialProvider;
 };
 
-export type ProvingConfiguration =
-  | ({ type: 'server' } & ServerProvingConfiguration)
-  | ({ type: 'wasm' } & WasmProvingConfiguration);
-
-export type DefaultProvingConfiguration = {
-  proving: ProvingConfiguration;
-};
-
-export const makeProvingServiceEffect = (
-  configuration: DefaultProvingConfiguration,
-): ProvingServiceEffect<UnboundTransaction> => {
-  switch (configuration.proving.type) {
-    case 'server':
-      return makeServerProvingServiceEffect(configuration.proving);
-    case 'wasm':
-      return makeWasmProvingServiceEffect(configuration.proving);
-  }
-};
+export type DefaultProvingConfiguration = ServerProvingConfiguration;
 
 export const makeServerProvingServiceEffect = (
   configuration: ServerProvingConfiguration,
 ): ProvingServiceEffect<UnboundTransaction> => {
   return pipe(
     HttpProverClient.create({
-      url: configuration.url,
+      url: configuration.provingServerUrl,
     }),
     Effect.map((client) => client.asProvingProvider()),
     fromProvingProviderEffect,
@@ -129,8 +112,13 @@ export const makeSimulatorProvingServiceEffect = (): ProvingServiceEffect<ledger
   };
 };
 
-export const makeProvingService = (configuration: DefaultProvingConfiguration): ProvingService<UnboundTransaction> =>
-  wrapEffectService(makeProvingServiceEffect(configuration));
+export const makeDefaultProvingServiceEffect = (
+  configuration: DefaultProvingConfiguration,
+): ProvingServiceEffect<UnboundTransaction> => makeServerProvingServiceEffect(configuration);
+
+export const makeDefaultProvingService = (
+  configuration: DefaultProvingConfiguration,
+): ProvingService<UnboundTransaction> => wrapEffectService(makeDefaultProvingServiceEffect(configuration));
 
 export const makeServerProvingService = (
   configuration: ServerProvingConfiguration,

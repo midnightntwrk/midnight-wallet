@@ -95,9 +95,9 @@ runInterfaceTests('Custom Wasm Prover', () =>
 runInterfaceTests('Server Proving', () =>
   pipe(
     proofServerContainerResource,
-    Effect.map((proofServerUrl) =>
+    Effect.map((provingServerUrl) =>
       makeServerProvingServiceEffect({
-        url: proofServerUrl,
+        provingServerUrl,
       }),
     ),
   ),
@@ -106,9 +106,9 @@ runInterfaceTests('Server Proving', () =>
 runInterfaceTests('Custom Server Prover', () =>
   pipe(
     proofServerContainerResource,
-    Effect.flatMap((proofServerUrl) =>
+    Effect.flatMap((provingServerUrl) =>
       HttpProverClient.create({
-        url: proofServerUrl,
+        url: provingServerUrl,
       }),
     ),
     Effect.map((client) => client.asProvingProvider()),
@@ -122,7 +122,7 @@ describe('Server Proving Service', () => {
   it('does fail with proving error instance when proving fails (e.g. due to misconfiguration)', async () => {
     const result = await Effect.gen(function* () {
       const misconfiguredService = makeServerProvingServiceEffect({
-        url: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
+        provingServerUrl: new URL('http://localhost:12345'), // Invalid URL to simulate misconfiguration
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
     }).pipe(Effect.scoped, Effect.either, Effect.runPromise);
@@ -139,9 +139,9 @@ describe('Server Proving Service', () => {
 
   it('does fail with proving error instance when proving fails (e.g. due to connection error)', async () => {
     const result = await Effect.gen(function* () {
-      const proofServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
+      const provingServerUrl = yield* proofServerContainerResource.pipe(Effect.scoped); //This makes the container stop immediately
       const misconfiguredService = makeServerProvingServiceEffect({
-        url: proofServerUrl,
+        provingServerUrl,
       });
       return yield* misconfiguredService.prove(testUnprovenTx);
     }).pipe(Effect.either, Effect.runPromise);

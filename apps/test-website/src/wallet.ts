@@ -37,7 +37,7 @@ export const defaultConfiguration: Configuration = {
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`wss://rpc.preview.midnight.network`),
-  proving: { type: 'server', url: new URL(`http://localhost:${PROOF_SERVER_PORT}`) },
+  provingServerUrl: new URL(`http://localhost:${PROOF_SERVER_PORT}`),
   indexerClientConnection: {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,

@@ -26,11 +26,10 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { type CombinedTokenTransfer, DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
-
-vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
+import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 const environmentId = randomUUID();
 
@@ -78,12 +77,6 @@ describe('Wallet Facade Transfer', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
         indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
       },
-      proving: {
-        type: 'server',
-        url: new URL(
-          `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-        ),
-      },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -111,6 +104,7 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
+      provingService: () => makeWasmProvingService(),
     });
     receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
@@ -118,6 +112,7 @@ describe('Wallet Facade Transfer', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
+      provingService: () => makeWasmProvingService(),
     });
 
     await Promise.all([

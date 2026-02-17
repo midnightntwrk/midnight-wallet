@@ -18,7 +18,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import {
   type DefaultProvingConfiguration,
-  makeProvingService,
+  makeDefaultProvingService,
   type ProvingService,
   type UnboundTransaction,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
@@ -181,7 +181,7 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultDustConfiguration &
   DefaultSubmissionConfiguration &
   DefaultPendingTransactionsServiceConfiguration &
-  DefaultProvingConfiguration;
+  Partial<DefaultProvingConfiguration>;
 
 type MaybePromise<T> = T | Promise<T>;
 export type InitParams<TConfig extends DefaultConfiguration> = {
@@ -212,10 +212,18 @@ export class WalletFacade {
     });
   }
 
-  static makeProvingService<TConfig extends DefaultProvingConfiguration>(
+  static makeDefaultProvingService<TConfig extends Partial<DefaultProvingConfiguration>>(
     config: TConfig,
   ): ProvingService<UnboundTransaction> {
-    return makeProvingService(config);
+    if (config.provingServerUrl) {
+      return makeDefaultProvingService({
+        provingServerUrl: config.provingServerUrl,
+      });
+    } else {
+      throw new Error(
+        "Missing required configuration: 'provingServerUrl' must be set in config, or provide a custom provingService in init parameters.",
+      );
+    }
   }
 
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
@@ -232,7 +240,7 @@ export class WalletFacade {
     const provingService = await Promise.resolve(
       initParams.provingService
         ? initParams.provingService(initParams.configuration)
-        : WalletFacade.makeProvingService(initParams.configuration),
+        : WalletFacade.makeDefaultProvingService(initParams.configuration),
     );
     const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));

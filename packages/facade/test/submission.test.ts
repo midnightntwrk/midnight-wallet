@@ -49,7 +49,7 @@ describe('Facade submission', () => {
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
       },
-      proving: { type: 'server', url: new URL('http://localhost:6300') },
+      provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
         additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
@@ -94,7 +94,7 @@ describe('Facade submission', () => {
       indexerClientConnection: {
         indexerHttpUrl: 'http://localhost:8080',
       },
-      proving: { type: 'server' as const, url: new URL('http://localhost:6300') },
+      provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
         additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,

@@ -39,8 +39,8 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment } from 'testcontainers';
 import {
+  makeDefaultProvingServiceEffect,
   type DefaultProvingConfiguration,
-  makeProvingServiceEffect,
   type ProvingServiceEffect,
   type UnboundTransaction,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
@@ -92,12 +92,9 @@ describe.skip('Wallet transacting', () => {
       indexerClientConnection: {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
       },
-      proving: {
-        type: 'server',
-        url: new URL(
-          `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-        ),
-      },
+      provingServerUrl: new URL(
+        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
+      ),
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -158,7 +155,7 @@ describe.skip('Wallet transacting', () => {
 
   beforeEach(async () => {
     submissionService = Submission.makeDefaultSubmissionServiceEffect<ledger.FinalizedTransaction>(configuration);
-    provingService = makeProvingServiceEffect(configuration);
+    provingService = makeDefaultProvingServiceEffect(configuration);
     Wallet = WalletBuilder.init()
       .withVariant(ProtocolVersion.MinSupportedVersion, new V1Builder().withDefaults())
       .build(configuration);

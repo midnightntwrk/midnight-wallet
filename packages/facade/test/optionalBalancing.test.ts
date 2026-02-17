@@ -94,9 +94,6 @@ describe('Optional Balancing', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
         indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
       },
-      proving: {
-        type: 'wasm',
-      },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -121,6 +118,7 @@ describe('Optional Balancing', () => {
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSeed),
       unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSeed, ledger.LedgerParameters.initialParameters().dust),
+      provingService: () => makeWasmProvingService(),
     });
 
     await facade.start(ledger.ZswapSecretKeys.fromSeed(shieldedSeed), ledger.DustSecretKey.fromSeed(dustSeed));
