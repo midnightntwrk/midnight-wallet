@@ -2198,7 +2198,7 @@ __metadata:
     "@midnight-ntwrk/wallet-api": "npm:^5.0.0"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0-rc.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.0.0"
-    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.1.0-rc.0"
+    "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.1.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.1.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.1-rc.0"
@@ -2257,20 +2257,6 @@ __metadata:
     vitest: "npm:^4.0.16"
   languageName: unknown
   linkType: soft
-
-"@midnight-ntwrk/wallet-sdk-capabilities@npm:3.1.0-rc.0":
-  version: 3.1.0-rc.0
-  resolution: "@midnight-ntwrk/wallet-sdk-capabilities@npm:3.1.0-rc.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-capabilities%2F3.1.0-rc.0%2Fcc254a31de495b9b790095fc1f7bcc7ac2f3b66d"
-  dependencies:
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.0.0"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.0"
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.1.0-rc.0"
-    "@midnight-ntwrk/wallet-sdk-node-client": "npm:^1.0.0"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.0.0"
-    effect: "npm:^3.19.14"
-  checksum: 10c0/30572cd4afa23d09493b1a2d26e0742d77fc18121c17c90645e3f43e671beee57a048fcc6700013402e2fd8e41f2f1ff6a2d897852883f7eac65ccaf6e629a6a
-  languageName: node
-  linkType: hard
 
 "@midnight-ntwrk/wallet-sdk-capabilities@npm:3.1.0-rc.1, @midnight-ntwrk/wallet-sdk-capabilities@npm:^3.1.0-rc.1, @midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities":
   version: 0.0.0-use.local
@@ -2388,7 +2374,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-indexer-client@npm:1.1.0-rc.1, @midnight-ntwrk/wallet-sdk-indexer-client@npm:^1.1.0-rc.0, @midnight-ntwrk/wallet-sdk-indexer-client@npm:^1.1.0-rc.1, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
+"@midnight-ntwrk/wallet-sdk-indexer-client@npm:1.1.0-rc.1, @midnight-ntwrk/wallet-sdk-indexer-client@npm:^1.1.0-rc.1, @midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client"
   dependencies:
@@ -2608,7 +2594,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-utilities@npm:1.0.0, @midnight-ntwrk/wallet-sdk-utilities@npm:^1.0.0":
+"@midnight-ntwrk/wallet-sdk-utilities@npm:1.0.0":
   version: 1.0.0
   resolution: "@midnight-ntwrk/wallet-sdk-utilities@npm:1.0.0::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet-sdk-utilities%2F1.0.0%2F4d17b9225ff97d1657e5035dab4d7d19ad6dfeb7"
   dependencies:
