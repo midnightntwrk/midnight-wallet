@@ -2684,7 +2684,7 @@ __metadata:
     rxjs: "npm:^7.5"
     shx: "npm:^0.4.0"
     testcontainers: "npm:^11.10.0"
-    tsc-watch: "npm:^6.0.0"
+    tsc-watch: "npm:^7.0.0"
     typescript: "npm:~5.9.3"
     typescript-eslint: "npm:^8.38.0"
     vitest: "npm:^4.0.16"
@@ -5688,7 +5688,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cross-spawn@npm:^7.0.3, cross-spawn@npm:^7.0.5, cross-spawn@npm:^7.0.6":
+"cross-spawn@npm:^7.0.5, cross-spawn@npm:^7.0.6":
   version: 7.0.6
   resolution: "cross-spawn@npm:7.0.6"
   dependencies:
@@ -10619,7 +10619,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"string-argv@npm:^0.3.1":
+"string-argv@npm:^0.3.2":
   version: 0.3.2
   resolution: "string-argv@npm:0.3.2"
   checksum: 10c0/75c02a83759ad1722e040b86823909d9a2fc75d15dd71ec4b537c3560746e33b5f5a07f7332d1e3f88319909f82190843aa2f0a0d8c8d591ec08e93d5b8dec82
@@ -11023,19 +11023,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tsc-watch@npm:^6.0.0":
-  version: 6.3.1
-  resolution: "tsc-watch@npm:6.3.1"
+"tsc-watch@npm:^7.0.0":
+  version: 7.2.0
+  resolution: "tsc-watch@npm:7.2.0"
   dependencies:
-    cross-spawn: "npm:^7.0.3"
+    cross-spawn: "npm:^7.0.6"
     node-cleanup: "npm:^2.1.2"
     ps-tree: "npm:^1.2.0"
-    string-argv: "npm:^0.3.1"
+    string-argv: "npm:^0.3.2"
   peerDependencies:
     typescript: "*"
   bin:
     tsc-watch: dist/lib/tsc-watch.js
-  checksum: 10c0/481e93fcdc26a9895be54f4311866da57f843bf19710363dd238a0cf3f95b83bd51520205743a029e575bc2e44766cc9d23cf8b4724c76fa762439eb7c20bbe0
+  checksum: 10c0/32d849be1579fa57c9503988729ef5dc2886fae6ff7df95eb5fc07ea0a7efce100e0bf32b9a34a8b342fda19a58d810b8723fb49229d53c4ed42cc4bfa0d1e1f
   languageName: node
   linkType: hard
 
