@@ -10,20 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Schema, ParseResult } from 'effect';
-
-export const BigIntSchema = Schema.declare((input: unknown): input is bigint => typeof input === 'bigint').annotations({
-  identifier: 'BigIntSchema',
-});
-
-export const SafeBigInt: Schema.Schema<bigint, string> = Schema.transformOrFail(Schema.String, BigIntSchema, {
-  decode: (value) =>
-    Effect.try({
-      try: () => BigInt(value),
-      catch: (err) => new ParseResult.Unexpected(err, 'Could not parse bigint'),
-    }),
-  encode: (value) => Effect.succeed(value.toString()),
-});
+import { Schema } from 'effect';
+import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 const DateFromMillis = Schema.transform(Schema.Number, Schema.DateFromSelf, {
   strict: true,
@@ -32,7 +20,7 @@ const DateFromMillis = Schema.transform(Schema.Number, Schema.DateFromSelf, {
 });
 
 const WireUtxoSchema = Schema.Struct({
-  value: SafeBigInt,
+  value: SafeBigInt.SafeBigInt,
   owner: Schema.String,
   tokenType: Schema.String,
   intentHash: Schema.String,
@@ -46,7 +34,7 @@ const UtxoWithMetaSchema = Schema.transform(
   Schema.typeSchema(
     Schema.Struct({
       utxo: Schema.Struct({
-        value: BigIntSchema,
+        value: SafeBigInt.BigIntSchema,
         owner: Schema.String,
         type: Schema.String,
         intentHash: Schema.String,
@@ -99,8 +87,8 @@ export const UnshieldedTransactionSchema = Schema.Data(
     }),
     fees: Schema.optional(
       Schema.Struct({
-        paidFees: SafeBigInt,
-        estimatedFees: SafeBigInt,
+        paidFees: SafeBigInt.SafeBigInt,
+        estimatedFees: SafeBigInt.SafeBigInt,
       }),
     ),
     transactionResult: Schema.optional(

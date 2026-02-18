@@ -20,3 +20,4 @@ export * as LedgerOps from './LedgerOps.js';
 export * as ObservableOps from './ObservableOps.js';
 export * as Poly from './polyFunction.js';
 export * as RecordOps from './RecordOps.js';
+export * as SafeBigInt from './SafeBigInt.js';
