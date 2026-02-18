@@ -582,6 +582,68 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
+  it.only('should revert a transaction and clear pending dust tokens', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000_000n;
+
+      // reward & claim Night tokens
+      const rewardNight = yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      expect(rewardNight.blockNumber).toBe(1n);
+      yield* waitForTx(stateRef, 1);
+
+      let simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(1);
+
+      // register Night tokens to gain dust coins
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 2);
+
+      let walletState = yield* SubscriptionRef.get(stateRef);
+      expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(1);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+
+      // fast-forward time to accumulate enough dust to cover fees
+      yield* simulator.fastForward(10n);
+
+      simulatorState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(simulatorState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+
+      // build a transfer transaction that requires dust for fees
+      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobAddress = bobKeyStore.getAddress();
+      const nightTokens = getNightTokens(simulatorState, walletAddress);
+      const sendToken = nightTokens[0];
+
+      const inputs = [{ ...sendToken, owner: nightVerifyingKey }];
+      const outputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
+      const intent = Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+      const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
+
+      // balance the transaction — this marks dust tokens as pending
+      const balancingTransaction = yield* wallet.balanceTransactions(
+        dustSecretKey,
+        [transferTransaction],
+        ttl,
+        currentTime,
+      );
+
+      walletState = yield* SubscriptionRef.get(stateRef);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBeGreaterThan(0);
+
+      // revert the balancing transaction (simulating the underlying tx being rejected)
+      yield* wallet.revertTransaction(balancingTransaction);
+
+      walletState = yield* SubscriptionRef.get(stateRef);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+    }).pipe(Effect.runPromise);
+  });
+
   it('deregisters from Dust generation', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();

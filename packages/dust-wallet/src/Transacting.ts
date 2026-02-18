@@ -366,7 +366,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
-      const [spends, updatedState] = state.spendCoins(secretKey, tokensWithFeeToTake, currentTime);
+      const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, tokensWithFeeToTake, currentTime);
 
       intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
         SignatureMarker.signature,
@@ -387,7 +387,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     transaction: UnprovenTransaction | TTransaction,
   ): Either.Either<CoreWallet, WalletError.WalletError> {
     return Either.try({
-      try: () => state.revertTransaction(transaction),
+      try: () => CoreWallet.revertTransaction(state, transaction),
       catch: (err) => {
         return new WalletError.OtherWalletError({
           message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,

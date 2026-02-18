@@ -255,14 +255,16 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // in case the nextIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
-        return state.updateProgress({ highestRelevantWalletIndex, isConnected: true });
+        return CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true });
       }
 
       const events = updates.map((u) => u.raw).filter((event) => event !== null);
       return secretKeys((keys) =>
-        state
-          .applyEvents(keys, events, wrappedUpdate.timestamp)
-          .updateProgress({ appliedIndex: nextIndex, highestRelevantWalletIndex, isConnected: true }),
+        CoreWallet.updateProgress(CoreWallet.applyEvents(state, keys, events, wrappedUpdate.timestamp), {
+          appliedIndex: nextIndex,
+          highestRelevantWalletIndex,
+          isConnected: true,
+        }),
       );
     },
   };
@@ -291,11 +293,13 @@ export const makeSimulatorSyncService = (
 
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => ({
   applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) =>
-    state
-      .applyEvents(
+    CoreWallet.updateProgress(
+      CoreWallet.applyEvents(
+        state,
         update.secretKey,
         update.update.lastTxResult?.events || [],
         DateOps.secondsToDate(update.update.lastTxNumber),
-      )
-      .updateProgress({ appliedIndex: update.update.lastTxNumber }),
+      ),
+      { appliedIndex: update.update.lastTxNumber },
+    ),
 });

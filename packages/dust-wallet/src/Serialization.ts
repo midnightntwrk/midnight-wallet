@@ -101,7 +101,6 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                   highestRelevantWalletIndex: 0n,
                   highestIndex: 0n,
                   highestRelevantIndex: 0n,
-                  isConnected: false,
                 },
                 snapshot.protocolVersion,
                 snapshot.networkId,
