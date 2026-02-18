@@ -129,7 +129,6 @@ describe('Dust Registration', () => {
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
-      submissionService: (config) => WalletFacade.makeDefaultSubmissionService(config),
     });
 
     await Promise.all([
