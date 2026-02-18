@@ -18,7 +18,7 @@ import {
   type VariantBuilder,
   type Variant,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { type WalletError } from './WalletError.js';
 import {
   type SyncService,
   type SyncCapability,
@@ -69,7 +69,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Varian
   CoreWallet, // null,
   RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData>
 > & {
-  deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError.WalletError>;
+  deserializeState: (serialized: TSerialized) => Either.Either<CoreWallet, WalletError>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -357,7 +357,7 @@ export class V1Builder<
         // TODO: re-implement
         return Effect.succeed(prevState);
       },
-      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError.WalletError> => {
+      deserializeState: (serialized: TSerialized): Either.Either<CoreWallet, WalletError> => {
         return v1Context.serializationCapability.deserialize(null, serialized);
       },
     };

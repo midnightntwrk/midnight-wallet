@@ -33,7 +33,7 @@ import {
   nativeToken,
 } from '@midnight-ntwrk/ledger-v7';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { OtherWalletError, TransactingError, WalletError } from './WalletError.js';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
 import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
@@ -52,12 +52,12 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
+  ): Either.Either<UnprovenTransaction, WalletError>;
 
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Either.Either<UnprovenTransaction, WalletError.WalletError>;
+  ): Either.Either<UnprovenTransaction, WalletError>;
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
 
@@ -68,9 +68,9 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction, TState], WalletError.WalletError>;
+  ): Either.Either<[UnprovenTransaction, TState], WalletError>;
 
-  revertTransaction(state: TState, transaction: AnyTransaction): Either.Either<TState, WalletError.WalletError>;
+  revertTransaction(state: TState, transaction: AnyTransaction): Either.Either<TState, WalletError>;
 }
 
 export type DefaultTransactingConfiguration = {
@@ -141,7 +141,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
+  ): Either.Either<UnprovenTransaction, WalletError> {
     const makeOffer = (
       utxos: ReadonlyArray<UtxoWithFullDustDetails>,
     ): Option.Option<UnshieldedOffer<SignatureEnabled>> => {
@@ -229,31 +229,27 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signatureData: Signature,
-  ): Either.Either<UnprovenTransaction, WalletError.WalletError> {
+  ): Either.Either<UnprovenTransaction, WalletError> {
     return Either.gen(this, function* () {
       const intent = transaction.intents?.get(1);
       if (!intent) {
         return yield* Either.left(
-          new WalletError.TransactingError({ message: 'No intent found in the transaction intents with segment = 1' }),
+          new TransactingError({ message: 'No intent found in the transaction intents with segment = 1' }),
         );
       }
 
       const { dustActions, guaranteedUnshieldedOffer, fallibleUnshieldedOffer } = intent;
       if (!dustActions) {
-        return yield* Either.left(new WalletError.TransactingError({ message: 'No dustActions found in intent' }));
+        return yield* Either.left(new TransactingError({ message: 'No dustActions found in intent' }));
       }
 
       if (!guaranteedUnshieldedOffer) {
-        return yield* Either.left(
-          new WalletError.TransactingError({ message: 'No guaranteedUnshieldedOffer found in intent' }),
-        );
+        return yield* Either.left(new TransactingError({ message: 'No guaranteedUnshieldedOffer found in intent' }));
       }
 
       const [registration, ...restRegistrations] = dustActions.registrations;
       if (!registration) {
-        return yield* Either.left(
-          new WalletError.TransactingError({ message: 'No registrations found in dustActions' }),
-        );
+        return yield* Either.left(new TransactingError({ message: 'No registrations found in dustActions' }));
       }
 
       return yield* LedgerOps.ledgerTry(() => {
@@ -333,7 +329,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError.WalletError> {
+  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> {
     const network = this.networkId;
     const feeLeft = transactions.reduce(
       (total, transaction) =>
@@ -345,13 +341,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
     const selectedTokens = this.getCoinSelection()(dustTokens, feeLeft);
     if (!selectedTokens.length) {
-      return Either.left(new WalletError.TransactingError({ message: 'No dust tokens found in the wallet state' }));
+      return Either.left(new TransactingError({ message: 'No dust tokens found in the wallet state' }));
     }
 
     const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
     const feeDiff = totalFeeInSelected - feeLeft;
     if (feeDiff < 0n) {
-      return Either.left(new WalletError.TransactingError({ message: 'Not enough Dust generated to pay the fee' }));
+      return Either.left(new TransactingError({ message: 'Not enough Dust generated to pay the fee' }));
     }
 
     // reduce the largest token's value by `feeDiff`
@@ -385,11 +381,11 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   revertTransaction(
     state: CoreWallet,
     transaction: UnprovenTransaction | TTransaction,
-  ): Either.Either<CoreWallet, WalletError.WalletError> {
+  ): Either.Either<CoreWallet, WalletError> {
     return Either.try({
       try: () => CoreWallet.revertTransaction(state, transaction),
       catch: (err) => {
-        return new WalletError.OtherWalletError({
+        return new OtherWalletError({
           message: `Error while reverting transaction ${transaction.identifiers().at(0)!}`,
           cause: err,
         });

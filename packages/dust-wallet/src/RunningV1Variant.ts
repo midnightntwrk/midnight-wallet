@@ -20,7 +20,7 @@ import {
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { OtherWalletError, WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -133,7 +133,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
-  startSync(startAux: TStartAux): Stream.Stream<void, WalletError.WalletError, Scope.Scope> {
+  startSync(startAux: TStartAux): Stream.Stream<void, WalletError, Scope.Scope> {
     return pipe(
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
@@ -143,7 +143,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           Effect.try({
             try: () => this.#v1Context.syncCapability.applyUpdate(state, update),
             catch: (err) =>
-              new WalletError.OtherWalletError({
+              new OtherWalletError({
                 message: 'Error while applying sync update',
                 cause: err,
               }),
@@ -172,9 +172,9 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
-      return Effect.fail(WalletError.WalletError.other('Token of a non-Night type received'));
+      return Effect.fail(WalletError.other('Token of a non-Night type received'));
     }
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
@@ -194,13 +194,13 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
     signature: Signature,
-  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
     return this.#v1Context.transactingCapability
       .addDustGenerationSignature(transaction, signature)
       .pipe(EitherOps.toEffect);
   }
 
-  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError.WalletError> {
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError> {
     return pipe(
       this.#v1Context.syncService.blockData(),
       Effect.map((blockData) =>
@@ -220,7 +220,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction, WalletError.WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.syncService.blockData(),
@@ -238,7 +238,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     });
   }
 
-  revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError.WalletError> {
+  revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {
     return SubscriptionRef.updateEffect(this.#context.stateRef, (state) => {
       return pipe(this.#v1Context.transactingCapability.revertTransaction(state, transaction), EitherOps.toEffect);
     });

@@ -22,15 +22,15 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { SyncWalletError, WalletError } from './WalletError.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
-  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError.WalletError, Scope.Scope>;
-  blockData: () => Effect.Effect<BlockData, WalletError.WalletError>;
+  updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
+  blockData: () => Effect.Effect<BlockData, WalletError>;
 }
 
 // TODO: use schema instead
@@ -141,7 +141,7 @@ export const makeDefaultSyncService = (
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
-    ): Stream.Stream<WalletSyncUpdate, WalletError.WalletError, Scope.Scope> => {
+    ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
       const batchSize = 10;
       const batchTimeout = Duration.millis(1);
 
@@ -154,7 +154,7 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
-    blockData: (): Effect.Effect<BlockData, WalletError.WalletError> => {
+    blockData: (): Effect.Effect<BlockData, WalletError> => {
       return Effect.gen(function* () {
         const query = yield* BlockHash;
         const result = yield* query({ offset: null });
@@ -162,12 +162,10 @@ export const makeDefaultSyncService = (
       }).pipe(
         Effect.provide(indexerSyncService.queryClient()),
         Effect.scoped,
-        Effect.catchAll((err) =>
-          Effect.fail(WalletError.WalletError.other(`Encountered unexpected error: ${err.message}`)),
-        ),
+        Effect.catchAll((err) => Effect.fail(WalletError.other(`Encountered unexpected error: ${err.message}`))),
         Effect.flatMap((blockData) => {
           if (!blockData) {
-            return Effect.fail(WalletError.WalletError.other('Unable to fetch block data'));
+            return Effect.fail(WalletError.other('Unable to fetch block data'));
           }
           // TODO: convert to schema
           return LedgerOps.ledgerTry(() => ({
@@ -183,22 +181,22 @@ export const makeDefaultSyncService = (
 };
 
 export type IndexerSyncService = {
-  connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError.WalletError, Scope.Scope>;
+  connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError, Scope.Scope>;
   subscribeWallet: (
     state: CoreWallet,
-  ) => Stream.Stream<WalletSyncSubscription, WalletError.WalletError, Scope.Scope | SubscriptionClient>;
-  queryClient: () => Layer.Layer<QueryClient, WalletError.WalletError, Scope.Scope>;
+  ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
 export const makeIndexerSyncService = (config: DefaultSyncConfiguration): IndexerSyncService => {
   return {
-    queryClient(): Layer.Layer<QueryClient, WalletError.WalletError, Scope.Scope> {
+    queryClient(): Layer.Layer<QueryClient, WalletError, Scope.Scope> {
       return pipe(
         HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl }),
-        Layer.mapError((error) => WalletError.WalletError.other(error)),
+        Layer.mapError((error) => WalletError.other(error)),
       );
     },
-    connectionLayer(): Layer.Layer<SubscriptionClient, WalletError.WalletError, Scope.Scope> {
+    connectionLayer(): Layer.Layer<SubscriptionClient, WalletError, Scope.Scope> {
       const { indexerClientConnection } = config;
 
       return ConnectionHelper.createWebSocketUrl(
@@ -211,14 +209,13 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           onRight: (url: WsURL.WsURL) => WsSubscriptionClient.layer({ url }),
         }),
         Layer.mapError(
-          (e: URLError) =>
-            new WalletError.SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+          (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
         ),
       );
     },
     subscribeWallet(
       state: CoreWallet,
-    ): Stream.Stream<WalletSyncSubscription, WalletError.WalletError, Scope.Scope | SubscriptionClient> {
+    ): Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
 
       return pipe(
@@ -228,11 +225,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Stream.mapEffect((subscription) =>
           pipe(
             Schema.decodeUnknownEither(SyncEventsUpdateSchema)(subscription.dustLedgerEvents),
-            Either.mapLeft((err) => new WalletError.SyncWalletError(err)),
+            Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),
         ),
-        Stream.mapError((error) => new WalletError.SyncWalletError(error)),
+        Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
   };

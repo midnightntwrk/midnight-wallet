@@ -13,17 +13,9 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { CoreWallet } from './CoreWallet.js';
 
-export type ProgressUpdate = {
-  appliedIndex: bigint | undefined;
-  highestRelevantWalletIndex: bigint | undefined;
-  highestIndex: bigint | undefined;
-  highestRelevantIndex: bigint | undefined;
-};
-
 export type TransactionHistoryCapability<TState, TTransaction> = {
   updateTxHistory(state: TState, newTxs: TTransaction[]): TState;
   transactionHistory(state: TState): readonly TTransaction[];
-  progress(state: TState): ProgressUpdate;
 };
 
 export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCapability<
@@ -36,14 +28,6 @@ export const makeDefaultTransactionHistoryCapability = (): TransactionHistoryCap
     },
     transactionHistory: (_state: CoreWallet): [] => {
       return [];
-    },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
     },
   };
 };
@@ -59,14 +43,6 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
     transactionHistory: (_state: CoreWallet): [] => {
       return [];
     },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
-    },
   };
 };
 
@@ -80,14 +56,6 @@ export const makeDiscardTransactionHistoryCapability = (): TransactionHistoryCap
     },
     transactionHistory: (_state: CoreWallet): [] => {
       return [];
-    },
-    progress: (state: CoreWallet): ProgressUpdate => {
-      return {
-        appliedIndex: state.progress.appliedIndex,
-        highestRelevantWalletIndex: state.progress.highestRelevantWalletIndex,
-        highestIndex: state.progress.highestIndex,
-        highestRelevantIndex: state.progress.highestRelevantIndex,
-      };
     },
   };
 };
