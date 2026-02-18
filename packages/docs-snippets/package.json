@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
     "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",

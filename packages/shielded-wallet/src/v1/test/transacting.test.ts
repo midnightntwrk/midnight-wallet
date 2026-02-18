@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { makeDefaultCoinsAndBalancesCapability } from '../CoinsAndBalances.js';
 import { makeDefaultKeysCapability } from '../Keys.js';
-import { makeSimulatorProvingService } from '../Proving.js';
+import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
   DefaultTransactingConfiguration,
@@ -140,7 +140,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
       const transactionValue = shieldedValue(4);
       const tx = pipe(transactionValue, (value) => {
         const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
@@ -175,7 +175,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
       const transactionValue = shieldedValue(6); // Spending all coins (1+2+3=6)
       const tx = pipe(transactionValue, (value) => {
         const offer = makeOutputOffer({ recipient: wallets.B, coin: value });
@@ -210,7 +210,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
       const transactionValueFallible = shieldedValue(2);
       const transactionValueGuaranteed = shieldedValue(2);
       const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
@@ -376,7 +376,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [balancedTx] = yield* EitherOps.toEffect(
@@ -538,7 +538,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [balancedTx] = yield* EitherOps.toEffect(
@@ -575,7 +575,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [balancedTx] = yield* EitherOps.toEffect(
@@ -614,7 +614,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [balancedTx] = yield* EitherOps.toEffect(
@@ -656,7 +656,7 @@ describe('V1 Wallet Transacting', () => {
         },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [tx] = yield* EitherOps.toEffect(
@@ -852,7 +852,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [tx, newState] = yield* EitherOps.toEffect(
@@ -876,7 +876,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [tx, newState] = yield* EitherOps.toEffect(
@@ -904,7 +904,7 @@ describe('V1 Wallet Transacting', () => {
         },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [tx, newState] = yield* EitherOps.toEffect(
@@ -946,7 +946,7 @@ describe('V1 Wallet Transacting', () => {
         },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const [tx, newState] = yield* EitherOps.toEffect(
@@ -985,7 +985,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const fallibleOffer = makeOutputOffer({
@@ -1038,7 +1038,7 @@ describe('V1 Wallet Transacting', () => {
         B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
       });
       const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
-      const proving = makeSimulatorProvingService();
+      const proving = makeSimulatorProvingServiceEffect();
 
       return Effect.gen(function* () {
         const fallibleOffer = makeOutputOffer({

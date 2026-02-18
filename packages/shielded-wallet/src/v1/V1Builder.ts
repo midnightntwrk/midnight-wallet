@@ -18,7 +18,6 @@ import {
   type VariantBuilder,
   type WalletRuntimeError,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type DefaultProvingConfiguration, makeDefaultProvingService, type ProvingService } from './Proving.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
 import {
@@ -48,10 +47,7 @@ export type BaseV1Configuration = {
   networkId: NetworkId.NetworkId;
 };
 
-export type DefaultV1Configuration = BaseV1Configuration &
-  DefaultSyncConfiguration &
-  DefaultProvingConfiguration &
-  DefaultTransactingConfiguration;
+export type DefaultV1Configuration = BaseV1Configuration & DefaultSyncConfiguration & DefaultTransactingConfiguration;
 
 const V1BuilderSymbol: {
   readonly typeId: unique symbol;
@@ -125,14 +121,12 @@ export class V1Builder<
       .withCoinsAndBalancesDefaults()
       .withTransactionHistoryDefaults()
       .withKeysDefaults()
-      .withProvingDefaults()
       .withCoinSelectionDefaults() as DefaultV1Builder;
   }
 
   withTransactionType<Transaction>(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, Transaction, TStartAux> {
     return new V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, Transaction, TStartAux>({
       ...this.#buildState,
-      provingService: undefined,
       transactingCapability: undefined,
       transactionHistoryCapability: undefined,
     });
@@ -292,42 +286,6 @@ export class V1Builder<
     return this.withCoinSelection(() => chooseCoin);
   }
 
-  withProving<TProvingConfig, TProvingContext extends Partial<RunningV1Variant.AnyContext>>(
-    provingService: (config: TProvingConfig, getContext: () => TProvingContext) => ProvingService<TTransaction>,
-  ): V1Builder<
-    TConfig & TProvingConfig,
-    TContext & TProvingContext,
-    TSerialized,
-    TSyncUpdate,
-    TTransaction,
-    TStartAux
-  > {
-    return new V1Builder<
-      TConfig & TProvingConfig,
-      TContext & TProvingContext,
-      TSerialized,
-      TSyncUpdate,
-      TTransaction,
-      TStartAux
-    >({
-      ...this.#buildState,
-      provingService,
-    });
-  }
-
-  withProvingDefaults(
-    this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, ledger.FinalizedTransaction, TStartAux>,
-  ): V1Builder<
-    TConfig & DefaultProvingConfiguration,
-    TContext,
-    TSerialized,
-    TSyncUpdate,
-    ledger.FinalizedTransaction,
-    TStartAux
-  > {
-    return this.withProving(makeDefaultProvingService);
-  }
-
   withCoinsAndBalancesDefaults(): V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return this.withCoinsAndBalances(makeDefaultCoinsAndBalancesCapability);
   }
@@ -479,7 +437,6 @@ export class V1Builder<
       syncService,
       transactingCapability,
       serializationCapability,
-      provingService,
       coinSelection,
       coinsAndBalancesCapability,
       keysCapability,
@@ -495,7 +452,6 @@ export class V1Builder<
       transactingCapability: transactingCapability(configuration, getContext),
       coinsAndBalancesCapability: coinsAndBalancesCapability(configuration, getContext),
       keysCapability: keysCapability(configuration, getContext),
-      provingService: provingService(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
       transactionHistoryCapability: transactionHistoryCapability(configuration, getContext),
     };
@@ -538,10 +494,6 @@ declare namespace V1Builder {
     ) => SerializationCapability<CoreWallet, null, TSerialized>;
   };
 
-  type HasProving<TConfig, TContext, TTransaction> = {
-    readonly provingService: (configuration: TConfig, getContext: () => TContext) => ProvingService<TTransaction>;
-  };
-
   type HasCoinsAndBalances<TConfig, TContext> = {
     readonly coinsAndBalancesCapability: (
       configuration: TConfig,
@@ -568,7 +520,6 @@ declare namespace V1Builder {
       HasSerialization<TConfig, TContext, TSerialized> &
       HasTransacting<TConfig, TContext, TTransaction> &
       HasCoinSelection<TConfig, TContext> &
-      HasProving<TConfig, TContext, TTransaction> &
       HasCoinsAndBalances<TConfig, TContext> &
       HasKeys<TConfig, TContext> &
       HasTransactionHistory<TConfig, TContext, TTransaction>
@@ -605,7 +556,6 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'transactingCapability',
     'coinSelection',
     'serializationCapability',
-    'provingService',
     'coinsAndBalancesCapability',
     'keysCapability',
     'transactionHistoryCapability',

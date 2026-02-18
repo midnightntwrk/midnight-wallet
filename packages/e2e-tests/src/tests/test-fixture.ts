@@ -21,6 +21,7 @@ import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
+import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 
 export function useTestContainersFixture() {
@@ -228,7 +229,7 @@ export class TestContainersFixture {
     }
   }
 
-  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration {
+  public getWalletConfig(): DefaultV1Configuration & DefaultSubmissionConfiguration & DefaultProvingConfiguration {
     return {
       indexerClientConnection: {
         indexerHttpUrl: this.getIndexerUri(),

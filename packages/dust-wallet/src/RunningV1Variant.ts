@@ -20,7 +20,7 @@ import {
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type Proving, WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -73,7 +73,6 @@ export declare namespace RunningV1Variant {
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
     syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
     transactingCapability: TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
-    provingService: Proving.ProvingService<TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<DustToken>;
@@ -237,18 +236,6 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         ),
       );
     });
-  }
-
-  proveTransaction(transaction: UnprovenTransaction): Effect.Effect<TTransaction, WalletError.WalletError> {
-    return this.#v1Context.provingService
-      .prove(transaction)
-      .pipe(
-        Effect.tapError(() =>
-          SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
-            EitherOps.toEffect(this.#v1Context.transactingCapability.revertTransaction(state, transaction)),
-          ),
-        ),
-      );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError.WalletError> {

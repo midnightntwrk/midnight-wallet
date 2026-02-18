@@ -153,8 +153,6 @@ export type ShieldedWalletAPI<
     desiredOutputs: readonly TokenTransfer[],
   ): Promise<ledger.UnprovenTransaction>;
 
-  finalizeTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction>;
-
   serializeState(): Promise<TSerialized>;
 
   waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
@@ -298,14 +296,6 @@ export function CustomShieldedWallet<
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({ [V1Tag]: (v1) => v1.initSwap(secretKeys, desiredInputs, desiredOutputs) })
-        .pipe(Effect.runPromise);
-    }
-
-    finalizeTransaction(transaction: ledger.UnprovenTransaction): Promise<TTransaction> {
-      return this.runtime
-        .dispatch({
-          [V1Tag]: (v1) => v1.finalizeTransaction(transaction),
-        })
         .pipe(Effect.runPromise);
     }
 

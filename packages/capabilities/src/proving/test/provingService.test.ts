@@ -13,9 +13,16 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { makeSimulatorProvingService } from '../Proving.js';
-import { getNonDustImbalance } from '../../test/testUtils.js';
+import { makeSimulatorProvingServiceEffect } from '../provingService.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+
+const getNonDustImbalance = (imbalances: Map<ledger.TokenType, bigint>, rawTokenType: ledger.RawTokenType): bigint => {
+  const [, value] = Array.from(imbalances.entries()).find(([t, value]) =>
+    t.tag !== 'dust' && t.raw == rawTokenType ? value : undefined,
+  ) ?? [undefined, BigInt(0)];
+
+  return value;
+};
 
 const makeTransaction = () => {
   const seed = Buffer.alloc(32, 0);
@@ -32,7 +39,7 @@ describe('Simulator proving service', () => {
   const testUnprovenTx = makeTransaction();
 
   it('does transform unproven transaction into proof-erased transaction', async () => {
-    const service = makeSimulatorProvingService();
+    const service = makeSimulatorProvingServiceEffect();
     const finalTx: ledger.ProofErasedTransaction = await service.prove(testUnprovenTx).pipe(Effect.runPromise);
 
     expect(finalTx).toBeInstanceOf(ledger.Transaction);

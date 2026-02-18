@@ -13,8 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { V1Builder, Proving } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   InMemoryTransactionHistoryStorage,
   PublicKey,
@@ -28,8 +27,9 @@ import os from 'node:os';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { type CombinedTokenTransfer, DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
+import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
 
@@ -69,7 +69,7 @@ describe('Wallet Facade Transfer', () => {
   const unshieldedReceiverKeystore = createKeystore(unshieldedReceiverSeed, NetworkId.NetworkId.Undeployed);
 
   let startedEnvironment: StartedDockerComposeEnvironment;
-  let configuration: DefaultConfiguration & Proving.WasmProvingConfiguration;
+  let configuration: DefaultConfiguration;
 
   beforeAll(async () => {
     startedEnvironment = await environment.up();
@@ -79,9 +79,6 @@ describe('Wallet Facade Transfer', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
         indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
       },
-      provingServerUrl: new URL(
-        `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
-      ),
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
@@ -105,25 +102,19 @@ describe('Wallet Facade Transfer', () => {
     const dustParameters = ledger.LedgerParameters.initialParameters().dust;
     senderFacade = await WalletFacade.init({
       configuration,
-      shielded: (config) =>
-        CustomShieldedWallet(
-          config,
-          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithSeed(shieldedSenderSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedSenderSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedSenderKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustSenderSeed, dustParameters),
+      provingService: () => makeWasmProvingService(),
     });
     receiverFacade = await WalletFacade.init({
       configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
-      shielded: (config) =>
-        CustomShieldedWallet(
-          config,
-          new V1Builder().withDefaults().withProving(Proving.makeWasmProvingService),
-        ).startWithSeed(shieldedReceiverSeed),
+      shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustReceiverSeed, dustParameters),
+      provingService: () => makeWasmProvingService(),
     });
 
     await Promise.all([
