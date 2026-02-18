@@ -14,7 +14,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
-import { type UnboundTransaction } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type UnboundTransaction } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { aFakeProvingProvider, initWalletWithSeed } from '../utils.ts';
 
 /*
