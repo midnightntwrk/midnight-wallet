@@ -16,6 +16,14 @@ const TransactionHashSchema = Schema.String;
 
 export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
 
+const UtxoSchema = Schema.Struct({
+  value: Schema.BigInt,
+  owner: Schema.String,
+  tokenType: Schema.String,
+  intentHash: Schema.String,
+  outputIndex: Schema.Number,
+});
+
 export const TransactionHistoryEntrySchema = Schema.Struct({
   id: Schema.Number,
   hash: TransactionHashSchema,
@@ -24,6 +32,8 @@ export const TransactionHistoryEntrySchema = Schema.Struct({
   timestamp: Schema.Date,
   fees: Schema.NullOr(Schema.BigInt),
   status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+  createdUtxos: Schema.Array(Schema.typeSchema(UtxoSchema)),
+  spentUtxos: Schema.Array(Schema.typeSchema(UtxoSchema)),
 });
 
 export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;
