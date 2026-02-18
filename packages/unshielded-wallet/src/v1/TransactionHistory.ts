@@ -24,7 +24,12 @@ export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: TransactionHistoryStorage;
 };
 
-const convertUpdateToEntry = ({ transaction, status }: UnshieldedUpdate): TransactionHistoryEntry => {
+const convertUpdateToEntry = ({
+  transaction,
+  createdUtxos,
+  spentUtxos,
+  status,
+}: UnshieldedUpdate): TransactionHistoryEntry => {
   return {
     id: transaction.id,
     hash: transaction.hash,
@@ -33,6 +38,20 @@ const convertUpdateToEntry = ({ transaction, status }: UnshieldedUpdate): Transa
     status,
     timestamp: transaction.block?.timestamp ?? null,
     fees: transaction.fees?.paidFees ?? null,
+    createdUtxos: createdUtxos.map(({ utxo }) => ({
+      value: utxo.value,
+      owner: utxo.owner,
+      tokenType: utxo.type,
+      intentHash: utxo.intentHash,
+      outputIndex: utxo.outputNo,
+    })),
+    spentUtxos: spentUtxos.map(({ utxo }) => ({
+      value: utxo.value,
+      owner: utxo.owner,
+      tokenType: utxo.type,
+      intentHash: utxo.intentHash,
+      outputIndex: utxo.outputNo,
+    })),
   };
 };
 

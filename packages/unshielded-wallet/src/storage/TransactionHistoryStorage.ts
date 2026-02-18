@@ -10,11 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Schema } from 'effect';
 
 const TransactionHashSchema = Schema.String;
 
 export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
+
+const UtxoSchema = Schema.Struct({
+  value: SafeBigInt.SafeBigInt,
+  owner: Schema.String,
+  tokenType: Schema.String,
+  intentHash: Schema.String,
+  outputIndex: Schema.Number,
+});
 
 export const TransactionHistoryEntrySchema = Schema.Struct({
   id: Schema.Number,
@@ -22,8 +31,10 @@ export const TransactionHistoryEntrySchema = Schema.Struct({
   protocolVersion: Schema.Number,
   identifiers: Schema.Array(Schema.String),
   timestamp: Schema.Date,
-  fees: Schema.NullOr(Schema.BigInt),
+  fees: Schema.NullOr(SafeBigInt.SafeBigInt),
   status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+  createdUtxos: Schema.Array(UtxoSchema),
+  spentUtxos: Schema.Array(UtxoSchema),
 });
 
 export type TransactionHistoryEntry = Schema.Schema.Type<typeof TransactionHistoryEntrySchema>;
