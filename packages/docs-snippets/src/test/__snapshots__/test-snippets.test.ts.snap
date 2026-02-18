@@ -195,7 +195,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 29n,
       highestRelevantWalletIndex: 29n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     coinPublicKey: ShieldedCoinPublicKey {
       data: Buffer(32) [Uint8Array] [
@@ -497,7 +500,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 50n,
       highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
     address: DustAddress {
@@ -697,7 +703,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 29n,
       highestRelevantWalletIndex: 29n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     coinPublicKey: ShieldedCoinPublicKey {
       data: Buffer(32) [Uint8Array] [
@@ -999,7 +1008,10 @@ exports[`Snippet outputs > with network > should output the correct result for '
       appliedIndex: 50n,
       highestRelevantWalletIndex: 50n,
       highestIndex: 0n,
-      highestRelevantIndex: 0n
+      highestRelevantIndex: 0n,
+      isConnected: true,
+      isStrictlyComplete: [Function: isStrictlyComplete],
+      isCompleteWithin: [Function: isCompleteWithin]
     },
     publicKey: 11886380015789543296729785856017363359697744265386149017101029008360306658047n,
     address: DustAddress {
