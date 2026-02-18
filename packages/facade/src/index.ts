@@ -197,13 +197,13 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 };
 
 export class WalletFacade {
-  static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
+  private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
   ): SubmissionService<ledger.FinalizedTransaction> {
     return makeDefaultSubmissionService<ledger.FinalizedTransaction>(config);
   }
 
-  static makeDefaultPendingTransactionsService<TConfig extends DefaultPendingTransactionsServiceConfiguration>(
+  private static makeDefaultPendingTransactionsService<TConfig extends DefaultPendingTransactionsServiceConfiguration>(
     config: TConfig,
   ): Promise<PendingTransactionsServiceImpl<ledger.FinalizedTransaction>> {
     return PendingTransactionsServiceImpl.init<ledger.FinalizedTransaction>({
@@ -212,7 +212,7 @@ export class WalletFacade {
     });
   }
 
-  static makeDefaultProvingService<TConfig extends Partial<DefaultProvingConfiguration>>(
+  private static makeDefaultProvingService<TConfig extends Partial<DefaultProvingConfiguration>>(
     config: TConfig,
   ): ProvingService<UnboundTransaction> {
     if (config.provingServerUrl) {
