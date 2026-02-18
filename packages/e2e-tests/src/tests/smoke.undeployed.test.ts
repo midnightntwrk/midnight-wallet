@@ -87,8 +87,9 @@ describe('Smoke tests', () => {
         utils.getUnshieldedSeed(seedFunded),
         NetworkId.NetworkId.Undeployed,
       );
-      await Promise.all([utils.waitForSyncFacade(funded.wallet), utils.waitForSyncFacade(receiver.wallet)]);
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      await utils.sleep(20); // wait for 2+ blocks to pass
+      await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
+      const initialState = await funded.wallet.waitForSyncedState();
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1: ${initialShieldedBalance} shielded tokens`);
@@ -157,7 +158,7 @@ describe('Smoke tests', () => {
 
       logger.info('Waiting for finalized balance...');
       await utils.waitForFacadePendingClear(funded.wallet);
-      const finalState = await utils.waitForSyncFacade(funded.wallet);
+      const finalState = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       expect(finalState.shielded.balances[shieldedTokenRaw]).toBe(balance - outputValue);
       expect(finalState.unshielded.balances[unshieldedTokenRaw]).toBeLessThanOrEqual(balance - outputValue);
@@ -169,7 +170,7 @@ describe('Smoke tests', () => {
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
 
       await utils.waitForFinalizedShieldedBalance(receiver.wallet.shielded);
-      const finalState2 = await utils.waitForSyncFacade(receiver.wallet);
+      const finalState2 = await receiver.wallet.waitForSyncedState();
       const finalShieldedBalance = finalState2.shielded.balances[shieldedTokenRaw];
       const finalUnshieldedBalance = finalState2.unshielded.balances[unshieldedTokenRaw];
       logger.info(finalState2);
@@ -196,7 +197,7 @@ describe('Smoke tests', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      const initialState = await funded.wallet.waitForSyncedState();
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await funded.wallet.shielded.serializeState();
       const stateObject = JSON.parse(serialized);
@@ -275,7 +276,7 @@ describe('Smoke tests', () => {
       allure.feature('Wallet building');
       allure.story('Building with discardTxHistory undefined');
 
-      const initialState = await utils.waitForSyncFacade(funded.wallet);
+      const initialState = await funded.wallet.waitForSyncedState();
       const publicKey = initialState.dust.publicKey;
       const address = initialState.dust.address;
       const dustBalance = initialState.dust.balance(new Date(3 * 1000));
