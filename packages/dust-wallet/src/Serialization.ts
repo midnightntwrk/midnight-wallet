@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { WalletError } from './WalletError.js';
+import { OtherWalletError, WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
@@ -88,7 +88,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       return pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.other(err)),
+        Either.mapLeft((err) => new OtherWalletError({ message: 'Error while deserializing snapshot', cause: err })),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>
@@ -105,7 +105,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                 snapshot.protocolVersion,
                 snapshot.networkId,
               ),
-            catch: (err) => WalletError.other(err),
+            catch: (err) => new OtherWalletError({ message: 'Error while restoring core wallet', cause: err }),
           }),
         ),
       );

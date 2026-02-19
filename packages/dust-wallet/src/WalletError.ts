@@ -13,25 +13,6 @@
 import { Data } from 'effect';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
-export const WalletError = {
-  other(err: unknown): WalletError {
-    let message: string;
-    if (err) {
-      if (typeof err == 'object' && 'message' in err) {
-        message = String(err.message);
-      } else if (typeof err == 'string') {
-        message = err;
-      } else {
-        message = '';
-      }
-    } else {
-      message = '';
-    }
-    return new OtherWalletError({ message: `Other wallet error: ${message}`, cause: err });
-  },
-};
-export type WalletError = OtherWalletError | SyncWalletError | TransactingError | LedgerOps.LedgerError;
-
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
   message: string;
   cause?: unknown;
@@ -46,3 +27,5 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
   message: string;
   cause?: unknown;
 }> {}
+
+export type WalletError = OtherWalletError | SyncWalletError | TransactingError | LedgerOps.LedgerError;

@@ -22,7 +22,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { SyncWalletError, WalletError } from './WalletError.js';
+import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
@@ -162,10 +162,12 @@ export const makeDefaultSyncService = (
       }).pipe(
         Effect.provide(indexerSyncService.queryClient()),
         Effect.scoped,
-        Effect.catchAll((err) => Effect.fail(WalletError.other(`Encountered unexpected error: ${err.message}`))),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
         Effect.flatMap((blockData) => {
           if (!blockData) {
-            return Effect.fail(WalletError.other('Unable to fetch block data'));
+            throw new OtherWalletError({ message: 'Unable to fetch block data' });
           }
           // TODO: convert to schema
           return LedgerOps.ledgerTry(() => ({
@@ -193,7 +195,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     queryClient(): Layer.Layer<QueryClient, WalletError, Scope.Scope> {
       return pipe(
         HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl }),
-        Layer.mapError((error) => WalletError.other(error)),
+        Layer.mapError((error) => new OtherWalletError(error)),
       );
     },
     connectionLayer(): Layer.Layer<SubscriptionClient, WalletError, Scope.Scope> {

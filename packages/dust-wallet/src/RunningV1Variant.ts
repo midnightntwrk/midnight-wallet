@@ -174,7 +174,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
-      return Effect.fail(WalletError.other('Token of a non-Night type received'));
+      return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.Do.pipe(
       Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
