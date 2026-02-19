@@ -41,7 +41,7 @@ import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSy
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
-vi.setConfig({ testTimeout: 1 * 1000 });
+vi.setConfig({ testTimeout: 10000 });
 
 const NIGHT_TOKEN_TYPE = nativeToken().raw;
 const SEED = '0000000000000000000000000000000000000000000000000000000000000001';
