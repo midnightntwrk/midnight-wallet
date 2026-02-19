@@ -34,11 +34,6 @@ await sender.wallet
     receiverStateBefore.dust.address,
     false,
   )
-  .then((recipe) => {
-    console.log('before balancing', recipe.transaction.toString());
-
-    return recipe;
-  })
   .then((recipe) =>
     sender.wallet.balanceUnprovenTransaction(
       recipe.transaction,
@@ -52,11 +47,6 @@ await sender.wallet
       },
     ),
   )
-  .then((recipe) => {
-    console.log('after balancing', recipe.transaction.toString());
-
-    return recipe;
-  })
   .then((recipe) => sender.wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => sender.wallet.submitTransaction(finalizedTransaction));
 
