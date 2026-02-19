@@ -13,23 +13,6 @@
 import { Data } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 
-export const WalletError = {
-  other(err: unknown): WalletError {
-    let message: string;
-    if (err) {
-      if (typeof err == 'object' && 'message' in err) {
-        message = String(err.message);
-      } else if (typeof err == 'string') {
-        message = err;
-      } else {
-        message = '';
-      }
-    } else {
-      message = '';
-    }
-    return new OtherWalletError({ message: `Other wallet error: ${message}`, cause: err });
-  },
-};
 export type WalletError =
   | OtherWalletError
   | InsufficientFundsError

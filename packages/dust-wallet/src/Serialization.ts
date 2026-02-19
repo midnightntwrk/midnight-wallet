@@ -12,12 +12,12 @@
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { WalletError } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { OtherWalletError, WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {
   serialize(wallet: TWallet): TSerialized;
-  deserialize(aux: TAux, data: TSerialized): Either.Either<TWallet, WalletError.WalletError>;
+  deserialize(aux: TAux, data: TSerialized): Either.Either<TWallet, WalletError>;
 };
 
 const StateSchema = Schema.declare(
@@ -84,11 +84,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
 
       return pipe(wallet, buildSnapshot, Schema.encodeSync(SnapshotSchema), JSON.stringify);
     },
-    deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError.WalletError> => {
+    deserialize: (aux, serialized): Either.Either<CoreWallet, WalletError> => {
       return pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.WalletError.other(err)),
+        Either.mapLeft((err) => new OtherWalletError({ message: 'Error while deserializing snapshot', cause: err })),
         Either.flatMap((snapshot: Snapshot) =>
           Either.try({
             try: () =>
@@ -101,12 +101,11 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                   highestRelevantWalletIndex: 0n,
                   highestIndex: 0n,
                   highestRelevantIndex: 0n,
-                  isConnected: false,
                 },
                 snapshot.protocolVersion,
                 snapshot.networkId,
               ),
-            catch: (err) => WalletError.WalletError.other(err),
+            catch: (err) => new OtherWalletError({ message: 'Error while restoring core wallet', cause: err }),
           }),
         ),
       );

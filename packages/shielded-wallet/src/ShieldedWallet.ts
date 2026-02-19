@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -24,7 +24,7 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type ProgressUpdate, type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -87,8 +87,8 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.capabilities.keys.getAddress(this.state);
   }
 
-  get progress(): ProgressUpdate {
-    return this.capabilities.transactionHistory.progress(this.state);
+  get progress(): SyncProgress.SyncProgress {
+    return this.state.progress;
   }
 
   /**

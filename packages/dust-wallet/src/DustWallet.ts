@@ -18,11 +18,10 @@ import {
   type SignatureVerifyingKey,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v7';
-import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type TransactionHistory } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './CoinsAndBalances.js';
@@ -71,13 +70,8 @@ export class DustWalletState {
     return this.capabilities.keys.getAddress(this.state);
   }
 
-  get progress(): TransactionHistory.ProgressUpdate {
-    return {
-      appliedIndex: this.state.progress.appliedIndex,
-      highestRelevantWalletIndex: this.state.progress.highestRelevantWalletIndex,
-      highestIndex: this.state.progress.highestIndex,
-      highestRelevantIndex: this.state.progress.highestRelevantIndex,
-    };
+  get progress(): SyncProgress.SyncProgress {
+    return this.state.progress;
   }
 
   /**

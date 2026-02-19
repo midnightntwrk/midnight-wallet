@@ -16,3 +16,4 @@ export * as SerializedTransaction from './SerializedTransaction.js';
 export * as ProtocolState from './ProtocolState.js';
 export * as ProtocolVersion from './ProtocolVersion.js';
 export * as NetworkId from './NetworkId.js';
+export * as SyncProgress from './SyncProgress.js';

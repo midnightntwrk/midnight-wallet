@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Either, pipe, Schema } from 'effect';
-import { WalletError } from './WalletError.js';
+import { OtherWalletError, WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { UnshieldedState } from './UnshieldedState.js';
@@ -72,7 +72,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
       pipe(
         serialized,
         Schema.decodeUnknownEither(Schema.parseJson(SnapshotSchema)),
-        Either.mapLeft((err) => WalletError.other(err)),
+        Either.mapLeft((err) => new OtherWalletError(err)),
         Either.map((snapshot) => {
           return CoreWallet.restore(
             UnshieldedState.restore(snapshot.state.availableUtxos, snapshot.state.pendingUtxos),

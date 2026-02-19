@@ -10,15 +10,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './V1Builder.js';
-export * as Sync from './Sync.js';
-export * as Transacting from './Transacting.js';
-export * as TransactionHistory from './TransactionHistory.js';
-export * as Serialization from './Serialization.js';
-export * as CoinsAndBalances from './CoinsAndBalances.js';
-export * as Keys from './Keys.js';
-export * from './RunningV1Variant.js';
-export * as Simulator from './Simulator.js';
-export * as WalletError from './WalletError.js';
-export * from './CoreWallet.js';
-export * from './TransactionOps.js';
+import { Data } from 'effect';
+import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+
+export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+export class SyncWalletError extends Data.TaggedError('Wallet.Sync')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
+export type WalletError = OtherWalletError | SyncWalletError | TransactingError | LedgerOps.LedgerError;

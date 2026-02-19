@@ -11,9 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
-import { createSyncProgress, SyncProgress, SyncProgressData } from './SyncProgress.js';
 import { InvalidCoinHashesError, WalletError } from './WalletError.js';
 
 export type PublicKeys = {
@@ -74,7 +73,7 @@ export type CoreWallet = Readonly<{
   state: ledger.ZswapLocalState;
   publicKeys: PublicKeys;
   protocolVersion: ProtocolVersion.ProtocolVersion;
-  progress: SyncProgress;
+  progress: SyncProgress.SyncProgress;
   networkId: string;
   coinHashes: CoinHashesMap;
 }>;
@@ -83,7 +82,7 @@ export const CoreWallet = {
   init(localState: ledger.ZswapLocalState, secretKeys: ledger.ZswapSecretKeys, networkId: string): CoreWallet {
     const publicKeys = PublicKeys.fromSecretKeys(secretKeys);
     const coinHashes = CoinHashesMap.init(secretKeys, CoinHashesMap.pickAllCoins(localState));
-    const progress = createSyncProgress();
+    const progress = SyncProgress.createSyncProgress();
     const protocolVersion = ProtocolVersion.MinSupportedVersion;
     return { state: localState, publicKeys, networkId, coinHashes, progress, protocolVersion };
   },
@@ -94,7 +93,7 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes: CoinHashesMap.empty,
-      progress: createSyncProgress(),
+      progress: SyncProgress.createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
   },
@@ -102,7 +101,7 @@ export const CoreWallet = {
   restore(
     localState: ledger.ZswapLocalState,
     secretKeys: ledger.ZswapSecretKeys,
-    syncProgress: Omit<SyncProgressData, 'isConnected'>,
+    syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: string,
   ): CoreWallet {
@@ -113,7 +112,7 @@ export const CoreWallet = {
       publicKeys,
       networkId,
       coinHashes,
-      progress: createSyncProgress(syncProgress),
+      progress: SyncProgress.createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
   },
@@ -122,7 +121,7 @@ export const CoreWallet = {
     publicKeys: PublicKeys,
     localState: ledger.ZswapLocalState,
     coinHashes: CoinHashesMap,
-    syncProgress: SyncProgressData,
+    syncProgress: SyncProgress.SyncProgressData,
     protocolVersion: bigint,
     networkId: string,
   ): Either.Either<CoreWallet, WalletError> {
@@ -135,7 +134,7 @@ export const CoreWallet = {
           publicKeys,
           networkId,
           coinHashes,
-          progress: createSyncProgress(syncProgress),
+          progress: SyncProgress.createSyncProgress(syncProgress),
           protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
         }),
       }),
@@ -184,9 +183,9 @@ export const CoreWallet = {
       highestIndex,
       highestRelevantIndex,
       isConnected,
-    }: Partial<SyncProgressData>,
+    }: Partial<SyncProgress.SyncProgressData>,
   ): CoreWallet {
-    const updatedProgress = createSyncProgress({
+    const updatedProgress = SyncProgress.createSyncProgress({
       appliedIndex: appliedIndex ?? wallet.progress.appliedIndex,
       highestRelevantWalletIndex: highestRelevantWalletIndex ?? wallet.progress.highestRelevantWalletIndex,
       highestIndex: highestIndex ?? wallet.progress.highestIndex,
