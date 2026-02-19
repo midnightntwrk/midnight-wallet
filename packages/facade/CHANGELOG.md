@@ -1,5 +1,48 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 2.0.0-rc.2
+
+### Major Changes
+
+- d3422bc: - Extract proving into a standalone `ProvingService` in the `@midnight-ntwrk/wallet-sdk-capabilities`
+  package, decoupling it from the shielded and dust wallet builders. The new service supports server (HTTP prover),
+  WASM, and simulator proving modes via a unified configuration.
+  - Remove `withProving` / `withProvingDefaults` and the `provingService` dependency from the V1 builders in both the
+    shielded and dust wallet packages. Proving is no longer a wallet-level concern.
+  - Integrate the `ProvingService` into `WalletFacade`, which now owns transaction proving and finalization. On proving
+    failure the facade reverts the transaction across all three wallet types (shielded, unshielded, dust).
+
+  ### Breaking changes
+  - **`@midnight-ntwrk/wallet-sdk-shielded`**: Removed `finalizeTransaction` from `ShieldedWalletAPI`. Removed `Proving`
+    export from `@midnight-ntwrk/wallet-sdk-shielded/v1`. Removed `provingService` from the V1 builder and
+    `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults` from `V1Builder`. `DefaultV1Configuration`
+    no longer includes `DefaultProvingConfiguration`.
+  - **`@midnight-ntwrk/wallet-sdk-dust-wallet`**: Removed `proveTransaction` from `DustWalletAPI`. Removed
+    `provingService` from the V1 builder and `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults`
+    from `V1Builder`.
+  - **`@midnight-ntwrk/wallet-sdk-facade`**: Removed the `UnboundTransaction` type export (now re-exported from
+    `@midnight-ntwrk/wallet-sdk-capabilities/proving`). `WalletFacade` now requires a `ProvingService` and
+    `DefaultConfiguration` includes `DefaultProvingConfiguration`.
+
+### Patch Changes
+
+- 0f29d01: - Moved `SyncProgress` from `wallet-sdk-shielded/v1` into `wallet-sdk-abstractions` so it can be shared
+  across wallet implementations
+  - Refactored `CoreWallet` in the dust wallet from a class to a plain object type + namespace, improving composability
+  - Added `WalletError` type to the dust wallet for structured error handling
+  - Added coin data to unshielded transaction history
+  - Removed unused `wallet-sdk-hd` dependency from `wallet-sdk-unshielded-wallet`
+  - Cleaned up `ProgressUpdate` type and `progress()` method from `TransactionHistoryCapability` in the shielded wallet
+    (superseded by the shared `SyncProgress`)
+- Updated dependencies [323e0e0]
+- Updated dependencies [d3422bc]
+- Updated dependencies [79fb7ba]
+- Updated dependencies [0f29d01]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0-rc.2
+  - @midnight-ntwrk/wallet-sdk-shielded@2.0.0-rc.2
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0-rc.2
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.2
+
 ## 2.0.0-rc.1
 
 ### Patch Changes

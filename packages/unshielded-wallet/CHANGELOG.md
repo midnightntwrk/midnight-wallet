@@ -1,5 +1,34 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 2.0.0-rc.2
+
+### Patch Changes
+
+- 323e0e0: Fix `rollbackSpendByUtxo` to handle missing UTXOs gracefully instead of throwing an error. This resolves a
+  race condition between sync and revert operations where `rollbackSpendByUtxo` could be called on a UTXO that's no
+  longer in the pending state. The function now returns the state unchanged when a UTXO is not found, consistent with
+  the behavior of `rollbackSpend`. Additionally, updated return types to `Either.Either<UnshieldedState, never>` for
+  both `rollbackSpend` and `rollbackSpendByUtxo` to accurately reflect that these functions never return errors.
+- 79fb7ba: Extends the unshielded transaction history entry to include the UTXOs created and spent by each transaction.
+
+  Each `TransactionHistoryEntry` now carries `createdUtxos` and `spentUtxos` arrays. Every UTXO exposes its `value`,
+  `owner`, `tokenType`, `intentHash`, and `outputIndex`, giving callers full visibility into which coins were received
+  and which were consumed in a given transaction.
+
+- 0f29d01: - Moved `SyncProgress` from `wallet-sdk-shielded/v1` into `wallet-sdk-abstractions` so it can be shared
+  across wallet implementations
+  - Refactored `CoreWallet` in the dust wallet from a class to a plain object type + namespace, improving composability
+  - Added `WalletError` type to the dust wallet for structured error handling
+  - Added coin data to unshielded transaction history
+  - Removed unused `wallet-sdk-hd` dependency from `wallet-sdk-unshielded-wallet`
+  - Cleaned up `ProgressUpdate` type and `progress()` method from `TransactionHistoryCapability` in the shielded wallet
+    (superseded by the shared `SyncProgress`)
+- Updated dependencies [d3422bc]
+- Updated dependencies [0f29d01]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0-rc.2
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.2
+
 ## 2.0.0-rc.1
 
 ### Patch Changes
