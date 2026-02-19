@@ -74,6 +74,8 @@ await wallet
     stateBefore.unshielded.availableCoins,
     unshieldedKeystore.getPublicKey(),
     (payload) => unshieldedKeystore.signData(payload),
+    stateBefore.dust.address,
+    true,
   )
   .then((recipe) => wallet.finalizeRecipe(recipe))
   .then((finalizedTransaction) => wallet.submitTransaction(finalizedTransaction));

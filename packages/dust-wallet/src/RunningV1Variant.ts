@@ -172,6 +172,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
+    allowFeePayment: boolean,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
@@ -185,7 +186,14 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       }),
       Effect.flatMap(({ utxosWithDustValue, currentTime }) => {
         return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
+          .createDustGenerationTransaction(
+            currentTime,
+            ttl,
+            utxosWithDustValue,
+            nightVerifyingKey,
+            dustReceiverAddress,
+            allowFeePayment,
+          )
           .pipe(EitherOps.toEffect);
       }),
     );
@@ -220,7 +228,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction, WalletError> {
+  ): Effect.Effect<UnprovenTransaction | undefined, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.syncService.blockData(),

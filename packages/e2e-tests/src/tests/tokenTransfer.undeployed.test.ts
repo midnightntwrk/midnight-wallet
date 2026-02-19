@@ -628,6 +628,8 @@ describe('Token transfer', () => {
         unregisteredNightUtxos,
         receiver3.unshieldedKeystore.getPublicKey(),
         (payload) => receiver3.unshieldedKeystore.signData(payload),
+        receiver3StateAfterTransfer.dust.address,
+        true,
       );
       const finalizedDustTx = await receiver3.wallet.finalizeRecipe(dustRegistrationRecipe);
       logger.info('Submitting dust registration transaction...');

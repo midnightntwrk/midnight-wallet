@@ -72,6 +72,8 @@ describe('Dust tests', () => {
         firstTwoNightUtxos,
         wallet.unshieldedKeystore.getPublicKey(),
         (payload) => wallet.unshieldedKeystore.signData(payload),
+        initialState.dust.address,
+        true,
       );
 
       const finalizedDustTx = await wallet.wallet.finalizeRecipe(dustRegistrationRecipe);

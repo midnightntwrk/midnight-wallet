@@ -52,6 +52,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
+    allowFeePayment: boolean,
   ): Either.Either<UnprovenTransaction, WalletError>;
 
   addDustGenerationSignature(
@@ -68,7 +69,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction, TState], WalletError>;
+  ): Either.Either<[UnprovenTransaction | undefined, TState], WalletError>;
 
   revertTransaction(state: TState, transaction: AnyTransaction): Either.Either<TState, WalletError>;
 }
@@ -141,6 +142,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
+    allowFeePayment: boolean,
   ): Either.Either<UnprovenTransaction, WalletError> {
     const makeOffer = (
       utxos: ReadonlyArray<UtxoWithFullDustDetails>,
@@ -174,11 +176,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
-        const totalDustValue = pipe(
-          splitResult.guaranteed,
-          IterableOps.map((coin) => coin.dust.generatedNow),
-          BigIntOps.sumAll,
-        );
+        const totalDustValue = allowFeePayment
+          ? pipe(
+              splitResult.guaranteed,
+              IterableOps.map((coin) => coin.dust.generatedNow),
+              BigIntOps.sumAll,
+            )
+          : 0n;
 
         const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
         const maybeFallibleOffer = makeOffer(splitResult.fallible);
@@ -187,7 +191,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           SignatureMarker.signature,
           nightVerifyingKey,
           receiver,
-          dustReceiverAddress !== undefined ? totalDustValue : 0n,
+          totalDustValue,
         );
         const dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
@@ -329,7 +333,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> {
+  ): Either.Either<[UnprovenTransaction | undefined, CoreWallet], WalletError> {
     const network = this.networkId;
     const feeLeft = transactions.reduce(
       (total, transaction) =>

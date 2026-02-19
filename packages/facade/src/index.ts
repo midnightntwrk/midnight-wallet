@@ -296,6 +296,7 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
+    allowFeePayment: boolean,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
 
@@ -305,6 +306,7 @@ export class WalletFacade {
       nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
       nightVerifyingKey,
       action.type === 'registration' ? action.dustReceiverAddress : undefined,
+      allowFeePayment,
     );
 
     const intent = transaction.intents?.get(1);
@@ -668,6 +670,7 @@ export class WalletFacade {
       fakeVerifyingKey,
       (payload) => ledger.signData(fakeSigningKey, payload),
       dustState.address,
+      true,
     );
     const finalizedFakeTx = fakeRegistrationRecipe.transaction.mockProve().bind();
 
@@ -743,19 +746,19 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
-    dustReceiverAddress?: DustAddress,
+    dustReceiverAddress: DustAddress,
+    allowFeePayment: boolean,
   ): Promise<UnprovenTransactionRecipe> {
     if (nightUtxos.length === 0) {
       throw Error('At least one Night UTXO is required.');
     }
 
-    const receiverAddress = dustReceiverAddress ?? (await this.dust.getAddress());
-
     const dustRegistrationTx = await this.createDustActionTransaction(
-      { type: 'registration', dustReceiverAddress: receiverAddress },
+      { type: 'registration', dustReceiverAddress },
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
+      allowFeePayment,
     );
 
     return {
@@ -774,6 +777,7 @@ export class WalletFacade {
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
+      false, // fee payment is not allowed for deregistration transactions
     );
     return {
       type: 'UNPROVEN_TRANSACTION',

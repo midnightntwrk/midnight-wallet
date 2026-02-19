@@ -119,6 +119,7 @@ export type DustWalletAPI = {
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
+    allowFeePayment: boolean,
   ): Promise<UnprovenTransaction>;
 
   addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
@@ -130,7 +131,7 @@ export type DustWalletAPI = {
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<UnprovenTransaction>;
+  ): Promise<UnprovenTransaction | undefined>;
 
   serializeState(): Promise<string>;
 
@@ -203,11 +204,19 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       nightUtxos: Array<UtxoWithMeta>,
       nightVerifyingKey: SignatureVerifyingKey,
       dustReceiverAddress: DustAddress | undefined,
+      allowFeePayment: boolean,
     ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) =>
-            v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+            v1.createDustGenerationTransaction(
+              currentTime,
+              ttl,
+              nightUtxos,
+              nightVerifyingKey,
+              dustReceiverAddress,
+              allowFeePayment,
+            ),
         })
         .pipe(Effect.runPromise);
     }
@@ -233,7 +242,7 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<UnprovenTransaction> {
+    ): Promise<UnprovenTransaction | undefined> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),

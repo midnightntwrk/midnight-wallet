@@ -106,6 +106,7 @@ describe('DustWallet', () => {
         nightTokens,
         nightVerifyingKey,
         new DustAddress(lastState.publicKey.publicKey),
+        true,
       );
 
       const intent = registerForDustTransaction.intents!.get(1);
@@ -133,22 +134,25 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
+      const deRegisterForDustTransaction = yield* wallet.createDustGenerationTransaction(
         currentTime,
         ttl,
         nightTokens,
         nightVerifyingKey,
         undefined,
+        false,
       );
 
       const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
-        [registerForDustTransaction],
+        [deRegisterForDustTransaction],
         ttl,
         currentTime,
       );
 
-      const balancedTransaction = registerForDustTransaction.merge(balancingTransaction);
+      const balancedTransaction = balancingTransaction
+        ? deRegisterForDustTransaction.merge(balancingTransaction)
+        : deRegisterForDustTransaction;
 
       const intent = balancedTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
@@ -386,7 +390,9 @@ describe('DustWallet', () => {
         currentTime,
       );
 
-      const balancedTransaction = transferTransaction.merge(balancingTransaction);
+      const balancedTransaction = balancingTransaction
+        ? transferTransaction.merge(balancingTransaction)
+        : transferTransaction;
 
       const provenTransaction = yield* provingService.prove(balancedTransaction);
 
@@ -539,7 +545,9 @@ describe('DustWallet', () => {
         currentTime,
       );
 
-      const balancedTransaction = transferTransaction.merge(balancingTransaction);
+      const balancedTransaction = balancingTransaction
+        ? transferTransaction.merge(balancingTransaction)
+        : transferTransaction;
 
       const provenTransaction = yield* provingService.prove(balancedTransaction);
 
@@ -637,7 +645,7 @@ describe('DustWallet', () => {
       expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBeGreaterThan(0);
 
       // revert the balancing transaction (simulating the underlying tx being rejected)
-      yield* wallet.revertTransaction(balancingTransaction);
+      yield* wallet.revertTransaction(balancingTransaction!);
 
       walletState = yield* SubscriptionRef.get(stateRef);
       expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
@@ -714,14 +722,14 @@ describe('DustWallet', () => {
       expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(2);
 
       // revert only the first balancing transaction
-      yield* wallet.revertTransaction(balancingTx1);
+      yield* wallet.revertTransaction(balancingTx1!);
 
       walletState = yield* SubscriptionRef.get(stateRef);
       const remainingPending = walletVariant.coinsAndBalances.getPendingCoins(walletState);
       expect(remainingPending.length).toBe(1);
 
       // revert the second tx
-      yield* wallet.revertTransaction(balancingTx2);
+      yield* wallet.revertTransaction(balancingTx2!);
 
       walletState = yield* SubscriptionRef.get(stateRef);
       const remainingPending2 = walletVariant.coinsAndBalances.getPendingCoins(walletState);

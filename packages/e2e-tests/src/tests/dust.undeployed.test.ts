@@ -131,6 +131,8 @@ describe('Dust tests', () => {
       nightUtxos,
       receiver.unshieldedKeystore.getPublicKey(),
       (payload) => receiver.unshieldedKeystore.signData(payload),
+      receiverInitialState.dust.address,
+      true,
     );
 
     const finalizedDustTx = await receiver.wallet.finalizeRecipe(dustRegistrationRecipe);
