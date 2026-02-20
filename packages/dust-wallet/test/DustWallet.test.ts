@@ -143,19 +143,10 @@ describe('DustWallet', () => {
         undefined,
       );
 
-      const balancingTransaction = yield* wallet.balanceTransactions(
-        dustSecretKey,
-        [registerForDustTransaction],
-        ttl,
-        currentTime,
-      );
-
-      const balancedTransaction = registerForDustTransaction.merge(balancingTransaction);
-
-      const intent = balancedTransaction.intents!.get(1);
+      const intent = registerForDustTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
       const signature = keyStore.signData(intentSignatureData);
-      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(balancedTransaction, signature);
+      const dustGenerationTransaction = yield* wallet.addDustGenerationSignature(registerForDustTransaction, signature);
 
       const transaction = yield* provingService.prove(dustGenerationTransaction);
       const result = yield* submissionService.submitTransaction(transaction, 'InBlock');
