@@ -722,7 +722,8 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('deregisters from Dust generation', async () => {
+  // initial_nonce method is needed to be implemented in the ledger to get this test to work, skipping for now
+  it.skip('deregisters from Dust generation', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
