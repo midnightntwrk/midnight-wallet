@@ -21,11 +21,15 @@
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1"
   },
   "changesets": [
+    "busy-lizards-heal",
     "chubby-donuts-thank",
     "cold-lizards-join",
     "cold-roses-do",
+    "four-hoops-kick",
     "four-tables-cross",
     "late-games-juggle",
+    "old-games-cut",
+    "six-rocks-show",
     "slow-meals-run",
     "social-shoes-stop",
     "standardize-wallet-apis",

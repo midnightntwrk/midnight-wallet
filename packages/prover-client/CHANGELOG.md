@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-prover-client
 
+## 1.1.0-rc.2
+
+### Patch Changes
+
+- Updated dependencies [0f29d01]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0-rc.1
+
 ## 1.1.0-rc.1
 
 ### Minor Changes
