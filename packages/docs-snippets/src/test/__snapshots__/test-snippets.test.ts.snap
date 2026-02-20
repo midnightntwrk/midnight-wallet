@@ -255,7 +255,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'b5a68fc86d316d6c85e415adc6273bc54e2f6ec5a65d48d009f6100b18caf519'
         }
       },
       {
@@ -268,7 +269,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'be30b169172619661009a4512c548f1c91553bd26b4e74521f9c41035f98e84e'
         }
       },
       {
@@ -281,7 +283,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'def433627b586ec8ff7e9b01823c7a411db8f871a76ee91318e962f11cc397d5'
         }
       },
       {
@@ -294,7 +297,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '7c7b66dd24040f223abd314b0396a469767ac9bf37520c7105571f83073e47d1'
         }
       },
       {
@@ -307,7 +311,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '80c59b4df73750d6bebc547b23789dff9ebe2537c068ebe0a1e008c6a08d26c9'
         }
       }
     ],
@@ -323,7 +328,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'b5a68fc86d316d6c85e415adc6273bc54e2f6ec5a65d48d009f6100b18caf519'
         }
       },
       {
@@ -336,7 +342,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'be30b169172619661009a4512c548f1c91553bd26b4e74521f9c41035f98e84e'
         }
       },
       {
@@ -349,7 +356,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'def433627b586ec8ff7e9b01823c7a411db8f871a76ee91318e962f11cc397d5'
         }
       },
       {
@@ -362,7 +370,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '7c7b66dd24040f223abd314b0396a469767ac9bf37520c7105571f83073e47d1'
         }
       },
       {
@@ -375,7 +384,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '80c59b4df73750d6bebc547b23789dff9ebe2537c068ebe0a1e008c6a08d26c9'
         }
       }
     ],
@@ -516,6 +526,14 @@ exports[`Snippet outputs > with network > should output the correct result for '
     }
   }
 }
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'redesignation' 1`] = `
+[
+  "Generating dust before designation: false
+Generating dust after designation: true
 ",
 ]
 `;
@@ -763,7 +781,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'b5a68fc86d316d6c85e415adc6273bc54e2f6ec5a65d48d009f6100b18caf519'
         }
       },
       {
@@ -776,7 +795,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'be30b169172619661009a4512c548f1c91553bd26b4e74521f9c41035f98e84e'
         }
       },
       {
@@ -789,7 +809,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'def433627b586ec8ff7e9b01823c7a411db8f871a76ee91318e962f11cc397d5'
         }
       },
       {
@@ -802,7 +823,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '7c7b66dd24040f223abd314b0396a469767ac9bf37520c7105571f83073e47d1'
         }
       },
       {
@@ -815,7 +837,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '80c59b4df73750d6bebc547b23789dff9ebe2537c068ebe0a1e008c6a08d26c9'
         }
       }
     ],
@@ -831,7 +854,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'b5a68fc86d316d6c85e415adc6273bc54e2f6ec5a65d48d009f6100b18caf519'
         }
       },
       {
@@ -844,7 +868,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'be30b169172619661009a4512c548f1c91553bd26b4e74521f9c41035f98e84e'
         }
       },
       {
@@ -857,7 +882,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: 'def433627b586ec8ff7e9b01823c7a411db8f871a76ee91318e962f11cc397d5'
         }
       },
       {
@@ -870,7 +896,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '7c7b66dd24040f223abd314b0396a469767ac9bf37520c7105571f83073e47d1'
         }
       },
       {
@@ -883,7 +910,8 @@ exports[`Snippet outputs > with network > should output the correct result for '
         },
         meta: {
           ctime: 2025-08-05T12:00:00.000Z,
-          registeredForDustGeneration: true
+          registeredForDustGeneration: true,
+          initialNonce: '80c59b4df73750d6bebc547b23789dff9ebe2537c068ebe0a1e008c6a08d26c9'
         }
       }
     ],

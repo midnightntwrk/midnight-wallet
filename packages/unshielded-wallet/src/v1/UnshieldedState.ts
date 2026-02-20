@@ -17,6 +17,7 @@ import { ApplyTransactionError, UtxoNotFoundError } from './WalletError.js';
 export interface UtxoMeta {
   readonly ctime: Date;
   readonly registeredForDustGeneration: boolean;
+  readonly initialNonce: string;
 }
 
 export type UtxoHash = string;

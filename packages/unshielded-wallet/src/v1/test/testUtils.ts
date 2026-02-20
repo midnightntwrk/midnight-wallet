@@ -19,6 +19,7 @@ export const generateMockUtxoWithMeta = (owner: string, type: string): UtxoWithM
     meta: {
       ctime: new Date(),
       registeredForDustGeneration: true,
+      initialNonce: '',
     },
   });
 

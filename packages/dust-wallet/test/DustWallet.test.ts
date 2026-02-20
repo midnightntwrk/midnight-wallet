@@ -60,7 +60,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
     if (utxo.type === NIGHT_TOKEN_TYPE) {
       const meta = state.ledger.utxo.lookupMeta(utxo);
       if (meta) {
-        result.push({ ...utxo, ctime: meta.ctime });
+        result.push({ ...utxo, ctime: meta.ctime, registeredForDustGeneration: false });
       }
     }
   }
@@ -105,6 +105,7 @@ describe('DustWallet', () => {
         ttl,
         nightTokens,
         nightVerifyingKey,
+        DustSecretKey.fromSeed(keyStore.getSecretKey()),
         new DustAddress(lastState.publicKey.publicKey),
       );
 
@@ -138,6 +139,7 @@ describe('DustWallet', () => {
         ttl,
         nightTokens,
         nightVerifyingKey,
+        dustSecretKey,
         undefined,
       );
 

@@ -47,12 +47,14 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   readonly networkId: NetworkId;
   readonly costParams: TotalCostParameters;
   createDustGenerationTransaction(
+    state: TState,
     currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
+    dustSecretKey: DustSecretKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Either.Either<UnprovenTransaction, WalletError>;
+  ): Either.Either<[UnprovenTransaction, TState], WalletError>;
 
   addDustGenerationSignature(
     transaction: UnprovenTransaction,
@@ -136,12 +138,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   createDustGenerationTransaction(
+    state: CoreWallet,
     currentTime: Date,
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
+    dustSecretKey: DustSecretKey,
     dustReceiverAddress: DustAddress | undefined,
-  ): Either.Either<UnprovenTransaction, WalletError> {
+  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> {
     const makeOffer = (
       utxos: ReadonlyArray<UtxoWithFullDustDetails>,
     ): Option.Option<UnshieldedOffer<SignatureEnabled>> => {
@@ -176,9 +180,23 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const totalDustValue = pipe(
           splitResult.guaranteed,
+          IterableOps.filter((coin) => !coin.utxo.registeredForDustGeneration),
           IterableOps.map((coin) => coin.dust.generatedNow),
           BigIntOps.sumAll,
         );
+
+        const initialNonces = new Set(
+          nightUtxos.map(({ utxo }) => utxo.initialNonce).filter((n): n is string => n !== undefined && n !== ''),
+        );
+
+        const matchingCoins = this.getCoins()
+          .getAvailableCoinsWithGeneratedDust(state, currentTime)
+          .filter((coin) => initialNonces.has(coin.token.backingNight));
+
+        const [dustSpends, updatedState] =
+          matchingCoins.length > 0
+            ? CoreWallet.spendCoins(state, dustSecretKey, matchingCoins, currentTime)
+            : [[] as const, state];
 
         const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
         const maybeFallibleOffer = makeOffer(splitResult.fallible);
@@ -187,13 +205,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           SignatureMarker.signature,
           nightVerifyingKey,
           receiver,
-          dustReceiverAddress !== undefined ? totalDustValue : 0n,
+          totalDustValue,
         );
+
         const dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,
           ProofMarker.preProof,
           currentTime,
-          [],
+          dustSpends ? [...dustSpends] : [],
           [dustRegistration],
         );
 
@@ -221,7 +240,10 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           },
         );
 
-        return Transaction.fromParts(network, undefined, undefined, intent);
+        return [Transaction.fromParts(network, undefined, undefined, intent), updatedState] as [
+          UnprovenTransaction,
+          CoreWallet,
+        ];
       });
     });
   }

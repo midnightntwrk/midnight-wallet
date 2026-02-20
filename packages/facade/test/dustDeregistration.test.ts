@@ -133,7 +133,8 @@ describe('Dust Deregistration', () => {
     const dustDeregistrationTx = await walletFacade.deregisterFromDustGeneration(
       nightUtxosRegisteredForDustGeneration.slice(0, deregisterTokens),
       unshieldedWalletKeystore.getPublicKey(),
-      (payload) => unshieldedWalletKeystore.signData(payload),
+      (payload: Uint8Array) => unshieldedWalletKeystore.signData(payload),
+      ledger.DustSecretKey.fromSeed(dustWalletSeed),
     );
 
     const balancingRecipe = await walletFacade.balanceUnprovenTransaction(

@@ -72,6 +72,7 @@ describe('Dust tests', () => {
         firstTwoNightUtxos,
         wallet.unshieldedKeystore.getPublicKey(),
         (payload) => wallet.unshieldedKeystore.signData(payload),
+        wallet.dustSecretKey,
       );
 
       const finalizedDustTx = await wallet.wallet.finalizeRecipe(dustRegistrationRecipe);
@@ -120,7 +121,8 @@ describe('Dust tests', () => {
       const dustDeregistrationRecipe = await wallet.wallet.deregisterFromDustGeneration(
         firstTwoRegisteredNightUtxos,
         wallet.unshieldedKeystore.getPublicKey(),
-        (payload) => wallet.unshieldedKeystore.signData(payload),
+        (payload: Uint8Array) => wallet.unshieldedKeystore.signData(payload),
+        wallet.dustSecretKey,
       );
 
       const balancedTransactionRecipe = await wallet.wallet.balanceUnprovenTransaction(

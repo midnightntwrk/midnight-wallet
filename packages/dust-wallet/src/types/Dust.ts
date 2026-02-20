@@ -65,4 +65,4 @@ export type DustGenerationInfo = {
   dtime: Date | undefined;
 };
 
-export type UtxoWithMeta = Utxo & { ctime: Date };
+export type UtxoWithMeta = Utxo & { ctime: Date; initialNonce?: string; registeredForDustGeneration: boolean };

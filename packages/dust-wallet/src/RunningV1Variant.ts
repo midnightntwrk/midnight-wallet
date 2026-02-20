@@ -32,13 +32,9 @@ import { type DustToken, type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from './Simulator.js';
-import {
-  type CoinsAndBalancesCapability,
-  type CoinSelection,
-  type UtxoWithFullDustDetails,
-} from './CoinsAndBalances.js';
+import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
 import { type TransactingCapability } from './Transacting.js';
-import { type CoreWallet } from './CoreWallet.js';
+import { CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
@@ -171,24 +167,39 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     ttl: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
+    dustSecretKey: DustSecretKey,
     dustReceiverAddress: DustAddress | undefined,
   ): Effect.Effect<UnprovenTransaction, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
-    return Effect.Do.pipe(
-      Effect.bind('currentState', () => SubscriptionRef.get(this.#context.stateRef)),
-      Effect.bind('blockData', () => this.#v1Context.syncService.blockData()),
-      Effect.let('currentTime', ({ blockData }): Date => currentTime ?? blockData.timestamp),
-      Effect.let('utxosWithDustValue', ({ currentState, currentTime }): ReadonlyArray<UtxoWithFullDustDetails> => {
-        return this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(currentState, nightUtxos, currentTime);
-      }),
-      Effect.flatMap(({ utxosWithDustValue, currentTime }) => {
-        return this.#v1Context.transactingCapability
-          .createDustGenerationTransaction(currentTime, ttl, utxosWithDustValue, nightVerifyingKey, dustReceiverAddress)
-          .pipe(EitherOps.toEffect);
-      }),
-    );
+
+    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
+      return pipe(
+        this.#v1Context.syncService.blockData(),
+        Effect.map((blockData) => {
+          const resolvedTime = currentTime ?? blockData.timestamp;
+          const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
+            state,
+            nightUtxos,
+            resolvedTime,
+          );
+
+          return this.#v1Context.transactingCapability
+            .createDustGenerationTransaction(
+              state,
+              resolvedTime,
+              ttl,
+              utxosWithDustValue,
+              nightVerifyingKey,
+              dustSecretKey,
+              dustReceiverAddress,
+            )
+            .pipe(EitherOps.toEffect);
+        }),
+        Effect.flatten,
+      );
+    });
   }
 
   addDustGenerationSignature(

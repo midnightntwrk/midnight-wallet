@@ -49,6 +49,7 @@ const utxoArbitrary = (tokenType: ledger.RawTokenType, owner: PublicKey): fc.Arb
       meta: fc.record({
         ctime: fc.date(),
         registeredForDustGeneration: fc.boolean(),
+        initialNonce: fc.constant(''),
       }),
     })
     .map((data) => new UtxoWithMeta(data));

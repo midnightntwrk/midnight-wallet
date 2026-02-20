@@ -213,6 +213,7 @@ describe('Dust Registration', () => {
       nightUtxos,
       unshieldedReceiverKeystore.getPublicKey(),
       (payload) => unshieldedReceiverKeystore.signData(payload),
+      ledger.DustSecretKey.fromSeed(dustReceiverSeed),
     );
 
     const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
@@ -316,6 +317,7 @@ describe('Dust Registration', () => {
         receiverStateBeforeRegistration.unshielded.availableCoins,
         unshieldedReceiverKeystore.getPublicKey(),
         (payload) => unshieldedReceiverKeystore.signData(payload),
+        ledger.DustSecretKey.fromSeed(dustReceiverSeed),
       )
       .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));

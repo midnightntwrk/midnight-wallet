@@ -144,6 +144,8 @@ export type UtxoWithMeta = {
   utxo: ledger.Utxo;
   meta: {
     ctime: Date;
+    initialNonce?: string;
+    registeredForDustGeneration: boolean;
   };
 };
 
@@ -295,6 +297,7 @@ export class WalletFacade {
     action: { type: 'registration'; dustReceiverAddress: DustAddress } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
+    dustSecretKey: ledger.DustSecretKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
@@ -302,8 +305,14 @@ export class WalletFacade {
     const transaction = await this.dust.createDustGenerationTransaction(
       undefined,
       ttl,
-      nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      nightUtxos.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        ...(meta.initialNonce !== undefined ? { initialNonce: meta.initialNonce } : {}),
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       nightVerifyingKey,
+      dustSecretKey,
       action.type === 'registration' ? action.dustReceiverAddress : undefined,
     );
 
@@ -656,17 +665,24 @@ export class WalletFacade {
     const dustState = await this.dust.waitForSyncedState();
     const dustGenerationEstimations = pipe(
       nightUtxos,
-      Arr.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      Arr.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        ...(meta.initialNonce !== undefined ? { initialNonce: meta.initialNonce } : {}),
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
       (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,
     );
     const fakeSigningKey = ledger.sampleSigningKey();
     const fakeVerifyingKey = ledger.signatureVerifyingKey(fakeSigningKey);
+    const fakeDustKey = ledger.DustSecretKey.fromBigint(0n);
     const fakeRegistrationRecipe = await this.registerNightUtxosForDustGeneration(
       nightUtxos,
       fakeVerifyingKey,
       (payload) => ledger.signData(fakeSigningKey, payload),
+      fakeDustKey,
       dustState.address,
     );
     const finalizedFakeTx = fakeRegistrationRecipe.transaction.mockProve().bind();
@@ -743,6 +759,7 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
+    dustSecretKey: ledger.DustSecretKey,
     dustReceiverAddress?: DustAddress,
   ): Promise<UnprovenTransactionRecipe> {
     if (nightUtxos.length === 0) {
@@ -755,6 +772,7 @@ export class WalletFacade {
       { type: 'registration', dustReceiverAddress: receiverAddress },
       nightUtxos,
       nightVerifyingKey,
+      dustSecretKey,
       signDustRegistration,
     );
 
@@ -768,11 +786,13 @@ export class WalletFacade {
     nightUtxos: UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
+    dustSecretKey: ledger.DustSecretKey,
   ): Promise<UnprovenTransactionRecipe> {
     const dustDeregistrationTx = await this.createDustActionTransaction(
       { type: 'deregistration' },
       nightUtxos,
       nightVerifyingKey,
+      dustSecretKey,
       signDustRegistration,
     );
     return {
