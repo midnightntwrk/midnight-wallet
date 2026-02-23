@@ -1,5 +1,14 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 2.0.0-rc.4
+
+### Patch Changes
+
+- Updated dependencies [55380e5]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1-rc.1
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.3
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.1-rc.2
+
 ## 2.0.0-rc.3
 
 ### Patch Changes
