@@ -220,7 +220,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction | undefined, WalletError> {
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
         this.#v1Context.syncService.blockData(),

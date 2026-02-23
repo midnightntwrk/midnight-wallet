@@ -130,7 +130,7 @@ export type DustWalletAPI = {
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<UnprovenTransaction | undefined>;
+  ): Promise<UnprovenTransaction>;
 
   serializeState(): Promise<string>;
 
@@ -233,7 +233,7 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<UnprovenTransaction | undefined> {
+    ): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),

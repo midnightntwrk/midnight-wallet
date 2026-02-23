@@ -68,7 +68,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction | undefined, TState], WalletError>;
+  ): Either.Either<[UnprovenTransaction, TState], WalletError>;
 
   revertTransaction(state: TState, transaction: AnyTransaction): Either.Either<TState, WalletError>;
 }
@@ -333,7 +333,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     ttl: Date,
     currentTime: Date,
     ledgerParams: LedgerParameters,
-  ): Either.Either<[UnprovenTransaction | undefined, CoreWallet], WalletError> {
+  ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> {
     const network = this.networkId;
     const feeLeft = transactions.reduce(
       (total, transaction) =>
