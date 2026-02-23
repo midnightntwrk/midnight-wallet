@@ -18,6 +18,14 @@ exports[`Snippet outputs > with network > should output the correct result for '
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'deregistration' 1`] = `
+[
+  "Registered night coins before deregistration: 5
+Registered night coins after deregistration: 4
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'designation' 1`] = `
 [
   "Generating dust before designation: false
@@ -516,6 +524,14 @@ exports[`Snippet outputs > with network > should output the correct result for '
     }
   }
 }
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'redesignation' 1`] = `
+[
+  "Generating dust before designation: false
+Generating dust after designation: true
 ",
 ]
 `;

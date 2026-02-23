@@ -174,11 +174,15 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
-        const totalDustValue = pipe(
-          splitResult.guaranteed,
-          IterableOps.map((coin) => coin.dust.generatedNow),
-          BigIntOps.sumAll,
-        );
+        // if receiver is `undefined`, it means the coin(s) are being deregistered so the allowFeePayment should not be used
+        const feePayment = receiver
+          ? pipe(
+              splitResult.guaranteed,
+              IterableOps.filter((coin) => !coin.utxo.registeredForDustGeneration),
+              IterableOps.map((coin) => coin.dust.generatedNow),
+              BigIntOps.sumAll,
+            )
+          : 0n;
 
         const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
         const maybeFallibleOffer = makeOffer(splitResult.fallible);
@@ -187,7 +191,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           SignatureMarker.signature,
           nightVerifyingKey,
           receiver,
-          dustReceiverAddress !== undefined ? totalDustValue : 0n,
+          feePayment,
         );
         const dustActions = new DustActions<SignatureEnabled, PreProof>(
           SignatureMarker.signature,

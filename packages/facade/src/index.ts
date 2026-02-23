@@ -144,6 +144,7 @@ export type UtxoWithMeta = {
   utxo: ledger.Utxo;
   meta: {
     ctime: Date;
+    registeredForDustGeneration: boolean;
   };
 };
 
@@ -302,7 +303,11 @@ export class WalletFacade {
     const transaction = await this.dust.createDustGenerationTransaction(
       undefined,
       ttl,
-      nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      nightUtxos.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       nightVerifyingKey,
       action.type === 'registration' ? action.dustReceiverAddress : undefined,
     );
@@ -656,7 +661,11 @@ export class WalletFacade {
     const dustState = await this.dust.waitForSyncedState();
     const dustGenerationEstimations = pipe(
       nightUtxos,
-      Arr.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      Arr.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
       (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,

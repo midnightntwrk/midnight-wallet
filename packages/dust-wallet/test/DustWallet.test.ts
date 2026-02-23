@@ -60,7 +60,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
     if (utxo.type === NIGHT_TOKEN_TYPE) {
       const meta = state.ledger.utxo.lookupMeta(utxo);
       if (meta) {
-        result.push({ ...utxo, ctime: meta.ctime });
+        result.push({ ...utxo, ctime: meta.ctime, registeredForDustGeneration: false });
       }
     }
   }
@@ -133,7 +133,7 @@ describe('DustWallet', () => {
       const currentTime = getCurrentTime(simulatorState);
       const ttl = DateOps.addSeconds(currentTime, 1);
 
-      const registerForDustTransaction = yield* wallet.createDustGenerationTransaction(
+      const deRegisterForDustTransaction = yield* wallet.createDustGenerationTransaction(
         currentTime,
         ttl,
         nightTokens,
@@ -143,12 +143,12 @@ describe('DustWallet', () => {
 
       const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
-        [registerForDustTransaction],
+        [deRegisterForDustTransaction],
         ttl,
         currentTime,
       );
 
-      const balancedTransaction = registerForDustTransaction.merge(balancingTransaction);
+      const balancedTransaction = deRegisterForDustTransaction.merge(balancingTransaction);
 
       const intent = balancedTransaction.intents!.get(1);
       const intentSignatureData = intent!.signatureData(1);
