@@ -31,7 +31,7 @@ await sender.wallet
         type: 'unshielded',
         outputs: [
           {
-            amount: 500_000_000_000_000n,
+            amount: 500_000_000_000n,
             receiverAddress: await wallet.unshielded.getAddress(),
             type: ledger.nativeToken().raw,
           },
