@@ -60,7 +60,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
     if (utxo.type === NIGHT_TOKEN_TYPE) {
       const meta = state.ledger.utxo.lookupMeta(utxo);
       if (meta) {
-        result.push({ ...utxo, ctime: meta.ctime, registeredForDustGeneration: true });
+        result.push({ ...utxo, ctime: meta.ctime, registeredForDustGeneration: false });
       }
     }
   }
