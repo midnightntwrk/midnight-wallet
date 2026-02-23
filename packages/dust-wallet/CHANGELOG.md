@@ -1,5 +1,14 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 2.0.0-rc.3
+
+### Patch Changes
+
+- eb1e4c3: feat: add fee payment option to dust registration and handle deregistration
+  - Filter coins already registered for dust generation from fee payment calculations
+  - Add `registeredForDustGeneration` flag to `UtxoWithMeta` type
+  - Add docs snippets for deregistration and redesignation flows
+
 ## 2.0.0-rc.2
 
 ### Major Changes

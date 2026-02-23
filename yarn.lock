@@ -2297,7 +2297,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-dust-wallet@npm:^2.0.0-rc.2, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
+"@midnight-ntwrk/wallet-sdk-dust-wallet@npm:^2.0.0-rc.3, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
@@ -2331,7 +2331,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.0.0"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.1.0-rc.2"
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^2.0.0-rc.2"
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^2.0.0-rc.3"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.0"
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:^2.0.0-rc.2"
