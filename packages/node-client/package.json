@@ -55,7 +55,7 @@
     "@effect/rpc": "^0.68.0",
     "@effect/sql": "^0.44.0",
     "@effect/workflow": "^0.8.1",
-    "@midnight-ntwrk/ledger-v7": "7.0.0",
+    "@midnight-ntwrk/ledger-v7": "7.0.2",
     "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.1.0-rc.2",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.0",
