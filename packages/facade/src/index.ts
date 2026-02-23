@@ -752,14 +752,16 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
-    dustReceiverAddress: DustAddress,
+    dustReceiverAddress?: DustAddress,
   ): Promise<UnprovenTransactionRecipe> {
     if (nightUtxos.length === 0) {
       throw Error('At least one Night UTXO is required.');
     }
 
+    const receiverAddress = dustReceiverAddress ?? (await this.dust.getAddress());
+
     const dustRegistrationTx = await this.createDustActionTransaction(
-      { type: 'registration', dustReceiverAddress },
+      { type: 'registration', dustReceiverAddress: receiverAddress },
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,

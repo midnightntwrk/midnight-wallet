@@ -735,7 +735,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it.only('deregisters from Dust generation', async () => {
+  it('deregisters from Dust generation', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());

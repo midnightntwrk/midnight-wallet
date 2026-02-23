@@ -132,7 +132,6 @@ describe('Transaction balancing examples', () => {
         nightUtxos,
         sender.unshieldedKeystore.getPublicKey(),
         (payload) => sender.unshieldedKeystore.signData(payload),
-        state.dust.address,
       );
       logger.info('Dust registration recipe:');
       logger.info(dustRegistrationRecipe.transaction.toString());
