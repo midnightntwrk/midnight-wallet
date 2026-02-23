@@ -214,7 +214,6 @@ describe('Dust Registration', () => {
       unshieldedReceiverKeystore.getPublicKey(),
       (payload) => unshieldedReceiverKeystore.signData(payload),
       receiverStateWithNight.dust.address,
-      true,
     );
 
     const provenDustRegistrationTx = await receiverFacade.finalizeRecipe(dustRegistrationRecipe);
@@ -319,7 +318,6 @@ describe('Dust Registration', () => {
         unshieldedReceiverKeystore.getPublicKey(),
         (payload) => unshieldedReceiverKeystore.signData(payload),
         receiverStateBeforeRegistration.dust.address,
-        true,
       )
       .then((recipe) => receiverFacade.finalizeRecipe(recipe))
       .then((tx) => receiverFacade.submitTransaction(tx));

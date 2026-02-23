@@ -32,7 +32,6 @@ await sender.wallet
     sender.unshieldedKeystore.getPublicKey(),
     (payload) => sender.unshieldedKeystore.signData(payload),
     receiverStateBefore.dust.address,
-    false,
   )
   .then((recipe) =>
     sender.wallet.balanceUnprovenTransaction(

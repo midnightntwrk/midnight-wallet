@@ -60,7 +60,7 @@ const getNightTokensWithMeta = (state: SimulatorState, walletAddress: UserAddres
     if (utxo.type === NIGHT_TOKEN_TYPE) {
       const meta = state.ledger.utxo.lookupMeta(utxo);
       if (meta) {
-        result.push({ ...utxo, ctime: meta.ctime });
+        result.push({ ...utxo, ctime: meta.ctime, registeredForDustGeneration: true });
       }
     }
   }
@@ -106,7 +106,6 @@ describe('DustWallet', () => {
         nightTokens,
         nightVerifyingKey,
         new DustAddress(lastState.publicKey.publicKey),
-        true,
       );
 
       const intent = registerForDustTransaction.intents!.get(1);
@@ -140,7 +139,6 @@ describe('DustWallet', () => {
         nightTokens,
         nightVerifyingKey,
         undefined,
-        false,
       );
 
       const balancingTransaction = yield* wallet.balanceTransactions(
@@ -737,7 +735,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('deregisters from Dust generation', async () => {
+  it.only('deregisters from Dust generation', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());

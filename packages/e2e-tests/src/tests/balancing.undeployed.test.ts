@@ -133,7 +133,6 @@ describe('Transaction balancing examples', () => {
         sender.unshieldedKeystore.getPublicKey(),
         (payload) => sender.unshieldedKeystore.signData(payload),
         state.dust.address,
-        true, // allow fee payment for dust registration transaction
       );
       logger.info('Dust registration recipe:');
       logger.info(dustRegistrationRecipe.transaction.toString());

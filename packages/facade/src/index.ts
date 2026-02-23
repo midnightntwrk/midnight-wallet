@@ -144,6 +144,7 @@ export type UtxoWithMeta = {
   utxo: ledger.Utxo;
   meta: {
     ctime: Date;
+    registeredForDustGeneration: boolean;
   };
 };
 
@@ -296,17 +297,19 @@ export class WalletFacade {
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
-    allowFeePayment: boolean,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
 
     const transaction = await this.dust.createDustGenerationTransaction(
       undefined,
       ttl,
-      nightUtxos.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      nightUtxos.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       nightVerifyingKey,
       action.type === 'registration' ? action.dustReceiverAddress : undefined,
-      allowFeePayment,
     );
 
     const intent = transaction.intents?.get(1);
@@ -658,7 +661,11 @@ export class WalletFacade {
     const dustState = await this.dust.waitForSyncedState();
     const dustGenerationEstimations = pipe(
       nightUtxos,
-      Arr.map(({ utxo, meta }) => ({ ...utxo, ctime: meta.ctime })),
+      Arr.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       (utxosWithMeta) => dustState.estimateDustGeneration(utxosWithMeta, now),
       (estimatedUtxos) => dustState.capabilities.coinsAndBalances.splitNightUtxos(estimatedUtxos),
       (split) => split.guaranteed,
@@ -670,7 +677,6 @@ export class WalletFacade {
       fakeVerifyingKey,
       (payload) => ledger.signData(fakeSigningKey, payload),
       dustState.address,
-      true,
     );
     const finalizedFakeTx = fakeRegistrationRecipe.transaction.mockProve().bind();
 
@@ -747,7 +753,6 @@ export class WalletFacade {
     nightVerifyingKey: ledger.SignatureVerifyingKey,
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
     dustReceiverAddress: DustAddress,
-    allowFeePayment: boolean,
   ): Promise<UnprovenTransactionRecipe> {
     if (nightUtxos.length === 0) {
       throw Error('At least one Night UTXO is required.');
@@ -758,7 +763,6 @@ export class WalletFacade {
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
-      allowFeePayment,
     );
 
     return {
@@ -777,7 +781,6 @@ export class WalletFacade {
       nightUtxos,
       nightVerifyingKey,
       signDustRegistration,
-      false, // fee payment is not allowed for deregistration transactions
     );
     return {
       type: 'UNPROVEN_TRANSACTION',

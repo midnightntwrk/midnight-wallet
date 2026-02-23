@@ -52,7 +52,6 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-    allowFeePayment: boolean,
   ): Either.Either<UnprovenTransaction, WalletError>;
 
   addDustGenerationSignature(
@@ -142,7 +141,6 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     nightUtxos: ReadonlyArray<UtxoWithFullDustDetails>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
-    allowFeePayment: boolean,
   ): Either.Either<UnprovenTransaction, WalletError> {
     const makeOffer = (
       utxos: ReadonlyArray<UtxoWithFullDustDetails>,
@@ -176,13 +174,12 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const splitResult = this.getCoins().splitNightUtxos(nightUtxos);
 
-        const totalDustValue = allowFeePayment
-          ? pipe(
-              splitResult.guaranteed,
-              IterableOps.map((coin) => coin.dust.generatedNow),
-              BigIntOps.sumAll,
-            )
-          : 0n;
+        const totalDustValue = pipe(
+          splitResult.guaranteed,
+          IterableOps.filter((coin) => !coin.utxo.registeredForDustGeneration),
+          IterableOps.map((coin) => coin.dust.generatedNow),
+          BigIntOps.sumAll,
+        );
 
         const maybeGuaranteedOffer = makeOffer(splitResult.guaranteed);
         const maybeFallibleOffer = makeOffer(splitResult.fallible);
