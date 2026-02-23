@@ -35,7 +35,7 @@
     "@midnight-ntwrk/wallet-sdk-indexer-client": "1.1.0-rc.3",
     "@midnight-ntwrk/wallet-sdk-runtime": "1.0.1-rc.2",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1",
-    "@scure/base": "^1.1.9",
+    "@scure/base": "^2.0.0",
     "effect": "^3.19.14",
     "isomorphic-ws": "^5.0.0",
     "node-fetch": "3.3.2",
