@@ -19,7 +19,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { HttpProverClient, WasmProver } from '@midnight-ntwrk/wallet-sdk-prover-client/effect';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, Either, Schedule, Duration, Scope, pipe } from 'effect';
 import { GenericContainer, Wait } from 'testcontainers';
 import { describe, expect, it, vi } from 'vitest';

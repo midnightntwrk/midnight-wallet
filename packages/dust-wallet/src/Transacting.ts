@@ -31,7 +31,7 @@ import {
   addressFromKey,
   LedgerParameters,
   nativeToken,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, WalletError } from './WalletError.js';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';

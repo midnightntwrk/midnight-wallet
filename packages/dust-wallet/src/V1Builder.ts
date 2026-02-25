@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, Scope, type Types, type Either } from 'effect';
 import { type Expect, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
-import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
+import { type DustSecretKey, type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
 import {
   type WalletRuntimeError,
   type VariantBuilder,

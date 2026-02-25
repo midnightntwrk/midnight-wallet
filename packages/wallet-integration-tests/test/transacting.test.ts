@@ -29,7 +29,7 @@ import {
   V1Tag,
   type Transacting,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { randomUUID } from 'node:crypto';

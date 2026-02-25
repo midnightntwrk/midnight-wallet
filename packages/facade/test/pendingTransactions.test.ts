@@ -23,7 +23,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
