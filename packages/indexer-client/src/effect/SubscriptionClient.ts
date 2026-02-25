@@ -22,6 +22,7 @@ export class SubscriptionClient extends Context.Tag('@midnight-ntwrk/indexer-cli
 export declare namespace SubscriptionClient {
   interface ServerConfig {
     readonly url: URL | string;
+    readonly keepAlive?: number | undefined;
   }
 
   interface Service {
