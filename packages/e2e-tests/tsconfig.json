@@ -1,13 +1,8 @@
 {
-  "include": [
-    "src/**/*.ts",
-    ".eslintrc.cjs"
-  ],
+  "include": ["src/**/*.ts", ".eslintrc.cjs"],
   "extends": "@tsconfig/node22/tsconfig.json",
   "compilerOptions": {
-    "types": [
-      "vitest/globals"
-    ],
+    "types": ["vitest/globals"],
     "module": "ESNext",
     "strict": true,
     "declaration": true,
@@ -32,8 +27,6 @@
     "esModuleInterop": true,
     "ignoreDeprecations": "5.0",
     "erasableSyntaxOnly": true,
-    "lib": [
-      "ESNext"
-    ]
+    "lib": ["ESNext"]
   }
 }
