@@ -33,6 +33,7 @@ export interface SyncCapability<TState, TUpdate> {
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
+  keepAlive?: number;
 };
 
 export type DefaultSyncConfiguration = {
@@ -187,7 +188,9 @@ export const makeEventsSyncService = (
 
       return pipe(
         ZswapEvents.run({ id: Number(appliedIndex) }),
-        Stream.provideLayer(WsSubscriptionClient.layer({ url: indexerWsUrl })),
+        Stream.provideLayer(
+          WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: config.indexerClientConnection.keepAlive }),
+        ),
         Stream.mapError((error) => new SyncWalletError(error)),
         Stream.mapEffect((subscription) =>
           pipe(

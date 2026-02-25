@@ -25,12 +25,14 @@ import {
 export const layer: (
   config: SubscriptionClient.ServerConfig,
 ) => Layer.Layer<SubscriptionClient, InvalidProtocolSchemeError, Scope.Scope> = (config) =>
-  Layer.effect(
+  Layer.scoped(
     SubscriptionClient,
     WsURL.make(config.url).pipe(
       Effect.flatMap((url) =>
         Effect.acquireRelease(
-          Effect.sync(() => createClient({ url: url.toString(), shouldRetry: () => false, keepAlive: 15_000 })),
+          Effect.sync(() =>
+            createClient({ url: url.toString(), shouldRetry: () => false, keepAlive: config.keepAlive ?? 15_000 }),
+          ),
           (client) => Effect.sync(() => client.dispose()),
         ),
       ),

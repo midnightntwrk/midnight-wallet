@@ -32,6 +32,7 @@ export interface SyncCapability<TState, TUpdate> {
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
+  keepAlive?: number;
 };
 
 export type DefaultSyncConfiguration = {
@@ -75,7 +76,9 @@ export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncSe
 
       return pipe(
         UnshieldedTransactions.run({ address, transactionId: Number(appliedId) }),
-        Stream.provideLayer(WsSubscriptionClient.layer({ url: indexerWsUrl })),
+        Stream.provideLayer(
+          WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: indexerClientConnection.keepAlive }),
+        ),
         Stream.mapError((error) => new SyncWalletError(error)),
         Stream.mapEffect((subscription) => {
           const { unshieldedTransactions } = subscription;
