@@ -37,11 +37,7 @@
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1",
     "@scure/base": "^2.0.0",
     "effect": "^3.19.18",
-    "isomorphic-ws": "^5.0.0",
-    "node-fetch": "3.3.2",
-    "rxjs": "^7.5",
-    "scale-ts": "^1.1.0",
-    "ws": "^8.19.0"
+    "rxjs": "^7.5"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
