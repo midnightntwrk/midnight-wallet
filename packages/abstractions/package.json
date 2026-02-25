@@ -25,7 +25,7 @@
     }
   },
   "dependencies": {
-    "effect": "^3.19.14"
+    "effect": "^3.19.18"
   },
   "devDependencies": {
     "eslint": "^9.39.1",

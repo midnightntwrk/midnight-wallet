@@ -48,7 +48,7 @@
     "@midnight-ntwrk/wallet-sdk-prover-client": "^1.1.0-rc.2",
     "@midnight-ntwrk/wallet-sdk-utilities": "^1.0.1-rc.0",
     "@midnight-ntwrk/zkir-v2": "^2.1.0",
-    "effect": "^3.19.14"
+    "effect": "^3.19.18"
   },
   "devDependencies": {
     "eslint": "^9.39.1",
