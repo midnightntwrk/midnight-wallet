@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.0.1-rc.1
+
+### Patch Changes
+
+- 55380e5: feat: adds safe bigint schema
+
 ## 1.0.1-rc.0
 
 ### Patch Changes

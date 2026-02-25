@@ -48,6 +48,7 @@ export interface SyncCapability<TState, TUpdate> {
 export type IndexerClientConnection = {
   indexerHttpUrl: string;
   indexerWsUrl?: string;
+  keepAlive?: number;
 };
 
 export type DefaultSyncConfiguration = {
@@ -194,7 +195,9 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   return {
     queryClient(): Layer.Layer<QueryClient, WalletError, Scope.Scope> {
       return pipe(
-        HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl }),
+        HttpQueryClient.layer({
+          url: config.indexerClientConnection.indexerHttpUrl,
+        }),
         Layer.mapError((error) => new OtherWalletError(error)),
       );
     },
@@ -208,7 +211,8 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Either.flatMap((url) => WsURL.make(url)),
         Either.match({
           onLeft: (error) => Layer.fail(error),
-          onRight: (url: WsURL.WsURL) => WsSubscriptionClient.layer({ url }),
+          onRight: (url: WsURL.WsURL) =>
+            WsSubscriptionClient.layer({ url, keepAlive: indexerClientConnection.keepAlive }),
         }),
         Layer.mapError(
           (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
