@@ -31,7 +31,7 @@
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1",
-    "effect": "^3.19.14",
+    "effect": "^3.19.18",
     "rxjs": "^7.5"
   },
   "scripts": {
@@ -46,12 +46,12 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "eslint": "^9.32.0",
-    "fast-check": "^4.2.0",
-    "prettier": "^3.7.0",
-    "publint": "~0.3.14",
-    "rimraf": "^6.0.1",
+    "eslint": "^9.39.1",
+    "fast-check": "^4.5.3",
+    "prettier": "^3.8.1",
+    "publint": "~0.3.0",
+    "rimraf": "^6.1.2",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   }
 }

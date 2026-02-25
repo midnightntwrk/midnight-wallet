@@ -27,27 +27,27 @@
     }
   },
   "dependencies": {
-    "@effect/platform": "^0.90.0",
+    "@effect/platform": "^0.94.0",
     "@graphql-typed-document-node/core": "^3.2.0",
     "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1",
-    "effect": "^3.19.14",
+    "effect": "^3.19.18",
     "graphql": "^16.11.0",
     "graphql-http": "^1.22.4",
-    "graphql-ws": "^6.0.5"
+    "graphql-ws": "^6.0.7"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^5.0.7",
-    "@graphql-codegen/client-preset": "^4.8.2",
-    "@graphql-codegen/typescript": "^4.1.6",
-    "@graphql-codegen/typescript-operations": "^4.6.1",
-    "eslint": "^9.37.0",
-    "prettier": "^3.7.0",
-    "publint": "~0.3.14",
-    "rimraf": "^6.0.1",
-    "testcontainers": "^11.10.0",
+    "@graphql-codegen/cli": "^6.0.0",
+    "@graphql-codegen/client-preset": "^5.0.0",
+    "@graphql-codegen/typescript": "^5.0.0",
+    "@graphql-codegen/typescript-operations": "^5.0.0",
+    "eslint": "^9.39.1",
+    "prettier": "^3.8.1",
+    "publint": "~0.3.0",
+    "rimraf": "^6.1.2",
+    "testcontainers": "^11.12.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "vitest": "^4.0.18"
   },
   "scripts": {
     "gql:codegen": "graphql-codegen",
