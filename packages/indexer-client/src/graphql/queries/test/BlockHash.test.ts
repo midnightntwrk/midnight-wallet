@@ -83,7 +83,7 @@ describe('BlockHash query', () => {
 
           expect(result).toEqual(blockExpectation);
         }).pipe(
-          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v3/graphql` })),
+          Effect.provide(HttpQueryClient.layer({ url: `http://127.0.0.1:${getIndexerPort()}/api/v4/graphql` })),
           Effect.scoped,
           Effect.catchAll((err) => Effect.fail(`Encountered unexpected error: ${err.message}`)),
           Effect.runPromise,

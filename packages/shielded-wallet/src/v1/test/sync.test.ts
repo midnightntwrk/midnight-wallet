@@ -183,8 +183,8 @@ describe('Wallet subscription', () => {
       await Effect.gen(function* () {
         const syncService = makeEventsSyncService({
           indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
           batchSize,
         });
@@ -225,8 +225,8 @@ describe('Wallet subscription', () => {
       await Effect.gen(function* () {
         const syncService = makeEventsSyncService({
           indexerClientConnection: {
-            indexerHttpUrl: 'http://localhost:8088/api/v3/graphql',
-            indexerWsUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
         });
 

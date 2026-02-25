@@ -49,7 +49,7 @@ describe('Wallet serialization and restoration', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
     };

@@ -109,8 +109,8 @@ export const createWalletConfig = (
 ): DefaultV1Configuration => {
   const defaultConfig: DefaultV1Configuration = {
     indexerClientConnection: {
-      indexerWsUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
-      indexerHttpUrl: `http://localhost:${indexerPort}/api/v3/graphql`,
+      indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
+      indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(),
