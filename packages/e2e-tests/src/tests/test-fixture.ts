@@ -19,7 +19,7 @@ import { type MidnightNetwork } from './utils.js';
 import { logger } from './logger.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';

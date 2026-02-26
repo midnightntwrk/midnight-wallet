@@ -3,6 +3,7 @@
   "version": "2.0.0-rc.5",
   "type": "module",
   "main": "./dist/index.js",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "author": "Midnight Foundation",
   "license": "Apache-2.0",
@@ -20,6 +21,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./v1": {
+      "types": "./dist/v1/index.d.ts",
+      "import": "./dist/v1/index.js"
     }
   },
   "dependencies": {

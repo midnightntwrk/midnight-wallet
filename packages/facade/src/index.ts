@@ -23,12 +23,14 @@ import {
   type UnboundTransaction,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import {
-  type AnyTransaction,
   type DefaultDustConfiguration,
-  type CoinsAndBalances as DustCoinsAndBalances,
   type DustWalletAPI,
   type DustWalletState,
 } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import {
+  type AnyTransaction,
+  type CoinsAndBalances as DustCoinsAndBalances,
+} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,

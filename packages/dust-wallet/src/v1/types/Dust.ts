@@ -12,7 +12,7 @@
 // limitations under the License.
 import { DustInitialNonce, DustNullifier, DustNonce, DustPublicKey, Utxo } from '@midnight-ntwrk/ledger-v7';
 
-export type DustToken = {
+export type Dust = {
   initialValue: bigint;
   owner: DustPublicKey;
   nonce: DustNonce;
@@ -22,12 +22,12 @@ export type DustToken = {
   mtIndex: bigint;
 };
 
-export type DustTokenWithNullifier = DustToken & {
+export type DustWithNullifier = Dust & {
   nullifier: DustNullifier;
 };
 
-export type DustTokenFullInfo = DustGenerationDetails & {
-  token: DustToken;
+export type DustFullInfo = DustGenerationDetails & {
+  token: Dust;
 };
 
 /**
