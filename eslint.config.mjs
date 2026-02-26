@@ -4,6 +4,7 @@ import esLintPrettier from 'eslint-plugin-prettier/recommended';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { includeIgnoreFile } from '@eslint/compat';
+import { defineConfig } from 'eslint/config';
 
 export const packageConfig = (...cfgs) => {
   const defaultFiles = ['src/**/*.{ts,tsx}', 'test/**/*.{ts,tsx}', 'scripts/**/*.ts'];
@@ -23,7 +24,7 @@ const globalIgnores = includeIgnoreFile(
 );
 
 //TODO: consider defining config for config JS files too (for consistent formatting at the very least)
-export const defaultConfig = tsLint.config(
+export const defaultConfig = defineConfig(
   esLint.configs.recommended,
   ...tsLint.configs.recommendedTypeChecked,
   {
@@ -69,3 +70,5 @@ export const defaultConfig = tsLint.config(
   },
   esLintPrettier,
 );
+
+export default packageConfig();

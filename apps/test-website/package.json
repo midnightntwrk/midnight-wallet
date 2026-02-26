@@ -45,12 +45,6 @@
   },
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",
-    "eslint": "^10.0.2",
-    "fast-check": "^4.5.3",
-    "prettier": "^3.8.1",
-    "publint": "^0.3.17",
-    "rimraf": "^6.1.3",
-    "typescript": "^5.9.3",
     "vite": "^7.3.1",
     "vite-plugin-node-polyfills": "^0.25.0",
     "vite-plugin-wasm": "^3.5.0"
