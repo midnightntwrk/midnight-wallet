@@ -25,7 +25,9 @@ export type SimulatorState = Readonly<{
 const simpleHash = (input: string): Effect.Effect<string> => {
   return Encoding.decodeHex(input).pipe(
     EitherOps.toEffect,
-    Effect.andThen((parsed) => Effect.promise(() => crypto.subtle.digest('SHA-256', parsed))),
+    Effect.andThen((parsed) =>
+      Effect.promise(() => crypto.subtle.digest('SHA-256', parsed as Uint8Array<ArrayBuffer>)),
+    ),
     Effect.andThen((out) => Encoding.encodeHex(new Uint8Array(out))),
     Effect.orDie,
   );
