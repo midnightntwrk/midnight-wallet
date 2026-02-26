@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '../../dust-wallet/dist/v1/index.js';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   InMemoryTransactionHistoryStorage,

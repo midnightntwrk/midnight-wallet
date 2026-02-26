@@ -26,7 +26,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '../../dust-wallet/dist/v1/index.js';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
