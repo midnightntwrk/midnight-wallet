@@ -1,5 +1,15 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 2.0.0-rc.4
+
+### Patch Changes
+
+- dd004db: Add optional `keepAlive` config param to `SubscriptionClient.ServerConfig` and to `IndexerClientConnection`
+  in all wallet packages. The value is forwarded to the underlying `graphql-ws` client and defaults to `15_000` ms when
+  not provided.
+- Updated dependencies [dd004db]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0-rc.4
+
 ## 2.0.0-rc.3
 
 ### Patch Changes
