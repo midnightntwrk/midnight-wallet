@@ -2778,14 +2778,8 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:2.0.0-rc.4"
     "@types/node": "npm:^25.3.0"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
     pure-rand: "npm:^7.0.1"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2794,14 +2788,6 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-abstractions@workspace:packages/abstractions"
   dependencies:
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    to-words: "npm:^5.1.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2812,13 +2798,6 @@ __metadata:
     "@midnight-ntwrk/ledger-v7": "npm:^7.0.2"
     "@scure/base": "npm:^2.0.0"
     "@subsquid/scale-codec": "npm:^4.0.1"
-    "@types/node": "npm:^25.3.0"
-    eslint: "npm:^10.0.2"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2826,22 +2805,22 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
+    "@effect/cluster": "npm:^0.56.4"
+    "@effect/experimental": "npm:^0.58.0"
+    "@effect/platform": "npm:^0.94.5"
+    "@effect/platform-node": "npm:^0.104.1"
+    "@effect/rpc": "npm:^0.73.2"
+    "@effect/sql": "npm:^0.49.0"
+    "@effect/workflow": "npm:^0.16.0"
     "@midnight-ntwrk/ledger-v7": "npm:^7.0.2"
-    "@midnight-ntwrk/wallet-sdk-address-format": "npm:^3.0.0"
-    "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.0"
+    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-node-client": "npm:^1.0.0"
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.1.0-rc.2"
-    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.0.1-rc.0"
+    "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.0.1-rc.1"
     "@midnight-ntwrk/zkir-v2": "npm:^2.1.0"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
+    rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
 
@@ -2858,15 +2837,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*"
     "@types/lodash-es": "npm:^4.17.12"
     buffer: "npm:^6.0.3"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
     lodash-es: "npm:^4.17.23"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2880,19 +2851,10 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:1.1.0-rc.4"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.1.0-rc.3"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.1-rc.2"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
-    "@types/node": "npm:^25.3.0"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2906,17 +2868,10 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:^3.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^2.0.0-rc.3"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.0"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:^2.0.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:^2.0.0-rc.2"
-    eslint: "npm:^10.0.2"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.2"
+    "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2925,16 +2880,8 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-hd@workspace:packages/hd"
   dependencies:
     "@ethereumjs/wallet": "npm:^10.0.0"
-    "@scure/base": "npm:^2.0.0"
     "@scure/bip32": "npm:^2.0.1"
     "@scure/bip39": "npm:^2.0.1"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2942,25 +2889,16 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-indexer-client@workspace:packages/indexer-client"
   dependencies:
-    "@effect/platform": "npm:^0.94.5"
     "@graphql-codegen/cli": "npm:^6.1.2"
     "@graphql-codegen/client-preset": "npm:^5.2.3"
     "@graphql-codegen/typescript": "npm:^5.0.8"
     "@graphql-codegen/typescript-operations": "npm:^5.0.8"
     "@graphql-typed-document-node/core": "npm:^3.2.0"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
     graphql: "npm:^16.13.0"
     graphql-http: "npm:^1.22.4"
     graphql-ws: "npm:^6.0.7"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -2983,11 +2921,13 @@ __metadata:
     eslint: "npm:^10.0.2"
     eslint-config-prettier: "npm:^10.1.8"
     eslint-plugin-prettier: "npm:^5.5.5"
-    extensionless: "npm:^2.0.6"
+    fast-check: "npm:^4.5.3"
     prettier: "npm:^3.8.1"
+    publint: "npm:^0.3.17"
     rimraf: "npm:^6.1.3"
+    testcontainers: "npm:^11.12.0"
     tslib: "npm:^2.8.1"
-    turbo: "npm:^2.8.10"
+    turbo: "npm:^2.8.11"
     typescript: "npm:^5.9.3"
     typescript-eslint: "npm:^8.56.1"
     vitest: "npm:^4.0.18"
@@ -3010,32 +2950,14 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.1.0-rc.3"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     "@polkadot/api": "npm:^16.5.4"
-    "@polkadot/api-augment": "npm:^16.5.4"
-    "@polkadot/api-base": "npm:^16.5.4"
-    "@polkadot/rpc-augment": "npm:^16.5.4"
-    "@polkadot/rpc-core": "npm:^16.5.4"
-    "@polkadot/typegen": "npm:^16.5.4"
     "@polkadot/types": "npm:^16.5.4"
-    "@polkadot/types-augment": "npm:^16.5.4"
-    "@polkadot/types-codec": "npm:^16.5.4"
-    "@polkadot/types-known": "npm:^16.5.4"
-    "@polkadot/types-support": "npm:^16.5.4"
+    "@polkadot/util": "npm:^14.0.1"
     "@types/bn.js": "npm:^5.2.0"
     "@types/tar-stream": "npm:^3.1.4"
-    "@types/yargs": "npm:^17.0.35"
     bn.js: "npm:^5.2.3"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    rxjs: "npm:^7.8.2"
     tar-stream: "npm:^3.1.7"
-    testcontainers: "npm:^11.12.0"
     tsx: "npm:^4.21.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
-    yargs: "npm:^18.0.0"
   languageName: unknown
   linkType: soft
 
@@ -3045,17 +2967,9 @@ __metadata:
   dependencies:
     "@effect/platform": "npm:^0.94.5"
     "@midnight-ntwrk/ledger-v7": "npm:^7.0.2"
-    "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     "@midnight-ntwrk/zkir-v2": "npm:2.1.0"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:~5.9.3"
-    vitest: "npm:^4.0.18"
     web-worker: "npm:^1.5.0"
   languageName: unknown
   linkType: soft
@@ -3067,14 +2981,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
-    typescript: "npm:~5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -3082,34 +2989,15 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-shielded@workspace:packages/shielded-wallet"
   dependencies:
-    "@effect/cluster": "npm:^0.56.4"
-    "@effect/experimental": "npm:^0.58.0"
-    "@effect/platform": "npm:^0.94.5"
-    "@effect/platform-node": "npm:^0.104.1"
-    "@effect/rpc": "npm:^0.73.2"
-    "@effect/sql": "npm:^0.49.0"
-    "@effect/workflow": "npm:^0.16.0"
     "@midnight-ntwrk/ledger-v7": "npm:^7.0.2"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0-rc.1"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:1.1.0-rc.4"
-    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.1.0-rc.3"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.1-rc.2"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
-    "@polkadot/types": "npm:^16.5.4"
-    "@scure/base": "npm:^2.0.0"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    to-words: "npm:^5.1.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -3123,35 +3011,21 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.1.0-rc.2"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:1.1.0-rc.4"
+    "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.1-rc.2"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:1.0.1-rc.1"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
-    testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-utilities@npm:1.0.1-rc.1, @midnight-ntwrk/wallet-sdk-utilities@npm:^1.0.1-rc.0, @midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities":
+"@midnight-ntwrk/wallet-sdk-utilities@npm:1.0.1-rc.1, @midnight-ntwrk/wallet-sdk-utilities@npm:^1.0.1-rc.1, @midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-utilities@workspace:packages/utilities"
   dependencies:
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
     portfinder: "npm:^1.0.38"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
     testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
-    vitest: "npm:^4.0.18"
   languageName: unknown
   linkType: soft
 
@@ -3170,17 +3044,11 @@ __metadata:
     "@types/react-dom": "npm:^19.2.3"
     buffer: "npm:^6.0.3"
     effect: "npm:^3.19.19"
-    eslint: "npm:^10.0.2"
-    fast-check: "npm:^4.5.3"
     lodash-es: "npm:^4.17.23"
-    prettier: "npm:^3.8.1"
-    publint: "npm:^0.3.17"
     react: "npm:^19.2.4"
     react-dom: "npm:^19.2.4"
-    rimraf: "npm:^6.1.3"
     rxjs: "npm:^7.8.2"
     testcontainers: "npm:^11.12.0"
-    typescript: "npm:^5.9.3"
     vite: "npm:^7.3.1"
     vite-plugin-node-polyfills: "npm:^0.25.0"
     vite-plugin-wasm: "npm:^3.5.0"
@@ -3679,7 +3547,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/api-augment@npm:16.5.4, @polkadot/api-augment@npm:^16.5.4":
+"@polkadot/api-augment@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/api-augment@npm:16.5.4"
   dependencies:
@@ -3694,7 +3562,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/api-base@npm:16.5.4, @polkadot/api-base@npm:^16.5.4":
+"@polkadot/api-base@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/api-base@npm:16.5.4"
   dependencies:
@@ -3775,7 +3643,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/rpc-augment@npm:16.5.4, @polkadot/rpc-augment@npm:^16.5.4":
+"@polkadot/rpc-augment@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/rpc-augment@npm:16.5.4"
   dependencies:
@@ -3788,7 +3656,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/rpc-core@npm:16.5.4, @polkadot/rpc-core@npm:^16.5.4":
+"@polkadot/rpc-core@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/rpc-core@npm:16.5.4"
   dependencies:
@@ -3826,38 +3694,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/typegen@npm:^16.5.4":
-  version: 16.5.4
-  resolution: "@polkadot/typegen@npm:16.5.4"
-  dependencies:
-    "@polkadot/api": "npm:16.5.4"
-    "@polkadot/api-augment": "npm:16.5.4"
-    "@polkadot/api-derive": "npm:16.5.4"
-    "@polkadot/rpc-augment": "npm:16.5.4"
-    "@polkadot/rpc-provider": "npm:16.5.4"
-    "@polkadot/types": "npm:16.5.4"
-    "@polkadot/types-augment": "npm:16.5.4"
-    "@polkadot/types-codec": "npm:16.5.4"
-    "@polkadot/types-create": "npm:16.5.4"
-    "@polkadot/types-support": "npm:16.5.4"
-    "@polkadot/util": "npm:^14.0.1"
-    "@polkadot/util-crypto": "npm:^14.0.1"
-    "@polkadot/x-ws": "npm:^14.0.1"
-    comment-parser: "npm:^1.4.1"
-    handlebars: "npm:^4.7.8"
-    tslib: "npm:^2.8.1"
-    yargs: "npm:^17.7.2"
-  bin:
-    polkadot-types-chain-info: scripts/polkadot-types-chain-info.mjs
-    polkadot-types-from-chain: scripts/polkadot-types-from-chain.mjs
-    polkadot-types-from-defs: scripts/polkadot-types-from-defs.mjs
-    polkadot-types-internal-interfaces: scripts/polkadot-types-internal-interfaces.mjs
-    polkadot-types-internal-metadata: scripts/polkadot-types-internal-metadata.mjs
-  checksum: 10c0/9a2452ffb4703f93dc7b7a2fa3101e90aa0483cd33f638474e087aa40f996b1c073ea7d6eed82b900c4a54b8fddd158d2fcee08c4ba1273425d57b96d2805ab6
-  languageName: node
-  linkType: hard
-
-"@polkadot/types-augment@npm:16.5.4, @polkadot/types-augment@npm:^16.5.4":
+"@polkadot/types-augment@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/types-augment@npm:16.5.4"
   dependencies:
@@ -3869,7 +3706,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/types-codec@npm:16.5.4, @polkadot/types-codec@npm:^16.5.4":
+"@polkadot/types-codec@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/types-codec@npm:16.5.4"
   dependencies:
@@ -3891,7 +3728,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/types-known@npm:16.5.4, @polkadot/types-known@npm:^16.5.4":
+"@polkadot/types-known@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/types-known@npm:16.5.4"
   dependencies:
@@ -3905,7 +3742,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@polkadot/types-support@npm:16.5.4, @polkadot/types-support@npm:^16.5.4":
+"@polkadot/types-support@npm:16.5.4":
   version: 16.5.4
   resolution: "@polkadot/types-support@npm:16.5.4"
   dependencies:
@@ -4771,22 +4608,6 @@ __metadata:
   dependencies:
     "@types/node": "npm:*"
   checksum: 10c0/61aff1129143fcc4312f083bc9e9e168aa3026b7dd6e70796276dcfb2c8211c4292603f9c4864fae702f2ed86e4abd4d38aa421831c2fd7f856c931a481afbab
-  languageName: node
-  linkType: hard
-
-"@types/yargs-parser@npm:*":
-  version: 21.0.3
-  resolution: "@types/yargs-parser@npm:21.0.3"
-  checksum: 10c0/e71c3bd9d0b73ca82e10bee2064c384ab70f61034bbfb78e74f5206283fc16a6d85267b606b5c22cb2a3338373586786fed595b2009825d6a9115afba36560a0
-  languageName: node
-  linkType: hard
-
-"@types/yargs@npm:^17.0.35":
-  version: 17.0.35
-  resolution: "@types/yargs@npm:17.0.35"
-  dependencies:
-    "@types/yargs-parser": "npm:*"
-  checksum: 10c0/609557826a6b85e73ccf587923f6429850d6dc70e420b455bab4601b670bfadf684b09ae288bccedab042c48ba65f1666133cf375814204b544009f57d6eef63
   languageName: node
   linkType: hard
 
@@ -6036,17 +5857,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"cliui@npm:^9.0.1":
-  version: 9.0.1
-  resolution: "cliui@npm:9.0.1"
-  dependencies:
-    string-width: "npm:^7.2.0"
-    strip-ansi: "npm:^7.1.0"
-    wrap-ansi: "npm:^9.0.0"
-  checksum: 10c0/13441832e9efe7c7a76bd2b8e683555c478d461a9f249dc5db9b17fe8d4b47fa9277b503914b90bd00e4a151abb6b9b02b2288972ffe2e5e3ca40bcb1c2330d3
-  languageName: node
-  linkType: hard
-
 "color-convert@npm:^2.0.1":
   version: 2.0.1
   resolution: "color-convert@npm:2.0.1"
@@ -6067,13 +5877,6 @@ __metadata:
   version: 2.0.20
   resolution: "colorette@npm:2.0.20"
   checksum: 10c0/e94116ff33b0ff56f3b83b9ace895e5bf87c2a7a47b3401b8c3f3226e050d5ef76cf4072fb3325f9dc24d1698f9b730baf4e05eeaf861d74a1883073f4c98a40
-  languageName: node
-  linkType: hard
-
-"comment-parser@npm:^1.4.1":
-  version: 1.4.1
-  resolution: "comment-parser@npm:1.4.1"
-  checksum: 10c0/d6c4be3f5be058f98b24f2d557f745d8fe1cc9eb75bebbdccabd404a0e1ed41563171b16285f593011f8b6a5ec81f564fb1f2121418ac5cbf0f49255bf0840dd
   languageName: node
   linkType: hard
 
@@ -7166,13 +6969,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"extensionless@npm:^2.0.6":
-  version: 2.0.6
-  resolution: "extensionless@npm:2.0.6"
-  checksum: 10c0/00f0cbf3676d7fb57ed3c4da64a6c6168f244f4c056f56d9af51b4952470474b296a1a9bd11d4d0ef97813848142bfa3bba6cc2bac5f5bb8af2e7ac808570a08
-  languageName: node
-  linkType: hard
-
 "fast-check@npm:^3.23.1":
   version: 3.23.2
   resolution: "fast-check@npm:3.23.2"
@@ -7777,24 +7573,6 @@ __metadata:
   version: 16.13.0
   resolution: "graphql@npm:16.13.0"
   checksum: 10c0/c20e7909c6c8d405a30f8caeae5aaf604b9f949bdcdf80bdb3d3561123e6099181c39eae697cf4fcdc5dd301ab215363b8def0aa0ff51f03cc7e4b48a8c2c2b1
-  languageName: node
-  linkType: hard
-
-"handlebars@npm:^4.7.8":
-  version: 4.7.8
-  resolution: "handlebars@npm:4.7.8"
-  dependencies:
-    minimist: "npm:^1.2.5"
-    neo-async: "npm:^2.6.2"
-    source-map: "npm:^0.6.1"
-    uglify-js: "npm:^3.1.4"
-    wordwrap: "npm:^1.0.0"
-  dependenciesMeta:
-    uglify-js:
-      optional: true
-  bin:
-    handlebars: bin/handlebars
-  checksum: 10c0/7aff423ea38a14bb379316f3857fe0df3c5d66119270944247f155ba1f08e07a92b340c58edaa00cfe985c21508870ee5183e0634dcb53dd405f35c93ef7f10d
   languageName: node
   linkType: hard
 
@@ -8925,7 +8703,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"minimist@npm:^1.2.5, minimist@npm:^1.2.6, minimist@npm:^1.2.8":
+"minimist@npm:^1.2.6, minimist@npm:^1.2.8":
   version: 1.2.8
   resolution: "minimist@npm:1.2.8"
   checksum: 10c0/19d3fcdca050087b84c2029841a093691a91259a47def2f18222f41e7645a0b7c44ef4b40e88a1e58a40c84d2ef0ee6047c55594d298146d0eb3f6b737c20ce6
@@ -9159,13 +8937,6 @@ __metadata:
   version: 1.0.0
   resolution: "negotiator@npm:1.0.0"
   checksum: 10c0/4c559dd52669ea48e1914f9d634227c561221dd54734070791f999c52ed0ff36e437b2e07d5c1f6e32909fc625fe46491c16e4a8f0572567d4dd15c3a4fda04b
-  languageName: node
-  linkType: hard
-
-"neo-async@npm:^2.6.2":
-  version: 2.6.2
-  resolution: "neo-async@npm:2.6.2"
-  checksum: 10c0/c2f5a604a54a8ec5438a342e1f356dff4bc33ccccdb6dc668d94fe8e5eccfc9d2c2eea6064b0967a767ba63b33763f51ccf2cd2441b461a7322656c1f06b3f5d
   languageName: node
   linkType: hard
 
@@ -10395,7 +10166,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"rimraf@npm:^6.1.2, rimraf@npm:^6.1.3":
+"rimraf@npm:^6.1.3":
   version: 6.1.3
   resolution: "rimraf@npm:6.1.3"
   dependencies:
@@ -10916,13 +10687,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"source-map@npm:^0.6.1":
-  version: 0.6.1
-  resolution: "source-map@npm:0.6.1"
-  checksum: 10c0/ab55398007c5e5532957cb0beee2368529618ac0ab372d789806f5718123cc4367d57de3904b4e6a4170eb5a0b0f41373066d02ca0735a0c4d75c7d328d3e011
-  languageName: node
-  linkType: hard
-
 "spawndamnit@npm:^3.0.1":
   version: 3.0.1
   resolution: "spawndamnit@npm:3.0.1"
@@ -11107,7 +10871,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"string-width@npm:^7.0.0, string-width@npm:^7.2.0":
+"string-width@npm:^7.0.0":
   version: 7.2.0
   resolution: "string-width@npm:7.2.0"
   dependencies:
@@ -11452,13 +11216,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"to-words@npm:^5.1.0":
-  version: 5.1.0
-  resolution: "to-words@npm:5.1.0"
-  checksum: 10c0/81c4c0fc7f600b40b903280473a36b4cd87279c80d06707b351e9073cd7c5c9b27f78f987ca11183497a0186f85998eb204ab40d1e8194b64cd8f01403a8bbad
-  languageName: node
-  linkType: hard
-
 "totalist@npm:^3.0.0":
   version: 3.0.1
   resolution: "totalist@npm:3.0.1"
@@ -11549,58 +11306,58 @@ __metadata:
   languageName: node
   linkType: hard
 
-"turbo-darwin-64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-darwin-64@npm:2.8.10"
+"turbo-darwin-64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-darwin-64@npm:2.8.11"
   conditions: os=darwin & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-darwin-arm64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-darwin-arm64@npm:2.8.10"
+"turbo-darwin-arm64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-darwin-arm64@npm:2.8.11"
   conditions: os=darwin & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-linux-64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-linux-64@npm:2.8.10"
+"turbo-linux-64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-linux-64@npm:2.8.11"
   conditions: os=linux & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-linux-arm64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-linux-arm64@npm:2.8.10"
+"turbo-linux-arm64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-linux-arm64@npm:2.8.11"
   conditions: os=linux & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo-windows-64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-windows-64@npm:2.8.10"
+"turbo-windows-64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-windows-64@npm:2.8.11"
   conditions: os=win32 & cpu=x64
   languageName: node
   linkType: hard
 
-"turbo-windows-arm64@npm:2.8.10":
-  version: 2.8.10
-  resolution: "turbo-windows-arm64@npm:2.8.10"
+"turbo-windows-arm64@npm:2.8.11":
+  version: 2.8.11
+  resolution: "turbo-windows-arm64@npm:2.8.11"
   conditions: os=win32 & cpu=arm64
   languageName: node
   linkType: hard
 
-"turbo@npm:^2.8.10":
-  version: 2.8.10
-  resolution: "turbo@npm:2.8.10"
+"turbo@npm:^2.8.11":
+  version: 2.8.11
+  resolution: "turbo@npm:2.8.11"
   dependencies:
-    turbo-darwin-64: "npm:2.8.10"
-    turbo-darwin-arm64: "npm:2.8.10"
-    turbo-linux-64: "npm:2.8.10"
-    turbo-linux-arm64: "npm:2.8.10"
-    turbo-windows-64: "npm:2.8.10"
-    turbo-windows-arm64: "npm:2.8.10"
+    turbo-darwin-64: "npm:2.8.11"
+    turbo-darwin-arm64: "npm:2.8.11"
+    turbo-linux-64: "npm:2.8.11"
+    turbo-linux-arm64: "npm:2.8.11"
+    turbo-windows-64: "npm:2.8.11"
+    turbo-windows-arm64: "npm:2.8.11"
   dependenciesMeta:
     turbo-darwin-64:
       optional: true
@@ -11616,7 +11373,7 @@ __metadata:
       optional: true
   bin:
     turbo: bin/turbo
-  checksum: 10c0/f751213327d2d61bcadf33ee510467005310b868ffc92d7ecaca29cd66158358fbb74fec0079621c731c406b662bc4221a173aadd600487b4f59c0119fa3b9d6
+  checksum: 10c0/9c74e4c1494494ee3118c232d2136dfbfd15faf203d433ee73392c57acde43395f8095c8d05fd1d56b5ba58295fe7562ad6c6b9a767f2c86091833bcc53f726e
   languageName: node
   linkType: hard
 
@@ -11669,7 +11426,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.9.3, typescript@npm:~5.9.3":
+"typescript@npm:^5.9.3":
   version: 5.9.3
   resolution: "typescript@npm:5.9.3"
   bin:
@@ -11679,7 +11436,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>, typescript@patch:typescript@npm%3A~5.9.3#optional!builtin<compat/typescript>":
+"typescript@patch:typescript@npm%3A^5.9.3#optional!builtin<compat/typescript>":
   version: 5.9.3
   resolution: "typescript@patch:typescript@npm%3A5.9.3#optional!builtin<compat/typescript>::version=5.9.3&hash=5786d5"
   bin:
@@ -11695,15 +11452,6 @@ __metadata:
   bin:
     ua-parser-js: script/cli.js
   checksum: 10c0/45dc1f7f3ce8248e0e64640d2e29c65c0ea1fc9cb105594de84af80e2a57bba4f718b9376098ca7a5b0ffe240f8995b0fa3714afa9d36861c41370a378f1a274
-  languageName: node
-  linkType: hard
-
-"uglify-js@npm:^3.1.4":
-  version: 3.19.3
-  resolution: "uglify-js@npm:3.19.3"
-  bin:
-    uglifyjs: bin/uglifyjs
-  checksum: 10c0/83b0a90eca35f778e07cad9622b80c448b6aad457c9ff8e568afed978212b42930a95f9e1be943a1ffa4258a3340fbb899f41461131c05bb1d0a9c303aed8479
   languageName: node
   linkType: hard
 
@@ -12174,13 +11922,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"wordwrap@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "wordwrap@npm:1.0.0"
-  checksum: 10c0/7ed2e44f3c33c5c3e3771134d2b0aee4314c9e49c749e37f464bf69f2bcdf0cbf9419ca638098e2717cff4875c47f56a007532f6111c3319f557a2ca91278e92
-  languageName: node
-  linkType: hard
-
 "wrap-ansi-cjs@npm:wrap-ansi@^7.0.0, wrap-ansi@npm:^7.0.0":
   version: 7.0.0
   resolution: "wrap-ansi@npm:7.0.0"
@@ -12328,13 +12069,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"yargs-parser@npm:^22.0.0":
-  version: 22.0.0
-  resolution: "yargs-parser@npm:22.0.0"
-  checksum: 10c0/cb7ef81759c4271cb1d96b9351dbbc9a9ce35d3e1122d2b739bf6c432603824fa02c67cc12dcef6ea80283379d63495686e8f41cc7b06c6576e792aba4d33e1c
-  languageName: node
-  linkType: hard
-
 "yargs@npm:^17.0.0, yargs@npm:^17.7.2":
   version: 17.7.2
   resolution: "yargs@npm:17.7.2"
@@ -12347,20 +12081,6 @@ __metadata:
     y18n: "npm:^5.0.5"
     yargs-parser: "npm:^21.1.1"
   checksum: 10c0/ccd7e723e61ad5965fffbb791366db689572b80cca80e0f96aad968dfff4156cd7cd1ad18607afe1046d8241e6fb2d6c08bf7fa7bfb5eaec818735d8feac8f05
-  languageName: node
-  linkType: hard
-
-"yargs@npm:^18.0.0":
-  version: 18.0.0
-  resolution: "yargs@npm:18.0.0"
-  dependencies:
-    cliui: "npm:^9.0.1"
-    escalade: "npm:^3.1.1"
-    get-caller-file: "npm:^2.0.5"
-    string-width: "npm:^7.2.0"
-    y18n: "npm:^5.0.5"
-    yargs-parser: "npm:^22.0.0"
-  checksum: 10c0/bf290e4723876ea9c638c786a5c42ac28e03c9ca2325e1424bf43b94e5876456292d3ed905b853ebbba6daf43ed29e772ac2a6b3c5fb1b16533245d6211778f3
   languageName: node
   linkType: hard
 

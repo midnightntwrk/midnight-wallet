@@ -22,15 +22,7 @@
     "@midnight-ntwrk/wallet-sdk-shielded": "2.0.0-rc.4",
     "@types/node": "^25.3.0",
     "effect": "^3.19.19",
-    "fast-check": "^4.5.3",
     "pure-rand": "^7.0.1",
-    "rxjs": "^7.8.2",
-    "testcontainers": "^11.12.0"
-  },
-  "devDependencies": {
-    "eslint": "^10.0.2",
-    "prettier": "^3.8.1",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "rxjs": "^7.8.2"
   }
 }
