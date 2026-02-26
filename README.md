@@ -14,19 +14,32 @@ It provides components for:
 
 ## Modules structure
 
-This project is a yarn workspaces combined with Turborepo. In many of them `package.json` files can be found and they
-are registered as workspaces in yarn, so yarn can resolve the dependencies. Main packages/sub-projects are:
+This project is a Yarn workspaces monorepo combined with Turborepo. Packages are organized under `packages/` and
+applications under `apps/`. Main packages are:
 
-- `wallet/v1` - the shielded wallet variant
-- `wallet` - wallet runtime and builder - allows orchestrating variants of a wallet across migration points (most
-  importantly - hard-forks)
+- `facade` - unified wallet API combining shielded, unshielded, and dust wallet types into a single interface
+- `shielded-wallet` - shielded token operations with zero-knowledge proof support
+- `unshielded-wallet` - unshielded token operations on the ledger
+- `dust-wallet` - dust management for transaction fees
+- `runtime` - wallet builder and lifecycle management, orchestrating wallet variants across migration points (e.g.
+  hard-forks)
 - `abstractions` - common abstractions and definitions - variants need to implement specific interfaces to be used
-  through wallet builder, but can't depend on the builder itself
+  through the wallet builder, but can't depend on the builder itself
+- `capabilities` - shared and universal definitions and implementations for capabilities, e.g. transaction balancing and
+  coin selection
 - `address-format` - implementation of Bech32m formatting for Midnight keys and addresses
-- `hd` - implementation of HD-wallet API for Midnight
-- `capabilities` - shared and universal definitions and implementations for capabilities. E.g. balancing or coin
-  selection
+- `hd` - implementation of HD-wallet API (BIP32/BIP39) for Midnight
+- `utilities` - common operations and types shared across packages
+- `indexer-client` - GraphQL client for syncing state with the indexer
+- `node-client` - Polkadot RPC client for communicating with the Midnight node
+- `prover-client` - client for zero-knowledge proof generation
 - `wallet-integration-tests` - tests examining public APIs
+- `e2e-tests` - end-to-end integration tests
+- `docs-snippets` - documentation code examples
+
+Applications:
+
+- `test-website` - React-based browser testing application for the wallet SDK
 
 > [!NOTE]
 >
@@ -80,7 +93,13 @@ yarn
 Build the projects once, generated Javascript code is written to the project's `dist` directory.
 
 ```shell
-turbo dist
+yarn dist
+```
+
+To build a specific package, use the `--filter` flag:
+
+```shell
+yarn dist --filter=@midnight-ntwrk/wallet-sdk-facade
 ```
 
 ## Build and watch
@@ -89,7 +108,7 @@ Build the project and watch for changes to automatically rebuild. Generated Java
 `dist` directory
 
 ```shell
-turbo watch dist
+yarn watch
 ```
 
 ## Clean
@@ -97,7 +116,7 @@ turbo watch dist
 Clean exiting `dist` directories.
 
 ```shell
-turbo clean
+yarn clean
 ```
 
 ## Format
@@ -105,7 +124,7 @@ turbo clean
 Formats source code.
 
 ```shell
-turbo format
+yarn format
 ```
 
 ## Test
@@ -134,13 +153,19 @@ enter the directory, making the variables available to any commands you run in t
 ### Unit tests
 
 ```shell
-turbo test
+yarn test
 ```
 
-### Integration tests
+To run tests for a specific package:
 
 ```shell
-sbt integrationTests/test
+yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet
+```
+
+To run a specific test file:
+
+```shell
+yarn test --filter=@midnight-ntwrk/wallet-sdk-unshielded-wallet -- test/UnshieldedWallet.test.ts
 ```
 
 ### CI verification
@@ -148,7 +173,7 @@ sbt integrationTests/test
 To run the same checks as CI does, run
 
 ```shell
-turbo verify
+yarn verify
 ```
 
 It runs across all workspaces:
@@ -162,19 +187,30 @@ It runs across all workspaces:
 
 All new features must branch off the default branch `main`.
 
-It's recommended to enable automatic scalafmt formatting in your text editor upon save, in order to avoid CI errors due
-to incorrect format.
+It's recommended to enable automatic formatting in your text editor upon save (via Prettier), in order to avoid CI
+errors due to incorrect format.
 
-To execute the same verifications that are enabled on the CI, you should run `CI Verifications` as documented above.
+To execute the same verifications that are enabled on the CI, you should run `yarn verify` as documented above.
 
 ## Release a new version
 
-Please read our [git workflow](https://input-output.atlassian.net/wiki/spaces/MN/pages/3378086090/Git+Workflow) for how
-to branch and tag releases.
+We use [Changesets](https://github.com/changesets/changesets) to manage versioning, changelogs, and publishing. For full
+details on the release process, see the [Developer Guide](./DEV_GUIDE.md).
 
-After that, use the [Releases](https://github.com/midnightntwrk/midnight-wallet/releases/new) feature from GitHub to
-create a tag with a name following the pattern `vX.Y.Z`. A GitHub action will automatically build and publish the new
-version.
+When your PR introduces a releasable change, add a changeset:
+
+```shell
+yarn changeset add
+```
+
+If the change doesn't need a release (e.g. docs, internal tooling), add an empty changeset:
+
+```shell
+yarn changeset add --empty
+```
+
+A GitHub Action automatically creates and maintains a `chore: release` PR that applies version bumps and changelog
+updates. Merging that PR publishes new versions to the package registry.
 
 ### LICENSE
 
@@ -217,13 +253,6 @@ our CLAs directly within a GitHub pull request.
 
 The Midnight Foundation uses GitHub Dependabot feature to keep our projects dependencies up-to-date and address
 potential security vulnerabilities.
-
-### Checkmarx
-
-The Midnight Foundation uses Checkmarx for application security (AppSec) to identify and fix security vulnerabilities.
-All repositories are scanned with Checkmarx's suite of tools including: Static Application Security Testing (SAST),
-Infrastructure as Code (IaC), Software Composition Analysis (SCA), API Security, Container Security and Supply Chain
-Scans (SCS).
 
 ### Unito
 
