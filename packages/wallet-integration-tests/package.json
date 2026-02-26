@@ -19,7 +19,7 @@
     "@midnight-ntwrk/wallet-sdk-hd": "3.0.0",
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.1.0-rc.3",
     "@midnight-ntwrk/wallet-sdk-runtime": "1.0.1-rc.2",
-    "@midnight-ntwrk/wallet-sdk-shielded": "2.0.0-rc.3",
+    "@midnight-ntwrk/wallet-sdk-shielded": "2.0.0-rc.4",
     "@types/node": "^25.3.0",
     "effect": "^3.19.19",
     "fast-check": "^4.5.3",
