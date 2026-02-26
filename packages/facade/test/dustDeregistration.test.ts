@@ -27,7 +27,7 @@ import {
 import * as rx from 'rxjs';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet } from '../../dust-wallet/dist/v1/index.js';
 import { makeDefaultSubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 120_000 });

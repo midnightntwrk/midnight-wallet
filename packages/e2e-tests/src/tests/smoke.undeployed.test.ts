@@ -28,7 +28,7 @@ import {
   UnshieldedWallet,
   InMemoryTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet, DustWalletClass } from '../../../dust-wallet/dist/v1/index.js';
 
 /**
  * Smoke tests

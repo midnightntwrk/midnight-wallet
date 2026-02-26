@@ -28,7 +28,7 @@ import {
   type CoinsAndBalances as DustCoinsAndBalances,
   type DustWalletAPI,
   type DustWalletState,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+} from '../../dust-wallet/dist/v1/index.js';
 import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,

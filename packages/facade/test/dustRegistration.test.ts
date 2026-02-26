@@ -38,7 +38,7 @@ import {
 import * as rx from 'rxjs';
 import { type CombinedTokenTransfer, type DefaultConfiguration, type FacadeState, WalletFacade } from '../src/index.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet } from '../../dust-wallet/dist/v1/index.js';
 import { ArrayOps, DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });

@@ -1,6 +1,6 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
-Manages dust tokens (transaction fees) on the Midnight network.
+Manages dust (transaction fees) on the Midnight network.
 
 ## Installation
 
@@ -10,8 +10,8 @@ npm install @midnight-ntwrk/wallet-sdk-dust-wallet
 
 ## Overview
 
-The Dust Wallet handles dust operations on the Midnight network. Dust tokens are required to pay transaction fees. This
-package provides:
+The Dust Wallet handles dust operations on the Midnight network. Dust is required to pay transaction fees. This package
+provides:
 
 - Dust coin management and tracking
 - Balance synchronization with the network

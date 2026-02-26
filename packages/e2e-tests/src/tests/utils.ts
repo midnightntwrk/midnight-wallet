@@ -36,7 +36,7 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type DefaultV1Configuration, DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { type DefaultV1Configuration, DustWallet } from '../../../dust-wallet/dist/v1/index.js';
 
 // place this somewhere better?
 export const Segments = {

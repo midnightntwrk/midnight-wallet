@@ -10,4 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './DustWallet.js';
+export * from './CoreWallet.js';
+export * from '../DustWallet.js';
+export * as Keys from './Keys.js';
+export * as Simulator from './Simulator.js';
+export * as SyncService from './Sync.js';
+export * as Transacting from './Transacting.js';
+export * from './RunningV1Variant.js';
+export * from './V1Builder.js';
+export * from './types/index.js';
+export * as CoinsAndBalances from './CoinsAndBalances.js';
