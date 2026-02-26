@@ -36,7 +36,7 @@ jobs:
           token: ${{ env.MIDNIGHT_GH_TOKEN }}
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@3227f5311cb93ffd14d13e65d8cc400d30f4dd8a
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -91,7 +91,7 @@ jobs:
           retention-days: 30
 
       - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 #v1
+        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report

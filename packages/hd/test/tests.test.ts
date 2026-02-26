@@ -13,7 +13,7 @@
 import { hdkey } from '@ethereumjs/wallet';
 import { HDKey } from '@scure/bip32';
 import * as bip39 from '@scure/bip39';
-import { wordlist as english } from '@scure/bip39/wordlists/english';
+import { wordlist as english } from '@scure/bip39/wordlists/english.js';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {

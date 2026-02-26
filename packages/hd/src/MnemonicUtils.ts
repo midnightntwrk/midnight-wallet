@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as bip39 from '@scure/bip39';
-import { wordlist as english } from '@scure/bip39/wordlists/english';
+import { wordlist as english } from '@scure/bip39/wordlists/english.js';
 
 export const mnemonicToWords: (mnemonic: string) => string[] = (mnemonic: string) => mnemonic.split(' ');
 

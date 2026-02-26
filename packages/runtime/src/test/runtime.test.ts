@@ -123,7 +123,7 @@ describe('Wallet runtime', () => {
     });
     const wallet = Wallet.start(Wallet, Intercepting, 42);
 
-    const state = wallet.rawState.pipe(rx.take(3));
+    const allCollectedState = toProtocolStateArray<number>(wallet.rawState.pipe(rx.take(3)));
 
     await wallet.runtime
       .dispatch({
@@ -134,9 +134,7 @@ describe('Wallet runtime', () => {
       })
       .pipe(Effect.runPromise);
 
-    const receivedStates = await toProtocolStateArray(state);
-
-    expect(receivedStates).toEqual([
+    expect(await allCollectedState).toEqual([
       { version: ProtocolVersion.ProtocolVersion(50n), state: 42 }, // this is the state we provided, and runtime automatically emits it
       { version: ProtocolVersion.ProtocolVersion(100n), state: 86 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 88 },
