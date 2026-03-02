@@ -30,19 +30,12 @@
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "^2.0.0-rc.3",
     "@midnight-ntwrk/wallet-sdk-shielded": "^2.0.0-rc.2",
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "^2.0.0-rc.2",
-    "rxjs": "^7.5"
+    "rxjs": "^7.8.2"
   },
   "devDependencies": {
     "@midnight-ntwrk/wallet-sdk-abstractions": "^2.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-hd": "^3.0.0",
-    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.1.0-rc.2",
-    "eslint": "^9.37.0",
-    "prettier": "^3.7.0",
-    "publint": "~0.3.14",
-    "rimraf": "^6.0.1",
-    "testcontainers": "^11.10.0",
-    "typescript": "^5.9.3",
-    "vitest": "^4.0.16"
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",

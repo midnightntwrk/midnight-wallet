@@ -24,14 +24,14 @@ import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime'
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
-import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './CoinsAndBalances.js';
-import { CoreWallet } from './CoreWallet.js';
-import { type KeysCapability } from './Keys.js';
-import { V1Tag } from './RunningV1Variant.js';
-import { type SerializationCapability } from './Serialization.js';
-import { type DustToken, type DustTokenFullInfo, type UtxoWithMeta } from './types/Dust.js';
-import { type AnyTransaction } from './types/ledger.js';
-import { type DefaultV1Configuration, type DefaultV1Variant, V1Builder } from './V1Builder.js';
+import { type Balance, type CoinsAndBalancesCapability, type UtxoWithFullDustDetails } from './v1/CoinsAndBalances.js';
+import { CoreWallet } from './v1/CoreWallet.js';
+import { type KeysCapability } from './v1/Keys.js';
+import { V1Tag } from './v1/RunningV1Variant.js';
+import { type SerializationCapability } from './v1/Serialization.js';
+import { type Dust, type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
+import { type AnyTransaction } from './v1/types/ledger.js';
+import { type DefaultV1Configuration, type DefaultV1Variant, V1Builder } from './v1/V1Builder.js';
 
 export type DustWalletCapabilities = {
   serialization: SerializationCapability<CoreWallet, null, string>;
@@ -50,15 +50,15 @@ export class DustWalletState {
   readonly state: CoreWallet;
   readonly capabilities: DustWalletCapabilities;
 
-  get totalCoins(): readonly DustToken[] {
+  get totalCoins(): readonly Dust[] {
     return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
   }
 
-  get availableCoins(): readonly DustToken[] {
+  get availableCoins(): readonly Dust[] {
     return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
   }
 
-  get pendingCoins(): readonly DustToken[] {
+  get pendingCoins(): readonly Dust[] {
     return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
   }
 
@@ -92,7 +92,7 @@ export class DustWalletState {
     return this.capabilities.coinsAndBalances.getWalletBalance(this.state, time);
   }
 
-  availableCoinsWithFullInfo(time: Date): readonly DustTokenFullInfo[] {
+  availableCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getAvailableCoinsWithFullInfo(this.state, time);
   }
 

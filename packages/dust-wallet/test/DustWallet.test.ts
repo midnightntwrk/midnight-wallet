@@ -35,9 +35,9 @@ import {
   type UtxoWithMeta,
   V1Builder,
   type V1Variant,
-} from '../src/index.js';
-import { Simulator, type SimulatorState } from '../src/Simulator.js';
-import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/Sync.js';
+} from '../src/v1/index.js';
+import { Simulator, type SimulatorState } from '../src/v1/Simulator.js';
+import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
@@ -319,7 +319,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('should allow spending Dust tokens', async () => {
+  it('should allow spending Dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
@@ -411,7 +411,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('should allow spending multiple Dust tokens', async () => {
+  it('should allow spending multiple Dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const walletAddress = keyStore.getAddress();
@@ -466,7 +466,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('spend the only Dust token', async () => {
+  it('spend the only Dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
@@ -582,7 +582,7 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
-  it('should revert a transaction and clear pending dust tokens', async () => {
+  it('should revert a transaction and clear pending dust', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
@@ -625,7 +625,7 @@ describe('DustWallet', () => {
       intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
-      // balance the transaction — this marks dust tokens as pending
+      // balance the transaction — this marks dust as pending
       const balancingTransaction = yield* wallet.balanceTransactions(
         dustSecretKey,
         [transferTransaction],

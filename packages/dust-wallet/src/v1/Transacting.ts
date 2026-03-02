@@ -36,7 +36,7 @@ import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { OtherWalletError, TransactingError, WalletError } from './WalletError.js';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
-import { AnyTransaction, DustToken, NetworkId, TotalCostParameters } from './types/index.js';
+import { AnyTransaction, Dust, NetworkId, TotalCostParameters } from './types/index.js';
 import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
@@ -79,7 +79,7 @@ export type DefaultTransactingConfiguration = {
 };
 
 export type DefaultTransactingContext = {
-  coinSelection: CoinSelection<DustToken>;
+  coinSelection: CoinSelection<Dust>;
   coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
   keysCapability: KeysCapability<CoreWallet>;
 };
@@ -117,14 +117,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 > {
   public readonly networkId: string;
   public readonly costParams: TotalCostParameters;
-  public readonly getCoinSelection: () => CoinSelection<DustToken>;
+  public readonly getCoinSelection: () => CoinSelection<Dust>;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
   constructor(
     networkId: NetworkId,
     costParams: TotalCostParameters,
-    getCoinSelection: () => CoinSelection<DustToken>,
+    getCoinSelection: () => CoinSelection<Dust>,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
   ) {
@@ -342,23 +342,23 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       0n,
     );
 
-    const dustTokens = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
-    const selectedTokens = this.getCoinSelection()(dustTokens, feeLeft);
-    if (!selectedTokens.length) {
-      return Either.left(new TransactingError({ message: 'No dust tokens found in the wallet state' }));
+    const dust = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
+    const selectedCoins = this.getCoinSelection()(dust, feeLeft);
+    if (!selectedCoins.length) {
+      return Either.left(new TransactingError({ message: 'No dust found in the wallet state' }));
     }
 
-    const totalFeeInSelected = selectedTokens.reduce((total, { value }) => total + value, 0n);
+    const totalFeeInSelected = selectedCoins.reduce((total, { value }) => total + value, 0n);
     const feeDiff = totalFeeInSelected - feeLeft;
     if (feeDiff < 0n) {
-      return Either.left(new TransactingError({ message: 'Not enough Dust generated to pay the fee' }));
+      return Either.left(new TransactingError({ message: 'Not enough dust generated to pay the fee' }));
     }
 
     // reduce the largest token's value by `feeDiff`
-    const tokensWithFeeToTake = selectedTokens.toSorted((a, b) => Number(b.value - a.value));
+    const coinsWithFeeToTake = selectedCoins.toSorted((a, b) => Number(b.value - a.value));
     if (feeDiff > 0n) {
-      const highestByValue = tokensWithFeeToTake[0];
-      tokensWithFeeToTake[0] = {
+      const highestByValue = coinsWithFeeToTake[0];
+      coinsWithFeeToTake[0] = {
         value: highestByValue.value - feeDiff,
         token: highestByValue.token,
       };
@@ -366,7 +366,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     return LedgerOps.ledgerTry(() => {
       const intent = Intent.new(ttl);
-      const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, tokensWithFeeToTake, currentTime);
+      const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, coinsWithFeeToTake, currentTime);
 
       intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
         SignatureMarker.signature,

@@ -47,7 +47,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -65,7 +65,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-${{ github.run_attempt }}
@@ -104,7 +104,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -118,7 +118,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -127,7 +127,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -146,7 +146,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -176,7 +176,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -190,7 +190,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-${{ github.run_attempt }}
@@ -198,7 +198,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-general-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-artifacts-${{ github.run_id }}
           path: .
@@ -231,7 +231,7 @@ jobs:
           security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
       - name: Publish Test Report
-        uses: mikepenz/action-junit-report@a294a61c909bd8a4b563024a2faa28897fd53ebc # ratchet:mikepenz/action-junit-report@v5
+        uses: mikepenz/action-junit-report@74626db7353a25a20a72816467ebf035f674c5f8 # v6
         if: success() || failure()
         with:
           check_name: 'Test Results Wallet SDK'
@@ -263,7 +263,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -281,7 +281,7 @@ jobs:
 
       - name: Save turbo cache
         if: always()
-        uses: actions/cache/save@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
@@ -320,7 +320,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@5e57cd118135c172c3672efd75eb46360885c0ef #v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -334,7 +334,7 @@ jobs:
         run: yarn install --immutable
 
       - name: Restore turbo cache
-        uses: actions/cache/restore@8b402f58fbc84540c8b491a91e594a4576fec3d7 #v5.0.2
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         with:
           path: .turbo
           key: turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-${{ github.run_attempt }}
@@ -342,7 +342,7 @@ jobs:
             turbo-${{ runner.os }}-${{ github.sha }}-${{ github.run_id }}-build-publish-
 
       - name: Download build artifacts
-        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 #v4
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
         with:
           name: build-publish-artifacts-${{ github.run_id }}
           path: .

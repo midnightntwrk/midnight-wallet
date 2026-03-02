@@ -25,7 +25,7 @@ import {
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
-import { DustToken, DustTokenWithNullifier } from './types/Dust.js';
+import { Dust, DustWithNullifier } from './types/Dust.js';
 import { CoinWithValue } from './CoinsAndBalances.js';
 import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
 
@@ -47,7 +47,7 @@ export type CoreWallet = Readonly<{
   protocolVersion: ProtocolVersion.ProtocolVersion;
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
-  pendingDustTokens: Array<DustTokenWithNullifier>;
+  pendingDust: Array<DustWithNullifier>;
 }>;
 
 export const CoreWallet = {
@@ -64,7 +64,7 @@ export const CoreWallet = {
       state: localState,
       publicKey,
       networkId,
-      pendingDustTokens: [],
+      pendingDust: [],
       progress: SyncProgress.createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -73,7 +73,7 @@ export const CoreWallet = {
   restore(
     localState: DustLocalState,
     publicKey: PublicKey,
-    pendingTokens: Array<DustTokenWithNullifier>,
+    pendingTokens: Array<DustWithNullifier>,
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
@@ -82,7 +82,7 @@ export const CoreWallet = {
       state: localState,
       publicKey,
       networkId,
-      pendingDustTokens: pendingTokens,
+      pendingDust: pendingTokens,
       progress: SyncProgress.createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -95,12 +95,12 @@ export const CoreWallet = {
     return {
       ...wallet,
       state: updatedState,
-      pendingDustTokens: wallet.pendingDustTokens.filter((t) => availableNonces.includes(t.nonce)),
+      pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
     };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
-    const pendingSpendsMap = CoreWallet.pendingDustTokensToMap(wallet.pendingDustTokens);
+    const pendingSpendsMap = CoreWallet.pendingDustToMap(wallet.pendingDust);
 
     const relevantSpends = pipe(
       [...(tx.intents?.values() ?? [])],
@@ -127,7 +127,7 @@ export const CoreWallet = {
     return {
       ...wallet,
       state: updatedState,
-      pendingDustTokens: wallet.pendingDustTokens.filter((token) => !removedNullifiers.includes(token.nullifier)),
+      pendingDust: wallet.pendingDust.filter((coin) => !removedNullifiers.includes(coin.nullifier)),
     };
   },
 
@@ -161,27 +161,27 @@ export const CoreWallet = {
   spendCoins(
     wallet: CoreWallet,
     secretKey: DustSecretKey,
-    coins: ReadonlyArray<CoinWithValue<DustToken>>,
+    coins: ReadonlyArray<CoinWithValue<Dust>>,
     currentTime: Date,
   ): [ReadonlyArray<UnprovenDustSpend>, CoreWallet] {
     const [output, newState, newPending] = pipe(
       coins,
       Arr.reduce(
-        [[], wallet.state, wallet.pendingDustTokens],
+        [[], wallet.state, wallet.pendingDust],
         (
-          [spends, localState]: [ReadonlyArray<UnprovenDustSpend>, DustLocalState, Array<DustTokenWithNullifier>],
+          [spends, localState]: [ReadonlyArray<UnprovenDustSpend>, DustLocalState, Array<DustWithNullifier>],
           { token: coinToSpend, value: takeFee },
         ) => {
           const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, currentTime);
-          const newPending = [...wallet.pendingDustTokens, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
+          const newPending = [...wallet.pendingDust, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
           return [Arr.append(spends, dustSpend), newState, newPending];
         },
       ),
     );
-    return [output, { ...wallet, state: newState, pendingDustTokens: newPending }];
+    return [output, { ...wallet, state: newState, pendingDust: newPending }];
   },
 
-  pendingDustTokensToMap(tokens: Array<DustTokenWithNullifier>): Map<DustNullifier, DustToken> {
-    return new Map<DustNullifier, DustToken>(tokens.map(({ nullifier, ...token }) => [nullifier, token]));
+  pendingDustToMap(coins: Array<DustWithNullifier>): Map<DustNullifier, Dust> {
+    return new Map<DustNullifier, Dust>(coins.map(({ nullifier, ...coins }) => [nullifier, coins]));
   },
 };

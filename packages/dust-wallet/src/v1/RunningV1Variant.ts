@@ -28,7 +28,7 @@ import {
   StateChange,
   VersionChangeType,
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { type DustToken, type UtxoWithMeta } from './types/Dust.js';
+import { type Dust, type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
 import { type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from './Simulator.js';
@@ -75,7 +75,7 @@ export declare namespace RunningV1Variant {
     transactingCapability: TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
-    coinSelection: CoinSelection<DustToken>;
+    coinSelection: CoinSelection<Dust>;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;

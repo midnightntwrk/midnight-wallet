@@ -14,7 +14,7 @@ The Wallet Facade provides a high-level unified interface that aggregates the fu
 (shielded, unshielded, and dust). It simplifies wallet operations by providing:
 
 - Combined state management across all wallet types
-- Unified transaction balancing for shielded, unshielded, and dust tokens
+- Unified transaction balancing for shielded, unshielded, and dust
 - Coordinated transfer and swap operations
 - Simplified transaction finalization flow
 - Dust registration management
