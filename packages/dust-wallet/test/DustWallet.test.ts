@@ -248,8 +248,6 @@ describe('DustWallet', () => {
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      // TODO IAN - verify: was 1_240_050_000_000_000n in ledger-v7, updated for ledger-v8 dust formula change
-      // expect(newWalletBalance).toBe(1_240_050_000_000_000n);
       expect(newWalletBalance).toBe(2_023_348_759_707_626n);
     }).pipe(Effect.runPromise);
   });

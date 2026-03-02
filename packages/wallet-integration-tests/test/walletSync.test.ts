@@ -118,13 +118,6 @@ describe('Wallet Sync', () => {
     const coinsAndBalancesCapability = Wallet.allVariantsRecord()[V1Tag].variant.coinsAndBalances;
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
-    // TODO IAN Genesis balances changed by 10x after node upgrade from 0.20.0-rc.6 to 0.22.0-rc.1
-    // Original expected values (each has one more trailing zero than the new values):
-    // expect(balances).toStrictEqual({
-    //   '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n, // 2,500,000,000,000,000
-    //   '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,  //   500,000,000,000,000
-    //   '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n,  //   500,000,000,000,000
-    // });
     expect(balances).toStrictEqual({
       '0000000000000000000000000000000000000000000000000000000000000000': 250000000000000n, // 250,000,000,000,000
       '0000000000000000000000000000000000000000000000000000000000000001': 50000000000000n, //  50,000,000,000,000
