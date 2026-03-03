@@ -759,8 +759,7 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  // TO-DO: Dust stays pending and only returns after some time. Wait for ledger to implement api to return back pending.
-  test.skip(
+  test(
     'coin becomes available when tx does not get proved',
     async () => {
       allure.tms('PM-8917', 'PM-8917');
@@ -768,9 +767,8 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Transaction not proved');
       const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
+      const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      const balance = 2500000000000000n;
 
       logger.info('Stopping proof server container..');
       await fixture.getProofServerContainer().stop({ timeout: 10_000 });
@@ -782,7 +780,7 @@ describe('Token transfer', () => {
           type: 'shielded',
           outputs: [
             {
-              type: dustTokenHash,
+              type: unshieldedTokenRaw,
               amount: outputValue,
               receiverAddress: initialState2.shielded.address,
             },
@@ -801,16 +799,15 @@ describe('Token transfer', () => {
       );
       await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
 
-      // const pendingState = await waitForPending(fundedFacade);
+      // const pendingState = await utils.waitForFacadePending(funded.wallet);
       // logger.info(pendingState);
-      // expect(pendingState.balances[dustTokenHash]).toBe(20000000000000000n);
-      // expect(pendingState.availableCoins.length).toBe(4);
-      // expect(pendingState.pendingCoins.length).toBe(1);
-      // expect(pendingState.coins.length).toBe(5);
-      // expect(pendingState.transactionHistory.length).toBe(1);
+      // expect(pendingState.shielded.balances[unshieldedTokenRaw]).toBe(outputValue);
+      // expect(pendingState.shielded.availableCoins.length).toBe(4);
+      // expect(pendingState.shielded.pendingCoins.length).toBe(1);
+      // expect(pendingState.shielded.totalCoins.length).toBe(5);
 
       const finalState = await utils.waitForFacadePendingClear(funded.wallet);
-      expect(finalState.shielded.balances[dustTokenHash]).toBe(balance);
+      expect(finalState.shielded.balances[unshieldedTokenRaw]).toBe(initialBalance);
       expect(finalState.shielded.availableCoins.length).toBe(7);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.totalCoins.length).toBe(7);
@@ -819,8 +816,7 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  // TO-DO: Same as above
-  test.skip(
+  test(
     'coin becomes available when tx does not get submitted',
     async () => {
       allure.tms('PM-8918', 'PM-8918');
@@ -828,9 +824,8 @@ describe('Token transfer', () => {
       allure.feature('Transactions');
       allure.story('Transaction not submitted');
       const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
+      const initialBalance = syncedState.shielded.balances[dustTokenHash];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
-      const balance = 2500000000000000n;
 
       logger.info('Stopping node container..');
       await fixture.getNodeContainer().stop({ removeVolumes: false });
@@ -863,10 +858,10 @@ describe('Token transfer', () => {
       await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
 
       const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
-      expect(finalState.balances[dustTokenHash]).toBe(balance);
-      expect(finalState.availableCoins.length).toBe(5);
+      expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
+      expect(finalState.availableCoins.length).toBe(7);
       expect(finalState.pendingCoins.length).toBe(0);
-      expect(finalState.totalCoins.length).toBe(5);
+      expect(finalState.totalCoins.length).toBe(7);
     },
     timeout,
   );
