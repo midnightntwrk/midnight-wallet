@@ -150,18 +150,13 @@ export class PolkadotNodeClient implements NodeClient.Service {
       this.ensureConnection(),
       Effect.andThen(
         Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash)).pipe(
-          Effect.map((block) => {
-            // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
-            return {
-              transactions: block.block.extrinsics
-                .filter(
-                  (extrinsic) =>
-                    extrinsic.method.section === 'midnight' && extrinsic.method.method === 'sendMnTransaction',
-                )
-                .map((extrinsic) => extrinsic.method.args[0].toU8a())
-                .map(SerializedTransaction.of),
-            };
-          }),
+          // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
+          Effect.map(({ block }) => ({
+            transactions: block.extrinsics
+              .filter(({ method }) => method.section === 'midnight' && method.method === 'sendMnTransaction')
+              .map(({ method }) => method.args[0].toU8a())
+              .map(SerializedTransaction.of),
+          })),
           Effect.mapError(
             (error) =>
               new NodeClientError.ConnectionError({
