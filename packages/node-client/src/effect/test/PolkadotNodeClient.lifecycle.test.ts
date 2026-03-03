@@ -7,9 +7,11 @@ const mockApi = {
   isConnected: false,
   connect: vi.fn(() => {
     mockApi.isConnected = true;
+    return Promise.resolve();
   }),
   disconnect: vi.fn(() => {
     mockApi.isConnected = false;
+    return Promise.resolve();
   }),
   tx: {
     midnight: {
