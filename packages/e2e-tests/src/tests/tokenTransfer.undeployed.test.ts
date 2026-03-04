@@ -759,6 +759,118 @@ describe('Token transfer', () => {
     timeout,
   );
 
+  // TO-DO: Dust stays pending and only returns after some time. Wait for ledger to implement api to return back pending.
+  test.skip(
+    'coin becomes available when tx does not get proved',
+    async () => {
+      allure.tms('PM-8917', 'PM-8917');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not proved');
+      const syncedState = await funded.wallet.waitForSyncedState();
+      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      const balance = 2500000000000000n;
+
+      logger.info('Stopping proof server container..');
+      await fixture.getProofServerContainer().stop({ timeout: 10_000 });
+
+      const initialState2 = await rx.firstValueFrom(funded.wallet.state());
+
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: dustTokenHash,
+              amount: outputValue,
+              receiverAddress: initialState2.shielded.address,
+            },
+          ],
+        },
+      ];
+      const txRecipe = await funded.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      );
+      await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
+
+      // const pendingState = await waitForPending(fundedFacade);
+      // logger.info(pendingState);
+      // expect(pendingState.balances[dustTokenHash]).toBe(20000000000000000n);
+      // expect(pendingState.availableCoins.length).toBe(4);
+      // expect(pendingState.pendingCoins.length).toBe(1);
+      // expect(pendingState.coins.length).toBe(5);
+      // expect(pendingState.transactionHistory.length).toBe(1);
+
+      const finalState = await utils.waitForFacadePendingClear(funded.wallet);
+      expect(finalState.shielded.balances[dustTokenHash]).toBe(balance);
+      expect(finalState.shielded.availableCoins.length).toBe(7);
+      expect(finalState.shielded.pendingCoins.length).toBe(0);
+      expect(finalState.shielded.totalCoins.length).toBe(7);
+      // expect(finalState.transactionHistory.length).toBe(1);
+    },
+    timeout,
+  );
+
+  // TO-DO: Same as above
+  test.skip(
+    'coin becomes available when tx does not get submitted',
+    async () => {
+      allure.tms('PM-8918', 'PM-8918');
+      allure.epic('Headless wallet');
+      allure.feature('Transactions');
+      allure.story('Transaction not submitted');
+      const syncedState = await funded.wallet.waitForSyncedState();
+      const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
+      logger.info(`Wallet 1 balance is: ${initialBalance}`);
+      const balance = 2500000000000000n;
+
+      logger.info('Stopping node container..');
+      await fixture.getNodeContainer().stop({ removeVolumes: false });
+
+      const initialState2 = await rx.firstValueFrom(funded.wallet.state());
+
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: outputValue,
+              receiverAddress: initialState2.shielded.address,
+            },
+          ],
+        },
+      ];
+      const txRecipe = await funded.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      );
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
+      await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
+
+      const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
+      expect(finalState.balances[dustTokenHash]).toBe(balance);
+      expect(finalState.availableCoins.length).toBe(5);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.totalCoins.length).toBe(5);
+    },
+    timeout,
+  );
+
   // test.skip(
   //   'error message when attempting to send to an invalid address',
   //   async () => {
@@ -1295,118 +1407,6 @@ describe('Token transfer', () => {
           },
         ),
       ).rejects.toThrow("Error from ledger: attempted to spend Dust UTXO that's not in the wallet state:");
-    },
-    timeout,
-  );
-
-  test(
-    'coin becomes available when tx does not get proved',
-    async () => {
-      allure.tms('PM-8917', 'PM-8917');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Transaction not proved');
-      await utils.sleep(20); // Wait for any previous transactions to clear
-      const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
-      logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-      const proofServerContainer = fixture.getProofServerContainer();
-      logger.info('Stopping proof server container..');
-      await proofServerContainer.stop({ remove: false, removeVolumes: false, timeout: 10_000 });
-
-      try {
-        const initialState2 = await rx.firstValueFrom(funded.wallet.state());
-
-        const outputsToCreate: CombinedTokenTransfer[] = [
-          {
-            type: 'shielded',
-            outputs: [
-              {
-                type: unshieldedTokenRaw,
-                amount: outputValue,
-                receiverAddress: initialState2.shielded.address,
-              },
-            ],
-          },
-        ];
-        const txRecipe = await funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        );
-        await expect(funded.wallet.finalizeRecipe(txRecipe)).rejects.toThrow();
-
-        const finalState = await utils.waitForFacadePendingClear(funded.wallet);
-        expect(finalState.shielded.balances[unshieldedTokenRaw]).toBe(initialBalance);
-        expect(finalState.shielded.availableCoins.length).toBe(7);
-        expect(finalState.shielded.pendingCoins.length).toBe(0);
-        expect(finalState.shielded.totalCoins.length).toBe(7);
-      } finally {
-        logger.info('Restarting proof server container..');
-        await proofServerContainer.restart({ timeout: 10_000 });
-      }
-    },
-    timeout,
-  );
-
-  test(
-    'coin becomes available when tx does not get submitted',
-    async () => {
-      allure.tms('PM-8918', 'PM-8918');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Transaction not submitted');
-      const syncedState = await funded.wallet.waitForSyncedState();
-      const initialBalance = syncedState.shielded.balances[dustTokenHash];
-      logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-      const nodeContainer = fixture.getNodeContainer();
-      logger.info('Stopping node container..');
-      await nodeContainer.stop({ remove: false, removeVolumes: false });
-
-      try {
-        const initialState2 = await rx.firstValueFrom(funded.wallet.state());
-
-        const outputsToCreate: CombinedTokenTransfer[] = [
-          {
-            type: 'shielded',
-            outputs: [
-              {
-                type: shieldedTokenRaw,
-                amount: outputValue,
-                receiverAddress: initialState2.shielded.address,
-              },
-            ],
-          },
-        ];
-        const txRecipe = await funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        );
-        const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
-        await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
-
-        const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
-        expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
-        expect(finalState.availableCoins.length).toBe(7);
-        expect(finalState.pendingCoins.length).toBe(0);
-        expect(finalState.totalCoins.length).toBe(7);
-      } finally {
-        logger.info('Restarting node container..');
-        await nodeContainer.restart();
-      }
     },
     timeout,
   );
