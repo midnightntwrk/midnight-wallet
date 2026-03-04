@@ -90,7 +90,15 @@ export class PolkadotNodeClient implements NodeClient.Service {
     return pipe(
       Effect.promise(async () => {
         if (!this.api.isConnected) {
-          await this.api.connect();
+          try {
+            await this.api.connect();
+          } catch (error) {
+            // WsProvider.connect() rejects if a WebSocket already exists (connection in progress).
+            // This is expected when the repeat loop re-enters before the 'open' event fires.
+            if (!(error instanceof Error && error.message === 'WebSocket is already connected')) {
+              throw error;
+            }
+          }
         }
       }),
       Effect.andThen(Effect.sync(() => this.api.isConnected)),
