@@ -21,10 +21,11 @@ import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -68,7 +69,10 @@ describe('Fresh wallet with empty state', () => {
 
       Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
       Wallet = ShieldedWallet(walletConfig);
-      Unshielded = UnshieldedWallet({ ...walletConfig, txHistoryStorage: new InMemoryTransactionHistoryStorage() });
+      Unshielded = UnshieldedWallet({
+        ...walletConfig,
+        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+      });
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
       unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
       dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
@@ -136,7 +140,7 @@ describe('Fresh wallet with empty state', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();

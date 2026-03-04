@@ -41,7 +41,7 @@
     "@graphql-codegen/typescript-operations": "^5.0.8"
   },
   "scripts": {
-    "gql:codegen": "graphql-codegen",
+    "gql:codegen": "graphql-codegen --clean --config codegen.ts",
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
     "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
     "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",

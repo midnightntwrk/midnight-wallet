@@ -28,7 +28,7 @@ import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
-import { type TransactionHistoryCapability } from './TransactionHistory.js';
+import { TransactionHistoryService, type TransactionHistoryCapability } from './TransactionHistory.js';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -63,7 +63,8 @@ export declare namespace RunningV1Variant {
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-    transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, TTransaction>;
+    transactionHistoryCapability: TransactionHistoryCapability;
+    transactionHistoryService: TransactionHistoryService;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;

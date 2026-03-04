@@ -16,7 +16,7 @@ import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
@@ -26,7 +26,7 @@ import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
-  InMemoryTransactionHistoryStorage,
+  UnshieldedTransactionHistoryEntry,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -197,6 +197,7 @@ describe('Smoke tests', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
+      // TODO IAN - THis is a mess, should work similar for TxHistory to the unshielded below
       const initialState = await funded.wallet.waitForSyncedState();
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await funded.wallet.shielded.serializeState();
@@ -230,7 +231,7 @@ describe('Smoke tests', () => {
       allure.story('Building with discardTxHistory undefined');
 
       fixture = getFixture();
-      const txHistoryStorage = new InMemoryTransactionHistoryStorage();
+      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>();
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
       const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -238,23 +239,26 @@ describe('Smoke tests', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage,
+        unshieldedTxHistoryStorage,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       logger.info(`Waiting to sync...`);
+      const initialState = await initialWallet.waitForSyncedState();
       // const syncedState = await utils.waitForSyncUnshielded(initialWallet);
       // TODO add assertion for Tx history
       const serializedState = await initialWallet.serializeState();
-      const serializedTxHistory = txHistoryStorage.serialize();
+      const serializedTxHistory = await initialState.transactionHistory.serialize();
       await initialWallet.stop();
 
-      const restoredTxHistory = InMemoryTransactionHistoryStorage.fromSerialized(serializedTxHistory);
+      const restoredTxHistory = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory, () => {
+        return new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>();
+      });
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: restoredTxHistory,
+        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
       }).restore(serializedState);
 
       await restoredWallet.start();
