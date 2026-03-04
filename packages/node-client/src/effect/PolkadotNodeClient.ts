@@ -148,23 +148,20 @@ export class PolkadotNodeClient implements NodeClient.Service {
   > {
     return pipe(
       this.ensureConnection(),
-      Effect.andThen(
-        Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash)).pipe(
-          // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
-          Effect.map(({ block }) => ({
-            transactions: block.extrinsics
-              .filter(({ method }) => method.section === 'midnight' && method.method === 'sendMnTransaction')
-              .map(({ method }) => method.args[0].toU8a())
-              .map(SerializedTransaction.of),
-          })),
-          Effect.mapError(
-            (error) =>
-              new NodeClientError.ConnectionError({
-                message: 'Failed to retrieve genesis transactions',
-                cause: error,
-              }),
-          ),
-        ),
+      Effect.andThen(() => Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash))),
+      // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
+      Effect.map(({ block }) => ({
+        transactions: block.extrinsics
+          .filter(({ method }) => method.section === 'midnight' && method.method === 'sendMnTransaction')
+          .map(({ method }) => method.args[0].toU8a())
+          .map(SerializedTransaction.of),
+      })),
+      Effect.mapError(
+        (error) =>
+          new NodeClientError.ConnectionError({
+            message: 'Failed to retrieve genesis transactions',
+            cause: error,
+          }),
       ),
       Effect.ensuring(Effect.promise(() => this.api.disconnect())),
     );
