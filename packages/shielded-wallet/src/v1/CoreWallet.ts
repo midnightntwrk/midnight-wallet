@@ -203,9 +203,11 @@ export const CoreWallet = {
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
   revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
     wallet: CoreWallet,
-    _tx: TTx,
+    tx: TTx,
   ): CoreWallet {
-    return wallet;
+    const newState = wallet.state.revertTransaction(tx);
+
+    return { ...wallet, state: newState };
   },
 
   // TODO: Remove after tx history is implemented
