@@ -16,7 +16,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
 
@@ -59,13 +58,6 @@ describe('Token transfer', () => {
   test(
     'Is working for shielded token transfer @smoke @healthcheck',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-8933', 'PM-8933');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid native token transfer transaction');
-
       logger.info('Funding wallet 1 with native tokens...');
       await utils.sleep(20); // wait for 2+ blocks to pass
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
@@ -254,13 +246,6 @@ describe('Token transfer', () => {
   test(
     'Is working for native token transfer @smoke @healthcheck',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-8933', 'PM-8933');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid native token transfer transaction');
-
       const nativeToken1Raw = '0000000000000000000000000000000000000000000000000000000000000001';
       const nativeToken2Raw = '0000000000000000000000000000000000000000000000000000000000000002';
 
@@ -361,13 +346,6 @@ describe('Token transfer', () => {
   test(
     'can perform a self-transaction',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-9680', 'PM-9680');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid transfer self-transaction');
-
       const initialState = await funded.wallet.waitForSyncedState();
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -421,13 +399,6 @@ describe('Token transfer', () => {
   test(
     'can perform a transaction to two different wallet addresses',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-9680', 'PM-9680');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid transfer self-transaction');
-
       const receiverSeed1 = randomBytes(32).toString('hex');
       const receiverSeed2 = randomBytes(32).toString('hex');
 
@@ -720,10 +691,6 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx fails on node',
     async () => {
-      allure.tms('PM-8919', 'PM-8919');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid transaction');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
       const initialAvailableCoins = syncedState?.shielded.availableCoins.length ?? 0;
@@ -802,10 +769,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to send an amount greater than available balance',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -845,10 +808,6 @@ describe('Token transfer', () => {
   test.skip(
     'error message when attempting to send an amount at max available network supply',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -889,10 +848,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to send an invalid amount',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -932,10 +887,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to send a negative amount',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -1084,10 +1035,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to send an empty array of outputs',
     async () => {
-      allure.tms('PM-9679', 'PM-9679');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -1112,10 +1059,6 @@ describe('Token transfer', () => {
   test.skip(
     'coins become available when native token tx fails on node',
     async () => {
-      allure.tms('PM-8936', 'PM-8936');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid native token transaction');
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialDustBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
@@ -1164,10 +1107,6 @@ describe('Token transfer', () => {
   test.skip(
     'coins become available when native token tx does not get proved',
     async () => {
-      allure.tms('PM-8934', 'PM-8934');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Transaction not proved');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialDustBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
       Object.entries(syncedState.shielded.balances).forEach(([key, _]) => {
@@ -1222,9 +1161,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to make transfer using incorrect shielded secret key',
     async () => {
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const incorrectSecretKey = ledger.ZswapSecretKeys.fromSeed(utils.getShieldedSeed(seed));
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
@@ -1261,9 +1197,6 @@ describe('Token transfer', () => {
   test(
     'error message when attempting to make transfer using incorrect dust secret key',
     async () => {
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Invalid amount error message');
       const incorrectDustKey = receiver.dustSecretKey;
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
@@ -1302,10 +1235,6 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx does not get proved',
     async () => {
-      allure.tms('PM-8917', 'PM-8917');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Transaction not proved');
       await utils.sleep(20); // Wait for any previous transactions to clear
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
@@ -1358,10 +1287,6 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx does not get submitted',
     async () => {
-      allure.tms('PM-8918', 'PM-8918');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Transaction not submitted');
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState.shielded.balances[dustTokenHash];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);

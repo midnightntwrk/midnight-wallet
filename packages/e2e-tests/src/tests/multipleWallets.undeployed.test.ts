@@ -15,7 +15,6 @@ import { firstValueFrom } from 'rxjs';
 import { logger } from './logger.js';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import { getShieldedSeed } from './utils.js';
-import * as allure from 'allure-js-commons';
 import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
@@ -53,47 +52,45 @@ describe('Syncing', () => {
   const rawNativeTokenType = (ledger.nativeToken() as { tag: string; raw: string }).raw;
 
   beforeEach(async () => {
-    await allure.step('Start multiple wallets', async function () {
-      fixture = getFixture();
-      Wallet = ShieldedWallet(fixture.getWalletConfig());
-      const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
-      const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+    fixture = getFixture();
+    Wallet = ShieldedWallet(fixture.getWalletConfig());
+    const Dust = DustWallet({ ...fixture.getWalletConfig(), ...fixture.getDustWalletConfig() });
+    const dustParameters = ledger.LedgerParameters.initialParameters().dust;
 
-      async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
-        for (let i = 0; i < seeds.length; i++) {
-          unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
-          shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
-          dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
-        }
-
-        for (let i = 0; i < seeds.length; i++) {
-          unshieldedWallets[i] = UnshieldedWallet({
-            networkId: fixture.getNetworkId(),
-            indexerClientConnection: {
-              indexerHttpUrl: fixture.getIndexerUri(),
-              indexerWsUrl: fixture.getIndexerWsUri(),
-            },
-            txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-          }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
-        }
-
-        for (let i = 0; i < seeds.length; i++) {
-          facades[i] = await WalletFacade.init({
-            configuration: {
-              ...fixture.getWalletConfig(),
-              ...fixture.getDustWalletConfig(),
-              txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-            },
-            shielded: () => shieldedWallets[i],
-            unshielded: () => unshieldedWallets[i],
-            dust: () => dustWallets[i],
-          });
-          await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
-        }
+    async function buildWallets(seeds: Uint8Array<ArrayBufferLike>[]) {
+      for (let i = 0; i < seeds.length; i++) {
+        unshieldedKeystores[i] = createKeystore(seeds[i], fixture.getNetworkId());
+        shieldedWallets[i] = Wallet.startWithSeed(seeds[i]);
+        dustWallets[i] = Dust.startWithSeed(seeds[i], dustParameters);
       }
 
-      await buildWallets(seeds);
-    });
+      for (let i = 0; i < seeds.length; i++) {
+        unshieldedWallets[i] = UnshieldedWallet({
+          networkId: fixture.getNetworkId(),
+          indexerClientConnection: {
+            indexerHttpUrl: fixture.getIndexerUri(),
+            indexerWsUrl: fixture.getIndexerWsUri(),
+          },
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
+      }
+
+      for (let i = 0; i < seeds.length; i++) {
+        facades[i] = await WalletFacade.init({
+          configuration: {
+            ...fixture.getWalletConfig(),
+            ...fixture.getDustWalletConfig(),
+            txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          },
+          shielded: () => shieldedWallets[i],
+          unshielded: () => unshieldedWallets[i],
+          dust: () => dustWallets[i],
+        });
+        await facades[i].start(ledger.ZswapSecretKeys.fromSeed(seeds[i]), ledger.DustSecretKey.fromSeed(seeds[i]));
+      }
+    }
+
+    await buildWallets(seeds);
   }, timeout);
 
   afterEach(async () => {
@@ -105,11 +102,6 @@ describe('Syncing', () => {
   test(
     'Syncing is working for multiple wallets concurrently',
     async () => {
-      allure.tms('PM-10974', 'PM-10974');
-      allure.epic('Headless wallet');
-      allure.feature('Syncing');
-      allure.story('Syncing wallets concurrently');
-
       const promises = facades.map((facade) => {
         return facade.waitForSyncedState();
       });

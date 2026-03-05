@@ -15,7 +15,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
-import * as allure from 'allure-js-commons';
 import { inspect } from 'node:util';
 
 /**
@@ -61,12 +60,6 @@ describe('Balance constant', () => {
   test(
     'Balance is constant when syncing from 0 @healthcheck',
     async () => {
-      allure.tag('healthcheck');
-      allure.tms('PM-13614', 'PM-13614');
-      allure.epic('Headless wallet');
-      allure.feature('Balance');
-      allure.story('Balance constant when syncing from 0');
-
       const syncedState = await wallet.wallet.waitForSyncedState();
       logger.info(inspect(syncedState.shielded.availableCoins, { depth: null }));
       logger.info(inspect(syncedState.unshielded.availableCoins, { depth: null }));
@@ -84,12 +77,6 @@ describe('Balance constant', () => {
   test(
     'Balance is constant when syncing from a restored state @healthcheck',
     async () => {
-      allure.tag('healthcheck');
-      allure.tms('PM-13615', 'PM-13615');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Balance constant');
-
       await utils.saveState(wallet.wallet, filename);
       const restoredWallet = await utils.provideWallet(filename, seed, fixture);
       const syncedState = await restoredWallet.wallet.waitForSyncedState();
