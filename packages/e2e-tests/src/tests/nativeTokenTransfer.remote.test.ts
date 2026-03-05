@@ -16,7 +16,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { exit } from 'node:process';
-import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 
 /**
@@ -85,12 +84,6 @@ describe('Token transfer', () => {
   test(
     'Is working for valid native token transfer @smoke @healthcheck',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-8933', 'PM-8933');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid transfer transaction using bech32m address');
       await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(sender.wallet.state());
       const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw];
@@ -224,12 +217,6 @@ describe('Token transfer', () => {
   test(
     'can perform a self-transaction',
     async () => {
-      allure.tag('smoke');
-      allure.tms('PM-9680', 'PM-9680');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid transfer self-transaction');
-
       const initialState = await sender.wallet.waitForSyncedState();
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw];
       logger.info(initialState.shielded.availableCoins);
@@ -278,11 +265,6 @@ describe('Token transfer', () => {
   // test.skip(
   //   'coins become available when native token tx fails on node @smoke',
   //   async () => {
-  //     allure.tag('smoke');
-  //     allure.tms('PM-8936', 'PM-8936');
-  //     allure.epic('Headless wallet');
-  //     allure.feature('Transactions');
-  //     allure.story('Invalid native token transaction');
   //     const initialState = await firstValueFrom(sender.state());
   //     const syncedState = await utils.waitForSyncShielded(sender.shielded);
   //     const initialDustBalance = syncedState?.balances[rawNativeTokenType] ?? 0n;
@@ -335,10 +317,6 @@ describe('Token transfer', () => {
   // test(
   //   'coins become available when native token tx does not get proved',
   //   async () => {
-  //     allure.tms('PM-8934', 'PM-8934');
-  //     allure.epic('Headless wallet');
-  //     allure.feature('Transactions');
-  //     allure.story('Transaction not proved');
   //     const syncedState = await waitForSyncShielded(sender.shielded);
   //     const initialDustBalance = syncedState?.balances[rawNativeTokenType] ?? 0n;
   //     Object.entries(syncedState.balances).forEach(([key, _]) => {
