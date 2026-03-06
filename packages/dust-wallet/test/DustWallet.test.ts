@@ -779,7 +779,7 @@ describe('DustWallet', () => {
         return Transaction.fromParts(NETWORK, undefined, undefined, intent);
       };
 
-      const transferTxs = Array.from({ length: 10 }, () => makeTransferTx(nightTokens[0]));
+      const transferTxs = Array.from({ length: 20 }, () => makeTransferTx(nightTokens[0]));
 
       const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
 
