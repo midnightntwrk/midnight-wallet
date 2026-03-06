@@ -27,6 +27,7 @@ import {
   PublicKey,
   UnshieldedWallet,
   UnshieldedTransactionHistoryEntry,
+  restoreUnshieldedTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -189,6 +190,7 @@ describe('Smoke tests', () => {
 
   // TODO @QA - update to test the restored state properly
   // NOTE: tx history is not part of state anymore
+  // TODO IAN - we need this test to work like the working one now which is the unshielded below
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
@@ -241,15 +243,15 @@ describe('Smoke tests', () => {
         },
         unshieldedTxHistoryStorage,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
+      await initialWallet.start();
       logger.info(`Waiting to sync...`);
       const initialState = await initialWallet.waitForSyncedState();
-      // const syncedState = await utils.waitForSyncUnshielded(initialWallet);
-      // TODO add assertion for Tx history
+
       const serializedState = await initialWallet.serializeState();
       const serializedTxHistory = await initialState.transactionHistory.serialize();
       await initialWallet.stop();
 
-      const restoredTxHistory = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory, () => {
+      const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory, () => {
         return new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>();
       });
       const restoredWallet = UnshieldedWallet({
@@ -258,13 +260,15 @@ describe('Smoke tests', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+        unshieldedTxHistoryStorage: restoredTxHistoryStorage,
       }).restore(serializedState);
 
       await restoredWallet.start();
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();
-      // TODO add assertion for Tx history
+
+      const restoredSerializedTxHistory = await restoredState.transactionHistory.serialize();
+      expect(restoredSerializedTxHistory).toEqual(serializedTxHistory);
       await restoredWallet.stop();
     },
     timeout,

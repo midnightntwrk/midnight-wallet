@@ -48,7 +48,10 @@ describe('Working in simulation mode', () => {
           .withTransactionType<ledger.ProofErasedTransaction>()
           .withCoinSelectionDefaults()
           .withTransacting(Transacting.makeSimulatorTransactingCapability)
-          .withTransactionHistory(TransactionHistory.makeSimulatorTransactionHistoryCapability)
+          .withTransactionHistory(
+            TransactionHistory.makeSimulatorTransactionHistoryCapability,
+            TransactionHistory.makeSimulatorTransactionHistoryService,
+          )
           .withSync(Sync.makeSimulatorSyncService, Sync.makeSimulatorSyncCapability)
           .withCoinsAndBalancesDefaults()
           .withKeysDefaults()

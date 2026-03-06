@@ -32,6 +32,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { randomBytes } from 'node:crypto';
 
+// TODO IAN - Need to update this!
 // Configuration for the wallet
 const configuration = {
   networkId: 'testnet', // or 'mainnet', 'undeployed'

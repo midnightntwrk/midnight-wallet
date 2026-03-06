@@ -15,7 +15,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Array as EArray, Effect, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { CoreWallet } from './CoreWallet.js';
 import { TransactionHistoryError } from './WalletError.js';
 
 export const QualifiedShieldedCoinInfoSchema = Schema.Struct({

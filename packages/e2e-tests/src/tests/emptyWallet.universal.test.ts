@@ -19,9 +19,8 @@ import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as allure from 'allure-js-commons';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,

@@ -19,7 +19,7 @@ import { type ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-
 import {
   createKeystore,
   PublicKey as UnshieldedPublicKey,
-  UnshieldedTransactionHistoryEntry,
+  type UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   type UnshieldedKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';

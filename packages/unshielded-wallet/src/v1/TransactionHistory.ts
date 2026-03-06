@@ -10,21 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Schema } from 'effect';
 import { UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
-
-// TODO IAN - Remove this.
-// export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
-//   id: Schema.Number,
-//   hash: TransactionHistoryStorage.TransactionHashSchema,
-//   protocolVersion: Schema.Number,
-//   identifiers: Schema.Array(Schema.String),
-//   timestamp: Schema.Date,
-//   fees: Schema.NullOr(Schema.BigInt),
-//   status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
-// });
 
 const UtxoSchema = Schema.Struct({
   value: SafeBigInt.SafeBigInt,
@@ -47,12 +36,14 @@ export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
 });
 
 export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
-export interface TransactionHistoryService<SyncUpdate> {
-  create(update: SyncUpdate): Promise<void>;
+
+export type TransactionHistoryCapability = {
+  create(update: UnshieldedUpdate): Promise<void>;
   get(hash: TransactionHistoryStorage.TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined>;
   getAll(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
   delete(hash: TransactionHistoryStorage.TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined>;
-}
+  serialize(): Promise<SerializedUnshieldedTransactionHistory>;
+};
 
 export type DefaultTransactionHistoryConfiguration = {
   unshieldedTxHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<UnshieldedTransactionHistoryEntry>;
@@ -89,10 +80,10 @@ const convertUpdateToEntry = ({
   };
 };
 
-export const makeDefaultTransactionHistoryService = (
+export const makeDefaultTransactionHistoryCapability = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
-): TransactionHistoryService<UnshieldedUpdate> => {
+): TransactionHistoryCapability => {
   const { unshieldedTxHistoryStorage } = config;
 
   return {
@@ -113,11 +104,29 @@ export const makeDefaultTransactionHistoryService = (
     ): Promise<UnshieldedTransactionHistoryEntry | undefined> => {
       return unshieldedTxHistoryStorage.delete(hash);
     },
+    serialize: async (): Promise<SerializedUnshieldedTransactionHistory> => {
+      return await serializeUnshieldedTransactionHistoryStorage(unshieldedTxHistoryStorage);
+    },
   };
 };
 
 const UnshieldedTransactionHistoryEntriesSchema = Schema.Array(UnshieldedTransactionHistoryEntrySchema);
 export type SerializedUnshieldedTransactionHistory = string;
+
+const serializeUnshieldedTransactionHistoryStorage = async (
+  storage: TransactionHistoryStorage.TransactionHistoryStorage<UnshieldedTransactionHistoryEntry>,
+): Promise<SerializedUnshieldedTransactionHistory> => {
+  const entries: UnshieldedTransactionHistoryEntry[] = [];
+
+  for await (const entry of storage.getAll()) {
+    entries.push(entry);
+  }
+
+  const encoder = Schema.encodeSync(UnshieldedTransactionHistoryEntriesSchema);
+  const encoded = encoder(entries);
+
+  return JSON.stringify(encoded);
+};
 
 export const restoreUnshieldedTransactionHistoryStorage = async (
   serializedHistory: SerializedUnshieldedTransactionHistory,

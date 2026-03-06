@@ -17,12 +17,13 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
 import { type MidnightNetwork } from './utils.js';
 import { logger } from './logger.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -238,6 +239,7 @@ export class TestContainersFixture {
       provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   }
 

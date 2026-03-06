@@ -89,12 +89,8 @@ export class ShieldedWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for ShieldedWallet');
+  get transactionHistory(): TransactionHistoryCapability {
+    return this.capabilities.transactionHistory;
   }
 
   constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: ShieldedWalletCapabilities<TSerialized>) {

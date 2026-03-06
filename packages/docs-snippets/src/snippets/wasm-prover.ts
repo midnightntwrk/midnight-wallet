@@ -15,11 +15,11 @@ import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-ab
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { type ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
-  UnshieldedTransactionHistoryEntry,
+  type UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Buffer } from 'buffer';

@@ -132,18 +132,44 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
       Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) => {
-        return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+      Stream.mapEffect((update) =>
+        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
           Effect.try({
-            try: () => this.#v1Context.syncCapability.applyUpdate(state, update),
+            try: () => {
+              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+              return [changesResult, newState] as const;
+            },
             catch: (err) =>
               new OtherWalletError({
                 message: 'Error while applying sync update',
                 cause: err,
               }),
           }),
-        );
-      }),
+        ).pipe(
+          Effect.flatMap((changesResult) => {
+            if (changesResult === undefined) {
+              return Effect.void;
+            }
+            const { changes, protocolVersion } = changesResult;
+            return Effect.forEach(
+              changes,
+              (change) =>
+                pipe(
+                  this.#v1Context.transactionHistoryService.getMetaData(change.source),
+                  Effect.flatMap((metadata) =>
+                    Effect.promise(() =>
+                      this.#v1Context.transactionHistoryCapability.create(change, metadata, protocolVersion),
+                    ),
+                  ),
+                  Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                  Effect.forkScoped,
+                ),
+              { discard: true },
+            );
+          }),
+          Effect.provideService(Scope.Scope, this.#scope),
+        ),
+      ),
       Stream.tapError((error) => Console.error(error)),
       Stream.retry(
         pipe(
