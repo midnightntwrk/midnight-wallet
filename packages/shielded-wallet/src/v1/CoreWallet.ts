@@ -1,5 +1,5 @@
 // This file is part of MIDNIGHT-WALLET-SDK.
-// Copyright (C) 2025-2026 Midnight Foundation
+// Copyright (C) Midnight Foundation
 // SPDX-License-Identifier: Apache-2.0
 // Licensed under the Apache License, Version 2.0 (the "License");
 // You may not use this file except in compliance with the License.
@@ -210,9 +210,11 @@ export const CoreWallet = {
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
   revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
     wallet: CoreWallet,
-    _tx: TTx,
+    tx: TTx,
   ): CoreWallet {
-    return wallet;
+    const newState = wallet.state.revertTransaction(tx);
+
+    return { ...wallet, state: newState };
   },
 
   // TODO: Remove after tx history is implemented
