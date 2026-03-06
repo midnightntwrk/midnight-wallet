@@ -55,14 +55,19 @@ export class PolkadotNodeClient implements NodeClient.Service {
   ): Effect.Effect<PolkadotNodeClient, NodeClientError.NodeClientError, Scope.Scope> {
     const config = makeConfig(configInput);
     return Effect.acquireRelease(
-      Effect.promise(() =>
-        ApiPromise.create({
+      Effect.promise(async () => {
+        const api = await ApiPromise.create({
           // @ts-expect-error -- exactOptionalPropertyTypes cause an incompatibility here
           provider: new WsProvider(config.nodeURL.toString()),
           throwOnConnect: false,
           noInitWarn: true,
-        }),
-      ),
+        });
+        // Disconnect immediately after loading metadata to avoid keeping the WebSocket open.
+        // The health-check timer (10s interval) and timeout handler (5s interval) are cleared on disconnect.
+        // Metadata and type registry remain cached in memory for subsequent on-demand connections.
+        await api.disconnect();
+        return api;
+      }),
       (api) => Effect.promise(() => api.disconnect()),
     ).pipe(Effect.map((api) => new PolkadotNodeClient(config, api)));
   }
@@ -70,7 +75,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
   static layer(
     configInput: Partial<Config> & Pick<Config, 'nodeURL'>,
   ): Layer.Layer<NodeClient.NodeClient, NodeClientError.NodeClientError, Scope.Scope> {
-    return Layer.effect(NodeClient.NodeClient, PolkadotNodeClient.make(configInput));
+    return Layer.scoped(NodeClient.NodeClient, PolkadotNodeClient.make(configInput));
   }
 
   readonly config: Config;
@@ -85,7 +90,15 @@ export class PolkadotNodeClient implements NodeClient.Service {
     return pipe(
       Effect.promise(async () => {
         if (!this.api.isConnected) {
-          await this.api.connect();
+          try {
+            await this.api.connect();
+          } catch (error) {
+            // WsProvider.connect() rejects if a WebSocket already exists (connection in progress).
+            // This is expected when the repeat loop re-enters before the 'open' event fires.
+            if (!(error instanceof Error && error.message === 'WebSocket is already connected')) {
+              throw error;
+            }
+          }
         }
       }),
       Effect.andThen(Effect.sync(() => this.api.isConnected)),
@@ -133,6 +146,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
     return pipe(
       Stream.fromEffect(this.ensureConnection()),
       Stream.flatMap(() => outputStream),
+      Stream.ensuring(Effect.promise(() => this.api.disconnect())),
     );
   }
 
@@ -140,18 +154,16 @@ export class PolkadotNodeClient implements NodeClient.Service {
     { readonly transactions: readonly SerializedTransaction.SerializedTransaction[] },
     NodeClientError.NodeClientError
   > {
-    return Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash)).pipe(
-      Effect.map((block) => {
-        // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
-        return {
-          transactions: block.block.extrinsics
-            .filter(
-              (extrinsic) => extrinsic.method.section === 'midnight' && extrinsic.method.method === 'sendMnTransaction',
-            )
-            .map((extrinsic) => extrinsic.method.args[0].toU8a())
-            .map(SerializedTransaction.of),
-        };
-      }),
+    return pipe(
+      this.ensureConnection(),
+      Effect.andThen(() => Effect.promise(() => this.api.rpc.chain.getBlock(this.api.genesisHash))),
+      // https://polkadot.js.org/docs/api/cookbook/blocks/#how-do-i-view-extrinsic-information
+      Effect.map(({ block }) => ({
+        transactions: block.extrinsics
+          .filter(({ method }) => method.section === 'midnight' && method.method === 'sendMnTransaction')
+          .map(({ method }) => method.args[0].toU8a())
+          .map(SerializedTransaction.of),
+      })),
       Effect.mapError(
         (error) =>
           new NodeClientError.ConnectionError({
@@ -159,6 +171,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
             cause: error,
           }),
       ),
+      Effect.ensuring(Effect.promise(() => this.api.disconnect())),
     );
   }
 

@@ -104,11 +104,14 @@ export const CoreWallet = {
 
     const relevantSpends = pipe(
       [...(tx.intents?.values() ?? [])],
-      Arr.flatMap((intent) => intent.dustActions?.spends ?? []),
-      Arr.filterMap((spend) =>
+      Arr.flatMap((intent) => {
+        const spendTime = intent.dustActions?.ctime;
+        return (intent.dustActions?.spends ?? []).map((spend) => ({ spend, spendTime }));
+      }),
+      Arr.filterMap(({ spend, spendTime }) =>
         pipe(
           Option.fromNullable(pendingSpendsMap.get(spend.oldNullifier)),
-          Option.map((pending) => ({ spend, pending })),
+          Option.map(() => ({ spend, spendTime })),
         ),
       ),
     );
@@ -117,8 +120,8 @@ export const CoreWallet = {
       relevantSpends,
       Arr.reduce(
         [wallet.state, [] as DustNullifier[]] as [DustLocalState, DustNullifier[]],
-        ([state, removed], { spend, pending }): [DustLocalState, DustNullifier[]] => [
-          state.processTtls(DateOps.addSeconds(pending.ctime, wallet.state.params.dustGracePeriodSeconds)),
+        ([state, removed], { spend, spendTime }): [DustLocalState, DustNullifier[]] => [
+          state.processTtls(DateOps.addSeconds(spendTime!, wallet.state.params.dustGracePeriodSeconds)),
           Arr.append(removed, spend.oldNullifier),
         ],
       ),
@@ -167,14 +170,19 @@ export const CoreWallet = {
     const [output, newState, newPending] = pipe(
       coins,
       Arr.reduce(
-        [[], wallet.state, wallet.pendingDust],
-        (
-          [spends, localState]: [ReadonlyArray<UnprovenDustSpend>, DustLocalState, Array<DustWithNullifier>],
-          { token: coinToSpend, value: takeFee },
-        ) => {
+        [[], wallet.state, wallet.pendingDust] as [
+          ReadonlyArray<UnprovenDustSpend>,
+          DustLocalState,
+          Array<DustWithNullifier>,
+        ],
+        ([spends, localState, pending], { token: coinToSpend, value: takeFee }) => {
           const [newState, dustSpend] = localState.spend(secretKey, coinToSpend, takeFee, currentTime);
-          const newPending = [...wallet.pendingDust, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
-          return [Arr.append(spends, dustSpend), newState, newPending];
+          const newPending = [...pending, { ...coinToSpend, nullifier: dustSpend.oldNullifier }];
+          return [Arr.append(spends, dustSpend), newState, newPending] as [
+            ReadonlyArray<UnprovenDustSpend>,
+            DustLocalState,
+            Array<DustWithNullifier>,
+          ];
         },
       ),
     );
