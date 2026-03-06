@@ -19,15 +19,21 @@ import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryCapability } from './TransactionHistory.js';
+import { TransactionHistoryCapability, TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
 }
 
+export type ChangesResult = {
+  readonly changes: ledger.ZswapStateChanges[];
+  readonly protocolVersion: number;
+};
+
 export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => TState;
+  /** Apply a sync update; may require services (e.g. QueryClient) to be provided by the caller. */
+  applyUpdate: (state: TState, update: TUpdate) => [TState, ChangesResult | undefined];
 }
 
 export type IndexerClientConnection = {
@@ -42,7 +48,8 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction>;
+  transactionHistoryCapability: TransactionHistoryCapability;
+  transactionHistoryService: TransactionHistoryService;
 };
 
 const Uint8ArraySchema = Schema.declare(
@@ -114,11 +121,13 @@ const HexedLedgerEvent: Schema.Schema<ledger.Event, string> = pipe(
 const EventsSyncUpdatePayload = Schema.Struct({
   id: Schema.Number,
   raw: Schema.String,
+  protocolVersion: Schema.Number,
   maxId: Schema.Number,
 });
 
 export const EventsSyncUpdate = Schema.TaggedStruct('EventsSyncUpdate', {
   id: Schema.Number,
+  protocolVersion: Schema.Number,
   maxId: Schema.Number,
   event: LedgerEventSchema,
 });
@@ -132,6 +141,7 @@ const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePaylo
       Either.map((event) => ({
         _tag: 'EventsSyncUpdate' as const,
         id: input.id,
+        protocolVersion: input.protocolVersion,
         maxId: input.maxId,
         event,
       })),
@@ -144,6 +154,7 @@ const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePaylo
       Either.map((raw) => ({
         id: output.id,
         raw,
+        protocolVersion: output.protocolVersion,
         maxId: output.maxId,
       })),
       Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to encode ledger event payload')),
@@ -211,9 +222,9 @@ export const makeEventsSyncService = (
 
 export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
-    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
+    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult | undefined] => {
       if (wrappedUpdate.updates.length === 0) {
-        return state;
+        return [state, undefined];
       }
 
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
@@ -222,25 +233,30 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       // in case the nextIndex is less than or equal to the appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
-        return CoreWallet.updateProgress(state, {
-          highestRelevantWalletIndex,
-          isConnected: true,
-        });
+        return [
+          CoreWallet.updateProgress(state, {
+            highestRelevantWalletIndex,
+            isConnected: true,
+          }),
+          undefined,
+        ];
       }
 
       return wrappedUpdate.secretKeys((keys) => {
-        return CoreWallet.updateProgress(
-          CoreWallet.replayEvents(
-            state,
-            keys,
-            wrappedUpdate.updates.map((u) => u.event),
-          ),
-          {
+        const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
+          state,
+          keys,
+          wrappedUpdate.updates.map((u) => u.event),
+        );
+
+        return [
+          CoreWallet.updateProgress(newState, {
             highestRelevantWalletIndex,
             appliedIndex: nextIndex,
             isConnected: true,
-          },
-        );
+          }),
+          { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
+        ];
       });
     },
   };
@@ -266,15 +282,15 @@ export const makeSimulatorSyncService = (
 
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult | undefined] => {
       const {
         update: {
           lastTxResult: { events },
         },
         secretKeys,
       } = update;
-
-      return CoreWallet.replayEvents(state, secretKeys, events);
+      const [newState] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      return [newState, undefined];
     },
   };
 };

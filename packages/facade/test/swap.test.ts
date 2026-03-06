@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
-import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { CustomShieldedWallet, ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import {
-  InMemoryTransactionHistoryStorage,
   PublicKey,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -95,7 +95,8 @@ describe('Swaps', () => {
         additionalFeeOverhead: 900_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
     };
   });
 
@@ -116,7 +117,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
@@ -127,7 +128,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
     });

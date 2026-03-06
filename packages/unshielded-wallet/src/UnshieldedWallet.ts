@@ -24,7 +24,7 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
 import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -39,14 +39,13 @@ import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-nt
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v1/SyncProgress.js';
-import { type UnshieldedUpdate } from './v1/SyncSchema.js';
 import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryService<UnshieldedUpdate>;
+  transactionHistory: TransactionHistoryCapability;
 };
 
 export class UnshieldedWalletState<TSerialized = string> {
@@ -84,7 +83,7 @@ export class UnshieldedWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  get transactionHistory(): TransactionHistoryService<UnshieldedUpdate> {
+  get transactionHistory(): TransactionHistoryCapability {
     return this.capabilities.transactionHistory;
   }
 

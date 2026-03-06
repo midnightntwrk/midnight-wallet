@@ -37,27 +37,25 @@ import { type WalletSyncUpdate } from './v1/Sync.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
-export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
+export type ShieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+  transactionHistory: TransactionHistoryCapability;
 };
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.FinalizedTransaction> {
+export class ShieldedWalletState<TSerialized = string> {
   static readonly mapState =
-    <TSerialized = string, TTransaction = ledger.FinalizedTransaction>(
-      capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
-    ) =>
-    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized, TTransaction> => {
+    <TSerialized = string>(capabilities: ShieldedWalletCapabilities<TSerialized>) =>
+    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized> => {
       return new ShieldedWalletState(state, capabilities);
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
-  readonly capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>;
+  readonly capabilities: ShieldedWalletCapabilities<TSerialized>;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
@@ -91,18 +89,11 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for ShieldedWallet');
+  get transactionHistory(): TransactionHistoryCapability {
+    return this.capabilities.transactionHistory;
   }
 
-  constructor(
-    state: ProtocolState.ProtocolState<CoreWallet>,
-    capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
-  ) {
+  constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: ShieldedWalletCapabilities<TSerialized>) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
@@ -127,12 +118,8 @@ export type ShieldedWalletClass = CustomizedShieldedWalletClass<
   string
 >;
 
-export type ShieldedWalletAPI<
-  TStartAux = ledger.ZswapSecretKeys,
-  TTransaction = ledger.FinalizedTransaction,
-  TSerialized = string,
-> = {
-  readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+export type ShieldedWalletAPI<TStartAux = ledger.ZswapSecretKeys, TSerialized = string> = {
+  readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
   start(secretKeys: TStartAux): Promise<void>;
 
@@ -155,7 +142,7 @@ export type ShieldedWalletAPI<
 
   serializeState(): Promise<TSerialized>;
 
-  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
+  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized>>;
 
   getAddress(): Promise<ShieldedAddress>;
 
@@ -171,7 +158,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
+> = ShieldedWalletAPI<TStartAux, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export type DefaultShieldedConfiguration = DefaultV1Configuration;
@@ -244,7 +231,7 @@ export function CustomShieldedWallet<
       return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);
     }
 
-    readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+    readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
     constructor(
       runtime: Runtime.Runtime<
@@ -255,7 +242,7 @@ export function CustomShieldedWallet<
       super(runtime, scope);
       this.state = this.rawState.pipe(
         rx.map(
-          ShieldedWalletState.mapState<TSerialized, TTransaction>(
+          ShieldedWalletState.mapState<TSerialized>(
             CustomShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant,
           ),
         ),
@@ -309,7 +296,7 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized, TTransaction>> {
+    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
       );
