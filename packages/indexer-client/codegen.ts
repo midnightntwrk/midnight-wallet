@@ -46,6 +46,8 @@ export default {
           HexEncoded: 'string',
           ViewingKey: 'string',
           UnshieldedAddress: 'string',
+          CardanoRewardAddress: 'string',
+          DustAddress: 'number',
         },
         namingConvention: {
           transformUnderscore: true,
