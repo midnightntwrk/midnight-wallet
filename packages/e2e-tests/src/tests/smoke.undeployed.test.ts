@@ -22,7 +22,6 @@ import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
 import {
   ShieldedWallet,
-  ShieldedWalletClass,
   ShieldedTransactionHistoryEntry,
   restoreShieldedTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
@@ -52,7 +51,6 @@ describe('Smoke tests', () => {
   const outputValue = 1_000n;
 
   let fixture: TestContainersFixture;
-  let Wallet: ShieldedWalletClass;
   let funded: utils.WalletInit;
   let receiver: utils.WalletInit;
   let Dust: DustWalletClass;
@@ -64,7 +62,6 @@ describe('Smoke tests', () => {
         ...fixture.getWalletConfig(),
         ...fixture.getDustWalletConfig(),
       });
-      Wallet = ShieldedWallet(fixture.getWalletConfig());
       funded = await utils.initWalletWithSeed(seedFunded, fixture);
       receiver = await utils.initWalletWithSeed(seed, fixture);
       logger.info('Two wallets started');
