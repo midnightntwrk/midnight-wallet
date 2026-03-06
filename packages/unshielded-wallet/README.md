@@ -28,16 +28,19 @@ import {
   UnshieldedWallet,
   createKeystore,
   PublicKey,
-  InMemoryTransactionHistoryStorage,
+  type UnshieldedTransactionHistoryEntry,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { randomBytes } from 'node:crypto';
 
-// TODO IAN - Need to update this!
 // Configuration for the wallet
 const configuration = {
-  networkId: 'testnet', // or 'mainnet', 'undeployed'
-  indexerUrl: 'ws://localhost:8088/api/v3/graphql/ws',
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  networkId: NetworkId.Undeployed, // or NetworkId.Testnet, NetworkId.Mainnet
+  indexerClientConnection: {
+    indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+    indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+  },
+  unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
 };
 
 // Create a keystore from a random unshielded seed

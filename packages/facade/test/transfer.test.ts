@@ -243,10 +243,22 @@ describe('Wallet Facade Transfer', () => {
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
     expect(submittedTxHash).toBeTruthy();
+
+    // Wait for the transaction to appear in sender's transaction history
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap((s) => s.unshielded.transactionHistory.get(finalizedTxHash)),
+        rx.filter((entry): entry is UnshieldedTransactionHistoryEntry => entry !== undefined),
+        rx.timeout(30_000),
+      ),
+    );
+
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
 
     const isValid = await rx.firstValueFrom(
       receiverFacade

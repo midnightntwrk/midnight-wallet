@@ -182,18 +182,6 @@ export const CoreWallet = {
     return [updatedWallet, stateWithChanges.changes];
   },
 
-  // TODO IAN - REMOVE THIS..
-  // replayEvents(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys, events: ledger.Event[]): CoreWallet {
-  //   const newState = wallet.state.replayEvents(secretKeys, events);
-  //   const newCoinHashes = CoinHashesMap.updateWithCoins(
-  //     secretKeys,
-  //     wallet.coinHashes,
-  //     CoinHashesMap.pickAllCoins(newState),
-  //   );
-
-  //   return { ...wallet, state: newState, coinHashes: newCoinHashes };
-  // },
-
   updateProgress(
     wallet: CoreWallet,
     {

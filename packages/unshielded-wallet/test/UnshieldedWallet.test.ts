@@ -121,9 +121,7 @@ describe('UnshieldedWallet', () => {
     const initialTxHistory = await Array.fromAsync(initialState.transactionHistory.getAll());
     const restoredTxHistory = await Array.fromAsync(restoredState.transactionHistory.getAll());
 
-    // TODO IAN - Better compare ?
-    expect(restoredTxHistory.length).toBe(initialTxHistory.length);
-    expect(restoredTxHistory.map((e) => e.hash)).toEqual(initialTxHistory.map((e) => e.hash));
+    expect(restoredTxHistory).toEqual(initialTxHistory);
 
     await restoredWallet.stop();
   });

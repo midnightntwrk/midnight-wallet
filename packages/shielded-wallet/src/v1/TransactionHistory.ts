@@ -12,7 +12,7 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Array as EArray, Effect, Schema } from 'effect';
+import { Array as EArray, Effect, Either, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -41,12 +41,6 @@ export type DefaultTransactionHistoryConfiguration = {
 
 const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
 
-// TODO IAN _ Remove this!
-// export type TransactionHistoryCapability<TState, TTransaction> = {
-//   updateTxHistory(state: TState, newTxs: TTransaction[]): TState;
-//   transactionHistory(state: TState): readonly TTransaction[];
-// };
-
 export type TransactionMetaData = {
   hash: string;
   timestamp: number;
@@ -58,6 +52,7 @@ export type TransactionHistoryCapability = {
   get(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
   getAll(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
   delete(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
+  serialize(): Promise<SerializedShieldedTransactionHistory>;
 };
 
 export type TransactionHistoryService = {
@@ -117,6 +112,9 @@ export const makeDefaultTransactionHistoryCapability = (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
       return shieldedTxHistoryStorage.delete(hash);
+    },
+    serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
+      return await serializeShieldedTransactionHistoryStorage(shieldedTxHistoryStorage);
     },
   };
 };
@@ -197,5 +195,46 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
     ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
       return txHistoryStorage.delete(hash);
     },
+    serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
+      return await serializeShieldedTransactionHistoryStorage(txHistoryStorage);
+    },
   };
+};
+
+const ShieldedTransactionHistoryEntriesSchema = Schema.Array(ShieldedTransactionHistoryEntrySchema);
+export type SerializedShieldedTransactionHistory = string;
+
+const serializeShieldedTransactionHistoryStorage = async (
+  storage: TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>,
+): Promise<SerializedShieldedTransactionHistory> => {
+  const entries: ShieldedTransactionHistoryEntry[] = [];
+
+  for await (const entry of storage.getAll()) {
+    entries.push(entry);
+  }
+
+  const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
+  const encoded = encoder(entries);
+
+  return JSON.stringify(encoded);
+};
+
+export const restoreShieldedTransactionHistoryStorage = async (
+  serializedHistory: SerializedShieldedTransactionHistory,
+  makeStorage: () => TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>,
+): Promise<TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>> => {
+  const decoder = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema);
+
+  const parsed = JSON.parse(serializedHistory) as unknown;
+  const entries = Either.getOrElse(decoder(parsed), (error) => {
+    throw new Error(`Failed to decode shielded transaction history: ${error.message}`);
+  });
+
+  const storage = makeStorage();
+
+  for (const entry of entries) {
+    await storage.create(entry);
+  }
+
+  return storage;
 };

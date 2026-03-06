@@ -20,7 +20,12 @@ import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wa
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import * as allure from 'allure-js-commons';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import {
+  ShieldedWallet,
+  ShieldedWalletClass,
+  ShieldedTransactionHistoryEntry,
+  restoreShieldedTransactionHistoryStorage,
+} from '@midnight-ntwrk/wallet-sdk-shielded';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
@@ -188,9 +193,6 @@ describe('Smoke tests', () => {
     timeout,
   );
 
-  // TODO @QA - update to test the restored state properly
-  // NOTE: tx history is not part of state anymore
-  // TODO IAN - we need this test to work like the working one now which is the unshielded below
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
@@ -199,22 +201,29 @@ describe('Smoke tests', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - serialize');
-      // TODO IAN - THis is a mess, should work similar for TxHistory to the unshielded below
       const initialState = await funded.wallet.waitForSyncedState();
-      const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
-      const serialized = await funded.wallet.shielded.serializeState();
-      const stateObject = JSON.parse(serialized);
+      const serializedState = await funded.wallet.shielded.serializeState();
+      const stateObject = JSON.parse(serializedState);
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
 
+      const serializedTxHistory = await initialState.shielded.transactionHistory.serialize();
+
       logger.info('Restoring wallet from serialized state...');
-      const restoredWallet = Wallet.restore(serialized);
+      const restoredTxHistoryStorage = await restoreShieldedTransactionHistoryStorage(serializedTxHistory, () => {
+        return new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>();
+      });
+      const RestoredWallet = ShieldedWallet({
+        ...fixture.getWalletConfig(),
+        shieldedTxHistoryStorage: restoredTxHistoryStorage,
+      });
+      const restoredWallet = RestoredWallet.restore(serializedState);
       await restoredWallet.start(funded.shieldedSecretKeys);
       try {
         const restoredState = await restoredWallet.waitForSyncedState();
-        const restoredStateTxHistory = utils.getTransactionHistoryIds(restoredState);
-        expect(restoredStateTxHistory).toEqual(initialStateTxHistory);
+        const restoredSerializedTxHistory = await restoredState.transactionHistory.serialize();
+        expect(restoredSerializedTxHistory).toEqual(serializedTxHistory);
       } finally {
         await restoredWallet.stop();
       }
