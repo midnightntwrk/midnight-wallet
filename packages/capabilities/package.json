@@ -40,7 +40,7 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.0.0-rc.4",
+    "@midnight-ntwrk/ledger-v8": "^8.0.0-rc.5",
     "@midnight-ntwrk/wallet-sdk-abstractions": "^2.0.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-indexer-client": "^1.1.0-rc.2",
     "@midnight-ntwrk/wallet-sdk-node-client": "^1.0.0",
