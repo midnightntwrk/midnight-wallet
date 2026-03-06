@@ -1,5 +1,27 @@
 # @midnight-ntwrk/wallet-sdk-indexer-client
 
+## 1.1.0
+
+### Minor Changes
+
+- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+  checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
+  be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
+  - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
+    finalized (it can't happen earlier because unproven transactions contain copies of secret keys for proving
+    purposes). Whenever a pending transaction is reported as failed - it is reverted. The pending transactions service
+    state is also reported in the facade state for serialization purposes and to enable UI reporting.
+
+### Patch Changes
+
+- 6c359b8: Expose promise-based QueryRunner utility for executing GraphQL queries without Effect boilerplate
+- dd004db: Add optional `keepAlive` config param to `SubscriptionClient.ServerConfig` and to `IndexerClientConnection`
+  in all wallet packages. The value is forwarded to the underlying `graphql-ws` client and defaults to `15_000` ms when
+  not provided.
+- Updated dependencies [55380e5]
+- Updated dependencies [330867f]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+
 ## 1.1.0-rc.4
 
 ### Patch Changes
