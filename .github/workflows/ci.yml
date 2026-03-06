@@ -3,8 +3,6 @@ name: CI
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_READ }}
-  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
-  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: undeployed
   DEPLOYMENT: local
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
@@ -219,16 +217,6 @@ jobs:
           tags=@smoke
           platform=Linux
           " > environment.properties
-
-      - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@v1.0.5
-        if: ${{ always() }}
-        with:
-          allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.NETWORK }}
-          security-user: ${{ env.ALLURE_ADMIN_USER }}
-          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
 
       - name: Publish Test Report
         uses: mikepenz/action-junit-report@74626db7353a25a20a72816467ebf035f674c5f8 # v6
