@@ -18,7 +18,7 @@ import {
   SubmissionEvent as SubmissionEventImported,
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type FinalizedTransaction } from '@midnight-ntwrk/ledger-v7';
+import { type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;

@@ -19,7 +19,7 @@ import {
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -248,7 +248,7 @@ describe('DustWallet', () => {
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      expect(newWalletBalance).toBe(1_240_050_000_000_000n);
+      expect(newWalletBalance).toBe(2_023_348_759_707_626n);
     }).pipe(Effect.runPromise);
   });
 
@@ -779,7 +779,7 @@ describe('DustWallet', () => {
         return Transaction.fromParts(NETWORK, undefined, undefined, intent);
       };
 
-      const transferTxs = Array.from({ length: 10 }, () => makeTransferTx(nightTokens[0]));
+      const transferTxs = Array.from({ length: 20 }, () => makeTransferTx(nightTokens[0]));
 
       const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
 
