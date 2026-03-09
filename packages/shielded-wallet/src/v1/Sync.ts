@@ -32,7 +32,6 @@ export type ChangesResult = {
 };
 
 export interface SyncCapability<TState, TUpdate> {
-  /** Apply a sync update; may require services (e.g. QueryClient) to be provided by the caller. */
   applyUpdate: (state: TState, update: TUpdate) => [TState, ChangesResult | undefined];
 }
 
