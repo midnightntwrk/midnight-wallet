@@ -1,7 +1,9 @@
-import type { InitialAPI, ConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import type { InitialAPI, ConnectedAPI as ConnectedAPIType } from '@midnight-ntwrk/dapp-connector-api';
+import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Data } from 'effect';
 import { SemVer } from 'semver';
+import type { ConnectorConfiguration } from './types.js';
 
 export class InstallationError extends Data.TaggedError('InstallationError')<{
   message: string;
@@ -40,15 +42,24 @@ export type InstalledConnector = Readonly<{
 }>;
 
 export class Connector implements InitialAPI {
-  private facade: WalletFacade;
+  private readonly facade: WalletFacade;
+  private readonly keystore: UnshieldedKeystore;
+  private readonly configuration: ConnectorConfiguration;
 
   readonly rdns: string;
   readonly name: string;
   readonly icon: string;
   readonly apiVersion: string;
 
-  constructor(metadata: ConnectorMetadata, facade: WalletFacade) {
+  constructor(
+    metadata: ConnectorMetadata,
+    facade: WalletFacade,
+    keystore: UnshieldedKeystore,
+    configuration: ConnectorConfiguration,
+  ) {
     this.facade = facade;
+    this.keystore = keystore;
+    this.configuration = configuration;
     this.name = metadata.name;
     this.icon = metadata.icon;
     this.apiVersion = metadata.apiVersion;
@@ -116,7 +127,7 @@ export class Connector implements InitialAPI {
     });
   }
 
-  connect(networkId: string): Promise<ConnectedAPI> {
+  connect(_networkId: string): Promise<ConnectedAPIType> {
     throw new Error('Not implemented');
   }
 }

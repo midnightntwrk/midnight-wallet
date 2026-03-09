@@ -1,11 +1,28 @@
 import * as fc from 'fast-check';
 import { ConnectorMetadata } from './index.js';
+import type { ConnectorConfiguration } from './types.js';
 import { SemVer } from 'semver';
 import { pipe } from 'effect';
 
 export const randomValue = <T>(arbitrary: fc.Arbitrary<T>): T => {
   return fc.sample(arbitrary, 1).at(0)!;
 };
+
+const networkIdArbitrary = fc.oneof(
+  fc.constantFrom('mainnet', 'testnet', 'devnet', 'qanet', 'preview', 'preprod'),
+  fc.string({ minLength: 1, maxLength: 20 }),
+);
+
+const httpUrlArbitrary = fc.webUrl({ validSchemes: ['http', 'https'] });
+const wsUrlArbitrary = fc.webUrl({ validSchemes: ['ws', 'wss'] });
+
+export const defaultConnectorConfigurationArbitrary: fc.Arbitrary<ConnectorConfiguration> = fc.record({
+  networkId: networkIdArbitrary,
+  indexerUri: httpUrlArbitrary,
+  indexerWsUri: wsUrlArbitrary,
+  substrateNodeUri: wsUrlArbitrary,
+  proverServerUri: fc.option(httpUrlArbitrary, { nil: undefined }),
+});
 
 const nameArbitrary = fc.oneof(fc.string(), fc.lorem({ maxCount: 10 }));
 const iconArbitrary = fc.oneof(

@@ -1,105 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Connector, InstallationError } from '../index.js';
 import * as fc from 'fast-check';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
-import { expectMatchObjectTyped } from './testUtils.js';
-import { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { UnshieldedWalletAPI, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWalletAPI, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWalletAPI, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as rx from 'rxjs';
-import type { SubmissionService, PendingTransactionsService } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import type { ProvingService, UnboundTransaction } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import { expectMatchObjectTyped, prepareMockFacade, prepareMockUnshieldedKeystore } from './testUtils.js';
+import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type { ConnectorConfiguration } from '../types.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-function _prepareRealFacade(): WalletFacade {
-  throw new Error('Not implemented');
-}
-
-class MockShieldedWallet implements ShieldedWalletAPI {
-  state: rx.Subject<ShieldedWalletState> = new rx.Subject();
-  start = vi.fn();
-  balanceTransaction = vi.fn();
-  transferTransaction = vi.fn();
-  revertTransaction = vi.fn();
-  initSwap = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn();
-  getAddress = vi.fn();
-  stop = vi.fn();
-}
-class MockUnshieldedWallet implements UnshieldedWalletAPI {
-  state: rx.Subject<UnshieldedWalletState> = new rx.Subject();
-  start = vi.fn();
-  signUnprovenTransaction = vi.fn();
-  signUnboundTransaction = vi.fn();
-  revertTransaction = vi.fn();
-  transferTransaction = vi.fn();
-  initSwap = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn();
-  getAddress = vi.fn();
-  stop = vi.fn();
-
-  balanceFinalizedTransaction = vi.fn();
-  balanceUnboundTransaction = vi.fn();
-  balanceUnprovenTransaction = vi.fn();
-}
-class MockDustWallet implements DustWalletAPI {
-  state: rx.Subject<DustWalletState> = new rx.Subject();
-  start = vi.fn();
-  balanceTransactions = vi.fn();
-  revertTransaction = vi.fn();
-  createDustGenerationTransaction = vi.fn();
-  addDustGenerationSignature = vi.fn();
-  calculateFee = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn();
-  getAddress = vi.fn();
-  stop = vi.fn();
-}
-
-class MockWalletFacade extends WalletFacade {
-  shielded: MockShieldedWallet;
-  unshielded: MockUnshieldedWallet;
-  dust: MockDustWallet;
-
-  constructor() {
-    const shielded = new MockShieldedWallet();
-    const unshielded = new MockUnshieldedWallet();
-    const dust = new MockDustWallet();
-
-    // Create mock services required by WalletFacade
-    const submissionService = {
-      submitTransaction: vi.fn(),
-      close: vi.fn(),
-    } as unknown as SubmissionService<ledger.FinalizedTransaction>;
-
-    const pendingTransactionsService = {
-      addPendingTransaction: vi.fn(),
-      state: vi.fn(() => new rx.Subject()),
-      start: vi.fn(),
-      stop: vi.fn(),
-      clear: vi.fn(),
-    } as unknown as PendingTransactionsService<ledger.FinalizedTransaction>;
-
-    const provingService = {
-      prove: vi.fn(),
-    } as unknown as ProvingService<UnboundTransaction>;
-
-    super(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
-    this.shielded = shielded;
-    this.unshielded = unshielded;
-    this.dust = dust;
-  }
-}
-
-function prepareMockFacade(): WalletFacade {
-  return new MockWalletFacade();
-}
+const defaultConfig: ConnectorConfiguration = {
+  networkId: 'testnet',
+  indexerUri: 'http://localhost:8080',
+  indexerWsUri: 'ws://localhost:8080',
+  substrateNodeUri: 'ws://localhost:9944',
+};
 
 describe('DappConnectorReference', () => {
   it('should create a connector instance with provided values', () => {
@@ -111,6 +25,8 @@ describe('DappConnectorReference', () => {
         rdns: 'com.example.wallet',
       },
       prepareMockFacade(),
+      prepareMockUnshieldedKeystore(),
+      defaultConfig,
     );
 
     expectMatchObjectTyped(connector, {
@@ -123,13 +39,18 @@ describe('DappConnectorReference', () => {
 
   it('should create a connector instance with random values', () => {
     const metadata = randomValue(defaultConnectorMetadataArbitrary);
-    const connector = new Connector(metadata, prepareMockFacade());
+    const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
 
     expect(connector).toMatchObject(metadata);
   });
 
   it('should not install instance if just created', () => {
-    const _connector = new Connector(randomValue(defaultConnectorMetadataArbitrary), prepareMockFacade());
+    const _connector = new Connector(
+      randomValue(defaultConnectorMetadataArbitrary),
+      prepareMockFacade(),
+      prepareMockUnshieldedKeystore(),
+      defaultConfig,
+    );
 
     expect(globalThis.midnight).toBeUndefined();
   });
@@ -142,7 +63,7 @@ describe('DappConnectorReference', () => {
     it('should install instance on globalThis.midnight using a provided uuid', async () => {
       const uuid = crypto.randomUUID();
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
       const installedConnector = await connector.install({ uuid });
 
       expectMatchObjectTyped(globalThis.midnight![uuid], {
@@ -157,7 +78,7 @@ describe('DappConnectorReference', () => {
     it('should fail to install instance on globalThis.midnight using a provided uuid if it already exists', async () => {
       const uuid = crypto.randomUUID();
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
 
       await connector.install({ uuid });
 
@@ -166,7 +87,7 @@ describe('DappConnectorReference', () => {
 
     it('should install instance on globalThis.midnight using a random uuid', async () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
       const installedConnector = await connector.install();
 
       expectMatchObjectTyped(globalThis.midnight![installedConnector.uuid], {
@@ -180,7 +101,7 @@ describe('DappConnectorReference', () => {
     it('should install instance under specified object using a random uuid', async () => {
       const target: { midnight?: Record<string, InitialAPI> } = {};
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
       const installedConnector = await connector.install({ location: target });
 
       expectMatchObjectTyped(target.midnight![installedConnector.uuid], {
@@ -194,7 +115,7 @@ describe('DappConnectorReference', () => {
     it('should install instance under specified object with a specified key, using a random uuid', async () => {
       const target: { test?: Record<string, InitialAPI> } = {};
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
       const installedConnector = await connector.install({ location: target, key: 'test' });
 
       expectMatchObjectTyped(target.test![installedConnector.uuid], {
@@ -208,7 +129,7 @@ describe('DappConnectorReference', () => {
     it('should install instance under window with a specified key, using a random uuid', async () => {
       const key = crypto.randomUUID();
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
       const installedConnector = await connector.install({ key });
 
       expect(globalThis).toHaveProperty([key, installedConnector.uuid]);
@@ -220,7 +141,7 @@ describe('DappConnectorReference', () => {
           const target: { midnight?: Record<string, InitialAPI> } = {};
           const installedConnectors = await Promise.all(
             connectorMetadatas
-              .map((connectorMetadata) => new Connector(connectorMetadata, prepareMockFacade()))
+              .map((connectorMetadata) => new Connector(connectorMetadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig))
               .map((connector) => connector.install({ location: target })),
           );
 
@@ -240,7 +161,7 @@ describe('DappConnectorReference', () => {
     it('should init the key in a safe way', async () => {
       const target: { test?: Record<string, InitialAPI> } = {};
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
 
       await connector.install({ location: target, key: 'test' });
       const propertyDescriptor = Object.getOwnPropertyDescriptor(target, 'test');
@@ -255,7 +176,7 @@ describe('DappConnectorReference', () => {
     it('should install connector in a safe way', async () => {
       const target: { midnight?: Record<string, InitialAPI> } = {};
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, prepareMockFacade());
+      const connector = new Connector(metadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig);
 
       const installedConnector = await connector.install({ location: target });
       const propertyDescriptor = Object.getOwnPropertyDescriptor(target.midnight, installedConnector.uuid);
