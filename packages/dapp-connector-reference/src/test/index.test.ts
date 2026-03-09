@@ -1,84 +1,96 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Connector, InstallationError } from '../index.js';
 import * as fc from 'fast-check';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
 import { expectMatchObjectTyped } from './testUtils.js';
 import { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import { UnshieldedWallet, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { UnshieldedWalletAPI, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { DustWalletAPI, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { ShieldedWalletAPI, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as rx from 'rxjs';
-import * as ledger from '@midnight-ntwrk/ledger-v6';
-import { Effect, Scope } from 'effect';
+import type { SubmissionService, PendingTransactionsService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import type { ProvingService, UnboundTransaction } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
+
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-function prepareRealFacade(): WalletFacade {
+function _prepareRealFacade(): WalletFacade {
   throw new Error('Not implemented');
 }
 
-const runtimeScope: Scope.CloseableScope = await Scope.make().pipe(Effect.runPromise);
-
-class MockShieldedWallet implements ShieldedWallet {
-  // @ts-expect-error - runtime is not implemented
-  runtime: ShieldedWallet['runtime'] = null;
-  runtimeScope: Scope.CloseableScope = runtimeScope;
-  rawState: rx.Subject<rx.ObservedValueOf<ShieldedWallet['rawState']>> = new rx.Subject();
+class MockShieldedWallet implements ShieldedWalletAPI {
   state: rx.Subject<ShieldedWalletState> = new rx.Subject();
   start = vi.fn();
   balanceTransaction = vi.fn();
   transferTransaction = vi.fn();
+  revertTransaction = vi.fn();
   initSwap = vi.fn();
-  finalizeTransaction = vi.fn();
-  submitTransaction = vi.fn();
   serializeState = vi.fn();
   waitForSyncedState = vi.fn();
   getAddress = vi.fn();
   stop = vi.fn();
 }
-class MockUnshieldedWallet implements UnshieldedWallet {
-  // @ts-expect-error - runtime is not implemented
-  runtime: UnshieldedWallet['runtime'] = null;
-  runtimeScope = runtimeScope;
-  rawState: rx.Subject<rx.ObservedValueOf<UnshieldedWallet['rawState']>> = new rx.Subject();
+class MockUnshieldedWallet implements UnshieldedWalletAPI {
   state: rx.Subject<UnshieldedWalletState> = new rx.Subject();
   start = vi.fn();
-  balanceTransaction = vi.fn();
+  signUnprovenTransaction = vi.fn();
+  signUnboundTransaction = vi.fn();
+  revertTransaction = vi.fn();
   transferTransaction = vi.fn();
   initSwap = vi.fn();
-  signTransaction = vi.fn();
   serializeState = vi.fn();
   waitForSyncedState = vi.fn();
   getAddress = vi.fn();
   stop = vi.fn();
+
+  balanceFinalizedTransaction = vi.fn();
+  balanceUnboundTransaction = vi.fn();
+  balanceUnprovenTransaction = vi.fn();
 }
-class MockDustWallet implements DustWallet {
-  // @ts-expect-error - runtime is not implemented
-  runtime: DustWallet['runtime'] = null;
-  runtimeScope = runtimeScope;
-  rawState: rx.Subject<rx.ObservedValueOf<DustWallet['rawState']>> = new rx.Subject();
+class MockDustWallet implements DustWalletAPI {
   state: rx.Subject<DustWalletState> = new rx.Subject();
   start = vi.fn();
+  balanceTransactions = vi.fn();
+  revertTransaction = vi.fn();
   createDustGenerationTransaction = vi.fn();
   addDustGenerationSignature = vi.fn();
   calculateFee = vi.fn();
-  addFeePayment = vi.fn();
-  finalizeTransaction = vi.fn();
-  submitTransaction = vi.fn();
   serializeState = vi.fn();
   waitForSyncedState = vi.fn();
   getAddress = vi.fn();
   stop = vi.fn();
 }
+
 class MockWalletFacade extends WalletFacade {
   shielded: MockShieldedWallet;
   unshielded: MockUnshieldedWallet;
   dust: MockDustWallet;
+
   constructor() {
     const shielded = new MockShieldedWallet();
     const unshielded = new MockUnshieldedWallet();
     const dust = new MockDustWallet();
-    super(shielded, unshielded, dust);
+
+    // Create mock services required by WalletFacade
+    const submissionService = {
+      submitTransaction: vi.fn(),
+      close: vi.fn(),
+    } as unknown as SubmissionService<ledger.FinalizedTransaction>;
+
+    const pendingTransactionsService = {
+      addPendingTransaction: vi.fn(),
+      state: vi.fn(() => new rx.Subject()),
+      start: vi.fn(),
+      stop: vi.fn(),
+      clear: vi.fn(),
+    } as unknown as PendingTransactionsService<ledger.FinalizedTransaction>;
+
+    const provingService = {
+      prove: vi.fn(),
+    } as unknown as ProvingService<UnboundTransaction>;
+
+    super(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
     this.shielded = shielded;
     this.unshielded = unshielded;
     this.dust = dust;
@@ -117,7 +129,7 @@ describe('DappConnectorReference', () => {
   });
 
   it('should not install instance if just created', () => {
-    const connector = new Connector(randomValue(defaultConnectorMetadataArbitrary), prepareMockFacade());
+    const _connector = new Connector(randomValue(defaultConnectorMetadataArbitrary), prepareMockFacade());
 
     expect(globalThis.midnight).toBeUndefined();
   });

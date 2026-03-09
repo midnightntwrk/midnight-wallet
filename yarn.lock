@@ -820,12 +820,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/language-service@npm:^0.76.0":
-  version: 0.76.0
-  resolution: "@effect/language-service@npm:0.76.0"
+"@effect/language-service@npm:^0.79.0":
+  version: 0.79.0
+  resolution: "@effect/language-service@npm:0.79.0"
   bin:
     effect-language-service: cli.js
-  checksum: 10c0/4e8773daedf8c7dd643e716b0da2d6ba6173c7dc8f68d9e2cfb712eaac659a2e1f6605b5dbc6abeb1aab2efd28d4cb80286458969e4dda0fd12106b8dfaf542a
+  checksum: 10c0/cb822d8441e4fa7d717df31877a91ca99abdd3a91066bd14096fa206e0da32124538e15b04de4e9ca4cfbde45706a45ee158b505df1aeee189128f59f694908c
   languageName: node
   linkType: hard
 
@@ -2909,7 +2909,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-facade": "workspace:*"
     "@types/semver": "npm:^7.7.1"
     "@vitest/coverage-v8": "npm:^4.0.0"
-    effect: "npm:^3.19.14"
+    effect: "npm:^3.19.19"
     eslint: "npm:^9.37.0"
     fast-check: "npm:^4.5.0"
     prettier: "npm:^3.7.4"
@@ -3004,7 +3004,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
     "@changesets/cli": "npm:^2.29.8"
-    "@effect/language-service": "npm:^0.76.0"
+    "@effect/language-service": "npm:^0.79.0"
     "@eslint/compat": "npm:^2.0.2"
     "@eslint/js": "npm:^10.0.1"
     "@tsconfig/node22": "npm:^22.0.5"
@@ -6605,16 +6605,6 @@ __metadata:
   version: 0.2.0
   resolution: "eastasianwidth@npm:0.2.0"
   checksum: 10c0/26f364ebcdb6395f95124fda411f63137a4bfb5d3a06453f7f23dfe52502905bd84e0488172e0f9ec295fdc45f05c23d5d91baf16bd26f0fe9acd777a188dc39
-  languageName: node
-  linkType: hard
-
-"effect@npm:^3.19.14":
-  version: 3.19.14
-  resolution: "effect@npm:3.19.14"
-  dependencies:
-    "@standard-schema/spec": "npm:^1.0.0"
-    fast-check: "npm:^3.23.1"
-  checksum: 10c0/8ada627fedb6596e19d21d4adb8ad43109b9f303f7b8e864493cb9f26edccfbd16915cbe10cb6c0fa6a2ece4d3781a91a2309e72882278e85fdd37ee2177acc8
   languageName: node
   linkType: hard
 
