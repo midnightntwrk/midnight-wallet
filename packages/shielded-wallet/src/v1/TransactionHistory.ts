@@ -12,7 +12,7 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Array as EArray, Effect, Either, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, Either, Schedule, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -145,6 +145,7 @@ export const makeDefaultTransactionHistoryService = (
       }).pipe(
         Effect.provide(queryClientLayer),
         Effect.scoped,
+        Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.compose(Schedule.recurs(3)))),
         Effect.catchAll((cause) =>
           Effect.fail(
             new TransactionHistoryError({
