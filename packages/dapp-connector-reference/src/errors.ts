@@ -12,28 +12,29 @@ export const ErrorCodes = {
   Disconnected: 'Disconnected',
 } as const satisfies Record<string, ErrorCode>;
 
+class APIErrorImpl extends Error implements APIErrorType {
+  readonly type = 'DAppConnectorAPIError' as const;
+  readonly code: ErrorCode;
+  readonly reason: string;
+
+  constructor(code: ErrorCode, reason: string) {
+    super(reason);
+    this.name = 'DAppConnectorAPIError';
+    this.code = code;
+    this.reason = reason;
+  }
+}
+
 export const APIError = {
-  internalError: (_reason: string): APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  internalError: (reason: string): APIErrorType => new APIErrorImpl('InternalError', reason),
 
-  rejected: (_reason: string): APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  rejected: (reason: string): APIErrorType => new APIErrorImpl('Rejected', reason),
 
-  invalidRequest: (_reason: string): APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  invalidRequest: (reason: string): APIErrorType => new APIErrorImpl('InvalidRequest', reason),
 
-  permissionRejected: (_reason: string): APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  permissionRejected: (reason: string): APIErrorType => new APIErrorImpl('PermissionRejected', reason),
 
-  disconnected: (_reason: string): APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  disconnected: (reason: string): APIErrorType => new APIErrorImpl('Disconnected', reason),
 
-  isAPIError: (_value: unknown): _value is APIErrorType => {
-    throw new Error('Not implemented');
-  },
+  isAPIError: (value: unknown): value is APIErrorType => value instanceof APIErrorImpl,
 };

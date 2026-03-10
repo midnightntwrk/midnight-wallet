@@ -19,7 +19,13 @@ export type ConnectorConfiguration = {
 
 /**
  * Convert internal connector configuration to the API Configuration type.
+ * Returns a frozen object to ensure immutability.
  */
-export const toAPIConfiguration = (_config: ConnectorConfiguration): Configuration => {
-  throw new Error('Not implemented');
-};
+export const toAPIConfiguration = (config: ConnectorConfiguration): Configuration =>
+  Object.freeze({
+    networkId: config.networkId,
+    indexerUri: config.indexerUri,
+    indexerWsUri: config.indexerWsUri,
+    proverServerUri: config.proverServerUri,
+    substrateNodeUri: config.substrateNodeUri,
+  });

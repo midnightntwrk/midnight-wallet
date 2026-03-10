@@ -141,7 +141,10 @@ describe('DappConnectorReference', () => {
           const target: { midnight?: Record<string, InitialAPI> } = {};
           const installedConnectors = await Promise.all(
             connectorMetadatas
-              .map((connectorMetadata) => new Connector(connectorMetadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig))
+              .map(
+                (connectorMetadata) =>
+                  new Connector(connectorMetadata, prepareMockFacade(), prepareMockUnshieldedKeystore(), defaultConfig),
+              )
               .map((connector) => connector.install({ location: target })),
           );
 
