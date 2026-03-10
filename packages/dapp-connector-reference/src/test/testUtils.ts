@@ -61,7 +61,9 @@ const mockDustWalletState: Partial<DustWalletState> = {
 };
 
 class MockShieldedWallet implements ShieldedWalletAPI {
-  state: rx.Subject<ShieldedWalletState> = new rx.Subject();
+  state: rx.BehaviorSubject<ShieldedWalletState> = new rx.BehaviorSubject(
+    mockShieldedWalletState as ShieldedWalletState,
+  );
   start = vi.fn();
   balanceTransaction = vi.fn();
   transferTransaction = vi.fn();
@@ -74,7 +76,9 @@ class MockShieldedWallet implements ShieldedWalletAPI {
 }
 
 class MockUnshieldedWallet implements UnshieldedWalletAPI {
-  state: rx.Subject<UnshieldedWalletState> = new rx.Subject();
+  state: rx.BehaviorSubject<UnshieldedWalletState> = new rx.BehaviorSubject(
+    mockUnshieldedWalletState as UnshieldedWalletState,
+  );
   start = vi.fn();
   signUnprovenTransaction = vi.fn();
   signUnboundTransaction = vi.fn();
@@ -91,7 +95,7 @@ class MockUnshieldedWallet implements UnshieldedWalletAPI {
 }
 
 class MockDustWallet implements DustWalletAPI {
-  state: rx.Subject<DustWalletState> = new rx.Subject();
+  state: rx.BehaviorSubject<DustWalletState> = new rx.BehaviorSubject(mockDustWalletState as DustWalletState);
   start = vi.fn();
   balanceTransactions = vi.fn();
   revertTransaction = vi.fn();
@@ -102,6 +106,17 @@ class MockDustWallet implements DustWalletAPI {
   waitForSyncedState = vi.fn(() => Promise.resolve(mockDustWalletState as DustWalletState));
   getAddress = vi.fn(() => Promise.resolve(testDustAddress));
   stop = vi.fn();
+}
+
+export interface MockDustCoin {
+  maxCap: bigint;
+  balance: bigint;
+}
+
+export interface MockBalancesConfig {
+  shielded?: Record<string, bigint>;
+  unshielded?: Record<string, bigint>;
+  dust?: MockDustCoin[];
 }
 
 class MockWalletFacade extends WalletFacade {
@@ -136,47 +151,44 @@ class MockWalletFacade extends WalletFacade {
     this.unshielded = unshielded;
     this.dust = dust;
   }
+
+  withBalances(config: MockBalancesConfig): this {
+    if (config.shielded !== undefined) {
+      const shieldedState: Partial<ShieldedWalletState> = {
+        address: testShieldedAddress,
+        balances: config.shielded,
+      };
+      this.shielded.state.next(shieldedState as ShieldedWalletState);
+    }
+
+    if (config.unshielded !== undefined) {
+      const unshieldedState: Partial<UnshieldedWalletState> = {
+        address: testUnshieldedAddress,
+        balances: config.unshielded,
+      };
+      this.unshielded.state.next(unshieldedState as UnshieldedWalletState);
+    }
+
+    if (config.dust !== undefined) {
+      const coins = config.dust;
+      const totalBalance = coins.reduce((sum, coin) => sum + coin.balance, 0n);
+      const dustState: Partial<DustWalletState> = {
+        address: testDustAddress,
+        balance: () => totalBalance,
+        availableCoinsWithFullInfo: () =>
+          coins.map(
+            (coin) => ({ maxCap: coin.maxCap }) as ReturnType<DustWalletState['availableCoinsWithFullInfo']>[number],
+          ),
+      };
+      this.dust.state.next(dustState as DustWalletState);
+    }
+
+    return this;
+  }
 }
 
-export function prepareMockFacade(): WalletFacade {
+export function prepareMockFacade(): MockWalletFacade {
   return new MockWalletFacade();
-}
-
-export interface MockBalancesConfig {
-  shielded?: Record<string, bigint>;
-  unshielded?: Record<string, bigint>;
-  dust?: { cap: bigint; balance: bigint };
-}
-
-export function prepareMockFacadeWithBalances(config: MockBalancesConfig): WalletFacade {
-  const facade = new MockWalletFacade();
-
-  if (config.shielded !== undefined) {
-    const shieldedState: Partial<ShieldedWalletState> = {
-      address: testShieldedAddress,
-      balances: config.shielded,
-    };
-    facade.shielded.waitForSyncedState = vi.fn(() => Promise.resolve(shieldedState as ShieldedWalletState));
-  }
-
-  if (config.unshielded !== undefined) {
-    const unshieldedState: Partial<UnshieldedWalletState> = {
-      address: testUnshieldedAddress,
-      balances: config.unshielded,
-    };
-    facade.unshielded.waitForSyncedState = vi.fn(() => Promise.resolve(unshieldedState as UnshieldedWalletState));
-  }
-
-  if (config.dust !== undefined) {
-    const dustState: Partial<DustWalletState> = {
-      address: testDustAddress,
-      balance: () => config.dust!.balance,
-      availableCoinsWithFullInfo: () => [],
-    };
-    facade.dust.waitForSyncedState = vi.fn(() => Promise.resolve(dustState as DustWalletState));
-  }
-
-  return facade;
 }
 
 class MockUnshieldedKeystore implements UnshieldedKeystore {
