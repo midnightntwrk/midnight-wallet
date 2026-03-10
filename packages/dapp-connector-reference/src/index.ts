@@ -1,9 +1,8 @@
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Data } from 'effect';
 import { SemVer } from 'semver';
-import type { ConnectorConfiguration } from './types.js';
+import type { ConnectorConfiguration, WalletFacadeView } from './types.js';
 import { APIError } from './errors.js';
 import { ConnectedAPI, type ExtendedConnectedAPI } from './ConnectedAPI.js';
 
@@ -44,7 +43,7 @@ export type InstalledConnector = Readonly<{
 }>;
 
 export class Connector implements InitialAPI {
-  private readonly facade: WalletFacade;
+  private readonly facade: WalletFacadeView;
   private readonly keystore: UnshieldedKeystore;
   private readonly configuration: ConnectorConfiguration;
 
@@ -55,7 +54,7 @@ export class Connector implements InitialAPI {
 
   constructor(
     metadata: ConnectorMetadata,
-    facade: WalletFacade,
+    facade: WalletFacadeView,
     keystore: UnshieldedKeystore,
     configuration: ConnectorConfiguration,
   ) {
@@ -138,7 +137,7 @@ export class Connector implements InitialAPI {
       );
     }
 
-    const connectedAPI = new ConnectedAPI(this.facade, this.keystore, this.configuration);
-    return Promise.resolve(Object.freeze(connectedAPI) as ExtendedConnectedAPI);
+    const connectedAPI: ExtendedConnectedAPI = new ConnectedAPI(this.facade, this.keystore, this.configuration);
+    return Promise.resolve(Object.freeze(connectedAPI));
   }
 }

@@ -1,20 +1,25 @@
 import { expect, vi } from 'vitest';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import type { UnshieldedWalletAPI, UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import type { DustWalletAPI, DustWalletState } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import type { ShieldedWalletAPI, ShieldedWalletState } from '@midnight-ntwrk/wallet-sdk-shielded';
-import type { SubmissionService, PendingTransactionsService } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import type { ProvingService, UnboundTransaction } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
   ShieldedEncryptionPublicKey,
   UnshieldedAddress,
   DustAddress,
+  MidnightBech32m,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as rx from 'rxjs';
+import type {
+  WalletFacadeView,
+  ShieldedWalletView,
+  UnshieldedWalletView,
+  DustWalletView,
+  ShieldedWalletStateView,
+  UnshieldedWalletStateView,
+  DustWalletStateView,
+  DustCoinInfo,
+} from '../types.js';
 
 export const expectMatchObjectTyped = <T>(actual: T, expected: Partial<T>): void => {
   expect(actual).toMatchObject(expected);
@@ -42,70 +47,37 @@ export const testUnshieldedAddress = new UnshieldedAddress(testUnshieldedAddress
 export const testDustAddress = new DustAddress(testDustAddressValue);
 
 // Mock shielded wallet state with real address
-const mockShieldedWalletState: Partial<ShieldedWalletState> = {
+const mockShieldedWalletState: ShieldedWalletStateView = {
   address: testShieldedAddress,
   balances: {},
 };
 
 // Mock unshielded wallet state with real address
-const mockUnshieldedWalletState: Partial<UnshieldedWalletState> = {
+const mockUnshieldedWalletState: UnshieldedWalletStateView = {
   address: testUnshieldedAddress,
   balances: {},
 };
 
 // Mock dust wallet state with real address
-const mockDustWalletState: Partial<DustWalletState> = {
+const mockDustWalletState: DustWalletStateView = {
   address: testDustAddress,
   balance: () => 0n,
   availableCoinsWithFullInfo: () => [],
 };
 
-class MockShieldedWallet implements ShieldedWalletAPI {
-  state: rx.BehaviorSubject<ShieldedWalletState> = new rx.BehaviorSubject(
-    mockShieldedWalletState as ShieldedWalletState,
-  );
-  start = vi.fn();
-  balanceTransaction = vi.fn();
-  transferTransaction = vi.fn();
-  revertTransaction = vi.fn();
-  initSwap = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn(() => Promise.resolve(mockShieldedWalletState as ShieldedWalletState));
+class MockShieldedWallet implements ShieldedWalletView {
+  state = new rx.BehaviorSubject<ShieldedWalletStateView>(mockShieldedWalletState);
   getAddress = vi.fn(() => Promise.resolve(testShieldedAddress));
-  stop = vi.fn();
 }
 
-class MockUnshieldedWallet implements UnshieldedWalletAPI {
-  state: rx.BehaviorSubject<UnshieldedWalletState> = new rx.BehaviorSubject(
-    mockUnshieldedWalletState as UnshieldedWalletState,
-  );
-  start = vi.fn();
-  signUnprovenTransaction = vi.fn();
-  signUnboundTransaction = vi.fn();
-  revertTransaction = vi.fn();
-  transferTransaction = vi.fn();
-  initSwap = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn(() => Promise.resolve(mockUnshieldedWalletState as UnshieldedWalletState));
+class MockUnshieldedWallet implements UnshieldedWalletView {
+  state = new rx.BehaviorSubject<UnshieldedWalletStateView>(mockUnshieldedWalletState);
   getAddress = vi.fn(() => Promise.resolve(testUnshieldedAddress));
-  stop = vi.fn();
-  balanceFinalizedTransaction = vi.fn();
-  balanceUnboundTransaction = vi.fn();
-  balanceUnprovenTransaction = vi.fn();
 }
 
-class MockDustWallet implements DustWalletAPI {
-  state: rx.BehaviorSubject<DustWalletState> = new rx.BehaviorSubject(mockDustWalletState as DustWalletState);
-  start = vi.fn();
-  balanceTransactions = vi.fn();
-  revertTransaction = vi.fn();
-  createDustGenerationTransaction = vi.fn();
-  addDustGenerationSignature = vi.fn();
-  calculateFee = vi.fn();
-  serializeState = vi.fn();
-  waitForSyncedState = vi.fn(() => Promise.resolve(mockDustWalletState as DustWalletState));
+class MockDustWallet implements DustWalletView {
+  state = new rx.BehaviorSubject<DustWalletStateView>(mockDustWalletState);
   getAddress = vi.fn(() => Promise.resolve(testDustAddress));
-  stop = vi.fn();
 }
 
 export interface MockDustCoin {
@@ -119,68 +91,55 @@ export interface MockBalancesConfig {
   dust?: MockDustCoin[];
 }
 
-class MockWalletFacade extends WalletFacade {
+/**
+ * Mock implementation of WalletFacadeView for testing.
+ *
+ * IMPORTANT: This is a narrowed-down version of WalletFacade from @midnight-ntwrk/wallet-sdk-facade.
+ * The WalletFacadeView interface (defined in types.ts) captures only the subset of WalletFacade
+ * that the DApp Connector actually uses. If WalletFacade changes in ways that affect the
+ * properties used by ConnectedAPI, the WalletFacadeView interface and this mock must be
+ * updated accordingly.
+ *
+ * @see WalletFacadeView in types.ts for the interface definition
+ * @see WalletFacade in @midnight-ntwrk/wallet-sdk-facade for the full implementation
+ */
+class MockWalletFacade implements WalletFacadeView {
   shielded: MockShieldedWallet;
   unshielded: MockUnshieldedWallet;
   dust: MockDustWallet;
 
   constructor() {
-    const shielded = new MockShieldedWallet();
-    const unshielded = new MockUnshieldedWallet();
-    const dust = new MockDustWallet();
-
-    const submissionService = {
-      submitTransaction: vi.fn(),
-      close: vi.fn(),
-    } as unknown as SubmissionService<ledger.FinalizedTransaction>;
-
-    const pendingTransactionsService = {
-      addPendingTransaction: vi.fn(),
-      state: vi.fn(() => new rx.Subject()),
-      start: vi.fn(),
-      stop: vi.fn(),
-      clear: vi.fn(),
-    } as unknown as PendingTransactionsService<ledger.FinalizedTransaction>;
-
-    const provingService = {
-      prove: vi.fn(),
-    } as unknown as ProvingService<UnboundTransaction>;
-
-    super(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
-    this.shielded = shielded;
-    this.unshielded = unshielded;
-    this.dust = dust;
+    this.shielded = new MockShieldedWallet();
+    this.unshielded = new MockUnshieldedWallet();
+    this.dust = new MockDustWallet();
   }
 
   withBalances(config: MockBalancesConfig): this {
     if (config.shielded !== undefined) {
-      const shieldedState: Partial<ShieldedWalletState> = {
+      const shieldedState: ShieldedWalletStateView = {
         address: testShieldedAddress,
         balances: config.shielded,
       };
-      this.shielded.state.next(shieldedState as ShieldedWalletState);
+      this.shielded.state.next(shieldedState);
     }
 
     if (config.unshielded !== undefined) {
-      const unshieldedState: Partial<UnshieldedWalletState> = {
+      const unshieldedState: UnshieldedWalletStateView = {
         address: testUnshieldedAddress,
         balances: config.unshielded,
       };
-      this.unshielded.state.next(unshieldedState as UnshieldedWalletState);
+      this.unshielded.state.next(unshieldedState);
     }
 
     if (config.dust !== undefined) {
       const coins = config.dust;
       const totalBalance = coins.reduce((sum, coin) => sum + coin.balance, 0n);
-      const dustState: Partial<DustWalletState> = {
+      const dustState: DustWalletStateView = {
         address: testDustAddress,
         balance: () => totalBalance,
-        availableCoinsWithFullInfo: () =>
-          coins.map(
-            (coin) => ({ maxCap: coin.maxCap }) as ReturnType<DustWalletState['availableCoinsWithFullInfo']>[number],
-          ),
+        availableCoinsWithFullInfo: (): readonly DustCoinInfo[] => coins.map((coin) => ({ maxCap: coin.maxCap })),
       };
-      this.dust.state.next(dustState as DustWalletState);
+      this.dust.state.next(dustState);
     }
 
     return this;
@@ -191,14 +150,15 @@ export function prepareMockFacade(): MockWalletFacade {
   return new MockWalletFacade();
 }
 
+// Mock Bech32 address that matches MidnightBech32m interface
+const mockBech32Address: MidnightBech32m = MidnightBech32m.encode('testnet', testUnshieldedAddress);
+
 class MockUnshieldedKeystore implements UnshieldedKeystore {
-  getSecretKey = vi.fn(() => Buffer.from('mock-secret-key'));
-  getBech32Address = vi.fn(() => ({
-    asString: () => 'unshielded1mockaddress',
-  })) as unknown as UnshieldedKeystore['getBech32Address'];
-  getPublicKey = vi.fn(() => 'mock-public-key' as unknown as ledger.SignatureVerifyingKey);
-  getAddress = vi.fn(() => 'mock-address' as ledger.UserAddress);
-  signData = vi.fn(() => 'mock-signature' as unknown as ledger.Signature);
+  getSecretKey = vi.fn((): Buffer => Buffer.from('mock-secret-key'));
+  getBech32Address = vi.fn((): MidnightBech32m => mockBech32Address);
+  getPublicKey = vi.fn((): ledger.SignatureVerifyingKey => 'mock-public-key');
+  getAddress = vi.fn((): ledger.UserAddress => testUnshieldedAddress.hexString);
+  signData = vi.fn((): ledger.Signature => 'mock-signature');
 }
 
 export function prepareMockUnshieldedKeystore(): UnshieldedKeystore {
