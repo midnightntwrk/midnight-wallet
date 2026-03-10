@@ -9,6 +9,49 @@ The Midnight Wallet SDK is a TypeScript implementation of the
 It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
 utilities for the Midnight privacy-focused blockchain.
 
+## Key Specifications (ALWAYS CONSULT)
+
+When working on wallet functionality, always consult these specifications:
+
+### Wallet Specification
+**Repository:** [midnight-architecture](https://github.com/midnightntwrk/midnight-architecture)
+**Path:** `components/WalletEngine/Specification.md`
+
+Key sections:
+- Transaction lifecycle: pending → confirmed → finalized (or discarded)
+- Coin lifecycle: booked → pending → confirmed → final
+- Balance types: available, pending, total
+- State operations: apply_transaction, finalize_transaction, discard_transaction, spend
+- Synchronization process and indexing services
+
+### DApp Connector API Specification
+**Repository:** [midnight-dapp-connector-api](https://github.com/input-output-hk/midnight-dapp-connector-api)
+**NPM:** [@midnight-ntwrk/dapp-connector-api](https://www.npmjs.com/package/@midnight-ntwrk/dapp-connector-api)
+**Path:** `SPECIFICATION.md`
+
+Key sections:
+- API design philosophy and responsibilities
+- Method signatures and expected behaviors
+- Error handling requirements
+- Transaction structure requirements
+
+### DApp Connector API Types
+**Path:** `src/api.ts` in the dapp-connector-api package
+
+TypeScript type definitions for the connector API.
+
+### Ledger Specification
+**Repository:** [midnight-ledger](https://github.com/input-output-hk/midnight-ledger)
+**Path:** `spec/`
+
+Key documents:
+- `intents-transactions.md` - Transaction structure, intents, sections
+- `zswap.md` - Shielded token protocol
+- `dust.md` - Dust token mechanics
+- `night.md` - Night/unshielded token mechanics
+- `contracts.md` - Smart contract execution
+- `cost-model.md` - Transaction fee calculation
+
 ## Build Commands
 
 ```bash
