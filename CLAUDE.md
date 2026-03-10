@@ -4,7 +4,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-The Midnight Wallet SDK is a TypeScript implementation of the [Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md). It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing utilities for the Midnight privacy-focused blockchain.
+The Midnight Wallet SDK is a TypeScript implementation of the
+[Midnight Wallet Specification](https://github.com/midnightntwrk/midnight-architecture/blob/main/components/WalletEngine/Specification.md).
+It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
+utilities for the Midnight privacy-focused blockchain.
 
 ## Build Commands
 
@@ -72,11 +75,13 @@ utilities           ← Common types and operations
 ```
 
 **External Communication:**
+
 - `indexer-client` - GraphQL client for syncing state with midnight-indexer
 - `node-client` - Polkadot RPC client for midnight-node
 - `prover-client` - Client for zero-knowledge proof generation
 
 **Key Management:**
+
 - `hd` - HD-wallet API (BIP32/BIP39) for Midnight
 - `address-format` - Bech32m formatting for keys and addresses
 
@@ -93,12 +98,14 @@ WalletFacade → FacadeAPIAdapter → AWallet → WalletRuntime → RuntimeVaria
 - **WalletBuilder**: Registers variants at build time
 
 Each variant follows a Services + Capabilities pattern:
+
 - **Service**: Async/side-effecting objects (sync streams, proving, submission)
 - **Capability**: Pure functional state transformations (balances, coin selection)
 
 ### State Management
 
 Uses Effect library with `SubscriptionRef` for BLoC-like state management:
+
 - Immutable state that can only be modified through controlled methods
 - Observable state stream for subscribers
 - Atomic updates serialized through SubscriptionRef
@@ -114,6 +121,7 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 Tests use Vitest with workspace configuration. Each package has its own `vitest.config.ts`.
 
 For tests requiring infrastructure (indexer-standalone), copy `.env.example` to `.env` and configure:
+
 ```bash
 cp .env.example .env
 # Generate APP_INFRA_SECRET: openssl rand -hex 32

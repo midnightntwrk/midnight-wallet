@@ -50,6 +50,7 @@ packages/src/**/*.d.ts*
 reports
 **/allure-results/*
 !**/allure-results/categories.json
+test-runner-profile/
 
 # user files
 **/.sync_cache
