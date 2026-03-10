@@ -1,4 +1,4 @@
-import type { InitialAPI, ConnectedAPI as ConnectedAPIType } from '@midnight-ntwrk/dapp-connector-api';
+import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Data } from 'effect';

@@ -29,7 +29,7 @@ describe('Configuration', () => {
       expect(result).toBeInstanceOf(Promise);
     });
 
-    it('should return configuration with networkId', async () => {
+    it('should return all configuration fields matching input', async () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade();
       const keystore = prepareMockUnshieldedKeystore();
@@ -39,57 +39,13 @@ describe('Configuration', () => {
       const config = await connectedAPI.getConfiguration();
 
       expect(config.networkId).toBe('testnet');
-    });
-
-    it('should return configuration with indexerUri', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const config = await connectedAPI.getConfiguration();
-
       expect(config.indexerUri).toBe('http://localhost:8080');
-    });
-
-    it('should return configuration with indexerWsUri', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const config = await connectedAPI.getConfiguration();
-
       expect(config.indexerWsUri).toBe('ws://localhost:8080');
-    });
-
-    it('should return configuration with substrateNodeUri', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const config = await connectedAPI.getConfiguration();
-
       expect(config.substrateNodeUri).toBe('ws://localhost:9944');
-    });
-
-    it('should return configuration with proverServerUri when provided', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const config = await connectedAPI.getConfiguration();
-
       expect(config.proverServerUri).toBe('http://localhost:9000');
     });
 
-    it('should return configuration without proverServerUri when not provided', async () => {
+    it('should return undefined proverServerUri when not provided', async () => {
       const configWithoutProver: ConnectorConfiguration = {
         networkId: 'testnet',
         indexerUri: 'http://localhost:8080',
@@ -105,21 +61,6 @@ describe('Configuration', () => {
       const config = await connectedAPI.getConfiguration();
 
       expect(config.proverServerUri).toBeUndefined();
-    });
-
-    it('should return all required Configuration fields', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const config = await connectedAPI.getConfiguration();
-
-      expect(config).toHaveProperty('networkId');
-      expect(config).toHaveProperty('indexerUri');
-      expect(config).toHaveProperty('indexerWsUri');
-      expect(config).toHaveProperty('substrateNodeUri');
     });
 
     it('should return consistent configuration on multiple calls', async () => {
@@ -172,19 +113,7 @@ describe('Configuration', () => {
       expect(result).toBeInstanceOf(Promise);
     });
 
-    it('should return status "connected" after successful connection', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
-
-      const status = await connectedAPI.getConnectionStatus();
-
-      expect(status.status).toBe('connected');
-    });
-
-    it('should include networkId when connected', async () => {
+    it('should return status "connected" with networkId after successful connection', async () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade();
       const keystore = prepareMockUnshieldedKeystore();
@@ -264,7 +193,6 @@ describe('Configuration', () => {
 
       const config = await connectedAPI.getConfiguration();
 
-      // Attempting to modify should either throw or have no effect
       expect(() => {
         (config as { networkId: string }).networkId = 'modified';
       }).toThrow();
@@ -279,7 +207,6 @@ describe('Configuration', () => {
 
       const status = await connectedAPI.getConnectionStatus();
 
-      // Attempting to modify should either throw or have no effect
       expect(() => {
         (status as { status: string }).status = 'disconnected';
       }).toThrow();

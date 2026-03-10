@@ -142,21 +142,18 @@ describe('Disconnection', () => {
       },
     );
 
-    it.each(methodsThatWorkWhenDisconnected)(
-      'should still allow %s after disconnect',
-      async (_methodName, invoker) => {
-        const metadata = randomValue(defaultConnectorMetadataArbitrary);
-        const facade = prepareMockFacade();
-        const keystore = prepareMockUnshieldedKeystore();
-        const connector = new Connector(metadata, facade, keystore, defaultConfig);
-        const connectedAPI = await connector.connect('testnet');
+    it.each(methodsThatWorkWhenDisconnected)('should still allow %s after disconnect', async (_methodName, invoker) => {
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const facade = prepareMockFacade();
+      const keystore = prepareMockUnshieldedKeystore();
+      const connector = new Connector(metadata, facade, keystore, defaultConfig);
+      const connectedAPI = await connector.connect('testnet');
 
-        await connectedAPI.disconnect();
+      await connectedAPI.disconnect();
 
-        // Should NOT throw - we just verify it resolves without error
-        await expect(invoker(connectedAPI)).resolves.not.toThrow();
-      },
-    );
+      // Should NOT throw - we just verify it resolves without error
+      await expect(invoker(connectedAPI)).resolves.not.toThrow();
+    });
   });
 
   describe('multiple disconnect calls', () => {
