@@ -1,5 +1,6 @@
 import { expect, vi } from 'vitest';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import type { TxStatus } from '@midnight-ntwrk/dapp-connector-api';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
 import {
   ShieldedAddress,
@@ -19,6 +20,9 @@ import type {
   UnshieldedWalletStateView,
   DustWalletStateView,
   DustCoinInfo,
+  TransactionHistoryServiceView,
+  TransactionHistoryEntryView,
+  PaginatedHistoryResult,
 } from '../types.js';
 
 export const expectMatchObjectTyped = <T>(actual: T, expected: Partial<T>): void => {
@@ -92,6 +96,41 @@ export interface MockBalancesConfig {
 }
 
 /**
+ * Mock transaction history entry for testing.
+ * Uses the "correct" API that the DApp Connector expects.
+ */
+export interface MockHistoryEntry {
+  txHash: string;
+  txStatus: TxStatus;
+}
+
+/**
+ * Mock implementation of TransactionHistoryServiceView for testing.
+ * Provides paginated transaction history with proper lifecycle status.
+ */
+class MockTransactionHistoryService implements TransactionHistoryServiceView {
+  private entries: TransactionHistoryEntryView[] = [];
+
+  setEntries(entries: MockHistoryEntry[]): void {
+    this.entries = entries.map((e) => ({
+      txHash: e.txHash,
+      txStatus: e.txStatus,
+    }));
+  }
+
+  getHistory(pageNumber: number, pageSize: number): Promise<PaginatedHistoryResult> {
+    const start = pageNumber * pageSize;
+    const end = start + pageSize;
+    const paginatedEntries = this.entries.slice(start, end);
+
+    return Promise.resolve({
+      entries: paginatedEntries,
+      totalCount: this.entries.length,
+    });
+  }
+}
+
+/**
  * Mock implementation of WalletFacadeView for testing.
  *
  * IMPORTANT: This is a narrowed-down version of WalletFacade from @midnight-ntwrk/wallet-sdk-facade.
@@ -100,6 +139,9 @@ export interface MockBalancesConfig {
  * properties used by ConnectedAPI, the WalletFacadeView interface and this mock must be
  * updated accordingly.
  *
+ * This mock also includes the "ideal" transaction history API that addresses critical gaps
+ * in the current wallet implementation (see types.ts for details).
+ *
  * @see WalletFacadeView in types.ts for the interface definition
  * @see WalletFacade in @midnight-ntwrk/wallet-sdk-facade for the full implementation
  */
@@ -107,11 +149,13 @@ class MockWalletFacade implements WalletFacadeView {
   shielded: MockShieldedWallet;
   unshielded: MockUnshieldedWallet;
   dust: MockDustWallet;
+  transactionHistory: MockTransactionHistoryService;
 
   constructor() {
     this.shielded = new MockShieldedWallet();
     this.unshielded = new MockUnshieldedWallet();
     this.dust = new MockDustWallet();
+    this.transactionHistory = new MockTransactionHistoryService();
   }
 
   withBalances(config: MockBalancesConfig): this {
@@ -142,6 +186,11 @@ class MockWalletFacade implements WalletFacadeView {
       this.dust.state.next(dustState);
     }
 
+    return this;
+  }
+
+  withTransactionHistory(entries: MockHistoryEntry[]): this {
+    this.transactionHistory.setEntries(entries);
     return this;
   }
 }
