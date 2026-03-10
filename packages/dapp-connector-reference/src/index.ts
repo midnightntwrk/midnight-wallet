@@ -4,6 +4,8 @@ import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-w
 import { Data } from 'effect';
 import { SemVer } from 'semver';
 import type { ConnectorConfiguration } from './types.js';
+import { APIError } from './errors.js';
+import { ConnectedAPI, type ExtendedConnectedAPI } from './ConnectedAPI.js';
 
 export class InstallationError extends Data.TaggedError('InstallationError')<{
   message: string;
@@ -127,7 +129,16 @@ export class Connector implements InitialAPI {
     });
   }
 
-  connect(_networkId: string): Promise<ConnectedAPIType> {
-    throw new Error('Not implemented');
+  connect(networkId: string): Promise<ExtendedConnectedAPI> {
+    if (networkId !== this.configuration.networkId) {
+      return Promise.reject(
+        APIError.rejected(
+          `Network ID mismatch: requested '${networkId}' but wallet is configured for '${this.configuration.networkId}'`,
+        ),
+      );
+    }
+
+    const connectedAPI = new ConnectedAPI(this.facade, this.keystore, this.configuration);
+    return Promise.resolve(Object.freeze(connectedAPI) as ExtendedConnectedAPI);
   }
 }
