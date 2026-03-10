@@ -1,4 +1,4 @@
-import type { Configuration } from '@midnight-ntwrk/dapp-connector-api';
+import type { Configuration, TxStatus } from '@midnight-ntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
 import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
@@ -76,6 +76,11 @@ export interface WalletFacadeView {
   readonly shielded: ShieldedWalletView;
   readonly unshielded: UnshieldedWalletView;
   readonly dust: DustWalletView;
+  /**
+   * Transaction history service. Optional because the current WalletFacade
+   * doesn't provide this API (see critical gaps documentation below).
+   */
+  readonly transactionHistory?: TransactionHistoryServiceView;
 }
 
 /**
@@ -107,3 +112,69 @@ export const toAPIConfiguration = (config: ConnectorConfiguration): Configuratio
     proverServerUri: config.proverServerUri,
     substrateNodeUri: config.substrateNodeUri,
   });
+
+// =============================================================================
+// Transaction History Types
+// =============================================================================
+// The following types define the "ideal" API for transaction history that the
+// DApp Connector expects. The current wallet facade (WalletFacade from
+// @midnight-ntwrk/wallet-sdk-facade) does not fully support this API.
+//
+// Critical gaps in current WalletFacade:
+// 1. Status model mismatch: Wallet uses execution result ('SUCCESS'|'FAILURE'|
+//    'PARTIAL_SUCCESS'), API expects lifecycle status ('finalized'|'confirmed'|
+//    'pending'|'discarded')
+// 2. No per-segment execution status: API expects Record<number, 'Success'|'Failure'>
+// 3. No 'pending' or 'discarded' tracking: Wallet only stores finalized transactions
+// 4. No pagination: Wallet's getAll() returns AsyncIterableIterator
+//
+// IMPORTANT: When WalletFacade is updated to support these features, the
+// TransactionHistoryServiceView interface should be updated to match.
+// =============================================================================
+
+/**
+ * Transaction hash as hex string.
+ */
+export type TransactionHash = string;
+
+/**
+ * A single transaction history entry as expected by the DApp Connector API.
+ * This matches the HistoryEntry type from @midnight-ntwrk/dapp-connector-api.
+ */
+export interface TransactionHistoryEntryView {
+  /**
+   * Hex-encoded transaction hash.
+   */
+  readonly txHash: TransactionHash;
+
+  /**
+   * Transaction lifecycle status with execution details for finalized/confirmed.
+   */
+  readonly txStatus: TxStatus;
+}
+
+/**
+ * Result of a paginated query for transaction history.
+ */
+export interface PaginatedHistoryResult {
+  readonly entries: readonly TransactionHistoryEntryView[];
+  readonly totalCount: number;
+}
+
+/**
+ * Service interface for querying transaction history.
+ * This is the "ideal" API that the DApp Connector expects from the wallet.
+ *
+ * IMPORTANT: This interface addresses critical gaps in the current wallet
+ * implementation. When WalletFacade is updated to support these features,
+ * this interface should be updated to match.
+ */
+export interface TransactionHistoryServiceView {
+  /**
+   * Get paginated transaction history.
+   * @param pageNumber - Zero-based page number
+   * @param pageSize - Number of entries per page
+   * @returns Paginated history entries with lifecycle status
+   */
+  getHistory(pageNumber: number, pageSize: number): Promise<PaginatedHistoryResult>;
+}
