@@ -1,5 +1,19 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.0.1
+
+### Patch Changes
+
+- 7ef6ff9: fix: bump package versions
+- cef03a5: Connect WebSocket on-demand and disconnect after each operation to prevent @polkadot/api health-check timers
+  from keeping service workers alive
+- Updated dependencies [3843720]
+- Updated dependencies [0f29d01]
+- Updated dependencies [55380e5]
+- Updated dependencies [330867f]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+
 ## 1.0.0
 
 ### Patch Changes

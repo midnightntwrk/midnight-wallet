@@ -1,5 +1,63 @@
 # @midnight-ntwrk/wallet-sdk-capabilities
 
+## 3.1.0
+
+### Minor Changes
+
+- f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
+  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+    into the `WalletFacade`
+  - make `WalletFacade` revert transaction upon submission failure
+  - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
+    This will allow non-breaking future initialization changes when e.g. new services are being integrated into the
+    facade.
+- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+  checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
+  be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
+  - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
+    finalized (it can't happen earlier because unproven transactions contain copies of secret keys for proving
+    purposes). Whenever a pending transaction is reported as failed - it is reverted. The pending transactions service
+    state is also reported in the facade state for serialization purposes and to enable UI reporting.
+
+### Patch Changes
+
+- d3422bc: - Extract proving into a standalone `ProvingService` in the `@midnight-ntwrk/wallet-sdk-capabilities`
+  package, decoupling it from the shielded and dust wallet builders. The new service supports server (HTTP prover),
+  WASM, and simulator proving modes via a unified configuration.
+  - Remove `withProving` / `withProvingDefaults` and the `provingService` dependency from the V1 builders in both the
+    shielded and dust wallet packages. Proving is no longer a wallet-level concern.
+  - Integrate the `ProvingService` into `WalletFacade`, which now owns transaction proving and finalization. On proving
+    failure the facade reverts the transaction across all three wallet types (shielded, unshielded, dust).
+
+  ### Breaking changes
+  - **`@midnight-ntwrk/wallet-sdk-shielded`**: Removed `finalizeTransaction` from `ShieldedWalletAPI`. Removed `Proving`
+    export from `@midnight-ntwrk/wallet-sdk-shielded/v1`. Removed `provingService` from the V1 builder and
+    `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults` from `V1Builder`. `DefaultV1Configuration`
+    no longer includes `DefaultProvingConfiguration`.
+  - **`@midnight-ntwrk/wallet-sdk-dust-wallet`**: Removed `proveTransaction` from `DustWalletAPI`. Removed
+    `provingService` from the V1 builder and `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults`
+    from `V1Builder`.
+  - **`@midnight-ntwrk/wallet-sdk-facade`**: Removed the `UnboundTransaction` type export (now re-exported from
+    `@midnight-ntwrk/wallet-sdk-capabilities/proving`). `WalletFacade` now requires a `ProvingService` and
+    `DefaultConfiguration` includes `DefaultProvingConfiguration`.
+
+- Updated dependencies [3843720]
+- Updated dependencies [6c359b8]
+- Updated dependencies [7ef6ff9]
+- Updated dependencies [f52d01d]
+- Updated dependencies [aa7ede2]
+- Updated dependencies [dd004db]
+- Updated dependencies [0f29d01]
+- Updated dependencies [55380e5]
+- Updated dependencies [330867f]
+- Updated dependencies [fe57cc3]
+- Updated dependencies [cef03a5]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0
+  - @midnight-ntwrk/wallet-sdk-node-client@1.0.1
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.1.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+
 ## 3.1.0-rc.2
 
 ### Patch Changes

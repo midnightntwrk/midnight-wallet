@@ -1,5 +1,37 @@
 # @midnight-ntwrk/wallet-sdk-prover-client
 
+## 1.1.0
+
+### Minor Changes
+
+- aa7ede2: ## Added
+  - Implemented WebAssembly (WASM) proving provider as an alternative to server-based proving
+  - Added `ProverClient.WasmConfig` interface for WASM prover configuration
+  - Introduced Web Worker-based proof generation with message-based communication
+  - Added comprehensive test coverage for both server and WASM proving services
+
+  ## Changed
+  - Updated proving interface to support custom key material providers
+  - Migrated from Filecoin keys to Midnight-specific keys in Wasm prover
+
+  ## Internal
+  - Refactored test utilities to support multiple proving backends
+
+- fe57cc3: Expose proving provider for custom prover integration
+  - Added `asProvingProvider()` method to `HttpProverClient` and `WasmProver` to expose underlying proving providers
+  - Added `create()` factory functions to `HttpProverClient` and `WasmProver` for direct instantiation without Effect
+    layers
+  - Added `fromProvingProvider()` and `fromProvingProviderEffect()` helper functions to `Proving` module for creating
+    proving services from custom providers
+  - Refactored `makeServerProvingService()` and `makeWasmProvingService()` to use the new provider-based approach
+  - Added comprehensive test coverage for custom prover workflows in both HTTP and WASM configurations
+
+### Patch Changes
+
+- Updated dependencies [55380e5]
+- Updated dependencies [330867f]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+
 ## 1.1.0-rc.3
 
 ### Patch Changes

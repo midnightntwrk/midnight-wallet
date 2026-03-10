@@ -1,5 +1,11 @@
 # @midnight-ntwrk/wallet-sdk-address-format
 
+## 3.0.1
+
+### Patch Changes
+
+- 7ef6ff9: fix: bump package versions
+
 ## 3.0.0
 
 ### Patch Changes
