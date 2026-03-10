@@ -86,6 +86,7 @@ jobs:
   canary:
     name: Canary (snapshot publish)
     runs-on: ubuntu-latest-8-core-x64
+    needs: [release]
     permissions:
       packages: write
       contents: read
