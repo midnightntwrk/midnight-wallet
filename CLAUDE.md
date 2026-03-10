@@ -120,6 +120,13 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 
 Tests use Vitest with workspace configuration. Each package has its own `vitest.config.ts`.
 
+**IMPORTANT: Always follow Test-Driven Development (TDD)**
+When implementing new features or fixing bugs:
+1. Write tests first that define the expected behavior
+2. Run tests to verify they fail (red)
+3. Only then implement the code to make tests pass (green)
+4. User reviews and commits tests before implementation begins
+
 For tests requiring infrastructure (indexer-standalone), copy `.env.example` to `.env` and configure:
 
 ```bash
