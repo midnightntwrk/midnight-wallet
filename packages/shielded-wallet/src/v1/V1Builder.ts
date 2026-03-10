@@ -43,9 +43,7 @@ import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capab
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
 import {
   DefaultTransactionHistoryConfiguration,
-  makeDefaultTransactionHistoryCapability,
   makeDefaultTransactionHistoryService,
-  type TransactionHistoryCapability,
   type TransactionHistoryService,
 } from './TransactionHistory.js';
 import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
@@ -75,7 +73,7 @@ export type V1Variant<TSerialized, TSyncUpdate, TTransaction, TAuxData> = Varian
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
-  transactionHistory: TransactionHistoryCapability;
+  transactionHistory: TransactionHistoryService;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -138,7 +136,7 @@ export class V1Builder<
     return new V1Builder<TConfig, TContext, TSerialized, TSyncUpdate, Transaction, TStartAux>({
       ...this.#buildState,
       transactingCapability: undefined,
-      transactionHistoryCapability: undefined,
+      transactionHistoryService: undefined,
     });
   }
 
@@ -336,17 +334,13 @@ export class V1Builder<
     ledger.FinalizedTransaction,
     TStartAux
   > {
-    return this.withTransactionHistory(makeDefaultTransactionHistoryCapability, makeDefaultTransactionHistoryService);
+    return this.withTransactionHistory(makeDefaultTransactionHistoryService);
   }
 
   withTransactionHistory<
     TTransactionHistoryConfig,
     TTransactionHistoryContext extends Partial<RunningV1Variant.AnyContext>,
   >(
-    transactionHistoryCapability: (
-      configuration: TTransactionHistoryConfig,
-      getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryCapability,
     transactionHistoryService: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
@@ -368,7 +362,6 @@ export class V1Builder<
       TStartAux
     >({
       ...this.#buildState,
-      transactionHistoryCapability,
       transactionHistoryService,
     });
   }
@@ -412,7 +405,7 @@ export class V1Builder<
       coinsAndBalances: v1Context.coinsAndBalancesCapability,
       keys: v1Context.keysCapability,
       serialization: v1Context.serializationCapability,
-      transactionHistory: v1Context.transactionHistoryCapability,
+      transactionHistory: v1Context.transactionHistoryService,
       start(
         context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<
@@ -462,7 +455,6 @@ export class V1Builder<
       coinSelection,
       coinsAndBalancesCapability,
       keysCapability,
-      transactionHistoryCapability,
       transactionHistoryService,
     } = this.#buildState;
 
@@ -476,7 +468,6 @@ export class V1Builder<
       coinsAndBalancesCapability: coinsAndBalancesCapability(configuration, getContext),
       keysCapability: keysCapability(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
-      transactionHistoryCapability: transactionHistoryCapability(configuration, getContext),
       transactionHistoryService: transactionHistoryService(configuration, getContext),
     };
 
@@ -526,10 +517,6 @@ declare namespace V1Builder {
   };
 
   type HasTransactionHistory<TConfig, TContext> = {
-    readonly transactionHistoryCapability: (
-      configuration: TConfig,
-      getContext: () => TContext,
-    ) => TransactionHistoryCapability;
     readonly transactionHistoryService: (
       configuration: TConfig,
       getContext: () => TContext,
@@ -586,7 +573,6 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate, TTransact
     'serializationCapability',
     'coinsAndBalancesCapability',
     'keysCapability',
-    'transactionHistoryCapability',
     'transactionHistoryService',
   ] as const;
   /**

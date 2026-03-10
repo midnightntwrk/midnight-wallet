@@ -38,8 +38,8 @@ import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabiliti
 import { CoreWallet } from './CoreWallet.js';
 import {
   DefaultTransactionHistoryConfiguration,
-  TransactionHistoryCapability,
-  makeDefaultTransactionHistoryCapability,
+  TransactionHistoryService,
+  makeDefaultTransactionHistoryService,
 } from './TransactionHistory.js';
 import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { createKeystore, PublicKey } from '../KeyStore.js';
@@ -69,7 +69,7 @@ export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, TSerialized>;
-  transactionHistory: TransactionHistoryCapability;
+  transactionHistory: TransactionHistoryService;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,17 +216,17 @@ export class V1Builder<
   withTransactionHistoryDefaults(
     this: V1Builder<TConfig, TContext, TSerialized, TSyncUpdate>,
   ): V1Builder<TConfig & DefaultTransactionHistoryConfiguration, TContext, TSerialized, TSyncUpdate> {
-    return this.withTransactionHistory(makeDefaultTransactionHistoryCapability);
+    return this.withTransactionHistory(makeDefaultTransactionHistoryService);
   }
 
   withTransactionHistory<
     TTransactionHistoryConfig,
     TTransactionHistoryContext extends Partial<RunningV1Variant.AnyContext>,
   >(
-    transactionHistoryCapability: (
+    transactionHistoryService: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryCapability,
+    ) => TransactionHistoryService,
   ): V1Builder<TConfig & TTransactionHistoryConfig, TContext & TTransactionHistoryContext, TSerialized, TSyncUpdate> {
     return new V1Builder<
       TConfig & TTransactionHistoryConfig,
@@ -235,7 +235,7 @@ export class V1Builder<
       TSyncUpdate
     >({
       ...this.#buildState,
-      transactionHistoryCapability,
+      transactionHistoryService,
     });
   }
 
@@ -264,7 +264,7 @@ export class V1Builder<
       coinsAndBalances: v1Context.coinsAndBalancesCapability,
       keys: v1Context.keysCapability,
       serialization: v1Context.serializationCapability,
-      transactionHistory: v1Context.transactionHistoryCapability,
+      transactionHistory: v1Context.transactionHistoryService,
       start(
         context: Variant.VariantContext<CoreWallet>,
       ): Effect.Effect<RunningV1Variant<TSerialized, TSyncUpdate>, WalletRuntimeError, Scope.Scope> {
@@ -301,7 +301,7 @@ export class V1Builder<
       coinSelection,
       coinsAndBalancesCapability,
       keysCapability,
-      transactionHistoryCapability,
+      transactionHistoryService,
     } = this.#buildState;
 
     const getContext = (): RunningV1Variant.Context<TSerialized, TSyncUpdate> => context;
@@ -314,7 +314,7 @@ export class V1Builder<
       coinsAndBalancesCapability: coinsAndBalancesCapability(configuration, getContext),
       keysCapability: keysCapability(configuration, getContext),
       coinSelection: coinSelection(configuration, getContext),
-      transactionHistoryCapability: transactionHistoryCapability(configuration, getContext),
+      transactionHistoryService: transactionHistoryService(configuration, getContext),
     };
 
     return context;
@@ -357,10 +357,10 @@ declare namespace V1Builder {
   };
 
   type HasTransactionHistory<TConfig, TContext> = {
-    readonly transactionHistoryCapability: (
+    readonly transactionHistoryService: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactionHistoryCapability;
+    ) => TransactionHistoryService;
   };
 
   type HasKeys<TConfig, TContext> = {
@@ -406,7 +406,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
     'serializationCapability',
     'coinsAndBalancesCapability',
     'keysCapability',
-    'transactionHistoryCapability',
+    'transactionHistoryService',
   ] as const;
   /**
    * This type will fail compilation if any key is omitted, letting the `isFull` check work properly

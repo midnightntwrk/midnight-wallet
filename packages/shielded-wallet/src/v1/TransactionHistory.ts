@@ -47,15 +47,12 @@ export type TransactionMetaData = {
   status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
 };
 
-export type TransactionHistoryCapability = {
+export type TransactionHistoryService = {
   create(changes: ledger.ZswapStateChanges, metadata: TransactionMetaData, protocolVersion: number): Promise<void>;
   get(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
   getAll(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
   delete(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
   serialize(): Promise<SerializedShieldedTransactionHistory>;
-};
-
-export type TransactionHistoryService = {
   getMetaData(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
@@ -85,11 +82,12 @@ export const mergeShieldedEntries = (
   spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
 
-export const makeDefaultTransactionHistoryCapability = (
+export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
-): TransactionHistoryCapability => {
+): TransactionHistoryService => {
   const { shieldedTxHistoryStorage } = config;
+  const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
 
   return {
     create: async (
@@ -116,16 +114,6 @@ export const makeDefaultTransactionHistoryCapability = (
     serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
       return await serializeShieldedTransactionHistoryStorage(shieldedTxHistoryStorage);
     },
-  };
-};
-
-export const makeDefaultTransactionHistoryService = (
-  config: DefaultTransactionHistoryConfiguration,
-  _getContext: () => unknown,
-): TransactionHistoryService => {
-  const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
-
-  return {
     getMetaData: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
@@ -159,19 +147,6 @@ export const makeDefaultTransactionHistoryService = (
 };
 
 export const makeSimulatorTransactionHistoryService = (): TransactionHistoryService => {
-  return {
-    getMetaData: (
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
-      Effect.succeed({
-        hash,
-        timestamp: Date.now(),
-        status: 'SUCCESS',
-      }),
-  };
-};
-
-export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryCapability => {
   const txHistoryStorage = new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>();
 
   return {
@@ -199,6 +174,14 @@ export const makeSimulatorTransactionHistoryCapability = (): TransactionHistoryC
     serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
       return await serializeShieldedTransactionHistoryStorage(txHistoryStorage);
     },
+    getMetaData: (
+      hash: TransactionHistoryStorage.TransactionHash,
+    ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
+      Effect.succeed({
+        hash,
+        timestamp: Date.now(),
+        status: 'SUCCESS',
+      }),
   };
 };
 

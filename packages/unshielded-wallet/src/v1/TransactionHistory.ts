@@ -37,7 +37,7 @@ export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
 
 export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
 
-export type TransactionHistoryCapability = {
+export type TransactionHistoryService = {
   create(update: UnshieldedUpdate): Promise<void>;
   get(hash: TransactionHistoryStorage.TransactionHash): Promise<UnshieldedTransactionHistoryEntry | undefined>;
   getAll(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
@@ -80,10 +80,10 @@ const convertUpdateToEntry = ({
   };
 };
 
-export const makeDefaultTransactionHistoryCapability = (
+export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
-): TransactionHistoryCapability => {
+): TransactionHistoryService => {
   const { unshieldedTxHistoryStorage } = config;
 
   return {

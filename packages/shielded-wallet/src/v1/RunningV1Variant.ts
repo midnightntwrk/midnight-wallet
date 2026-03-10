@@ -40,7 +40,7 @@ import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
-import { TransactionHistoryService, type TransactionHistoryCapability } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -75,7 +75,6 @@ export declare namespace RunningV1Variant {
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-    transactionHistoryCapability: TransactionHistoryCapability;
     transactionHistoryService: TransactionHistoryService;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -169,7 +168,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                       this.#v1Context.transactionHistoryService.getMetaData(change.source),
                       Effect.flatMap((metadata) =>
                         Effect.promise(() =>
-                          this.#v1Context.transactionHistoryCapability.create(change, metadata, protocolVersion),
+                          this.#v1Context.transactionHistoryService.create(change, metadata, protocolVersion),
                         ),
                       ),
                       Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),

@@ -24,7 +24,7 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -41,21 +41,27 @@ export type ShieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability;
+};
+
+export type ShieldedWalletServices = {
+  transactionHistory: TransactionHistoryService;
 };
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
 export class ShieldedWalletState<TSerialized = string> {
   static readonly mapState =
-    <TSerialized = string>(capabilities: ShieldedWalletCapabilities<TSerialized>) =>
+    <TSerialized = string>(variant: ShieldedWalletCapabilities<TSerialized> & ShieldedWalletServices) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized> => {
-      return new ShieldedWalletState(state, capabilities);
+      const { serialization, coinsAndBalances, keys } = variant;
+      const { transactionHistory } = variant;
+      return new ShieldedWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
   readonly capabilities: ShieldedWalletCapabilities<TSerialized>;
+  readonly services: ShieldedWalletServices;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
@@ -89,14 +95,19 @@ export class ShieldedWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  get transactionHistory(): TransactionHistoryCapability {
-    return this.capabilities.transactionHistory;
+  get transactionHistory(): TransactionHistoryService {
+    return this.services.transactionHistory;
   }
 
-  constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: ShieldedWalletCapabilities<TSerialized>) {
+  constructor(
+    state: ProtocolState.ProtocolState<CoreWallet>,
+    capabilities: ShieldedWalletCapabilities<TSerialized>,
+    services: ShieldedWalletServices,
+  ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
+    this.services = services;
   }
 
   serialize(): TSerialized {
