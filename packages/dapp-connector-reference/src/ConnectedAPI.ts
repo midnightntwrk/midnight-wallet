@@ -11,11 +11,10 @@ import type {
   SignDataOptions,
   WalletConnectedAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
-import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as rx from 'rxjs';
-import type { ConnectorConfiguration } from './types.js';
+import type { ConnectorConfiguration, WalletFacadeView } from './types.js';
 import { toAPIConfiguration } from './types.js';
 import { APIError } from './errors.js';
 
@@ -36,13 +35,13 @@ export interface ExtendedConnectedAPI extends ConnectedAPIType {
  * Provides wallet functionality to connected DApps.
  */
 export class ConnectedAPI implements ExtendedConnectedAPI {
-  private readonly facade: WalletFacade;
+  private readonly facade: WalletFacadeView;
   private readonly keystore: UnshieldedKeystore;
   private readonly config: ConnectorConfiguration;
   // Use an object reference so state can be modified even when this instance is frozen
   private readonly state: { connected: boolean } = { connected: true };
 
-  constructor(facade: WalletFacade, keystore: UnshieldedKeystore, configuration: ConnectorConfiguration) {
+  constructor(facade: WalletFacadeView, keystore: UnshieldedKeystore, configuration: ConnectorConfiguration) {
     this.facade = facade;
     this.keystore = keystore;
     this.config = configuration;
