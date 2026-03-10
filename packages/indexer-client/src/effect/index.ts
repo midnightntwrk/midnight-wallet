@@ -17,3 +17,4 @@ export * as HttpQueryClient from './HttpQueryClient.js';
 export * from './SubscriptionClient.js';
 export * as WsSubscriptionClient from './WsSubscriptionClient.js';
 export * as ConnectionHelper from './ConnectionHelper.js';
+export * as QueryRunner from './QueryRunner.js';

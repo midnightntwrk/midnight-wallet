@@ -641,6 +641,7 @@ describe('DustWallet', () => {
 
       walletState = yield* SubscriptionRef.get(stateRef);
       expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+      expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(1);
     }).pipe(Effect.runPromise);
   });
 
@@ -717,15 +718,81 @@ describe('DustWallet', () => {
       yield* wallet.revertTransaction(balancingTx1);
 
       walletState = yield* SubscriptionRef.get(stateRef);
-      const remainingPending = walletVariant.coinsAndBalances.getPendingCoins(walletState);
-      expect(remainingPending.length).toBe(1);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(1);
+      expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(1);
 
       // revert the second tx
       yield* wallet.revertTransaction(balancingTx2);
 
       walletState = yield* SubscriptionRef.get(stateRef);
-      const remainingPending2 = walletVariant.coinsAndBalances.getPendingCoins(walletState);
-      expect(remainingPending2.length).toBe(0);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+      expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(2);
+    }).pipe(Effect.runPromise);
+  });
+
+  it('should revert a transaction that spent multiple dust coins in a single balance call', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const singleAwardTokens = 150_000_000_000n;
+      const awardCount = 5;
+
+      const nightRewards: Chunk.Chunk<{ blockNumber: bigint }> = yield* Stream.repeatEffect(
+        simulator.rewardNight(walletAddress, singleAwardTokens, nightVerifyingKey),
+      ).pipe(Stream.take(awardCount), Stream.runCollect);
+      const maxBlockNr = nightRewards.pipe(
+        Chunk.map(({ blockNumber }) => blockNumber),
+        Chunk.reduceRight(0n, BI.max),
+      );
+      yield* waitForTx(stateRef, maxBlockNr);
+
+      let simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      expect(nightTokensWithMeta.length).toBe(awardCount);
+
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, maxBlockNr + 1n);
+
+      let walletState = yield* SubscriptionRef.get(stateRef);
+      const dustCoinsCount = walletVariant.coinsAndBalances.getAvailableCoins(walletState).length;
+      expect(dustCoinsCount).toBe(2);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+
+      yield* simulator.fastForward(10n);
+
+      simulatorState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(simulatorState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+
+      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobAddress = bobKeyStore.getAddress();
+      const nightTokens = getNightTokens(simulatorState, walletAddress);
+
+      const makeTransferTx = (sendToken: (typeof nightTokens)[0]) => {
+        const intent = Intent.new(ttl);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
+          [{ ...sendToken, owner: nightVerifyingKey }],
+          [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+          [],
+        );
+        return Transaction.fromParts(NETWORK, undefined, undefined, intent);
+      };
+
+      const transferTxs = Array.from({ length: 10 }, () => makeTransferTx(nightTokens[0]));
+
+      const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
+
+      walletState = yield* SubscriptionRef.get(stateRef);
+      const pendingAfterBalance = walletVariant.coinsAndBalances.getPendingCoins(walletState);
+
+      expect(pendingAfterBalance.length).toBeGreaterThan(1);
+
+      yield* wallet.revertTransaction(balancingTx);
+
+      walletState = yield* SubscriptionRef.get(stateRef);
+      expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
+      expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(dustCoinsCount);
     }).pipe(Effect.runPromise);
   });
 
