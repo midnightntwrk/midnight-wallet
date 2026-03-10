@@ -13,6 +13,8 @@ import type {
 } from '@midnight-ntwrk/dapp-connector-api';
 import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import * as rx from 'rxjs';
 import type { ConnectorConfiguration } from './types.js';
 import { toAPIConfiguration } from './types.js';
 import { APIError } from './errors.js';
@@ -78,9 +80,9 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     );
   }
 
-  // Address Methods (to be implemented)
+  // Address Methods
 
-  getShieldedAddresses(): Promise<{
+  async getShieldedAddresses(): Promise<{
     shieldedAddress: string;
     shieldedCoinPublicKey: string;
     shieldedEncryptionPublicKey: string;
@@ -88,44 +90,69 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const address = await this.facade.shielded.getAddress();
+    const networkId = this.config.networkId;
+
+    return Object.freeze({
+      shieldedAddress: MidnightBech32m.encode(networkId, address).asString(),
+      shieldedCoinPublicKey: MidnightBech32m.encode(networkId, address.coinPublicKey).asString(),
+      shieldedEncryptionPublicKey: MidnightBech32m.encode(networkId, address.encryptionPublicKey).asString(),
+    });
   }
 
-  getUnshieldedAddress(): Promise<{ unshieldedAddress: string }> {
+  async getUnshieldedAddress(): Promise<{ unshieldedAddress: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const address = await this.facade.unshielded.getAddress();
+    const networkId = this.config.networkId;
+
+    return Object.freeze({
+      unshieldedAddress: MidnightBech32m.encode(networkId, address).asString(),
+    });
   }
 
-  getDustAddress(): Promise<{ dustAddress: string }> {
+  async getDustAddress(): Promise<{ dustAddress: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const address = await this.facade.dust.getAddress();
+    const networkId = this.config.networkId;
+
+    return Object.freeze({
+      dustAddress: MidnightBech32m.encode(networkId, address).asString(),
+    });
   }
 
-  // Balance Methods (to be implemented)
+  // Balance Methods
 
-  getShieldedBalances(): Promise<Record<string, bigint>> {
+  async getShieldedBalances(): Promise<Record<string, bigint>> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const state = await rx.firstValueFrom(this.facade.shielded.state);
+    return Object.freeze({ ...state.balances });
   }
 
-  getUnshieldedBalances(): Promise<Record<string, bigint>> {
+  async getUnshieldedBalances(): Promise<Record<string, bigint>> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const state = await rx.firstValueFrom(this.facade.unshielded.state);
+    return Object.freeze({ ...state.balances });
   }
 
-  getDustBalance(): Promise<{ cap: bigint; balance: bigint }> {
+  async getDustBalance(): Promise<{ cap: bigint; balance: bigint }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+    const state = await rx.firstValueFrom(this.facade.dust.state);
+    const now = new Date();
+    const coinsInfo = state.availableCoinsWithFullInfo(now);
+    const cap = coinsInfo.reduce((sum, coin) => sum + coin.maxCap, 0n);
+    const balance = state.balance(now);
+
+    return Object.freeze({ cap, balance });
   }
 
   // Transaction History (to be implemented)

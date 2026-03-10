@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { Connector } from '../index.js';
 import type { ExtendedConnectedAPI } from '../ConnectedAPI.js';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
 import type { ConnectorConfiguration } from '../types.js';
-import { prepareMockFacade, prepareMockUnshieldedKeystore, prepareMockFacadeWithBalances } from './testUtils.js';
+import { prepareMockFacade, prepareMockUnshieldedKeystore } from './testUtils.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
@@ -27,10 +26,12 @@ describe('Balance Methods', () => {
     substrateNodeUri: 'ws://localhost:9944',
   };
 
-  const createConnectedAPI = async (facade?: WalletFacade): Promise<ExtendedConnectedAPI> => {
+  const createConnectedAPI = async (
+    facade: ReturnType<typeof prepareMockFacade> = prepareMockFacade(),
+  ): Promise<ExtendedConnectedAPI> => {
     const metadata = randomValue(defaultConnectorMetadataArbitrary);
     const keystore = prepareMockUnshieldedKeystore();
-    const connector = new Connector(metadata, facade ?? prepareMockFacade(), keystore, defaultConfig);
+    const connector = new Connector(metadata, facade, keystore, defaultConfig);
     return connector.connect('testnet');
   };
 
@@ -55,7 +56,7 @@ describe('Balance Methods', () => {
     it('should return balances matching facade state (property-based)', async () => {
       await fc.assert(
         fc.asyncProperty(balancesArbitrary, async (expectedBalances) => {
-          const facade = prepareMockFacadeWithBalances({ shielded: expectedBalances });
+          const facade = prepareMockFacade().withBalances({ shielded: expectedBalances });
           const connectedAPI = await createConnectedAPI(facade);
 
           const balances = await connectedAPI.getShieldedBalances();
@@ -88,7 +89,7 @@ describe('Balance Methods', () => {
     it('should return balances matching facade state (property-based)', async () => {
       await fc.assert(
         fc.asyncProperty(balancesArbitrary, async (expectedBalances) => {
-          const facade = prepareMockFacadeWithBalances({ unshielded: expectedBalances });
+          const facade = prepareMockFacade().withBalances({ unshielded: expectedBalances });
           const connectedAPI = await createConnectedAPI(facade);
 
           const balances = await connectedAPI.getUnshieldedBalances();
@@ -124,22 +125,28 @@ describe('Balance Methods', () => {
     });
 
     it('should return dust balance matching facade state (property-based)', async () => {
-      const dustBalanceArbitrary = fc
+      // Each coin has maxCap and balance where balance <= maxCap
+      const dustCoinArbitrary = fc
         .record({
-          cap: balanceValueArbitrary,
+          maxCap: balanceValueArbitrary,
           balance: balanceValueArbitrary,
         })
-        .filter(({ cap, balance }) => balance <= cap);
+        .filter(({ maxCap, balance }) => balance <= maxCap);
+
+      // Array of coins (can be empty or have multiple)
+      const dustCoinsArbitrary = fc.array(dustCoinArbitrary, { minLength: 0, maxLength: 5 });
 
       await fc.assert(
-        fc.asyncProperty(dustBalanceArbitrary, async (expectedDust) => {
-          const facade = prepareMockFacadeWithBalances({ dust: expectedDust });
+        fc.asyncProperty(dustCoinsArbitrary, async (coins) => {
+          const facade = prepareMockFacade().withBalances({ dust: coins });
           const connectedAPI = await createConnectedAPI(facade);
 
           const dustBalance = await connectedAPI.getDustBalance();
 
-          expect(dustBalance.cap).toBe(expectedDust.cap);
-          expect(dustBalance.balance).toBe(expectedDust.balance);
+          const expectedCap = coins.reduce((sum, coin) => sum + coin.maxCap, 0n);
+          const expectedBalance = coins.reduce((sum, coin) => sum + coin.balance, 0n);
+          expect(dustBalance.cap).toBe(expectedCap);
+          expect(dustBalance.balance).toBe(expectedBalance);
         }),
         { numRuns: 20 },
       );

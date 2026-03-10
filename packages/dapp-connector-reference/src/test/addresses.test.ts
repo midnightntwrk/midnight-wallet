@@ -29,10 +29,11 @@ vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 const wellKnownNetworkIds = fc.constantFrom('testnet', 'devnet', 'qanet', 'preview', 'preprod');
 
 // Option 2: Random valid network IDs - segments joined by dashes
-// HRP segment rules: alphanumeric characters (a-z: 97-122, 0-9: 48-57)
+// HRP segment rules: alphanumeric characters (a-z: 97-122, 1-9: 49-57)
+// Note: '0' (ASCII 48) is excluded by Bech32m HRP validation
 const validHrpChar = fc.oneof(
   fc.integer({ min: 97, max: 122 }).map((code) => String.fromCharCode(code)), // a-z
-  fc.integer({ min: 48, max: 57 }).map((code) => String.fromCharCode(code)), // 0-9
+  fc.integer({ min: 49, max: 57 }).map((code) => String.fromCharCode(code)), // 1-9 (0 excluded)
 );
 const validNetworkIdSegment = fc.array(validHrpChar, { minLength: 1, maxLength: 8 }).map((chars) => chars.join(''));
 const randomNetworkId = fc
