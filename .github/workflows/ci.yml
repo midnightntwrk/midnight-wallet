@@ -201,6 +201,9 @@ jobs:
           name: build-artifacts-${{ github.run_id }}
           path: .
 
+      - name: Pre-pull Docker images
+        run: docker compose -f infra/compose/docker-compose-dynamic.yml pull
+
       - name: Run tests
         run: yarn test
 
