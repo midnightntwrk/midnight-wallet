@@ -259,7 +259,7 @@ export class WalletFacade {
   readonly provingService: ProvingService<UnboundTransaction>;
   #pendingSubscription: Subscription;
 
-  private constructor(
+  protected constructor(
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI,

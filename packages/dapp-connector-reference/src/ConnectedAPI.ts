@@ -1,0 +1,208 @@
+import type {
+  ConnectedAPI as ConnectedAPIType,
+  Configuration,
+  ConnectionStatus,
+  DesiredInput,
+  DesiredOutput,
+  HistoryEntry,
+  KeyMaterialProvider,
+  ProvingProvider,
+  Signature,
+  SignDataOptions,
+  WalletConnectedAPI,
+} from '@midnight-ntwrk/dapp-connector-api';
+import type { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import type { ConnectorConfiguration } from './types.js';
+import { toAPIConfiguration } from './types.js';
+import { APIError } from './errors.js';
+
+/**
+ * Extended ConnectedAPI interface that includes disconnect functionality.
+ * This extends the base ConnectedAPI with reference implementation specific methods.
+ */
+export interface ExtendedConnectedAPI extends ConnectedAPIType {
+  /**
+   * Disconnect from the wallet. After calling this method, all API methods
+   * (except getConnectionStatus and hintUsage) will reject with a Disconnected error.
+   */
+  disconnect(): Promise<void>;
+}
+
+/**
+ * Reference implementation of the ConnectedAPI interface.
+ * Provides wallet functionality to connected DApps.
+ */
+export class ConnectedAPI implements ExtendedConnectedAPI {
+  private readonly facade: WalletFacade;
+  private readonly keystore: UnshieldedKeystore;
+  private readonly config: ConnectorConfiguration;
+  // Use an object reference so state can be modified even when this instance is frozen
+  private readonly state: { connected: boolean } = { connected: true };
+
+  constructor(facade: WalletFacade, keystore: UnshieldedKeystore, configuration: ConnectorConfiguration) {
+    this.facade = facade;
+    this.keystore = keystore;
+    this.config = configuration;
+  }
+
+  // Disconnection (reference implementation extension)
+
+  disconnect(): Promise<void> {
+    this.state.connected = false;
+    return Promise.resolve();
+  }
+
+  private get connected(): boolean {
+    return this.state.connected;
+  }
+
+  // Configuration & Status Methods
+
+  getConfiguration(): Promise<Configuration> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.resolve(toAPIConfiguration(this.config));
+  }
+
+  getConnectionStatus(): Promise<ConnectionStatus> {
+    if (!this.connected) {
+      return Promise.resolve(Object.freeze({ status: 'disconnected' as const }));
+    }
+    return Promise.resolve(
+      Object.freeze({
+        status: 'connected' as const,
+        networkId: this.config.networkId,
+      }),
+    );
+  }
+
+  // Address Methods (to be implemented)
+
+  getShieldedAddresses(): Promise<{
+    shieldedAddress: string;
+    shieldedCoinPublicKey: string;
+    shieldedEncryptionPublicKey: string;
+  }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  getUnshieldedAddress(): Promise<{ unshieldedAddress: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  getDustAddress(): Promise<{ dustAddress: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Balance Methods (to be implemented)
+
+  getShieldedBalances(): Promise<Record<string, bigint>> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  getUnshieldedBalances(): Promise<Record<string, bigint>> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  getDustBalance(): Promise<{ cap: bigint; balance: bigint }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Transaction History (to be implemented)
+
+  getTxHistory(_pageNumber: number, _pageSize: number): Promise<HistoryEntry[]> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Transaction Building (to be implemented)
+
+  makeTransfer(_desiredOutputs: DesiredOutput[], _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  makeIntent(
+    _desiredInputs: DesiredInput[],
+    _desiredOutputs: DesiredOutput[],
+    _options: { intentId: number | 'random'; payFees: boolean },
+  ): Promise<{ tx: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Transaction Balancing (to be implemented)
+
+  balanceUnsealedTransaction(_tx: string, _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  balanceSealedTransaction(_tx: string, _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Submission (to be implemented)
+
+  submitTransaction(_tx: string): Promise<void> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Signing & Proving (to be implemented)
+
+  signData(_data: string, _options: SignDataOptions): Promise<Signature> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  getProvingProvider(_keyMaterialProvider: KeyMaterialProvider): Promise<ProvingProvider> {
+    if (!this.connected) {
+      return Promise.reject(APIError.disconnected('Not connected to wallet'));
+    }
+    return Promise.reject(new Error('Not implemented'));
+  }
+
+  // Hint Usage
+
+  hintUsage(_methodNames: Array<keyof WalletConnectedAPI>): Promise<void> {
+    // Reference implementation: resolve immediately
+    // In a real wallet, this would be used to request user permissions
+    return Promise.resolve();
+  }
+}

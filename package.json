@@ -9,7 +9,7 @@
   ],
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
-    "@effect/language-service": "^0.76.0",
+    "@effect/language-service": "^0.79.0",
     "@eslint/compat": "^2.0.2",
     "@eslint/js": "^10.0.1",
     "@tsconfig/node22": "^22.0.5",
