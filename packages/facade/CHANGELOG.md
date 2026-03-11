@@ -1,5 +1,120 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 2.0.0
+
+### Major Changes
+
+- f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
+  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+    into the `WalletFacade`
+  - make `WalletFacade` revert transaction upon submission failure
+  - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
+    This will allow non-breaking future initialization changes when e.g. new services are being integrated into the
+    facade.
+- d3422bc: - Extract proving into a standalone `ProvingService` in the `@midnight-ntwrk/wallet-sdk-capabilities`
+  package, decoupling it from the shielded and dust wallet builders. The new service supports server (HTTP prover),
+  WASM, and simulator proving modes via a unified configuration.
+  - Remove `withProving` / `withProvingDefaults` and the `provingService` dependency from the V1 builders in both the
+    shielded and dust wallet packages. Proving is no longer a wallet-level concern.
+  - Integrate the `ProvingService` into `WalletFacade`, which now owns transaction proving and finalization. On proving
+    failure the facade reverts the transaction across all three wallet types (shielded, unshielded, dust).
+
+  ### Breaking changes
+  - **`@midnight-ntwrk/wallet-sdk-shielded`**: Removed `finalizeTransaction` from `ShieldedWalletAPI`. Removed `Proving`
+    export from `@midnight-ntwrk/wallet-sdk-shielded/v1`. Removed `provingService` from the V1 builder and
+    `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults` from `V1Builder`. `DefaultV1Configuration`
+    no longer includes `DefaultProvingConfiguration`.
+  - **`@midnight-ntwrk/wallet-sdk-dust-wallet`**: Removed `proveTransaction` from `DustWalletAPI`. Removed
+    `provingService` from the V1 builder and `RunningV1Variant.Context`. Removed `withProving` / `withProvingDefaults`
+    from `V1Builder`.
+  - **`@midnight-ntwrk/wallet-sdk-facade`**: Removed the `UnboundTransaction` type export (now re-exported from
+    `@midnight-ntwrk/wallet-sdk-capabilities/proving`). `WalletFacade` now requires a `ProvingService` and
+    `DefaultConfiguration` includes `DefaultProvingConfiguration`.
+
+- 1409b6b: Standardize wallet APIs across shielded, unshielded, and dust wallets
+
+  ### Breaking Changes
+
+  **Dust Wallet:**
+  - Rename `DustCoreWallet` to `CoreWallet` for consistency
+  - Rename `walletBalance()` to `balance()` on `DustWalletState`
+  - Rename `dustPublicKey` to `publicKey` and `dustAddress` to `address` on state objects
+  - Rename `getDustPublicKey()` to `getPublicKey()` and `getDustAddress()` to `getAddress()` on `KeysCapability`
+  - Add `getAddress(): Promise<DustAddress>` method to `DustWalletAPI`
+  - Change `dustReceiverAddress` parameter type from `string` to `DustAddress` in transaction methods
+
+  **Shielded Wallet:**
+  - Rename `startWithShieldedSeed()` to `startWithSeed()` for consistency
+  - Add `getAddress(): Promise<ShieldedAddress>` method
+  - Change `receiverAddress` parameter type from `string` to `ShieldedAddress` in transfer methods
+  - Transaction history getter now throws "not yet implemented" error
+
+  **Facade:**
+  - `TokenTransfer` interface now requires typed addresses (`ShieldedAddress` or `UnshieldedAddress`) instead of strings
+  - Split `CombinedTokenTransfer` into `ShieldedTokenTransfer` and `UnshieldedTokenTransfer` types
+  - Address encoding/decoding is now handled internally - consumers pass address objects directly
+
+  ### Migration Guide
+
+  **Before:**
+
+  ```typescript
+  const address = MidnightBech32m.encode('undeployed', state.shielded.address).toString();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+  **After:**
+
+  ```typescript
+  const address = await wallet.shielded.getAddress();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+### Minor Changes
+
+- f52d01d: - Create a pending transactions service in the `@midnight-ntwrk/wallet-sdk-capabilities` package. The service
+  checks TTL and status of transactions against indexer in order to report failures. The service state is also meant to
+  be serialized and restored in order to not loose track of pending transactions in case of wallet restarts
+  - Integrate the pending transactions service into the `WalletFacade`. It registers transactions as soon as they are
+    finalized (it can't happen earlier because unproven transactions contain copies of secret keys for proving
+    purposes). Whenever a pending transaction is reported as failed - it is reverted. The pending transactions service
+    state is also reported in the facade state for serialization purposes and to enable UI reporting.
+
+### Patch Changes
+
+- eb1e4c3: feat: add fee payment option to dust registration and handle deregistration
+  - Filter coins already registered for dust generation from fee payment calculations
+  - Add `registeredForDustGeneration` flag to `UtxoWithMeta` type
+  - Add docs snippets for deregistration and redesignation flows
+
+- 0f29d01: - Moved `SyncProgress` from `wallet-sdk-shielded/v1` into `wallet-sdk-abstractions` so it can be shared
+  across wallet implementations
+  - Refactored `CoreWallet` in the dust wallet from a class to a plain object type + namespace, improving composability
+  - Added `WalletError` type to the dust wallet for structured error handling
+  - Added coin data to unshielded transaction history
+  - Removed unused `wallet-sdk-hd` dependency from `wallet-sdk-unshielded-wallet`
+  - Cleaned up `ProgressUpdate` type and `progress()` method from `TransactionHistoryCapability` in the shielded wallet
+    (superseded by the shared `SyncProgress`)
+- Updated dependencies [323e0e0]
+- Updated dependencies [f52d01d]
+- Updated dependencies [c6f6f3e]
+- Updated dependencies [7ef6ff9]
+- Updated dependencies [d3422bc]
+- Updated dependencies [f52d01d]
+- Updated dependencies [71b1324]
+- Updated dependencies [aa7ede2]
+- Updated dependencies [79fb7ba]
+- Updated dependencies [eb1e4c3]
+- Updated dependencies [dd004db]
+- Updated dependencies [0f29d01]
+- Updated dependencies [fe57cc3]
+- Updated dependencies [1409b6b]
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.0.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.0.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@2.0.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.1
+
 ## 2.0.0-rc.3
 
 ### Patch Changes

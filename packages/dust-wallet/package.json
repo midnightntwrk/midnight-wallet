@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-dust-wallet",
-  "version": "2.0.0-rc.5",
+  "version": "2.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -29,12 +29,12 @@
   },
   "dependencies": {
     "@midnight-ntwrk/ledger-v8": "^8.0.0-rc.5",
-    "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0-rc.1",
-    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.0",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "3.1.0-rc.2",
-    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.1.0-rc.4",
-    "@midnight-ntwrk/wallet-sdk-runtime": "1.0.1-rc.2",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1-rc.1",
+    "@midnight-ntwrk/wallet-sdk-abstractions": "2.0.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "3.0.1",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "3.1.0",
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "1.1.0",
+    "@midnight-ntwrk/wallet-sdk-runtime": "1.0.1",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1",
     "effect": "^3.19.19",
     "rxjs": "^7.8.2"
   },
@@ -50,6 +50,6 @@
     "publint": "publint --strict"
   },
   "devDependencies": {
-    "@midnight-ntwrk/wallet-sdk-hd": "3.0.0"
+    "@midnight-ntwrk/wallet-sdk-hd": "3.0.1"
   }
 }
