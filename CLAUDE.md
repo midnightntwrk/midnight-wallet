@@ -14,10 +14,12 @@ utilities for the Midnight privacy-focused blockchain.
 When working on wallet functionality, always consult these specifications:
 
 ### Wallet Specification
-**Repository:** [midnight-architecture](https://github.com/midnightntwrk/midnight-architecture)
-**Path:** `components/WalletEngine/Specification.md`
+
+**Repository:** [midnight-architecture](https://github.com/midnightntwrk/midnight-architecture) **Path:**
+`components/WalletEngine/Specification.md`
 
 Key sections:
+
 - Transaction lifecycle: pending → confirmed → finalized (or discarded)
 - Coin lifecycle: booked → pending → confirmed → final
 - Balance types: available, pending, total
@@ -25,26 +27,30 @@ Key sections:
 - Synchronization process and indexing services
 
 ### DApp Connector API Specification
-**Repository:** [midnight-dapp-connector-api](https://github.com/input-output-hk/midnight-dapp-connector-api)
-**NPM:** [@midnight-ntwrk/dapp-connector-api](https://www.npmjs.com/package/@midnight-ntwrk/dapp-connector-api)
-**Path:** `SPECIFICATION.md`
+
+**Repository:** [midnight-dapp-connector-api](https://github.com/input-output-hk/midnight-dapp-connector-api) **NPM:**
+[@midnight-ntwrk/dapp-connector-api](https://www.npmjs.com/package/@midnight-ntwrk/dapp-connector-api) **Path:**
+`SPECIFICATION.md`
 
 Key sections:
+
 - API design philosophy and responsibilities
 - Method signatures and expected behaviors
 - Error handling requirements
 - Transaction structure requirements
 
 ### DApp Connector API Types
+
 **Path:** `src/api.ts` in the dapp-connector-api package
 
 TypeScript type definitions for the connector API.
 
 ### Ledger Specification
-**Repository:** [midnight-ledger](https://github.com/input-output-hk/midnight-ledger)
-**Path:** `spec/`
+
+**Repository:** [midnight-ledger](https://github.com/input-output-hk/midnight-ledger) **Path:** `spec/`
 
 Key documents:
+
 - `intents-transactions.md` - Transaction structure, intents, sections
 - `zswap.md` - Shielded token protocol
 - `dust.md` - Dust token mechanics
@@ -163,8 +169,8 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 
 Tests use Vitest with workspace configuration. Each package has its own `vitest.config.ts`.
 
-**IMPORTANT: Always follow Test-Driven Development (TDD)**
-When implementing new features or fixing bugs:
+**IMPORTANT: Always follow Test-Driven Development (TDD)** When implementing new features or fixing bugs:
+
 1. Write tests first that define the expected behavior
 2. Run tests to verify they fail (red)
 3. Only then implement the code to make tests pass (green)

@@ -154,13 +154,32 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     return Object.freeze({ cap, balance });
   }
 
-  // Transaction History (to be implemented)
+  // Transaction History
 
-  getTxHistory(_pageNumber: number, _pageSize: number): Promise<HistoryEntry[]> {
+  async getTxHistory(pageNumber: number, pageSize: number): Promise<HistoryEntry[]> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    // Check if facade provides transaction history service
+    if (this.facade.transactionHistory === undefined) {
+      // Facade doesn't support transaction history API yet
+      return Promise.reject(
+        APIError.internalError(
+          'Transaction history not available: facade does not provide transaction history service',
+        ),
+      );
+    }
+
+    const result = await this.facade.transactionHistory.getHistory(pageNumber, pageSize);
+
+    // Map to HistoryEntry[] and freeze each entry
+    return result.entries.map((entry) =>
+      Object.freeze({
+        txHash: entry.txHash,
+        txStatus: entry.txStatus,
+      }),
+    );
   }
 
   // Transaction Building (to be implemented)
