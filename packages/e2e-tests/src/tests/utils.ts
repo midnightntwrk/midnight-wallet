@@ -141,7 +141,7 @@ const restoreDustWallet = async (
       const DustInstance = DustWallet({
         ...walletConfig,
         costParameters: walletConfig?.costParameters ?? {
-          additionalFeeOverhead: 300_000_000_000_000n,
+          additionalFeeOverhead: 0n,
           feeBlocksMargin: 5,
         },
       });

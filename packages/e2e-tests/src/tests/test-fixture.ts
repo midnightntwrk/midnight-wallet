@@ -245,7 +245,7 @@ export class TestContainersFixture {
     return {
       networkId: this.getNetworkId(),
       costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
+        additionalFeeOverhead: 0n,
         feeBlocksMargin: 5,
       },
     };

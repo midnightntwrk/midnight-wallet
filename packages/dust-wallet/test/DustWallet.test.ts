@@ -81,7 +81,7 @@ type RunningWallet = RunningV1Variant<string, SimulatorSyncUpdate, ProofErasedTr
 
 describe('DustWallet', () => {
   const costParameters = {
-    additionalFeeOverhead: 300_000_000_000_000n,
+    additionalFeeOverhead: 0n,
     feeBlocksMargin: 5,
   };
   const dustParameters = LedgerParameters.initialParameters().dust;

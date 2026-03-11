@@ -33,7 +33,7 @@ const INDEXER_WS_URL = `ws://localhost:${INDEXER_PORT}/api/v4/graphql/ws`;
 const configuration: DefaultConfiguration = {
   networkId: 'undeployed',
   costParameters: {
-    additionalFeeOverhead: 300_000_000_000_000n,
+    additionalFeeOverhead: 0n,
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`ws://localhost:${NODE_PORT}`),
