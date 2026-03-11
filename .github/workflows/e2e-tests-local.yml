@@ -8,8 +8,6 @@ on:
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
-  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   NETWORK: 'undeployed'
   APP_INFRA_SECRET: ${{ secrets.APP_INFRA_SECRET }}
 
@@ -54,41 +52,6 @@ jobs:
       - name: Run e2e tests
         run: |
           yarn turbo test-undeployed
-
-      - name: Create allure properties
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests/allure-results
-        run: |
-          echo "
-          env=${{ env.NETWORK }}
-          runtime=nodejs-${{ matrix.version }}
-          platform=Linux
-          " > environment.properties
-
-      - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@935714d2ab2c0de7b15a9d3e29a0cffe0fa64c59 # v1.0.5
-        if: ${{ always() }}
-        with:
-          allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ env.NETWORK }}-nightly
-          security-user: ${{ env.ALLURE_ADMIN_USER }}
-          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
-
-      - name: Generate allure report
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests
-        run: |
-          yarn allure-generate
-
-      - name: Publish artifacts (test reports)
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7.0.0
-        if: success() || failure()
-        with:
-          name: test-reports-nodejs-${{ matrix.version }}
-          path: |
-            ./packages/e2e-tests/reports/allure-report
-          retention-days: 30
 
       - name: Publish wallet TS Test Report
         uses: dorny/test-reporter@3d76b34a4535afbd0600d347b09a6ee5deb3ed7f # v2
