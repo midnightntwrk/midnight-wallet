@@ -1,6 +1,6 @@
 ---
-'@midnight-ntwrk/wallet-sdk-dust-wallet': patch
-'@midnight-ntwrk/wallet-sdk-facade': patch
+'@midnight-ntwrk/wallet-sdk-dust-wallet': minor
+'@midnight-ntwrk/wallet-sdk-facade': minor
 ---
 
 fix: dynamic fee calculation including balancing transaction costs

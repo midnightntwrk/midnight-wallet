@@ -387,15 +387,11 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
   }
 
   static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
-    console.log('Calculating fee imbalance for transaction', transaction.toString());
-
     const [_, imbalance] =
       transaction
         .imbalances(0, totalFee)
         .entries()
         .find(([tt, _]) => tt.tag === 'dust') ?? [];
-
-    console.log('Fee imbalance for transaction is', imbalance, 'with total fee', totalFee);
 
     return imbalance ? imbalance : totalFee;
   }
