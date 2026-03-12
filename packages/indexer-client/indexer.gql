@@ -23,6 +23,10 @@ type Block {
 	"""
 	author: HexEncoded
 	"""
+	The hex-encoded ledger parameters for this block.
+	"""
+	ledgerParameters: HexEncoded!
+	"""
 	The parent of this block.
 	"""
 	parent: Block
@@ -31,9 +35,9 @@ type Block {
 	"""
 	transactions: [Transaction!]!
 	"""
-	The hex-encoded ledger parameters for this block.
+	The system parameters (governance) at this block height.
 	"""
-	ledgerParameters: HexEncoded!
+	systemParameters: SystemParameters!
 }
 
 """
@@ -49,6 +53,8 @@ input BlockOffset @oneOf {
 	"""
 	height: Int
 }
+
+scalar CardanoRewardAddress
 
 type CollapsedMerkleTree {
 	"""
@@ -70,12 +76,25 @@ type CollapsedMerkleTree {
 }
 
 """
+Committee member for an epoch.
+"""
+type CommitteeMember {
+	epochNo: Int!
+	position: Int!
+	sidechainPubkeyHex: String!
+	expectedSlots: Int!
+	auraPubkeyHex: String
+	poolIdHex: String
+	spoSkHex: String
+}
+
+"""
 A contract action.
 """
 interface ContractAction {
 	address: HexEncoded!
 	state: HexEncoded!
-	chainState: HexEncoded!
+	zswapState: HexEncoded!
 	transaction: Transaction!
 	unshieldedBalances: [ContractBalance!]!
 }
@@ -125,7 +144,7 @@ type ContractCall implements ContractAction {
 	"""
 	The hex-encoded serialized contract-specific zswap state.
 	"""
-	chainState: HexEncoded!
+	zswapState: HexEncoded!
 	"""
 	The entry point.
 	"""
@@ -159,7 +178,7 @@ type ContractDeploy implements ContractAction {
 	"""
 	The hex-encoded serialized contract-specific zswap state.
 	"""
-	chainState: HexEncoded!
+	zswapState: HexEncoded!
 	"""
 	Transaction for this contract deploy.
 	"""
@@ -185,7 +204,7 @@ type ContractUpdate implements ContractAction {
 	"""
 	The hex-encoded serialized contract-specific zswap state.
 	"""
-	chainState: HexEncoded!
+	zswapState: HexEncoded!
 	"""
 	Transaction for this contract update.
 	"""
@@ -195,6 +214,48 @@ type ContractUpdate implements ContractAction {
 	"""
 	unshieldedBalances: [ContractBalance!]!
 }
+
+"""
+The D-parameter controlling validator committee composition.
+"""
+type DParameter {
+	"""
+	Number of permissioned candidates.
+	"""
+	numPermissionedCandidates: Int!
+	"""
+	Number of registered candidates.
+	"""
+	numRegisteredCandidates: Int!
+}
+
+"""
+D-parameter change record for history queries.
+"""
+type DParameterChange {
+	"""
+	The block height where this parameter became effective.
+	"""
+	blockHeight: Int!
+	"""
+	The hex-encoded block hash where this parameter became effective.
+	"""
+	blockHash: HexEncoded!
+	"""
+	The UNIX timestamp when this parameter became effective.
+	"""
+	timestamp: Int!
+	"""
+	Number of permissioned candidates.
+	"""
+	numPermissionedCandidates: Int!
+	"""
+	Number of registered candidates.
+	"""
+	numRegisteredCandidates: Int!
+}
+
+scalar DustAddress
 
 type DustGenerationDtimeUpdate implements DustLedgerEvent {
 	"""
@@ -209,36 +270,52 @@ type DustGenerationDtimeUpdate implements DustLedgerEvent {
 	The maximum ID of all dust ledger events.
 	"""
 	maxId: Int!
+	"""
+	The protocol version.
+	"""
+	protocolVersion: Int!
 }
 
 """
-DUST generation status for a specific Cardano stake key.
+DUST generation status for a specific Cardano reward address.
 """
 type DustGenerationStatus {
 	"""
-	The hex-encoded Cardano stake key.
+	The Bech32-encoded Cardano reward address (e.g., stake_test1... or stake1...).
 	"""
-	cardanoStakeKey: HexEncoded!
+	cardanoRewardAddress: CardanoRewardAddress!
 	"""
-	The hex-encoded associated DUST address if registered.
+	The Bech32m-encoded associated DUST address if registered.
 	"""
-	dustAddress: HexEncoded
+	dustAddress: DustAddress
 	"""
-	Whether this stake key is registered.
+	Whether this reward address is registered.
 	"""
 	registered: Boolean!
 	"""
-	NIGHT balance backing generation.
+	NIGHT balance backing generation in STAR.
 	"""
 	nightBalance: String!
 	"""
-	Generation rate in Specks per second.
+	DUST generation rate in SPECK per second.
 	"""
 	generationRate: String!
 	"""
-	Current DUST capacity.
+	Maximum DUST capacity in SPECK.
+	"""
+	maxCapacity: String!
+	"""
+	Current generated DUST capacity in SPECK.
 	"""
 	currentCapacity: String!
+	"""
+	Cardano UTXO transaction hash for update/unregister operations.
+	"""
+	utxoTxHash: HexEncoded
+	"""
+	Cardano UTXO output index for update/unregister operations.
+	"""
+	utxoOutputIndex: Int
 }
 
 type DustInitialUtxo implements DustLedgerEvent {
@@ -255,6 +332,10 @@ type DustInitialUtxo implements DustLedgerEvent {
 	"""
 	maxId: Int!
 	"""
+	The protocol version.
+	"""
+	protocolVersion: Int!
+	"""
 	The dust output.
 	"""
 	output: DustOutput!
@@ -267,6 +348,7 @@ interface DustLedgerEvent {
 	id: Int!
 	raw: HexEncoded!
 	maxId: Int!
+	protocolVersion: Int!
 }
 
 """
@@ -292,6 +374,41 @@ type DustSpendProcessed implements DustLedgerEvent {
 	The maximum ID of all dust ledger events.
 	"""
 	maxId: Int!
+	"""
+	The protocol version.
+	"""
+	protocolVersion: Int!
+}
+
+"""
+Current epoch information.
+"""
+type EpochInfo {
+	epochNo: Int!
+	durationSeconds: Int!
+	elapsedSeconds: Int!
+}
+
+"""
+SPO performance for an epoch.
+"""
+type EpochPerf {
+	epochNo: Int!
+	spoSkHex: String!
+	produced: Int!
+	expected: Int!
+	identityLabel: String
+	stakeSnapshot: String
+	poolIdHex: String
+	validatorClass: String
+}
+
+"""
+First valid epoch for an SPO identity.
+"""
+type FirstValidEpoch {
+	idKey: String!
+	firstValidEpoch: Int!
 }
 
 scalar HexEncoded
@@ -320,6 +437,32 @@ type ParamChange implements DustLedgerEvent {
 	The maximum ID of all dust ledger events.
 	"""
 	maxId: Int!
+	"""
+	The protocol version.
+	"""
+	protocolVersion: Int!
+}
+
+"""
+Pool metadata from Cardano.
+"""
+type PoolMetadata {
+	poolIdHex: String!
+	hexId: String
+	name: String
+	ticker: String
+	homepageUrl: String
+	logoUrl: String
+}
+
+"""
+Presence event for an SPO in an epoch.
+"""
+type PresenceEvent {
+	epochNo: Int!
+	idKey: String!
+	source: String!
+	status: String
 }
 
 type Query {
@@ -336,9 +479,118 @@ type Query {
 	"""
 	contractAction(address: HexEncoded!, offset: ContractActionOffset): ContractAction
 	"""
-	Get DUST generation status for specific Cardano stake keys.
+	Get DUST generation status for specific Cardano reward addresses.
 	"""
-	dustGenerationStatus(cardanoStakeKeys: [HexEncoded!]!): [DustGenerationStatus!]!
+	dustGenerationStatus(cardanoRewardAddresses: [CardanoRewardAddress!]!): [DustGenerationStatus!]!
+	"""
+	Get the full history of D-parameter changes for governance auditability.
+	"""
+	dParameterHistory: [DParameterChange!]!
+	"""
+	Get the full history of Terms and Conditions changes for governance auditability.
+	"""
+	termsAndConditionsHistory: [TermsAndConditionsChange!]!
+	"""
+	List SPO identities with pagination.
+	"""
+	spoIdentities(limit: Int, offset: Int): [SpoIdentity!]!
+	"""
+	Get SPO identity by pool ID.
+	"""
+	spoIdentityByPoolId(poolIdHex: String!): SpoIdentity
+	"""
+	Get total count of SPOs.
+	"""
+	spoCount: Int
+	"""
+	Get pool metadata by pool ID.
+	"""
+	poolMetadata(poolIdHex: String!): PoolMetadata
+	"""
+	List pool metadata with pagination.
+	"""
+	poolMetadataList(limit: Int, offset: Int, withNameOnly: Boolean): [PoolMetadata!]!
+	"""
+	Get SPO with metadata by pool ID.
+	"""
+	spoByPoolId(poolIdHex: String!): Spo
+	"""
+	List SPOs with optional search.
+	"""
+	spoList(limit: Int, offset: Int, search: String): [Spo!]!
+	"""
+	Get composite SPO data (identity + metadata + performance).
+	"""
+	spoCompositeByPoolId(poolIdHex: String!): SpoComposite
+	"""
+	Get SPO identifiers ordered by performance.
+	"""
+	stakePoolOperators(limit: Int): [String!]!
+	"""
+	Get latest SPO performance entries.
+	"""
+	spoPerformanceLatest(limit: Int, offset: Int): [EpochPerf!]!
+	"""
+	Get SPO performance by SPO key.
+	"""
+	spoPerformanceBySpoSk(spoSkHex: String!, limit: Int, offset: Int): [EpochPerf!]!
+	"""
+	Get epoch performance for all SPOs.
+	"""
+	epochPerformance(epoch: Int!, limit: Int, offset: Int): [EpochPerf!]!
+	"""
+	Get current epoch information.
+	"""
+	currentEpochInfo: EpochInfo
+	"""
+	Get epoch utilization (produced/expected ratio).
+	"""
+	epochUtilization(epoch: Int!): Float
+	"""
+	Get committee membership for an epoch.
+	"""
+	committee(epoch: Int!): [CommitteeMember!]!
+	"""
+	Get cumulative registration totals for an epoch range.
+	"""
+	registeredTotalsSeries(fromEpoch: Int!, toEpoch: Int!): [RegisteredTotals!]!
+	"""
+	Get registration statistics for an epoch range.
+	"""
+	registeredSpoSeries(fromEpoch: Int!, toEpoch: Int!): [RegisteredStat!]!
+	"""
+	Get raw presence events for an epoch range.
+	"""
+	registeredPresence(fromEpoch: Int!, toEpoch: Int!): [PresenceEvent!]!
+	"""
+	Get first valid epoch for each SPO identity.
+	"""
+	registeredFirstValidEpochs(uptoEpoch: Int): [FirstValidEpoch!]!
+	"""
+	Get stake distribution with search and ordering.
+	"""
+	stakeDistribution(limit: Int, offset: Int, search: String, orderByStakeDesc: Boolean): [StakeShare!]!
+}
+
+"""
+Registration statistics for an epoch.
+"""
+type RegisteredStat {
+	epochNo: Int!
+	federatedValidCount: Int!
+	federatedInvalidCount: Int!
+	registeredValidCount: Int!
+	registeredInvalidCount: Int!
+	dparam: Float
+}
+
+"""
+Cumulative registration totals for an epoch.
+"""
+type RegisteredTotals {
+	epochNo: Int!
+	totalRegistered: Int!
+	newlyRegistered: Int!
 }
 
 """
@@ -471,6 +723,96 @@ type ShieldedTransactionsProgress {
 	highestRelevantEndIndex: Int!
 }
 
+"""
+SPO with optional metadata.
+"""
+type Spo {
+	poolIdHex: String!
+	validatorClass: String!
+	sidechainPubkeyHex: String!
+	auraPubkeyHex: String
+	name: String
+	ticker: String
+	homepageUrl: String
+	logoUrl: String
+}
+
+"""
+Composite SPO data (identity + metadata + performance).
+"""
+type SpoComposite {
+	identity: SpoIdentity
+	metadata: PoolMetadata
+	performance: [EpochPerf!]!
+}
+
+"""
+SPO identity information.
+"""
+type SpoIdentity {
+	poolIdHex: String!
+	mainchainPubkeyHex: String!
+	sidechainPubkeyHex: String!
+	auraPubkeyHex: String
+	validatorClass: String!
+}
+
+"""
+Stake share information for an SPO.
+
+Values are sourced from mainchain pool data (e.g., Blockfrost) and keyed by Cardano pool_id.
+"""
+type StakeShare {
+	"""
+	Cardano pool ID (56-character hex string).
+	"""
+	poolIdHex: String!
+	"""
+	Pool name from metadata.
+	"""
+	name: String
+	"""
+	Pool ticker from metadata.
+	"""
+	ticker: String
+	"""
+	Pool homepage URL from metadata.
+	"""
+	homepageUrl: String
+	"""
+	Pool logo URL from metadata.
+	"""
+	logoUrl: String
+	"""
+	Current live stake in lovelace.
+	"""
+	liveStake: String
+	"""
+	Current active stake in lovelace.
+	"""
+	activeStake: String
+	"""
+	Number of live delegators.
+	"""
+	liveDelegators: Int
+	"""
+	Saturation ratio (0.0 to 1.0+).
+	"""
+	liveSaturation: Float
+	"""
+	Declared pledge in lovelace.
+	"""
+	declaredPledge: String
+	"""
+	Current live pledge in lovelace.
+	"""
+	livePledge: String
+	"""
+	Stake share as a fraction of total stake.
+	"""
+	stakeShare: Float
+}
+
 type Subscription {
 	"""
 	Subscribe to blocks starting at the given offset or at the latest block if the offset is
@@ -500,6 +842,20 @@ type Subscription {
 	Subscribe to zswap ledger events starting at the given ID or at the very start if omitted.
 	"""
 	zswapLedgerEvents(id: Int): ZswapLedgerEvent!
+}
+
+"""
+System parameters at a specific block height.
+"""
+type SystemParameters {
+	"""
+	The D-parameter controlling validator committee composition.
+	"""
+	dParameter: DParameter!
+	"""
+	The current Terms and Conditions, if any have been set.
+	"""
+	termsAndConditions: TermsAndConditions
 }
 
 """
@@ -546,6 +902,46 @@ type SystemTransaction implements Transaction {
 	Dust ledger events of this transaction.
 	"""
 	dustLedgerEvents: [DustLedgerEvent!]!
+}
+
+"""
+Terms and Conditions agreement.
+"""
+type TermsAndConditions {
+	"""
+	The hex-encoded hash of the Terms and Conditions document.
+	"""
+	hash: HexEncoded!
+	"""
+	The URL where the Terms and Conditions can be found.
+	"""
+	url: String!
+}
+
+"""
+Terms and Conditions change record for history queries.
+"""
+type TermsAndConditionsChange {
+	"""
+	The block height where this T&C version became effective.
+	"""
+	blockHeight: Int!
+	"""
+	The hex-encoded block hash where this T&C version became effective.
+	"""
+	blockHash: HexEncoded!
+	"""
+	The UNIX timestamp when this T&C version became effective.
+	"""
+	timestamp: Int!
+	"""
+	The hex-encoded hash of the Terms and Conditions document.
+	"""
+	hash: HexEncoded!
+	"""
+	The URL where the Terms and Conditions can be found.
+	"""
+	url: String!
 }
 
 """
@@ -711,6 +1107,10 @@ type ZswapLedgerEvent {
 	The maximum ID of all zswap ledger events.
 	"""
 	maxId: Int!
+	"""
+	The protocol version.
+	"""
+	protocolVersion: Int!
 }
 
 """

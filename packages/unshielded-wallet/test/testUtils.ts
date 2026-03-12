@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { sampleIntentHash } from '@midnight-ntwrk/ledger-v7';
+import { sampleIntentHash } from '@midnight-ntwrk/ledger-v8';
 import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
@@ -109,8 +109,8 @@ export const createWalletConfig = (
 ): DefaultV1Configuration => {
   const defaultConfig: DefaultV1Configuration = {
     indexerClientConnection: {
-      indexerWsUrl: `ws://localhost:${indexerPort}/api/v3/graphql/ws`,
-      indexerHttpUrl: `http://localhost:${indexerPort}/api/v3/graphql`,
+      indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
+      indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
     txHistoryStorage: new InMemoryTransactionHistoryStorage(),

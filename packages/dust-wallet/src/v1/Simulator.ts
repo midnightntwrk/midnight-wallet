@@ -24,7 +24,7 @@ import {
   TransactionContext,
   type ProofErasedTransaction,
   type SyntheticCost,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as crypto from 'crypto';
 import { type NetworkId } from './types/ledger.js';
@@ -63,6 +63,7 @@ export class Simulator {
         parentBlockHash: hash,
         secondsSinceEpoch: DateOps.dateToSeconds(blockTime),
         secondsSinceEpochErr: 1,
+        lastBlockTime: 1n,
       })),
     );
 

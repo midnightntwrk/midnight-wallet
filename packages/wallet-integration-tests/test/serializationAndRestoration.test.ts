@@ -15,7 +15,7 @@ import {
   type ShieldedWalletClass,
   type ShieldedWalletState,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -49,7 +49,7 @@ describe('Wallet serialization and restoration', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
     };

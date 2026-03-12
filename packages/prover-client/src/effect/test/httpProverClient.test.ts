@@ -20,14 +20,14 @@ import {
   Transaction,
   ZswapOffer,
   ZswapOutput,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { Effect } from 'effect';
 import { GenericContainer, Wait, type StartedTestContainer } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import * as HttpProverClient from '../HttpProverClient.js';
 import * as ProverClient from '../ProverClient.js';
 
-const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:7.0.0';
+const PROOF_SERVER_IMAGE: string = 'ghcr.io/midnight-ntwrk/proof-server:8.0.0-rc.5';
 const PROOF_SERVER_PORT: number = 6300;
 
 const timeout_minutes = (mins: number) => 1_000 * 60 * mins;
