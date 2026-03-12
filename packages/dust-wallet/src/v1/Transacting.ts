@@ -380,8 +380,8 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const balancingTx = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
 
     // Erase proofs on everything and merge
-    const erasedBalancing = balancingTx.mockProve();
-    const mergedTx = transactions.reduce<FinalizedTransaction>((acc, tx) => acc.merge(tx.mockProve()), erasedBalancing);
+    const erasedBalancing = balancingTx.eraseProofs();
+    const mergedTx = transactions.reduce((acc, tx) => acc.merge(tx.eraseProofs()), erasedBalancing);
 
     return this.calculateFee(mergedTx, ledgerParams);
   }
@@ -393,7 +393,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
         .entries()
         .find(([tt, _]) => tt.tag === 'dust') ?? [];
 
-    return imbalance ? imbalance : totalFee;
+    return imbalance ?? 0n;
   }
 
   computeBalancingRecipe(
@@ -465,7 +465,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
                   });
                 } else {
                   return new OtherWalletError({
-                    message: 'Balancing fallible section failed',
+                    message: 'Balancing failed',
                     cause: err,
                   });
                 }
