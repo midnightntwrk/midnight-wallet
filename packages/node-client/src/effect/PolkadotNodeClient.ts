@@ -268,7 +268,7 @@ export class PolkadotNodeClient implements NodeClient.Service {
       } else if (status.isInvalid) {
         await emit.fail(
           new NodeClientError.TransactionInvalidError({
-            message: 'Transaction got dropped, the mempool likely is full and network congested',
+            message: 'Transaction is invalid and was rejected by the node',
             txData: serializedTransaction,
           }),
         );
