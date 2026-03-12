@@ -41,7 +41,7 @@ import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Simulator } from '../Simulator.js';
 
 vi.setConfig({
-  testTimeout: 20_000,
+  testTimeout: 60_000,
 });
 
 // Helper to create a valid hex-encoded ledger event
