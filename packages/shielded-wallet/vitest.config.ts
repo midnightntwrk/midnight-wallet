@@ -18,6 +18,7 @@ export default defineConfig({
   test: {
     setupFiles: ['../../setup-env.ts'],
     environment: 'node',
+    testTimeout: 30_000,
     globals: true,
     coverage: {
       provider: 'v8',

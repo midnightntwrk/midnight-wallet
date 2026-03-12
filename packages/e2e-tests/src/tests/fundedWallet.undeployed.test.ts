@@ -13,7 +13,6 @@
 import { useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
-import * as allure from 'allure-js-commons';
 import { logger } from './logger.js';
 import { inspect } from 'util';
 
@@ -33,10 +32,8 @@ describe('Funded wallet', () => {
   let funded: utils.WalletInit;
 
   beforeEach(async () => {
-    await allure.step('Start a funded wallet', async function () {
-      const fixture = getFixture();
-      funded = await utils.initWalletWithSeed(seedFunded, fixture);
-    });
+    const fixture = getFixture();
+    funded = await utils.initWalletWithSeed(seedFunded, fixture);
   });
 
   afterEach(async () => {
@@ -46,10 +43,6 @@ describe('Funded wallet', () => {
   test(
     'Wallet balance for native token is 25B tDUST and there are two other token types',
     async () => {
-      allure.tms('PM-8928', 'PM-8928');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - funded');
       logger.info('Waiting for sync...');
       const state = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet synced. Shielded balance: ${inspect(state.shielded.balances)}`);
@@ -75,10 +68,6 @@ describe('Funded wallet', () => {
   test(
     'funded wallet facade returns total coins',
     async () => {
-      allure.tms('PM-8929', 'PM-8929');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - funded');
       const state = await funded.wallet.waitForSyncedState();
       const shieldedCoins = state.shielded.totalCoins;
       expect(shieldedCoins).toHaveLength(7);
@@ -124,10 +113,6 @@ describe('Funded wallet', () => {
   test(
     'funded wallet facade eturns available coins',
     async () => {
-      allure.tms('PM-8930', 'PM-8930');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - funded');
       const state = await funded.wallet.waitForSyncedState();
       const shieldedCoins = state.shielded.availableCoins;
       expect(shieldedCoins).toHaveLength(7);
@@ -174,10 +159,6 @@ describe('Funded wallet', () => {
   test(
     'Wallet has no pending coins',
     async () => {
-      allure.tms('PM-8931', 'PM-8931');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - funded');
       const state = await funded.wallet.waitForSyncedState();
       expect(state.shielded.pendingCoins).toHaveLength(0);
       expect(state.unshielded.pendingCoins).toHaveLength(0);
@@ -189,10 +170,6 @@ describe('Funded wallet', () => {
   // test(
   //   'Wallet has one tx in tx history',
   //   async () => {
-  //     allure.tms('PM-8932', 'PM-8932');
-  //     allure.epic('Headless wallet');
-  //     allure.feature('Wallet state');
-  //     allure.story('Wallet state properties - funded');
   //     const state = await wallet.waitForSyncedState();
   //     const txHistory = state.shielded.transactionHistory;
   //     expect(txHistory).toHaveLength(0);

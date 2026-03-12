@@ -11,12 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /// <reference types="vitest" />
-import AllureReporter from 'allure-vitest/reporter';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    setupFiles: ['allure-vitest/setup', '../../setup-env.ts'],
+    setupFiles: ['../../setup-env.ts'],
     environment: 'node',
     hookTimeout: 90_000,
     testTimeout: 90_000,
@@ -27,7 +26,6 @@ export default defineConfig({
       ['junit', { outputFile: './reports/test-report.xml' }],
       ['json', { outputFile: './reports/test-report.json' }],
       ['html', { outputFile: './reports/html/index.html' }],
-      ['allure-vitest/reporter', { resultsDir: './reports/allure-results' }],
     ],
     projects: [
       {
@@ -41,17 +39,12 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'remote',
-          include: ['**/**/tests/*.remote.test.ts'],
+          include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
         },
       },
     ],
   },
   resolve: {
     extensions: ['.ts', '.js'],
-    alias: {
-      // '@': path.resolve(__dirname, './src'),
-      // '@infrastructure': path.resolve(__dirname, '../src/infrastructure'),
-      // '@e2e': path.resolve(__dirname, '../src/e2e')
-    },
   },
 });

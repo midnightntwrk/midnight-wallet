@@ -16,7 +16,6 @@ import { TestContainersFixture, useTestContainersFixture } from './test-fixture.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import * as allure from 'allure-js-commons';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
@@ -40,12 +39,10 @@ describe('Dust tests', () => {
   let receiver: utils.WalletInit;
 
   beforeEach(async () => {
-    await allure.step('Start two wallets', async function () {
-      fixture = getFixture();
-      funded = await utils.initWalletWithSeed(seedFunded, fixture);
-      receiver = await utils.initWalletWithSeed(seed, fixture);
-      logger.info('Two wallets started');
-    });
+    fixture = getFixture();
+    funded = await utils.initWalletWithSeed(seedFunded, fixture);
+    receiver = await utils.initWalletWithSeed(seed, fixture);
+    logger.info('Two wallets started');
   });
 
   afterEach(async () => {
@@ -177,13 +174,6 @@ describe('Dust tests', () => {
   test(
     'Able to deregister night tokens for dust decay',
     async () => {
-      // allure.tag('smoke');
-      // allure.tag('heanthcheck');
-      // allure.tms('PM-8916', 'PM-8916');
-      // allure.epic('Headless wallet');
-      // allure.feature('Transactions');
-      // allure.story('Valid transfer transaction');
-
       const initialWalletState = await receiver.wallet.waitForSyncedState();
 
       const registerdNightUtxosBeforeRegister = initialWalletState.unshielded.availableCoins.filter(

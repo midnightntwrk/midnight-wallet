@@ -19,7 +19,6 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import * as allure from 'allure-js-commons';
 import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
@@ -52,17 +51,15 @@ describe('Smoke tests', () => {
   let Dust: DustWalletClass;
 
   beforeEach(async () => {
-    await allure.step('Start two wallets', async function () {
-      fixture = getFixture();
-      Dust = DustWallet({
-        ...fixture.getWalletConfig(),
-        ...fixture.getDustWalletConfig(),
-      });
-      Wallet = ShieldedWallet(fixture.getWalletConfig());
-      funded = await utils.initWalletWithSeed(seedFunded, fixture);
-      receiver = await utils.initWalletWithSeed(seed, fixture);
-      logger.info('Two wallets started');
+    fixture = getFixture();
+    Dust = DustWallet({
+      ...fixture.getWalletConfig(),
+      ...fixture.getDustWalletConfig(),
     });
+    Wallet = ShieldedWallet(fixture.getWalletConfig());
+    funded = await utils.initWalletWithSeed(seedFunded, fixture);
+    receiver = await utils.initWalletWithSeed(seed, fixture);
+    logger.info('Two wallets started');
   });
 
   afterEach(async () => {
@@ -73,12 +70,6 @@ describe('Smoke tests', () => {
   test(
     'Valid transfer of shielded and unshielded token @healthcheck',
     async () => {
-      allure.tag('smoke');
-      allure.tag('heanthcheck');
-      allure.tms('PM-8916', 'PM-8916');
-      allure.epic('Headless wallet');
-      allure.feature('Transactions');
-      allure.story('Valid transfer transaction');
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
@@ -192,11 +183,6 @@ describe('Smoke tests', () => {
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
-      allure.tag('smoke');
-      allure.tms('PM-9084', 'PM-9084');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - serialize');
       const initialState = await funded.wallet.waitForSyncedState();
       const initialStateTxHistory = utils.getTransactionHistoryIds(initialState.shielded);
       const serialized = await funded.wallet.shielded.serializeState();
@@ -222,13 +208,6 @@ describe('Smoke tests', () => {
   test(
     'Unshielded wallet can be serialized and restored',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-11088', 'PM-11088');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet building');
-      allure.story('Building with discardTxHistory undefined');
-
       fixture = getFixture();
       const txHistoryStorage = new InMemoryTransactionHistoryStorage();
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
@@ -269,13 +248,6 @@ describe('Smoke tests', () => {
   test(
     'Dust wallet can be serialized and restored',
     async () => {
-      allure.tag('smoke');
-      allure.tag('healthcheck');
-      allure.tms('PM-11088', 'PM-11088');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet building');
-      allure.story('Building with discardTxHistory undefined');
-
       const initialState = await funded.wallet.waitForSyncedState();
       const publicKey = initialState.dust.publicKey;
       const address = initialState.dust.address;
@@ -317,13 +289,6 @@ describe('Smoke tests', () => {
 //   test(
 //     'Unshielded wallet is working if txHistoryStorage is not defined @healthcheck',
 //     async () => {
-//       allure.tag('smoke');
-//       allure.tag('healthcheck');
-//       allure.tms('PM-11088', 'PM-11088');
-//       allure.epic('Headless wallet');
-//       allure.feature('Wallet building');
-//       allure.story('Building with discardTxHistory undefined');
-
 //       fixture = getFixture();
 //       const unshieldedKeyStore = createKeystore(getUnshieldedSeed(seedFunded), fixture.getNetworkId());
 //       const unshieldedWallet = await WalletBuilder.build({
