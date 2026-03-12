@@ -47,7 +47,6 @@ import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 import {
   getBalanceRecipe,
-  CoinRecipe,
   Imbalances as CapImbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
