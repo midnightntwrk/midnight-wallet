@@ -69,9 +69,9 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     signature: Signature,
   ): Either.Either<UnprovenTransaction, WalletError>;
 
-  estimateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
 
-  calculateFee(
+  estimateFee(
     secretKey: TSecrets,
     state: TState,
     transactions: ReadonlyArray<AnyTransaction>,
@@ -136,14 +136,14 @@ export const makeSimulatorTransactingCapability = (
 const distributeFeeAcrossInputs = <T extends { value: bigint }>(
   inputs: ReadonlyArray<T>,
   fee: bigint,
-): ReadonlyArray<T> => {
-  let remaining = fee;
-  return inputs.map((input) => {
-    const deduction = remaining >= input.value ? input.value : remaining;
-    remaining -= deduction;
-    return { ...input, value: deduction };
-  });
-};
+): ReadonlyArray<T> =>
+  inputs.reduce<{ result: T[]; remaining: bigint }>(
+    ({ result, remaining }, input) => {
+      const deduction = remaining >= input.value ? input.value : remaining;
+      return { result: [...result, { ...input, value: deduction }], remaining: remaining - deduction };
+    },
+    { result: [], remaining: fee },
+  ).result;
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
@@ -347,7 +347,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
-  estimateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
+  calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
     return (
       transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) +
       (this.costParams.additionalFeeOverhead ?? 0n)
@@ -380,19 +380,24 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const balancingTx = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
 
     // Erase proofs on everything and merge
-    const erasedBalancing = balancingTx.eraseProofs();
-    const mergedTx = transactions.reduce((acc, tx) => acc.merge(tx.eraseProofs()), erasedBalancing);
+    const erasedBalancing = balancingTx.mockProve();
+    const mergedTx = transactions.reduce<FinalizedTransaction>((acc, tx) => acc.merge(tx.mockProve()), erasedBalancing);
 
-    return this.estimateFee(mergedTx, ledgerParams);
+    return this.calculateFee(mergedTx, ledgerParams);
   }
 
   static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
-    const dustImbalance = transaction
-      .imbalances(0, totalFee)
-      .entries()
-      .find(([tt, _]) => tt.tag === 'dust');
+    console.log('Calculating fee imbalance for transaction', transaction.toString());
 
-    return dustImbalance ? dustImbalance[1] : totalFee;
+    const [_, imbalance] =
+      transaction
+        .imbalances(0, totalFee)
+        .entries()
+        .find(([tt, _]) => tt.tag === 'dust') ?? [];
+
+    console.log('Fee imbalance for transaction is', imbalance, 'with total fee', totalFee);
+
+    return imbalance ? imbalance : totalFee;
   }
 
   computeBalancingRecipe(
@@ -406,7 +411,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     const initialFees = transactions.reduce(
       (total, transaction) =>
         total +
-        TransactingCapabilityImplementation.feeImbalance(transaction, this.estimateFee(transaction, ledgerParams)),
+        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
       0n,
     );
 
@@ -481,7 +486,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     );
   }
 
-  calculateFee(
+  estimateFee(
     secretKey: DustSecretKey,
     state: CoreWallet,
     transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,

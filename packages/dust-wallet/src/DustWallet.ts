@@ -123,9 +123,9 @@ export type DustWalletAPI = {
 
   addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
 
-  estimateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
-  calculateFee(
+  estimateFee(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,
     ttl?: Date,
@@ -227,15 +227,15 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
         .pipe(Effect.runPromise);
     }
 
-    estimateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
+    calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.estimateFee(transactions),
+          [V1Tag]: (v1) => v1.calculateFee(transactions),
         })
         .pipe(Effect.runPromise);
     }
 
-    calculateFee(
+    estimateFee(
       secretKey: DustSecretKey,
       transactions: ReadonlyArray<AnyTransaction>,
       ttl?: Date,
@@ -244,7 +244,7 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) => v1.calculateFee(secretKey, transactions, effectiveTtl, currentTime),
+          [V1Tag]: (v1) => v1.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
         })
         .pipe(Effect.runPromise);
     }

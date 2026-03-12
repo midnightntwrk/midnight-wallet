@@ -200,14 +200,14 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       .pipe(EitherOps.toEffect);
   }
 
-  estimateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError> {
+  calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError> {
     return pipe(
       this.#v1Context.syncService.blockData(),
       Effect.map((blockData) =>
         pipe(
           transactions,
           Arr.map((transaction) =>
-            this.#v1Context.transactingCapability.estimateFee(transaction, blockData.ledgerParameters),
+            this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
           ),
           ArrayOps.sumBigInt,
         ),
@@ -215,7 +215,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
-  calculateFee(
+  estimateFee(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
@@ -225,7 +225,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       Effect.all([SubscriptionRef.get(this.#context.stateRef), this.#v1Context.syncService.blockData()]),
       Effect.flatMap(([state, blockData]) =>
         pipe(
-          this.#v1Context.transactingCapability.calculateFee(
+          this.#v1Context.transactingCapability.estimateFee(
             secretKey,
             state,
             transactions,

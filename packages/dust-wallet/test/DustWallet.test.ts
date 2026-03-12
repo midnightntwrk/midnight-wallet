@@ -522,7 +522,7 @@ describe('DustWallet', () => {
 
       walletState = yield* SubscriptionRef.get(stateRef);
 
-      const totalFee = yield* wallet.calculateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
+      const totalFee = yield* wallet.estimateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
 
       expect(totalFee).toBeGreaterThan(0n);
 

@@ -378,7 +378,7 @@ describe('Token transfer', () => {
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -475,7 +475,7 @@ describe('Token transfer', () => {
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
       // await utils.waitForFacadePending(fundedFacade);

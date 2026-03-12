@@ -52,15 +52,15 @@ const feeBalancingTx = await dustWallet.balanceTransactions(dustSecretKey, [tran
 ### Calculating Fees
 
 ```typescript
-// Estimate the fee for a transaction only (does not include the balancing transaction fee)
-const estimatedFee = await dustWallet.estimateFee([transaction]);
+// Calculate the fee for a transaction only (does not include the balancing transaction fee)
+const fee = await dustWallet.calculateFee([transaction]);
 
-// Calculate the total fee including the balancing transaction fee
+// Estimate the total fee including the balancing transaction fee
 // ttl and currentTime are optional (default: 1 hour from now, and current block timestamp)
-const totalFee = await dustWallet.calculateFee(dustSecretKey, [transaction]);
+const totalFee = await dustWallet.estimateFee(dustSecretKey, [transaction]);
 
 // With explicit ttl and currentTime
-const totalFeeWithOptions = await dustWallet.calculateFee(dustSecretKey, [transaction], ttl, currentTime);
+const totalFeeWithOptions = await dustWallet.estimateFee(dustSecretKey, [transaction], ttl, currentTime);
 ```
 
 ### Dust Generation
