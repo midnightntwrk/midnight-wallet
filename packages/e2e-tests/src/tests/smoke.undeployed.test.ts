@@ -78,7 +78,7 @@ describe('Smoke tests', () => {
         utils.getUnshieldedSeed(seedFunded),
         NetworkId.NetworkId.Undeployed,
       );
-      await utils.sleep(20); // wait for 2+ blocks to pass
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await funded.wallet.waitForSyncedState();
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];

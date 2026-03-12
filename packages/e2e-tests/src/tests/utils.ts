@@ -564,6 +564,41 @@ export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
 
+/**
+ * Queries the indexer's GraphQL endpoint for the current block height.
+ */
+const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
+  const response = await fetch(indexerHttpUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: '{ block { height } }' }),
+  });
+  const json = (await response.json()) as { data: { block: { height: number } } };
+  return json.data.block.height;
+};
+
+/**
+ * Waits for the blockchain to produce at least one new block by polling the
+ * indexer for the current block height. Resolves as soon as the height
+ * increases from its initial value.
+ */
+export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs = 60_000): Promise<void> => {
+  const initialHeight = await fetchBlockHeight(indexerHttpUrl);
+  logger.info(`Waiting for block advancement beyond height ${initialHeight}...`);
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(2);
+    const currentHeight = await fetchBlockHeight(indexerHttpUrl);
+    logger.info(`Current block height: ${currentHeight} (waiting for > ${initialHeight})`);
+    if (currentHeight > initialHeight) {
+      logger.info('Block advancement detected');
+      return;
+    }
+  }
+  throw new Error(`Timed out waiting for block advancement beyond height ${initialHeight} after ${timeoutMs}ms`);
+};
+
 export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
