@@ -560,10 +560,6 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
   return derivationResult.key;
 };
 
-export const sleep = (secs: number): Promise<void> => {
-  return new Promise((resolve) => setTimeout(resolve, secs * 1000));
-};
-
 /**
  * Queries the indexer's GraphQL endpoint for the current block height.
  */
