@@ -92,7 +92,6 @@ describe('Swaps', () => {
       ),
       networkId: NetworkId.NetworkId.Undeployed,
       costParameters: {
-        additionalFeeOverhead: 0n,
         feeBlocksMargin: 5,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),

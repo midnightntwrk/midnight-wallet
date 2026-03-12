@@ -28,4 +28,14 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
   cause?: unknown;
 }> {}
 
-export type WalletError = OtherWalletError | SyncWalletError | TransactingError | LedgerOps.LedgerError;
+export class InsufficientFundsError extends Data.TaggedError('Wallet.InsufficientFunds')<{
+  message: string;
+  tokenType: string;
+}> {}
+
+export type WalletError =
+  | OtherWalletError
+  | SyncWalletError
+  | TransactingError
+  | InsufficientFundsError
+  | LedgerOps.LedgerError;

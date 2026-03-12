@@ -48,7 +48,6 @@ describe('Wallet Facade handling pending transactions', () => {
       },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
-        additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
