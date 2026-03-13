@@ -1,5 +1,13 @@
 # @midnight-ntwrk/wallet-sdk-runtime
 
+## 1.0.2
+
+### Patch Changes
+
+- Updated dependencies [ea55591]
+- Updated dependencies [aa7b1f4]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+
 ## 1.0.1
 
 ### Patch Changes
