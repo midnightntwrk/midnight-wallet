@@ -14,9 +14,8 @@ import { sampleIntentHash } from '@midnight-ntwrk/ledger-v8';
 import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DefaultV1Configuration } from '../src/v1/index.js';
-import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
 import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
 /**

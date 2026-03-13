@@ -10,7 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolState,
+  ProtocolVersion,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -99,6 +104,7 @@ describe.skip('Wallet transacting', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 

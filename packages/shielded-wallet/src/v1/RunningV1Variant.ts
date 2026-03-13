@@ -11,7 +11,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
+import {
+  Effect,
+  Option,
+  pipe,
+  type Record,
+  Scope,
+  Stream,
+  SubscriptionRef,
+  Schedule,
+  Duration,
+  Sink,
+  Console,
+} from 'effect';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
@@ -21,14 +33,14 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { type SerializationCapability } from './Serialization.js';
-import { type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
+import { type ChangesResult, type EventsSyncUpdate, type SyncCapability, type SyncService } from './Sync.js';
 import { type TransactingCapability, type TokenTransfer, type BalancingResult } from './Transacting.js';
 import { OtherWalletError, type WalletError } from './WalletError.js';
 import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
-import { type TransactionHistoryCapability } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;
@@ -58,12 +70,12 @@ export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
     serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate, Option.Option<ChangesResult>>;
     transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>;
-    transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, TTransaction>;
+    transactionHistoryService: TransactionHistoryService;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;
@@ -131,18 +143,42 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
       Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) => {
-        return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+      Stream.mapEffect((update) =>
+        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
           Effect.try({
-            try: () => this.#v1Context.syncCapability.applyUpdate(state, update),
+            try: () => {
+              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+              return [changesResult, newState] as const;
+            },
             catch: (err) =>
               new OtherWalletError({
                 message: 'Error while applying sync update',
                 cause: err,
               }),
           }),
-        );
-      }),
+        ).pipe(
+          Effect.flatMap((changesResult) =>
+            Option.match(changesResult, {
+              onNone: () => Effect.void,
+              onSome: ({ changes, protocolVersion }) =>
+                Effect.forEach(
+                  changes,
+                  (change) =>
+                    pipe(
+                      this.#v1Context.transactionHistoryService.getMetaData(change.source),
+                      Effect.flatMap((metadata) =>
+                        this.#v1Context.transactionHistoryService.create(change, metadata, protocolVersion),
+                      ),
+                      Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                      Effect.forkScoped,
+                    ),
+                  { discard: true },
+                ),
+            }),
+          ),
+          Effect.provideService(Scope.Scope, this.#scope),
+        ),
+      ),
       Stream.tapError((error) => Console.error(error)),
       Stream.retry(
         pipe(

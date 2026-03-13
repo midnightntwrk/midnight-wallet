@@ -18,15 +18,10 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import {
-  createKeystore,
-  PublicKey,
-  InMemoryTransactionHistoryStorage,
-  UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
@@ -155,7 +150,7 @@ describe('Dust Deregistration', () => {
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(
+          const txInHistory = await walletFacade.unshielded.queryTxHistoryByHash(
             finalizedDustDeregistrationTx.transactionHash(),
           );
 

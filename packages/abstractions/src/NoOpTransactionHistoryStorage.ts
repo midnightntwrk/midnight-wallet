@@ -10,30 +10,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage, TransactionHash, TransactionHistoryEntry } from './TransactionHistoryStorage.js';
+import {
+  type TransactionHistoryStorage,
+  type TransactionHash,
+  type TransactionHistoryEntryWithHash,
+} from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
-  create(_entry: TransactionHistoryEntry): Promise<void> {
+  create(_entry: TransactionHistoryEntryWithHash): Promise<void> {
     return Promise.resolve();
   }
 
-  delete(_hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> {
+  delete(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     return Promise.resolve(undefined);
   }
 
-  async *getAll(): AsyncIterableIterator<TransactionHistoryEntry> {
+  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
     return Promise.resolve(yield* []);
   }
 
-  get(_hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> {
+  get(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     return Promise.resolve(undefined);
-  }
-
-  serialize(): string {
-    return JSON.stringify({});
-  }
-
-  static deserialize(_serialized: string): NoOpTransactionHistoryStorage {
-    return new NoOpTransactionHistoryStorage();
   }
 }

@@ -103,6 +103,7 @@ const createMockSubscriptionFn = (
         zswapLedgerEvents: {
           id,
           raw: mockEventHex,
+          protocolVersion: 1,
           maxId: totalRecords,
         },
       })),

@@ -18,8 +18,12 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
-import { InMemoryTransactionHistoryStorage, NoOpTransactionHistoryStorage } from '../src/storage/index.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import {
+  InMemoryTransactionHistoryStorage,
+  NoOpTransactionHistoryStorage,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { restoreUnshieldedTransactionHistoryStorage } from '../src/v1/TransactionHistory.js';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
@@ -66,7 +70,7 @@ describe('UnshieldedWallet', () => {
     expect(state.availableCoins.length).toBeGreaterThan(0);
     expect(state.pendingCoins).toHaveLength(0);
 
-    const transactionHistory = await Array.fromAsync(state.transactionHistory.getAll());
+    const transactionHistory = await Array.fromAsync(unshieldedWallet.getAllFromTxHistory());
 
     expect(transactionHistory.length).toBeGreaterThan(1);
   });
@@ -89,12 +93,10 @@ describe('UnshieldedWallet', () => {
 
     const serializedState = await initialWallet.serializeState();
 
-    const serializedTxHistory = txHistoryStorage.serialize();
-
+    const serializedTxHistory = await initialWallet.serializeTransactionHistory();
     await initialWallet.stop();
 
-    const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.fromSerialized(serializedTxHistory);
-
+    const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
     const restoredConfig = createWalletConfig(indexerPort, { txHistoryStorage: restoredTxHistoryStorage });
 
     const restoredWallet = UnshieldedWallet(restoredConfig).restore(serializedState);
@@ -111,11 +113,18 @@ describe('UnshieldedWallet', () => {
     expect(restoredState.availableCoins.length).toBe(initialState.availableCoins.length);
     expect(restoredState.pendingCoins.length).toBe(initialState.pendingCoins.length);
 
+    const initialTxHistory = await Array.fromAsync(initialWallet.getAllFromTxHistory());
+    const restoredTxHistory = await Array.fromAsync(restoredWallet.getAllFromTxHistory());
+
+    expect(restoredTxHistory).toEqual(initialTxHistory);
+
     await restoredWallet.stop();
   });
 
   it('should instantiate without transaction history service', async () => {
-    const initialConfig = createWalletConfig(indexerPort, { txHistoryStorage: new NoOpTransactionHistoryStorage() });
+    const initialConfig = createWalletConfig(indexerPort, {
+      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+    });
     const keystore = createKeystore(unshieldedSeed, initialConfig.networkId);
     const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 

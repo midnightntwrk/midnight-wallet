@@ -19,10 +19,9 @@ import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
   UnshieldedWalletClass,
@@ -66,7 +65,10 @@ describe('Fresh wallet with empty state', () => {
 
     Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
     Wallet = ShieldedWallet(walletConfig);
-    Unshielded = UnshieldedWallet({ ...walletConfig, txHistoryStorage: new InMemoryTransactionHistoryStorage() });
+    Unshielded = UnshieldedWallet({
+      ...walletConfig,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    });
     shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
     unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
@@ -247,8 +249,8 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Shielded midnight wallet returns no tx history',
     async () => {
-      const state = await firstValueFrom(wallet.wallet.shielded.state);
-      expect(() => state.transactionHistory).toThrow();
+      const entry = await wallet.wallet.shielded.queryTxHistoryByHash('nonexistent');
+      expect(entry).toBeUndefined();
     },
     timeout,
   );

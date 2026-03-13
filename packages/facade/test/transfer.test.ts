@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
-  InMemoryTransactionHistoryStorage,
   PublicKey,
+  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   createKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -108,7 +108,10 @@ describe('Wallet Facade Transfer', () => {
       provingService: () => makeWasmProvingService(),
     });
     receiverFacade = await WalletFacade.init({
-      configuration: { ...configuration, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
+      configuration: {
+        ...configuration,
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      },
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
         UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedReceiverKeystore)),
@@ -169,10 +172,21 @@ describe('Wallet Facade Transfer', () => {
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(unprovenTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
-    const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
+    expect(submittedTxIdentifier).toBeTypeOf('string');
 
-    expect(submittedTxHash).toBeTypeOf('string');
+    // Wait for the transaction to appear in sender's transaction history
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap(() => senderFacade.shielded.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry): entry is ShieldedTransactionHistoryEntry => entry !== undefined),
+        rx.timeout(30_000),
+      ),
+    );
+
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
 
     const isValid = await rx.firstValueFrom(
       receiverFacade
@@ -226,10 +240,22 @@ describe('Wallet Facade Transfer', () => {
     );
 
     const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
 
     const submittedTxHash = await senderFacade.submitTransaction(finalizedTx);
 
     expect(submittedTxHash).toBeTruthy();
+
+    // Wait for the transaction to appear in sender's transaction history
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap(() => senderFacade.unshielded.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry): entry is UnshieldedTransactionHistoryEntry => entry !== undefined),
+        rx.timeout(30_000),
+      ),
+    );
+
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
 
     const isValid = await rx.firstValueFrom(
       receiverFacade

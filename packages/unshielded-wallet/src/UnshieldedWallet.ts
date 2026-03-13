@@ -21,10 +21,14 @@ import {
   type UnboundTransaction,
 } from './v1/index.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, Either, type Scope } from 'effect';
+import { Effect, Either, Option, Stream, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+import {
+  type TransactionHistoryService,
+  type UnshieldedTransactionHistoryEntry,
+  type SerializedUnshieldedTransactionHistory,
+} from './v1/TransactionHistory.js';
 import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -39,26 +43,31 @@ import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-nt
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type PublicKey } from './KeyStore.js';
 import { type SyncProgress } from './v1/SyncProgress.js';
-import { type UnshieldedUpdate } from './v1/SyncSchema.js';
 import { type UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type UnshieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryService<UnshieldedUpdate>;
+};
+
+export type UnshieldedWalletServices = {
+  transactionHistory: TransactionHistoryService;
 };
 
 export class UnshieldedWalletState<TSerialized = string> {
   static readonly mapState =
-    <TSerialized = string>(capabilities: UnshieldedWalletCapabilities<TSerialized>) =>
+    <TSerialized = string>(variant: UnshieldedWalletCapabilities<TSerialized> & UnshieldedWalletServices) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): UnshieldedWalletState<TSerialized> => {
-      return new UnshieldedWalletState(state, capabilities);
+      const { serialization, coinsAndBalances, keys } = variant;
+      const { transactionHistory } = variant;
+      return new UnshieldedWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
   readonly capabilities: UnshieldedWalletCapabilities<TSerialized>;
+  readonly services: UnshieldedWalletServices;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
@@ -84,14 +93,15 @@ export class UnshieldedWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  get transactionHistory(): TransactionHistoryService<UnshieldedUpdate> {
-    return this.capabilities.transactionHistory;
-  }
-
-  constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: UnshieldedWalletCapabilities<TSerialized>) {
+  constructor(
+    state: ProtocolState.ProtocolState<CoreWallet>,
+    capabilities: UnshieldedWalletCapabilities<TSerialized>,
+    services: UnshieldedWalletServices,
+  ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
+    this.services = services;
   }
 
   serialize(): TSerialized {
@@ -147,6 +157,12 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   ): Promise<void>;
 
   getAddress(): Promise<UnshieldedAddress>;
+
+  queryTxHistoryByHash(hash: string): Promise<UnshieldedTransactionHistoryEntry | undefined>;
+
+  getAllFromTxHistory(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
+
+  serializeTransactionHistory(): Promise<SerializedUnshieldedTransactionHistory>;
 
   stop(): Promise<void>;
 };
@@ -322,6 +338,29 @@ export function CustomUnshieldedWallet<
 
     getAddress(): Promise<UnshieldedAddress> {
       return rx.firstValueFrom(this.state).then((state) => state.address);
+    }
+
+    queryTxHistoryByHash(hash: string): Promise<UnshieldedTransactionHistoryEntry | undefined> {
+      return Effect.runPromise(
+        CustomUnshieldedWalletImplementation.allVariantsRecord()
+          [V1Tag].variant.transactionHistory.get(hash)
+          .pipe(Effect.map(Option.getOrUndefined)),
+      );
+    }
+
+    async *getAllFromTxHistory(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry> {
+      const items = await Effect.runPromise(
+        CustomUnshieldedWalletImplementation.allVariantsRecord()
+          [V1Tag].variant.transactionHistory.getAll()
+          .pipe(Stream.runCollect),
+      );
+      yield* items;
+    }
+
+    serializeTransactionHistory(): Promise<SerializedUnshieldedTransactionHistory> {
+      return Effect.runPromise(
+        CustomUnshieldedWalletImplementation.allVariantsRecord()[V1Tag].variant.transactionHistory.serialize(),
+      );
     }
   };
 }

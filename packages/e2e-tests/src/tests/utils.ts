@@ -15,7 +15,7 @@ import * as rx from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
@@ -31,7 +31,6 @@ import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
@@ -412,7 +411,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
   rx.firstValueFrom(
     wallet.state().pipe(
       rx.mergeMap(async (state) => {
-        const txInHistory = await state.unshielded.transactionHistory.get(finalizedTx.transactionHash());
+        const txInHistory = await wallet.unshielded.queryTxHistoryByHash(finalizedTx.transactionHash());
 
         return {
           state,
