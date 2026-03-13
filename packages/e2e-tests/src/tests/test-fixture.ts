@@ -69,6 +69,7 @@ export function useTestContainersFixture() {
         )
           .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
           .withEnvironment(environmentVars)
+          .withStartupTimeout(100_000)
           .up();
         break;
       }

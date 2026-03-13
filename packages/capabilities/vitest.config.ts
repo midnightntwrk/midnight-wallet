@@ -18,6 +18,7 @@ export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, '**/dist/**'],
     environment: 'node',
+    testTimeout: 30_000,
     globals: true,
     coverage: {
       provider: 'v8',

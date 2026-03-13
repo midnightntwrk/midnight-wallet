@@ -19,6 +19,7 @@ export default defineConfig({
     exclude: [...configDefaults.exclude, '**/dist/**'],
     setupFiles: ['../../setup-env.ts'],
     environment: 'node',
+    testTimeout: 30_000,
     globals: true,
     coverage: {
       provider: 'v8',

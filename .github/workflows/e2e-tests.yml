@@ -3,8 +3,6 @@ name: E2E tests
 env:
   MIDNIGHT_GH_USER: ${{ secrets.GH_USERNAME }}
   MIDNIGHT_GH_TOKEN: ${{ secrets.MIDNIGHTCI_PACKAGES_WRITE }}
-  ALLURE_ADMIN_USER: ${{ secrets.ALLURE_ADMIN_USER }}
-  ALLURE_ADMIN_PASSWORD: ${{ secrets.ALLURE_ADMIN_PASSWORD }}
   SEED_STABLE: ${{ secrets.E2E_TESTS_SEED_STABLE }}
   SYNC_CACHE: ${{ github.workspace }}/packages/e2e-tests/.sync_cache
 
@@ -84,10 +82,6 @@ on:
         required: true
       MIDNIGHTBOT_PACKAGES_WRITE:
         required: true
-      ALLURE_ADMIN_USER:
-        required: true
-      ALLURE_ADMIN_PASSWORD:
-        required: true
       APP_INFRA_SECRET:
         required: true
       E2E_TESTS_SEED:
@@ -135,7 +129,7 @@ jobs:
       - name: Debug
         run: ls -a -R ./packages/e2e-tests
 
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 #v6.2.0
+      - uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f #v6.3.0
         with:
           node-version-file: '.nvmrc'
           cache: 'yarn'
@@ -152,7 +146,7 @@ jobs:
           yarn --version
 
       - name: Log in to GitHub Container registry
-        uses: docker/login-action@65b78e6e13532edd9afa3aa52ac7964289d1a9c1
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
         with:
           registry: 'https://ghcr.io'
           username: ${{ env.MIDNIGHT_GH_USER }}
@@ -191,46 +185,8 @@ jobs:
           path: ${{ env.SYNC_CACHE }}
           include-hidden-files: true
 
-      - name: Create allure properties
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests/allure-results
-        env:
-          INPUT_NETWORK: ${{ inputs.network }}
-          INPUT_MODIFIER: ${{ inputs.modifier }}
-        run: |
-          echo "
-          env=$INPUT_NETWORK
-          tags=$INPUT_MODIFIER
-          platform=Linux
-          " > environment.properties
-
-      - name: Send Results to Allure Server
-        uses: robkatona/send-allure-results@935714d2ab2c0de7b15a9d3e29a0cffe0fa64c59 #v1.0.5
-        if: ${{ always() }}
-        with:
-          allure-server-url: https://allure-server.prd.midnight.tools
-          allure-results-directory: ./packages/e2e-tests/reports/allure-results
-          project-id: headless-wallet-${{ inputs.NETWORK }}
-          security-user: ${{ env.ALLURE_ADMIN_USER }}
-          security-pass: ${{ env.ALLURE_ADMIN_PASSWORD }}
-
-      - name: Generate allure report
-        if: success() || failure()
-        working-directory: ./packages/e2e-tests
-        run: |
-          yarn allure-generate
-
-      - name: Publish artifacts (test reports)
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f #v7.0.0
-        if: success() || failure()
-        with:
-          name: test-reports
-          path: |
-            ./packages/e2e-tests/reports/allure-report
-          retention-days: 30
-
       - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@b082adf0eced0765477756c2a610396589b8c637 # v2
+        uses: dorny/test-reporter@3d76b34a4535afbd0600d347b09a6ee5deb3ed7f # v2
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report

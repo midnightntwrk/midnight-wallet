@@ -2,4 +2,4 @@
 '@midnight-ntwrk/wallet-sdk-utilities': patch
 ---
 
-feat: adds safe bigint schema
+fix: move dev-only deps out of dependencies

@@ -1,5 +1,104 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 2.0.0
+
+### Major Changes
+
+- f52d01d: - expose functions for reverting pending coins (booked for a pending transaction) from a provided transaction
+  - extract submission into `@midnight-ntwrk/wallet-sdk-capabilities` package as a standalone service and integrate it
+    into the `WalletFacade`
+  - make `WalletFacade` revert transaction upon submission failure
+  - change initialization of `WalletFacade` to a static async method `WalletFacade.init` taking a configuration object.
+    This will allow non-breaking future initialization changes when e.g. new services are being integrated into the
+    facade.
+
+### Minor Changes
+
+- 1409b6b: Standardize wallet APIs across shielded, unshielded, and dust wallets
+
+  ### Breaking Changes
+
+  **Dust Wallet:**
+  - Rename `DustCoreWallet` to `CoreWallet` for consistency
+  - Rename `walletBalance()` to `balance()` on `DustWalletState`
+  - Rename `dustPublicKey` to `publicKey` and `dustAddress` to `address` on state objects
+  - Rename `getDustPublicKey()` to `getPublicKey()` and `getDustAddress()` to `getAddress()` on `KeysCapability`
+  - Add `getAddress(): Promise<DustAddress>` method to `DustWalletAPI`
+  - Change `dustReceiverAddress` parameter type from `string` to `DustAddress` in transaction methods
+
+  **Shielded Wallet:**
+  - Rename `startWithShieldedSeed()` to `startWithSeed()` for consistency
+  - Add `getAddress(): Promise<ShieldedAddress>` method
+  - Change `receiverAddress` parameter type from `string` to `ShieldedAddress` in transfer methods
+  - Transaction history getter now throws "not yet implemented" error
+
+  **Facade:**
+  - `TokenTransfer` interface now requires typed addresses (`ShieldedAddress` or `UnshieldedAddress`) instead of strings
+  - Split `CombinedTokenTransfer` into `ShieldedTokenTransfer` and `UnshieldedTokenTransfer` types
+  - Address encoding/decoding is now handled internally - consumers pass address objects directly
+
+  ### Migration Guide
+
+  **Before:**
+
+  ```typescript
+  const address = MidnightBech32m.encode('undeployed', state.shielded.address).toString();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+  **After:**
+
+  ```typescript
+  const address = await wallet.shielded.getAddress();
+  wallet.transferTransaction([{ type: 'shielded', outputs: [{ receiverAddress: address, ... }] }]);
+  ```
+
+### Patch Changes
+
+- 323e0e0: Fix `rollbackSpendByUtxo` to handle missing UTXOs gracefully instead of throwing an error. This resolves a
+  race condition between sync and revert operations where `rollbackSpendByUtxo` could be called on a UTXO that's no
+  longer in the pending state. The function now returns the state unchanged when a UTXO is not found, consistent with
+  the behavior of `rollbackSpend`. Additionally, updated return types to `Either.Either<UnshieldedState, never>` for
+  both `rollbackSpend` and `rollbackSpendByUtxo` to accurately reflect that these functions never return errors.
+- c6f6f3e: fix: add generic to addSignature function, remove intent cloning
+  - Add generic type parameter to `addSignature` to preserve transaction type instead of always returning
+    `UnprovenTransaction`
+  - Remove intent cloning via serialization/deserialization
+
+- 79fb7ba: Extends the unshielded transaction history entry to include the UTXOs created and spent by each transaction.
+
+  Each `TransactionHistoryEntry` now carries `createdUtxos` and `spentUtxos` arrays. Every UTXO exposes its `value`,
+  `owner`, `tokenType`, `intentHash`, and `outputIndex`, giving callers full visibility into which coins were received
+  and which were consumed in a given transaction.
+
+- dd004db: Add optional `keepAlive` config param to `SubscriptionClient.ServerConfig` and to `IndexerClientConnection`
+  in all wallet packages. The value is forwarded to the underlying `graphql-ws` client and defaults to `15_000` ms when
+  not provided.
+- 0f29d01: - Moved `SyncProgress` from `wallet-sdk-shielded/v1` into `wallet-sdk-abstractions` so it can be shared
+  across wallet implementations
+  - Refactored `CoreWallet` in the dust wallet from a class to a plain object type + namespace, improving composability
+  - Added `WalletError` type to the dust wallet for structured error handling
+  - Added coin data to unshielded transaction history
+  - Removed unused `wallet-sdk-hd` dependency from `wallet-sdk-unshielded-wallet`
+  - Cleaned up `ProgressUpdate` type and `progress()` method from `TransactionHistoryCapability` in the shielded wallet
+    (superseded by the shared `SyncProgress`)
+- Updated dependencies [f52d01d]
+- Updated dependencies [3843720]
+- Updated dependencies [6c359b8]
+- Updated dependencies [7ef6ff9]
+- Updated dependencies [d3422bc]
+- Updated dependencies [f52d01d]
+- Updated dependencies [dd004db]
+- Updated dependencies [0f29d01]
+- Updated dependencies [55380e5]
+- Updated dependencies [330867f]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.1.0
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.0.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.0.1
+  - @midnight-ntwrk/wallet-sdk-utilities@1.0.1
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.1
+
 ## 2.0.0-rc.4
 
 ### Patch Changes

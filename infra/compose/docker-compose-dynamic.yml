@@ -43,7 +43,7 @@ services:
       node:
         condition: service_healthy
   node:
-    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.22.0-rc.5'
+    image: 'ghcr.io/midnight-ntwrk/midnight-node:0.22.0-rc.6'
     container_name: node_$TESTCONTAINERS_UID
     cap_drop:
       - ALL

@@ -35,7 +35,7 @@ import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
 import { type KeysCapability } from './Keys.js';
 import { type CoinSelection } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { type CoreWallet } from './CoreWallet.js';
-import { TransactionHistoryService } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
