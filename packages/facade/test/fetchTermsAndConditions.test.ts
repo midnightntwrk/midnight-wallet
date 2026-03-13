@@ -56,7 +56,9 @@ describe('WalletFacade.fetchTermsAndConditions', () => {
         },
       });
 
-      expect(typeof termsAndConditions.url).toBe('string');
+      const parsedUrl = new URL(termsAndConditions.url);
+      expect(parsedUrl.protocol).toMatch(/^https?:$/);
+      expect(parsedUrl.hostname).toBeTruthy();
 
       // SHA-256 hash is 256 bits = 64 hex characters
       expect(termsAndConditions.hash).toMatch(/^[0-9a-fA-F]{64}$/);
