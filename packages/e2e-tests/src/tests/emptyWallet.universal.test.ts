@@ -20,7 +20,6 @@ import { TestContainersFixture, useTestContainersFixture } from './test-fixture.
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as allure from 'allure-js-commons';
 import {
   createKeystore,
   PublicKey,
@@ -250,10 +249,6 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Shielded midnight wallet returns no tx history',
     async () => {
-      allure.tms('PM-8927', 'PM-8927');
-      allure.epic('Headless wallet');
-      allure.feature('Wallet state');
-      allure.story('Wallet state properties - fresh');
       const entry = await wallet.wallet.shielded.queryTxHistoryByHash('nonexistent');
       expect(entry).toBeUndefined();
     },

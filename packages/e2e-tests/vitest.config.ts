@@ -16,7 +16,7 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, '**/dist/**'],
-    setupFiles: ['allure-vitest/setup', '../../setup-env.ts'],
+    setupFiles: ['../../setup-env.ts'],
     environment: 'node',
     hookTimeout: 90_000,
     testTimeout: 90_000,
