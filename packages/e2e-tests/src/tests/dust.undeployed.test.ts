@@ -90,7 +90,7 @@ describe('Dust tests', () => {
         ],
       },
     ];
-    await utils.sleep(20); // wait for 2+ blocks to pass
+    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const txRecipe = await funded.wallet.transferTransaction(
       outputsToCreate,
@@ -112,7 +112,7 @@ describe('Dust tests', () => {
     logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
 
-    await utils.sleep(20);
+    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
@@ -255,6 +255,7 @@ describe('Dust tests', () => {
   test(
     'Able to spend all shielded tokens',
     async () => {
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const walletState = await receiver.wallet.waitForSyncedState();
 
       const registerdNightUtxosBeforeRegister = walletState.unshielded.availableCoins.filter(

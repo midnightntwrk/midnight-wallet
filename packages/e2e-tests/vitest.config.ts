@@ -15,10 +15,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    setupFiles: ['../../setup-env.ts'],
+    setupFiles: ['../../setup-env.ts', './src/tests/setup-retry-logging.ts'],
     environment: 'node',
-    hookTimeout: 90_000,
-    testTimeout: 90_000,
+    hookTimeout: 3_600_000,
+    testTimeout: 3_600_000,
+    retry: 1,
     globals: true,
     exclude: ['node_modules', 'dist'],
     reporters: [

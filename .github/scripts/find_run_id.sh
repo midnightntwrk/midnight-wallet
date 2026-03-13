@@ -45,4 +45,5 @@ for run_id in $runs; do
   fi
 done
 
-echo "No completed runs with artifact named '$ARTIFACT_NAME' found."
+echo "No completed runs with artifact named '$ARTIFACT_NAME' found." >&2
+exit 1

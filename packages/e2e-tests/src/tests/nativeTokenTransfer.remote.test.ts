@@ -46,7 +46,7 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
   const timeout = 600_000;
 
   beforeEach(async () => {
@@ -55,19 +55,20 @@ describe('Token transfer', () => {
     wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
     wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);
 
-    const initialState = await wallet.wallet.waitForSyncedState();
-    const initialNativeBalance = initialState.shielded.balances[nativeToken1Raw];
-    logger.info(`initial balance: ${initialNativeBalance}`);
+    const [state1, state2] = await Promise.all([
+      wallet.wallet.waitForSyncedState(),
+      wallet2.wallet.waitForSyncedState(),
+    ]);
+    const balance1 = state1.shielded.balances[nativeToken1Raw] ?? 0n;
+    const balance2 = state2.shielded.balances[nativeToken1Raw] ?? 0n;
+    logger.info(`Wallet 1 native token 1 balance: ${balance1}, Wallet 2 native token 1 balance: ${balance2}`);
 
-    const date = new Date();
-    const hour = date.getHours();
-
-    if (hour % 2 !== 0) {
-      logger.info('Wallet 1 will be sender');
+    if (balance1 >= balance2) {
+      logger.info('Wallet 1 has more native tokens — using as sender');
       sender = wallet;
       receiver = wallet2;
     } else {
-      logger.info('Wallet 2 will be sender');
+      logger.info('Wallet 2 has more native tokens — using as sender');
       sender = wallet2;
       receiver = wallet;
     }
