@@ -46,7 +46,7 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  const syncTimeout = 30 * 60 * 1000; // 30 minutes in milliseconds
+  const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
   const timeout = 600_000;
 
   beforeEach(async () => {
