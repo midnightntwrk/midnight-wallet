@@ -295,8 +295,12 @@ export const makeSimulatorSyncCapability = (): SyncCapability<
         },
         secretKeys,
       } = update;
-      const [newState] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
-      return [newState, Option.none()];
+      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      const changesResult =
+        newChanges.length > 0
+          ? Option.some({ changes: newChanges, protocolVersion: Number(state.protocolVersion) })
+          : Option.none();
+      return [newState, changesResult];
     },
   };
 };
