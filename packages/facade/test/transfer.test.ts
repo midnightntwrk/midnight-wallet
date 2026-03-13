@@ -87,8 +87,7 @@ describe('Wallet Facade Transfer', () => {
         additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -112,8 +111,7 @@ describe('Wallet Facade Transfer', () => {
     receiverFacade = await WalletFacade.init({
       configuration: {
         ...configuration,
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-        shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
       },
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
@@ -183,7 +181,7 @@ describe('Wallet Facade Transfer', () => {
     // Wait for the transaction to appear in sender's transaction history
     const txHistoryEntry = await rx.firstValueFrom(
       senderFacade.state().pipe(
-        rx.concatMap((s) => s.shielded.transactionHistory.get(finalizedTxHash)),
+        rx.concatMap(() => senderFacade.shielded.queryTxHistoryByHash(finalizedTxHash)),
         rx.filter((entry): entry is ShieldedTransactionHistoryEntry => entry !== undefined),
         rx.timeout(30_000),
       ),
@@ -252,7 +250,7 @@ describe('Wallet Facade Transfer', () => {
     // Wait for the transaction to appear in sender's transaction history
     const txHistoryEntry = await rx.firstValueFrom(
       senderFacade.state().pipe(
-        rx.concatMap((s) => s.unshielded.transactionHistory.get(finalizedTxHash)),
+        rx.concatMap(() => senderFacade.unshielded.queryTxHistoryByHash(finalizedTxHash)),
         rx.filter((entry): entry is UnshieldedTransactionHistoryEntry => entry !== undefined),
         rx.timeout(30_000),
       ),

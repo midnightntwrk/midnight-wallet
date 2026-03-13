@@ -14,13 +14,8 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import {
-  createKeystore,
-  PublicKey,
-  UnshieldedTransactionHistoryEntry,
-  UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
@@ -54,8 +49,7 @@ describe('Facade submission', () => {
         additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
       },
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
 
     const facade: WalletFacade = await WalletFacade.init({
@@ -100,8 +94,7 @@ describe('Facade submission', () => {
         additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
       },
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
     const seed = crypto.randomBytes(32);
     const shielded = ShieldedWallet(config).startWithSeed(seed);

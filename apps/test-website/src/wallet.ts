@@ -16,12 +16,11 @@ import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-ab
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
   PublicKey,
   type UnshieldedKeystore,
-  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type Buffer } from 'buffer';
@@ -43,8 +42,7 @@ export const defaultConfiguration: Configuration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
-  unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
 };
 
 export const init = async (

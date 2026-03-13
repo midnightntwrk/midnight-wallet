@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Scope, Stream, Schema, pipe, Either } from 'effect';
+import { Effect, Scope, Stream, Schema, pipe, Either } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
@@ -126,7 +126,7 @@ export const makeDefaultSyncCapability = (
             });
 
             const { transactionHistoryService } = getContext();
-            void transactionHistoryService.create(update);
+            Effect.runFork(transactionHistoryService.create(update));
 
             return stateAfterUpdatingProgress;
           }),

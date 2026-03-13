@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -18,12 +18,7 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
-import {
-  createKeystore,
-  PublicKey,
-  UnshieldedWallet,
-  UnshieldedTransactionHistoryEntry,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -82,8 +77,7 @@ describe('Dust Deregistration', () => {
         additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -157,7 +151,7 @@ describe('Dust Deregistration', () => {
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(
+          const txInHistory = await walletFacade.unshielded.queryTxHistoryByHash(
             finalizedDustDeregistrationTx.transactionHash(),
           );
 

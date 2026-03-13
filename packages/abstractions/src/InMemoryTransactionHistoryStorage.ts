@@ -19,28 +19,19 @@ import {
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
  */
-export class InMemoryTransactionHistoryStorage<
-  T extends TransactionHistoryEntryWithHash,
-> implements TransactionHistoryStorage<T> {
-  private entries: Map<TransactionHash, T>;
+export class InMemoryTransactionHistoryStorage implements TransactionHistoryStorage {
+  private entries: Map<TransactionHash, TransactionHistoryEntryWithHash>;
 
-  constructor(entries?: Map<TransactionHash, T>) {
-    this.entries = entries ?? new Map<TransactionHash, T>();
+  constructor(entries?: Map<TransactionHash, TransactionHistoryEntryWithHash>) {
+    this.entries = entries ?? new Map<TransactionHash, TransactionHistoryEntryWithHash>();
   }
 
-  create(entry: T, mergeEntries?: (existing: T, incoming: T) => T): Promise<void> {
-    const existingEntry = this.entries.get(entry.hash);
-
-    if (existingEntry) {
-      this.entries.set(entry.hash, mergeEntries ? mergeEntries(existingEntry, entry) : entry);
-    } else {
-      this.entries.set(entry.hash, entry);
-    }
-
+  create(entry: TransactionHistoryEntryWithHash): Promise<void> {
+    this.entries.set(entry.hash, entry);
     return Promise.resolve();
   }
 
-  delete(hash: TransactionHash): Promise<T | undefined> {
+  delete(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     const existingEntry = this.entries.get(hash);
 
     if (!existingEntry) {
@@ -52,13 +43,13 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve(existingEntry);
   }
 
-  async *getAll(): AsyncIterableIterator<T> {
+  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
     for (const entry of this.entries.values()) {
       yield await Promise.resolve(entry);
     }
   }
 
-  get(hash: TransactionHash): Promise<T | undefined> {
+  get(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     return Promise.resolve(this.entries.get(hash));
   }
 

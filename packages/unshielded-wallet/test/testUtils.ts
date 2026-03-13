@@ -17,7 +17,6 @@ import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DefaultV1Configuration } from '../src/v1/index.js';
 import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
-import { type UnshieldedTransactionHistoryEntry } from '../src/v1/TransactionHistory.js';
 
 /**
  * TODO: place in separate package with more additional mock functions
@@ -113,7 +112,7 @@ export const createWalletConfig = (
       indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
-    unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
   };
 
   return { ...defaultConfig, ...overrides };

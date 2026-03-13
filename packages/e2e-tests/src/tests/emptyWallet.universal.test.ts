@@ -24,7 +24,6 @@ import * as allure from 'allure-js-commons';
 import {
   createKeystore,
   PublicKey,
-  UnshieldedTransactionHistoryEntry,
   UnshieldedWallet,
   UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -70,7 +69,7 @@ describe('Fresh wallet with empty state', () => {
       Wallet = ShieldedWallet(walletConfig);
       Unshielded = UnshieldedWallet({
         ...walletConfig,
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
       });
       shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
       unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
@@ -139,7 +138,7 @@ describe('Fresh wallet with empty state', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();
@@ -298,8 +297,8 @@ describe('Fresh wallet with empty state', () => {
       allure.epic('Headless wallet');
       allure.feature('Wallet state');
       allure.story('Wallet state properties - fresh');
-      const state = await firstValueFrom(wallet.wallet.shielded.state);
-      expect(() => state.transactionHistory).toThrow();
+      const entry = await wallet.wallet.shielded.queryTxHistoryByHash('nonexistent');
+      expect(entry).toBeUndefined();
     },
     timeout,
   );

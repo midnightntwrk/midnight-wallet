@@ -11,7 +11,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  ShieldedTransactionHistoryEntry,
   ShieldedWallet,
   type ShieldedWalletClass,
   type ShieldedWalletState,
@@ -53,7 +52,7 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as crypto from 'node:crypto';
 import { randomUUID } from 'node:crypto';
@@ -33,7 +33,6 @@ import {
   UnshieldedWallet,
   PublicKey,
   type UnshieldedKeystore,
-  UnshieldedTransactionHistoryEntry,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
 import { type CombinedTokenTransfer, type DefaultConfiguration, type FacadeState, WalletFacade } from '../src/index.js';
@@ -91,8 +90,7 @@ describe('Dust Registration', () => {
         additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 
@@ -225,7 +223,9 @@ describe('Dust Registration', () => {
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(provenDustRegistrationTx.transactionHash());
+          const txInHistory = await receiverFacade.unshielded.queryTxHistoryByHash(
+            provenDustRegistrationTx.transactionHash(),
+          );
 
           return {
             state,

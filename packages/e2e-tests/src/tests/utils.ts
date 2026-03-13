@@ -21,7 +21,6 @@ import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import type * as fs from 'node:fs';
 import {
-  ShieldedTransactionHistoryEntry,
   ShieldedWallet,
   type ShieldedWalletAPI,
   type ShieldedWalletClass,
@@ -33,7 +32,6 @@ import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
   PublicKey,
-  UnshieldedTransactionHistoryEntry,
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -119,7 +117,7 @@ const restoreUnshieldedWallet = async (
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
@@ -200,8 +198,7 @@ export const provideWallet = async (
       configuration: {
         ...walletConfig,
         ...dustWalletConfig,
-        unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-        shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
       },
       shielded: () => restoredShielded,
       unshielded: () => restoredUnshielded,
@@ -285,8 +282,7 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
     configuration: {
       ...walletConfig,
       ...fixture.getDustWalletConfig(),
-      unshieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<UnshieldedTransactionHistoryEntry>(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
@@ -416,7 +412,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
   rx.firstValueFrom(
     wallet.state().pipe(
       rx.mergeMap(async (state) => {
-        const txInHistory = await state.unshielded.transactionHistory.get(finalizedTx.transactionHash());
+        const txInHistory = await wallet.unshielded.queryTxHistoryByHash(finalizedTx.transactionHash());
 
         return {
           state,

@@ -35,7 +35,6 @@ import os from 'node:os';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
-import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 vi.setConfig({ testTimeout: 600_000, hookTimeout: 120_000 });
 
@@ -70,7 +69,7 @@ describe('Wallet Sync', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   });
 

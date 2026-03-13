@@ -23,7 +23,6 @@ import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midn
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
-import { ShieldedTransactionHistoryEntry } from '@midnight-ntwrk/wallet-sdk-shielded';
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -239,7 +238,7 @@ export class TestContainersFixture {
       provingServerUrl: new URL(this.getProverUri()),
       relayURL: new URL(this.getNodeUri()),
       networkId: this.getNetworkId(),
-      shieldedTxHistoryStorage: new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
     };
   }
 

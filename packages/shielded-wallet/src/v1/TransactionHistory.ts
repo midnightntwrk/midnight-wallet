@@ -12,7 +12,7 @@
 // limitations under the License.
 import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Duration, Array as EArray, Effect, Either, Schedule, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, Either, Option, Schedule, Schema, Stream } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -35,7 +35,7 @@ export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
 
 export type DefaultTransactionHistoryConfiguration = {
-  shieldedTxHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>;
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
 };
 
@@ -48,15 +48,34 @@ export type TransactionMetaData = {
 };
 
 export type TransactionHistoryService = {
-  create(changes: ledger.ZswapStateChanges, metadata: TransactionMetaData, protocolVersion: number): Promise<void>;
-  get(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
-  getAll(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
-  delete(hash: TransactionHistoryStorage.TransactionHash): Promise<ShieldedTransactionHistoryEntry | undefined>;
-  serialize(): Promise<SerializedShieldedTransactionHistory>;
+  create(
+    changes: ledger.ZswapStateChanges,
+    metadata: TransactionMetaData,
+    protocolVersion: number,
+  ): Effect.Effect<void, TransactionHistoryError>;
+  get(
+    hash: TransactionHistoryStorage.TransactionHash,
+  ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
+  getAll(): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError>;
+  delete(
+    hash: TransactionHistoryStorage.TransactionHash,
+  ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
+  serialize(): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError>;
   getMetaData(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
 };
+
+const isShieldedEntry = Schema.is(ShieldedTransactionHistoryEntrySchema);
+
+const asShieldedEntry = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+): Effect.Effect<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
+  isShieldedEntry(entry)
+    ? Effect.succeed(entry)
+    : Effect.fail(
+        new TransactionHistoryError({ message: `Corrupted history entry found in storage for hash: ${entry.hash}` }),
+      );
 
 const convertUpdateToEntry = (
   changes: ledger.ZswapStateChanges,
@@ -86,34 +105,76 @@ export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
 ): TransactionHistoryService => {
-  const { shieldedTxHistoryStorage } = config;
+  const txHistoryStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
+    'shielded',
+    config.txHistoryStorage,
+  );
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
 
   return {
-    create: async (
+    create: (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
-    ): Promise<void> => {
-      const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
-      await shieldedTxHistoryStorage.create(entry, mergeShieldedEntries);
-    },
-    get: async (
+    ): Effect.Effect<void, TransactionHistoryError> =>
+      Effect.gen(function* () {
+        const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
+        const existingRaw = yield* Effect.tryPromise({
+          try: () => txHistoryStorage.get(entry.hash),
+          catch: (e) =>
+            new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
+        });
+        const toStore = existingRaw ? mergeShieldedEntries(yield* asShieldedEntry(existingRaw), entry) : entry;
+        yield* Effect.tryPromise({
+          try: () => txHistoryStorage.create(toStore),
+          catch: (e) =>
+            new TransactionHistoryError({ message: `Failed to create history entry for ${entry.hash}`, cause: e }),
+        });
+      }),
+
+    get: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
-      return shieldedTxHistoryStorage.get(hash);
-    },
-    getAll: (): AsyncIterableIterator<ShieldedTransactionHistoryEntry> => {
-      return shieldedTxHistoryStorage.getAll();
-    },
-    delete: async (
+    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.get(hash),
+        catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        ),
+      ),
+
+    getAll: (): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
+      Stream.fromAsyncIterable(
+        txHistoryStorage.getAll(),
+        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
+      ).pipe(Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry)))),
+
+    delete: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
-      return shieldedTxHistoryStorage.delete(hash);
-    },
-    serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
-      return await serializeShieldedTransactionHistoryStorage(shieldedTxHistoryStorage);
-    },
+    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.delete(hash),
+        catch: (e) => new TransactionHistoryError({ message: `Failed to delete history entry for ${hash}`, cause: e }),
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        ),
+      ),
+
+    serialize: (): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError> =>
+      Stream.fromAsyncIterable(
+        txHistoryStorage.getAll(),
+        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
+      ).pipe(
+        Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry))),
+        Stream.runCollect,
+        Effect.map((chunk) => {
+          const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
+          return JSON.stringify(encoder(Array.from(chunk)));
+        }),
+      ),
+
     getMetaData: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
@@ -134,46 +195,87 @@ export const makeDefaultTransactionHistoryService = (
         Effect.provide(queryClientLayer),
         Effect.scoped,
         Effect.retry(Schedule.exponential(Duration.seconds(1)).pipe(Schedule.compose(Schedule.recurs(3)))),
-        Effect.catchAll((cause) =>
-          Effect.fail(
+        Effect.mapError(
+          (cause) =>
             new TransactionHistoryError({
               message: `Failed to fetch transaction metadata for ${hash}`,
               cause,
             }),
-          ),
         ),
       ),
   };
 };
 
 export const makeSimulatorTransactionHistoryService = (): TransactionHistoryService => {
-  const txHistoryStorage = new InMemoryTransactionHistoryStorage<ShieldedTransactionHistoryEntry>();
+  const txHistoryStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
+    'shielded',
+    new InMemoryTransactionHistoryStorage(),
+  );
 
   return {
-    create: async (
+    create: (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
-    ): Promise<void> => {
-      const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
-      await txHistoryStorage.create(entry, mergeShieldedEntries);
-    },
-    get: async (
+    ): Effect.Effect<void, TransactionHistoryError> =>
+      Effect.gen(function* () {
+        const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
+        const existingRaw = yield* Effect.tryPromise({
+          try: () => txHistoryStorage.get(entry.hash),
+          catch: (e) =>
+            new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
+        });
+        const toStore = existingRaw ? mergeShieldedEntries(yield* asShieldedEntry(existingRaw), entry) : entry;
+        yield* Effect.tryPromise({
+          try: () => txHistoryStorage.create(toStore),
+          catch: (e) =>
+            new TransactionHistoryError({ message: `Failed to create history entry for ${entry.hash}`, cause: e }),
+        });
+      }),
+
+    get: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
-      return txHistoryStorage.get(hash);
-    },
-    getAll: (): AsyncIterableIterator<ShieldedTransactionHistoryEntry> => {
-      return txHistoryStorage.getAll();
-    },
-    delete: async (
+    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.get(hash),
+        catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        ),
+      ),
+
+    getAll: (): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
+      Stream.fromAsyncIterable(
+        txHistoryStorage.getAll(),
+        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
+      ).pipe(Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry)))),
+
+    delete: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Promise<ShieldedTransactionHistoryEntry | undefined> => {
-      return txHistoryStorage.delete(hash);
-    },
-    serialize: async (): Promise<SerializedShieldedTransactionHistory> => {
-      return await serializeShieldedTransactionHistoryStorage(txHistoryStorage);
-    },
+    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.delete(hash),
+        catch: (e) => new TransactionHistoryError({ message: `Failed to delete history entry for ${hash}`, cause: e }),
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        ),
+      ),
+
+    serialize: (): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError> =>
+      Stream.fromAsyncIterable(
+        txHistoryStorage.getAll(),
+        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
+      ).pipe(
+        Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry))),
+        Stream.runCollect,
+        Effect.map((chunk) => {
+          const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
+          return JSON.stringify(encoder(Array.from(chunk)));
+        }),
+      ),
+
     getMetaData: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
@@ -188,37 +290,29 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
 const ShieldedTransactionHistoryEntriesSchema = Schema.Array(ShieldedTransactionHistoryEntrySchema);
 export type SerializedShieldedTransactionHistory = string;
 
-const serializeShieldedTransactionHistoryStorage = async (
-  storage: TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>,
-): Promise<SerializedShieldedTransactionHistory> => {
-  const entries: ShieldedTransactionHistoryEntry[] = [];
-
-  for await (const entry of storage.getAll()) {
-    entries.push(entry);
-  }
-
-  const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
-  const encoded = encoder(entries);
-
-  return JSON.stringify(encoded);
-};
-
-export const restoreShieldedTransactionHistoryStorage = async (
+export const restoreShieldedTransactionHistoryStorage = (
   serializedHistory: SerializedShieldedTransactionHistory,
-  makeStorage: () => TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>,
-): Promise<TransactionHistoryStorage.TransactionHistoryStorage<ShieldedTransactionHistoryEntry>> => {
-  const decoder = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema);
+  storage: TransactionHistoryStorage.TransactionHistoryStorage,
+): Promise<void> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage('shielded', storage);
+      const result = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema)(
+        JSON.parse(serializedHistory) as unknown,
+      );
 
-  const parsed = JSON.parse(serializedHistory) as unknown;
-  const entries = Either.getOrElse(decoder(parsed), (error) => {
-    throw new Error(`Failed to decode shielded transaction history: ${error.message}`);
-  });
+      if (Either.isLeft(result)) {
+        return yield* new TransactionHistoryError({
+          message: `Failed to decode shielded transaction history: ${result.left.message}`,
+        });
+      }
 
-  const storage = makeStorage();
-
-  for (const entry of entries) {
-    await storage.create(entry);
-  }
-
-  return storage;
-};
+      for (const entry of result.right) {
+        yield* Effect.tryPromise({
+          try: () => namespacedStorage.create(entry),
+          catch: (e) =>
+            new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
+        });
+      }
+    }),
+  );

@@ -16,22 +16,20 @@ import {
   type TransactionHistoryEntryWithHash,
 } from './TransactionHistoryStorage.js';
 
-export class NoOpTransactionHistoryStorage<
-  T extends TransactionHistoryEntryWithHash,
-> implements TransactionHistoryStorage<T> {
-  create(_entry: T): Promise<void> {
+export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
+  create(_entry: TransactionHistoryEntryWithHash): Promise<void> {
     return Promise.resolve();
   }
 
-  delete(_hash: TransactionHash): Promise<T | undefined> {
+  delete(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     return Promise.resolve(undefined);
   }
 
-  async *getAll(): AsyncIterableIterator<T> {
+  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
     return Promise.resolve(yield* []);
   }
 
-  get(_hash: TransactionHash): Promise<T | undefined> {
+  get(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
     return Promise.resolve(undefined);
   }
 }
