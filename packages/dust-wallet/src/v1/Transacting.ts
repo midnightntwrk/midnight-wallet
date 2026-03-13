@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
+import { Effect, Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Option } from 'effect';
 import {
   DustActions,
   DustRegistration,
@@ -33,13 +33,23 @@ import {
   nativeToken,
 } from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { OtherWalletError, TransactingError, WalletError } from './WalletError.js';
+import { OtherWalletError, TransactingError, WalletError, InsufficientFundsError } from './WalletError.js';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
 import { AnyTransaction, Dust, NetworkId, TotalCostParameters } from './types/index.js';
-import { CoinsAndBalancesCapability, CoinSelection, UtxoWithFullDustDetails } from './CoinsAndBalances.js';
+import {
+  CoinsAndBalancesCapability,
+  CoinSelection,
+  CoinWithValue,
+  UtxoWithFullDustDetails,
+} from './CoinsAndBalances.js';
 import { KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
+import {
+  getBalanceRecipe,
+  Imbalances as CapImbalances,
+  InsufficientFundsError as BalancingInsufficientFundsError,
+} from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 // This interface should abstract over the transaction types used
 // It does not do so now for historical reasons
@@ -60,6 +70,15 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
   ): Either.Either<UnprovenTransaction, WalletError>;
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
+
+  estimateFee(
+    secretKey: TSecrets,
+    state: TState,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl: Date,
+    currentTime: Date,
+    ledgerParams: LedgerParameters,
+  ): Either.Either<bigint, WalletError>;
 
   balanceTransactions(
     secretKey: TSecrets,
@@ -109,6 +128,22 @@ export const makeSimulatorTransactingCapability = (
     () => getContext().keysCapability,
   );
 };
+
+/**
+ * Distributes the fee across multiple inputs, draining smaller inputs first
+ * when the fee exceeds any single input's value.
+ */
+const distributeFeeAcrossInputs = <T extends { value: bigint }>(
+  inputs: ReadonlyArray<T>,
+  fee: bigint,
+): ReadonlyArray<T> =>
+  inputs.reduce<{ result: T[]; remaining: bigint }>(
+    ({ result, remaining }, input) => {
+      const deduction = remaining >= input.value ? input.value : remaining;
+      return { result: [...result, { ...input, value: deduction }], remaining: remaining - deduction };
+    },
+    { result: [], remaining: fee },
+  ).result;
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
@@ -314,16 +349,151 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
     return (
-      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) + this.costParams.additionalFeeOverhead
+      transaction.feesWithMargin(ledgerParams, this.costParams.feeBlocksMargin) +
+      (this.costParams.additionalFeeOverhead ?? 0n)
     );
   }
 
+  dryRunFee(
+    recipeInputs: ReadonlyArray<CoinWithValue<Dust>>,
+    transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+    secretKey: DustSecretKey,
+    state: CoreWallet,
+    ttl: Date,
+    currentTime: Date,
+    ledgerParams: LedgerParameters,
+  ): bigint {
+    const network = this.networkId;
+
+    // Create a balancing tx from recipe inputs without persisting state changes
+    const [spends] = CoreWallet.spendCoins(state, secretKey, recipeInputs, currentTime);
+
+    const intent = Intent.new(ttl);
+    intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+      SignatureMarker.signature,
+      ProofMarker.preProof,
+      currentTime,
+      [...spends],
+      [],
+    );
+
+    const balancingTx = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
+
+    // Erase proofs on everything and merge
+    const erasedBalancing = balancingTx.eraseProofs();
+    const mergedTx = transactions.reduce((acc, tx) => acc.merge(tx.eraseProofs()), erasedBalancing);
+
+    return this.calculateFee(mergedTx, ledgerParams);
+  }
+
   static feeImbalance(transaction: AnyTransaction, totalFee: bigint): bigint {
-    const dustImbalance = transaction
-      .imbalances(0, totalFee)
-      .entries()
-      .find(([tt, _]) => tt.tag === 'dust');
-    return dustImbalance ? -dustImbalance[1] : totalFee;
+    const [_, imbalance] =
+      transaction
+        .imbalances(0, totalFee)
+        .entries()
+        .find(([tt, _]) => tt.tag === 'dust') ?? [];
+
+    return imbalance ?? 0n;
+  }
+
+  computeBalancingRecipe(
+    secretKey: DustSecretKey,
+    state: CoreWallet,
+    transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+    ttl: Date,
+    currentTime: Date,
+    ledgerParams: LedgerParameters,
+  ): Either.Either<{ fee: bigint; recipeInputs: ReadonlyArray<CoinWithValue<Dust>> }, WalletError> {
+    const initialFees = transactions.reduce(
+      (total, transaction) =>
+        total +
+        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
+      0n,
+    );
+
+    const dust = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
+
+    return pipe(
+      Effect.iterate(
+        { currentFee: initialFees, recipeInputs: [] as ReadonlyArray<CoinWithValue<Dust>>, converged: false } as {
+          currentFee: bigint;
+          recipeInputs: ReadonlyArray<CoinWithValue<Dust>>;
+          converged: boolean;
+        },
+        {
+          while: (s) => !s.converged,
+          body: ({ currentFee }) =>
+            Effect.try({
+              try: () => {
+                const recipe = getBalanceRecipe({
+                  coins: dust.map((coin) => ({
+                    type: 'dust',
+                    value: coin.value,
+                    token: coin.token,
+                  })),
+                  initialImbalances: CapImbalances.fromEntry('dust', currentFee),
+                  feeTokenType: 'dust',
+                  transactionCostModel: {
+                    inputFeeOverhead: 0n,
+                    outputFeeOverhead: 0n,
+                  },
+                  createOutput: (coin) => coin,
+                  isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+                });
+
+                const recipeInputs = recipe.inputs.map((input) => ({ token: input.token, value: input.value }));
+
+                const newFee = this.dryRunFee(
+                  recipeInputs,
+                  transactions,
+                  secretKey,
+                  state,
+                  ttl,
+                  currentTime,
+                  ledgerParams,
+                );
+
+                const recipeAmountCoverage = recipeInputs.reduce((sum, input) => sum + input.value, 0n);
+
+                return { currentFee: newFee, recipeInputs, converged: newFee <= recipeAmountCoverage };
+              },
+              catch: (err) => {
+                if (err instanceof BalancingInsufficientFundsError) {
+                  return new InsufficientFundsError({
+                    message: 'Insufficient funds',
+                    tokenType: err.tokenType,
+                  });
+                } else {
+                  return new OtherWalletError({
+                    message: 'Balancing failed',
+                    cause: err,
+                  });
+                }
+              },
+            }),
+        },
+      ),
+      Effect.either,
+      Effect.runSync,
+      Either.map(({ currentFee, recipeInputs }) => ({
+        fee: currentFee,
+        recipeInputs: distributeFeeAcrossInputs(recipeInputs, currentFee),
+      })),
+    );
+  }
+
+  estimateFee(
+    secretKey: DustSecretKey,
+    state: CoreWallet,
+    transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+    ttl: Date,
+    currentTime: Date,
+    ledgerParams: LedgerParameters,
+  ): Either.Either<bigint, WalletError> {
+    return pipe(
+      this.computeBalancingRecipe(secretKey, state, transactions, ttl, currentTime, ledgerParams),
+      Either.map(({ fee }) => fee),
+    );
   }
 
   balanceTransactions(
@@ -334,52 +504,29 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     currentTime: Date,
     ledgerParams: LedgerParameters,
   ): Either.Either<[UnprovenTransaction, CoreWallet], WalletError> {
-    const network = this.networkId;
-    const feeLeft = transactions.reduce(
-      (total, transaction) =>
-        total +
-        TransactingCapabilityImplementation.feeImbalance(transaction, this.calculateFee(transaction, ledgerParams)),
-      0n,
+    const networkId = this.networkId;
+
+    return pipe(
+      this.computeBalancingRecipe(secretKey, state, transactions, ttl, currentTime, ledgerParams),
+      Either.flatMap(({ recipeInputs }) => {
+        return LedgerOps.ledgerTry(() => {
+          const intent = Intent.new(ttl);
+          const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, recipeInputs, currentTime);
+
+          intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
+            SignatureMarker.signature,
+            ProofMarker.preProof,
+            currentTime,
+            [...spends],
+            [],
+          );
+
+          const feeTransaction = Transaction.fromPartsRandomized(networkId, undefined, undefined, intent);
+
+          return [feeTransaction, updatedState];
+        });
+      }),
     );
-
-    const dust = this.getCoins().getAvailableCoinsWithGeneratedDust(state, currentTime);
-    const selectedCoins = this.getCoinSelection()(dust, feeLeft);
-    if (!selectedCoins.length) {
-      return Either.left(new TransactingError({ message: 'No dust found in the wallet state' }));
-    }
-
-    const totalFeeInSelected = selectedCoins.reduce((total, { value }) => total + value, 0n);
-    const feeDiff = totalFeeInSelected - feeLeft;
-    if (feeDiff < 0n) {
-      return Either.left(new TransactingError({ message: 'Not enough dust generated to pay the fee' }));
-    }
-
-    // reduce the largest token's value by `feeDiff`
-    const coinsWithFeeToTake = selectedCoins.toSorted((a, b) => Number(b.value - a.value));
-    if (feeDiff > 0n) {
-      const highestByValue = coinsWithFeeToTake[0];
-      coinsWithFeeToTake[0] = {
-        value: highestByValue.value - feeDiff,
-        token: highestByValue.token,
-      };
-    }
-
-    return LedgerOps.ledgerTry(() => {
-      const intent = Intent.new(ttl);
-      const [spends, updatedState] = CoreWallet.spendCoins(state, secretKey, coinsWithFeeToTake, currentTime);
-
-      intent.dustActions = new DustActions<SignatureEnabled, PreProof>(
-        SignatureMarker.signature,
-        ProofMarker.preProof,
-        currentTime,
-        [...spends],
-        [],
-      );
-
-      const feeTransaction = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
-
-      return [feeTransaction, updatedState];
-    });
   }
 
   revertTransaction(

@@ -125,6 +125,13 @@ export type DustWalletAPI = {
 
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
+  estimateFee(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl?: Date,
+    currentTime?: Date,
+  ): Promise<bigint>;
+
   balanceTransactions(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,
@@ -224,6 +231,20 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.calculateFee(transactions),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    estimateFee(
+      secretKey: DustSecretKey,
+      transactions: ReadonlyArray<AnyTransaction>,
+      ttl?: Date,
+      currentTime?: Date,
+    ): Promise<bigint> {
+      const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
         })
         .pipe(Effect.runPromise);
     }
