@@ -58,7 +58,7 @@ export type ShieldedWalletServices = {
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-export class ShieldedWalletState<TSerialized = string> {
+export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> {
   static readonly mapState =
     <TSerialized = string>(variant: ShieldedWalletCapabilities<TSerialized> & ShieldedWalletServices) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized> => {
