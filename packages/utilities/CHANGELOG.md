@@ -1,5 +1,15 @@
 # @midnight-ntwrk/wallet-sdk-utilities
 
+## 1.1.0
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+### Patch Changes
+
+- ea55591: fix: move dev-only deps out of dependencies
+
 ## 1.0.1
 
 ### Patch Changes

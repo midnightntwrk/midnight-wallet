@@ -1,5 +1,20 @@
 # @midnight-ntwrk/wallet-sdk-capabilities
 
+## 3.2.0
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+### Patch Changes
+
+- Updated dependencies [ea55591]
+- Updated dependencies [aa7b1f4]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.2.0
+  - @midnight-ntwrk/wallet-sdk-node-client@1.1.0
+
 ## 3.1.0
 
 ### Minor Changes
