@@ -2797,12 +2797,11 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@midnight-ntwrk/dapp-connector-api@file:../../../midnight-dapp-connector-api::locator=%40midnight-ntwrk%2Fwallet-sdk-dapp-connector-reference%40workspace%3Apackages%2Fdapp-connector-reference":
-  version: 4.0.1
-  resolution: "@midnight-ntwrk/dapp-connector-api@file:../../../midnight-dapp-connector-api#../../../midnight-dapp-connector-api::hash=3f1aa9&locator=%40midnight-ntwrk%2Fwallet-sdk-dapp-connector-reference%40workspace%3Apackages%2Fdapp-connector-reference"
-  checksum: 10c0/4b79f84cc1d4e40a0cccb1970b98dd564466f0d78369b2244b946f5cc5a006922644c6efe44569e60d9aad14c2133e5d78441acd6416dbadd4d50a2bb80e2e74
+"@midnight-ntwrk/dapp-connector-api@portal:/home/akopec/mn/midnight-dapp-connector-api::locator=%40midnight-ntwrk%2Fwallet-sdk-monorepo%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/dapp-connector-api@portal:/home/akopec/mn/midnight-dapp-connector-api::locator=%40midnight-ntwrk%2Fwallet-sdk-monorepo%40workspace%3A."
   languageName: node
-  linkType: hard
+  linkType: soft
 
 "@midnight-ntwrk/ledger-v7@npm:^7.0.2":
   version: 7.0.2
@@ -2905,7 +2904,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-dapp-connector-reference@workspace:packages/dapp-connector-reference"
   dependencies:
-    "@midnight-ntwrk/dapp-connector-api": ../../../midnight-dapp-connector-api
+    "@midnight-ntwrk/dapp-connector-api": "npm:^4.0.1"
     "@midnight-ntwrk/wallet-sdk-facade": "workspace:*"
     "@types/semver": "npm:^7.7.1"
     "@vitest/coverage-v8": "npm:^4.0.0"

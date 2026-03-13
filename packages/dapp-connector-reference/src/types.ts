@@ -1,6 +1,161 @@
 import type { Configuration, TxStatus } from '@midnight-ntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
 import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
+
+// =============================================================================
+// Transaction Recipe Types
+// =============================================================================
+// These types mirror the recipe types from @midnight-ntwrk/wallet-sdk-facade.
+// The WalletFacade uses a recipe-based workflow for building transactions:
+// 1. transferTransaction/initSwap → UnprovenTransactionRecipe
+// 2. signRecipe → signed recipe
+// 3. finalizeRecipe → FinalizedTransaction
+// =============================================================================
+
+/**
+ * An unbound transaction (proven but not yet cryptographically bound).
+ */
+export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+
+/**
+ * Recipe containing a finalized transaction from external source.
+ */
+export type FinalizedTransactionRecipe = {
+  type: 'FINALIZED_TRANSACTION';
+  originalTransaction: ledger.FinalizedTransaction;
+  balancingTransaction: ledger.UnprovenTransaction;
+};
+
+/**
+ * Recipe containing an unbound transaction (proven, ready for binding).
+ */
+export type UnboundTransactionRecipe = {
+  type: 'UNBOUND_TRANSACTION';
+  baseTransaction: UnboundTransaction;
+  balancingTransaction?: ledger.UnprovenTransaction | undefined;
+};
+
+/**
+ * Recipe containing an unproven transaction.
+ */
+export type UnprovenTransactionRecipe = {
+  type: 'UNPROVEN_TRANSACTION';
+  transaction: ledger.UnprovenTransaction;
+};
+
+/**
+ * Union of all recipe types for the balancing workflow.
+ */
+export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
+
+// =============================================================================
+// Token Transfer Types
+// =============================================================================
+
+/**
+ * A single token transfer to a recipient address.
+ */
+export interface TokenTransfer<AddressType extends ShieldedAddress | UnshieldedAddress> {
+  type: ledger.RawTokenType;
+  receiverAddress: AddressType;
+  amount: bigint;
+}
+
+/**
+ * Shielded token transfer specification.
+ */
+export type ShieldedTokenTransfer = {
+  type: 'shielded';
+  outputs: TokenTransfer<ShieldedAddress>[];
+};
+
+/**
+ * Unshielded token transfer specification.
+ */
+export type UnshieldedTokenTransfer = {
+  type: 'unshielded';
+  outputs: TokenTransfer<UnshieldedAddress>[];
+};
+
+/**
+ * Combined transfer supporting both shielded and unshielded outputs.
+ */
+export type CombinedTokenTransfer = ShieldedTokenTransfer | UnshieldedTokenTransfer;
+
+/**
+ * Inputs for a swap transaction, specifying amounts by token type.
+ */
+export type CombinedSwapInputs = {
+  shielded?: Record<ledger.RawTokenType, bigint>;
+  unshielded?: Record<ledger.RawTokenType, bigint>;
+};
+
+/**
+ * Outputs for a swap transaction.
+ */
+export type CombinedSwapOutputs = CombinedTokenTransfer;
+
+/**
+ * Secret keys required for transaction building.
+ */
+export interface TransactionSecretKeys {
+  shieldedSecretKeys: ledger.ZswapSecretKeys;
+  dustSecretKey: ledger.DustSecretKey;
+}
+
+/**
+ * Keystore interface providing all keys needed for wallet operations.
+ *
+ * This abstraction unifies access to:
+ * - Shielded secret keys (for ZK proof generation)
+ * - Dust secret key (for fee payment)
+ * - Unshielded signing (for public ledger transactions)
+ *
+ * Implementations may derive keys from HD wallets, hardware wallets,
+ * or other secure key storage mechanisms.
+ */
+export interface WalletKeystore {
+  /**
+   * Get shielded wallet secret keys for ZK proof generation.
+   * These keys are used to create and spend shielded coins.
+   */
+  getShieldedSecretKeys(): ledger.ZswapSecretKeys;
+
+  /**
+   * Get dust wallet secret key for fee payment.
+   * This key is used to spend dust coins for transaction fees.
+   */
+  getDustSecretKey(): ledger.DustSecretKey;
+
+  /**
+   * Sign data with the unshielded wallet key.
+   * Used for signing unshielded transaction intents.
+   */
+  signData(data: Uint8Array): ledger.Signature;
+}
+
+/**
+ * Options for transfer and swap transactions.
+ */
+export interface TransactionOptions {
+  /** Time-to-live for the transaction */
+  ttl: Date;
+  /** Whether to pay fees from dust wallet (default: true for transfers, false for swaps) */
+  payFees?: boolean;
+}
+
+/**
+ * Extended options for swap transactions with intent ID support.
+ */
+export interface SwapTransactionOptions extends TransactionOptions {
+  /**
+   * Segment ID for the intent.
+   * If not specified, a random segment ID is used.
+   * Must be > 0 (segment 0 is reserved for guaranteed section).
+   */
+  intentId?: number;
+}
 
 /**
  * Minimal shielded wallet state interface required by ConnectedAPI.
@@ -76,11 +231,70 @@ export interface WalletFacadeView {
   readonly shielded: ShieldedWalletView;
   readonly unshielded: UnshieldedWalletView;
   readonly dust: DustWalletView;
+
   /**
    * Transaction history service. Optional because the current WalletFacade
    * doesn't provide this API (see critical gaps documentation below).
    */
   readonly transactionHistory?: TransactionHistoryServiceView;
+
+  // ===========================================================================
+  // Transaction Recipe Methods
+  // ===========================================================================
+  // These methods implement the recipe-based workflow for building transactions.
+  // The workflow is: transferTransaction/initSwap → signRecipe → finalizeRecipe
+  //
+  // NOTE: The current WalletFacade's initSwap doesn't support intentId option.
+  // When implementing, random segment IDs are used. To support specific segment
+  // IDs, the WalletFacade would need to be extended.
+  // ===========================================================================
+
+  /**
+   * Create a transfer transaction recipe.
+   *
+   * @param outputs - Token transfers to create
+   * @param secretKeys - Shielded and dust secret keys for signing
+   * @param options - Transaction options (TTL, payFees)
+   * @returns Unproven transaction recipe
+   */
+  transferTransaction(
+    outputs: CombinedTokenTransfer[],
+    secretKeys: TransactionSecretKeys,
+    options: TransactionOptions,
+  ): Promise<UnprovenTransactionRecipe>;
+
+  /**
+   * Create a swap (intent) transaction recipe.
+   *
+   * @param desiredInputs - Tokens the wallet will provide
+   * @param desiredOutputs - Tokens the wallet wants to receive
+   * @param secretKeys - Shielded and dust secret keys for signing
+   * @param options - Transaction options (TTL, payFees, intentId)
+   * @returns Unproven transaction recipe
+   */
+  initSwap(
+    desiredInputs: CombinedSwapInputs,
+    desiredOutputs: CombinedSwapOutputs[],
+    secretKeys: TransactionSecretKeys,
+    options: SwapTransactionOptions,
+  ): Promise<UnprovenTransactionRecipe>;
+
+  /**
+   * Sign a transaction recipe with the provided signing function.
+   *
+   * @param recipe - The recipe to sign
+   * @param signSegment - Function to sign intent data
+   * @returns Signed recipe
+   */
+  signRecipe(recipe: BalancingRecipe, signSegment: (data: Uint8Array) => ledger.Signature): Promise<BalancingRecipe>;
+
+  /**
+   * Finalize a recipe into a ready-to-submit transaction.
+   *
+   * @param recipe - The recipe to finalize
+   * @returns Finalized transaction
+   */
+  finalizeRecipe(recipe: BalancingRecipe): Promise<ledger.FinalizedTransaction>;
 }
 
 /**
