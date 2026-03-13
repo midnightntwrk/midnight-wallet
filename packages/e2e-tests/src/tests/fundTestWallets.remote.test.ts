@@ -158,7 +158,6 @@ describe('Set up test wallet', () => {
       const dustRegistrationTxid = await receiver.wallet.submitTransaction(finalizedDustTx);
       expect(dustRegistrationTxid).toBeDefined();
       logger.info(`Dust registration tx id: ${dustRegistrationTxid}`);
-      await utils.sleep(20);
     },
     syncTimeout,
   );
