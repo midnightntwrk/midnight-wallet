@@ -167,6 +167,33 @@ describe('Funded wallet', () => {
     timeout,
   );
 
+  test(
+    'Unshielded transaction history entries contain createdUtxos and spentUtxos',
+    async () => {
+      const state = await funded.wallet.waitForSyncedState();
+      const txHistory = await Array.fromAsync(state.unshielded.transactionHistory.getAll());
+      expect(txHistory.length).toBeGreaterThan(0);
+      for (const entry of txHistory) {
+        expect(entry).toHaveProperty('createdUtxos');
+        expect(entry).toHaveProperty('spentUtxos');
+        expect(Array.isArray(entry.createdUtxos)).toBe(true);
+        expect(Array.isArray(entry.spentUtxos)).toBe(true);
+        // Genesis funding transactions should have created UTXOs
+        for (const utxo of [...entry.createdUtxos, ...entry.spentUtxos]) {
+          expect(typeof utxo.value).toBe('bigint');
+          expect(typeof utxo.owner).toBe('string');
+          expect(typeof utxo.tokenType).toBe('string');
+          expect(typeof utxo.intentHash).toBe('string');
+          expect(typeof utxo.outputIndex).toBe('number');
+        }
+      }
+      // At least one entry should have createdUtxos (from genesis funding)
+      const entryWithCreated = txHistory.find((e) => e.createdUtxos.length > 0);
+      expect(entryWithCreated).toBeDefined();
+    },
+    timeout,
+  );
+
   // test(
   //   'Wallet has one tx in tx history',
   //   async () => {
