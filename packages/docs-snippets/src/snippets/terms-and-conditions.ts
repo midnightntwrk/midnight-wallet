@@ -10,8 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './Connect.js';
-export * from './Disconnect.js';
-export * from './BlockHash.js';
-export * from './FetchTermsAndConditions.js';
-export * from './TransactionStatus.js';
+import { type FetchTermsAndConditionsConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+
+const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
+const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;
+
+const configuration: FetchTermsAndConditionsConfiguration = {
+  indexerClientConnection: {
+    indexerHttpUrl: INDEXER_HTTP_URL,
+  },
+};
+
+const termsAndConditions = await WalletFacade.fetchTermsAndConditions(configuration);
+console.log('Terms and Conditions URL:', termsAndConditions.url);
+console.log('Terms and Conditions hash (SHA-256):', termsAndConditions.hash);

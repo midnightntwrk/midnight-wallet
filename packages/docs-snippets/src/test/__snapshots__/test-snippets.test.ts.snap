@@ -553,6 +553,14 @@ Does Bob have specific shielded coin after swap? true
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'terms-and-conditions' 1`] = `
+[
+  "Terms and Conditions URL: https://www.midnight.gd/global-terms-txt
+Terms and Conditions hash (SHA-256): ca85ed77bce68288e55300f006ccd5cce5d4940dc39fc41173a9c2ecd1eb616e
+",
+]
+`;
+
 exports[`Snippet outputs > with network > should output the correct result for 'unshielded-transfer' 1`] = `
 [
   "Unshielded transfer completed; night balance: 1000000n
