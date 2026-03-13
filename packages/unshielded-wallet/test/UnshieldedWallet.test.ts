@@ -96,8 +96,7 @@ describe('UnshieldedWallet', () => {
     const serializedTxHistory = await initialWallet.serializeTransactionHistory();
     await initialWallet.stop();
 
-    const restoredTxHistoryStorage = new InMemoryTransactionHistoryStorage();
-    await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory, restoredTxHistoryStorage);
+    const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
     const restoredConfig = createWalletConfig(indexerPort, { txHistoryStorage: restoredTxHistoryStorage });
 
     const restoredWallet = UnshieldedWallet(restoredConfig).restore(serializedState);

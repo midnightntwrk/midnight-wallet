@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Effect, Either, Option, Schema, Stream } from 'effect';
 import { UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -164,13 +164,13 @@ export type SerializedUnshieldedTransactionHistory = string;
 
 export const restoreUnshieldedTransactionHistoryStorage = (
   serializedHistory: SerializedUnshieldedTransactionHistory,
-  storage: TransactionHistoryStorage.TransactionHistoryStorage,
-): Promise<void> =>
+): Promise<TransactionHistoryStorage.TransactionHistoryStorage> =>
   Effect.runPromise(
     Effect.gen(function* () {
+      const txHistoryStorage = new InMemoryTransactionHistoryStorage();
       const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
         'unshielded',
-        storage,
+        txHistoryStorage,
       );
       const result = Schema.decodeUnknownEither(UnshieldedTransactionHistoryEntriesSchema)(
         JSON.parse(serializedHistory) as unknown,
@@ -189,5 +189,7 @@ export const restoreUnshieldedTransactionHistoryStorage = (
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
         });
       }
+
+      return txHistoryStorage;
     }),
   );

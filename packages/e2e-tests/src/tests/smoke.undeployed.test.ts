@@ -179,6 +179,7 @@ describe('Smoke tests', () => {
   test(
     'Shielded wallet state can be serialized and then restored',
     async () => {
+      await funded.wallet.waitForSyncedState();
       const serializedState = await funded.wallet.shielded.serializeState();
       const stateObject = JSON.parse(serializedState);
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
@@ -188,11 +189,10 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await funded.wallet.shielded.serializeTransactionHistory();
 
       logger.info('Restoring wallet from serialized state...');
-      const restoredTxHistoryStorage = new InMemoryTransactionHistoryStorage();
-      await restoreShieldedTransactionHistoryStorage(serializedTxHistory, restoredTxHistoryStorage);
+      const txHistoryStorage = await restoreShieldedTransactionHistoryStorage(serializedTxHistory);
       const RestoredWallet = ShieldedWallet({
         ...fixture.getWalletConfig(),
-        txHistoryStorage: restoredTxHistoryStorage,
+        txHistoryStorage,
       });
       const restoredWallet = RestoredWallet.restore(serializedState);
       await restoredWallet.start(funded.shieldedSecretKeys);
@@ -229,15 +229,14 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await initialWallet.serializeTransactionHistory();
       await initialWallet.stop();
 
-      const restoredTxHistoryStorage = new InMemoryTransactionHistoryStorage();
-      await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory, restoredTxHistoryStorage);
+      const txHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: restoredTxHistoryStorage,
+        txHistoryStorage,
       }).restore(serializedState);
 
       await restoredWallet.start();

@@ -292,11 +292,14 @@ export type SerializedShieldedTransactionHistory = string;
 
 export const restoreShieldedTransactionHistoryStorage = (
   serializedHistory: SerializedShieldedTransactionHistory,
-  storage: TransactionHistoryStorage.TransactionHistoryStorage,
-): Promise<void> =>
+): Promise<TransactionHistoryStorage.TransactionHistoryStorage> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage('shielded', storage);
+      const txHistoryStorage = new InMemoryTransactionHistoryStorage();
+      const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
+        'shielded',
+        txHistoryStorage,
+      );
       const result = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema)(
         JSON.parse(serializedHistory) as unknown,
       );
@@ -314,5 +317,7 @@ export const restoreShieldedTransactionHistoryStorage = (
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
         });
       }
+
+      return txHistoryStorage;
     }),
   );
