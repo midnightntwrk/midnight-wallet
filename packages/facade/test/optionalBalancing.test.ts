@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -91,15 +91,14 @@ describe('Optional Balancing', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
-        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
+        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql/ws`,
       },
       relayURL: new URL(
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
       costParameters: {
-        additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),

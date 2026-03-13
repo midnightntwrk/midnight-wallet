@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Either, pipe, Array as Arr } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, WalletError } from './WalletError.js';
 
 /**

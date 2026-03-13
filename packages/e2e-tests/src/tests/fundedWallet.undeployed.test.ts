@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';

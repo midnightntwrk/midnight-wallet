@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
 import { InvalidCoinHashesError, WalletError } from './WalletError.js';
@@ -203,9 +203,11 @@ export const CoreWallet = {
   /* not implemented until this is done https://shielded.atlassian.net/browse/PM-19678 */
   revertTransaction<TTx extends ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>>(
     wallet: CoreWallet,
-    _tx: TTx,
+    tx: TTx,
   ): CoreWallet {
-    return wallet;
+    const newState = wallet.state.revertTransaction(tx);
+
+    return { ...wallet, state: newState };
   },
 
   // TODO: Remove after tx history is implemented

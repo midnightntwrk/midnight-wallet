@@ -61,7 +61,7 @@ describe('ZSwap events subscription', () => {
 
           expect(events).toHaveLength(2);
         }).pipe(
-          Effect.provide(WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v3/graphql/ws` })),
+          Effect.provide(WsSubscriptionClient.layer({ url: `ws://127.0.0.1:${getIndexerPort()}/api/v4/graphql/ws` })),
           Effect.scoped,
           Effect.runPromise,
         );

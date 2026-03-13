@@ -18,7 +18,7 @@ import {
   type SignatureVerifyingKey,
   type FinalizedTransaction,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { OtherWalletError, WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -210,6 +210,30 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             this.#v1Context.transactingCapability.calculateFee(transaction, blockData.ledgerParameters),
           ),
           ArrayOps.sumBigInt,
+        ),
+      ),
+    );
+  }
+
+  estimateFee(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl: Date,
+    currentTime?: Date,
+  ): Effect.Effect<bigint, WalletError> {
+    return pipe(
+      Effect.all([SubscriptionRef.get(this.#context.stateRef), this.#v1Context.syncService.blockData()]),
+      Effect.flatMap(([state, blockData]) =>
+        pipe(
+          this.#v1Context.transactingCapability.estimateFee(
+            secretKey,
+            state,
+            transactions,
+            ttl,
+            currentTime ?? blockData.timestamp,
+            blockData.ledgerParameters,
+          ),
+          EitherOps.toEffect,
         ),
       ),
     );

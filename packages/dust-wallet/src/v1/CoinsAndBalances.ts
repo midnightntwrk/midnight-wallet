@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
@@ -33,25 +33,10 @@ export type UtxoWithFullDustDetails = Readonly<{
   dust: DustGenerationDetails;
 }>;
 
-export type CoinSelection<TInput> = (
-  coins: readonly CoinWithValue<TInput>[],
-  amountNeeded: Balance,
-) => CoinWithValue<TInput>[];
+export type CoinSelection<TInput> = (coins: readonly CoinWithValue<TInput>[]) => CoinWithValue<TInput> | undefined;
 
-export const chooseCoin = <TInput>(
-  coins: readonly CoinWithValue<TInput>[],
-  amountNeeded: Balance,
-): CoinWithValue<TInput>[] => {
-  let sum = 0n;
-  const sorted = coins.toSorted((a, b) => Number(a.value - b.value));
-  const result = [];
-  for (const coin of sorted) {
-    sum += coin.value;
-    result.push(coin);
-    if (sum >= amountNeeded) break;
-  }
-  return result;
-};
+export const chooseCoin = <TInput>(coins: readonly CoinWithValue<TInput>[]): CoinWithValue<TInput> | undefined =>
+  coins.toSorted((a, b) => Number(a.value - b.value)).at(0);
 
 export type CoinsAndBalancesCapability<TState> = {
   getWalletBalance(state: TState, time: Date): Balance;

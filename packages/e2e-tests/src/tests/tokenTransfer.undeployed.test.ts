@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as rx from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
@@ -378,7 +378,7 @@ describe('Token transfer', () => {
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
+      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -475,7 +475,7 @@ describe('Token transfer', () => {
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
+      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
       // await utils.waitForFacadePending(fundedFacade);

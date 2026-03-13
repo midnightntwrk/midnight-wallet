@@ -19,7 +19,7 @@ import {
   Transaction,
   UnshieldedOffer,
   type UserAddress,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -81,7 +81,6 @@ type RunningWallet = RunningV1Variant<string, SimulatorSyncUpdate, ProofErasedTr
 
 describe('DustWallet', () => {
   const costParameters = {
-    additionalFeeOverhead: 300_000_000_000_000n,
     feeBlocksMargin: 5,
   };
   const dustParameters = LedgerParameters.initialParameters().dust;
@@ -248,7 +247,7 @@ describe('DustWallet', () => {
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      expect(newWalletBalance).toBe(1_240_050_000_000_000n);
+      expect(newWalletBalance).toBe(2_023_348_759_707_626n);
     }).pipe(Effect.runPromise);
   });
 
@@ -523,13 +522,14 @@ describe('DustWallet', () => {
 
       walletState = yield* SubscriptionRef.get(stateRef);
 
-      // capture fees
-      const totalFee = yield* wallet.calculateFee([transferTransaction]);
+      const totalFee = yield* wallet.estimateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
+
+      expect(totalFee).toBeGreaterThan(0n);
+
       const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(
         walletState,
         getCurrentTime(simulatorState),
       );
-      expect(totalFee).toBeGreaterThan(0n);
 
       // cover fees with dust
       const balancingTransaction = yield* wallet.balanceTransactions(
@@ -543,8 +543,10 @@ describe('DustWallet', () => {
 
       const provenTransaction = yield* provingService.prove(balancedTransaction);
 
-      // validate fee imbalance
-      expect(Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee)).toBe(0n);
+      // validate fee imbalance, it can be >= 0n because the coin selected may be of higher value than the total fee
+      expect(
+        Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee),
+      ).toBeGreaterThanOrEqual(0n);
 
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       yield* waitForTx(stateRef, 11);
@@ -776,10 +778,10 @@ describe('DustWallet', () => {
           [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
           [],
         );
-        return Transaction.fromParts(NETWORK, undefined, undefined, intent);
+        return Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
       };
 
-      const transferTxs = Array.from({ length: 10 }, () => makeTransferTx(nightTokens[0]));
+      const transferTxs = Array.from({ length: 40 }, () => makeTransferTx(nightTokens[0]));
 
       const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
 

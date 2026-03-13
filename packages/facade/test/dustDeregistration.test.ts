@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
@@ -68,8 +68,8 @@ describe('Dust Deregistration', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
-        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql/ws`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
+        indexerWsUrl: `ws://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql/ws`,
       },
       provingServerUrl: new URL(
         `http://localhost:${startedEnvironment.getContainer(`proof-server_${environmentId}`).getMappedPort(6300)}`,
@@ -79,7 +79,6 @@ describe('Dust Deregistration', () => {
       ),
       networkId: NetworkId.NetworkId.Undeployed,
       costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   type DefaultSubmissionConfiguration,
   makeDefaultSubmissionService,
@@ -601,8 +601,22 @@ export class WalletFacade {
     }
   }
 
+  /** Estimates the fee for the given transaction only. This lacks the fees of the balancing transaction. */
   async calculateTransactionFee(tx: AnyTransaction): Promise<bigint> {
     return await this.dust.calculateFee([tx]);
+  }
+
+  /** Calculates the total fee for the given transaction plus the fee of the balancing transaction. */
+  async estimateTransactionFee(
+    tx: AnyTransaction,
+    secretKey: ledger.DustSecretKey,
+    options?: {
+      ttl?: Date;
+      currentTime?: Date;
+    },
+  ): Promise<bigint> {
+    const ttl = options?.ttl ?? this.defaultTtl();
+    return await this.dust.estimateFee(secretKey, [tx], ttl, options?.currentTime);
   }
 
   async transferTransaction(

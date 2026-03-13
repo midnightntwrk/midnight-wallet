@@ -27,7 +27,7 @@ import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 
 import os from 'node:os';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe } from 'effect';
 import { getShieldedSeed } from './utils.js';
 
@@ -61,7 +61,7 @@ describe('Wallet Sync', () => {
 
     configuration = {
       indexerClientConnection: {
-        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v3/graphql`,
+        indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
     };
@@ -109,9 +109,9 @@ describe('Wallet Sync', () => {
     const balances = coinsAndBalancesCapability.getTotalBalances(syncedState);
 
     expect(balances).toStrictEqual({
-      '0000000000000000000000000000000000000000000000000000000000000000': 2500000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000001': 500000000000000n,
-      '0000000000000000000000000000000000000000000000000000000000000002': 500000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000000': 250000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000001': 50000000000000n,
+      '0000000000000000000000000000000000000000000000000000000000000002': 50000000000000n,
     });
   });
 });

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {

@@ -176,7 +176,7 @@ export class TestContainersFixture {
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
-        return `ws://localhost:${indexerPort}/api/v3/graphql/ws`;
+        return `ws://localhost:${indexerPort}/api/v4/graphql/ws`;
       }
       default: {
         throw new Error(`Unrecognized network: ${String(TestContainersFixture.network)}`);
@@ -246,7 +246,6 @@ export class TestContainersFixture {
     return {
       networkId: this.getNetworkId(),
       costParameters: {
-        additionalFeeOverhead: 300_000_000_000_000n,
         feeBlocksMargin: 5,
       },
     };

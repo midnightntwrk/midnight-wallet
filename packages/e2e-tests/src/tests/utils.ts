@@ -14,7 +14,7 @@
 import * as rx from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
@@ -141,7 +141,6 @@ const restoreDustWallet = async (
       const DustInstance = DustWallet({
         ...walletConfig,
         costParameters: walletConfig?.costParameters ?? {
-          additionalFeeOverhead: 300_000_000_000_000n,
           feeBlocksMargin: 5,
         },
       });

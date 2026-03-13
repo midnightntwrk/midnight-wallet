@@ -17,7 +17,7 @@ import {
   type Signature,
   type SignatureVerifyingKey,
   type UnprovenTransaction,
-} from '@midnight-ntwrk/ledger-v7';
+} from '@midnight-ntwrk/ledger-v8';
 import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
@@ -125,6 +125,13 @@ export type DustWalletAPI = {
 
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
+  estimateFee(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl?: Date,
+    currentTime?: Date,
+  ): Promise<bigint>;
+
   balanceTransactions(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,
@@ -224,6 +231,20 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.calculateFee(transactions),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    estimateFee(
+      secretKey: DustSecretKey,
+      transactions: ReadonlyArray<AnyTransaction>,
+      ttl?: Date,
+      currentTime?: Date,
+    ): Promise<bigint> {
+      const effectiveTtl = ttl ?? new Date(Date.now() + 60 * 60 * 1000);
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.estimateFee(secretKey, transactions, effectiveTtl, currentTime),
         })
         .pipe(Effect.runPromise);
     }

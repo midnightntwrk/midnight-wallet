@@ -11,8 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-import * as ledger from '@midnight-ntwrk/ledger-v7';
-import { DustWallet } from '../../../packages/dust-wallet/dist/v1/index.js';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
@@ -33,7 +33,6 @@ export type Configuration = DefaultConfiguration;
 export const defaultConfiguration: Configuration = {
   networkId: 'preview',
   costParameters: {
-    additionalFeeOverhead: 300_000_000_000_000n,
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`wss://rpc.preview.midnight.network`),
