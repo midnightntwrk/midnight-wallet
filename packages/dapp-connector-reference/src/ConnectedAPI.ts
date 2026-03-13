@@ -11,24 +11,25 @@ import type {
   SignDataOptions,
   WalletConnectedAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
-import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 import * as rx from 'rxjs';
-import type { ConnectorConfiguration, WalletFacadeView } from './types.js';
+import type { ConnectorConfiguration, WalletFacadeView, SwapTransactionOptions, WalletKeystore } from './types.js';
 import { toAPIConfiguration } from './types.js';
 import { APIError } from './errors.js';
+import { parseDesiredOutputs, parseDesiredInputs, parseIntentId } from './parsing.js';
+import { ShieldedCoinPublicKey, ShieldedEncryptionPublicKey } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
- * Extended ConnectedAPI interface that includes disconnect functionality.
+ * Extended ConnectedAPI type that includes disconnect functionality.
  * This extends the base ConnectedAPI with reference implementation specific methods.
  */
-export interface ExtendedConnectedAPI extends ConnectedAPIType {
+export type ExtendedConnectedAPI = ConnectedAPIType & {
   /**
    * Disconnect from the wallet. After calling this method, all API methods
    * (except getConnectionStatus and hintUsage) will reject with a Disconnected error.
    */
   disconnect(): Promise<void>;
-}
+};
 
 /**
  * Reference implementation of the ConnectedAPI interface.
@@ -36,12 +37,12 @@ export interface ExtendedConnectedAPI extends ConnectedAPIType {
  */
 export class ConnectedAPI implements ExtendedConnectedAPI {
   private readonly facade: WalletFacadeView;
-  private readonly keystore: UnshieldedKeystore;
+  private readonly keystore: WalletKeystore;
   private readonly config: ConnectorConfiguration;
   // Use an object reference so state can be modified even when this instance is frozen
   private readonly state: { connected: boolean } = { connected: true };
 
-  constructor(facade: WalletFacadeView, keystore: UnshieldedKeystore, configuration: ConnectorConfiguration) {
+  constructor(facade: WalletFacadeView, keystore: WalletKeystore, configuration: ConnectorConfiguration) {
     this.facade = facade;
     this.keystore = keystore;
     this.config = configuration;
@@ -182,24 +183,88 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     );
   }
 
-  // Transaction Building (to be implemented)
+  // Transaction Building
 
-  makeTransfer(_desiredOutputs: DesiredOutput[], _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+  async makeTransfer(desiredOutputs: DesiredOutput[], options?: { payFees?: boolean }): Promise<{ tx: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const transfers = parseDesiredOutputs(desiredOutputs, this.config.networkId, { requireAtLeastOne: true });
+
+    // Get secret keys from keystore
+    const secretKeys = {
+      shieldedSecretKeys: this.keystore.getShieldedSecretKeys(),
+      dustSecretKey: this.keystore.getDustSecretKey(),
+    };
+
+    // Create TTL (1 hour from now)
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Build transaction using facade's recipe workflow
+    const recipe = await this.facade.transferTransaction(transfers, secretKeys, {
+      ttl,
+      payFees: options?.payFees ?? true,
+    });
+
+    // Sign the recipe (for unshielded outputs)
+    const signedRecipe = await this.facade.signRecipe(recipe, (data) => this.keystore.signData(data));
+
+    // Finalize the recipe
+    const finalizedTx = await this.facade.finalizeRecipe(signedRecipe);
+
+    // Serialize to hex
+    const txHex = Buffer.from(finalizedTx.serialize()).toString('hex');
+
+    return { tx: txHex };
   }
 
-  makeIntent(
-    _desiredInputs: DesiredInput[],
-    _desiredOutputs: DesiredOutput[],
-    _options: { intentId: number | 'random'; payFees: boolean },
+  async makeIntent(
+    desiredInputs: DesiredInput[],
+    desiredOutputs: DesiredOutput[],
+    options: { intentId: number | 'random'; payFees: boolean },
   ): Promise<{ tx: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const swapInputs = parseDesiredInputs(desiredInputs);
+    const swapOutputs = parseDesiredOutputs(desiredOutputs, this.config.networkId, { requireAtLeastOne: false });
+
+    if (desiredInputs.length === 0 && desiredOutputs.length === 0) {
+      throw APIError.invalidRequest('At least one input or output is required for an intent');
+    }
+
+    const parsedIntentId = parseIntentId(options.intentId);
+
+    // Get secret keys from keystore
+    const secretKeys = {
+      shieldedSecretKeys: this.keystore.getShieldedSecretKeys(),
+      dustSecretKey: this.keystore.getDustSecretKey(),
+    };
+
+    // Create TTL (1 hour from now)
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Build options, conditionally including intentId
+    const swapOptions: SwapTransactionOptions =
+      parsedIntentId === undefined
+        ? { ttl, payFees: options.payFees }
+        : { ttl, payFees: options.payFees, intentId: parsedIntentId };
+
+    // Build transaction using facade's recipe workflow
+    const recipe = await this.facade.initSwap(swapInputs, swapOutputs, secretKeys, swapOptions);
+
+    // Sign the recipe (for unshielded outputs)
+    const signedRecipe = await this.facade.signRecipe(recipe, (data) => this.keystore.signData(data));
+
+    // Finalize the recipe
+    const finalizedTx = await this.facade.finalizeRecipe(signedRecipe);
+
+    // Serialize to hex
+    const txHex = Buffer.from(finalizedTx.serialize()).toString('hex');
+
+    return { tx: txHex };
   }
 
   // Transaction Balancing (to be implemented)

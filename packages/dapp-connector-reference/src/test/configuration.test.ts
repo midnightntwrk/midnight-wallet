@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { Connector } from '../index.js';
+import type { ExtendedConnectedAPI } from '../ConnectedAPI.js';
 import { defaultConnectorMetadataArbitrary, randomValue, defaultConnectorConfigurationArbitrary } from '../testing.js';
 import type { ConnectorConfiguration } from '../types.js';
 import { prepareMockFacade, prepareMockUnshieldedKeystore } from './testUtils.js';
@@ -16,13 +17,17 @@ describe('Configuration', () => {
     proverServerUri: 'http://localhost:9000',
   };
 
+  const createConnectedAPI = async (config: ConnectorConfiguration = defaultConfig): Promise<ExtendedConnectedAPI> => {
+    const metadata = randomValue(defaultConnectorMetadataArbitrary);
+    const facade = prepareMockFacade();
+    const keystore = prepareMockUnshieldedKeystore();
+    const connector = new Connector(metadata, facade, keystore, config);
+    return connector.connect(config.networkId);
+  };
+
   describe('getConfiguration', () => {
     it('should return a promise', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
+      const connectedAPI = await createConnectedAPI();
 
       const result = connectedAPI.getConfiguration();
 
@@ -30,11 +35,7 @@ describe('Configuration', () => {
     });
 
     it('should return all configuration fields matching input', async () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const facade = prepareMockFacade();
-      const keystore = prepareMockUnshieldedKeystore();
-      const connector = new Connector(metadata, facade, keystore, defaultConfig);
-      const connectedAPI = await connector.connect('testnet');
+      const connectedAPI = await createConnectedAPI();
 
       const config = await connectedAPI.getConfiguration();
 

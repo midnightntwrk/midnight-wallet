@@ -37,7 +37,8 @@
     "readdir-glob": "^3.0.0",
     "minimatch": "^10.2.3",
     "tar": "^7.5.5",
-    "lodash": "^4.17.23"
+    "lodash": "^4.17.23",
+    "@midnight-ntwrk/dapp-connector-api": "portal:/home/akopec/mn/midnight-dapp-connector-api"
   },
   "scripts": {
     "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",

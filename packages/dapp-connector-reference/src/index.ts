@@ -1,10 +1,21 @@
+/// <reference types="@midnight-ntwrk/dapp-connector-api/globals" />
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import type { UnshieldedKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { Data } from 'effect';
 import { SemVer } from 'semver';
-import type { ConnectorConfiguration, WalletFacadeView } from './types.js';
+import type { ConnectorConfiguration, WalletFacadeView, WalletKeystore } from './types.js';
 import { APIError } from './errors.js';
 import { ConnectedAPI, type ExtendedConnectedAPI } from './ConnectedAPI.js';
+
+// Re-export parsing functions for use by other DApp Connector implementations
+export {
+  parseTokenType,
+  parsePositiveAmount,
+  parseShieldedAddress,
+  parseUnshieldedAddress,
+  parseIntentId,
+  parseDesiredOutputs,
+  parseDesiredInputs,
+} from './parsing.js';
 
 export class InstallationError extends Data.TaggedError('InstallationError')<{
   message: string;
@@ -12,7 +23,12 @@ export class InstallationError extends Data.TaggedError('InstallationError')<{
   uuid: string;
 }> {}
 
-export type ConnectorMetadata = Readonly<Omit<InitialAPI, 'connect'>>;
+/**
+ * Metadata for a connector, derived from InitialAPI.
+ * Using Pick ensures this type evolves with the API specification -
+ * if InitialAPI adds new metadata fields, they must be explicitly added here.
+ */
+export type ConnectorMetadata = Readonly<Pick<InitialAPI, 'rdns' | 'name' | 'icon' | 'apiVersion'>>;
 export const ConnectorMetadata = {
   currentApiVersion: new SemVer('4.0.0-beta.2'),
   empty: Object.freeze({
@@ -44,7 +60,7 @@ export type InstalledConnector = Readonly<{
 
 export class Connector implements InitialAPI {
   private readonly facade: WalletFacadeView;
-  private readonly keystore: UnshieldedKeystore;
+  private readonly keystore: WalletKeystore;
   private readonly configuration: ConnectorConfiguration;
 
   readonly rdns: string;
@@ -55,7 +71,7 @@ export class Connector implements InitialAPI {
   constructor(
     metadata: ConnectorMetadata,
     facade: WalletFacadeView,
-    keystore: UnshieldedKeystore,
+    keystore: WalletKeystore,
     configuration: ConnectorConfiguration,
   ) {
     this.facade = facade;
