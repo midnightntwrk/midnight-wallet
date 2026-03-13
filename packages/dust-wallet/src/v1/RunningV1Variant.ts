@@ -215,6 +215,30 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     );
   }
 
+  estimateFee(
+    secretKey: DustSecretKey,
+    transactions: ReadonlyArray<AnyTransaction>,
+    ttl: Date,
+    currentTime?: Date,
+  ): Effect.Effect<bigint, WalletError> {
+    return pipe(
+      Effect.all([SubscriptionRef.get(this.#context.stateRef), this.#v1Context.syncService.blockData()]),
+      Effect.flatMap(([state, blockData]) =>
+        pipe(
+          this.#v1Context.transactingCapability.estimateFee(
+            secretKey,
+            state,
+            transactions,
+            ttl,
+            currentTime ?? blockData.timestamp,
+            blockData.ledgerParameters,
+          ),
+          EitherOps.toEffect,
+        ),
+      ),
+    );
+  }
+
   balanceTransactions(
     secretKey: DustSecretKey,
     transactions: ReadonlyArray<AnyTransaction>,

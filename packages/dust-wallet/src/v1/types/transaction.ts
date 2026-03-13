@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 export type TotalCostParameters = {
-  additionalFeeOverhead: bigint;
+  additionalFeeOverhead?: bigint;
   // a number of blocks we expect for finalization.
   feeBlocksMargin: number;
 };

@@ -46,7 +46,6 @@ describe('Facade submission', () => {
       },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
-        additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),
@@ -91,7 +90,6 @@ describe('Facade submission', () => {
       },
       provingServerUrl: new URL('http://localhost:6300'),
       costParameters: {
-        additionalFeeOverhead: 0n,
         feeBlocksMargin: 0,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),

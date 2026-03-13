@@ -84,7 +84,6 @@ describe('Wallet Facade Transfer', () => {
       ),
       networkId: NetworkId.NetworkId.Undeployed,
       costParameters: {
-        additionalFeeOverhead: 400_000_000_000_000n,
         feeBlocksMargin: 5,
       },
       txHistoryStorage: new InMemoryTransactionHistoryStorage(),

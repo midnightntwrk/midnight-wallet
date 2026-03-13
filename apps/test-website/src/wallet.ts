@@ -33,7 +33,6 @@ export type Configuration = DefaultConfiguration;
 export const defaultConfiguration: Configuration = {
   networkId: 'preview',
   costParameters: {
-    additionalFeeOverhead: 300_000_000_000_000n,
     feeBlocksMargin: 5,
   },
   relayURL: new URL(`wss://rpc.preview.midnight.network`),
