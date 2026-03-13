@@ -24,3 +24,18 @@ const configuration: FetchTermsAndConditionsConfiguration = {
 const termsAndConditions = await WalletFacade.fetchTermsAndConditions(configuration);
 console.log('Terms and Conditions URL:', termsAndConditions.url);
 console.log('Terms and Conditions hash (SHA-256):', termsAndConditions.hash);
+
+const sha256Hex = async (data: ArrayBuffer): Promise<string> => {
+  const digestBuffer = await globalThis.crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(digestBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+};
+
+const response = await fetch(termsAndConditions.url);
+const documentBytes = await response.arrayBuffer();
+
+const digestHex = await sha256Hex(documentBytes);
+const isValid = digestHex === termsAndConditions.hash;
+console.log('Computed hash:', digestHex);
+console.log('Hash matches:', isValid);
