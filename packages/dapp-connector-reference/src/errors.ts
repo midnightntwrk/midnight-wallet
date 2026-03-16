@@ -1,16 +1,10 @@
 import type { APIError as APIErrorType, ErrorCode } from '@midnight-ntwrk/dapp-connector-api';
+import { ErrorCodes as APIErrorCodes } from '@midnight-ntwrk/dapp-connector-api';
 
 /**
- * All possible error codes for the DApp Connector API.
- * These match the values defined in @midnight-ntwrk/dapp-connector-api.
+ * Re-export error codes from the DApp Connector API specification.
  */
-export const ErrorCodes = {
-  InternalError: 'InternalError',
-  Rejected: 'Rejected',
-  InvalidRequest: 'InvalidRequest',
-  PermissionRejected: 'PermissionRejected',
-  Disconnected: 'Disconnected',
-} as const satisfies Record<string, ErrorCode>;
+export const ErrorCodes = APIErrorCodes;
 
 class APIErrorImpl extends Error implements APIErrorType {
   readonly type = 'DAppConnectorAPIError' as const;
@@ -35,6 +29,12 @@ export const APIError = {
   permissionRejected: (reason: string): APIErrorType => new APIErrorImpl('PermissionRejected', reason),
 
   disconnected: (reason: string): APIErrorType => new APIErrorImpl('Disconnected', reason),
+
+  /**
+   * Creates an InsufficientFunds error for when wallet lacks balance to complete a transaction.
+   * @param reason - Description of what funds are insufficient (e.g., "Insufficient shielded balance for token X")
+   */
+  insufficientFunds: (reason: string): APIErrorType => new APIErrorImpl('InsufficientFunds', reason),
 
   isAPIError: (value: unknown): value is APIErrorType => value instanceof APIErrorImpl,
 };

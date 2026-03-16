@@ -507,4 +507,95 @@ describe('makeIntent', () => {
       );
     }, 60_000);
   });
+
+  describe('insufficient balance', () => {
+    it('should reject with InsufficientFunds when wallet lacks shielded balance for inputs', async () => {
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const facade = prepareMockFacade().withBalances({
+        shielded: {}, // Empty shielded balances
+        unshielded: {},
+        dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
+      });
+      const keystore = prepareMockUnshieldedKeystore();
+      const connector = new Connector(metadata, facade, keystore, defaultConfig);
+      const connectedAPI = await connector.connect('testnet');
+
+      // Intent that provides shielded tokens (wallet needs to have them)
+      const desiredInputs: DesiredInput[] = [{ kind: 'shielded', type: tokenType, value: 100n }];
+      const desiredOutputs: DesiredOutput[] = [
+        { kind: 'shielded', type: anotherTokenType, value: 50n, recipient: shieldedAddress },
+      ];
+
+      await expect(connectedAPI.makeIntent(desiredInputs, desiredOutputs, { intentId: 1, payFees: true })).rejects.toMatchObject({
+        code: 'InsufficientFunds',
+        reason: expect.stringMatching(/insufficient|balance/i),
+      });
+    });
+
+    it('should reject with InsufficientFunds when wallet lacks unshielded balance for inputs', async () => {
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const facade = prepareMockFacade().withBalances({
+        shielded: {},
+        unshielded: {}, // Empty unshielded balances
+        dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
+      });
+      const keystore = prepareMockUnshieldedKeystore();
+      const connector = new Connector(metadata, facade, keystore, defaultConfig);
+      const connectedAPI = await connector.connect('testnet');
+
+      // Intent that provides unshielded tokens (wallet needs to have them)
+      const desiredInputs: DesiredInput[] = [{ kind: 'unshielded', type: tokenType, value: 100n }];
+      const desiredOutputs: DesiredOutput[] = [
+        { kind: 'unshielded', type: anotherTokenType, value: 50n, recipient: unshieldedAddress },
+      ];
+
+      await expect(connectedAPI.makeIntent(desiredInputs, desiredOutputs, { intentId: 1, payFees: true })).rejects.toMatchObject({
+        code: 'InsufficientFunds',
+        reason: expect.stringMatching(/insufficient|balance/i),
+      });
+    });
+
+    it('should reject with InsufficientFunds when wallet lacks dust for fees', async () => {
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const facade = prepareMockFacade().withBalances({
+        shielded: { [tokenType]: 1000n }, // Has shielded balance
+        unshielded: {},
+        dust: [], // No dust for fees
+      });
+      const keystore = prepareMockUnshieldedKeystore();
+      const connector = new Connector(metadata, facade, keystore, defaultConfig);
+      const connectedAPI = await connector.connect('testnet');
+
+      const desiredInputs: DesiredInput[] = [{ kind: 'shielded', type: tokenType, value: 100n }];
+      const desiredOutputs: DesiredOutput[] = [
+        { kind: 'shielded', type: anotherTokenType, value: 50n, recipient: shieldedAddress },
+      ];
+
+      await expect(connectedAPI.makeIntent(desiredInputs, desiredOutputs, { intentId: 1, payFees: true })).rejects.toMatchObject({
+        code: 'InsufficientFunds',
+        reason: expect.stringMatching(/insufficient|dust|fee/i),
+      });
+    });
+
+    it('should NOT reject for insufficient dust when payFees is false', async () => {
+      const metadata = randomValue(defaultConnectorMetadataArbitrary);
+      const facade = prepareMockFacade().withBalances({
+        shielded: { [tokenType]: 1000n }, // Has shielded balance for inputs
+        unshielded: {},
+        dust: [], // No dust - but payFees=false so this shouldn't matter
+      });
+      const keystore = prepareMockUnshieldedKeystore();
+      const connector = new Connector(metadata, facade, keystore, defaultConfig);
+      const connectedAPI = await connector.connect('testnet');
+
+      const desiredInputs: DesiredInput[] = [{ kind: 'shielded', type: tokenType, value: 100n }];
+      const desiredOutputs: DesiredOutput[] = [
+        { kind: 'shielded', type: anotherTokenType, value: 50n, recipient: shieldedAddress },
+      ];
+
+      // Should succeed (or fail for non-dust reasons) - never InsufficientFunds for dust
+      const result = await connectedAPI.makeIntent(desiredInputs, desiredOutputs, { intentId: 1, payFees: false });
+      expect(result.tx).toBeDefined();
+    });
+  });
 });

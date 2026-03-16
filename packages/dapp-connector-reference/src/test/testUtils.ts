@@ -829,3 +829,91 @@ export function buildMockIntentTransaction(options: MockIntentOptions): ledger.F
 export function serializeTransaction(tx: ledger.FinalizedTransaction): string {
   return Buffer.from(tx.serialize()).toString('hex');
 }
+
+/**
+ * Transaction type for unsealed (pre-binding) transactions.
+ * These have proofs but are not yet cryptographically bound.
+ */
+export type UnsealedTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
+
+/**
+ * Options for building a mock unsealed transaction.
+ */
+export interface MockUnsealedTransactionOptions {
+  networkId: string;
+  ttl?: Date;
+  /** Token outputs that create imbalances needing to be balanced by wallet */
+  outputs?: Array<{ type: string; value: bigint }>;
+}
+
+/**
+ * Build a mock unsealed transaction hex string for testing.
+ * Creates a transaction with shielded outputs that create imbalances,
+ * simulating what a DApp would send for balancing.
+ *
+ * Note: In unit tests with mocks, the actual transaction bytes don't need
+ * to be a true PreBinding transaction - the mock facade handles it.
+ * For integration tests, real UnboundTransaction from proving would be used.
+ */
+export function buildMockUnsealedTransaction(options: MockUnsealedTransactionOptions): string {
+  // Default token type: 64-character hex string (32 bytes)
+  const defaultTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+  const {
+    networkId,
+    ttl = new Date(Date.now() + 60 * 60 * 1000),
+    outputs = [{ type: defaultTokenType, value: 100n }],
+  } = options;
+
+  // Build shielded offer with outputs (creates negative imbalance - wallet needs to provide inputs)
+  const shieldedOffer = buildMockShieldedOffer(outputs);
+
+  // Create intent
+  const intent = ledger.Intent.new(ttl);
+
+  // Create transaction with the shielded offer
+  const tx = ledger.Transaction.fromParts(networkId, shieldedOffer, undefined, intent);
+
+  // Mock prove (which also binds for mockProve)
+  // For unit tests with mocks, we serialize and return as hex
+  const provenTx = tx.mockProve();
+
+  return Buffer.from(provenTx.serialize()).toString('hex');
+}
+
+/**
+ * Options for building a mock sealed transaction.
+ */
+export interface MockSealedTransactionOptions {
+  networkId: string;
+  ttl?: Date;
+  /** Token outputs that create imbalances needing to be balanced by wallet */
+  outputs?: Array<{ type: string; value: bigint }>;
+}
+
+/**
+ * Build a mock sealed transaction (with proofs and binding).
+ * Creates a transaction with shielded outputs that create imbalances,
+ * simulating a swap transaction from another party that needs balancing.
+ * This is the type expected by balanceSealedTransaction.
+ */
+export function buildMockSealedTransaction(options: MockSealedTransactionOptions): ledger.FinalizedTransaction {
+  // Default token type: 64-character hex string (32 bytes)
+  const defaultTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+  const {
+    networkId,
+    ttl = new Date(Date.now() + 60 * 60 * 1000),
+    outputs = [{ type: defaultTokenType, value: 100n }],
+  } = options;
+
+  // Build shielded offer with outputs (creates negative imbalance)
+  const shieldedOffer = buildMockShieldedOffer(outputs);
+
+  // Create intent
+  const intent = ledger.Intent.new(ttl);
+
+  // Create transaction with the shielded offer
+  const tx = ledger.Transaction.fromParts(networkId, shieldedOffer, undefined, intent);
+
+  // Mock prove and bind
+  return tx.mockProve().bind();
+}
