@@ -73,7 +73,7 @@ describe('Smoke tests', () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
-      const balance = 2500000000000000n;
+      const balance = 250000000000000n;
       const unshieldedFundedKeyStore = createKeystore(
         utils.getUnshieldedSeed(seedFunded),
         NetworkId.NetworkId.Undeployed,
@@ -177,18 +177,7 @@ describe('Smoke tests', () => {
 
       // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
       const senderTxHistory = await Array.fromAsync(finalState.unshielded.transactionHistory.getAll());
-      expect(senderTxHistory.length).toBeGreaterThan(0);
-      for (const entry of senderTxHistory) {
-        expect(Array.isArray(entry.createdUtxos)).toBe(true);
-        expect(Array.isArray(entry.spentUtxos)).toBe(true);
-        for (const utxo of [...entry.createdUtxos, ...entry.spentUtxos]) {
-          expect(typeof utxo.value).toBe('bigint');
-          expect(typeof utxo.owner).toBe('string');
-          expect(typeof utxo.tokenType).toBe('string');
-          expect(typeof utxo.intentHash).toBe('string');
-          expect(typeof utxo.outputIndex).toBe('number');
-        }
-      }
+      utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
 
       const receiverTxHistory = await Array.fromAsync(finalState2.unshielded.transactionHistory.getAll());
       expect(receiverTxHistory.length).toBeGreaterThan(0);

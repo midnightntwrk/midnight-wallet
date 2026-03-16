@@ -214,16 +214,8 @@ describe('Token transfer', () => {
       expect(senderTxEntry).toBeDefined();
       expect(senderTxEntry!.hash).toBe(txHash);
       expect(senderTxEntry!.status).toBe('SUCCESS');
-      expect(Array.isArray(senderTxEntry!.createdUtxos)).toBe(true);
-      expect(Array.isArray(senderTxEntry!.spentUtxos)).toBe(true);
       expect(senderTxEntry!.spentUtxos.length).toBeGreaterThan(0);
-      for (const utxo of [...senderTxEntry!.createdUtxos, ...senderTxEntry!.spentUtxos]) {
-        expect(typeof utxo.value).toBe('bigint');
-        expect(typeof utxo.owner).toBe('string');
-        expect(typeof utxo.tokenType).toBe('string');
-        expect(typeof utxo.intentHash).toBe('string');
-        expect(typeof utxo.outputIndex).toBe('number');
-      }
+      utils.expectValidUnshieldedTxHistoryEntry(senderTxEntry!);
 
       const receiverFinalState = await receiver.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState2));
@@ -252,10 +244,7 @@ describe('Token transfer', () => {
       // Receiver should have received the unshielded output value
       const receivedUtxo = receiverTxEntry!.createdUtxos.find((u) => u.value === outputValue);
       expect(receivedUtxo).toBeDefined();
-      expect(typeof receivedUtxo!.owner).toBe('string');
-      expect(typeof receivedUtxo!.tokenType).toBe('string');
-      expect(typeof receivedUtxo!.intentHash).toBe('string');
-      expect(typeof receivedUtxo!.outputIndex).toBe('number');
+      utils.expectValidUnshieldedUtxoFields(receivedUtxo!);
     },
     syncTimeout,
   );

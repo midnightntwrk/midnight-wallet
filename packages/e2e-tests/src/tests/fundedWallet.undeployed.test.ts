@@ -47,20 +47,20 @@ describe('Funded wallet', () => {
       const state = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet synced. Shielded balance: ${inspect(state.shielded.balances)}`);
       expect(state.shielded.totalCoins).toHaveLength(7);
-      expect(state.shielded.balances[rawNativeTokenType]).toBe(2_500_000_000_000_000n);
+      expect(state.shielded.balances[rawNativeTokenType]).toBe(250_000_000_000_000n);
       expect(state.shielded.balances['0000000000000000000000000000000000000000000000000000000000000001']).toBe(
-        500000000000000n,
+        50000000000000n,
       );
       expect(state?.shielded.balances['0000000000000000000000000000000000000000000000000000000000000002']).toBe(
-        500000000000000n,
+        50000000000000n,
       );
       expect(state.unshielded.totalCoins).toHaveLength(5);
-      expect(state.unshielded.balances[unshieldedTokenRaw]).toBe(2_500_000_000_000_000n);
+      expect(state.unshielded.balances[unshieldedTokenRaw]).toBe(250_000_000_000_000n);
       expect(
         state.unshielded.balances['0000000000000000000000000000000000000000000000000000000000000002'],
       ).toBeUndefined();
       expect(state.dust.totalCoins).toHaveLength(5);
-      expect(state.dust.balance(new Date())).toBe(12500000000000000000000000n);
+      expect(state.dust.balance(new Date())).toBe(1250000000000000000000000n);
     },
     timeout,
   );
@@ -82,14 +82,14 @@ describe('Funded wallet', () => {
         .forEach((coin) => {
           expect(coin.coin.nonce).toBeDefined();
           expect(coin.coin.type).toHaveLength(68);
-          expect(coin.coin.value).toBe(500000000000000n);
+          expect(coin.coin.value).toBe(50000000000000n);
         });
 
       const unshieldedCoins = state.unshielded.totalCoins;
       expect(unshieldedCoins).toHaveLength(5);
       expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.utxo.intentHash))).toBeTruthy();
       unshieldedCoins.forEach((c) => {
-        expect(c.utxo.value).toBe(500000000000000n);
+        expect(c.utxo.value).toBe(50000000000000n);
         expect(c.utxo.outputNo).toBe(0);
         expect(typeof c.utxo.owner).toBe('string');
         expect(typeof c.utxo.type).toBe('string');
@@ -127,14 +127,14 @@ describe('Funded wallet', () => {
         .forEach((coin) => {
           expect(coin.coin.nonce).toBeDefined();
           expect(coin.coin.type).toHaveLength(68);
-          expect(coin.coin.value).toBe(500000000000000n);
+          expect(coin.coin.value).toBe(50000000000000n);
         });
 
       const unshieldedCoins = state.unshielded.availableCoins;
       expect(unshieldedCoins).toHaveLength(5);
       expect(utils.isArrayUnique(unshieldedCoins.map((c) => c.utxo.intentHash))).toBeTruthy();
       unshieldedCoins.forEach((c) => {
-        expect(c.utxo.value).toBe(500000000000000n);
+        expect(c.utxo.value).toBe(50000000000000n);
         expect(c.utxo.outputNo).toBe(0);
         expect(typeof c.utxo.owner).toBe('string');
         expect(typeof c.utxo.type).toBe('string');
@@ -172,21 +172,7 @@ describe('Funded wallet', () => {
     async () => {
       const state = await funded.wallet.waitForSyncedState();
       const txHistory = await Array.fromAsync(state.unshielded.transactionHistory.getAll());
-      expect(txHistory.length).toBeGreaterThan(0);
-      for (const entry of txHistory) {
-        expect(entry).toHaveProperty('createdUtxos');
-        expect(entry).toHaveProperty('spentUtxos');
-        expect(Array.isArray(entry.createdUtxos)).toBe(true);
-        expect(Array.isArray(entry.spentUtxos)).toBe(true);
-        // Genesis funding transactions should have created UTXOs
-        for (const utxo of [...entry.createdUtxos, ...entry.spentUtxos]) {
-          expect(typeof utxo.value).toBe('bigint');
-          expect(typeof utxo.owner).toBe('string');
-          expect(typeof utxo.tokenType).toBe('string');
-          expect(typeof utxo.intentHash).toBe('string');
-          expect(typeof utxo.outputIndex).toBe('number');
-        }
-      }
+      utils.expectValidUnshieldedTxHistoryEntries(txHistory);
       // At least one entry should have createdUtxos (from genesis funding)
       const entryWithCreated = txHistory.find((e) => e.createdUtxos.length > 0);
       expect(entryWithCreated).toBeDefined();
