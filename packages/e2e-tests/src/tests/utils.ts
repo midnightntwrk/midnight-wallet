@@ -38,6 +38,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 
 // place this somewhere better?
 export const Segments = {
@@ -564,17 +566,10 @@ export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
 
-/**
- * Queries the indexer's GraphQL endpoint for the current block height.
- */
 const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
-  const response = await fetch(indexerHttpUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query: '{ block { height } }' }),
-  });
-  const json = (await response.json()) as { data: { block: { height: number } } };
-  return json.data.block.height;
+  const result = await QueryRunner.runPromise(BlockHash, { offset: null }, { url: indexerHttpUrl });
+  if (!result.block) throw new Error('No block returned from indexer');
+  return result.block.height;
 };
 
 /**
