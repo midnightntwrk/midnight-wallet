@@ -229,6 +229,9 @@ class MockWalletFacade implements WalletFacadeView {
   private _unshieldedBalancesConfigured = false;
   private _dustBalancesConfigured = false;
 
+  // Configured error to throw on submission (for testing error handling)
+  private _submissionError: Error | undefined = undefined;
+
   constructor() {
     this.shielded = new MockShieldedWallet();
     this.unshielded = new MockUnshieldedWallet();
@@ -272,6 +275,11 @@ class MockWalletFacade implements WalletFacadeView {
 
   withTransactionHistory(entries: MockHistoryEntry[]): this {
     this.transactionHistory.setEntries(entries);
+    return this;
+  }
+
+  withSubmissionError(error: Error): this {
+    this._submissionError = error;
     return this;
   }
 
@@ -593,6 +601,17 @@ class MockWalletFacade implements WalletFacadeView {
       originalTransaction: tx,
       balancingTransaction: balancingTx,
     };
+  }
+
+  // ===========================================================================
+  // Transaction Submission
+  // ===========================================================================
+
+  async submitTransaction(_tx: ledger.FinalizedTransaction): Promise<void> {
+    if (this._submissionError !== undefined) {
+      throw this._submissionError;
+    }
+    // Mock: submission succeeds
   }
 
   private buildMockBalancingTransaction(ttl: Date, includeDustSpend: boolean = true): ledger.UnprovenTransaction {

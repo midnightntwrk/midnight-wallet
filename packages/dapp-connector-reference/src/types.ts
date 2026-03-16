@@ -353,6 +353,18 @@ export interface WalletFacadeView {
     secretKeys: TransactionSecretKeys,
     options: BalancingOptions,
   ): Promise<FinalizedTransactionRecipe>;
+
+  // ===========================================================================
+  // Transaction Submission
+  // ===========================================================================
+
+  /**
+   * Submit a finalized transaction to the network.
+   *
+   * @param tx - The finalized transaction to submit
+   * @returns Promise that resolves when submission is complete
+   */
+  submitTransaction(tx: ledger.FinalizedTransaction): Promise<void>;
 }
 
 /**

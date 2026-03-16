@@ -368,13 +368,20 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     }
   }
 
-  // Submission (to be implemented)
+  // Transaction Submission
 
-  submitTransaction(_tx: string): Promise<void> {
+  async submitTransaction(tx: string): Promise<void> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const txBytes = parseHexToBytes(tx, 'Transaction');
+    const finalizedTx = safeDeserialize<ledger.FinalizedTransaction>(
+      () => ledger.Transaction.deserialize('signature', 'proof', 'binding', txBytes),
+      'Failed to deserialize transaction as sealed (binding)',
+    );
+
+    await this.facade.submitTransaction(finalizedTx);
   }
 
   // Signing & Proving (to be implemented)
