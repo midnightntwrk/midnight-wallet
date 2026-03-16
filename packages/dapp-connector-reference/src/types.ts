@@ -129,6 +129,12 @@ export interface WalletKeystore {
   getDustSecretKey(): ledger.DustSecretKey;
 
   /**
+   * Get the unshielded wallet secret key.
+   * Used for deriving the verifying key for signature verification.
+   */
+  getUnshieldedSecretKey(): string;
+
+  /**
    * Sign data with the unshielded wallet key.
    * Used for signing unshielded transaction intents.
    */

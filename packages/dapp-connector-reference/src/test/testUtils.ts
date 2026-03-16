@@ -666,10 +666,14 @@ class MockWalletKeystore implements WalletKeystore {
     return this.dustSecretKey;
   }
 
+  getUnshieldedSecretKey(): string {
+    // Use a deterministic secret key for testing (same as used in signData)
+    return '0'.repeat(63) + '1';
+  }
+
   signData(_data: Uint8Array): ledger.Signature {
-    // Use a deterministic signature for testing
-    const mockSecretKey = '0'.repeat(63) + '1';
-    return ledger.signData(mockSecretKey, _data);
+    // Use the same deterministic secret key for consistency
+    return ledger.signData(this.getUnshieldedSecretKey(), _data);
   }
 }
 

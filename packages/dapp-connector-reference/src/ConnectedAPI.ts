@@ -97,6 +97,32 @@ const finalizeRecipeToHex = async (
 };
 
 /**
+ * Decode signing data based on encoding type.
+ */
+const decodeSigningData = (data: string, encoding: 'hex' | 'base64' | 'text'): Uint8Array => {
+  switch (encoding) {
+    case 'hex': {
+      if (data === '') return new Uint8Array(0);
+      if (!/^[0-9a-fA-F]*$/.test(data)) {
+        throw APIError.invalidRequest('Invalid hex encoding');
+      }
+      return Buffer.from(data, 'hex');
+    }
+    case 'base64': {
+      if (data === '') return new Uint8Array(0);
+      // Validate base64 format
+      if (!/^[A-Za-z0-9+/]*={0,2}$/.test(data)) {
+        throw APIError.invalidRequest('Invalid base64 encoding');
+      }
+      return Buffer.from(data, 'base64');
+    }
+    case 'text': {
+      return new TextEncoder().encode(data);
+    }
+  }
+};
+
+/**
  * Extended ConnectedAPI type that includes disconnect functionality.
  * This extends the base ConnectedAPI with reference implementation specific methods.
  */
@@ -384,13 +410,34 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     await this.facade.submitTransaction(finalizedTx);
   }
 
-  // Signing & Proving (to be implemented)
+  // Data Signing
 
-  signData(_data: string, _options: SignDataOptions): Promise<Signature> {
+  async signData(data: string, options: SignDataOptions): Promise<Signature> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    // Decode data based on encoding
+    const decodedBytes = decodeSigningData(data, options.encoding);
+
+    // Create prefixed message: midnight_signed_message:<size>:<data>
+    const prefix = `midnight_signed_message:${decodedBytes.length}:`;
+    const prefixBytes = new TextEncoder().encode(prefix);
+    const prefixedData = new Uint8Array(prefixBytes.length + decodedBytes.length);
+    prefixedData.set(prefixBytes, 0);
+    prefixedData.set(decodedBytes, prefixBytes.length);
+
+    // Sign the prefixed data
+    const signature = this.keystore.signData(prefixedData);
+
+    // Get the verifying key from the keystore
+    const verifyingKey = ledger.signatureVerifyingKey(this.keystore.getUnshieldedSecretKey());
+
+    return {
+      data: prefix + data,
+      signature: signature,
+      verifyingKey: verifyingKey,
+    };
   }
 
   getProvingProvider(_keyMaterialProvider: KeyMaterialProvider): Promise<ProvingProvider> {
