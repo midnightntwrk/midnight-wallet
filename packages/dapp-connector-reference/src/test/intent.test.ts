@@ -28,9 +28,17 @@ describe('makeIntent', () => {
     substrateNodeUri: 'ws://localhost:9944',
   };
 
+  // Standard token type (64 hex chars = 256-bit hash) - defined early for use in createConnectedAPI
+  const tokenType = '0000000000000000000000000000000000000000000000000000000000000000';
+  const anotherTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+
   const createConnectedAPI = async (): Promise<ExtendedConnectedAPI> => {
     const metadata = randomValue(defaultConnectorMetadataArbitrary);
-    const facade = prepareMockFacade();
+    const facade = prepareMockFacade().withBalances({
+      shielded: { [tokenType]: 10000n, [anotherTokenType]: 10000n },
+      unshielded: { [tokenType]: 10000n, [anotherTokenType]: 10000n },
+      dust: [{ maxCap: 1000n, balance: 1000n }],
+    });
     const keystore = prepareMockUnshieldedKeystore();
     const connector = new Connector(metadata, facade, keystore, defaultConfig);
     return connector.connect('testnet');
@@ -45,10 +53,6 @@ describe('makeIntent', () => {
   // Bech32m encoded addresses for API calls
   const shieldedAddress = MidnightBech32m.encode('testnet', shieldedRecipient.address).asString();
   const unshieldedAddress = MidnightBech32m.encode('testnet', unshieldedRecipient.address).asString();
-
-  // Standard token type (64 hex chars = 256-bit hash)
-  const tokenType = '0000000000000000000000000000000000000000000000000000000000000000';
-  const anotherTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
 
   describe('API contract', () => {
     it('should have makeIntent method on ConnectedAPI', async () => {
@@ -512,7 +516,7 @@ describe('makeIntent', () => {
     it('should reject with InsufficientFunds when wallet lacks shielded balance for inputs', async () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade().withBalances({
-        shielded: {}, // Empty shielded balances
+        shielded: { [tokenType]: 0n }, // Token configured with 0 balance
         unshielded: {},
         dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
       });
@@ -536,7 +540,7 @@ describe('makeIntent', () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade().withBalances({
         shielded: {},
-        unshielded: {}, // Empty unshielded balances
+        unshielded: { [tokenType]: 0n }, // Token configured with 0 balance
         dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
       });
       const keystore = prepareMockUnshieldedKeystore();

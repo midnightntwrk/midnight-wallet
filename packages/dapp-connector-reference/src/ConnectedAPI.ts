@@ -12,12 +12,89 @@ import type {
   WalletConnectedAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import * as ledger from '@midnight-ntwrk/ledger-v7';
 import * as rx from 'rxjs';
-import type { ConnectorConfiguration, WalletFacadeView, SwapTransactionOptions, WalletKeystore } from './types.js';
+import type {
+  ConnectorConfiguration,
+  WalletFacadeView,
+  SwapTransactionOptions,
+  WalletKeystore,
+  BalancingRecipe,
+} from './types.js';
 import { toAPIConfiguration } from './types.js';
 import { APIError } from './errors.js';
 import { parseDesiredOutputs, parseDesiredInputs, parseIntentId } from './parsing.js';
 import { ShieldedCoinPublicKey, ShieldedEncryptionPublicKey } from '@midnight-ntwrk/wallet-sdk-address-format';
+
+// =============================================================================
+// Pure Helper Functions
+// =============================================================================
+
+/**
+ * Type guard for InsufficientFundsError using _tag discriminator.
+ * Uses structural matching for robustness across package boundaries.
+ */
+const isInsufficientFundsError = (error: unknown): error is { _tag: 'InsufficientFundsError'; message: string } =>
+  error !== null &&
+  typeof error === 'object' &&
+  '_tag' in error &&
+  error._tag === 'InsufficientFundsError';
+
+/**
+ * Maps InsufficientFundsError to APIError, re-throws other errors unchanged.
+ */
+const mapInsufficientFundsError = (error: unknown): never => {
+  throw isInsufficientFundsError(error) ? APIError.insufficientFunds(error.message) : error;
+};
+
+/**
+ * Parse hex string to bytes, throwing APIError on invalid input.
+ */
+const parseHexToBytes = (hex: string, context: string): Uint8Array => {
+  if (hex === '') {
+    throw APIError.invalidRequest(`${context} hex is empty`);
+  }
+  const bytes = Buffer.from(hex, 'hex');
+  if (bytes.length === 0 || Buffer.from(bytes).toString('hex') !== hex.toLowerCase()) {
+    throw APIError.invalidRequest(`${context} hex is malformed`);
+  }
+  return bytes;
+};
+
+/**
+ * Safely deserialize a transaction, throwing APIError on failure.
+ */
+const safeDeserialize = <T>(deserialize: () => T, errorMessage: string): T => {
+  try {
+    return deserialize();
+  } catch {
+    throw APIError.invalidRequest(errorMessage);
+  }
+};
+
+/**
+ * Create TTL 1 hour from now.
+ */
+const createDefaultTTL = (): Date => new Date(Date.now() + 60 * 60 * 1000);
+
+/**
+ * Determine token kinds to balance based on payFees option.
+ */
+const getTokenKindsToBalance = (payFees: boolean): 'all' | ('shielded' | 'unshielded')[] =>
+  payFees ? 'all' : ['shielded', 'unshielded'];
+
+/**
+ * Execute the recipe workflow: sign → finalize → serialize to hex.
+ */
+const finalizeRecipeToHex = async (
+  facade: WalletFacadeView,
+  keystore: WalletKeystore,
+  recipe: BalancingRecipe,
+): Promise<string> => {
+  const signedRecipe = await facade.signRecipe(recipe, (data) => keystore.signData(data));
+  const finalizedTx = await facade.finalizeRecipe(signedRecipe);
+  return Buffer.from(finalizedTx.serialize()).toString('hex');
+};
 
 /**
  * Extended ConnectedAPI type that includes disconnect functionality.
@@ -57,6 +134,13 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
 
   private get connected(): boolean {
     return this.state.connected;
+  }
+
+  private get secretKeys() {
+    return {
+      shieldedSecretKeys: this.keystore.getShieldedSecretKeys(),
+      dustSecretKey: this.keystore.getDustSecretKey(),
+    };
   }
 
   // Configuration & Status Methods
@@ -192,31 +276,15 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
 
     const transfers = parseDesiredOutputs(desiredOutputs, this.config.networkId, { requireAtLeastOne: true });
 
-    // Get secret keys from keystore
-    const secretKeys = {
-      shieldedSecretKeys: this.keystore.getShieldedSecretKeys(),
-      dustSecretKey: this.keystore.getDustSecretKey(),
-    };
-
-    // Create TTL (1 hour from now)
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
-
-    // Build transaction using facade's recipe workflow
-    const recipe = await this.facade.transferTransaction(transfers, secretKeys, {
-      ttl,
-      payFees: options?.payFees ?? true,
-    });
-
-    // Sign the recipe (for unshielded outputs)
-    const signedRecipe = await this.facade.signRecipe(recipe, (data) => this.keystore.signData(data));
-
-    // Finalize the recipe
-    const finalizedTx = await this.facade.finalizeRecipe(signedRecipe);
-
-    // Serialize to hex
-    const txHex = Buffer.from(finalizedTx.serialize()).toString('hex');
-
-    return { tx: txHex };
+    try {
+      const recipe = await this.facade.transferTransaction(transfers, this.secretKeys, {
+        ttl: createDefaultTTL(),
+        payFees: options?.payFees ?? true,
+      });
+      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
+    } catch (error) {
+      return mapInsufficientFundsError(error);
+    }
   }
 
   async makeIntent(
@@ -228,59 +296,76 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
 
-    const swapInputs = parseDesiredInputs(desiredInputs);
-    const swapOutputs = parseDesiredOutputs(desiredOutputs, this.config.networkId, { requireAtLeastOne: false });
-
     if (desiredInputs.length === 0 && desiredOutputs.length === 0) {
       throw APIError.invalidRequest('At least one input or output is required for an intent');
     }
 
+    const swapInputs = parseDesiredInputs(desiredInputs);
+    const swapOutputs = parseDesiredOutputs(desiredOutputs, this.config.networkId, { requireAtLeastOne: false });
     const parsedIntentId = parseIntentId(options.intentId);
 
-    // Get secret keys from keystore
-    const secretKeys = {
-      shieldedSecretKeys: this.keystore.getShieldedSecretKeys(),
-      dustSecretKey: this.keystore.getDustSecretKey(),
+    const swapOptions: SwapTransactionOptions = {
+      ttl: createDefaultTTL(),
+      payFees: options.payFees,
+      ...(parsedIntentId !== undefined && { intentId: parsedIntentId }),
     };
 
-    // Create TTL (1 hour from now)
-    const ttl = new Date(Date.now() + 60 * 60 * 1000);
-
-    // Build options, conditionally including intentId
-    const swapOptions: SwapTransactionOptions =
-      parsedIntentId === undefined
-        ? { ttl, payFees: options.payFees }
-        : { ttl, payFees: options.payFees, intentId: parsedIntentId };
-
-    // Build transaction using facade's recipe workflow
-    const recipe = await this.facade.initSwap(swapInputs, swapOutputs, secretKeys, swapOptions);
-
-    // Sign the recipe (for unshielded outputs)
-    const signedRecipe = await this.facade.signRecipe(recipe, (data) => this.keystore.signData(data));
-
-    // Finalize the recipe
-    const finalizedTx = await this.facade.finalizeRecipe(signedRecipe);
-
-    // Serialize to hex
-    const txHex = Buffer.from(finalizedTx.serialize()).toString('hex');
-
-    return { tx: txHex };
+    try {
+      const recipe = await this.facade.initSwap(swapInputs, swapOutputs, this.secretKeys, swapOptions);
+      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
+    } catch (error) {
+      return mapInsufficientFundsError(error);
+    }
   }
 
-  // Transaction Balancing (to be implemented)
+  // Transaction Balancing
 
-  balanceUnsealedTransaction(_tx: string, _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+  async balanceUnsealedTransaction(tx: string, options?: { payFees?: boolean }): Promise<{ tx: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const txBytes = parseHexToBytes(tx, 'Transaction');
+    const unsealedTx = safeDeserialize<ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>>(
+      () => ledger.Transaction.deserialize('signature', 'proof', 'pre-binding', txBytes),
+      'Failed to deserialize transaction as unsealed (pre-binding)',
+    );
+
+    const payFees = options?.payFees ?? true;
+
+    try {
+      const recipe = await this.facade.balanceUnboundTransaction(unsealedTx, this.secretKeys, {
+        ttl: createDefaultTTL(),
+        tokenKindsToBalance: getTokenKindsToBalance(payFees),
+      });
+      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
+    } catch (error) {
+      return mapInsufficientFundsError(error);
+    }
   }
 
-  balanceSealedTransaction(_tx: string, _options?: { payFees?: boolean }): Promise<{ tx: string }> {
+  async balanceSealedTransaction(tx: string, options?: { payFees?: boolean }): Promise<{ tx: string }> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const txBytes = parseHexToBytes(tx, 'Transaction');
+    const sealedTx = safeDeserialize<ledger.FinalizedTransaction>(
+      () => ledger.Transaction.deserialize('signature', 'proof', 'binding', txBytes),
+      'Failed to deserialize transaction as sealed (binding)',
+    );
+
+    const payFees = options?.payFees ?? true;
+
+    try {
+      const recipe = await this.facade.balanceFinalizedTransaction(sealedTx, this.secretKeys, {
+        ttl: createDefaultTTL(),
+        tokenKindsToBalance: getTokenKindsToBalance(payFees),
+      });
+      return { tx: await finalizeRecipeToHex(this.facade, this.keystore, recipe) };
+    } catch (error) {
+      return mapInsufficientFundsError(error);
+    }
   }
 
   // Submission (to be implemented)

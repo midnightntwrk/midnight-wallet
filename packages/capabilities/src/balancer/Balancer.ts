@@ -14,6 +14,8 @@ import { CounterOffer, TransactionCostModel } from './CounterOffer.js';
 import { CoinRecipe, Imbalance, Imbalances, TokenType, TokenValue } from './Imbalances.js';
 
 export class InsufficientFundsError extends Error {
+  static readonly _tag = 'InsufficientFundsError' as const;
+  readonly _tag = InsufficientFundsError._tag;
   readonly tokenType: TokenType;
 
   constructor(tokenType: TokenType) {

@@ -30,9 +30,17 @@ describe('makeTransfer', () => {
     substrateNodeUri: 'ws://localhost:9944',
   };
 
+  // Standard token types (64 hex chars = 256-bit hash) - defined early for use in createConnectedAPI
+  const tokenType = '0000000000000000000000000000000000000000000000000000000000000000';
+  const anotherTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+
   const createConnectedAPI = async (): Promise<ExtendedConnectedAPI> => {
     const metadata = randomValue(defaultConnectorMetadataArbitrary);
-    const facade = prepareMockFacade();
+    const facade = prepareMockFacade().withBalances({
+      shielded: { [tokenType]: 10000n, [anotherTokenType]: 10000n },
+      unshielded: { [tokenType]: 10000n, [anotherTokenType]: 10000n },
+      dust: [{ maxCap: 1000n, balance: 1000n }],
+    });
     const keystore = prepareMockUnshieldedKeystore();
     const connector = new Connector(metadata, facade, keystore, defaultConfig);
     return connector.connect('testnet');
@@ -41,9 +49,6 @@ describe('makeTransfer', () => {
   // Helper to create valid Bech32m addresses for testing
   const shieldedAddress = MidnightBech32m.encode('testnet', testShieldedAddress).asString();
   const unshieldedAddress = MidnightBech32m.encode('testnet', testUnshieldedAddress).asString();
-
-  // Standard token type (64 hex chars = 256-bit hash)
-  const tokenType = '0000000000000000000000000000000000000000000000000000000000000000';
 
   describe('API contract', () => {
     it('should have makeTransfer method on ConnectedAPI', async () => {
@@ -157,7 +162,6 @@ describe('makeTransfer', () => {
   describe('multiple token types', () => {
     it('should create balanced transaction with different token types', async () => {
       const connectedAPI = await createConnectedAPI();
-      const anotherTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
 
       const desiredOutputs: DesiredOutput[] = [
         { kind: 'shielded', type: tokenType, value: 100n, recipient: shieldedAddress },
@@ -262,7 +266,7 @@ describe('makeTransfer', () => {
     it('should reject with InsufficientFunds when wallet lacks shielded balance', async () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade().withBalances({
-        shielded: {}, // Empty shielded balances
+        shielded: { [tokenType]: 0n }, // Token configured with 0 balance
         unshielded: {},
         dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
       });
@@ -284,7 +288,7 @@ describe('makeTransfer', () => {
       const metadata = randomValue(defaultConnectorMetadataArbitrary);
       const facade = prepareMockFacade().withBalances({
         shielded: {},
-        unshielded: {}, // Empty unshielded balances
+        unshielded: { [tokenType]: 0n }, // Token configured with 0 balance
         dust: [{ balance: 1000n, maxCap: 1000n }], // Has dust for fees
       });
       const keystore = prepareMockUnshieldedKeystore();

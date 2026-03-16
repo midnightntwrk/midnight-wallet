@@ -158,6 +158,25 @@ export interface SwapTransactionOptions extends TransactionOptions {
 }
 
 /**
+ * Token kinds that can be balanced.
+ */
+export type TokenKind = 'dust' | 'shielded' | 'unshielded';
+
+/**
+ * Options for transaction balancing.
+ */
+export interface BalancingOptions {
+  /** Time-to-live for the balancing transaction */
+  ttl: Date;
+  /**
+   * Which token kinds to balance.
+   * 'all' balances all token types (default).
+   * Array specifies which kinds to balance (e.g., ['shielded', 'dust']).
+   */
+  tokenKindsToBalance?: 'all' | TokenKind[];
+}
+
+/**
  * Minimal shielded wallet state interface required by ConnectedAPI.
  * Implementations can provide additional properties.
  */
@@ -295,6 +314,45 @@ export interface WalletFacadeView {
    * @returns Finalized transaction
    */
   finalizeRecipe(recipe: BalancingRecipe): Promise<ledger.FinalizedTransaction>;
+
+  // ===========================================================================
+  // Transaction Balancing Methods
+  // ===========================================================================
+  // These methods balance existing transactions by adding inputs/outputs.
+  // Used when DApps provide transactions that need wallet to add balancing.
+  // ===========================================================================
+
+  /**
+   * Balance an unbound (unsealed) transaction.
+   * Takes a transaction with proofs but not yet cryptographically bound,
+   * adds necessary inputs/outputs, and returns a finalized transaction recipe.
+   *
+   * @param tx - The unbound transaction to balance
+   * @param secretKeys - Shielded and dust secret keys
+   * @param options - Balancing options (TTL, tokenKindsToBalance)
+   * @returns Recipe ready for signing and finalization
+   */
+  balanceUnboundTransaction(
+    tx: UnboundTransaction,
+    secretKeys: TransactionSecretKeys,
+    options: BalancingOptions,
+  ): Promise<UnboundTransactionRecipe>;
+
+  /**
+   * Balance a finalized (sealed) transaction.
+   * Takes a transaction with proofs and cryptographic binding,
+   * adds necessary inputs/outputs in a separate balancing transaction.
+   *
+   * @param tx - The finalized transaction to balance
+   * @param secretKeys - Shielded and dust secret keys
+   * @param options - Balancing options (TTL, tokenKindsToBalance)
+   * @returns Recipe containing original transaction plus balancing transaction
+   */
+  balanceFinalizedTransaction(
+    tx: ledger.FinalizedTransaction,
+    secretKeys: TransactionSecretKeys,
+    options: BalancingOptions,
+  ): Promise<FinalizedTransactionRecipe>;
 }
 
 /**

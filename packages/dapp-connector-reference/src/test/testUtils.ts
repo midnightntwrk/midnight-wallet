@@ -1,6 +1,7 @@
 import { expect, vi } from 'vitest';
 import type { TxStatus, DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
 import * as ledger from '@midnight-ntwrk/ledger-v7';
+import { InsufficientFundsError } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -29,7 +30,11 @@ import type {
   TransactionOptions,
   SwapTransactionOptions,
   UnprovenTransactionRecipe,
+  UnboundTransactionRecipe,
+  FinalizedTransactionRecipe,
   BalancingRecipe,
+  BalancingOptions,
+  UnboundTransaction,
   WalletKeystore,
 } from '../types.js';
 
@@ -217,6 +222,13 @@ class MockWalletFacade implements WalletFacadeView {
   dust: MockDustWallet;
   transactionHistory: MockTransactionHistoryService;
 
+  // Track whether balances were explicitly configured via withBalances()
+  // When configured, balance checks are strict (fail if insufficient)
+  // When not configured, balance checks are skipped (assume infinite balance)
+  private _shieldedBalancesConfigured = false;
+  private _unshieldedBalancesConfigured = false;
+  private _dustBalancesConfigured = false;
+
   constructor() {
     this.shielded = new MockShieldedWallet();
     this.unshielded = new MockUnshieldedWallet();
@@ -226,6 +238,7 @@ class MockWalletFacade implements WalletFacadeView {
 
   withBalances(config: MockBalancesConfig): this {
     if (config.shielded !== undefined) {
+      this._shieldedBalancesConfigured = true;
       const shieldedState: ShieldedWalletStateView = {
         address: testShieldedAddress,
         balances: config.shielded,
@@ -234,6 +247,7 @@ class MockWalletFacade implements WalletFacadeView {
     }
 
     if (config.unshielded !== undefined) {
+      this._unshieldedBalancesConfigured = true;
       const unshieldedState: UnshieldedWalletStateView = {
         address: testUnshieldedAddress,
         balances: config.unshielded,
@@ -242,6 +256,7 @@ class MockWalletFacade implements WalletFacadeView {
     }
 
     if (config.dust !== undefined) {
+      this._dustBalancesConfigured = true;
       const coins = config.dust;
       const totalBalance = coins.reduce((sum, coin) => sum + coin.balance, 0n);
       const dustState: DustWalletStateView = {
@@ -296,11 +311,57 @@ class MockWalletFacade implements WalletFacadeView {
     options: TransactionOptions,
   ): Promise<UnprovenTransactionRecipe> {
     const desiredOutputs = this.convertTransfersToDesiredOutputs(outputs);
+    const payFees = options.payFees ?? true;
+
+    // Check balances only for tokens explicitly listed in configured balances
+    // Tokens not in the balances object are assumed to have infinite balance
+    // This simulates real WalletFacade behavior which throws on insufficient funds
+
+    if (this._shieldedBalancesConfigured) {
+      const shieldedState = this.shielded.state.getValue();
+      for (const transfer of outputs) {
+        if (transfer.type === 'shielded') {
+          for (const output of transfer.outputs) {
+            // Only check if this specific token is in the balances object
+            if (output.type in shieldedState.balances) {
+              const balance = shieldedState.balances[output.type];
+              if (balance < output.amount) {
+                throw new InsufficientFundsError(output.type);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (this._unshieldedBalancesConfigured) {
+      const unshieldedState = this.unshielded.state.getValue();
+      for (const transfer of outputs) {
+        if (transfer.type === 'unshielded') {
+          for (const output of transfer.outputs) {
+            // Only check if this specific token is in the balances object
+            if (output.type in unshieldedState.balances) {
+              const balance = unshieldedState.balances[output.type];
+              if (balance < output.amount) {
+                throw new InsufficientFundsError(output.type);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (payFees && this._dustBalancesConfigured) {
+      const dustState = this.dust.state.getValue();
+      if (dustState.balance(new Date()) <= 0n) {
+        throw new InsufficientFundsError('dust');
+      }
+    }
 
     const tx = buildMockTransferTransaction({
       networkId: 'testnet',
       desiredOutputs,
-      payFees: options.payFees ?? true,
+      payFees,
       ttl: options.ttl,
     });
 
@@ -316,6 +377,45 @@ class MockWalletFacade implements WalletFacadeView {
     _secretKeys: TransactionSecretKeys,
     options: SwapTransactionOptions,
   ): Promise<UnprovenTransactionRecipe> {
+    const payFees = options.payFees ?? false;
+
+    // Check balances only for tokens explicitly listed in configured balances
+    // Tokens not in the balances object are assumed to have infinite balance
+    // This simulates real WalletFacade behavior which throws on insufficient funds
+
+    if (this._shieldedBalancesConfigured && desiredInputs.shielded !== undefined) {
+      const shieldedState = this.shielded.state.getValue();
+      for (const [type, value] of Object.entries(desiredInputs.shielded)) {
+        // Only check if this specific token is in the balances object
+        if (type in shieldedState.balances) {
+          const balance = shieldedState.balances[type];
+          if (balance < value) {
+            throw new InsufficientFundsError(type);
+          }
+        }
+      }
+    }
+
+    if (this._unshieldedBalancesConfigured && desiredInputs.unshielded !== undefined) {
+      const unshieldedState = this.unshielded.state.getValue();
+      for (const [type, value] of Object.entries(desiredInputs.unshielded)) {
+        // Only check if this specific token is in the balances object
+        if (type in unshieldedState.balances) {
+          const balance = unshieldedState.balances[type];
+          if (balance < value) {
+            throw new InsufficientFundsError(type);
+          }
+        }
+      }
+    }
+
+    if (payFees && this._dustBalancesConfigured) {
+      const dustState = this.dust.state.getValue();
+      if (dustState.balance(new Date()) <= 0n) {
+        throw new InsufficientFundsError('dust');
+      }
+    }
+
     // Convert inputs to DesiredInput array
     const inputs: DesiredInput[] = [];
     if (desiredInputs.shielded !== undefined) {
@@ -339,7 +439,7 @@ class MockWalletFacade implements WalletFacadeView {
       networkId: 'testnet',
       desiredInputs: inputs,
       desiredOutputs: outputs,
-      payFees: options.payFees ?? false,
+      payFees,
       intentId,
       ttl: options.ttl,
     });
@@ -365,10 +465,157 @@ class MockWalletFacade implements WalletFacadeView {
       // The mock transaction is already finalized (we built it that way)
       return recipe.transaction as unknown as ledger.FinalizedTransaction;
     } else if (recipe.type === 'UNBOUND_TRANSACTION') {
-      return recipe.baseTransaction.bind();
+      // For unsealed transactions, we need to combine base + balancing and bind
+      const baseTx = recipe.baseTransaction;
+      const balancingTx = recipe.balancingTransaction;
+
+      // If there's a balancing transaction with DustActions, create a combined result
+      if (balancingTx !== undefined) {
+        return this.buildCombinedMockTransaction(baseTx, balancingTx);
+      }
+
+      return baseTx.bind();
     } else {
-      return recipe.originalTransaction;
+      // FINALIZED_TRANSACTION: combine original with balancing transaction
+      // The balancing transaction contains DustActions for fee payment
+      const originalTx = recipe.originalTransaction;
+      const balancingTx = recipe.balancingTransaction;
+
+      // Build a combined mock transaction that includes DustActions from balancing
+      return this.buildCombinedMockTransactionFromFinalized(originalTx, balancingTx);
     }
+  }
+
+  /**
+   * Build a combined mock transaction from an unbound transaction and balancing transaction.
+   * Preserves the base transaction structure and adds DustActions from balancing.
+   */
+  private buildCombinedMockTransaction(
+    _baseTx: UnboundTransaction,
+    balancingTx: ledger.UnprovenTransaction,
+  ): ledger.FinalizedTransaction {
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    const intent = ledger.Intent.new(ttl);
+
+    // Copy DustActions from balancing transaction if present
+    const balancingIntent = balancingTx.intents?.get(0);
+    if (balancingIntent?.dustActions !== undefined) {
+      intent.dustActions = balancingIntent.dustActions;
+    }
+
+    // Build a new transaction with the intent
+    const tx = ledger.Transaction.fromParts('testnet', undefined, undefined, intent);
+    return tx.mockProve().bind();
+  }
+
+  /**
+   * Build a combined mock transaction from a finalized transaction and balancing transaction.
+   * In production, this would merge the transactions. For mocks, we create a new
+   * transaction that has the expected properties (intents, DustActions, binding).
+   *
+   * Since we can't easily merge ledger transactions, we build a new mock transaction
+   * that has the required structure for test verification:
+   * - Binding randomness (sealed)
+   * - At least one intent
+   * - DustActions from the balancing transaction
+   */
+  private buildCombinedMockTransactionFromFinalized(
+    _originalTx: ledger.FinalizedTransaction,
+    balancingTx: ledger.UnprovenTransaction,
+  ): ledger.FinalizedTransaction {
+    const ttl = new Date(Date.now() + 60 * 60 * 1000);
+    const intent = ledger.Intent.new(ttl);
+
+    // Copy DustActions from balancing transaction if present
+    const balancingIntent = balancingTx.intents?.get(0);
+    if (balancingIntent?.dustActions !== undefined) {
+      intent.dustActions = balancingIntent.dustActions;
+    }
+
+    // Build a new transaction with the intent that has DustActions
+    const tx = ledger.Transaction.fromParts('testnet', undefined, undefined, intent);
+    return tx.mockProve().bind();
+  }
+
+  async balanceUnboundTransaction(
+    tx: UnboundTransaction,
+    _secretKeys: TransactionSecretKeys,
+    options: BalancingOptions,
+  ): Promise<UnboundTransactionRecipe> {
+    // Check if we should balance dust (pay fees)
+    const shouldBalanceDust =
+      options.tokenKindsToBalance === 'all' ||
+      (Array.isArray(options.tokenKindsToBalance) && options.tokenKindsToBalance.includes('dust'));
+
+    // For mock: check if we have dust balance when fees are required
+    if (shouldBalanceDust) {
+      const dustState = this.dust.state.getValue();
+      const dustBalance = dustState.balance(new Date());
+      if (dustBalance <= 0n) {
+        throw new InsufficientFundsError('dust');
+      }
+    }
+
+    // Build a mock balancing transaction with DustSpend if needed
+    const balancingTx = shouldBalanceDust ? this.buildMockBalancingTransaction(options.ttl) : undefined;
+
+    return {
+      type: 'UNBOUND_TRANSACTION',
+      baseTransaction: tx,
+      balancingTransaction: balancingTx,
+    };
+  }
+
+  async balanceFinalizedTransaction(
+    tx: ledger.FinalizedTransaction,
+    _secretKeys: TransactionSecretKeys,
+    options: BalancingOptions,
+  ): Promise<FinalizedTransactionRecipe> {
+    // Check if we should balance dust (pay fees)
+    const shouldBalanceDust =
+      options.tokenKindsToBalance === 'all' ||
+      (Array.isArray(options.tokenKindsToBalance) && options.tokenKindsToBalance.includes('dust'));
+
+    // For mock: check if we have dust balance when fees are required
+    if (shouldBalanceDust) {
+      const dustState = this.dust.state.getValue();
+      const dustBalance = dustState.balance(new Date());
+      if (dustBalance <= 0n) {
+        throw new InsufficientFundsError('dust');
+      }
+    }
+
+    // Build a mock balancing transaction with DustSpend if needed
+    const balancingTx = this.buildMockBalancingTransaction(options.ttl, shouldBalanceDust);
+
+    return {
+      type: 'FINALIZED_TRANSACTION',
+      originalTransaction: tx,
+      balancingTransaction: balancingTx,
+    };
+  }
+
+  private buildMockBalancingTransaction(ttl: Date, includeDustSpend: boolean = true): ledger.UnprovenTransaction {
+    // Create a minimal unproven transaction for balancing
+    const intent = ledger.Intent.new(ttl);
+
+    if (includeDustSpend) {
+      // Add DustActions to indicate fee payment
+      const dustActions = new ledger.DustActions<ledger.SignatureEnabled, ledger.PreProof>(
+        'signature',
+        'pre-proof',
+        new Date(),
+        [],
+        [],
+      );
+      intent.dustActions = dustActions;
+    }
+
+    // Create transaction and explicitly set the intents map
+    const tx = ledger.Transaction.fromParts('testnet', undefined, undefined, intent);
+    // Ensure the intent is accessible in the intents map at key 0 (guaranteed section)
+    tx.intents = new Map([[0, intent]]);
+    return tx;
   }
 }
 
@@ -851,9 +1098,14 @@ export interface MockUnsealedTransactionOptions {
  * Creates a transaction with shielded outputs that create imbalances,
  * simulating what a DApp would send for balancing.
  *
- * Note: In unit tests with mocks, the actual transaction bytes don't need
- * to be a true PreBinding transaction - the mock facade handles it.
- * For integration tests, real UnboundTransaction from proving would be used.
+ * LIMITATION: mockProve() internally also binds the transaction. We cannot create
+ * true pre-binding transactions without real proving. For unit tests, this function
+ * returns a SEALED transaction that can be used with the mock facade (which accepts
+ * any bytes). The `balanceUnsealedTransaction` tests that verify unsealed vs sealed
+ * distinction will detect this as sealed, which is correct behavior.
+ *
+ * Happy path tests for `balanceUnsealedTransaction` require integration testing
+ * with a real prover to create true pre-binding transactions.
  */
 export function buildMockUnsealedTransaction(options: MockUnsealedTransactionOptions): string {
   // Default token type: 64-character hex string (32 bytes)
@@ -873,8 +1125,8 @@ export function buildMockUnsealedTransaction(options: MockUnsealedTransactionOpt
   // Create transaction with the shielded offer
   const tx = ledger.Transaction.fromParts(networkId, shieldedOffer, undefined, intent);
 
-  // Mock prove (which also binds for mockProve)
-  // For unit tests with mocks, we serialize and return as hex
+  // mockProve() creates a proven AND bound transaction (despite type saying PreBinding)
+  // This is a ledger limitation - we can't create true pre-binding transactions in tests
   const provenTx = tx.mockProve();
 
   return Buffer.from(provenTx.serialize()).toString('hex');

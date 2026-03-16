@@ -180,8 +180,12 @@ describe('APIError', () => {
       expect(ErrorCodes.Disconnected).toBe('Disconnected');
     });
 
-    it('should have exactly 5 error codes', () => {
-      expect(Object.keys(ErrorCodes)).toHaveLength(5);
+    it('should have InsufficientFunds code', () => {
+      expect(ErrorCodes.InsufficientFunds).toBe('InsufficientFunds');
+    });
+
+    it('should have exactly 6 error codes', () => {
+      expect(Object.keys(ErrorCodes)).toHaveLength(6);
     });
 
     it('should have all codes as strings', () => {
