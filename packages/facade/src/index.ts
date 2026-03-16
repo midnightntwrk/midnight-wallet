@@ -38,6 +38,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe } from 'effect';
 import { combineLatest, map, type Observable, firstValueFrom, Subscription, concatMap } from 'rxjs';
 import {
@@ -179,6 +181,29 @@ export class FacadeState {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
+/**
+ * The Terms and Conditions returned by the indexer, containing a URL for display
+ * and a SHA-256 hash for content verification.
+ */
+export type TermsAndConditions = {
+  /** The hex-encoded SHA-256 hash of the Terms and Conditions document. */
+  hash: string;
+  /** The URL pointing to the Terms and Conditions document. */
+  url: string;
+};
+
+/**
+ * Minimal configuration required for {@link WalletFacade.fetchTermsAndConditions}.
+ * Accepts the shared `indexerClientConnection` sub-object found on all wallet configurations,
+ * so callers can pass the full wallet configuration directly without any adaptation.
+ */
+export type FetchTermsAndConditionsConfiguration = {
+  indexerClientConnection: {
+    indexerHttpUrl: string;
+    indexerWsUrl?: string;
+  };
+};
+
 export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   DefaultShieldedConfiguration &
   DefaultDustConfiguration &
@@ -227,6 +252,39 @@ export class WalletFacade {
         "Missing required configuration: 'provingServerUrl' must be set in config, or provide a custom provingService in init parameters.",
       );
     }
+  }
+
+  /**
+   * Fetches the current Terms and Conditions from the network indexer.
+   *
+   * This is a static, pre-initialization utility — no wallet instance is required.
+   * Wallet builders should call this before or independently of wallet initialization
+   * to display the current T&C to end users and obtain the hash for content verification.
+   *
+   * The returned `hash` is the hex-encoded SHA-256 hash of the document at `url`.
+   * Wallet builders are responsible for fetching and rendering the document content
+   * via `url` in whatever manner suits their application.
+   *
+   * @param configuration - An object with an `indexerClientConnection.indexerHttpUrl`.
+   *   Any wallet configuration that satisfies {@link FetchTermsAndConditionsConfiguration} can be passed directly.
+   * @returns A promise resolving to the current {@link TermsAndConditions}, or rejecting if
+   *   no Terms and Conditions have been set on the network yet.
+   */
+  static async fetchTermsAndConditions(
+    configuration: FetchTermsAndConditionsConfiguration,
+  ): Promise<TermsAndConditions> {
+    const result = await QueryRunner.runPromise(
+      FetchTermsAndConditionsQuery,
+      {},
+      {
+        url: configuration.indexerClientConnection.indexerHttpUrl,
+      },
+    );
+    const tc = result.block?.systemParameters?.termsAndConditions;
+    if (!tc) {
+      throw new Error('Terms and Conditions are not currently set on the network.');
+    }
+    return tc;
   }
 
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
