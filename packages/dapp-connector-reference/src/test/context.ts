@@ -6,8 +6,9 @@
  */
 
 import type { WalletConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
+import type * as ledger from '@midnight-ntwrk/ledger-v7';
 import type { Connector } from '../index.js';
-import type { MockBalancesConfig, MockHistoryEntry } from './testUtils.js';
+import type { MockBalancesConfig, MockHistoryEntry, ShieldedAddressWithKeys, UnshieldedAddressWithKeys } from './testUtils.js';
 
 /**
  * Options for creating a connected API instance.
@@ -15,6 +16,53 @@ import type { MockBalancesConfig, MockHistoryEntry } from './testUtils.js';
 export interface CreateConnectedAPIOptions {
   /** Network ID to connect with. Defaults to implementation's default (usually 'testnet'). */
   readonly networkId?: string;
+}
+
+/**
+ * Test environment providing addresses, token types, and helpers.
+ * Used by transaction tests (transfer, intent, balancing).
+ */
+export interface TestEnvironment {
+  /** Network ID for address encoding (e.g., 'testnet') */
+  readonly networkId: string;
+
+  /** Pre-encoded test addresses for the network (Bech32m format) */
+  readonly addresses: {
+    readonly shielded: string;
+    readonly shielded2: string;
+    readonly unshielded: string;
+    readonly unshielded2: string;
+  };
+
+  /**
+   * Address keys for verification (optional).
+   * Only available for implementations that can provide secret keys for testing.
+   * Enables decryption-based verification of shielded outputs.
+   */
+  readonly addressKeys?: {
+    readonly shielded: ShieldedAddressWithKeys;
+    readonly shielded2: ShieldedAddressWithKeys;
+    readonly unshielded: UnshieldedAddressWithKeys;
+    readonly unshielded2: UnshieldedAddressWithKeys;
+  };
+
+  /** Standard token types for testing (64-char hex strings) */
+  readonly tokenTypes: {
+    readonly standard: string;
+    readonly alternate: string;
+  };
+
+  /**
+   * Build a mock sealed transaction for balancing tests (optional).
+   * Only available for implementations that can build mock transactions.
+   */
+  readonly buildSealedTransaction?: (options: { networkId: string }) => ledger.FinalizedTransaction;
+
+  /**
+   * Serialize a transaction to hex string (optional).
+   * Only available for implementations that support transaction serialization.
+   */
+  readonly serializeTransaction?: (tx: ledger.FinalizedTransaction) => string;
 }
 
 /**
@@ -39,6 +87,12 @@ export interface ConnectedAPIInstance {
 export interface DappConnectorTestContext {
   /** Name for test output (e.g., "reference", "browser-extension") */
   readonly implementationName: string;
+
+  /**
+   * Test environment with addresses, token types, and helpers.
+   * Required for transaction tests (transfer, intent, balancing).
+   */
+  readonly environment: TestEnvironment;
 
   /**
    * Factory to create a Connector instance.
@@ -73,7 +127,7 @@ export interface DappConnectorTestContext {
    * Configure mock balances for transfer/intent tests.
    * Only available for implementations that support mocking.
    *
-   * @returns A new context factory with the configured balances.
+   * @returns The same context with configured balances (for chaining).
    */
   readonly withBalances?: (config: MockBalancesConfig) => DappConnectorTestContext;
 
@@ -81,7 +135,7 @@ export interface DappConnectorTestContext {
    * Configure transaction history for history tests.
    * Only available for implementations that support mocking.
    *
-   * @returns A new context factory with the configured history.
+   * @returns The same context with configured history (for chaining).
    */
   readonly withTransactionHistory?: (entries: MockHistoryEntry[]) => DappConnectorTestContext;
 
@@ -89,7 +143,7 @@ export interface DappConnectorTestContext {
    * Configure submission error for submission tests.
    * Only available for implementations that support mocking.
    *
-   * @returns A new context factory with the configured error.
+   * @returns The same context with configured error (for chaining).
    */
   readonly withSubmissionError?: (error: Error) => DappConnectorTestContext;
 }
@@ -106,4 +160,20 @@ export type ConnectedAPITestContext = Pick<DappConnectorTestContext, 'implementa
 export type InstallationTestContext = Pick<
   DappConnectorTestContext,
   'implementationName' | 'createConnector' | 'installTarget'
+>;
+
+/**
+ * Helper type for transaction tests (transfer, intent) that need environment and balances.
+ */
+export type TransactionTestContext = Pick<
+  DappConnectorTestContext,
+  'implementationName' | 'createConnectedAPI' | 'environment' | 'withBalances'
+>;
+
+/**
+ * Helper type for balancing tests that need environment and transaction builders.
+ */
+export type BalancingTestContext = Pick<
+  DappConnectorTestContext,
+  'implementationName' | 'createConnectedAPI' | 'environment' | 'withBalances'
 >;

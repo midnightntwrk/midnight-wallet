@@ -14,3 +14,6 @@ export { runProvingTests } from './proving.js';
 export { runHistoryTests } from './history.js';
 export { runDisconnectionTests } from './disconnection.js';
 export { runValidationTests } from './validation.js';
+export { runTransferTests } from './transfer.js';
+export { runIntentTests } from './intent.js';
+export { runBalancingTests } from './balancing.js';

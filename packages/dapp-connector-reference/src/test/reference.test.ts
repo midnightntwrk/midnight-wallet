@@ -9,8 +9,18 @@ import { describe } from 'vitest';
 import { Connector } from '../index.js';
 import type { ConnectorConfiguration } from '../types.js';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
-import { prepareMockFacade, prepareMockUnshieldedKeystore } from './testUtils.js';
-import type { DappConnectorTestContext, CreateConnectedAPIOptions, ConnectedAPIInstance } from './context.js';
+import {
+  prepareMockFacade,
+  prepareMockUnshieldedKeystore,
+  testShieldedWithKeys,
+  testShieldedWithKeys2,
+  testUnshieldedWithKeys,
+  testUnshieldedWithKeys2,
+  buildMockSealedTransaction,
+  serializeTransaction,
+} from './testUtils.js';
+import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import type { DappConnectorTestContext, CreateConnectedAPIOptions, ConnectedAPIInstance, TestEnvironment } from './context.js';
 
 // Import test suites
 import {
@@ -26,6 +36,9 @@ import {
   runHistoryTests,
   runDisconnectionTests,
   runValidationTests,
+  runTransferTests,
+  runIntentTests,
+  runBalancingTests,
 } from './suites/index.js';
 
 // Default configuration for reference implementation tests
@@ -35,6 +48,40 @@ const defaultConfig: ConnectorConfiguration = {
   indexerWsUri: 'ws://localhost:8080',
   substrateNodeUri: 'ws://localhost:9944',
 };
+
+// Standard token types for testing (64-char hex strings representing 256-bit hashes)
+const standardTokenType = '0000000000000000000000000000000000000000000000000000000000000000';
+const alternateTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+
+/**
+ * Create test environment for the reference implementation.
+ * Provides Bech32m-encoded addresses and token types for transaction tests.
+ */
+const createTestEnvironment = (): TestEnvironment => ({
+  networkId: 'testnet',
+
+  addresses: {
+    shielded: MidnightBech32m.encode('testnet', testShieldedWithKeys.address).asString(),
+    shielded2: MidnightBech32m.encode('testnet', testShieldedWithKeys2.address).asString(),
+    unshielded: MidnightBech32m.encode('testnet', testUnshieldedWithKeys.address).asString(),
+    unshielded2: MidnightBech32m.encode('testnet', testUnshieldedWithKeys2.address).asString(),
+  },
+
+  addressKeys: {
+    shielded: testShieldedWithKeys,
+    shielded2: testShieldedWithKeys2,
+    unshielded: testUnshieldedWithKeys,
+    unshielded2: testUnshieldedWithKeys2,
+  },
+
+  tokenTypes: {
+    standard: standardTokenType,
+    alternate: alternateTokenType,
+  },
+
+  buildSealedTransaction: (options) => buildMockSealedTransaction(options),
+  serializeTransaction: (tx) => serializeTransaction(tx),
+});
 
 /**
  * Create a reference implementation test context.
@@ -48,9 +95,11 @@ const createReferenceContext = (): DappConnectorTestContext => {
   // Create fresh mocks for this context
   const facade = prepareMockFacade();
   const keystore = prepareMockUnshieldedKeystore();
+  const environment = createTestEnvironment();
 
   const context: DappConnectorTestContext = {
     implementationName: 'reference',
+    environment,
     installTarget: {},
 
     createConnector: () => {
@@ -142,4 +191,16 @@ describe('disconnection', () => {
 
 describe('validation', () => {
   runValidationTests(createReferenceContext());
+});
+
+describe('transfer', () => {
+  runTransferTests(createReferenceContext());
+});
+
+describe('intent', () => {
+  runIntentTests(createReferenceContext());
+});
+
+describe('balancing', () => {
+  runBalancingTests(createReferenceContext());
 });
