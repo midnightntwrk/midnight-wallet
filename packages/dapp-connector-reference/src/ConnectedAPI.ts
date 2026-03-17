@@ -123,22 +123,15 @@ const decodeSigningData = (data: string, encoding: 'hex' | 'base64' | 'text'): U
 };
 
 /**
- * Extended ConnectedAPI type that includes disconnect functionality.
- * This extends the base ConnectedAPI with reference implementation specific methods.
- */
-export type ExtendedConnectedAPI = ConnectedAPIType & {
-  /**
-   * Disconnect from the wallet. After calling this method, all API methods
-   * (except getConnectionStatus and hintUsage) will reject with a Disconnected error.
-   */
-  disconnect(): Promise<void>;
-};
-
-/**
  * Reference implementation of the ConnectedAPI interface.
  * Provides wallet functionality to connected DApps.
+ *
+ * Note: This class includes an internal `disconnect()` method for testing purposes.
+ * The public API (WalletConnectedAPI from dapp-connector-api) does not include disconnect -
+ * disconnection is a wallet-side operation, not something DApps can trigger.
+ * Test contexts can access disconnect() by keeping a reference to the concrete class.
  */
-export class ConnectedAPI implements ExtendedConnectedAPI {
+export class ConnectedAPI implements ConnectedAPIType {
   private readonly facade: WalletFacadeView;
   private readonly keystore: WalletKeystore;
   private readonly config: ConnectorConfiguration;

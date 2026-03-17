@@ -4,7 +4,8 @@ import { Data } from 'effect';
 import { SemVer } from 'semver';
 import type { ConnectorConfiguration, WalletFacadeView, WalletKeystore } from './types.js';
 import { APIError } from './errors.js';
-import { ConnectedAPI, type ExtendedConnectedAPI } from './ConnectedAPI.js';
+import type { ConnectedAPI as ConnectedAPIType } from '@midnight-ntwrk/dapp-connector-api';
+import { ConnectedAPI } from './ConnectedAPI.js';
 
 // Re-export parsing functions for use by other DApp Connector implementations
 export {
@@ -148,7 +149,7 @@ export class Connector implements InitialAPI {
     });
   }
 
-  connect(networkId: string): Promise<ExtendedConnectedAPI> {
+  connect(networkId: string): Promise<ConnectedAPIType> {
     if (networkId !== this.configuration.networkId) {
       return Promise.reject(
         APIError.rejected(
@@ -157,7 +158,7 @@ export class Connector implements InitialAPI {
       );
     }
 
-    const connectedAPI: ExtendedConnectedAPI = new ConnectedAPI(this.facade, this.keystore, this.configuration);
+    const connectedAPI = new ConnectedAPI(this.facade, this.keystore, this.configuration);
     return Promise.resolve(Object.freeze(connectedAPI));
   }
 }

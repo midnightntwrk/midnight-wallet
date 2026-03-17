@@ -123,9 +123,14 @@ const createReferenceContext = (): DappConnectorTestContext => {
       const connector = new Connector(metadata, facade, keystore, config);
       const api = await connector.connect(networkId);
 
+      // Type assertion: We know our implementation has disconnect() internally,
+      // but WalletConnectedAPI doesn't expose it (disconnect is wallet-side, not DApp-side).
+      // Test contexts need access to disconnect for proper cleanup.
+      const internalApi = api as unknown as { disconnect(): Promise<void> };
+
       return {
         api,
-        disconnect: () => api.disconnect(),
+        disconnect: () => internalApi.disconnect(),
         networkId,
       };
     },
