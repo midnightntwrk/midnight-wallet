@@ -115,6 +115,11 @@ describe('Token transfer', () => {
         `Wallet 2 shielded address: ${utils.getShieldedAddress(networkId, initialReceiverState.shielded.address)}`,
       );
 
+      const senderInitialTxHistory = await Array.fromAsync(senderInitialState.unshielded.transactionHistory.getAll());
+      const receiverInitialTxHistory = await Array.fromAsync(
+        initialReceiverState.unshielded.transactionHistory.getAll(),
+      );
+
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -201,10 +206,17 @@ describe('Token transfer', () => {
       expect(senderFinalState.unshielded.totalCoins.length).toBeLessThanOrEqual(
         senderInitialState.unshielded.totalCoins.length,
       );
-      // expect(finalState.nullifiers.length).toBeLessThanOrEqual(initialState.nullifiers.length);
-      // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+      // Verify sender unshielded transaction history grew and contains the specific transaction
+      const senderFinalTxHistory = await Array.fromAsync(senderFinalState.unshielded.transactionHistory.getAll());
+      expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
+      const txHash = finalizedTx.transactionHash();
+      const senderTxEntry = await senderFinalState.unshielded.transactionHistory.get(txHash);
+      expect(senderTxEntry).toBeDefined();
+      expect(senderTxEntry!.hash).toBe(txHash);
+      expect(senderTxEntry!.status).toBe('SUCCESS');
+      expect(senderTxEntry!.spentUtxos.length).toBeGreaterThan(0);
+      utils.expectValidUnshieldedTxHistoryEntry(senderTxEntry!);
 
-      // await waitForTxInHistory(txId, receiver);
       const receiverFinalState = await receiver.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState2));
       const receiverFinalShieldedBalance = receiverFinalState.shielded.balances[shieldedTokenRaw] ?? 0n;
@@ -220,6 +232,19 @@ describe('Token transfer', () => {
       expect(receiverFinalState.shielded.totalCoins.length).toBeGreaterThanOrEqual(
         initialReceiverState.shielded.totalCoins.length + 1,
       );
+
+      // Verify receiver unshielded transaction history grew and contains the specific transaction
+      const receiverFinalTxHistory = await Array.fromAsync(receiverFinalState.unshielded.transactionHistory.getAll());
+      expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
+      const receiverTxEntry = await receiverFinalState.unshielded.transactionHistory.get(txHash);
+      expect(receiverTxEntry).toBeDefined();
+      expect(receiverTxEntry!.hash).toBe(txHash);
+      expect(receiverTxEntry!.status).toBe('SUCCESS');
+      expect(receiverTxEntry!.createdUtxos.length).toBeGreaterThan(0);
+      // Receiver should have received the unshielded output value
+      const receivedUtxo = receiverTxEntry!.createdUtxos.find((u) => u.value === outputValue);
+      expect(receivedUtxo).toBeDefined();
+      utils.expectValidUnshieldedUtxoFields(receivedUtxo!);
     },
     syncTimeout,
   );

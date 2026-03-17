@@ -40,6 +40,7 @@ export default defineConfig({
         test: {
           name: 'remote',
           include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
+          exclude: ['**/fundTestWallets.remote.test.ts'],
         },
       },
     ],

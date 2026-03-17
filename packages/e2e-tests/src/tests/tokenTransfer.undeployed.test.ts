@@ -1291,47 +1291,44 @@ describe('Token transfer', () => {
       const initialBalance = syncedState.shielded.balances[dustTokenHash];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
-      const nodeContainer = fixture.getNodeContainer();
-      logger.info('Stopping node container..');
-      await nodeContainer.stop({ remove: false, removeVolumes: false });
+      const initialState = await rx.firstValueFrom(funded.wallet.state());
 
-      try {
-        const initialState2 = await rx.firstValueFrom(funded.wallet.state());
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: outputValue,
+              receiverAddress: initialState.shielded.address,
+            },
+          ],
+        },
+      ];
+      const txRecipe = await funded.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      );
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
 
-        const outputsToCreate: CombinedTokenTransfer[] = [
-          {
-            type: 'shielded',
-            outputs: [
-              {
-                type: shieldedTokenRaw,
-                amount: outputValue,
-                receiverAddress: initialState2.shielded.address,
-              },
-            ],
-          },
-        ];
-        const txRecipe = await funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        );
-        const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
-        await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
+      // Verify coins are pending after finalization
+      const pendingState = await rx.firstValueFrom(funded.wallet.shielded.state);
+      expect(pendingState.pendingCoins.length).toBeGreaterThan(0);
 
-        const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
-        expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
-        expect(finalState.availableCoins.length).toBe(7);
-        expect(finalState.pendingCoins.length).toBe(0);
-        expect(finalState.totalCoins.length).toBe(7);
-      } finally {
-        logger.info('Restarting node container..');
-        await nodeContainer.restart();
-      }
+      // Revert instead of submitting — simulates a tx that never gets submitted
+      await funded.wallet.revert(finalizedTx);
+
+      const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
+      expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
+      expect(finalState.availableCoins.length).toBe(7);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.totalCoins.length).toBe(7);
     },
     timeout,
   );

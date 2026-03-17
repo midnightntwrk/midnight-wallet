@@ -73,7 +73,7 @@ describe('Smoke tests', () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
-      const balance = 2500000000000000n;
+      const balance = 250000000000000n;
       const unshieldedFundedKeyStore = createKeystore(
         utils.getUnshieldedSeed(seedFunded),
         NetworkId.NetworkId.Undeployed,
@@ -174,6 +174,17 @@ describe('Smoke tests', () => {
       expect(finalState2.unshielded.availableCoins.length).toBe(1);
       expect(finalState2.shielded.pendingCoins.length).toBe(0);
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
+
+      // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
+      const senderTxHistory = await Array.fromAsync(finalState.unshielded.transactionHistory.getAll());
+      utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
+
+      const receiverTxHistory = await Array.fromAsync(finalState2.unshielded.transactionHistory.getAll());
+      expect(receiverTxHistory.length).toBeGreaterThan(0);
+      // Receiver should have at least one entry with createdUtxos
+      const receiverEntryWithCreated = receiverTxHistory.find((e) => e.createdUtxos.length > 0);
+      expect(receiverEntryWithCreated).toBeDefined();
+      expect(receiverEntryWithCreated!.createdUtxos[0].value).toBe(outputValue);
     },
     timeout,
   );
@@ -220,8 +231,14 @@ describe('Smoke tests', () => {
         txHistoryStorage,
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       logger.info(`Waiting to sync...`);
-      // const syncedState = await utils.waitForSyncUnshielded(initialWallet);
-      // TODO add assertion for Tx history
+      await initialWallet.start();
+      const syncedState = await utils.waitForSyncUnshielded(initialWallet);
+      const initialTxHistory = await Array.fromAsync(syncedState.transactionHistory.getAll());
+      expect(initialTxHistory.length).toBeGreaterThan(0);
+      for (const entry of initialTxHistory) {
+        expect(Array.isArray(entry.createdUtxos)).toBe(true);
+        expect(Array.isArray(entry.spentUtxos)).toBe(true);
+      }
       const serializedState = await initialWallet.serializeState();
       const serializedTxHistory = txHistoryStorage.serialize();
       await initialWallet.stop();
@@ -239,7 +256,12 @@ describe('Smoke tests', () => {
       await restoredWallet.start();
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();
-      // TODO add assertion for Tx history
+      const restoredTxHistoryEntries = await Array.fromAsync(restoredState.transactionHistory.getAll());
+      expect(restoredTxHistoryEntries.length).toBe(initialTxHistory.length);
+      for (const entry of restoredTxHistoryEntries) {
+        expect(Array.isArray(entry.createdUtxos)).toBe(true);
+        expect(Array.isArray(entry.spentUtxos)).toBe(true);
+      }
       await restoredWallet.stop();
     },
     timeout,
