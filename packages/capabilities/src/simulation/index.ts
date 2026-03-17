@@ -10,8 +10,5 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './balancer/index.js';
-export * from './pendingTransactions/index.js';
-export * from './proving/index.js';
-export * from './simulation/index.js';
-export * from './submission/index.js';
+
+export { Simulator, type SimulatorState, type SimulatorConfig, type BlockInfo, type GenesisMint, type StrictnessConfig } from './Simulator.js';

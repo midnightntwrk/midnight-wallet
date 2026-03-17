@@ -37,6 +37,10 @@
     "./proving": {
       "types": "./dist/proving/index.d.ts",
       "import": "./dist/proving/index.js"
+    },
+    "./simulation": {
+      "types": "./dist/simulation/index.d.ts",
+      "import": "./dist/simulation/index.js"
     }
   },
   "dependencies": {
