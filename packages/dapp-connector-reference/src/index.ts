@@ -17,6 +17,10 @@ export {
   parseDesiredInputs,
 } from './parsing.js';
 
+// Re-export proving provider factories and types
+export { createWasmProvingProviderFactory, createMockProvingProviderFactory } from './proving.js';
+export type { ProvingProviderFactory } from './types.js';
+
 export class InstallationError extends Data.TaggedError('InstallationError')<{
   message: string;
   cause: Error;

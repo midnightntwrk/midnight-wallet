@@ -3,7 +3,7 @@
  * Tests getProvingProvider method.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/dapp-connector-api';
@@ -40,34 +40,7 @@ export const runProvingTests = (context: ConnectedAPITestContext): void => {
     });
   });
 
-  describe('current implementation', () => {
-    it('should throw "Not implemented" error', async () => {
-      const { api, disconnect } = await context.createConnectedAPI();
-
-      try {
-        const keyMaterialProvider = createMockKeyMaterialProvider();
-
-        // Current reference implementation does not support proving delegation
-        // This test documents the current behavior
-        await expect(api.getProvingProvider(keyMaterialProvider)).rejects.toThrow('Not implemented');
-      } finally {
-        await disconnect();
-      }
-    });
-  });
-
-  // =============================================================================
-  // Future Implementation Tests (skipped until prover integration is available)
-  // =============================================================================
-  // When implementing proving delegation:
-  // 1. Add proving service to WalletFacadeView interface
-  // 2. Implement ProvingProvider wrapper that:
-  //    - Uses keyMaterialProvider to resolve circuit keys
-  //    - Delegates to facade's prover for check() and prove()
-  // 3. Enable these tests
-  // =============================================================================
-
-  describe.skip('provider interface', () => {
+  describe('provider interface', () => {
     it('should return a ProvingProvider with check method', async () => {
       const { api, disconnect } = await context.createConnectedAPI();
 
@@ -97,28 +70,7 @@ export const runProvingTests = (context: ConnectedAPITestContext): void => {
     });
   });
 
-  describe.skip('check method', () => {
-    it('should call keyMaterialProvider to resolve keys', async () => {
-      const { api, disconnect } = await context.createConnectedAPI();
-
-      try {
-        const keyMaterialProvider = createMockKeyMaterialProvider();
-        const getZKIRSpy = vi.spyOn(keyMaterialProvider, 'getZKIR');
-        const getVerifierKeySpy = vi.spyOn(keyMaterialProvider, 'getVerifierKey');
-
-        const provider = await api.getProvingProvider(keyMaterialProvider);
-        const preimage = new Uint8Array([0, 1, 2, 3]);
-        const keyLocation = 'test-circuit';
-
-        await provider.check(preimage, keyLocation);
-
-        expect(getZKIRSpy).toHaveBeenCalledWith(keyLocation);
-        expect(getVerifierKeySpy).toHaveBeenCalledWith(keyLocation);
-      } finally {
-        await disconnect();
-      }
-    });
-
+  describe('check method', () => {
     it('should return array of bigint or undefined values', async () => {
       const { api, disconnect } = await context.createConnectedAPI();
 
@@ -141,26 +93,7 @@ export const runProvingTests = (context: ConnectedAPITestContext): void => {
     });
   });
 
-  describe.skip('prove method', () => {
-    it('should call keyMaterialProvider to resolve prover key', async () => {
-      const { api, disconnect } = await context.createConnectedAPI();
-
-      try {
-        const keyMaterialProvider = createMockKeyMaterialProvider();
-        const getProverKeySpy = vi.spyOn(keyMaterialProvider, 'getProverKey');
-
-        const provider = await api.getProvingProvider(keyMaterialProvider);
-        const preimage = new Uint8Array([0, 1, 2, 3]);
-        const keyLocation = 'test-circuit';
-
-        await provider.prove(preimage, keyLocation);
-
-        expect(getProverKeySpy).toHaveBeenCalledWith(keyLocation);
-      } finally {
-        await disconnect();
-      }
-    });
-
+  describe('prove method', () => {
     it('should return proof as Uint8Array', async () => {
       const { api, disconnect } = await context.createConnectedAPI();
 

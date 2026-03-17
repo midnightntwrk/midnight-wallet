@@ -1,4 +1,4 @@
-import type { Configuration, TxStatus } from '@midnight-ntwrk/dapp-connector-api';
+import type { Configuration, TxStatus, KeyMaterialProvider, ProvingProvider } from '@midnight-ntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
 import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import type * as ledger from '@midnight-ntwrk/ledger-v7';
@@ -373,6 +373,23 @@ export interface WalletFacadeView {
   submitTransaction(tx: ledger.FinalizedTransaction): Promise<void>;
 }
 
+// =============================================================================
+// Proving Provider Types
+// =============================================================================
+
+/**
+ * Factory function that creates a ProvingProvider from a DApp-provided KeyMaterialProvider.
+ *
+ * This abstraction allows swapping the proving implementation:
+ * - WASM-based proving (in-browser, using zkir-v2)
+ * - HTTP-based proving (remote prover server)
+ * - Mock proving (for testing)
+ *
+ * The factory receives a KeyMaterialProvider from the DApp that knows how to fetch
+ * circuit keys (ZKIR, prover key, verifier key) for specific circuits.
+ */
+export type ProvingProviderFactory = (keyMaterialProvider: KeyMaterialProvider) => ProvingProvider;
+
 /**
  * Configuration required for the DApp Connector.
  * Contains network information and service URIs.
@@ -388,6 +405,14 @@ export type ConnectorConfiguration = {
   proverServerUri?: string | undefined;
   /** URI for the Substrate RPC node */
   substrateNodeUri: string;
+  /**
+   * Factory for creating ProvingProvider instances.
+   * If not provided, getProvingProvider will throw an error.
+   *
+   * Use createWasmProvingProviderFactory() for WASM-based proving,
+   * or provide a custom factory for other proving backends.
+   */
+  provingProviderFactory?: ProvingProviderFactory | undefined;
 };
 
 /**

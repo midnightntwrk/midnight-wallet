@@ -6,7 +6,7 @@
  */
 
 import { describe } from 'vitest';
-import { Connector } from '../index.js';
+import { Connector, createMockProvingProviderFactory } from '../index.js';
 import type { ConnectorConfiguration } from '../types.js';
 import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
 import {
@@ -41,12 +41,21 @@ import {
   runBalancingTests,
 } from './suites/index.js';
 
+// Mock proving provider factory for tests
+const mockProvingProviderFactory = createMockProvingProviderFactory(
+  // check: return empty array (no constraint violations)
+  async () => [],
+  // prove: return dummy proof bytes
+  async () => new Uint8Array([0x00, 0x01, 0x02, 0x03]),
+);
+
 // Default configuration for reference implementation tests
 const defaultConfig: ConnectorConfiguration = {
   networkId: 'testnet',
   indexerUri: 'http://localhost:8080',
   indexerWsUri: 'ws://localhost:8080',
   substrateNodeUri: 'ws://localhost:9944',
+  provingProviderFactory: mockProvingProviderFactory,
 };
 
 // Standard token types for testing (64-char hex strings representing 256-bit hashes)

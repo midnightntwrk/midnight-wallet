@@ -440,11 +440,28 @@ export class ConnectedAPI implements ExtendedConnectedAPI {
     };
   }
 
-  getProvingProvider(_keyMaterialProvider: KeyMaterialProvider): Promise<ProvingProvider> {
+  getProvingProvider(keyMaterialProvider: KeyMaterialProvider): Promise<ProvingProvider> {
     if (!this.connected) {
       return Promise.reject(APIError.disconnected('Not connected to wallet'));
     }
-    return Promise.reject(new Error('Not implemented'));
+
+    const factory = this.config.provingProviderFactory;
+    if (factory === undefined) {
+      return Promise.reject(
+        APIError.invalidRequest(
+          'Proving provider not configured. Set provingProviderFactory in ConnectorConfiguration.',
+        ),
+      );
+    }
+
+    try {
+      const provider = factory(keyMaterialProvider);
+      return Promise.resolve(provider);
+    } catch (error) {
+      return Promise.reject(
+        APIError.invalidRequest(`Failed to create proving provider: ${error instanceof Error ? error.message : error}`),
+      );
+    }
   }
 
   // Hint Usage
