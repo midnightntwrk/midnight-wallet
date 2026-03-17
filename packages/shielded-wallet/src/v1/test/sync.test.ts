@@ -49,13 +49,16 @@ const createMockEventHex = async (): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const simulator = yield* Simulator.init([
-      {
-        amount: 1000n,
-        type: ledger.shieldedToken().raw,
-        recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
-      },
-    ]).pipe(Effect.provideService(Scope.Scope, scope));
+    const simulator = yield* Simulator.init({
+      mode: 'genesis',
+      genesisMints: [
+        {
+          amount: 1000n,
+          type: ledger.shieldedToken().raw,
+          recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
+        },
+      ],
+    }).pipe(Effect.provideService(Scope.Scope, scope));
 
     const stateOption = yield* simulator.state$.pipe(Stream.take(1), Stream.runHead);
     const state = Option.match(stateOption, {
@@ -65,6 +68,9 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
+    if (state.lastTxResult === undefined) {
+      throw new Error('No transaction result from simulator');
+    }
     const events = state.lastTxResult.events;
     if (events.length === 0) {
       throw new Error('No events generated from simulator');

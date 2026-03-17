@@ -267,14 +267,14 @@ export const makeSimulatorSyncService = (
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   return {
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
-      const {
-        update: {
-          lastTxResult: { events },
-        },
-        secretKeys,
-      } = update;
+      const { update: simulatorUpdate, secretKeys } = update;
 
-      return CoreWallet.replayEvents(state, secretKeys, events);
+      // In blank mode, lastTxResult may be undefined (no genesis transaction)
+      if (simulatorUpdate.lastTxResult === undefined) {
+        return state;
+      }
+
+      return CoreWallet.replayEvents(state, secretKeys, simulatorUpdate.lastTxResult.events);
     },
   };
 };

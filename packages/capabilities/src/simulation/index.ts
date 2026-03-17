@@ -11,4 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export { Simulator, type SimulatorState, type SimulatorConfig, type BlockInfo, type GenesisMint, type StrictnessConfig } from './Simulator.js';
+export {
+  Simulator,
+  type SimulatorState,
+  type SimulatorConfig,
+  type BlockInfo,
+  type GenesisMint,
+  type StrictnessConfig,
+} from './Simulator.js';

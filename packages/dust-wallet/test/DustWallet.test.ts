@@ -170,7 +170,9 @@ describe('DustWallet', () => {
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const scope = yield* Scope.make();
 
-      simulator = yield* Simulator.init(NETWORK).pipe(Effect.provideService(Scope.Scope, scope));
+      simulator = yield* Simulator.init({ mode: 'blank', networkId: NETWORK }).pipe(
+        Effect.provideService(Scope.Scope, scope),
+      );
 
       walletVariant = new V1Builder()
         .withTransactionType<ProofErasedTransaction>()

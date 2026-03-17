@@ -97,11 +97,21 @@ export type StrictnessConfig = Readonly<{
  */
 export type SimulatorConfig =
   | { readonly mode: 'blank'; readonly networkId: NetworkId.NetworkId }
-  | { readonly mode: 'genesis'; readonly genesisMints: Arr.NonEmptyArray<GenesisMint>; readonly networkId?: NetworkId.NetworkId };
+  | {
+      readonly mode: 'genesis';
+      readonly genesisMints: Arr.NonEmptyArray<GenesisMint>;
+      readonly networkId?: NetworkId.NetworkId;
+    };
 
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+/**
+ * Ensure hex string has even length by padding with leading zero if needed.
+ * Required for proper hex decoding.
+ */
+const padHexToEvenLength = (hex: string): string => (hex.length % 2 === 0 ? hex : hex.padStart(hex.length + 1, '0'));
 
 /**
  * Compute SHA-256 hash of a hex string.
@@ -109,7 +119,9 @@ export type SimulatorConfig =
 const simpleHash = (input: string): Effect.Effect<string> =>
   Encoding.decodeHex(input).pipe(
     EitherOps.toEffect,
-    Effect.andThen((parsed) => Effect.promise(() => crypto.subtle.digest('SHA-256', parsed as Uint8Array<ArrayBuffer>))),
+    Effect.andThen((parsed) =>
+      Effect.promise(() => crypto.subtle.digest('SHA-256', parsed as Uint8Array<ArrayBuffer>)),
+    ),
     Effect.andThen((out) => Encoding.encodeHex(new Uint8Array(out))),
     Effect.orDie,
   );
@@ -117,6 +129,9 @@ const simpleHash = (input: string): Effect.Effect<string> =>
 /**
  * Create a WellFormedStrictness instance with configurable options.
  * All options default to false for maximum testing flexibility.
+ *
+ * Note: WellFormedStrictness is a class from the ledger library that requires
+ * mutation to configure. This is unavoidable given the external API design.
  */
 const createStrictness = (config: StrictnessConfig = {}): WellFormedStrictness => {
   const strictness = new WellFormedStrictness();
@@ -127,6 +142,20 @@ const createStrictness = (config: StrictnessConfig = {}): WellFormedStrictness =
   strictness.verifySignatures = config.verifySignatures ?? false;
   return strictness;
 };
+
+/**
+ * Create a Simulator from an initial state with proper stream setup.
+ */
+const createSimulatorFromState = (initialState: SimulatorState): Effect.Effect<Simulator, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const ref = yield* SubscriptionRef.make<SimulatorState>(initialState);
+    const changesStream = yield* Stream.share(ref.changes, {
+      capacity: 'unbounded',
+      replay: Number.MAX_SAFE_INTEGER,
+    });
+    yield* pipe(changesStream, Stream.runDrain, Effect.forkScoped);
+    return new Simulator(ref, changesStream);
+  });
 
 // =============================================================================
 // Simulator Class
@@ -160,11 +189,7 @@ export class Simulator {
    * Compute block hash from block time.
    */
   static blockHash = (blockTime: Date): Effect.Effect<string> =>
-    pipe(
-      DateOps.dateToSeconds(blockTime).toString(16),
-      (str) => (str.length % 2 === 0 ? str : str.padStart(str.length + 1, '0')),
-      simpleHash,
-    );
+    pipe(DateOps.dateToSeconds(blockTime).toString(16), padHexToEvenLength, simpleHash);
 
   /**
    * Create the next block context from block time.
@@ -184,11 +209,8 @@ export class Simulator {
    * Create the next block context from block number (for genesis mode).
    */
   static nextBlockContextFromNumber = (number: bigint): Effect.Effect<BlockContext> =>
-    pipe(
-      number.toString(16),
-      (str) => (str.length % 2 === 0 ? str : str.padStart(str.length + 1, '0')),
-      simpleHash,
-      Effect.map((hash) => ({
+    pipe(number.toString(16), padHexToEvenLength, simpleHash, (hashEffect) =>
+      Effect.map(hashEffect, (hash) => ({
         parentBlockHash: hash,
         secondsSinceEpoch: number,
         secondsSinceEpochErr: 1,
@@ -249,29 +271,23 @@ export class Simulator {
    * @returns Effect that produces a Simulator instance
    */
   static init(config: SimulatorConfig): Effect.Effect<Simulator, never, Scope.Scope> {
-    return config.mode === 'blank' ? Simulator.initBlank(config.networkId) : Simulator.initWithGenesis(config.genesisMints, config.networkId);
+    return config.mode === 'blank'
+      ? Simulator.initBlank(config.networkId)
+      : Simulator.initWithGenesis(config.genesisMints, config.networkId);
   }
 
   /**
    * Initialize simulator with blank ledger state.
    */
   private static initBlank(networkId: NetworkId.NetworkId): Effect.Effect<Simulator, never, Scope.Scope> {
-    return Effect.gen(function* () {
-      const initialState: SimulatorState = {
-        networkId,
-        ledger: LedgerState.blank(networkId),
-        lastTx: undefined,
-        lastTxResult: undefined,
-        lastTxNumber: 0n,
-      };
-      const ref = yield* SubscriptionRef.make<SimulatorState>(initialState);
-      const changesStream = yield* Stream.share(ref.changes, {
-        capacity: 'unbounded',
-        replay: Number.MAX_SAFE_INTEGER,
-      });
-      yield* pipe(changesStream, Stream.runDrain, Effect.forkScoped);
-      return new Simulator(ref, changesStream);
-    });
+    const initialState: SimulatorState = {
+      networkId,
+      ledger: LedgerState.blank(networkId),
+      lastTx: undefined,
+      lastTxResult: undefined,
+      lastTxNumber: 0n,
+    };
+    return createSimulatorFromState(initialState);
   }
 
   /**
@@ -293,7 +309,12 @@ export class Simulator {
           genesisMints,
           Arr.map((transfer) => {
             const coin = createShieldedCoinInfo(transfer.type, transfer.amount);
-            const output = ZswapOutput.new(coin, 0, transfer.recipient.coinPublicKey, transfer.recipient.encryptionPublicKey);
+            const output = ZswapOutput.new(
+              coin,
+              0,
+              transfer.recipient.coinPublicKey,
+              transfer.recipient.encryptionPublicKey,
+            );
             return ZswapOffer.fromOutput<PreProof>(output, transfer.type, transfer.amount);
           }),
           ArrayOps.fold((acc, offer) => acc.merge(offer)),
@@ -321,13 +342,7 @@ export class Simulator {
         lastTxResult: init.initialResult,
         lastTxNumber: 0n,
       };
-      const ref = yield* SubscriptionRef.make<SimulatorState>(initialState);
-      const changesStream = yield* Stream.share(ref.changes, {
-        capacity: 'unbounded',
-        replay: Number.MAX_SAFE_INTEGER,
-      });
-      yield* pipe(changesStream, Stream.runDrain, Effect.forkScoped);
-      return new Simulator(ref, changesStream);
+      return yield* createSimulatorFromState(initialState);
     });
   }
 
