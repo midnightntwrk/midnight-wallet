@@ -378,7 +378,7 @@ describe('Token transfer', () => {
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -475,7 +475,7 @@ describe('Token transfer', () => {
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
       // await utils.waitForFacadePending(fundedFacade);
@@ -1227,7 +1227,7 @@ describe('Token transfer', () => {
             ttl: new Date(Date.now() + 60 * 60 * 1000),
           },
         ),
-      ).rejects.toThrow("Error from ledger: attempted to spend Dust UTXO that's not in the wallet state:");
+      ).rejects.toThrow("attempted to spend Dust UTXO that's not in the wallet state:");
     },
     timeout,
   );
