@@ -20,5 +20,13 @@
     "@midnight-ntwrk/wallet-sdk-utilities": "1.0.1",
     "@midnight-ntwrk/wallet-integration-tests": "0.0.1"
   },
-  "changesets": []
+  "changesets": [
+    "all-llamas-cough",
+    "beige-colts-beam",
+    "dark-pianos-camp",
+    "hot-sails-worry",
+    "kind-canyons-listen",
+    "slow-pants-win",
+    "wicked-areas-leave"
+  ]
 }
