@@ -33,6 +33,7 @@ import {
   createKeystore,
   InMemoryTransactionHistoryStorage,
   PublicKey,
+  type TransactionHistoryEntry,
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -597,5 +598,28 @@ export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs 
 export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
+
+export function expectValidUnshieldedUtxoFields(utxo: TransactionHistoryEntry['createdUtxos'][number]) {
+  expect(typeof utxo.value).toBe('bigint');
+  expect(typeof utxo.owner).toBe('string');
+  expect(typeof utxo.tokenType).toBe('string');
+  expect(typeof utxo.intentHash).toBe('string');
+  expect(typeof utxo.outputIndex).toBe('number');
+}
+
+export function expectValidUnshieldedTxHistoryEntry(entry: TransactionHistoryEntry) {
+  expect(Array.isArray(entry.createdUtxos)).toBe(true);
+  expect(Array.isArray(entry.spentUtxos)).toBe(true);
+  for (const utxo of [...entry.createdUtxos, ...entry.spentUtxos]) {
+    expectValidUnshieldedUtxoFields(utxo);
+  }
+}
+
+export function expectValidUnshieldedTxHistoryEntries(entries: readonly TransactionHistoryEntry[]) {
+  expect(entries.length).toBeGreaterThan(0);
+  for (const entry of entries) {
+    expectValidUnshieldedTxHistoryEntry(entry);
+  }
+}
 
 export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';
