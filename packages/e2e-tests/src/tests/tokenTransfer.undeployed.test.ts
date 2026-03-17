@@ -59,7 +59,7 @@ describe('Token transfer', () => {
     'Is working for shielded token transfer @smoke @healthcheck',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
-      await utils.sleep(20); // wait for 2+ blocks to pass
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -590,7 +590,7 @@ describe('Token transfer', () => {
       await utils.waitForUnshieldedCoinUpdate(receiver3.wallet, 0);
 
       //register Night for Dust
-      await utils.sleep(20);
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const receiver3StateAfterTransfer = await receiver3.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiver3StateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === false,
@@ -1235,7 +1235,7 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx does not get proved',
     async () => {
-      await utils.sleep(20); // Wait for any previous transactions to clear
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
