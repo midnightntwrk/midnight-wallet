@@ -69,13 +69,9 @@ export type SimulatorSyncUpdate = {
 type SecretKeysResource = <A>(cb: (key: DustSecretKey) => A) => A;
 export const SecretKeysResource = {
   create: (secretKey: DustSecretKey): SecretKeysResource => {
-    let sk: DustSecretKey | null = secretKey;
     return (cb) => {
-      if (sk === null || sk === undefined) {
-        throw new Error('Secret key has been consumed');
-      }
-      const result = cb(sk);
-      sk = null;
+      const result = cb(secretKey);
+      secretKey.clear();
       return result;
     };
   },

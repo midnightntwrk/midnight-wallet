@@ -54,17 +54,9 @@ const Uint8ArraySchema = Schema.declare(
 type SecretKeysResource = <A>(cb: (keys: ledger.ZswapSecretKeys) => A) => A;
 export const SecretKeysResource = {
   create: (secretKeys: ledger.ZswapSecretKeys): SecretKeysResource => {
-    /**
-     * TODO: future Ledger version will include `clear` function to clear the secret keys,
-     * it is intentend to be used here instead of `null`
-     */
-    let sk: ledger.ZswapSecretKeys | null = secretKeys;
     return (cb) => {
-      if (sk === null) {
-        throw new Error('Secret keys have been consumed');
-      }
-      const result = cb(sk);
-      sk = null;
+      const result = cb(secretKeys);
+      secretKeys.clear();
       return result;
     };
   },
