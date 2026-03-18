@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-address-format",
-  "version": "3.0.1",
+  "version": "3.1.0-rc.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -24,7 +24,7 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/ledger-v8": "^8.0.0-rc.5",
+    "@midnight-ntwrk/ledger-v8": "^8.0.2",
     "@scure/base": "^2.0.0",
     "@subsquid/scale-codec": "^4.0.1"
   },

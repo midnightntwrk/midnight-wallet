@@ -2,6 +2,12 @@ name: Healthcheck - qanet
 
 on:
   workflow_dispatch:
+    inputs:
+      skip_cache:
+        type: boolean
+        description: Skip downloading sync cache (force fresh wallet sync)
+        required: false
+        default: false
   schedule:
     - cron: '0 7,16 * * *'
 
@@ -12,4 +18,5 @@ jobs:
     with:
       network: qanet
       modifier: '-t @healthcheck'
+      skip_cache: ${{ inputs.skip_cache || false }}
     secrets: inherit
