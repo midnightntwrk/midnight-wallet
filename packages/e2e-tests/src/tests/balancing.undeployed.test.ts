@@ -96,7 +96,7 @@ describe('Transaction balancing examples', () => {
         ],
       },
     ];
-    await utils.sleep(20); // wait for 2+ blocks to pass
+    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const txRecipe = await funded.wallet.transferTransaction(
       outputsToCreate,
       {

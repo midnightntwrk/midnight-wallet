@@ -39,6 +39,8 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 
 // place this somewhere better?
 export const Segments = {
@@ -563,6 +565,34 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
 
 export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
+};
+
+const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
+  const result = await QueryRunner.runPromise(BlockHash, { offset: null }, { url: indexerHttpUrl });
+  if (!result.block) throw new Error('No block returned from indexer');
+  return result.block.height;
+};
+
+/**
+ * Waits for the blockchain to produce at least one new block by polling the
+ * indexer for the current block height. Resolves as soon as the height
+ * increases from its initial value.
+ */
+export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs = 60_000): Promise<void> => {
+  const initialHeight = await fetchBlockHeight(indexerHttpUrl);
+  logger.info(`Waiting for block advancement beyond height ${initialHeight}...`);
+
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    await sleep(2);
+    const currentHeight = await fetchBlockHeight(indexerHttpUrl);
+    logger.info(`Current block height: ${currentHeight} (waiting for > ${initialHeight})`);
+    if (currentHeight > initialHeight) {
+      logger.info('Block advancement detected');
+      return;
+    }
+  }
+  throw new Error(`Timed out waiting for block advancement beyond height ${initialHeight} after ${timeoutMs}ms`);
 };
 
 export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;

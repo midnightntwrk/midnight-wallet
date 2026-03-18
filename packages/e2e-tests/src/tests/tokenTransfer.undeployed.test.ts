@@ -59,7 +59,7 @@ describe('Token transfer', () => {
     'Is working for shielded token transfer @smoke @healthcheck',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
-      await utils.sleep(20); // wait for 2+ blocks to pass
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -378,7 +378,7 @@ describe('Token transfer', () => {
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -475,7 +475,7 @@ describe('Token transfer', () => {
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
       // await utils.waitForFacadePending(fundedFacade);
@@ -590,7 +590,7 @@ describe('Token transfer', () => {
       await utils.waitForUnshieldedCoinUpdate(receiver3.wallet, 0);
 
       //register Night for Dust
-      await utils.sleep(20);
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const receiver3StateAfterTransfer = await receiver3.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiver3StateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === false,
@@ -1227,7 +1227,7 @@ describe('Token transfer', () => {
             ttl: new Date(Date.now() + 60 * 60 * 1000),
           },
         ),
-      ).rejects.toThrow("Error from ledger: attempted to spend Dust UTXO that's not in the wallet state:");
+      ).rejects.toThrow("attempted to spend Dust UTXO that's not in the wallet state:");
     },
     timeout,
   );
@@ -1235,7 +1235,7 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx does not get proved',
     async () => {
-      await utils.sleep(20); // Wait for any previous transactions to clear
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);

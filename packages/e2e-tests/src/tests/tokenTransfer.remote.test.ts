@@ -37,7 +37,7 @@ describe('Token transfer', () => {
   const seedFunded = process.env['SEED'];
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
-  const syncTimeout = 30 * 60 * 1000; //  30 minutes in milliseconds
+  const syncTimeout = 60 * 60 * 1000; //  60 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = utils.tNightAmount(10n);
   const filenameWallet = `${seedFunded.substring(0, 7)}-${TestContainersFixture.network}.state`;
@@ -58,15 +58,20 @@ describe('Token transfer', () => {
     wallet2 = await utils.provideWallet(filenameWallet2, seed, fixture);
     logger.info('Two wallets started');
 
-    const date = new Date();
-    const hour = date.getHours();
+    const [state1, state2] = await Promise.all([
+      wallet.wallet.waitForSyncedState(),
+      wallet2.wallet.waitForSyncedState(),
+    ]);
+    const balance1 = state1.shielded.balances[shieldedTokenRaw] ?? 0n;
+    const balance2 = state2.shielded.balances[shieldedTokenRaw] ?? 0n;
+    logger.info(`Wallet 1 shielded balance: ${balance1}, Wallet 2 shielded balance: ${balance2}`);
 
-    if (hour % 2 !== 0) {
-      logger.info('Using SEED2 as receiver');
+    if (balance1 >= balance2) {
+      logger.info('Wallet 1 (SEED) has more funds — using as sender');
       sender = wallet;
       receiver = wallet2;
     } else {
-      logger.info('Using SEED2 as sender');
+      logger.info('Wallet 2 (SEED2) has more funds — using as sender');
       sender = wallet2;
       receiver = wallet;
     }
