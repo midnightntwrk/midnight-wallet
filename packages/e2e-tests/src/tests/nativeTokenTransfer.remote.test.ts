@@ -46,9 +46,6 @@ describe('Token transfer', () => {
   let wallet: utils.WalletInit;
   let wallet2: utils.WalletInit;
   let fixture: TestContainersFixture;
-  const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
-  const timeout = 600_000;
-
   beforeEach(async () => {
     fixture = getFixture();
 
@@ -72,7 +69,7 @@ describe('Token transfer', () => {
       sender = wallet2;
       receiver = wallet;
     }
-  }, syncTimeout);
+  });
 
   afterEach(async () => {
     await utils.saveState(wallet.wallet, filenameWallet);
@@ -80,7 +77,7 @@ describe('Token transfer', () => {
     await sender.wallet.stop();
     await receiver.wallet.stop();
     logger.info('Wallets stopped');
-  }, timeout);
+  });
 
   test(
     'Is working for valid native token transfer @smoke @healthcheck',
@@ -212,7 +209,6 @@ describe('Token transfer', () => {
         initialReceiverState.shielded.totalCoins.length + 1,
       );
     },
-    syncTimeout,
   );
 
   test(
@@ -260,7 +256,6 @@ describe('Token transfer', () => {
       expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length + 1);
       expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length + 1);
     },
-    syncTimeout,
   );
 
   // test.skip(
