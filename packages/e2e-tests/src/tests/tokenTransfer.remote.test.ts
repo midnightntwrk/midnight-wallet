@@ -37,6 +37,7 @@ describe('Token transfer', () => {
   const seedFunded = process.env['SEED'];
   const shieldedTokenRaw = ledger.shieldedToken().raw;
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
+  const syncTimeout = 60 * 60 * 1000; //  60 minutes in milliseconds
   const timeout = 600_000;
   const outputValue = utils.tNightAmount(10n);
   const filenameWallet = `${seedFunded.substring(0, 7)}-${TestContainersFixture.network}.state`;
@@ -74,7 +75,7 @@ describe('Token transfer', () => {
       sender = wallet2;
       receiver = wallet;
     }
-  });
+  }, syncTimeout);
 
   afterEach(async () => {
     await utils.saveState(wallet.wallet, filenameWallet);
@@ -250,6 +251,7 @@ describe('Token transfer', () => {
       expect(receivedUtxo).toBeDefined();
       utils.expectValidUnshieldedUtxoFields(receivedUtxo!);
     },
+    syncTimeout,
   );
 
   test(

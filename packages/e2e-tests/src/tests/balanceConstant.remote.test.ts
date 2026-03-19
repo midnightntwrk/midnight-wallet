@@ -41,6 +41,8 @@ describe('Balance constant', () => {
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
+  const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
+
   let wallet: utils.WalletInit;
   let fixture: TestContainersFixture;
 
@@ -48,12 +50,12 @@ describe('Balance constant', () => {
     fixture = getFixture();
 
     wallet = await utils.initWalletWithSeed(seed, fixture);
-  });
+  }, syncTimeout);
 
   afterEach(async () => {
     // await utils.saveState(walletFacade, filename);
     await wallet.wallet.stop();
-  });
+  }, syncTimeout);
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',
@@ -69,6 +71,7 @@ describe('Balance constant', () => {
       expect(syncedState.shielded.pendingCoins.length).toBe(0);
       expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
     },
+    syncTimeout,
   );
 
   test(
@@ -86,5 +89,6 @@ describe('Balance constant', () => {
       expect(syncedState.shielded.pendingCoins.length).toBe(0);
       expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
     },
+    syncTimeout,
   );
 });
