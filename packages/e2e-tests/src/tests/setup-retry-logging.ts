@@ -10,8 +10,22 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './Connect.js';
-export * from './Disconnect.js';
-export * from './BlockHash.js';
-export * from './FetchTermsAndConditions.js';
-export * from './TransactionStatus.js';
+import { beforeEach, onTestFailed } from 'vitest';
+import { logger } from './logger.js';
+
+beforeEach(() => {
+  onTestFailed(({ task: failedTask }) => {
+    const attempt = (failedTask.result?.retryCount ?? 0) + 1;
+    const maxRetries = failedTask.retry ?? 0;
+
+    if (maxRetries > 0) {
+      logger.error(`Test "${failedTask.name}" failed on attempt ${attempt}/${maxRetries + 1}:`);
+      for (const error of failedTask.result?.errors ?? []) {
+        logger.error(error.message);
+        if (error.stack) {
+          logger.error(error.stack);
+        }
+      }
+    }
+  });
+});

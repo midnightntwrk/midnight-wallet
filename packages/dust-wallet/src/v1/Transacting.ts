@@ -460,12 +460,12 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
               catch: (err) => {
                 if (err instanceof BalancingInsufficientFundsError) {
                   return new InsufficientFundsError({
-                    message: 'Insufficient funds',
+                    message: err.message,
                     tokenType: err.tokenType,
                   });
                 } else {
                   return new OtherWalletError({
-                    message: 'Balancing failed',
+                    message: err instanceof Error ? err.message : 'Dust balancing failed',
                     cause: err,
                   });
                 }
