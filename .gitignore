@@ -1,3 +1,10 @@
+# Claude Code — personal/local settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Claude Code — credentials (Linux/Windows only; macOS uses Keychain)
+.claude/.credentials.json
+
 # Yarn
 .pnp.*
 **/.yarn/*
