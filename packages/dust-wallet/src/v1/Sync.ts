@@ -66,7 +66,7 @@ export type SimulatorSyncUpdate = {
   secretKey: DustSecretKey;
 };
 
-type SecretKeysResource = <A>(cb: (key: DustSecretKey) => A) => A;
+export type SecretKeysResource = <A>(cb: (key: DustSecretKey) => A) => A;
 export const SecretKeysResource = {
   create: (secretKey: DustSecretKey): SecretKeysResource => {
     return (cb) => {
@@ -118,14 +118,14 @@ export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateS
 
 export type WalletSyncUpdate = {
   updates: WalletSyncSubscription[];
-  secretKeys: SecretKeysResource;
+  secretKey: DustSecretKey;
   timestamp: Date;
 };
 export const WalletSyncUpdate = {
   create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
     return {
       updates,
-      secretKeys: SecretKeysResource.create(secretKey),
+      secretKey,
       timestamp,
     };
   },
@@ -240,7 +240,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
   return {
     applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
-      const { updates, secretKeys } = wrappedUpdate;
+      const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
       if (updates.length === 0) {
@@ -258,13 +258,12 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       }
 
       const events = updates.map((u) => u.raw).filter((event) => event !== null);
-      return secretKeys((keys) =>
-        CoreWallet.updateProgress(CoreWallet.applyEvents(state, keys, events, wrappedUpdate.timestamp), {
-          appliedIndex: nextIndex,
-          highestRelevantWalletIndex,
-          isConnected: true,
-        }),
-      );
+
+      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, secretKey, events, wrappedUpdate.timestamp), {
+        appliedIndex: nextIndex,
+        highestRelevantWalletIndex,
+        isConnected: true,
+      });
     },
   };
 };
