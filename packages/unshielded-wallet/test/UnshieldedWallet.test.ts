@@ -23,7 +23,6 @@ import {
   InMemoryTransactionHistoryStorage,
   NoOpTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { restoreUnshieldedTransactionHistoryStorage } from '../src/v1/TransactionHistory.js';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
@@ -73,52 +72,6 @@ describe('UnshieldedWallet', () => {
     const transactionHistory = await Array.fromAsync(unshieldedWallet.getAllFromTxHistory());
 
     expect(transactionHistory.length).toBeGreaterThan(1);
-  });
-
-  it('should restore from serialized state with tx history', async () => {
-    const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-    const initialConfig = createWalletConfig(indexerPort, { txHistoryStorage });
-    const keystore = createKeystore(unshieldedSeed, initialConfig.networkId);
-
-    const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
-
-    await initialWallet.start();
-
-    await waitForCoins(initialWallet);
-
-    const initialState = await initialWallet.waitForSyncedState();
-
-    expect(initialState.availableCoins.length).toBeGreaterThan(0);
-    expect(initialState.pendingCoins.length).toBe(0);
-
-    const serializedState = await initialWallet.serializeState();
-
-    const serializedTxHistory = await initialWallet.serializeTransactionHistory();
-    await initialWallet.stop();
-
-    const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
-    const restoredConfig = createWalletConfig(indexerPort, { txHistoryStorage: restoredTxHistoryStorage });
-
-    const restoredWallet = UnshieldedWallet(restoredConfig).restore(serializedState);
-
-    await restoredWallet.start();
-
-    await restoredWallet.waitForSyncedState();
-
-    const restoredState = await firstValueFrom(restoredWallet.state);
-
-    expect(UnshieldedAddress.codec.encode(initialConfig.networkId, restoredState.address).asString()).toBe(
-      UnshieldedAddress.codec.encode(initialConfig.networkId, initialState.address).asString(),
-    );
-    expect(restoredState.availableCoins.length).toBe(initialState.availableCoins.length);
-    expect(restoredState.pendingCoins.length).toBe(initialState.pendingCoins.length);
-
-    const initialTxHistory = await Array.fromAsync(initialWallet.getAllFromTxHistory());
-    const restoredTxHistory = await Array.fromAsync(restoredWallet.getAllFromTxHistory());
-
-    expect(restoredTxHistory).toEqual(initialTxHistory);
-
-    await restoredWallet.stop();
   });
 
   it('should instantiate without transaction history service', async () => {

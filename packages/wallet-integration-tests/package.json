@@ -20,6 +20,7 @@
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.1.0",
     "@midnight-ntwrk/wallet-sdk-runtime": "1.0.1",
     "@midnight-ntwrk/wallet-sdk-shielded": "2.0.0",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "2.0.0",
     "@types/node": "^25.3.0",
     "effect": "^3.19.19",
     "pure-rand": "^7.0.1",

@@ -16,67 +16,40 @@ export const TransactionHashSchema = Schema.String;
 
 export type TransactionHash = Schema.Schema.Type<typeof TransactionHashSchema>;
 
+export const TransactionHistoryStatusSchema = Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS');
+
+export type TransactionHistoryStatus = Schema.Schema.Type<typeof TransactionHistoryStatusSchema>;
+
+export const TransactionHistoryCommonSchema = Schema.Struct({
+  hash: TransactionHashSchema,
+  protocolVersion: Schema.Number,
+  status: TransactionHistoryStatusSchema,
+  identifiers: Schema.optional(Schema.Array(Schema.String)),
+  timestamp: Schema.optional(Schema.NullOr(Schema.Date)),
+  fees: Schema.optional(Schema.NullOr(Schema.BigInt)),
+});
+
+export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHistoryCommonSchema>;
+
+type WalletSections = {
+  readonly shielded?: unknown;
+  readonly unshielded?: unknown;
+  readonly dust?: unknown;
+};
+
 /**
- * Constraint for transaction history entries: they must have a `hash` property
- * of type TransactionHash, which is used as the key for storage (e.g. in
- * InMemoryTransactionHistoryStorage).
+ * Unified transaction history entry shared across all wallet types.
+ * Common fields live at the top level; wallet-specific data is nested
+ * under the `shielded`, `unshielded`, and `dust` keys.
  */
-export type TransactionHistoryEntryWithHash = { hash: TransactionHash };
+export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & WalletSections;
 
 /**
  * Storage interface for transaction history entries keyed by their `hash` property.
  */
 export interface TransactionHistoryStorage {
-  create(entry: TransactionHistoryEntryWithHash): Promise<void>;
+  upsert(entry: TransactionHistoryEntryWithHash): Promise<void>;
   delete(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined>;
   getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash>;
   get(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined>;
-}
-
-/**
- * Wraps any TransactionHistoryStorage to scope all operations to a given namespace
- * string. This prevents hash key collisions when multiple wallet types share a single
- * backing store — each namespace's entries are stored under keys of the form
- * `"${namespace}:${hash}"` and the original hash is restored transparently on reads.
- */
-export class NamespacedTransactionHistoryStorage implements TransactionHistoryStorage {
-  readonly #prefix: string;
-  readonly #storage: TransactionHistoryStorage;
-
-  constructor(namespace: string, storage: TransactionHistoryStorage) {
-    this.#prefix = `${namespace}:`;
-    this.#storage = storage;
-  }
-
-  #namespacedHash(hash: TransactionHash): TransactionHash {
-    return `${this.#prefix}${hash}`;
-  }
-
-  #stripPrefix(entry: TransactionHistoryEntryWithHash): TransactionHistoryEntryWithHash {
-    return { ...entry, hash: entry.hash.startsWith(this.#prefix) ? entry.hash.slice(this.#prefix.length) : entry.hash };
-  }
-
-  create(entry: TransactionHistoryEntryWithHash): Promise<void> {
-    return this.#storage.create({ ...entry, hash: this.#namespacedHash(entry.hash) });
-  }
-
-  delete(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
-    return this.#storage
-      .delete(this.#namespacedHash(hash))
-      .then((entry) => (entry ? this.#stripPrefix(entry) : undefined));
-  }
-
-  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
-    for await (const entry of this.#storage.getAll()) {
-      if (entry.hash.startsWith(this.#prefix)) {
-        yield this.#stripPrefix(entry);
-      }
-    }
-  }
-
-  get(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
-    return this.#storage
-      .get(this.#namespacedHash(hash))
-      .then((entry) => (entry ? this.#stripPrefix(entry) : undefined));
-  }
 }

@@ -17,7 +17,7 @@ import {
 } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
-  create(_entry: TransactionHistoryEntryWithHash): Promise<void> {
+  upsert(_entry: TransactionHistoryEntryWithHash): Promise<void> {
     return Promise.resolve();
   }
 

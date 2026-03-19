@@ -26,8 +26,9 @@ export class InMemoryTransactionHistoryStorage implements TransactionHistoryStor
     this.entries = entries ?? new Map<TransactionHash, TransactionHistoryEntryWithHash>();
   }
 
-  create(entry: TransactionHistoryEntryWithHash): Promise<void> {
-    this.entries.set(entry.hash, entry);
+  upsert(entry: TransactionHistoryEntryWithHash): Promise<void> {
+    const existing = this.entries.get(entry.hash);
+    this.entries.set(entry.hash, existing ? { ...existing, ...entry } : entry);
     return Promise.resolve();
   }
 

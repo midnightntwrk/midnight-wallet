@@ -24,10 +24,10 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
   mt_index: Schema.BigInt,
 });
 
+type QualifiedShieldedCoinInfo = Schema.Schema.Type<typeof QualifiedShieldedCoinInfoSchema>;
+
 export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
-  hash: TransactionHistoryStorage.TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
   receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
   spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
 });
@@ -66,49 +66,90 @@ export type TransactionHistoryService = {
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
 };
 
-const isShieldedEntry = Schema.is(ShieldedTransactionHistoryEntrySchema);
+type ShieldedSection = {
+  readonly receivedCoins: readonly QualifiedShieldedCoinInfo[];
+  readonly spentCoins: readonly QualifiedShieldedCoinInfo[];
+};
+
+const hasShieldedSection = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+): entry is StorageEntryWithShielded =>
+  entry.shielded != null &&
+  typeof entry.shielded === 'object' &&
+  'receivedCoins' in entry.shielded &&
+  'spentCoins' in entry.shielded;
+
+const projectToShieldedEntry = (entry: StorageEntryWithShielded): ShieldedTransactionHistoryEntry => ({
+  hash: entry.hash,
+  protocolVersion: entry.protocolVersion,
+  status: entry.status,
+  identifiers: entry.identifiers ?? [],
+  timestamp: entry.timestamp ?? null,
+  fees: entry.fees ?? null,
+  receivedCoins: entry.shielded.receivedCoins,
+  spentCoins: entry.shielded.spentCoins,
+});
 
 const asShieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Effect.Effect<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
-  isShieldedEntry(entry)
-    ? Effect.succeed(entry)
+  hasShieldedSection(entry)
+    ? Effect.succeed(projectToShieldedEntry(entry))
     : Effect.fail(
-        new TransactionHistoryError({ message: `Corrupted history entry found in storage for hash: ${entry.hash}` }),
+        new TransactionHistoryError({ message: `No shielded data found in storage for hash: ${entry.hash}` }),
       );
 
-const convertUpdateToEntry = (
-  changes: ledger.ZswapStateChanges,
-  metadata: TransactionMetaData,
-  protocolVersion: number,
-): ShieldedTransactionHistoryEntry => {
-  return {
-    hash: changes.source,
-    protocolVersion,
-    status: metadata.status,
-    receivedCoins: changes.receivedCoins,
-    spentCoins: changes.spentCoins,
-  };
-};
-
-export const mergeShieldedEntries = (
-  existing: ShieldedTransactionHistoryEntry,
-  incoming: ShieldedTransactionHistoryEntry,
-): ShieldedTransactionHistoryEntry => ({
-  ...existing,
-  ...incoming,
+const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
   receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
   spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
+
+type StorageEntryWithShielded = TransactionHistoryStorage.TransactionHistoryEntryWithHash & {
+  shielded: ShieldedSection;
+};
+
+const convertUpdateToStorageEntry = (
+  changes: ledger.ZswapStateChanges,
+  metadata: TransactionMetaData,
+  protocolVersion: number,
+): StorageEntryWithShielded => ({
+  hash: changes.source,
+  protocolVersion,
+  status: metadata.status,
+  shielded: {
+    receivedCoins: changes.receivedCoins,
+    spentCoins: changes.spentCoins,
+  } satisfies ShieldedSection,
+});
+
+const upsertShieldedEntry = (
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
+): Effect.Effect<void, TransactionHistoryError> =>
+  Effect.gen(function* () {
+    const existing = yield* Effect.tryPromise({
+      try: () => txHistoryStorage.get(entry.hash),
+      catch: (e) =>
+        new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
+    });
+
+    const shieldedSection =
+      existing && hasShieldedSection(existing)
+        ? mergeShieldedSections(existing.shielded, entry.shielded)
+        : entry.shielded;
+
+    yield* Effect.tryPromise({
+      try: () => txHistoryStorage.upsert({ ...existing, ...entry, shielded: shieldedSection }),
+      catch: (e) =>
+        new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
+    });
+  });
 
 export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
 ): TransactionHistoryService => {
-  const txHistoryStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
-    'shielded',
-    config.txHistoryStorage,
-  );
+  const txHistoryStorage = config.txHistoryStorage;
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
 
   return {
@@ -116,21 +157,10 @@ export const makeDefaultTransactionHistoryService = (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
-    ): Effect.Effect<void, TransactionHistoryError> =>
-      Effect.gen(function* () {
-        const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
-        const existingRaw = yield* Effect.tryPromise({
-          try: () => txHistoryStorage.get(entry.hash),
-          catch: (e) =>
-            new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
-        });
-        const toStore = existingRaw ? mergeShieldedEntries(yield* asShieldedEntry(existingRaw), entry) : entry;
-        yield* Effect.tryPromise({
-          try: () => txHistoryStorage.create(toStore),
-          catch: (e) =>
-            new TransactionHistoryError({ message: `Failed to create history entry for ${entry.hash}`, cause: e }),
-        });
-      }),
+    ): Effect.Effect<void, TransactionHistoryError> => {
+      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
+      return upsertShieldedEntry(txHistoryStorage, entry);
+    },
 
     get: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -139,8 +169,8 @@ export const makeDefaultTransactionHistoryService = (
         try: () => txHistoryStorage.get(hash),
         catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
       }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        Effect.map((entry) =>
+          entry && hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
         ),
       ),
 
@@ -148,7 +178,11 @@ export const makeDefaultTransactionHistoryService = (
       Stream.fromAsyncIterable(
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry)))),
+      ).pipe(
+        Stream.filterMap((entry) =>
+          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
+        ),
+      ),
 
     delete: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -167,7 +201,9 @@ export const makeDefaultTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(
-        Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry))),
+        Stream.filterMap((entry) =>
+          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
+        ),
         Stream.runCollect,
         Effect.map((chunk) => {
           const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
@@ -207,31 +243,17 @@ export const makeDefaultTransactionHistoryService = (
 };
 
 export const makeSimulatorTransactionHistoryService = (): TransactionHistoryService => {
-  const txHistoryStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
-    'shielded',
-    new InMemoryTransactionHistoryStorage(),
-  );
+  const txHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   return {
     create: (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
-    ): Effect.Effect<void, TransactionHistoryError> =>
-      Effect.gen(function* () {
-        const entry = convertUpdateToEntry(changes, metadata, protocolVersion);
-        const existingRaw = yield* Effect.tryPromise({
-          try: () => txHistoryStorage.get(entry.hash),
-          catch: (e) =>
-            new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
-        });
-        const toStore = existingRaw ? mergeShieldedEntries(yield* asShieldedEntry(existingRaw), entry) : entry;
-        yield* Effect.tryPromise({
-          try: () => txHistoryStorage.create(toStore),
-          catch: (e) =>
-            new TransactionHistoryError({ message: `Failed to create history entry for ${entry.hash}`, cause: e }),
-        });
-      }),
+    ): Effect.Effect<void, TransactionHistoryError> => {
+      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
+      return upsertShieldedEntry(txHistoryStorage, entry);
+    },
 
     get: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -240,8 +262,8 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
         try: () => txHistoryStorage.get(hash),
         catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
       }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        Effect.map((entry) =>
+          entry && hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
         ),
       ),
 
@@ -249,7 +271,11 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
       Stream.fromAsyncIterable(
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry)))),
+      ).pipe(
+        Stream.filterMap((entry) =>
+          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
+        ),
+      ),
 
     delete: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -268,7 +294,9 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(
-        Stream.flatMap((entry) => Stream.fromEffect(asShieldedEntry(entry))),
+        Stream.filterMap((entry) =>
+          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
+        ),
         Stream.runCollect,
         Effect.map((chunk) => {
           const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
@@ -296,10 +324,6 @@ export const restoreShieldedTransactionHistoryStorage = (
   Effect.runPromise(
     Effect.gen(function* () {
       const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-      const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
-        'shielded',
-        txHistoryStorage,
-      );
       const result = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema)(
         JSON.parse(serializedHistory) as unknown,
       );
@@ -312,7 +336,19 @@ export const restoreShieldedTransactionHistoryStorage = (
 
       for (const entry of result.right) {
         yield* Effect.tryPromise({
-          try: () => namespacedStorage.create(entry),
+          try: () =>
+            txHistoryStorage.upsert({
+              hash: entry.hash,
+              protocolVersion: entry.protocolVersion,
+              status: entry.status,
+              identifiers: entry.identifiers,
+              timestamp: entry.timestamp,
+              fees: entry.fees,
+              shielded: {
+                receivedCoins: entry.receivedCoins,
+                spentCoins: entry.spentCoins,
+              } satisfies ShieldedSection,
+            }),
           catch: (e) =>
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
         });

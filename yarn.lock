@@ -2776,6 +2776,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.1.0"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.1"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:2.0.0"
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:2.0.0"
     "@types/node": "npm:^25.3.0"
     effect: "npm:^3.19.19"
     pure-rand: "npm:^7.0.1"
@@ -2999,7 +3000,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:^2.0.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
+"@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:2.0.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:^2.0.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
   dependencies:

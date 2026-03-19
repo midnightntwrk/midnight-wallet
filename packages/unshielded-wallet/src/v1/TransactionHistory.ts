@@ -24,14 +24,11 @@ const UtxoSchema = Schema.Struct({
   outputIndex: Schema.Number,
 });
 
+type Utxo = Schema.Schema.Type<typeof UtxoSchema>;
+
 export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
   id: Schema.Number,
-  hash: TransactionHistoryStorage.TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  identifiers: Schema.Array(Schema.String),
-  timestamp: Schema.Date,
-  fees: Schema.NullOr(SafeBigInt.SafeBigInt),
-  status: Schema.Literal('SUCCESS', 'FAILURE', 'PARTIAL_SUCCESS'),
   createdUtxos: Schema.Array(UtxoSchema),
   spentUtxos: Schema.Array(UtxoSchema),
 });
@@ -54,33 +51,65 @@ export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage;
 };
 
-const isUnshieldedEntry = Schema.is(UnshieldedTransactionHistoryEntrySchema);
+type UnshieldedSection = {
+  readonly id: number;
+  readonly createdUtxos: readonly Utxo[];
+  readonly spentUtxos: readonly Utxo[];
+};
+
+type StorageEntryWithUnshielded = TransactionHistoryStorage.TransactionHistoryEntryWithHash & {
+  unshielded: UnshieldedSection;
+};
+
+const hasUnshieldedSection = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+): entry is StorageEntryWithUnshielded =>
+  entry.unshielded != null &&
+  typeof entry.unshielded === 'object' &&
+  'id' in entry.unshielded &&
+  'createdUtxos' in entry.unshielded &&
+  'spentUtxos' in entry.unshielded;
+
+const projectToUnshieldedEntry = (entry: StorageEntryWithUnshielded): UnshieldedTransactionHistoryEntry => {
+  const { id, createdUtxos, spentUtxos } = entry.unshielded;
+  return {
+    id,
+    hash: entry.hash,
+    protocolVersion: entry.protocolVersion,
+    identifiers: entry.identifiers ?? [],
+    timestamp: entry.timestamp ?? new Date(0),
+    fees: (entry.fees ?? null) as UnshieldedTransactionHistoryEntry['fees'],
+    status: entry.status,
+    createdUtxos,
+    spentUtxos,
+  };
+};
 
 const asUnshieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Effect.Effect<UnshieldedTransactionHistoryEntry, TransactionHistoryError> =>
-  isUnshieldedEntry(entry)
-    ? Effect.succeed(entry)
+  hasUnshieldedSection(entry)
+    ? Effect.succeed(projectToUnshieldedEntry(entry))
     : Effect.fail(
         new TransactionHistoryError({
-          message: `Corrupted history entry found in storage for hash: ${entry.hash}`,
+          message: `No unshielded data found in storage for hash: ${entry.hash}`,
         }),
       );
 
-const convertUpdateToEntry = ({
+const convertUpdateToStorageEntry = ({
   transaction,
   createdUtxos,
   spentUtxos,
   status,
-}: UnshieldedUpdate): UnshieldedTransactionHistoryEntry => {
-  return {
+}: UnshieldedUpdate): StorageEntryWithUnshielded => ({
+  hash: transaction.hash,
+  protocolVersion: transaction.protocolVersion,
+  status,
+  identifiers: transaction.identifiers ? transaction.identifiers : [],
+  timestamp: transaction.block?.timestamp ?? null,
+  fees: transaction.fees?.paidFees ?? null,
+  unshielded: {
     id: transaction.id,
-    hash: transaction.hash,
-    protocolVersion: transaction.protocolVersion,
-    identifiers: transaction.identifiers ? transaction.identifiers : [],
-    status,
-    timestamp: transaction.block?.timestamp ?? null,
-    fees: transaction.fees?.paidFees ?? null,
     createdUtxos: createdUtxos.map(({ utxo }) => ({
       value: utxo.value,
       owner: utxo.owner,
@@ -95,23 +124,29 @@ const convertUpdateToEntry = ({
       intentHash: utxo.intentHash,
       outputIndex: utxo.outputNo,
     })),
-  };
-};
+  },
+});
 
 export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
 ): TransactionHistoryService => {
-  const txHistoryStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
-    'unshielded',
-    config.txHistoryStorage,
-  );
+  const txHistoryStorage = config.txHistoryStorage;
 
   return {
     create: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.create(convertUpdateToEntry(update)),
-        catch: (e) => new TransactionHistoryError({ message: 'Failed to create transaction history entry', cause: e }),
+      Effect.gen(function* () {
+        const entry = convertUpdateToStorageEntry(update);
+        const existing = yield* Effect.tryPromise({
+          try: () => txHistoryStorage.get(entry.hash),
+          catch: (e) =>
+            new TransactionHistoryError({ message: 'Failed to get existing transaction history entry', cause: e }),
+        });
+        yield* Effect.tryPromise({
+          try: () => txHistoryStorage.upsert({ ...existing, ...entry }),
+          catch: (e) =>
+            new TransactionHistoryError({ message: 'Failed to upsert transaction history entry', cause: e }),
+        });
       }),
 
     get: (
@@ -121,8 +156,8 @@ export const makeDefaultTransactionHistoryService = (
         try: () => txHistoryStorage.get(hash),
         catch: (e) => new TransactionHistoryError({ message: 'Failed to get transaction history entry', cause: e }),
       }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asUnshieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
+        Effect.map((entry) =>
+          entry && hasUnshieldedSection(entry) ? Option.some(projectToUnshieldedEntry(entry)) : Option.none(),
         ),
       ),
 
@@ -130,7 +165,11 @@ export const makeDefaultTransactionHistoryService = (
       Stream.fromAsyncIterable(
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate transaction history', cause: e }),
-      ).pipe(Stream.flatMap((entry) => Stream.fromEffect(asUnshieldedEntry(entry)))),
+      ).pipe(
+        Stream.filterMap((entry) =>
+          hasUnshieldedSection(entry) ? Option.some(projectToUnshieldedEntry(entry)) : Option.none(),
+        ),
+      ),
 
     delete: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -149,7 +188,9 @@ export const makeDefaultTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate transaction history', cause: e }),
       ).pipe(
-        Stream.flatMap((entry) => Stream.fromEffect(asUnshieldedEntry(entry))),
+        Stream.filterMap((entry) =>
+          hasUnshieldedSection(entry) ? Option.some(projectToUnshieldedEntry(entry)) : Option.none(),
+        ),
         Stream.runCollect,
         Effect.map((entries) => {
           const encoder = Schema.encodeSync(UnshieldedTransactionHistoryEntriesSchema);
@@ -168,10 +209,6 @@ export const restoreUnshieldedTransactionHistoryStorage = (
   Effect.runPromise(
     Effect.gen(function* () {
       const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-      const namespacedStorage = new TransactionHistoryStorage.NamespacedTransactionHistoryStorage(
-        'unshielded',
-        txHistoryStorage,
-      );
       const result = Schema.decodeUnknownEither(UnshieldedTransactionHistoryEntriesSchema)(
         JSON.parse(serializedHistory) as unknown,
       );
@@ -184,7 +221,20 @@ export const restoreUnshieldedTransactionHistoryStorage = (
 
       for (const entry of result.right) {
         yield* Effect.tryPromise({
-          try: () => namespacedStorage.create(entry),
+          try: () =>
+            txHistoryStorage.upsert({
+              hash: entry.hash,
+              protocolVersion: entry.protocolVersion,
+              status: entry.status,
+              identifiers: entry.identifiers,
+              timestamp: entry.timestamp,
+              fees: entry.fees,
+              unshielded: {
+                id: entry.id,
+                createdUtxos: entry.createdUtxos,
+                spentUtxos: entry.spentUtxos,
+              },
+            }),
           catch: (e) =>
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
         });
