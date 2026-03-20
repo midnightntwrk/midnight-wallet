@@ -49,8 +49,13 @@ describe('Token transfer', () => {
   const syncTimeout = 60 * 60 * 1000; // 60 minutes in milliseconds
   const timeout = 600_000;
 
-  beforeEach(async () => {
+  beforeEach(async (context) => {
     fixture = getFixture();
+
+    if ((context.task.result?.retryCount ?? 0) > 0) {
+      logger.info('Retry detected — waiting for block advancement before re-initializing wallets');
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    }
 
     wallet = await utils.provideWallet(filenameWallet, fundedSeed, fixture);
     wallet2 = await utils.provideWallet(filenameWallet2, receivingSeed, fixture);

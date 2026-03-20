@@ -50,9 +50,14 @@ describe('Token transfer', () => {
   let fixture: TestContainersFixture;
   let networkId: NetworkId.NetworkId;
 
-  beforeEach(async () => {
+  beforeEach(async (context) => {
     fixture = getFixture();
     networkId = fixture.getNetworkId();
+
+    if ((context.task.result?.retryCount ?? 0) > 0) {
+      logger.info('Retry detected — waiting for block advancement before re-initializing wallets');
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    }
 
     wallet = await utils.provideWallet(filenameWallet, seedFunded, fixture);
     wallet2 = await utils.provideWallet(filenameWallet2, seed, fixture);
@@ -328,7 +333,7 @@ describe('Token transfer', () => {
     const initialStateWallet1 = await sender.wallet.waitForSyncedState();
     const initialStateWallet2 = await receiver.wallet.waitForSyncedState();
 
-    // Does walllet have shielded tokens to swap
+    // Does wallet have shielded tokens to swap
     const wallet1BalanceToken1 = initialStateWallet1.shielded.balances[shieldedToken1] ?? 0n;
     const wallet1BalanceToken2 = initialStateWallet1.shielded.balances[shieldedToken2] ?? 0n;
     const wallet2BalanceToken1 = initialStateWallet2.shielded.balances[shieldedToken1] ?? 0n;
@@ -339,6 +344,7 @@ describe('Token transfer', () => {
       return;
     }
 
+    // Sender creates the swap offer (input: token1, desired output: token2)
     const swapTx = await sender.wallet.initSwap(
       { shielded: { [shieldedToken1]: 1000000n } },
       [
@@ -363,9 +369,9 @@ describe('Token transfer', () => {
       },
     );
     const finalizedTx = await sender.wallet.finalizeRecipe(swapTx);
-    const wallet1TxId = await sender.wallet.submitTransaction(finalizedTx);
-    logger.info('Transaction id: ' + wallet1TxId);
+    logger.info('Sender finalized swap offer');
 
+    // Receiver balances the swap (adds their side) and finalizes the complete transaction
     const wallet2BalancedTx = await receiver.wallet.balanceFinalizedTransaction(
       finalizedTx,
       {
@@ -377,8 +383,10 @@ describe('Token transfer', () => {
       },
     );
     const finalizedSwapTx = await receiver.wallet.finalizeRecipe(wallet2BalancedTx);
-    const wallet2TxId = await receiver.wallet.submitTransaction(finalizedSwapTx);
-    logger.info('Transaction id 2: ' + wallet2TxId);
+
+    // Submit only the fully-balanced swap transaction
+    const txId = await receiver.wallet.submitTransaction(finalizedSwapTx);
+    logger.info('Swap transaction id: ' + txId);
 
     const finalStateWallet1 = await utils.waitForFinalizedShieldedBalance(sender.wallet.shielded);
     const finalStateWallet2 = await utils.waitForFinalizedShieldedBalance(receiver.wallet.shielded);
