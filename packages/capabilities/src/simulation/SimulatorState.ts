@@ -329,6 +329,151 @@ export const applyTransaction = (
 };
 
 // =============================================================================
+// Block Production (Pure Functions)
+// =============================================================================
+
+/**
+ * Result of processing a single transaction.
+ */
+export type TransactionProcessingResult = Readonly<{
+  tx: ProofErasedTransaction;
+  result: import('@midnight-ntwrk/ledger-v8').TransactionResult;
+  newLedger: LedgerState;
+}>;
+
+/**
+ * Process a single pending transaction against the current ledger.
+ * Returns Either with the processing result or an error.
+ *
+ * @param ledger - Current ledger state
+ * @param pendingTx - Transaction to process
+ * @param blockTime - Block timestamp
+ * @param blockContext - Block context
+ * @param minFullness - Minimum block fullness to use
+ */
+export const processTransaction = (
+  ledger: LedgerState,
+  pendingTx: PendingTransaction,
+  blockTime: Date,
+  blockContext: BlockContext,
+  minFullness: number,
+): Either.Either<TransactionProcessingResult, LedgerOps.LedgerError> => {
+  return LedgerOps.ledgerTry(() => {
+    const computedFullness = pendingTx.tx.cost(ledger.parameters);
+    const detailedBlockFullness = ledger.parameters.normalizeFullness(computedFullness);
+    const computedBlockFullness = Math.max(
+      minFullness,
+      detailedBlockFullness.readTime,
+      detailedBlockFullness.computeTime,
+      detailedBlockFullness.blockUsage,
+      detailedBlockFullness.bytesWritten,
+      detailedBlockFullness.bytesChurned,
+    );
+
+    const verifiedTransaction = pendingTx.tx.wellFormed(ledger, pendingTx.strictness, blockTime);
+    const transactionContext = new TransactionContext(ledger, blockContext);
+    const [newLedgerState, txResult] = ledger.apply(verifiedTransaction, transactionContext);
+    const postBlockLedger = newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness);
+
+    return {
+      tx: pendingTx.tx,
+      result: txResult,
+      newLedger: postBlockLedger,
+    };
+  });
+};
+
+/**
+ * Process multiple transactions in sequence, accumulating results.
+ * Returns Either with all results and final ledger, or first error.
+ *
+ * @param ledger - Initial ledger state
+ * @param transactions - Transactions to process
+ * @param blockTime - Block timestamp
+ * @param blockContext - Block context
+ * @param fullness - Block fullness (0-1)
+ */
+export const processTransactions = (
+  ledger: LedgerState,
+  transactions: readonly PendingTransaction[],
+  blockTime: Date,
+  blockContext: BlockContext,
+  fullness: number,
+): Either.Either<{ blockTransactions: BlockTransaction[]; finalLedger: LedgerState }, LedgerOps.LedgerError> => {
+  const blockTransactions: BlockTransaction[] = [];
+  let currentLedger = ledger;
+
+  for (const pendingTx of transactions) {
+    const result = processTransaction(currentLedger, pendingTx, blockTime, blockContext, fullness);
+
+    if (Either.isLeft(result)) {
+      return Either.left(result.left);
+    }
+
+    blockTransactions.push({ tx: result.right.tx, result: result.right.result });
+    currentLedger = result.right.newLedger;
+  }
+
+  return Either.right({ blockTransactions, finalLedger: currentLedger });
+};
+
+/**
+ * Create a block from processed transactions and update state.
+ * Pure function that takes pre-computed block hash.
+ *
+ * @param state - Current simulator state
+ * @param blockTransactions - Processed transactions to include
+ * @param blockHash - Pre-computed block hash
+ * @param blockTime - Block timestamp
+ * @param newLedger - New ledger state after processing transactions
+ * @param processedTxs - Original pending transactions to remove from mempool
+ */
+export const createBlock = (
+  state: SimulatorState,
+  blockTransactions: readonly BlockTransaction[],
+  blockHashValue: string,
+  blockTime: Date,
+  newLedger: LedgerState,
+  processedTxs: readonly PendingTransaction[],
+): [Block, SimulatorState] => {
+  const nextBlockNumber = getCurrentBlockNumber(state) + 1n;
+
+  const block: Block = {
+    number: nextBlockNumber,
+    hash: blockHashValue,
+    timestamp: blockTime,
+    transactions: blockTransactions,
+  };
+
+  const newState: SimulatorState = {
+    ...state,
+    ledger: newLedger,
+    blocks: [...state.blocks, block],
+    mempool: state.mempool.filter((tx) => !processedTxs.includes(tx)),
+    currentTime: blockTime,
+  };
+
+  return [block, newState];
+};
+
+/**
+ * Create an empty block (no transactions) and update state.
+ *
+ * @param state - Current simulator state
+ * @param blockHashValue - Pre-computed block hash
+ * @param blockTime - Block timestamp
+ * @param processedTxs - Original pending transactions to remove from mempool (if any)
+ */
+export const createEmptyBlock = (
+  state: SimulatorState,
+  blockHashValue: string,
+  blockTime: Date,
+  processedTxs: readonly PendingTransaction[] = [],
+): [Block, SimulatorState] => {
+  return createBlock(state, [], blockHashValue, blockTime, state.ledger, processedTxs);
+};
+
+// =============================================================================
 // Helper Functions
 // =============================================================================
 

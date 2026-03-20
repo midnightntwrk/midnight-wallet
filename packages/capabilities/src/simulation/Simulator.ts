@@ -60,6 +60,10 @@ import {
   blockHash,
   nextBlockContext,
   applyTransaction,
+  processTransactions,
+  createBlock,
+  createEmptyBlock,
+  removeFromMempool,
 } from './SimulatorState.js';
 
 // Re-export types from SimulatorState for backward compatibility
@@ -443,6 +447,11 @@ export class Simulator {
   /**
    * Produce a block from the given transactions.
    * Internal method used by the block producer stream.
+   *
+   * This method orchestrates block production by:
+   * 1. Computing the block hash (async)
+   * 2. Processing transactions using pure functions from SimulatorState
+   * 3. Creating the block and updating state atomically
    */
   #produceBlock(
     transactions: readonly PendingTransaction[],
@@ -455,86 +464,44 @@ export class Simulator {
         stateRef,
         (simulatorState): Effect.Effect<readonly [Either.Either<Block, LedgerOps.LedgerError>, SimulatorState]> =>
           Effect.gen(function* () {
-            const nextBlockNumber = getCurrentBlockNumber(simulatorState) + 1n;
             // Advance time first, then use it for the block
             const blockTime = DateOps.addSeconds(simulatorState.currentTime, 1);
+            const hash = yield* Effect.promise(() => blockHash(blockTime));
 
             if (transactions.length === 0) {
-              // No transactions to process, return empty block
-              const hash = yield* Effect.promise(() => blockHash(blockTime));
-
-              const emptyBlock: Block = {
-                number: nextBlockNumber,
-                hash,
-                timestamp: blockTime,
-                transactions: [],
-              };
-
-              const newState: SimulatorState = {
-                ...simulatorState,
-                blocks: [...simulatorState.blocks, emptyBlock],
-                mempool: simulatorState.mempool.filter((tx) => !transactions.includes(tx)),
-                currentTime: blockTime,
-              };
-
+              // No transactions to process, return empty block using pure function
+              const [emptyBlock, newState] = createEmptyBlock(simulatorState, hash, blockTime, transactions);
               return [Either.right(emptyBlock), newState] as const;
             }
 
             const context = yield* Effect.promise(() => nextBlockContext(blockTime));
 
-            // Process all transactions, collecting results
-            const blockTransactions: BlockTransaction[] = [];
-            let currentLedger = simulatorState.ledger;
+            // Process all transactions using pure function
+            const processingResult = processTransactions(
+              simulatorState.ledger,
+              transactions,
+              blockTime,
+              context,
+              fullness,
+            );
 
-            for (const pendingTx of transactions) {
-              const result = LedgerOps.ledgerTry(() => {
-                const computedFullness = pendingTx.tx.cost(currentLedger.parameters);
-                const detailedBlockFullness = currentLedger.parameters.normalizeFullness(computedFullness);
-                const computedBlockFullness = Math.max(
-                  fullness,
-                  detailedBlockFullness.readTime,
-                  detailedBlockFullness.computeTime,
-                  detailedBlockFullness.blockUsage,
-                  detailedBlockFullness.bytesWritten,
-                  detailedBlockFullness.bytesChurned,
-                );
-
-                const verifiedTransaction = pendingTx.tx.wellFormed(currentLedger, pendingTx.strictness, blockTime);
-                const transactionContext = new TransactionContext(currentLedger, context);
-                const [newLedgerState, txResult] = currentLedger.apply(verifiedTransaction, transactionContext);
-                currentLedger = newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness);
-
-                return txResult;
-              });
-
-              if (Either.isLeft(result)) {
-                // Transaction failed, return error
-                const newState: SimulatorState = {
-                  ...simulatorState,
-                  mempool: simulatorState.mempool.filter((tx) => !transactions.includes(tx)),
-                };
-                return [Either.left(result.left), newState] as const;
-              }
-
-              blockTransactions.push({ tx: pendingTx.tx, result: result.right });
+            if (Either.isLeft(processingResult)) {
+              // Transaction failed, remove from mempool and return error
+              const newState = removeFromMempool(simulatorState, transactions);
+              return [Either.left(processingResult.left), newState] as const;
             }
 
-            const hash = yield* Effect.promise(() => blockHash(blockTime));
+            const { blockTransactions, finalLedger } = processingResult.right;
 
-            const block: Block = {
-              number: nextBlockNumber,
+            // Create block using pure function
+            const [block, newState] = createBlock(
+              simulatorState,
+              blockTransactions,
               hash,
-              timestamp: blockTime,
-              transactions: blockTransactions,
-            };
-
-            const newState: SimulatorState = {
-              ...simulatorState,
-              ledger: currentLedger,
-              blocks: [...simulatorState.blocks, block],
-              mempool: simulatorState.mempool.filter((tx) => !transactions.includes(tx)),
-              currentTime: blockTime,
-            };
+              blockTime,
+              finalLedger,
+              transactions,
+            );
 
             return [Either.right(block), newState] as const;
           }),

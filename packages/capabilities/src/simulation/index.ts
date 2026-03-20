@@ -31,6 +31,12 @@ export {
   updateLedger,
   appendBlock,
   applyTransaction,
+  // Block production functions
+  processTransaction,
+  processTransactions,
+  createBlock,
+  createEmptyBlock,
+  type TransactionProcessingResult,
   // Helper functions
   createStrictness,
   blockHash,
