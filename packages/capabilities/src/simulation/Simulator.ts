@@ -365,15 +365,15 @@ export class Simulator {
     return Effect.gen(function* () {
       // First, modify ledger state to make Night tokens claimable
       yield* SubscriptionRef.updateEffect(stateRef, (simulatorState) =>
-        Effect.gen(function* () {
-          const newLedgerState = yield* LedgerOps.ledgerTry(() =>
+        pipe(
+          LedgerOps.ledgerTry(() =>
             simulatorState.ledger.testingDistributeNight(recipient, amount, simulatorState.currentTime),
-          );
-          return {
+          ),
+          Effect.map((newLedgerState) => ({
             ...simulatorState,
             ledger: newLedgerState,
-          };
-        }),
+          })),
+        ),
       );
 
       // Then create and submit the claim transaction to mempool
