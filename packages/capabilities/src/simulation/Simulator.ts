@@ -64,6 +64,7 @@ import {
   createBlock,
   createEmptyBlock,
   removeFromMempool,
+  addToMempool,
 } from './SimulatorState.js';
 
 // Re-export types from SimulatorState for backward compatibility
@@ -359,8 +360,10 @@ export class Simulator {
     recipient: UserAddress,
     amount: bigint,
     verifyingKey: SignatureVerifyingKey,
-  ): Effect.Effect<void, LedgerOps.LedgerError> {
+  ): Effect.Effect<Block, LedgerOps.LedgerError> {
     const stateRef = this.#stateRef;
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
+    const simulator = this;
 
     return Effect.gen(function* () {
       // First, modify ledger state to make Night tokens claimable
@@ -376,7 +379,7 @@ export class Simulator {
         ),
       );
 
-      // Then create and submit the claim transaction to mempool
+      // Create and submit the claim transaction through submitTransaction
       const currentState = yield* SubscriptionRef.get(stateRef);
       const signature = new SignatureErased();
       const claimRewardsTransaction = new ClaimRewardsTransaction(
@@ -389,41 +392,82 @@ export class Simulator {
       );
       const tx = Transaction.fromRewards(claimRewardsTransaction).eraseProofs();
 
-      // Submit to mempool - block producer will handle block creation
-      yield* SubscriptionRef.update(stateRef, (s) => ({
-        ...s,
-        mempool: [...s.mempool, { tx, strictness: new WellFormedStrictness() }],
-      }));
-
-      // Wait for block producer to process the transaction
-      // Use a sleep to allow the forked block producer fiber time to run
-      // Matching the sleep duration used by submission service (100ms)
-      yield* Effect.sleep('100 millis');
+      // Submit transaction - this now produces a block and returns when applied
+      return yield* simulator.submitTransaction(tx);
     });
   }
 
   /**
-   * Submit a transaction to the simulator's mempool.
+   * Submit a transaction and wait for it to be applied to the ledger.
    *
-   * This only adds the transaction to the mempool. Block production is handled
-   * separately by the configured block producer:
-   * - immediate: produces a block on each state change
-   * - batched: produces when batch size is reached
-   * - manual: produces when trigger() is called
-   * - debounced: produces after inactivity period
+   * This method:
+   * 1. Adds the transaction to the mempool
+   * 2. Waits for the block producer to process it
+   * 3. Returns the block containing the transaction
+   *
+   * The block producer stream handles actual block production, ensuring
+   * that custom block producers work correctly with submitTransaction.
+   *
+   * For fire-and-forget scenarios where you don't need to wait for
+   * block production, use `addToMempoolOnly` instead.
    *
    * @param tx - Transaction to submit (proofs erased)
    * @param options - Optional submission options
    * @param options.strictness - Override well-formedness strictness
    */
-  submitTransaction(tx: ProofErasedTransaction, options?: { strictness?: StrictnessConfig }): Effect.Effect<void> {
+  submitTransaction(
+    tx: ProofErasedTransaction,
+    options?: { strictness?: StrictnessConfig },
+  ): Effect.Effect<Block, LedgerOps.LedgerError> {
+    const strictness = createStrictness(options?.strictness);
+    const pendingTx: PendingTransaction = { tx, strictness };
+    const stateRef = this.#stateRef;
+
+    return Effect.gen(function* () {
+      // Add to mempool
+      yield* SubscriptionRef.update(stateRef, (s) => addToMempool(s, pendingTx));
+
+      // Wait for the transaction to be processed (removed from mempool)
+      // by watching state changes
+      const finalState = yield* pipe(
+        stateRef.changes,
+        Stream.filter((s) => !s.mempool.includes(pendingTx)),
+        Stream.take(1),
+        Stream.runHead,
+      );
+
+      if (finalState._tag === 'None') {
+        return yield* Effect.die(new Error('State stream ended unexpectedly'));
+      }
+
+      // Find the block containing our transaction
+      const block = finalState.value.blocks.find((b) => b.transactions.some((bt) => bt.tx === tx));
+
+      if (!block) {
+        // Transaction was removed from mempool but not in any block - it failed
+        return yield* Effect.fail({
+          _tag: 'LedgerError' as const,
+          message: 'Transaction was discarded',
+        } as LedgerOps.LedgerError);
+      }
+
+      return block;
+    });
+  }
+
+  /**
+   * Add a transaction to the mempool without producing a block.
+   * Use this for batched or delayed block production scenarios.
+   *
+   * @param tx - Transaction to add
+   * @param options - Optional options
+   * @param options.strictness - Override well-formedness strictness
+   */
+  addToMempoolOnly(tx: ProofErasedTransaction, options?: { strictness?: StrictnessConfig }): Effect.Effect<void> {
     const strictness = createStrictness(options?.strictness);
     const pendingTx: PendingTransaction = { tx, strictness };
 
-    return SubscriptionRef.update(this.#stateRef, (s) => ({
-      ...s,
-      mempool: [...s.mempool, pendingTx],
-    }));
+    return SubscriptionRef.update(this.#stateRef, (s) => addToMempool(s, pendingTx));
   }
 
   /**

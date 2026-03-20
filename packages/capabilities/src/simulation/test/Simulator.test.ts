@@ -718,15 +718,16 @@ describe('Unified Simulator', () => {
             return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
           };
 
-          // First tx - no block yet (mempool size < 2)
-          yield* simulator.submitTransaction(createTx());
+          // First tx - add to mempool without producing block
+          // Use addToMempoolOnly to test custom block producer behavior
+          yield* simulator.addToMempoolOnly(createTx());
           yield* Effect.sleep('50 millis');
           const state1 = yield* simulator.getLatestState();
           expect(getCurrentBlockNumber(state1)).toBe(getCurrentBlockNumber(initialState));
           expect(state1.mempool.length).toBe(1);
 
-          // Second tx - should trigger block (exactly 2 txs)
-          yield* simulator.submitTransaction(createTx());
+          // Second tx - should trigger custom block producer (exactly 2 txs)
+          yield* simulator.addToMempoolOnly(createTx());
           yield* Effect.sleep('100 millis');
           const state2 = yield* simulator.getLatestState();
           expect(getCurrentBlockNumber(state2)).toBe(getCurrentBlockNumber(initialState) + 1n);
