@@ -38,7 +38,7 @@ import type {
 import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator, getLastBlock, getLastBlockEvents } from '../Simulator.js';
+import { Simulator, getLastBlock, getLastBlockEvents } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,

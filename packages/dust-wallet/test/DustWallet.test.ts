@@ -42,7 +42,7 @@ import {
   getCurrentBlockNumber,
   getLastBlock,
   getLastBlockResults,
-} from '../src/v1/Simulator.js';
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';

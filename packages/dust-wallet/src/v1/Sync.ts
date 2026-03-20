@@ -23,7 +23,7 @@ import {
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
-import { Simulator, SimulatorState, getCurrentBlockNumber, getLastBlockEvents, getLastBlock } from './Simulator.js';
+import { Simulator, SimulatorState, getCurrentBlockNumber, getLastBlockEvents, getLastBlock } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
