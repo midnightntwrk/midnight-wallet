@@ -70,12 +70,6 @@ export const waitForSyncProgress = async (wallet: WalletFacade) =>
     ),
   );
 
-export const isAnotherChain = async (wallet: ShieldedWallet, offset: number) => {
-  const state = await wallet.waitForSyncedState();
-  // allow for situations when there's no new index in the network between runs
-  const applyGap = state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex;
-  return applyGap <= offset - 1;
-};
 
 export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
   const chunks: string[] = [];
@@ -107,14 +101,12 @@ const restoreShieldedWallet = async (
 
 const restoreUnshieldedWallet = async (
   path: string,
-  seed: string,
   fixture: TestContainersFixture,
   readIfExists: (path: string) => Promise<string | undefined>,
 ) => {
   try {
     const serialized = await readIfExists(path);
     if (serialized) {
-      const keyStore = createKeystore(getUnshieldedSeed(seed), fixture.getNetworkId());
       const wallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {
@@ -122,7 +114,7 @@ const restoreUnshieldedWallet = async (
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
         txHistoryStorage: new InMemoryTransactionHistoryStorage(),
-      }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
+      }).restore(serialized);
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
     }
@@ -189,7 +181,7 @@ export const provideWallet = async (
 
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
-    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists),
+    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, fixture, readIfExists),
     restoreDustWallet(`${directoryPath}/dust-${filename}`, { ...walletConfig, ...dustWalletConfig }, readIfExists),
   ]);
 
@@ -208,20 +200,58 @@ export const provideWallet = async (
       dust: () => restoredDust,
     });
     await restoredWallet.start(shieldedSecretKeys, dustSecretKey);
-    // check if wallet is syncing correctly
-    await waitForSyncProgress(restoredWallet);
-    const restoredWalletState = await rx.firstValueFrom(restoredWallet.state());
-    const applyGap =
-      restoredWalletState.unshielded.progress.highestTransactionId - restoredWalletState.unshielded.progress.appliedId;
-    logger.info(`Apply gap: ${applyGap}`);
-    if ((applyGap ?? 0) < 0) {
-      logger.warn('Unable to sync restored wallet. Building wallet facade from scratch');
+
+    // Wait for the wallets to connect and receive initial progress from the indexer,
+    // then check for chain reset before waiting for full sync (which would hang on a reset).
+    const connectedState = await rx.firstValueFrom(
+      restoredWallet.state().pipe(
+        rx.filter((state) => state.unshielded.progress.isConnected),
+        rx.timeout(30_000),
+      ),
+    );
+
+    // Shielded/Dust: the sync loop sets highestRelevantWalletIndex from the indexer's maxId.
+    // If our saved appliedIndex exceeds that, the chain has reset.
+    const shieldedProgress = connectedState.shielded.state.progress;
+    const shieldedAhead =
+      shieldedProgress.appliedIndex > 0n &&
+      shieldedProgress.highestRelevantWalletIndex > 0n &&
+      shieldedProgress.appliedIndex > shieldedProgress.highestRelevantWalletIndex;
+    logger.info(
+      `Shielded: appliedIndex=${shieldedProgress.appliedIndex}, highestRelevantWalletIndex=${shieldedProgress.highestRelevantWalletIndex}`,
+    );
+
+    const dustProgress = connectedState.dust.state.progress;
+    const dustAhead =
+      dustProgress.appliedIndex > 0n &&
+      dustProgress.highestRelevantWalletIndex > 0n &&
+      dustProgress.appliedIndex > dustProgress.highestRelevantWalletIndex;
+    logger.info(
+      `Dust: appliedIndex=${dustProgress.appliedIndex}, highestRelevantWalletIndex=${dustProgress.highestRelevantWalletIndex}`,
+    );
+
+    // Unshielded: highestTransactionId is updated via progress messages from the indexer.
+    const unshieldedProgress = connectedState.unshielded.progress;
+    const unshieldedAhead =
+      unshieldedProgress.appliedId > 0n &&
+      unshieldedProgress.highestTransactionId > 0n &&
+      unshieldedProgress.appliedId > unshieldedProgress.highestTransactionId;
+    logger.info(
+      `Unshielded: appliedId=${unshieldedProgress.appliedId}, highestTransactionId=${unshieldedProgress.highestTransactionId}`,
+    );
+
+    if (shieldedAhead || dustAhead || unshieldedAhead) {
+      logger.warn(
+        'Chain reset detected — restored wallet state is ahead of current chain. Building wallet facade from scratch',
+      );
       await restoredWallet.stop();
       return initWalletWithSeed(seed, fixture);
-    } else {
-      logger.info('Successfully restored wallet facade.');
-      return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
     }
+
+    // Chain looks consistent — wait for full sync
+    await waitForSyncProgress(restoredWallet);
+    logger.info('Successfully restored wallet facade.');
+    return { wallet: restoredWallet, shieldedSecretKeys, dustSecretKey, unshieldedKeystore };
   }
 };
 
