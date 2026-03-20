@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Scope, Stream, Schema, pipe, Either } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import { Simulator, SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
