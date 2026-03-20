@@ -167,7 +167,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                     pipe(
                       this.#v1Context.transactionHistoryService.getMetaData(change.source),
                       Effect.flatMap((metadata) =>
-                        this.#v1Context.transactionHistoryService.create(change, metadata, protocolVersion),
+                        this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
                       ),
                       Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
                       Effect.forkScoped,

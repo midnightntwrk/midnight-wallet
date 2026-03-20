@@ -36,7 +36,7 @@ export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
 export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
 
 export type TransactionHistoryService = {
-  create(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
+  put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
   get(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError>;
@@ -57,8 +57,14 @@ type UnshieldedSection = {
   readonly spentUtxos: readonly Utxo[];
 };
 
-type StorageEntryWithUnshielded = TransactionHistoryStorage.TransactionHistoryEntryWithHash & {
-  unshielded: UnshieldedSection;
+type StorageEntryWithUnshielded = Omit<
+  TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+  'identifiers' | 'timestamp' | 'fees'
+> & {
+  readonly identifiers: readonly string[];
+  readonly timestamp: Date;
+  readonly fees: bigint | null;
+  readonly unshielded: UnshieldedSection;
 };
 
 const hasUnshieldedSection = (
@@ -76,9 +82,9 @@ const projectToUnshieldedEntry = (entry: StorageEntryWithUnshielded): Unshielded
     id,
     hash: entry.hash,
     protocolVersion: entry.protocolVersion,
-    identifiers: entry.identifiers ?? [],
-    timestamp: entry.timestamp ?? new Date(0),
-    fees: (entry.fees ?? null) as UnshieldedTransactionHistoryEntry['fees'],
+    identifiers: entry.identifiers,
+    timestamp: entry.timestamp,
+    fees: entry.fees as UnshieldedTransactionHistoryEntry['fees'],
     status: entry.status,
     createdUtxos,
     spentUtxos,
@@ -105,8 +111,8 @@ const convertUpdateToStorageEntry = ({
   hash: transaction.hash,
   protocolVersion: transaction.protocolVersion,
   status,
-  identifiers: transaction.identifiers ? transaction.identifiers : [],
-  timestamp: transaction.block?.timestamp ?? null,
+  identifiers: transaction.identifiers ?? [],
+  timestamp: transaction.block.timestamp,
   fees: transaction.fees?.paidFees ?? null,
   unshielded: {
     id: transaction.id,
@@ -134,19 +140,10 @@ export const makeDefaultTransactionHistoryService = (
   const txHistoryStorage = config.txHistoryStorage;
 
   return {
-    create: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
-      Effect.gen(function* () {
-        const entry = convertUpdateToStorageEntry(update);
-        const existing = yield* Effect.tryPromise({
-          try: () => txHistoryStorage.get(entry.hash),
-          catch: (e) =>
-            new TransactionHistoryError({ message: 'Failed to get existing transaction history entry', cause: e }),
-        });
-        yield* Effect.tryPromise({
-          try: () => txHistoryStorage.upsert({ ...existing, ...entry }),
-          catch: (e) =>
-            new TransactionHistoryError({ message: 'Failed to upsert transaction history entry', cause: e }),
-        });
+    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.upsert(convertUpdateToStorageEntry(update)),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
       }),
 
     get: (

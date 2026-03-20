@@ -27,7 +27,9 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
 type QualifiedShieldedCoinInfo = Schema.Schema.Type<typeof QualifiedShieldedCoinInfoSchema>;
 
 export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  hash: TransactionHistoryStorage.TransactionHashSchema,
+  protocolVersion: Schema.Number,
+  status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
   receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
   spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
 });
@@ -48,7 +50,7 @@ export type TransactionMetaData = {
 };
 
 export type TransactionHistoryService = {
-  create(
+  put(
     changes: ledger.ZswapStateChanges,
     metadata: TransactionMetaData,
     protocolVersion: number,
@@ -73,19 +75,18 @@ type ShieldedSection = {
 
 const hasShieldedSection = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
-): entry is StorageEntryWithShielded =>
+): entry is TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection } =>
   entry.shielded != null &&
   typeof entry.shielded === 'object' &&
   'receivedCoins' in entry.shielded &&
   'spentCoins' in entry.shielded;
 
-const projectToShieldedEntry = (entry: StorageEntryWithShielded): ShieldedTransactionHistoryEntry => ({
+const projectToShieldedEntry = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
+): ShieldedTransactionHistoryEntry => ({
   hash: entry.hash,
   protocolVersion: entry.protocolVersion,
   status: entry.status,
-  identifiers: entry.identifiers ?? [],
-  timestamp: entry.timestamp ?? null,
-  fees: entry.fees ?? null,
   receivedCoins: entry.shielded.receivedCoins,
   spentCoins: entry.shielded.spentCoins,
 });
@@ -104,8 +105,11 @@ const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSect
   spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
 
-type StorageEntryWithShielded = TransactionHistoryStorage.TransactionHistoryEntryWithHash & {
-  shielded: ShieldedSection;
+type StorageEntryWithShielded = Omit<
+  TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+  'identifiers' | 'timestamp' | 'fees'
+> & {
+  readonly shielded: ShieldedSection;
 };
 
 const convertUpdateToStorageEntry = (
@@ -153,7 +157,7 @@ export const makeDefaultTransactionHistoryService = (
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
 
   return {
-    create: (
+    put: (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
@@ -246,7 +250,7 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
   const txHistoryStorage = new InMemoryTransactionHistoryStorage();
 
   return {
-    create: (
+    put: (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionMetaData,
       protocolVersion: number,
@@ -341,9 +345,6 @@ export const restoreShieldedTransactionHistoryStorage = (
               hash: entry.hash,
               protocolVersion: entry.protocolVersion,
               status: entry.status,
-              identifiers: entry.identifiers,
-              timestamp: entry.timestamp,
-              fees: entry.fees,
               shielded: {
                 receivedCoins: entry.receivedCoins,
                 spentCoins: entry.spentCoins,

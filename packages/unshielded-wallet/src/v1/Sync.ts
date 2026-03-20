@@ -126,7 +126,7 @@ export const makeDefaultSyncCapability = (
             });
 
             const { transactionHistoryService } = getContext();
-            Effect.runFork(transactionHistoryService.create(update));
+            Effect.runFork(transactionHistoryService.put(update));
 
             return stateAfterUpdatingProgress;
           }),

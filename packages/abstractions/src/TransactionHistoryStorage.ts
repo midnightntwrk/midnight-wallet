@@ -25,7 +25,7 @@ export const TransactionHistoryCommonSchema = Schema.Struct({
   protocolVersion: Schema.Number,
   status: TransactionHistoryStatusSchema,
   identifiers: Schema.optional(Schema.Array(Schema.String)),
-  timestamp: Schema.optional(Schema.NullOr(Schema.Date)),
+  timestamp: Schema.optional(Schema.Date),
   fees: Schema.optional(Schema.NullOr(Schema.BigInt)),
 });
 
