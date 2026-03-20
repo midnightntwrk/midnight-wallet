@@ -14,7 +14,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import { Simulator, SimulatorState, getLastBlock, getLastBlockEvents } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
@@ -259,8 +259,31 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) =>
-      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKeys: secretKeys }))),
+    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) => {
+      // Get the initial state immediately to ensure we process the genesis block.
+      // Then subscribe to state$ for subsequent changes, but deduplicate by block number
+      // to avoid processing the same block twice.
+      let lastSeenBlockNumber: bigint | undefined;
+
+      return pipe(
+        Stream.fromEffect(config.simulator.getLatestState()),
+        Stream.concat(config.simulator.state$),
+        Stream.filter((state) => {
+          const lastBlock = getLastBlock(state);
+          if (lastBlock === undefined) {
+            return false; // Skip blank state
+          }
+          const blockNumber = lastBlock.number;
+          // Skip if we've already seen this block (deduplication)
+          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+            return false;
+          }
+          lastSeenBlockNumber = blockNumber;
+          return true;
+        }),
+        Stream.map((state) => ({ update: state, secretKeys })),
+      );
+    },
   };
 };
 
@@ -269,12 +292,17 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
       const { update: simulatorUpdate, secretKeys } = update;
 
-      // In blank mode, lastTxResult may be undefined (no genesis transaction)
-      if (simulatorUpdate.lastTxResult === undefined) {
+      // In blank mode (no blocks yet), skip update
+      const lastBlock = getLastBlock(simulatorUpdate);
+      if (lastBlock === undefined) {
         return state;
       }
 
-      return CoreWallet.replayEvents(state, secretKeys, simulatorUpdate.lastTxResult.events);
+      const blockNumber = lastBlock.number;
+      const events = [...getLastBlockEvents(simulatorUpdate)];
+      return CoreWallet.updateProgress(CoreWallet.replayEvents(state, secretKeys, events), {
+        appliedIndex: blockNumber,
+      });
     },
   };
 };

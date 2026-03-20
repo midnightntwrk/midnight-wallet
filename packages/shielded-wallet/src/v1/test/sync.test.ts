@@ -38,7 +38,7 @@ import type {
 import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator } from '../Simulator.js';
+import { Simulator, getLastBlock, getLastBlockEvents } from '../Simulator.js';
 
 vi.setConfig({
   testTimeout: 60_000,
@@ -68,10 +68,11 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
-    if (state.lastTxResult === undefined) {
-      throw new Error('No transaction result from simulator');
+    const lastBlock = getLastBlock(state);
+    if (lastBlock === undefined) {
+      throw new Error('No block from simulator');
     }
-    const events = state.lastTxResult.events;
+    const events = getLastBlockEvents(state);
     if (events.length === 0) {
       throw new Error('No events generated from simulator');
     }

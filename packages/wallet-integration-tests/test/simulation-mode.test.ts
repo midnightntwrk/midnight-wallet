@@ -30,14 +30,14 @@ describe('Working in simulation mode', () => {
       const senderKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
       const receiverKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
 
-      const genesisMints = [
+      const genesisMints: [Simulator.GenesisMint] = [
         {
           amount: 10_000_000n,
           type: shieldedTokenType,
           recipient: senderKeys,
         },
-      ] as const;
-      const simulator = yield* Simulator.Simulator.init(genesisMints);
+      ];
+      const simulator = yield* Simulator.Simulator.init({ mode: 'genesis', genesisMints });
 
       const Wallet = CustomShieldedWallet(
         {

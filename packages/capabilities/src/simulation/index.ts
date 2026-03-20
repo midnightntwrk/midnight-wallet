@@ -13,9 +13,26 @@
 
 export {
   Simulator,
+  immediateBlockProducer,
+  // State accessor functions (composable with simulator.query())
+  getLastBlock,
+  getCurrentBlockNumber,
+  getCurrentTime,
+  getBlockByNumber,
+  getLastBlockResults,
+  getLastBlockEvents,
+  hasPendingTransactions,
+  // Types
   type SimulatorState,
   type SimulatorConfig,
+  type Block,
+  type BlockTransaction,
   type BlockInfo,
   type GenesisMint,
   type StrictnessConfig,
+  type BlockProducer,
+  type BlockProductionRequest,
+  type PendingTransaction,
+  type FullnessSpec,
+  InvalidBlockFullnessError,
 } from './Simulator.js';

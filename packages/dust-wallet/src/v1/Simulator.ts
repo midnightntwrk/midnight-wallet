@@ -21,7 +21,17 @@
  */
 export {
   Simulator,
+  // State accessor functions (composable with simulator.query())
+  getLastBlock,
+  getCurrentBlockNumber,
+  getCurrentTime,
+  getBlockByNumber,
+  getLastBlockResults,
+  getLastBlockEvents,
+  // Types
   type SimulatorState,
+  type Block,
+  type BlockTransaction,
   type BlockInfo,
   type StrictnessConfig,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';

@@ -23,7 +23,7 @@ import {
 import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import { Simulator, SimulatorState, getCurrentBlockNumber, getLastBlockEvents, getLastBlock } from './Simulator.js';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
@@ -277,32 +277,68 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKey: DustSecretKey) =>
-      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
+    updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
+      // Get the initial state immediately to ensure we process the genesis block.
+      // Then subscribe to state$ for subsequent changes, but deduplicate by block number
+      // to avoid processing the same block twice.
+      let lastSeenBlockNumber: bigint | undefined;
+
+      return pipe(
+        Stream.fromEffect(config.simulator.getLatestState()),
+        Stream.concat(config.simulator.state$),
+        Stream.filter((state) => {
+          const lastBlock = getLastBlock(state);
+          if (lastBlock === undefined) {
+            return false; // Skip blank state
+          }
+          const blockNumber = lastBlock.number;
+          // Skip if we've already seen this block (deduplication)
+          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+            return false;
+          }
+          lastSeenBlockNumber = blockNumber;
+          return true;
+        }),
+        Stream.map((state) => ({ update: state, secretKey })),
+      );
+    },
     blockData: (): Effect.Effect<BlockData> => {
       return Effect.gen(function* () {
         const state = yield* config.simulator.getLatestState();
-        const timestamp = DateOps.secondsToDate(state.lastTxNumber);
+        const lastBlock = getLastBlock(state);
+        // For blank state, return defaults
+        if (lastBlock === undefined) {
+          return {
+            hash: yield* Simulator.blockHash(state.currentTime),
+            height: 0,
+            ledgerParameters: state.ledger.parameters,
+            timestamp: state.currentTime,
+          };
+        }
         return {
-          hash: yield* Simulator.blockHash(timestamp),
-          height: Number(state.lastTxNumber),
+          hash: lastBlock.hash,
+          height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
-          timestamp,
+          timestamp: lastBlock.timestamp,
         };
       });
     },
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => ({
-  applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) =>
-    CoreWallet.updateProgress(
-      CoreWallet.applyEvents(
-        state,
-        update.secretKey,
-        update.update.lastTxResult?.events || [],
-        DateOps.secondsToDate(update.update.lastTxNumber),
-      ),
-      { appliedIndex: update.update.lastTxNumber },
-    ),
-});
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
+  return {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
+      const lastBlock = getLastBlock(update.update);
+      // If no block exists yet (blank simulator), skip update
+      if (lastBlock === undefined) {
+        return state;
+      }
+      const events = [...getLastBlockEvents(update.update)];
+      return CoreWallet.updateProgress(
+        CoreWallet.applyEvents(state, update.secretKey, events, lastBlock.timestamp),
+        { appliedIndex: lastBlock.number },
+      );
+    },
+  };
+};

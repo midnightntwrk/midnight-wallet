@@ -21,8 +21,17 @@
  */
 export {
   Simulator,
+  // State accessor functions (composable with simulator.query())
+  getLastBlock,
+  getCurrentBlockNumber,
+  getBlockByNumber,
+  getLastBlockResults,
+  getLastBlockEvents,
+  // Types
   type SimulatorState,
   type SimulatorConfig,
+  type Block,
+  type BlockTransaction,
   type BlockInfo,
   type GenesisMint,
   type StrictnessConfig,
