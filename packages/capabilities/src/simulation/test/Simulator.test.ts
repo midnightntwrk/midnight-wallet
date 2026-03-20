@@ -27,9 +27,11 @@ import {
   immediateBlockProducer,
   getCurrentBlockNumber,
   getLastBlock,
+  applyTransaction,
+  nextBlockContext,
   type BlockProducer,
   type SimulatorState,
-} from '../Simulator.js';
+} from '../index.js';
 
 vi.setConfig({ testTimeout: 60_000 });
 
@@ -290,9 +292,9 @@ describe('Unified Simulator', () => {
         const strictness = new ledger.WellFormedStrictness();
         strictness.enforceBalancing = false;
 
-        const blockContext = yield* Simulator.nextBlockContext(state.currentTime);
+        const blockContext = yield* Effect.promise(() => nextBlockContext(state.currentTime));
 
-        const result = Simulator.apply(state, tx, strictness, blockContext);
+        const result = applyTransaction(state, tx, strictness, blockContext);
 
         // The result should be an Either
         expect(result._tag).toBe('Right');
@@ -326,9 +328,9 @@ describe('Unified Simulator', () => {
         const strictness = new ledger.WellFormedStrictness();
         strictness.enforceBalancing = true;
 
-        const blockContext = yield* Simulator.nextBlockContext(state.currentTime);
+        const blockContext = yield* Effect.promise(() => nextBlockContext(state.currentTime));
 
-        const result = Simulator.apply(state, tx, strictness, blockContext);
+        const result = applyTransaction(state, tx, strictness, blockContext);
 
         // The result should be an Either Left (error)
         expect(result._tag).toBe('Left');
