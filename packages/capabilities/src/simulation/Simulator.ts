@@ -26,19 +26,14 @@
 import { Array as Arr, Clock, Effect, Either, Encoding, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
 import {
   LedgerState,
-  type BlockContext,
   type UserAddress,
   ClaimRewardsTransaction,
   SignatureErased,
   type SignatureVerifyingKey,
   Transaction,
   WellFormedStrictness,
-  type TransactionResult,
   TransactionContext,
   type ProofErasedTransaction,
-  type SyntheticCost,
-  type RawTokenType,
-  type ZswapSecretKeys,
   createShieldedCoinInfo,
   ZswapOutput,
   ZswapOffer,
@@ -46,176 +41,56 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps, ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import * as crypto from 'crypto';
+
+import {
+  type SimulatorState,
+  type Block,
+  type BlockTransaction,
+  type PendingTransaction,
+  type BlockProducer,
+  type GenesisMint,
+  type StrictnessConfig,
+  type FullnessSpec,
+  getCurrentBlockNumber,
+  hasPendingTransactions,
+  resolveFullness,
+  allMempoolTransactions,
+  blankState,
+  createStrictness,
+  blockHash,
+  nextBlockContext,
+  applyTransaction,
+} from './SimulatorState.js';
+
+// Re-export types from SimulatorState for backward compatibility
+export type {
+  SimulatorState,
+  Block,
+  BlockTransaction,
+  PendingTransaction,
+  BlockInfo,
+  BlockProductionRequest,
+  BlockProducer,
+  FullnessSpec,
+  GenesisMint,
+  StrictnessConfig,
+} from './SimulatorState.js';
+
+// Re-export state accessors for backward compatibility
+export {
+  getLastBlock,
+  getCurrentBlockNumber,
+  getBlockByNumber,
+  getLastBlockResults,
+  getLastBlockEvents,
+  hasPendingTransactions,
+  getCurrentTime,
+  applyTransaction,
+} from './SimulatorState.js';
 
 // =============================================================================
-// Types
+// Block Producers
 // =============================================================================
-
-/**
- * A transaction included in a block with its execution result.
- */
-export type BlockTransaction = Readonly<{
-  /** The transaction that was executed */
-  tx: ProofErasedTransaction;
-  /** The result of executing the transaction */
-  result: TransactionResult;
-}>;
-
-/**
- * A produced block containing transactions and metadata.
- */
-export type Block = Readonly<{
-  /** Block number (height) */
-  number: bigint;
-  /** Block hash */
-  hash: string;
-  /** Block timestamp */
-  timestamp: Date;
-  /** Transactions in this block, ordered by execution */
-  transactions: readonly BlockTransaction[];
-}>;
-
-/**
- * Simulator state containing the ledger, block history, and pending mempool.
- */
-export type SimulatorState = Readonly<{
-  networkId: NetworkId.NetworkId;
-  ledger: LedgerState;
-  /** All produced blocks, ordered by block number */
-  blocks: readonly Block[];
-  /** Pending transactions waiting for block production */
-  mempool: readonly PendingTransaction[];
-  /** Current simulator time (independent of block numbers) */
-  currentTime: Date;
-}>;
-
-// =============================================================================
-// State Accessors
-// =============================================================================
-
-/**
- * Get the last produced block, or undefined if no blocks yet.
- */
-export const getLastBlock = (state: SimulatorState): Block | undefined =>
-  state.blocks.length > 0 ? state.blocks[state.blocks.length - 1] : undefined;
-
-/**
- * Get the current block number (height of the last block, or 0 if no blocks).
- export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastBlock(stat
- */
-export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastBlock(state)?.number ?? 0n;
-
-/**
- * Get a block by its number.
- */
-export const getBlockByNumber = (state: SimulatorState, number: bigint): Block | undefined =>
-  state.blocks.find((b) => b.number === number);
-
-/**
- * Get all transaction results from the last block.
- */
-export const getLastBlockResults = (state: SimulatorState): readonly TransactionResult[] =>
-  getLastBlock(state)?.transactions.map((t) => t.result) ?? [];
-
-/**
- * Get all events from the last block (flattened from all transactions).
- */
-export const getLastBlockEvents = (state: SimulatorState): readonly TransactionResult['events'][number][] =>
-  getLastBlockResults(state).flatMap((r) => r.events);
-
-/**
- * Check if there are pending transactions in the mempool.
- */
-export const hasPendingTransactions = (state: SimulatorState): boolean => state.mempool.length > 0;
-
-/**
- * Get the current simulator time.
- */
-export const getCurrentTime = (state: SimulatorState): Date => state.currentTime;
-
-/**
- * Result of a successful block production.
- */
-export type BlockInfo = Readonly<{
-  blockNumber: bigint;
-  blockHash: string;
-}>;
-
-/**
- * Pending transaction waiting for block production.
- */
-export type PendingTransaction = Readonly<{
-  tx: ProofErasedTransaction;
-  strictness: WellFormedStrictness;
-}>;
-
-/**
- * Error for invalid block fullness values.
- */
-export class InvalidBlockFullnessError extends Error {
-  readonly _tag = 'InvalidBlockFullnessError';
-  constructor(message: string) {
-    super(message);
-    this.name = 'InvalidBlockFullnessError';
-  }
-}
-
-// =============================================================================
-// Block Production
-// =============================================================================
-
-/**
- * Request to produce a block with specific transactions and fullness.
- * This mimics how real nodes work - selecting which transactions to include.
- */
-export type BlockProductionRequest = Readonly<{
-  /** Transactions to include in this block (selected from the state's mempool) */
-  transactions: readonly PendingTransaction[];
-  /** Block fullness (0-1) for fee calculation */
-  fullness: number;
-}>;
-
-/**
- * A block producer is a stream transformer that decides when blocks should be produced.
- *
- * It receives a stream of simulator state changes and transforms it into a stream
- * of block production requests. Each request specifies which transactions to include
- * and the block fullness for fee calculation.
- *
- * @example
- * ```typescript
- * // Custom producer: produce block when mempool has 5+ transactions
- * const batchedProducer: BlockProducer = (states) =>
- *   states.pipe(
- *     Stream.filter((s) => s.mempool.length >= 5),
- *     Stream.map((s) => ({
- *       transactions: [...s.mempool],
- *       fullness: 0.5,
- *     }))
- *   );
- * ```
- */
-export type BlockProducer = (states: Stream.Stream<SimulatorState>) => Stream.Stream<BlockProductionRequest>;
-
-/**
- * Fullness specification: static number or callback based on state.
- */
-export type FullnessSpec = number | ((state: SimulatorState) => number);
-
-/**
- * Resolve fullness from spec and state.
- */
-const resolveFullness = (spec: FullnessSpec, state: SimulatorState): number =>
-  typeof spec === 'function' ? spec(state) : spec;
-
-/**
- * Helper to create a request that includes all mempool transactions.
- */
-const allTransactions = (state: SimulatorState, fullness: number): BlockProductionRequest => ({
-  transactions: [...state.mempool],
-  fullness,
-});
 
 /**
  * Default block producer: produces a block for each state change with non-empty mempool.
@@ -227,29 +102,12 @@ export const immediateBlockProducer =
   (states) =>
     states.pipe(
       Stream.filter(hasPendingTransactions),
-      Stream.map((s) => allTransactions(s, resolveFullness(fullness, s))),
+      Stream.map((s) => allMempoolTransactions(s, resolveFullness(fullness, s))),
     );
 
-/**
- * Genesis mint specification for initializing the simulator with pre-funded accounts.
- */
-export type GenesisMint = Readonly<{
-  amount: bigint;
-  type: RawTokenType;
-  recipient: ZswapSecretKeys;
-}>;
-
-/**
- * Configuration for well-formedness strictness checks.
- * All options default to false for testing flexibility.
- */
-export type StrictnessConfig = Readonly<{
-  enforceBalancing?: boolean;
-  verifyNativeProofs?: boolean;
-  verifyContractProofs?: boolean;
-  enforceLimits?: boolean;
-  verifySignatures?: boolean;
-}>;
+// =============================================================================
+// Simulator Configuration
+// =============================================================================
 
 /**
  * Simulator initialization configuration.
@@ -266,35 +124,6 @@ export type SimulatorConfig =
       readonly networkId?: NetworkId.NetworkId;
       readonly blockProducer?: BlockProducer;
     };
-
-// =============================================================================
-// Helper Functions
-// =============================================================================
-
-/**
- * Compute SHA-256 hash of a bigint, returning hex-encoded result.
- */
-const simpleHash = (input: bigint): Effect.Effect<string> =>
-  Effect.promise(() => crypto.subtle.digest('SHA-256', new TextEncoder().encode(input.toString()))).pipe(
-    Effect.andThen((out) => Encoding.encodeHex(new Uint8Array(out))),
-  );
-
-/**
- * Create a WellFormedStrictness instance with configurable options.
- * All options default to false for maximum testing flexibility.
- *
- * Note: WellFormedStrictness is a class from the ledger library that requires
- * mutation to configure. This is unavoidable given the external API design.
- */
-const createStrictness = (config: StrictnessConfig = {}): WellFormedStrictness => {
-  const strictness = new WellFormedStrictness();
-  strictness.enforceBalancing = config.enforceBalancing ?? false;
-  strictness.verifyNativeProofs = config.verifyNativeProofs ?? false;
-  strictness.verifyContractProofs = config.verifyContractProofs ?? false;
-  strictness.enforceLimits = config.enforceLimits ?? false;
-  strictness.verifySignatures = config.verifySignatures ?? false;
-  return strictness;
-};
 
 // =============================================================================
 // Simulator Class
@@ -326,79 +155,35 @@ export class Simulator {
 
   /**
    * Compute block hash from block time.
+   * @deprecated Use blockHash from SimulatorState instead
    */
-  static blockHash = (blockTime: Date): Effect.Effect<string> => simpleHash(DateOps.dateToSeconds(blockTime));
+  static blockHash = (blockTime: Date): Effect.Effect<string> =>
+    Effect.promise(() => blockHash(blockTime));
 
   /**
    * Create the next block context from block time.
+   * @deprecated Use nextBlockContext from SimulatorState instead
    */
-  static nextBlockContext = (blockTime: Date): Effect.Effect<BlockContext> =>
-    pipe(
-      Simulator.blockHash(blockTime),
-      Effect.map((hash) => ({
-        parentBlockHash: hash,
-        secondsSinceEpoch: DateOps.dateToSeconds(blockTime),
-        secondsSinceEpochErr: 1,
-        lastBlockTime: 1n,
-      })),
-    );
+  static nextBlockContext = (blockTime: Date): Effect.Effect<import('@midnight-ntwrk/ledger-v8').BlockContext> =>
+    Effect.promise(() => nextBlockContext(blockTime));
 
   /**
    * Pure state transition: apply a transaction to the simulator state.
-   * Returns Either with the new state or an error.
-   *
-   * @param simulatorState - Current simulator state
-   * @param tx - Transaction to apply
-   * @param strictness - Well-formedness strictness options
-   * @param blockContext - Block context for the transaction
-   * @param options - Optional parameters
-   * @param options.blockNumber - Override block number (defaults to last block + 1)
-   * @param options.blockFullness - Override detailed block fullness (SyntheticCost)
-   * @param options.overallBlockFullness - Override overall block fullness (0-1 value)
+   * @deprecated Use applyTransaction from SimulatorState instead
    */
-  static apply(
+  static apply = (
     simulatorState: SimulatorState,
     tx: ProofErasedTransaction,
     strictness: WellFormedStrictness,
-    blockContext: BlockContext,
-    options?: { blockNumber?: bigint; blockFullness?: SyntheticCost; overallBlockFullness?: number },
-  ): Either.Either<[Block, SimulatorState], LedgerOps.LedgerError> {
-    return LedgerOps.ledgerTry(() => {
-      const computedFullness = options?.blockFullness ?? tx.cost(simulatorState.ledger.parameters);
-
-      const detailedBlockFullness = simulatorState.ledger.parameters.normalizeFullness(computedFullness);
-      const computedBlockFullness =
-        options?.overallBlockFullness ??
-        Math.max(
-          detailedBlockFullness.readTime,
-          detailedBlockFullness.computeTime,
-          detailedBlockFullness.blockUsage,
-          detailedBlockFullness.bytesWritten,
-          detailedBlockFullness.bytesChurned,
-        );
-
-      const blockNumber = options?.blockNumber ?? getCurrentBlockNumber(simulatorState) + 1n;
-      const blockTime = simulatorState.currentTime;
-      const verifiedTransaction = tx.wellFormed(simulatorState.ledger, strictness, blockTime);
-      const transactionContext = new TransactionContext(simulatorState.ledger, blockContext);
-      const [newLedgerState, txResult] = simulatorState.ledger.apply(verifiedTransaction, transactionContext);
-
-      const newBlock: Block = {
-        number: blockNumber,
-        hash: blockContext.parentBlockHash,
-        timestamp: blockTime,
-        transactions: [{ tx, result: txResult }],
-      };
-
-      const newSimulatorState: SimulatorState = {
-        ...simulatorState,
-        ledger: newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness),
-        blocks: [...simulatorState.blocks, newBlock],
-      };
-
-      return [newBlock, newSimulatorState];
-    });
-  }
+    blockContext: import('@midnight-ntwrk/ledger-v8').BlockContext,
+    options?: {
+      blockNumber?: bigint;
+      blockFullness?: import('@midnight-ntwrk/ledger-v8').SyntheticCost;
+      overallBlockFullness?: number;
+    },
+  ): Either.Either<[Block, SimulatorState], LedgerOps.LedgerError> => {
+    return applyTransaction(simulatorState, tx, strictness, blockContext, options);
+  };
 
   /**
    * Initialize a new simulator.
@@ -419,14 +204,7 @@ export class Simulator {
     networkId: NetworkId.NetworkId,
     blockProducer?: BlockProducer,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
-    const initialState: SimulatorState = {
-      networkId,
-      ledger: LedgerState.blank(networkId),
-      blocks: [],
-      mempool: [],
-      currentTime: new Date(0),
-    };
-    return Simulator.fromState(initialState, blockProducer);
+    return Simulator.fromState(blankState(networkId), blockProducer);
   }
 
   /**
@@ -440,7 +218,7 @@ export class Simulator {
     const emptyState = LedgerState.blank(networkId);
     const noStrictness = createStrictness();
 
-    const makeTransactions = (context: BlockContext) =>
+    const makeTransactions = (context: import('@midnight-ntwrk/ledger-v8').BlockContext) =>
       Effect.gen(function* () {
         const nowMillis = yield* Clock.currentTimeMillis;
         const verificationTime = new Date(nowMillis);
@@ -683,11 +461,11 @@ export class Simulator {
 
             if (transactions.length === 0) {
               // No transactions to process, return empty block
-              const blockHash = yield* Simulator.blockHash(blockTime);
+              const hash = yield* Effect.promise(() => blockHash(blockTime));
 
               const emptyBlock: Block = {
                 number: nextBlockNumber,
-                hash: blockHash,
+                hash,
                 timestamp: blockTime,
                 transactions: [],
               };
@@ -702,7 +480,7 @@ export class Simulator {
               return [Either.right(emptyBlock), newState] as const;
             }
 
-            const blockContext = yield* Simulator.nextBlockContext(blockTime);
+            const context = yield* Effect.promise(() => nextBlockContext(blockTime));
 
             // Process all transactions, collecting results
             const blockTransactions: BlockTransaction[] = [];
@@ -722,7 +500,7 @@ export class Simulator {
                 );
 
                 const verifiedTransaction = pendingTx.tx.wellFormed(currentLedger, pendingTx.strictness, blockTime);
-                const transactionContext = new TransactionContext(currentLedger, blockContext);
+                const transactionContext = new TransactionContext(currentLedger, context);
                 const [newLedgerState, txResult] = currentLedger.apply(verifiedTransaction, transactionContext);
                 currentLedger = newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness);
 
@@ -741,11 +519,11 @@ export class Simulator {
               blockTransactions.push({ tx: pendingTx.tx, result: result.right });
             }
 
-            const blockHash = yield* Simulator.blockHash(blockTime);
+            const hash = yield* Effect.promise(() => blockHash(blockTime));
 
             const block: Block = {
               number: nextBlockNumber,
-              hash: blockHash,
+              hash,
               timestamp: blockTime,
               transactions: blockTransactions,
             };

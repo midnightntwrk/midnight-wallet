@@ -11,9 +11,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Re-export everything from SimulatorState
 export {
-  Simulator,
-  immediateBlockProducer,
   // State accessor functions (composable with simulator.query())
   getLastBlock,
   getCurrentBlockNumber,
@@ -22,17 +21,32 @@ export {
   getLastBlockResults,
   getLastBlockEvents,
   hasPendingTransactions,
+  // State transformation functions
+  resolveFullness,
+  allMempoolTransactions,
+  blankState,
+  addToMempool,
+  removeFromMempool,
+  advanceTime,
+  updateLedger,
+  appendBlock,
+  applyTransaction,
+  // Helper functions
+  createStrictness,
+  blockHash,
+  nextBlockContext,
   // Types
   type SimulatorState,
-  type SimulatorConfig,
   type Block,
   type BlockTransaction,
   type BlockInfo,
+  type PendingTransaction,
+  type BlockProductionRequest,
+  type BlockProducer,
+  type FullnessSpec,
   type GenesisMint,
   type StrictnessConfig,
-  type BlockProducer,
-  type BlockProductionRequest,
-  type PendingTransaction,
-  type FullnessSpec,
-  InvalidBlockFullnessError,
-} from './Simulator.js';
+} from './SimulatorState.js';
+
+// Re-export from Simulator
+export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simulator.js';
