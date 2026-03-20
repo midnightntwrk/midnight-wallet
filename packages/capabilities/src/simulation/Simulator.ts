@@ -23,7 +23,7 @@
  * - Time advancement (for TTL and time-sensitive tests)
  */
 
-import { Array as Arr, Clock, Effect, Either, Encoding, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
+import { Array as Arr, Clock, Effect, Either, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
 import {
   LedgerState,
   type UserAddress,
@@ -45,13 +45,11 @@ import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type SimulatorState,
   type Block,
-  type BlockTransaction,
   type PendingTransaction,
   type BlockProducer,
   type GenesisMint,
   type StrictnessConfig,
   type FullnessSpec,
-  getCurrentBlockNumber,
   hasPendingTransactions,
   resolveFullness,
   allMempoolTransactions,
@@ -162,8 +160,7 @@ export class Simulator {
    * Compute block hash from block time.
    * @deprecated Use blockHash from SimulatorState instead
    */
-  static blockHash = (blockTime: Date): Effect.Effect<string> =>
-    Effect.promise(() => blockHash(blockTime));
+  static blockHash = (blockTime: Date): Effect.Effect<string> => Effect.promise(() => blockHash(blockTime));
 
   /**
    * Create the next block context from block time.

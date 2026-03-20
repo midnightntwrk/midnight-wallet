@@ -169,8 +169,8 @@ export interface CustomizedDustWalletClass<
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultDustConfiguration,
 > extends WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>]
-  > {
+  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>]
+> {
   configuration: TConfig;
   startWithSeed(
     seed: Uint8Array,
@@ -226,10 +226,7 @@ export function CustomDustWallet<
     extends BaseWallet
     implements CustomizedDustWallet<TStartAux, TSyncUpdate, TSerialized>
   {
-    static startWithSeed(
-      seed: Uint8Array,
-      dustParameters: DustParameters,
-    ): CustomDustWalletImplementation {
+    static startWithSeed(seed: Uint8Array, dustParameters: DustParameters): CustomDustWalletImplementation {
       const dustSecretKey = DustSecretKey.fromSeed(seed);
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
@@ -262,13 +259,17 @@ export function CustomDustWallet<
     ) {
       super(runtime, scope);
       this.state = this.rawState.pipe(
-        rx.map(DustWalletState.mapState<TSerialized>(CustomDustWalletImplementation.allVariantsRecord()[V1Tag].variant)),
+        rx.map(
+          DustWalletState.mapState<TSerialized>(CustomDustWalletImplementation.allVariantsRecord()[V1Tag].variant),
+        ),
         rx.shareReplay({ refCount: true, bufferSize: 1 }),
       );
     }
 
     start(secretKey: DustSecretKey): Promise<void> {
-      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey as TStartAux) }).pipe(Effect.runPromise);
+      return this.runtime
+        .dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey as TStartAux) })
+        .pipe(Effect.runPromise);
     }
 
     async createDustGenerationTransaction(

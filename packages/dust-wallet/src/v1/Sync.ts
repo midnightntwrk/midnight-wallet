@@ -20,10 +20,15 @@ import {
   SubscriptionClient,
   QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
-import { Simulator, SimulatorState, getCurrentBlockNumber, getLastBlockEvents, getLastBlock } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import {
+  Simulator,
+  SimulatorState,
+  getLastBlockEvents,
+  getLastBlock,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
@@ -335,10 +340,9 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         return state;
       }
       const events = [...getLastBlockEvents(update.update)];
-      return CoreWallet.updateProgress(
-        CoreWallet.applyEvents(state, update.secretKey, events, lastBlock.timestamp),
-        { appliedIndex: lastBlock.number },
-      );
+      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, update.secretKey, events, lastBlock.timestamp), {
+        appliedIndex: lastBlock.number,
+      });
     },
   };
 };

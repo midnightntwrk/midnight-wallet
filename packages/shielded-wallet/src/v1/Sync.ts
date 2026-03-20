@@ -14,7 +14,12 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState, getLastBlock, getLastBlockEvents } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import {
+  Simulator,
+  SimulatorState,
+  getLastBlock,
+  getLastBlockEvents,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
