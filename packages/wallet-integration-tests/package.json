@@ -22,7 +22,7 @@
     "@midnight-ntwrk/wallet-sdk-shielded": "2.1.0",
     "@types/node": "^25.3.0",
     "effect": "^3.19.19",
-    "pure-rand": "^7.0.1",
+    "pure-rand": "^8.0.0",
     "rxjs": "^7.8.2"
   }
 }

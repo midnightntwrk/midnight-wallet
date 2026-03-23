@@ -2778,7 +2778,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:2.1.0"
     "@types/node": "npm:^25.3.0"
     effect: "npm:^3.19.19"
-    pure-rand: "npm:^7.0.1"
+    pure-rand: "npm:^8.0.0"
     rxjs: "npm:^7.8.2"
   languageName: unknown
   linkType: soft
@@ -9787,10 +9787,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"pure-rand@npm:^7.0.0, pure-rand@npm:^7.0.1":
+"pure-rand@npm:^7.0.0":
   version: 7.0.1
   resolution: "pure-rand@npm:7.0.1"
   checksum: 10c0/9cade41030f5ec95f5d55a11a71404cd6f46b69becaad892097cd7f58e2c6248cd0a933349ca7d21336ab629f1da42ffe899699b671bc4651600eaf6e57f837e
+  languageName: node
+  linkType: hard
+
+"pure-rand@npm:^8.0.0":
+  version: 8.3.0
+  resolution: "pure-rand@npm:8.3.0"
+  checksum: 10c0/d6af301050cb6e70ffe834a1c8bc88daf1e549e23029755461025f36aa791a954ecd51f4824d9a7c63f33f24699d9f5355ae10a03586014eb636b2ce611cbcd8
   languageName: node
   linkType: hard
 
