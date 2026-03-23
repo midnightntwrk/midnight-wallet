@@ -134,8 +134,12 @@ export type ShieldedWalletClass = CustomizedShieldedWalletClass<
   string
 >;
 
-export type ShieldedWalletAPI<TStartAux = ledger.ZswapSecretKeys, TSerialized = string> = {
-  readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
+export type ShieldedWalletAPI<
+  TStartAux = ledger.ZswapSecretKeys,
+  TTransaction = ledger.FinalizedTransaction,
+  TSerialized = string,
+> = {
+  readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
 
   start(secretKeys: TStartAux): Promise<void>;
 
@@ -158,7 +162,7 @@ export type ShieldedWalletAPI<TStartAux = ledger.ZswapSecretKeys, TSerialized = 
 
   serializeState(): Promise<TSerialized>;
 
-  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized>>;
+  waitForSyncedState(allowedGap?: bigint): Promise<ShieldedWalletState<TSerialized, TTransaction>>;
 
   getAddress(): Promise<ShieldedAddress>;
 
@@ -182,7 +186,7 @@ export type CustomizedShieldedWallet<
   TTransaction = ledger.FinalizedTransaction,
   TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = ShieldedWalletAPI<TStartAux, TSerialized> &
+> = ShieldedWalletAPI<TStartAux, TTransaction, TSerialized> &
   WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
 
 export type DefaultShieldedConfiguration = DefaultV1Configuration;
