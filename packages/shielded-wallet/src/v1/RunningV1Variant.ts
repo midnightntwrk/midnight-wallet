@@ -172,7 +172,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                       Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
                       Effect.forkScoped,
                     ),
-                  { discard: true },
+                  { discard: true, concurrency: 'unbounded' },
                 ),
             }),
           ),
