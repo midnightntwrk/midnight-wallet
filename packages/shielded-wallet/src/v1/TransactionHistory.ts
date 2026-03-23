@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { InMemoryTransactionHistoryStorage, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Duration, Array as EArray, Effect, Either, Option, Schedule, Schema, Stream } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
@@ -246,8 +246,11 @@ export const makeDefaultTransactionHistoryService = (
   };
 };
 
-export const makeSimulatorTransactionHistoryService = (): TransactionHistoryService => {
-  const txHistoryStorage = new InMemoryTransactionHistoryStorage();
+export const makeSimulatorTransactionHistoryService = (
+  config: DefaultTransactionHistoryConfiguration,
+  _getContext: () => unknown,
+): TransactionHistoryService => {
+  const txHistoryStorage = config.txHistoryStorage;
 
   return {
     put: (
