@@ -324,10 +324,10 @@ export type SerializedShieldedTransactionHistory = string;
 
 export const restoreShieldedTransactionHistoryStorage = (
   serializedHistory: SerializedShieldedTransactionHistory,
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
 ): Promise<TransactionHistoryStorage.TransactionHistoryStorage> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const txHistoryStorage = new InMemoryTransactionHistoryStorage();
       const result = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema)(
         JSON.parse(serializedHistory) as unknown,
       );

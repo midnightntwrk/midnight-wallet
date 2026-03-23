@@ -189,7 +189,10 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await funded.wallet.shielded.serializeTransactionHistory();
 
       logger.info('Restoring wallet from serialized state...');
-      const txHistoryStorage = await restoreShieldedTransactionHistoryStorage(serializedTxHistory);
+      const txHistoryStorage = await restoreShieldedTransactionHistoryStorage(
+        serializedTxHistory,
+        new InMemoryTransactionHistoryStorage(),
+      );
       const RestoredWallet = ShieldedWallet({
         ...fixture.getWalletConfig(),
         txHistoryStorage,
@@ -229,7 +232,10 @@ describe('Smoke tests', () => {
       const serializedTxHistory = await initialWallet.serializeTransactionHistory();
       await initialWallet.stop();
 
-      const txHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
+      const txHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(
+        serializedTxHistory,
+        new InMemoryTransactionHistoryStorage(),
+      );
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
         indexerClientConnection: {

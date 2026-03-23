@@ -143,7 +143,10 @@ describe('Wallet serialization and restoration', () => {
       const serializedState = await wallet.serializeState();
       await wallet.stop();
 
-      const restoredTxHistoryStorage = await restoreShieldedTransactionHistoryStorage(serializedTxHistory);
+      const restoredTxHistoryStorage = await restoreShieldedTransactionHistoryStorage(
+        serializedTxHistory,
+        new InMemoryTransactionHistoryStorage(),
+      );
       const restoredConfig = { ...shieldedConfiguration, txHistoryStorage: restoredTxHistoryStorage };
       const RestoredShieldedWallet = ShieldedWallet(restoredConfig);
       const restoredWallet = RestoredShieldedWallet.restore(serializedState);
@@ -187,7 +190,10 @@ describe('Wallet serialization and restoration', () => {
       const serializedState = await initialWallet.serializeState();
       await initialWallet.stop();
 
-      const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(serializedTxHistory);
+      const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(
+        serializedTxHistory,
+        new InMemoryTransactionHistoryStorage(),
+      );
       const restoredConfig: UnshieldedV1Configuration = {
         ...unshieldedConfig,
         txHistoryStorage: restoredTxHistoryStorage,
