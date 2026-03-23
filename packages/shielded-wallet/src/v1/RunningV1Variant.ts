@@ -165,7 +165,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
                   changes,
                   (change) =>
                     pipe(
-                      this.#v1Context.transactionHistoryService.getMetaData(change.source),
+                      this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
                       Effect.flatMap((metadata) =>
                         this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
                       ),

@@ -63,7 +63,7 @@ export type TransactionHistoryService = {
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
   serialize(): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError>;
-  getMetaData(
+  getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
 };
@@ -215,7 +215,7 @@ export const makeDefaultTransactionHistoryService = (
         }),
       ),
 
-    getMetaData: (
+    getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
       Effect.gen(function* () {
@@ -308,7 +308,7 @@ export const makeSimulatorTransactionHistoryService = (): TransactionHistoryServ
         }),
       ),
 
-    getMetaData: (
+    getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
       Effect.succeed({
