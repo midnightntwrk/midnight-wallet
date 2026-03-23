@@ -24,8 +24,6 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
   mt_index: Schema.BigInt,
 });
 
-type QualifiedShieldedCoinInfo = Schema.Schema.Type<typeof QualifiedShieldedCoinInfoSchema>;
-
 export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
   hash: TransactionHistoryStorage.TransactionHashSchema,
   protocolVersion: Schema.Number,
@@ -68,37 +66,38 @@ export type TransactionHistoryService = {
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
 };
 
-type ShieldedSection = {
-  readonly receivedCoins: readonly QualifiedShieldedCoinInfo[];
-  readonly spentCoins: readonly QualifiedShieldedCoinInfo[];
-};
-
-const hasShieldedSection = (
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
-): entry is TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection } =>
-  entry.shielded != null &&
-  typeof entry.shielded === 'object' &&
-  'receivedCoins' in entry.shielded &&
-  'spentCoins' in entry.shielded;
-
-const projectToShieldedEntry = (
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
-): ShieldedTransactionHistoryEntry => ({
-  hash: entry.hash,
-  protocolVersion: entry.protocolVersion,
-  status: entry.status,
-  receivedCoins: entry.shielded.receivedCoins,
-  spentCoins: entry.shielded.spentCoins,
+const ShieldedSectionSchema = Schema.Struct({
+  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
 });
+
+type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
+
+const isShieldedSection = Schema.is(ShieldedSectionSchema);
+
+const tryProjectToShieldedEntry = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+): Option.Option<ShieldedTransactionHistoryEntry> =>
+  isShieldedSection(entry.shielded)
+    ? Option.some({
+        hash: entry.hash,
+        protocolVersion: entry.protocolVersion,
+        status: entry.status,
+        receivedCoins: entry.shielded.receivedCoins,
+        spentCoins: entry.shielded.spentCoins,
+      })
+    : Option.none();
 
 const asShieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Effect.Effect<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
-  hasShieldedSection(entry)
-    ? Effect.succeed(projectToShieldedEntry(entry))
-    : Effect.fail(
+  Option.match(tryProjectToShieldedEntry(entry), {
+    onSome: Effect.succeed,
+    onNone: () =>
+      Effect.fail(
         new TransactionHistoryError({ message: `No shielded data found in storage for hash: ${entry.hash}` }),
-      );
+      ),
+  });
 
 const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
   receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
@@ -138,7 +137,7 @@ const upsertShieldedEntry = (
     });
 
     const shieldedSection =
-      existing && hasShieldedSection(existing)
+      existing && isShieldedSection(existing.shielded)
         ? mergeShieldedSections(existing.shielded, entry.shielded)
         : entry.shielded;
 
@@ -172,21 +171,13 @@ export const makeDefaultTransactionHistoryService = (
       Effect.tryPromise({
         try: () => txHistoryStorage.get(hash),
         catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
-      }).pipe(
-        Effect.map((entry) =>
-          entry && hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
-      ),
+      }).pipe(Effect.map((entry) => (entry ? tryProjectToShieldedEntry(entry) : Option.none()))),
 
     getAll: (): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
       Stream.fromAsyncIterable(
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(
-        Stream.filterMap((entry) =>
-          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
-      ),
+      ).pipe(Stream.filterMap((entry) => tryProjectToShieldedEntry(entry))),
 
     delete: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -205,9 +196,7 @@ export const makeDefaultTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(
-        Stream.filterMap((entry) =>
-          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
+        Stream.filterMap((entry) => tryProjectToShieldedEntry(entry)),
         Stream.runCollect,
         Effect.map((chunk) => {
           const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
@@ -268,21 +257,13 @@ export const makeSimulatorTransactionHistoryService = (
       Effect.tryPromise({
         try: () => txHistoryStorage.get(hash),
         catch: (e) => new TransactionHistoryError({ message: `Failed to get history entry for ${hash}`, cause: e }),
-      }).pipe(
-        Effect.map((entry) =>
-          entry && hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
-      ),
+      }).pipe(Effect.map((entry) => (entry ? tryProjectToShieldedEntry(entry) : Option.none()))),
 
     getAll: (): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
       Stream.fromAsyncIterable(
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(
-        Stream.filterMap((entry) =>
-          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
-      ),
+      ).pipe(Stream.filterMap((entry) => tryProjectToShieldedEntry(entry))),
 
     delete: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -301,9 +282,7 @@ export const makeSimulatorTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(
-        Stream.filterMap((entry) =>
-          hasShieldedSection(entry) ? Option.some(projectToShieldedEntry(entry)) : Option.none(),
-        ),
+        Stream.filterMap((entry) => tryProjectToShieldedEntry(entry)),
         Stream.runCollect,
         Effect.map((chunk) => {
           const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
