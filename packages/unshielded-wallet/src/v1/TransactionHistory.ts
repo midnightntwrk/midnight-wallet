@@ -24,11 +24,19 @@ const UtxoSchema = Schema.Struct({
   outputIndex: Schema.Number,
 });
 
-export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+const UnshieldedSectionSchema = Schema.Struct({
   id: Schema.Number,
   createdUtxos: Schema.Array(UtxoSchema),
   spentUtxos: Schema.Array(UtxoSchema),
+});
+
+type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
+
+const isUnshieldedSection = Schema.is(UnshieldedSectionSchema);
+
+export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  unshielded: UnshieldedSectionSchema,
 });
 
 export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
@@ -49,14 +57,6 @@ export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage;
 };
 
-const UnshieldedSectionSchema = Schema.Struct({
-  id: Schema.Number,
-  createdUtxos: Schema.Array(UtxoSchema),
-  spentUtxos: Schema.Array(UtxoSchema),
-});
-
-type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
-
 type StorageEntryWithUnshielded = Omit<
   TransactionHistoryStorage.TransactionHistoryEntryWithHash,
   'identifiers' | 'timestamp' | 'fees'
@@ -67,22 +67,18 @@ type StorageEntryWithUnshielded = Omit<
   readonly unshielded: UnshieldedSection;
 };
 
-const isUnshieldedSection = Schema.is(UnshieldedSectionSchema);
-
 const tryProjectToUnshieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Option.Option<UnshieldedTransactionHistoryEntry> =>
   isUnshieldedSection(entry.unshielded)
     ? Option.some({
-        id: entry.unshielded.id,
         hash: entry.hash,
         protocolVersion: entry.protocolVersion,
         identifiers: entry.identifiers ?? [],
         timestamp: entry.timestamp ?? new Date(),
         fees: (entry.fees ?? null) as UnshieldedTransactionHistoryEntry['fees'],
         status: entry.status,
-        createdUtxos: entry.unshielded.createdUtxos,
-        spentUtxos: entry.unshielded.spentUtxos,
+        unshielded: entry.unshielded,
       })
     : Option.none();
 
@@ -213,11 +209,7 @@ export const restoreUnshieldedTransactionHistoryStorage = (
               identifiers: entry.identifiers,
               timestamp: entry.timestamp,
               fees: entry.fees,
-              unshielded: {
-                id: entry.id,
-                createdUtxos: entry.createdUtxos,
-                spentUtxos: entry.spentUtxos,
-              },
+              unshielded: entry.unshielded,
             }),
           catch: (e) =>
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),

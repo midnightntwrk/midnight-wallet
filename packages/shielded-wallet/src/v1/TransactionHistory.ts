@@ -24,12 +24,20 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
   mt_index: Schema.BigInt,
 });
 
+const ShieldedSectionSchema = Schema.Struct({
+  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+});
+
+type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
+
+const isShieldedSection = Schema.is(ShieldedSectionSchema);
+
 export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
   hash: TransactionHistoryStorage.TransactionHashSchema,
   protocolVersion: Schema.Number,
   status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
-  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+  shielded: ShieldedSectionSchema,
 });
 
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
@@ -66,15 +74,6 @@ export type TransactionHistoryService = {
   ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
 };
 
-const ShieldedSectionSchema = Schema.Struct({
-  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-});
-
-type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
-
-const isShieldedSection = Schema.is(ShieldedSectionSchema);
-
 const tryProjectToShieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Option.Option<ShieldedTransactionHistoryEntry> =>
@@ -83,8 +82,7 @@ const tryProjectToShieldedEntry = (
         hash: entry.hash,
         protocolVersion: entry.protocolVersion,
         status: entry.status,
-        receivedCoins: entry.shielded.receivedCoins,
-        spentCoins: entry.shielded.spentCoins,
+        shielded: entry.shielded,
       })
     : Option.none();
 
@@ -327,10 +325,7 @@ export const restoreShieldedTransactionHistoryStorage = (
               hash: entry.hash,
               protocolVersion: entry.protocolVersion,
               status: entry.status,
-              shielded: {
-                receivedCoins: entry.receivedCoins,
-                spentCoins: entry.spentCoins,
-              } satisfies ShieldedSection,
+              shielded: entry.shielded,
             }),
           catch: (e) =>
             new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
