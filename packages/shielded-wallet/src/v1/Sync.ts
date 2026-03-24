@@ -232,22 +232,20 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         ];
       }
 
-      return wrappedUpdate.secretKeys((keys) => {
-        const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
-          state,
-          wrappedUpdate.secretKeys, // TODO: IAN - Check if this is correct
-          wrappedUpdate.updates.map((u) => u.event),
-        );
+      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
+        state,
+        wrappedUpdate.secretKeys,
+        wrappedUpdate.updates.map((u) => u.event),
+      );
 
-        return [
-          CoreWallet.updateProgress(newState, {
-            highestRelevantWalletIndex,
-            appliedIndex: nextIndex,
-            isConnected: true,
-          }),
-          { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
-        ];
-      });
+      return [
+        CoreWallet.updateProgress(newState, {
+          highestRelevantWalletIndex,
+          appliedIndex: nextIndex,
+          isConnected: true,
+        }),
+        { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
+      ];
     },
   };
 };
