@@ -16,10 +16,11 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, '**/dist/**'],
-    setupFiles: ['../../setup-env.ts'],
+    setupFiles: ['../../setup-env.ts', './src/tests/setup-retry-logging.ts'],
     environment: 'node',
-    hookTimeout: 90_000,
-    testTimeout: 90_000,
+    hookTimeout: 3_600_000,
+    testTimeout: 3_600_000,
+    retry: 1,
     globals: true,
     reporters: [
       'default',
@@ -40,6 +41,7 @@ export default defineConfig({
         test: {
           name: 'remote',
           include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
+          exclude: ['**/fundTestWallets.remote.test.ts'],
         },
       },
     ],

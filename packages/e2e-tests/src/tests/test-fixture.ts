@@ -15,7 +15,7 @@ import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { type MidnightNetwork } from './utils.js';
+import { type MidnightNetwork, sleep } from './utils.js';
 import { logger } from './logger.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -49,6 +49,9 @@ export function useTestContainersFixture() {
           .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())
           .withEnvironment(environmentVars)
           .up();
+
+        // wait for another block to be produced
+        await sleep(6);
         break;
       }
       case 'devnet':

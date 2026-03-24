@@ -1,5 +1,94 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 3.0.0
+
+### Major Changes
+
+- 07ea767: fix: dynamic fee calculation including balancing transaction costs
+  - Split `calculateFee` into two methods:
+    - `calculateFee` — estimates the fee for a given transaction only (no balancing transaction costs)
+    - `estimateFee` — calculates the total fee including the balancing transaction, requiring a secret key, wallet
+      state, and TTL
+  - Updated `WalletFacade` to expose `calculateTransactionFee` and an updated `estimateTransactionFee` that accepts a
+    secret key and optional TTL/currentTime
+  - Removed fee overhead constant; fees are now dynamically calculated based on actual coin selection
+  - Updated `CoinSelection` type to return a single coin (smallest available) instead of multiple coins summed to a
+    target amount
+  - Added `InsufficientFundsError` to `WalletError` for cases where balancing cannot cover the fee
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+### Patch Changes
+
+- 9d71d25: feat: expose Terms and Conditions via `WalletFacade.fetchTermsAndConditions`
+
+  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnight-ntwrk/wallet-sdk-indexer-client` that retrieves the
+  current Terms and Conditions (URL and SHA-256 hash) from the network indexer.
+
+  Exposes a new static method `WalletFacade.fetchTermsAndConditions(configuration)` in
+  `@midnight-ntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
+  obtain the T&C URL for display and the hash for content verification. The method accepts any configuration that
+  includes `indexerClientConnection.indexerHttpUrl`, so the shared wallet configuration can be passed directly without
+  adaptation.
+
+- Updated dependencies [9d71d25]
+- Updated dependencies [372d964]
+- Updated dependencies [aa7b1f4]
+- Updated dependencies [1ad34a9]
+- Updated dependencies [07ea767]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@3.0.0
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.1.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.2.0
+
+## 3.0.0-rc.0
+
+### Major Changes
+
+- 07ea767: fix: dynamic fee calculation including balancing transaction costs
+  - Split `calculateFee` into two methods:
+    - `calculateFee` — estimates the fee for a given transaction only (no balancing transaction costs)
+    - `estimateFee` — calculates the total fee including the balancing transaction, requiring a secret key, wallet
+      state, and TTL
+  - Updated `WalletFacade` to expose `calculateTransactionFee` and an updated `estimateTransactionFee` that accepts a
+    secret key and optional TTL/currentTime
+  - Removed fee overhead constant; fees are now dynamically calculated based on actual coin selection
+  - Updated `CoinSelection` type to return a single coin (smallest available) instead of multiple coins summed to a
+    target amount
+  - Added `InsufficientFundsError` to `WalletError` for cases where balancing cannot cover the fee
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+### Patch Changes
+
+- 9d71d25: feat: expose Terms and Conditions via `WalletFacade.fetchTermsAndConditions`
+
+  Adds a new `FetchTermsAndConditions` GraphQL query to `@midnight-ntwrk/wallet-sdk-indexer-client` that retrieves the
+  current Terms and Conditions (URL and SHA-256 hash) from the network indexer.
+
+  Exposes a new static method `WalletFacade.fetchTermsAndConditions(configuration)` in
+  `@midnight-ntwrk/wallet-sdk-facade` that wallet builders can call before or independently of wallet initialization to
+  obtain the T&C URL for display and the hash for content verification. The method accepts any configuration that
+  includes `indexerClientConnection.indexerHttpUrl`, so the shared wallet configuration can be passed directly without
+  adaptation.
+
+- Updated dependencies [9d71d25]
+- Updated dependencies [372d964]
+- Updated dependencies [aa7b1f4]
+- Updated dependencies [07ea767]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@3.0.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@2.1.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-shielded@2.1.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.0-rc.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.2.0-rc.0
+
 ## 2.0.0
 
 ### Major Changes

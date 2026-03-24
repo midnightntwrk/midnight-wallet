@@ -17,6 +17,7 @@ type Documents = {
     "\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n        timestamp\n      }\n    }\n  ": typeof types.BlockHashDocument,
     "\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ": typeof types.ConnectDocument,
     "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  ": typeof types.DisconnectDocument,
+    "\n    query FetchTermsAndConditions {\n      block {\n        systemParameters {\n          termsAndConditions {\n            hash\n            url\n          }\n        }\n      }\n    }\n  ": typeof types.FetchTermsAndConditionsDocument,
     "\n    query TransactionHistoryDetail($transactionHash: HexEncoded!) {\n      transactions(offset: {hash: $transactionHash}) {\n        __typename\n        hash\n        block {\n          timestamp\n        }\n        ... on RegularTransaction {\n          transactionResult {\n            status\n          }\n        }\n      }\n    }\n  ": typeof types.TransactionHistoryDetailDocument,
     "\n    query TransactionStatus($transactionId: HexEncoded!) {\n      transactions(offset: {identifier: $transactionId}) {\n        __typename\n        ... on RegularTransaction {\n          identifiers\n          transactionResult {\n            segments {\n              id\n              success\n            }\n            status\n            __typename\n          }\n        }\n      }\n    }\n  ": typeof types.TransactionStatusDocument,
     "\n    subscription DustLedgerEvents($id: Int) {\n      dustLedgerEvents(id: $id) {\n        type: __typename\n        id\n        raw\n        maxId\n      }\n    }\n  ": typeof types.DustLedgerEventsDocument,
@@ -28,6 +29,7 @@ const documents: Documents = {
     "\n    query BlockHash($offset: BlockOffset) {\n      block(offset: $offset) {\n        height\n        hash\n        ledgerParameters\n        timestamp\n      }\n    }\n  ": types.BlockHashDocument,
     "\n    mutation Connect($viewingKey: ViewingKey!) {\n      connect(viewingKey: $viewingKey)\n    }\n  ": types.ConnectDocument,
     "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  ": types.DisconnectDocument,
+    "\n    query FetchTermsAndConditions {\n      block {\n        systemParameters {\n          termsAndConditions {\n            hash\n            url\n          }\n        }\n      }\n    }\n  ": types.FetchTermsAndConditionsDocument,
     "\n    query TransactionHistoryDetail($transactionHash: HexEncoded!) {\n      transactions(offset: {hash: $transactionHash}) {\n        __typename\n        hash\n        block {\n          timestamp\n        }\n        ... on RegularTransaction {\n          transactionResult {\n            status\n          }\n        }\n      }\n    }\n  ": types.TransactionHistoryDetailDocument,
     "\n    query TransactionStatus($transactionId: HexEncoded!) {\n      transactions(offset: {identifier: $transactionId}) {\n        __typename\n        ... on RegularTransaction {\n          identifiers\n          transactionResult {\n            segments {\n              id\n              success\n            }\n            status\n            __typename\n          }\n        }\n      }\n    }\n  ": types.TransactionStatusDocument,
     "\n    subscription DustLedgerEvents($id: Int) {\n      dustLedgerEvents(id: $id) {\n        type: __typename\n        id\n        raw\n        maxId\n      }\n    }\n  ": types.DustLedgerEventsDocument,
@@ -62,6 +64,10 @@ export function gql(source: "\n    mutation Connect($viewingKey: ViewingKey!) {\
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function gql(source: "\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  "): (typeof documents)["\n    mutation Disconnect($sessionId: HexEncoded!) {\n      disconnect(sessionId: $sessionId)\n    }\n  "];
+/**
+ * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function gql(source: "\n    query FetchTermsAndConditions {\n      block {\n        systemParameters {\n          termsAndConditions {\n            hash\n            url\n          }\n        }\n      }\n    }\n  "): (typeof documents)["\n    query FetchTermsAndConditions {\n      block {\n        systemParameters {\n          termsAndConditions {\n            hash\n            url\n          }\n        }\n      }\n    }\n  "];
 /**
  * The gql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

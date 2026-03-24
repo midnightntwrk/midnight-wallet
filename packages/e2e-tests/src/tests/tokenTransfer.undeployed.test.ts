@@ -59,7 +59,7 @@ describe('Token transfer', () => {
     'Is working for shielded token transfer @smoke @healthcheck',
     async () => {
       logger.info('Funding wallet 1 with native tokens...');
-      await utils.sleep(20); // wait for 2+ blocks to pass
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(funded.wallet.state());
       const initialDustBalance = initialState.dust.balance(new Date());
@@ -378,7 +378,7 @@ describe('Token transfer', () => {
       logger.info('Sending transaction...');
       const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
 
       await utils.waitForFacadePendingClear(funded.wallet);
@@ -475,7 +475,7 @@ describe('Token transfer', () => {
       );
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
-      const txFees = await funded.wallet.estimateTransactionFee(finalizedTx, funded.dustSecretKey);
+      const txFees = await funded.wallet.calculateTransactionFee(finalizedTx);
       logger.info('Transaction id: ' + txId);
       logger.info('Wait for pending...');
       // await utils.waitForFacadePending(fundedFacade);
@@ -590,7 +590,7 @@ describe('Token transfer', () => {
       await utils.waitForUnshieldedCoinUpdate(receiver3.wallet, 0);
 
       //register Night for Dust
-      await utils.sleep(20);
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const receiver3StateAfterTransfer = await receiver3.wallet.waitForSyncedState();
       const unregisteredNightUtxos = receiver3StateAfterTransfer.unshielded.availableCoins.filter(
         (coin) => coin.meta.registeredForDustGeneration === false,
@@ -1227,7 +1227,7 @@ describe('Token transfer', () => {
             ttl: new Date(Date.now() + 60 * 60 * 1000),
           },
         ),
-      ).rejects.toThrow("Error from ledger: attempted to spend Dust UTXO that's not in the wallet state:");
+      ).rejects.toThrow("attempted to spend Dust UTXO that's not in the wallet state:");
     },
     timeout,
   );
@@ -1235,7 +1235,7 @@ describe('Token transfer', () => {
   test(
     'coin becomes available when tx does not get proved',
     async () => {
-      await utils.sleep(20); // Wait for any previous transactions to clear
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       const syncedState = await funded.wallet.waitForSyncedState();
       const initialBalance = syncedState.shielded.balances[unshieldedTokenRaw];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
@@ -1291,47 +1291,44 @@ describe('Token transfer', () => {
       const initialBalance = syncedState.shielded.balances[dustTokenHash];
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
-      const nodeContainer = fixture.getNodeContainer();
-      logger.info('Stopping node container..');
-      await nodeContainer.stop({ remove: false, removeVolumes: false });
+      const initialState = await rx.firstValueFrom(funded.wallet.state());
 
-      try {
-        const initialState2 = await rx.firstValueFrom(funded.wallet.state());
+      const outputsToCreate: CombinedTokenTransfer[] = [
+        {
+          type: 'shielded',
+          outputs: [
+            {
+              type: shieldedTokenRaw,
+              amount: outputValue,
+              receiverAddress: initialState.shielded.address,
+            },
+          ],
+        },
+      ];
+      const txRecipe = await funded.wallet.transferTransaction(
+        outputsToCreate,
+        {
+          shieldedSecretKeys: funded.shieldedSecretKeys,
+          dustSecretKey: funded.dustSecretKey,
+        },
+        {
+          ttl: new Date(Date.now() + 60 * 60 * 1000),
+        },
+      );
+      const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
 
-        const outputsToCreate: CombinedTokenTransfer[] = [
-          {
-            type: 'shielded',
-            outputs: [
-              {
-                type: shieldedTokenRaw,
-                amount: outputValue,
-                receiverAddress: initialState2.shielded.address,
-              },
-            ],
-          },
-        ];
-        const txRecipe = await funded.wallet.transferTransaction(
-          outputsToCreate,
-          {
-            shieldedSecretKeys: funded.shieldedSecretKeys,
-            dustSecretKey: funded.dustSecretKey,
-          },
-          {
-            ttl: new Date(Date.now() + 60 * 60 * 1000),
-          },
-        );
-        const finalizedTx = await funded.wallet.finalizeRecipe(txRecipe);
-        await expect(funded.wallet.submitTransaction(finalizedTx)).rejects.toThrow();
+      // Verify coins are pending after finalization
+      const pendingState = await rx.firstValueFrom(funded.wallet.shielded.state);
+      expect(pendingState.pendingCoins.length).toBeGreaterThan(0);
 
-        const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
-        expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
-        expect(finalState.availableCoins.length).toBe(7);
-        expect(finalState.pendingCoins.length).toBe(0);
-        expect(finalState.totalCoins.length).toBe(7);
-      } finally {
-        logger.info('Restarting node container..');
-        await nodeContainer.restart();
-      }
+      // Revert instead of submitting — simulates a tx that never gets submitted
+      await funded.wallet.revert(finalizedTx);
+
+      const finalState = await utils.waitForFinalizedShieldedBalance(funded.wallet.shielded);
+      expect(finalState.balances[dustTokenHash]).toBe(initialBalance);
+      expect(finalState.availableCoins.length).toBe(7);
+      expect(finalState.pendingCoins.length).toBe(0);
+      expect(finalState.totalCoins.length).toBe(7);
     },
     timeout,
   );

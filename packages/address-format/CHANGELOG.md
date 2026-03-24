@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-address-format
 
+## 3.1.0
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+## 3.1.0-rc.0
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
 ## 3.0.1
 
 ### Patch Changes

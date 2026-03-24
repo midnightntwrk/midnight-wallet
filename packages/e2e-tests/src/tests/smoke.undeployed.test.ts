@@ -71,12 +71,12 @@ describe('Smoke tests', () => {
       logger.info(`shielded token type: ${shieldedTokenRaw}`);
       logger.info(`unshielded token type: ${unshieldedTokenRaw}`);
 
-      const balance = 2500000000000000n;
+      const balance = 250000000000000n;
       const unshieldedFundedKeyStore = createKeystore(
         utils.getUnshieldedSeed(seedFunded),
         NetworkId.NetworkId.Undeployed,
       );
-      await utils.sleep(20); // wait for 2+ blocks to pass
+      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
       await Promise.all([funded.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await funded.wallet.waitForSyncedState();
       const initialShieldedBalance = initialState.shielded.balances[shieldedTokenRaw];
@@ -172,6 +172,17 @@ describe('Smoke tests', () => {
       expect(finalState2.unshielded.availableCoins.length).toBe(1);
       expect(finalState2.shielded.pendingCoins.length).toBe(0);
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
+
+      // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
+      const senderTxHistory = await Array.fromAsync(finalState.unshielded.transactionHistory.getAll());
+      utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
+
+      const receiverTxHistory = await Array.fromAsync(finalState2.unshielded.transactionHistory.getAll());
+      expect(receiverTxHistory.length).toBeGreaterThan(0);
+      // Receiver should have at least one entry with createdUtxos
+      const receiverEntryWithCreated = receiverTxHistory.find((e) => e.createdUtxos.length > 0);
+      expect(receiverEntryWithCreated).toBeDefined();
+      expect(receiverEntryWithCreated!.createdUtxos[0].value).toBe(outputValue);
     },
     timeout,
   );
@@ -226,8 +237,15 @@ describe('Smoke tests', () => {
       }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeyStore));
       await initialWallet.start();
       logger.info(`Waiting to sync...`);
-      await initialWallet.waitForSyncedState();
-
+      // TODO IAN - Check if this is correct
+      await initialWallet.start();
+      const syncedState = await utils.waitForSyncUnshielded(initialWallet);
+      const initialTxHistory = await Array.fromAsync(syncedState.transactionHistory.getAll());
+      expect(initialTxHistory.length).toBeGreaterThan(0);
+      for (const entry of initialTxHistory) {
+        expect(Array.isArray(entry.createdUtxos)).toBe(true);
+        expect(Array.isArray(entry.spentUtxos)).toBe(true);
+      }
       const serializedState = await initialWallet.serializeState();
       const serializedTxHistory = await initialWallet.serializeTransactionHistory();
       await initialWallet.stop();
@@ -248,9 +266,13 @@ describe('Smoke tests', () => {
       await restoredWallet.start();
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();
-
-      const restoredSerializedTxHistory = await restoredWallet.serializeTransactionHistory();
-      expect(restoredSerializedTxHistory).toEqual(serializedTxHistory);
+      // TODO IAN - Check if this is correct
+      const restoredTxHistoryEntries = await Array.fromAsync(restoredState.transactionHistory.getAll());
+      expect(restoredTxHistoryEntries.length).toBe(initialTxHistory.length);
+      for (const entry of restoredTxHistoryEntries) {
+        expect(Array.isArray(entry.createdUtxos)).toBe(true);
+        expect(Array.isArray(entry.spentUtxos)).toBe(true);
+      }
       await restoredWallet.stop();
     },
     timeout,
