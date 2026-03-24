@@ -49,7 +49,7 @@ export type DefaultTransactionHistoryConfiguration = {
 
 const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
 
-export type TransactionMetaData = {
+export type TransactionDetails = {
   hash: string;
   timestamp: number;
   status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
@@ -58,7 +58,7 @@ export type TransactionMetaData = {
 export type TransactionHistoryService = {
   put(
     changes: ledger.ZswapStateChanges,
-    metadata: TransactionMetaData,
+    metadata: TransactionDetails,
     protocolVersion: number,
   ): Effect.Effect<void, TransactionHistoryError>;
   get(
@@ -71,7 +71,7 @@ export type TransactionHistoryService = {
   serialize(): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError>;
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
-  ): Effect.Effect<TransactionMetaData, TransactionHistoryError>;
+  ): Effect.Effect<TransactionDetails, TransactionHistoryError>;
 };
 
 const tryProjectToShieldedEntry = (
@@ -111,7 +111,7 @@ type StorageEntryWithShielded = Omit<
 
 const convertUpdateToStorageEntry = (
   changes: ledger.ZswapStateChanges,
-  metadata: TransactionMetaData,
+  metadata: TransactionDetails,
   protocolVersion: number,
 ): StorageEntryWithShielded => ({
   hash: changes.source,
@@ -156,7 +156,7 @@ export const makeDefaultTransactionHistoryService = (
   return {
     put: (
       changes: ledger.ZswapStateChanges,
-      metadata: TransactionMetaData,
+      metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
@@ -204,13 +204,13 @@ export const makeDefaultTransactionHistoryService = (
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
+    ): Effect.Effect<TransactionDetails, TransactionHistoryError> =>
       Effect.gen(function* () {
         const statusQuery = yield* TransactionHistoryDetail;
         const result = yield* statusQuery({ transactionHash: hash });
         const tx = result.transactions[0];
         const rawStatus = tx.__typename === 'RegularTransaction' ? tx.transactionResult.status : undefined;
-        const status: TransactionMetaData['status'] =
+        const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
 
         return {
@@ -242,11 +242,14 @@ export const makeSimulatorTransactionHistoryService = (
   return {
     put: (
       changes: ledger.ZswapStateChanges,
-      metadata: TransactionMetaData,
+      metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertShieldedEntry(txHistoryStorage, entry);
+      return upsertShieldedEntry(txHistoryStorage, {
+        ...entry,
+        timestamp: new Date(metadata.timestamp),
+      });
     },
 
     get: (
@@ -290,12 +293,24 @@ export const makeSimulatorTransactionHistoryService = (
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<TransactionMetaData, TransactionHistoryError> =>
-      Effect.succeed({
-        hash,
-        timestamp: Date.now(),
-        status: 'SUCCESS',
-      }),
+    ): Effect.Effect<TransactionDetails, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.get(hash),
+        catch: (e) =>
+          new TransactionHistoryError({ message: `Failed to get transaction details for ${hash}`, cause: e }),
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry
+            ? Effect.succeed({
+                hash: entry.hash,
+                timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),
+                status: entry.status,
+              })
+            : Effect.fail(
+                new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),
+              ),
+        ),
+      ),
   };
 };
 
