@@ -11,19 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import {
-  Effect,
-  Option,
-  pipe,
-  type Record,
-  Scope,
-  Stream,
-  SubscriptionRef,
-  Schedule,
-  Duration,
-  Sink,
-  Console,
-} from 'effect';
+import { Effect, pipe, type Record, Scope, Stream, SubscriptionRef, Schedule, Duration, Sink, Console } from 'effect';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type WalletRuntimeError,
@@ -70,7 +58,7 @@ export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
     serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<CoreWallet, TSyncUpdate, Option.Option<ChangesResult>>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate, ChangesResult>;
     transactingCapability: TransactingCapability<ledger.ZswapSecretKeys, CoreWallet, TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
@@ -157,24 +145,20 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
               }),
           }),
         ).pipe(
-          Effect.flatMap((changesResult) =>
-            Option.match(changesResult, {
-              onNone: () => Effect.void,
-              onSome: ({ changes, protocolVersion }) =>
-                Effect.forEach(
-                  changes,
-                  (change) =>
-                    pipe(
-                      this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                      Effect.flatMap((metadata) =>
-                        this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
-                      ),
-                      Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
-                      Effect.forkScoped,
-                    ),
-                  { discard: true, concurrency: 'unbounded' },
+          Effect.flatMap(({ changes, protocolVersion }) =>
+            Effect.forEach(
+              changes,
+              (change) =>
+                pipe(
+                  this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                  Effect.flatMap((metadata) =>
+                    this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                  ),
+                  Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                  Effect.forkScoped,
                 ),
-            }),
+              { discard: true, concurrency: 'unbounded' },
+            ),
           ),
           Effect.provideService(Scope.Scope, this.#scope),
         ),

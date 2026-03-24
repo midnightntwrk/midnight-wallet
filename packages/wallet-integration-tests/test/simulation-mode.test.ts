@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { Simulator, Sync, Transacting, TransactionHistory, V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
@@ -43,6 +43,8 @@ describe('Working in simulation mode', () => {
         {
           simulator,
           networkId: NetworkId.NetworkId.Undeployed,
+          txHistoryStorage: new NoOpTransactionHistoryStorage(),
+          indexerClientConnection: { indexerHttpUrl: 'http://unused' },
         },
         new V1Builder()
           .withTransactionType<ledger.ProofErasedTransaction>()

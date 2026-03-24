@@ -12,7 +12,7 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Chunk, Duration, Effect, Either, Option, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
+import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { Simulator, SimulatorState } from './Simulator.js';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
@@ -218,15 +218,11 @@ export const makeEventsSyncService = (
   };
 };
 
-export const makeEventsSyncCapability = (): SyncCapability<
-  CoreWallet,
-  WalletSyncUpdate,
-  Option.Option<ChangesResult>
-> => {
+export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, Option.Option<ChangesResult>] => {
+    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] => {
       if (wrappedUpdate.updates.length === 0) {
-        return [state, Option.none()];
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
@@ -240,7 +236,7 @@ export const makeEventsSyncCapability = (): SyncCapability<
             highestRelevantWalletIndex,
             isConnected: true,
           }),
-          Option.none(),
+          { changes: [], protocolVersion: lastUpdate.protocolVersion },
         ];
       }
 
@@ -257,7 +253,7 @@ export const makeEventsSyncCapability = (): SyncCapability<
             appliedIndex: nextIndex,
             isConnected: true,
           }),
-          Option.some({ changes: newChanges, protocolVersion: lastUpdate.protocolVersion }),
+          { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
         ];
       });
     },
@@ -282,13 +278,9 @@ export const makeSimulatorSyncService = (
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<
-  CoreWallet,
-  SimulatorSyncUpdate,
-  Option.Option<ChangesResult>
-> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, Option.Option<ChangesResult>] => {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
       const {
         update: {
           lastTxResult: { events },
@@ -296,11 +288,7 @@ export const makeSimulatorSyncCapability = (): SyncCapability<
         secretKeys,
       } = update;
       const [newState, newChanges] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
-      const changesResult =
-        newChanges.length > 0
-          ? Option.some({ changes: newChanges, protocolVersion: Number(state.protocolVersion) })
-          : Option.none();
-      return [newState, changesResult];
+      return [newState, { changes: newChanges, protocolVersion: Number(state.protocolVersion) }];
     },
   };
 };

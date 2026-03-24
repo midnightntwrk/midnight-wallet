@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, type Either, type Option, Scope, type Types } from 'effect';
+import { Effect, type Either, Scope, type Types } from 'effect';
 import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type Variant,
@@ -175,7 +175,7 @@ export class V1Builder<
     syncCapability: (
       configuration: TSyncConfig,
       getContext: () => TSyncContext,
-    ) => SyncCapability<CoreWallet, TSyncUpdate, Option.Option<ChangesResult>>,
+    ) => SyncCapability<CoreWallet, TSyncUpdate, ChangesResult>,
   ): V1Builder<TConfig & TSyncConfig, TContext & TSyncContext, TSerialized, TSyncUpdate, TTransaction, TStartAux> {
     return new V1Builder<
       TConfig & TSyncConfig,
@@ -485,7 +485,7 @@ declare namespace V1Builder {
     readonly syncCapability: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => SyncCapability<CoreWallet, TSyncUpdate, Option.Option<ChangesResult>>;
+    ) => SyncCapability<CoreWallet, TSyncUpdate, ChangesResult>;
   };
 
   type HasTransacting<TConfig, TContext, TTransaction> = {
