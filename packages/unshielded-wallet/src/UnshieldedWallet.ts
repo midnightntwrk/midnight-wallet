@@ -24,11 +24,7 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Effect, Either, Option, Stream, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
-import {
-  type TransactionHistoryService,
-  type UnshieldedTransactionHistoryEntry,
-  type SerializedUnshieldedTransactionHistory,
-} from './v1/TransactionHistory.js';
+import { type TransactionHistoryService, type UnshieldedTransactionHistoryEntry } from './v1/TransactionHistory.js';
 import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -161,8 +157,6 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   queryTxHistoryByHash(hash: string): Promise<UnshieldedTransactionHistoryEntry | undefined>;
 
   getAllFromTxHistory(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
-
-  serializeTransactionHistory(): Promise<SerializedUnshieldedTransactionHistory>;
 
   stop(): Promise<void>;
 };
@@ -355,12 +349,6 @@ export function CustomUnshieldedWallet<
           .pipe(Stream.runCollect),
       );
       yield* items;
-    }
-
-    serializeTransactionHistory(): Promise<SerializedUnshieldedTransactionHistory> {
-      return Effect.runPromise(
-        CustomUnshieldedWalletImplementation.allVariantsRecord()[V1Tag].variant.transactionHistory.serialize(),
-      );
     }
   };
 }

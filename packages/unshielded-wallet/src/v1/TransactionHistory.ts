@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Effect, Either, Option, Schema, Stream } from 'effect';
+import { Effect, Option, Schema, Stream } from 'effect';
 import { UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
@@ -24,7 +24,7 @@ const UtxoSchema = Schema.Struct({
   outputIndex: Schema.Number,
 });
 
-const UnshieldedSectionSchema = Schema.Struct({
+export const UnshieldedSectionSchema = Schema.Struct({
   id: Schema.Number,
   createdUtxos: Schema.Array(UtxoSchema),
   spentUtxos: Schema.Array(UtxoSchema),
@@ -50,15 +50,14 @@ export type TransactionHistoryService = {
   delete(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError>;
-  serialize(): Effect.Effect<SerializedUnshieldedTransactionHistory, TransactionHistoryError>;
 };
 
 export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage;
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
 };
 
 type StorageEntryWithUnshielded = Omit<
-  TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+  TransactionHistoryStorage.TransactionHistoryCommon,
   'identifiers' | 'timestamp' | 'fees'
 > & {
   readonly identifiers: readonly string[];
@@ -70,7 +69,7 @@ type StorageEntryWithUnshielded = Omit<
 const tryProjectToUnshieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Option.Option<UnshieldedTransactionHistoryEntry> =>
-  isUnshieldedSection(entry.unshielded)
+  isUnshieldedSection(entry['unshielded'])
     ? Option.some({
         hash: entry.hash,
         protocolVersion: entry.protocolVersion,
@@ -78,7 +77,7 @@ const tryProjectToUnshieldedEntry = (
         timestamp: entry.timestamp ?? new Date(),
         fees: (entry.fees ?? null) as UnshieldedTransactionHistoryEntry['fees'],
         status: entry.status,
-        unshielded: entry.unshielded,
+        unshielded: entry['unshielded'],
       })
     : Option.none();
 
@@ -164,58 +163,5 @@ export const makeDefaultTransactionHistoryService = (
           entry ? asUnshieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
         ),
       ),
-
-    serialize: (): Effect.Effect<SerializedUnshieldedTransactionHistory, TransactionHistoryError> =>
-      Stream.fromAsyncIterable(
-        txHistoryStorage.getAll(),
-        (e) => new TransactionHistoryError({ message: 'Failed to iterate transaction history', cause: e }),
-      ).pipe(
-        Stream.filterMap((entry) => tryProjectToUnshieldedEntry(entry)),
-        Stream.runCollect,
-        Effect.map((entries) => {
-          const encoder = Schema.encodeSync(UnshieldedTransactionHistoryEntriesSchema);
-          return JSON.stringify(encoder(Array.from(entries)));
-        }),
-      ),
   };
 };
-
-const UnshieldedTransactionHistoryEntriesSchema = Schema.Array(UnshieldedTransactionHistoryEntrySchema);
-export type SerializedUnshieldedTransactionHistory = string;
-
-export const restoreUnshieldedTransactionHistoryStorage = (
-  serializedHistory: SerializedUnshieldedTransactionHistory,
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
-): Promise<TransactionHistoryStorage.TransactionHistoryStorage> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const result = Schema.decodeUnknownEither(UnshieldedTransactionHistoryEntriesSchema)(
-        JSON.parse(serializedHistory) as unknown,
-      );
-
-      if (Either.isLeft(result)) {
-        return yield* new TransactionHistoryError({
-          message: `Failed to decode unshielded transaction history: ${result.left.message}`,
-        });
-      }
-
-      for (const entry of result.right) {
-        yield* Effect.tryPromise({
-          try: () =>
-            txHistoryStorage.upsert({
-              hash: entry.hash,
-              protocolVersion: entry.protocolVersion,
-              status: entry.status,
-              identifiers: entry.identifiers,
-              timestamp: entry.timestamp,
-              fees: entry.fees,
-              unshielded: entry.unshielded,
-            }),
-          catch: (e) =>
-            new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
-        });
-      }
-
-      return txHistoryStorage;
-    }),
-  );

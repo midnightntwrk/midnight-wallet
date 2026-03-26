@@ -13,23 +13,30 @@
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryEntryWithHash,
+  type TransactionHistoryCommon,
+  type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
-export class NoOpTransactionHistoryStorage implements TransactionHistoryStorage {
-  upsert(_entry: TransactionHistoryEntryWithHash): Promise<void> {
+export class NoOpTransactionHistoryStorage<
+  T extends { hash: TransactionHash } = TransactionHistoryCommon,
+> implements TransactionHistoryStorage<T> {
+  upsert(_entry: T): Promise<void> {
     return Promise.resolve();
   }
 
-  delete(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
+  delete(_hash: TransactionHash): Promise<T | undefined> {
     return Promise.resolve(undefined);
   }
 
-  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
+  async *getAll(): AsyncIterableIterator<T> {
     return Promise.resolve(yield* []);
   }
 
-  get(_hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
+  get(_hash: TransactionHash): Promise<T | undefined> {
     return Promise.resolve(undefined);
+  }
+
+  serialize(): Promise<SerializedTransactionHistory> {
+    return Promise.resolve('[]');
   }
 }

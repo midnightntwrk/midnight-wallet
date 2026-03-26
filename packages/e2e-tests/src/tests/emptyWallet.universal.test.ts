@@ -27,6 +27,7 @@ import {
   UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
 import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
@@ -67,7 +68,7 @@ describe('Fresh wallet with empty state', () => {
     Wallet = ShieldedWallet(walletConfig);
     Unshielded = UnshieldedWallet({
       ...walletConfig,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     });
     shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
     unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
@@ -130,7 +131,7 @@ describe('Fresh wallet with empty state', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();

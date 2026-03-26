@@ -14,14 +14,8 @@ import {
   ShieldedWallet,
   type ShieldedWalletClass,
   type ShieldedWalletState,
-  restoreShieldedTransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
-import {
-  UnshieldedWallet,
-  restoreUnshieldedTransactionHistoryStorage,
-  createKeystore,
-  PublicKey,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { UnshieldedWallet, createKeystore, PublicKey } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { type DefaultV1Configuration as UnshieldedV1Configuration } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
@@ -34,6 +28,7 @@ import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -53,6 +48,7 @@ const environment = new DockerComposeEnvironment(getComposeDirectory(), 'docker-
 describe('Wallet serialization and restoration', () => {
   let startedEnvironment: StartedDockerComposeEnvironment;
   let shieldedConfiguration: DefaultV1Configuration;
+  let unshieldedConfiguration: UnshieldedV1Configuration;
   let indexerPort: number;
 
   beforeAll(async () => {
@@ -64,7 +60,16 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+    };
+
+    unshieldedConfiguration = {
+      indexerClientConnection: {
+        indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
+        indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
+      },
+      networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 
@@ -129,27 +134,24 @@ describe('Wallet serialization and restoration', () => {
 
   it('should restore shielded wallet from serialized transaction history', async () => {
     const seed = getShieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-    const config = { ...shieldedConfiguration, txHistoryStorage };
-    const ShieldedWalletWithHistory = ShieldedWallet(config);
-
-    const wallet = ShieldedWalletWithHistory.startWithSeed(seed);
+    const wallet = ShieldedWallet(shieldedConfiguration).startWithSeed(seed);
     await wallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
     try {
       await wallet.waitForSyncedState();
 
       const initialTxHistory = await Array.fromAsync(wallet.getAllFromTxHistory());
-      const serializedTxHistory = await wallet.serializeTransactionHistory();
+      const serializedTxHistory = await shieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await wallet.serializeState();
       await wallet.stop();
 
-      const restoredTxHistoryStorage = await restoreShieldedTransactionHistoryStorage(
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
-        new InMemoryTransactionHistoryStorage(),
+        WalletEntrySchema,
       );
-      const restoredConfig = { ...shieldedConfiguration, txHistoryStorage: restoredTxHistoryStorage };
-      const RestoredShieldedWallet = ShieldedWallet(restoredConfig);
-      const restoredWallet = RestoredShieldedWallet.restore(serializedState);
+      const restoredWallet = ShieldedWallet({
+        ...shieldedConfiguration,
+        txHistoryStorage: restoredTxHistoryStorage,
+      }).restore(serializedState);
 
       await restoredWallet.start(ledger.ZswapSecretKeys.fromSeed(seed));
       try {
@@ -168,37 +170,29 @@ describe('Wallet serialization and restoration', () => {
 
   it('should restore unshielded wallet from serialized transaction history', async () => {
     const unshieldedSeed = getUnshieldedSeed('0000000000000000000000000000000000000000000000000000000000000002');
-    const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-    const unshieldedConfig: UnshieldedV1Configuration = {
-      indexerClientConnection: {
-        indexerWsUrl: `ws://localhost:${indexerPort}/api/v4/graphql/ws`,
-        indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
-      },
-      networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage,
-    };
-    const keystore = createKeystore(unshieldedSeed, unshieldedConfig.networkId);
+    const keystore = createKeystore(unshieldedSeed, unshieldedConfiguration.networkId);
 
-    const initialWallet = UnshieldedWallet(unshieldedConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
+    const initialWallet = UnshieldedWallet(unshieldedConfiguration).startWithPublicKey(
+      PublicKey.fromKeyStore(keystore),
+    );
     await initialWallet.start();
     try {
       await firstValueFrom(initialWallet.state.pipe(rx.filter((state) => state.availableCoins.length > 0)));
       await initialWallet.waitForSyncedState();
 
       const initialTxHistory = await Array.fromAsync(initialWallet.getAllFromTxHistory());
-      const serializedTxHistory = await initialWallet.serializeTransactionHistory();
+      const serializedTxHistory = await unshieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await initialWallet.serializeState();
       await initialWallet.stop();
 
-      const restoredTxHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
-        new InMemoryTransactionHistoryStorage(),
+        WalletEntrySchema,
       );
-      const restoredConfig: UnshieldedV1Configuration = {
-        ...unshieldedConfig,
+      const restoredWallet = UnshieldedWallet({
+        ...unshieldedConfiguration,
         txHistoryStorage: restoredTxHistoryStorage,
-      };
-      const restoredWallet = UnshieldedWallet(restoredConfig).restore(serializedState);
+      }).restore(serializedState);
 
       await restoredWallet.start();
       try {

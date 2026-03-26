@@ -18,7 +18,7 @@ import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
 
 describe('Facade submission', () => {
   it('is gracefully closed when wallet is stopped', async () => {
@@ -48,7 +48,7 @@ describe('Facade submission', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
 
     const facade: WalletFacade = await WalletFacade.init({
@@ -92,7 +92,7 @@ describe('Facade submission', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
     const seed = crypto.randomBytes(32);
     const shielded = ShieldedWallet(config).startWithSeed(seed);

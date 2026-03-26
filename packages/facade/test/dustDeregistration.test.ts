@@ -20,7 +20,7 @@ import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } f
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeDefaultSubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
@@ -76,7 +76,7 @@ describe('Dust Deregistration', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 

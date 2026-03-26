@@ -16,6 +16,7 @@ import {
   ProtocolState,
   ProtocolVersion,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -104,7 +105,7 @@ describe.skip('Wallet transacting', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 

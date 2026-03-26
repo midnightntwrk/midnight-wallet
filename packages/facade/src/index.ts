@@ -35,12 +35,14 @@ import {
   type DefaultShieldedConfiguration,
   type ShieldedWalletAPI,
   type ShieldedWalletState,
+  ShieldedSectionSchema,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type UnshieldedWalletState } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { Array as Arr, pipe } from 'effect';
+import { Array as Arr, pipe, Schema } from 'effect';
+import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { combineLatest, map, type Observable, firstValueFrom, Subscription, concatMap } from 'rxjs';
 import {
   DefaultPendingTransactionsServiceConfiguration,
@@ -50,6 +52,32 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { finalizedTransactionTrait } from './transaction.js';
 import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+
+/**
+ * Entry schema with common fields only, no wallet-specific extensions.
+ */
+export const CommonEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+});
+
+/**
+ * Wallet-specific extensions type — shielded, unshielded, and dust sections.
+ */
+export type DefaultExtensions = {
+  readonly shielded?: unknown;
+  readonly unshielded?: unknown;
+  readonly dust?: unknown;
+};
+
+/**
+ * Full entry schema for transaction history — common fields + all wallet sections.
+ * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
+ */
+export const WalletEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  shielded: Schema.optional(ShieldedSectionSchema),
+  unshielded: Schema.optional(UnshieldedSectionSchema),
+});
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
 

@@ -26,6 +26,7 @@ import {
   type CombinedSwapInputs,
   type CombinedSwapOutputs,
   type DefaultConfiguration,
+  WalletEntrySchema,
   WalletFacade,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
@@ -89,7 +90,7 @@ describe('Swaps', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 
@@ -110,7 +111,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
@@ -121,7 +122,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
     });

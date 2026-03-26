@@ -12,7 +12,7 @@
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Duration, Array as EArray, Effect, Either, Option, Schedule, Schema, Stream } from 'effect';
+import { Duration, Array as EArray, Effect, Option, Schedule, Schema, Stream } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -24,7 +24,7 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
   mt_index: Schema.BigInt,
 });
 
-const ShieldedSectionSchema = Schema.Struct({
+export const ShieldedSectionSchema = Schema.Struct({
   receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
   spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
 });
@@ -43,7 +43,7 @@ export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
 
 export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage;
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
   indexerClientConnection: { indexerHttpUrl: string };
 };
 
@@ -68,7 +68,6 @@ export type TransactionHistoryService = {
   delete(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
-  serialize(): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError>;
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError>;
@@ -77,12 +76,12 @@ export type TransactionHistoryService = {
 const tryProjectToShieldedEntry = (
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
 ): Option.Option<ShieldedTransactionHistoryEntry> =>
-  isShieldedSection(entry.shielded)
+  isShieldedSection(entry['shielded'])
     ? Option.some({
         hash: entry.hash,
         protocolVersion: entry.protocolVersion,
         status: entry.status,
-        shielded: entry.shielded,
+        shielded: entry['shielded'],
       })
     : Option.none();
 
@@ -103,7 +102,7 @@ const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSect
 });
 
 type StorageEntryWithShielded = Omit<
-  TransactionHistoryStorage.TransactionHistoryEntryWithHash,
+  TransactionHistoryStorage.TransactionHistoryCommon,
   'identifiers' | 'timestamp' | 'fees'
 > & {
   readonly shielded: ShieldedSection;
@@ -124,7 +123,7 @@ const convertUpdateToStorageEntry = (
 });
 
 const upsertShieldedEntry = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
 ): Effect.Effect<void, TransactionHistoryError> =>
   Effect.gen(function* () {
@@ -135,8 +134,8 @@ const upsertShieldedEntry = (
     });
 
     const shieldedSection =
-      existing && isShieldedSection(existing.shielded)
-        ? mergeShieldedSections(existing.shielded, entry.shielded)
+      existing && isShieldedSection(existing['shielded'])
+        ? mergeShieldedSections(existing['shielded'], entry.shielded)
         : entry.shielded;
 
     yield* Effect.tryPromise({
@@ -187,19 +186,6 @@ export const makeDefaultTransactionHistoryService = (
         Effect.flatMap((entry) =>
           entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
         ),
-      ),
-
-    serialize: (): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError> =>
-      Stream.fromAsyncIterable(
-        txHistoryStorage.getAll(),
-        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(
-        Stream.filterMap((entry) => tryProjectToShieldedEntry(entry)),
-        Stream.runCollect,
-        Effect.map((chunk) => {
-          const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
-          return JSON.stringify(encoder(Array.from(chunk)));
-        }),
       ),
 
     getTransactionDetails: (
@@ -278,19 +264,6 @@ export const makeSimulatorTransactionHistoryService = (
         ),
       ),
 
-    serialize: (): Effect.Effect<SerializedShieldedTransactionHistory, TransactionHistoryError> =>
-      Stream.fromAsyncIterable(
-        txHistoryStorage.getAll(),
-        (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
-      ).pipe(
-        Stream.filterMap((entry) => tryProjectToShieldedEntry(entry)),
-        Stream.runCollect,
-        Effect.map((chunk) => {
-          const encoder = Schema.encodeSync(ShieldedTransactionHistoryEntriesSchema);
-          return JSON.stringify(encoder(Array.from(chunk)));
-        }),
-      ),
-
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionDetails, TransactionHistoryError> =>
@@ -313,40 +286,3 @@ export const makeSimulatorTransactionHistoryService = (
       ),
   };
 };
-
-const ShieldedTransactionHistoryEntriesSchema = Schema.Array(ShieldedTransactionHistoryEntrySchema);
-export type SerializedShieldedTransactionHistory = string;
-
-export const restoreShieldedTransactionHistoryStorage = (
-  serializedHistory: SerializedShieldedTransactionHistory,
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage,
-): Promise<TransactionHistoryStorage.TransactionHistoryStorage> =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const result = Schema.decodeUnknownEither(ShieldedTransactionHistoryEntriesSchema)(
-        JSON.parse(serializedHistory) as unknown,
-      );
-
-      if (Either.isLeft(result)) {
-        return yield* new TransactionHistoryError({
-          message: `Failed to decode shielded transaction history: ${result.left.message}`,
-        });
-      }
-
-      for (const entry of result.right) {
-        yield* Effect.tryPromise({
-          try: () =>
-            txHistoryStorage.upsert({
-              hash: entry.hash,
-              protocolVersion: entry.protocolVersion,
-              status: entry.status,
-              shielded: entry.shielded,
-            }),
-          catch: (e) =>
-            new TransactionHistoryError({ message: 'Failed to restore transaction history entry', cause: e }),
-        });
-      }
-
-      return txHistoryStorage;
-    }),
-  );

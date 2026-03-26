@@ -19,10 +19,7 @@ import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
 import { createKeystore, PublicKey } from '../src/KeyStore.js';
 import { UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import {
-  InMemoryTransactionHistoryStorage,
-  NoOpTransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 vi.setConfig({ testTimeout: 100_000, hookTimeout: 100_000 });
 
@@ -50,8 +47,7 @@ describe('UnshieldedWallet', () => {
   });
 
   it('should build', async () => {
-    const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-    const config = createWalletConfig(indexerPort, { txHistoryStorage });
+    const config = createWalletConfig(indexerPort);
     const keystore = createKeystore(unshieldedSeed, config.networkId);
 
     const unshieldedWallet = UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(keystore));
@@ -93,10 +89,7 @@ describe('UnshieldedWallet', () => {
   });
 
   it('should restore from serialized state', async () => {
-    const txHistoryStorage = new InMemoryTransactionHistoryStorage();
-    const initialConfig = createWalletConfig(indexerPort, {
-      txHistoryStorage,
-    });
+    const initialConfig = createWalletConfig(indexerPort);
     const keystore = createKeystore(unshieldedSeed, initialConfig.networkId);
     const initialWallet = UnshieldedWallet(initialConfig).startWithPublicKey(PublicKey.fromKeyStore(keystore));
 
@@ -113,7 +106,7 @@ describe('UnshieldedWallet', () => {
 
     await initialWallet.stop();
 
-    const restoreConfig = createWalletConfig(indexerPort, { txHistoryStorage });
+    const restoreConfig = createWalletConfig(indexerPort);
     const restoredWallet = UnshieldedWallet(restoreConfig).restore(serializedState);
     await restoredWallet.start();
 

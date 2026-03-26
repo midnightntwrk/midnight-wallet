@@ -10,29 +10,36 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { Schema } from 'effect';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryEntryWithHash,
+  type TransactionHistoryCommon,
+  type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
  */
-export class InMemoryTransactionHistoryStorage implements TransactionHistoryStorage {
-  private entries: Map<TransactionHash, TransactionHistoryEntryWithHash>;
+export class InMemoryTransactionHistoryStorage<
+  T extends { hash: TransactionHash } = TransactionHistoryCommon,
+  I = T,
+> implements TransactionHistoryStorage<T> {
+  private entries: Map<TransactionHash, T>;
+  private readonly entrySchema: Schema.Schema<T, unknown>;
 
-  constructor(entries?: Map<TransactionHash, TransactionHistoryEntryWithHash>) {
-    this.entries = entries ?? new Map<TransactionHash, TransactionHistoryEntryWithHash>();
+  constructor(entrySchema: Schema.Schema<T, I>) {
+    this.entries = new Map<TransactionHash, T>();
+    this.entrySchema = entrySchema as unknown as Schema.Schema<T, unknown>;
   }
 
-  upsert(entry: TransactionHistoryEntryWithHash): Promise<void> {
+  upsert(entry: T): Promise<void> {
     const existing = this.entries.get(entry.hash);
     this.entries.set(entry.hash, existing ? { ...existing, ...entry } : entry);
     return Promise.resolve();
   }
 
-  delete(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
+  delete(hash: TransactionHash): Promise<T | undefined> {
     const existingEntry = this.entries.get(hash);
 
     if (!existingEntry) {
@@ -44,17 +51,39 @@ export class InMemoryTransactionHistoryStorage implements TransactionHistoryStor
     return Promise.resolve(existingEntry);
   }
 
-  async *getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash> {
+  async *getAll(): AsyncIterableIterator<T> {
     for (const entry of this.entries.values()) {
       yield await Promise.resolve(entry);
     }
   }
 
-  get(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined> {
+  get(hash: TransactionHash): Promise<T | undefined> {
     return Promise.resolve(this.entries.get(hash));
   }
 
   reset(): void {
     this.entries.clear();
+  }
+
+  async serialize(): Promise<SerializedTransactionHistory> {
+    const allEntries: T[] = [];
+    for await (const entry of this.getAll()) {
+      allEntries.push(entry);
+    }
+    const encode = Schema.encodeSync(Schema.Array(this.entrySchema));
+    return JSON.stringify(encode(allEntries));
+  }
+
+  static restore<T extends { hash: string }, I>(
+    serialized: SerializedTransactionHistory,
+    entrySchema: Schema.Schema<T, I>,
+  ): InMemoryTransactionHistoryStorage<T, I> {
+    const decode = Schema.decodeUnknownSync(Schema.Array(entrySchema as unknown as Schema.Schema<T, unknown>));
+    const decoded = decode(JSON.parse(serialized) as unknown) as T[];
+    const storage = new InMemoryTransactionHistoryStorage<T, I>(entrySchema);
+    for (const entry of decoded) {
+      storage.entries.set(entry.hash, entry);
+    }
+    return storage;
   }
 }

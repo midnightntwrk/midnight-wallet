@@ -2772,6 +2772,7 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.1.0"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.2.0"
+    "@midnight-ntwrk/wallet-sdk-facade": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.1"
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.2.0"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.2"
@@ -2859,7 +2860,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-facade@workspace:*, @midnight-ntwrk/wallet-sdk-facade@workspace:^, @midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade":
+"@midnight-ntwrk/wallet-sdk-facade@npm:3.0.0, @midnight-ntwrk/wallet-sdk-facade@workspace:*, @midnight-ntwrk/wallet-sdk-facade@workspace:^, @midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade"
   dependencies:

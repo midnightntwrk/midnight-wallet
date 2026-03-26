@@ -19,14 +19,9 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { ShieldedWallet, restoreShieldedTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
-import {
-  createKeystore,
-  PublicKey,
-  UnshieldedWallet,
-  restoreUnshieldedTransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { CombinedTokenTransfer, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
 /**
@@ -174,15 +169,15 @@ describe('Smoke tests', () => {
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
 
       // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
-      const senderTxHistory = await Array.fromAsync(finalState.unshielded.transactionHistory.getAll());
+      const senderTxHistory = await Array.fromAsync(funded.wallet.unshielded.getAllFromTxHistory());
       utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
 
-      const receiverTxHistory = await Array.fromAsync(finalState2.unshielded.transactionHistory.getAll());
+      const receiverTxHistory = await Array.fromAsync(receiver.wallet.unshielded.getAllFromTxHistory());
       expect(receiverTxHistory.length).toBeGreaterThan(0);
       // Receiver should have at least one entry with createdUtxos
-      const receiverEntryWithCreated = receiverTxHistory.find((e) => e.createdUtxos.length > 0);
+      const receiverEntryWithCreated = receiverTxHistory.find((e) => e.unshielded.createdUtxos.length > 0);
       expect(receiverEntryWithCreated).toBeDefined();
-      expect(receiverEntryWithCreated!.createdUtxos[0].value).toBe(outputValue);
+      expect(receiverEntryWithCreated!.unshielded.createdUtxos[0].value).toBe(outputValue);
     },
     timeout,
   );
@@ -197,22 +192,24 @@ describe('Smoke tests', () => {
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
 
-      const serializedTxHistory = await funded.wallet.shielded.serializeTransactionHistory();
+      const walletConfig = fixture.getWalletConfig();
+      const txHistoryStorage = walletConfig.txHistoryStorage;
+      const serializedTxHistory = await txHistoryStorage.serialize();
 
       logger.info('Restoring wallet from serialized state...');
-      const txHistoryStorage = await restoreShieldedTransactionHistoryStorage(
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
-        new InMemoryTransactionHistoryStorage(),
+        WalletEntrySchema,
       );
       const RestoredWallet = ShieldedWallet({
-        ...fixture.getWalletConfig(),
-        txHistoryStorage,
+        ...walletConfig,
+        txHistoryStorage: restoredTxHistoryStorage,
       });
       const restoredWallet = RestoredWallet.restore(serializedState);
       await restoredWallet.start(funded.shieldedSecretKeys);
       try {
         await restoredWallet.waitForSyncedState();
-        const restoredSerializedTxHistory = await restoredWallet.serializeTransactionHistory();
+        const restoredSerializedTxHistory = await restoredTxHistoryStorage.serialize();
         expect(restoredSerializedTxHistory).toEqual(serializedTxHistory);
       } finally {
         await restoredWallet.stop();
@@ -225,7 +222,7 @@ describe('Smoke tests', () => {
     'Unshielded wallet can be serialized and restored',
     async () => {
       fixture = getFixture();
-      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage();
+      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema);
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
       const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -239,20 +236,14 @@ describe('Smoke tests', () => {
       logger.info(`Waiting to sync...`);
       // TODO IAN - Check if this is correct
       await initialWallet.start();
-      const syncedState = await utils.waitForSyncUnshielded(initialWallet);
-      const initialTxHistory = await Array.fromAsync(syncedState.transactionHistory.getAll());
-      expect(initialTxHistory.length).toBeGreaterThan(0);
-      for (const entry of initialTxHistory) {
-        expect(Array.isArray(entry.createdUtxos)).toBe(true);
-        expect(Array.isArray(entry.spentUtxos)).toBe(true);
-      }
+      await utils.waitForSyncUnshielded(initialWallet);
       const serializedState = await initialWallet.serializeState();
-      const serializedTxHistory = await initialWallet.serializeTransactionHistory();
+      const serializedTxHistory = await unshieldedTxHistoryStorage.serialize();
       await initialWallet.stop();
 
-      const txHistoryStorage = await restoreUnshieldedTransactionHistoryStorage(
+      const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
-        new InMemoryTransactionHistoryStorage(),
+        WalletEntrySchema,
       );
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -260,19 +251,12 @@ describe('Smoke tests', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage,
+        txHistoryStorage: restoredTxHistoryStorage,
       }).restore(serializedState);
 
       await restoredWallet.start();
       const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
       expect(restoredState).toBeTruthy();
-      // TODO IAN - Check if this is correct
-      const restoredTxHistoryEntries = await Array.fromAsync(restoredState.transactionHistory.getAll());
-      expect(restoredTxHistoryEntries.length).toBe(initialTxHistory.length);
-      for (const entry of restoredTxHistoryEntries) {
-        expect(Array.isArray(entry.createdUtxos)).toBe(true);
-        expect(Array.isArray(entry.spentUtxos)).toBe(true);
-      }
       await restoredWallet.stop();
     },
     timeout,

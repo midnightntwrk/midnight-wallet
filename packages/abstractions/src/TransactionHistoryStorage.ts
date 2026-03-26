@@ -31,25 +31,23 @@ export const TransactionHistoryCommonSchema = Schema.Struct({
 
 export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHistoryCommonSchema>;
 
-type WalletSections = {
-  readonly shielded?: unknown;
-  readonly unshielded?: unknown;
-  readonly dust?: unknown;
-};
+export type SerializedTransactionHistory = string;
 
 /**
- * Unified transaction history entry shared across all wallet types.
- * Common fields live at the top level; wallet-specific data is nested
- * under the `shielded`, `unshielded`, and `dust` keys.
+ * An entry with common fields plus any additional properties (wallet sections).
+ * Used by wallet packages for projection/filtering when the exact type is not known.
  */
-export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & WalletSections;
+export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<string, unknown>;
 
 /**
  * Storage interface for transaction history entries keyed by their `hash` property.
+ *
+ * Pass a full entry schema to the implementation constructor to enable serialization.
  */
-export interface TransactionHistoryStorage {
-  upsert(entry: TransactionHistoryEntryWithHash): Promise<void>;
-  delete(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined>;
-  getAll(): AsyncIterableIterator<TransactionHistoryEntryWithHash>;
-  get(hash: TransactionHash): Promise<TransactionHistoryEntryWithHash | undefined>;
+export interface TransactionHistoryStorage<T extends { hash: TransactionHash } = TransactionHistoryCommon> {
+  upsert(entry: T): Promise<void>;
+  delete(hash: TransactionHash): Promise<T | undefined>;
+  getAll(): AsyncIterableIterator<T>;
+  get(hash: TransactionHash): Promise<T | undefined>;
+  serialize(): Promise<SerializedTransactionHistory>;
 }

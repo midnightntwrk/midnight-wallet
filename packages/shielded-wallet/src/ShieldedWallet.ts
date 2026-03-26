@@ -29,11 +29,7 @@ import { Effect, Either, Option, Stream, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import {
-  type TransactionHistoryService,
-  type ShieldedTransactionHistoryEntry,
-  type SerializedShieldedTransactionHistory,
-} from './v1/TransactionHistory.js';
+import { type TransactionHistoryService, type ShieldedTransactionHistoryEntry } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -175,8 +171,6 @@ export type ShieldedWalletAPI<
   ): Promise<ShieldedTransactionHistoryEntry | undefined>;
 
   getAllFromTxHistory(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
-
-  serializeTransactionHistory(): Promise<SerializedShieldedTransactionHistory>;
 
   stop(): Promise<void>;
 };
@@ -321,12 +315,6 @@ export function CustomShieldedWallet<
           .pipe(Stream.runCollect),
       );
       yield* items;
-    }
-
-    serializeTransactionHistory(): Promise<SerializedShieldedTransactionHistory> {
-      return Effect.runPromise(
-        CustomShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant.transactionHistory.serialize(),
-      );
     }
 
     initSwap(
