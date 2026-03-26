@@ -75,7 +75,9 @@ Contains working code examples for common wallet operations:
 
 ## Build Commands and tools in use
 
-All commands must be run from the repository root. Do not cd into a package directory to run commands — shared devDependencies (vitest, typescript, eslint, etc.) are hoisted to the root node_modules and won't resolve from individual package directories. Use --filter to target specific packages.
+All commands must be run from the repository root. Do not cd into a package directory to run commands — shared
+devDependencies (vitest, typescript, eslint, etc.) are hoisted to the root node_modules and won't resolve from
+individual package directories. Use --filter to target specific packages.
 
 ```bash
 # Setup (use nvm or nix develop with direnv)
@@ -161,7 +163,6 @@ directly (e.g., `tsconfig.build.json` or `tsconfig.test.json`), not one that onl
 git diff --name-only --diff-filter=ACMR HEAD -- '*.ts' | xargs -I{} yarn effect-language-service diagnostics --file "$(pwd)/{}" --format pretty
 ```
 
-
 ## Architecture
 
 For detailed architecture documentation with diagrams, see:
@@ -181,7 +182,8 @@ Midnight implements three token types/resources, each requiring distinct wallet 
 
 1. **Unshielded Wallet** - Night and other unshielded tokens on the public ledger
 2. **Shielded Wallet** - Custom shielded tokens with zero-knowledge proof support
-3. **Dust Wallet** - Dust for paying transaction fees. Under no circumstances refer to Dust as a "token". It's a resource generated from Night tokens, which sole purpose is fee payments
+3. **Dust Wallet** - Dust for paying transaction fees. Under no circumstances refer to Dust as a "token". It's a
+   resource generated from Night tokens, which sole purpose is fee payments
 
 Each wallet type uses different addresses, credential proving methods, and state structures.
 
@@ -241,9 +243,12 @@ Uses Effect library with `SubscriptionRef` for BLoC-like state management:
 ## Key Dependencies
 
 - **Effect** (`effect`) - Functional programming primitives, `SubscriptionRef` for state
-  - Use namespace imports for Effect types that conflict with globals: `import { Array as EArray, Record as ERecord } from 'effect';`
-  - Typed error handling via `Either` and `Effect.fail` (Either in pure/synchronous context, `Effect.fail` and friends in side-effectful one)
-  - The project uses @effect/language-service for Effect-specific diagnostics, quickfixes, and code quality checks. It is configured in tsconfig.base.json as a TypeScript plugin.
+  - Use namespace imports for Effect types that conflict with globals:
+    `import { Array as EArray, Record as ERecord } from 'effect';`
+  - Typed error handling via `Either` and `Effect.fail` (Either in pure/synchronous context, `Effect.fail` and friends
+    in side-effectful one)
+  - The project uses @effect/language-service for Effect-specific diagnostics, quickfixes, and code quality checks. It
+    is configured in tsconfig.base.json as a TypeScript plugin.
 - **RxJS** (`rxjs`) - Observable streams for reactive state
   - Only in APIs exposed to the users of the SDK
 - **@midnight-ntwrk/ledger-v8** - Core ledger types and ZK proof types
@@ -263,7 +268,10 @@ Tests use Vitest with workspace configuration. Each package has its own `vitest.
    - Consider what mocking infrastructure is needed
    - Ensure assertions are precise and verifiable
    - Design tests that can be implemented without modification
-   - Avoid usage of mocks in sense `vi.fn` or `vi.mock`; if possible implement an  stub object/function providing expected data instead and/or use fakes (a good related articles on the topic are https://blog.ploeh.dk/2022/10/17/stubs-and-mocks-break-encapsulation/ and https://martinfowler.com/articles/mocksArentStubs.html#DrivingTdd)
+   - Avoid usage of mocks in sense `vi.fn` or `vi.mock`; if possible implement an stub object/function providing
+     expected data instead and/or use fakes (a good related articles on the topic are
+     https://blog.ploeh.dk/2022/10/17/stubs-and-mocks-break-encapsulation/ and
+     https://martinfowler.com/articles/mocksArentStubs.html#DrivingTdd)
 
 2. **Write the test** with precise assertions
 
@@ -624,7 +632,8 @@ pipe(
 );
 ```
 
-**Avoid mixing** both styles in the same function - pick one for consistency, but prefer pipes if custom operators need to be used. Never use `.gen` variant for a single operation.
+**Avoid mixing** both styles in the same function - pick one for consistency, but prefer pipes if custom operators need
+to be used. Never use `.gen` variant for a single operation.
 
 The above also is valid for usage with other Effect types, like `Either`
 
@@ -667,7 +676,10 @@ const newState = Capability.applyUpdate(oldState, update);
 yield * SubscriptionRef.update(this.#state, () => newState);
 ```
 
-Do not ever mix `Ref.get` or `SubscriptionRef.get` (or similar) with methods changing the state. Always ensure to use `Ref.update`, `Ref.modify` or similar to change the state and always use the only state reference the one provided in the callback. Otherwise, it is easy to cause unwanted concurrency issues usage of `Ref` and its variants is meant to prevent. 
+Do not ever mix `Ref.get` or `SubscriptionRef.get` (or similar) with methods changing the state. Always ensure to use
+`Ref.update`, `Ref.modify` or similar to change the state and always use the only state reference the one provided in
+the callback. Otherwise, it is easy to cause unwanted concurrency issues usage of `Ref` and its variants is meant to
+prevent.
 
 ### Resource Management
 
