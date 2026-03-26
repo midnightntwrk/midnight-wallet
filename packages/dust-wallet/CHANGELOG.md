@@ -1,5 +1,38 @@
 # @midnight-ntwrk/wallet-sdk-dust-wallet
 
+## 3.0.0
+
+### Major Changes
+
+- 07ea767: fix: dynamic fee calculation including balancing transaction costs
+  - Split `calculateFee` into two methods:
+    - `calculateFee` — estimates the fee for a given transaction only (no balancing transaction costs)
+    - `estimateFee` — calculates the total fee including the balancing transaction, requiring a secret key, wallet
+      state, and TTL
+  - Updated `WalletFacade` to expose `calculateTransactionFee` and an updated `estimateTransactionFee` that accepts a
+    secret key and optional TTL/currentTime
+  - Removed fee overhead constant; fees are now dynamically calculated based on actual coin selection
+  - Updated `CoinSelection` type to return a single coin (smallest available) instead of multiple coins summed to a
+    target amount
+  - Added `InsufficientFundsError` to `WalletError` for cases where balancing cannot cover the fee
+
+### Minor Changes
+
+- aa7b1f4: chore: update ledger to v8
+
+### Patch Changes
+
+- 372d964: fix: optimize balancing error message reporting
+- 1ad34a9: fix: clear ZswapSecretKeys from memory after use instead of only nullifying the reference
+- Updated dependencies [9d71d25]
+- Updated dependencies [ea55591]
+- Updated dependencies [aa7b1f4]
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.0
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.2.0
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.2
+
 ## 3.0.0-rc.0
 
 ### Major Changes
