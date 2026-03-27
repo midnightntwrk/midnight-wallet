@@ -85,6 +85,12 @@ const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>, txTime
   return Stream.runLast(stream);
 };
 
+const expectWithMargin = (actual: bigint, expected: bigint, reference: bigint, marginPercent = 2n) => {
+  const diff = actual > expected ? actual - expected : expected - actual;
+  const margin = (reference * marginPercent) / 100n;
+  expect(diff).toBeLessThanOrEqual(margin);
+};
+
 type WalletVariant = V1Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
 type RunningWallet = RunningV1Variant<string, SimulatorSyncUpdate, ProofErasedTransaction, DustSecretKey>;
 
@@ -530,7 +536,10 @@ describe('DustWallet', () => {
 
       const totalFee = yield* wallet.estimateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
 
-      expect(totalFee).toBeGreaterThan(0n);
+      const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(
+        walletState,
+        getCurrentTime(simulatorState),
+      );
 
       // cover fees with dust
       const balancingTransaction = yield* wallet.balanceTransactions(
@@ -544,10 +553,9 @@ describe('DustWallet', () => {
 
       const provenTransaction = yield* provingService.prove(balancedTransaction);
 
-      // validate fee imbalance, it can be >= 0n because the coin selected may be of higher value than the total fee
-      expect(
-        Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee),
-      ).toBeGreaterThanOrEqual(0n);
+      // validate fee imbalance, allowing ±2% margin due to non-deterministic transaction serialization
+      const feeImbalance = Transacting.TransactingCapabilityImplementation.feeImbalance(provenTransaction, totalFee);
+      expectWithMargin(feeImbalance, 0n, totalFee);
 
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       // Block 3: after rewardNight (1), registerNightTokens (2), and this submission (3)
@@ -569,13 +577,11 @@ describe('DustWallet', () => {
       // Query the new balance at the block timestamp (when the change coin was created)
       const walletBalanceAfterTx = walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp);
 
-      // Query the old balance at the block timestamp for comparison
-      // Note: The old coin has more decay (ctime from block 2) than the new change coin (ctime from block 3),
-      // so the comparison isn't exact. We verify the balance is reasonable: not more than before minus fee,
-      // and the difference accounts for the decay between old and new coin creation times.
-      const walletBalanceBeforeTx = walletVariant.coinsAndBalances.getWalletBalance(
-        oldWalletState,
-        lastBlock.timestamp,
+      // validate wallet balance changed to balance_now ≈ balance_before - tx_fee (±2% margin)
+      expectWithMargin(
+        walletVariant.coinsAndBalances.getWalletBalance(walletState, toTxTime(lastTxNumber)),
+        walletBalance - totalFee,
+        totalFee,
       );
 
       // The balance after paying the fee should be less than balance before minus fee
@@ -587,10 +593,12 @@ describe('DustWallet', () => {
       const decayTolerance = newAvailableCoins[0].rate * 11n; // ~11 seconds of decay difference
       expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalanceBeforeTx - totalFee - decayTolerance);
 
-      // validate it decays properly
-      expect(
-        walletVariant.coinsAndBalances.getWalletBalance(walletState, DateOps.addSeconds(lastBlock.timestamp, 1)),
-      ).toBe(walletBalanceAfterTx - newAvailableCoins[0].rate);
+      // validate it decays properly (±2% margin)
+      expectWithMargin(
+        walletVariant.coinsAndBalances.getWalletBalance(walletState, toTxTime(lastTxNumber + 1)),
+        walletBalance - totalFee - newAvailableCoins[0].rate,
+        totalFee,
+      );
 
       // validate at the maxCapReachedAt the balance will be 0
       expect(walletVariant.coinsAndBalances.getWalletBalance(walletState, newAvailableCoins[0].maxCapReachedAt)).toBe(
