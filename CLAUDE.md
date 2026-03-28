@@ -11,6 +11,8 @@ TypeScript implementation of the Midnight Wallet Specification. Turbo monorepo, 
 | [docs/decisions/](./docs/decisions/) | ADRs: BLoC pattern, Effect library, Variant/Builder/Facade |
 | [CONTRIBUTING.md](./CONTRIBUTING.md) | CLA, contribution process, license headers |
 
+IMPORTANT: Use GitNexus tools (impact analysis, context, query) before modifying code. See GitNexus section below.
+
 ## Key People
 
 | Person | Role | Reviews for |
