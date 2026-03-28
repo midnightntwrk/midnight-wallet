@@ -4,7 +4,7 @@ TypeScript implementation of the Midnight Wallet Specification. Turbo monorepo, 
 
 | File | What it covers |
 |------|---------------|
-| [FP_GUIDE.md](./FP_GUIDE.md) | Functional programming principles, Effect/Either patterns, immutability rules, canonical examples |
+| [FUNCTIONAL_PROGRAMMING.md](./FUNCTIONAL_PROGRAMMING.md) | Effect/Either patterns, immutability rules, typeclass patterns, canonical examples, Scala/F# idiom translation |
 | [SKILLS.md](./SKILLS.md) | Custom slash commands (/pre-push, /test, /build, /new-capability, /check-fp) |
 | [DEV_GUIDE.md](./DEV_GUIDE.md) | Branching strategy, changesets workflow, pre-release channels |
 | [docs/Design.md](./docs/Design.md) | Architecture diagrams, three-token model, variant structure |
@@ -99,6 +99,38 @@ yarn effect-language-service diagnostics --project "$(pwd)/packages/dust-wallet/
 - **RxJS** (`rxjs`) — Observable streams, facade-level ONLY (not internal code)
 - **@midnight-ntwrk/ledger-v8** — Core ledger types and ZK proof types
 
+## Functional Programming (MANDATORY)
+
+Full guide with examples and canonical files: [FUNCTIONAL_PROGRAMMING.md](./FUNCTIONAL_PROGRAMMING.md)
+
+**Immutability — NEVER use:**
+- `let` — use `const` only
+- `for`/`while` — use `map`/`filter`/`reduce`/`flatMap`
+- `array.push()`/`pop()`/`splice()` — these mutate
+- `object[key] = value` — use spread `{ ...obj, key: value }`
+
+**Either vs Effect — NOT interchangeable:**
+- **Either** = pure synchronous (validation, state transforms, business logic)
+- **Effect** = side-effecting (I/O, async, resources, DI)
+- Convert at boundary only: `EitherOps.toEffect(pureResult)`
+
+**Anti-patterns (NEVER DO):**
+
+| Anti-Pattern | Correct Alternative |
+|---|---|
+| `Promise` in internal code | `Effect.tryPromise` |
+| Throw for expected errors | `Either` or `Effect.fail` |
+| `null`/`undefined` for optional | `Option` |
+| Mutable class state | Refs + pure functions |
+| Mix Effect and raw async/await | Effect composition |
+| Validate and return boolean | Parse and return typed value |
+
+**Effect boundaries** (per ADR 0006): Internal code uses Effect. Facade APIs expose Promise/RxJS. Never require Effect knowledge from SDK consumers.
+
+**Import aliases required:** `Array→EArray`, `Record→ERecord`, `Number→ENumber`, `String→EString`, `Boolean→EBoolean`, `Function→EFunction`
+
+**Type casts:** Exhaust type guards, generics, narrowing first. If unavoidable, add justification comment.
+
 ## TDD (MANDATORY)
 
 **The test is the specification.** Once written and confirmed failing, tests MUST NOT be changed to accommodate implementation.
@@ -111,7 +143,7 @@ yarn effect-language-service diagnostics --project "$(pwd)/packages/dust-wallet/
 
 If implementation cannot pass the test as written: gather ALL failing cases, present to the user with what/why/proposed solutions. Wait for user decision. Do NOT weaken assertions.
 
-Avoid `vi.fn`/`vi.mock` — use stubs and fakes instead. See [FP_GUIDE.md](./FP_GUIDE.md) for testing Effect code patterns.
+Avoid `vi.fn`/`vi.mock` — use stubs and fakes instead. See [FUNCTIONAL_PROGRAMMING.md](./FUNCTIONAL_PROGRAMMING.md) for testing Effect code patterns.
 
 ## CI Pipeline
 
@@ -128,7 +160,7 @@ Release: Changesets GitHub Action creates release PR on main, auto-publishes to 
 
 ## Common Mistakes
 
-1. **Using `let`/`for`/`push`** — Mandatory immutability. Use `reduce`/`map`/`filter`. See [FP_GUIDE.md](./FP_GUIDE.md).
+1. **Using `let`/`for`/`push`** — Mandatory immutability. Use `reduce`/`map`/`filter`. See [FUNCTIONAL_PROGRAMMING.md](./FUNCTIONAL_PROGRAMMING.md).
 2. **Mixing Either and Effect** — Either for pure synchronous logic, Effect for side-effecting. Never wrap Either inside Effect for pure computations.
 3. **Calling Dust a "token"** — It's a resource for fee payment, generated from Night tokens. Reviewers will reject this.
 4. **Running commands from package directories** — Must run from root. Shared deps are hoisted.

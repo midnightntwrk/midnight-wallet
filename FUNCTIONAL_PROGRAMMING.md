@@ -2,7 +2,7 @@
 
 This codebase follows functional programming principles rigorously. These patterns are **mandatory** - not preferences.
 
-For architecture overview, see [CLAUDE.md](./CLAUDE.md). For ADRs, see [docs/decisions/](./docs/decisions/).
+For the contributor map, see [CLAUDE.md](./CLAUDE.md). For ADRs, see [docs/decisions/](./docs/decisions/).
 
 ## Functional Core, Imperative Shell (Impureim Sandwich)
 
