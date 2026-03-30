@@ -17,8 +17,8 @@ export default defineConfig({
   test: {
     setupFiles: ['../../setup-env.ts', './src/tests/setup-retry-logging.ts'],
     environment: 'node',
-    hookTimeout: 3_600_000,
-    testTimeout: 3_600_000,
+    hookTimeout: 1_800_000,
+    testTimeout: 1_800_000,
     retry: 1,
     globals: true,
     exclude: ['node_modules', 'dist'],
@@ -41,7 +41,7 @@ export default defineConfig({
         test: {
           name: 'remote',
           include: ['**/**/tests/*.remote.test.ts', '**/**/tests/*.universal.test.ts'],
-          exclude: ['**/fundTestWallets.remote.test.ts'],
+          // exclude: ['**/fundTestWallets.remote.test.ts'],
         },
       },
     ],
