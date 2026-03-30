@@ -36,9 +36,25 @@ export type IndexerClientConnection = {
   keepAlive?: number;
 };
 
+export type BatchUpdatesConfig = {
+  /** Maximum number of events to collect into a single batch before emitting.
+   *  @default 10 */
+  readonly size?: number;
+  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
+   *  Controls the `groupedWithin` timeout — lower values mean more responsive
+   *  (but smaller) batches when events arrive slowly.
+   *  @default 1 */
+  readonly timeout?: number;
+  /** Minimum delay in milliseconds injected between consecutive batches.
+   *  Prevents the sync stream from saturating downstream consumers when many
+   *  events are available at once. Set to 0 to disable spacing entirely.
+   *  @default 4 */
+  readonly spacing?: number;
+};
+
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
-  batchSize?: number;
+  batchUpdates?: BatchUpdatesConfig;
 };
 
 export type DefaultSyncContext = {
@@ -176,9 +192,11 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
-      const batchSize = config.batchSize ?? 10;
+      const batchSize = config.batchUpdates?.size ?? 10;
+      const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
+      const batchSpacing = config.batchUpdates?.spacing ?? 4;
 
-      return pipe(
+      const eventsStream = pipe(
         ZswapEvents.run({ id: Number(appliedIndex) }),
         Stream.provideLayer(
           WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: config.indexerClientConnection.keepAlive }),
@@ -192,11 +210,14 @@ export const makeEventsSyncService = (
             EitherOps.toEffect,
           ),
         ),
-        Stream.groupedWithin(batchSize, Duration.millis(1)),
+        Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
-        Stream.schedule(Schedule.spaced(Duration.millis(4))),
       );
+
+      return batchSpacing > 0
+        ? Stream.schedule(eventsStream, Schedule.spaced(Duration.millis(batchSpacing)))
+        : eventsStream;
     },
   };
 };
