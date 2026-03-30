@@ -51,9 +51,26 @@ export type IndexerClientConnection = {
   keepAlive?: number;
 };
 
+export type BatchUpdatesConfig = {
+  /** Maximum number of events to collect into a single batch before emitting.
+   *  @default 10 */
+  readonly size?: number;
+  /** Maximum time to wait for a full batch before emitting a partial one.
+   *  Controls the `groupedWithin` timeout — lower values mean more responsive
+   *  (but smaller) batches when events arrive slowly.
+   *  @default Duration.millis(1) */
+  readonly timeout?: Duration.Duration;
+  /** Minimum delay injected between consecutive batches via `Schedule.spaced`.
+   *  Prevents the sync stream from saturating downstream consumers when many
+   *  events are available at once.
+   *  @default Duration.millis(4) */
+  readonly spacing?: Duration.Duration;
+};
+
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   networkId: NetworkId;
+  batchUpdates?: BatchUpdatesConfig;
 };
 
 export type SimulatorSyncConfiguration = {
@@ -139,15 +156,16 @@ export const makeDefaultSyncService = (
       state: CoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
-      const batchSize = 10;
-      const batchTimeout = Duration.millis(1);
+      const batchSize = config.batchUpdates?.size ?? 10;
+      const batchTimeout = config.batchUpdates?.timeout ?? Duration.millis(1);
+      const batchSpacing = config.batchUpdates?.spacing ?? Duration.millis(4);
 
       return pipe(
         indexerSyncService.subscribeWallet(state),
         Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKey, new Date())),
-        Stream.schedule(Schedule.spaced(Duration.millis(4))),
+        Stream.schedule(Schedule.spaced(batchSpacing)),
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },

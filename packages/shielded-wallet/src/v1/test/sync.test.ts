@@ -186,7 +186,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
-          batchSize,
+          batchUpdates: { size: batchSize },
         });
 
         const updates = yield* syncService.updates(initialState, secretKeys).pipe(Stream.runCollect);
@@ -204,6 +204,99 @@ describe('Wallet subscription', () => {
         expect(Chunk.size(updates)).toBe(Math.ceil(numberOfEventsToProduce / batchSize));
         expect(batchSizes).toEqual(expectedBatchSizes);
       }).pipe(Effect.provideService(ZswapEvents.tag, mockSubscriptionFn), Effect.scoped, Effect.runPromise);
+    });
+
+    it('should respect custom batchUpdates.timeout configuration', async () => {
+      const mockEventHex = await createMockEventHex();
+      const eventCount = 20;
+
+      // Events arrive one-by-one with a 5ms delay between each
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex, {
+        delayEvents: true,
+        minDelay: Duration.millis(5),
+        maxDelay: Duration.millis(5),
+        useTestClock: true,
+      });
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      // With a large timeout (10s) and large batch size (100), all 20 events
+      // should accumulate into a single batch since neither the size nor
+      // the timeout threshold is reached before the stream ends.
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: 100, timeout: Duration.seconds(10) },
+        });
+
+        const streamFiber = yield* Effect.fork(syncService.updates(initialState, secretKeys).pipe(Stream.runCollect));
+
+        // Advance clock enough for all events to arrive (20 * 5ms = 100ms)
+        // plus spacing and timeout
+        yield* TestClock.adjust(Duration.seconds(30));
+
+        const updates = yield* Fiber.join(streamFiber);
+
+        // All events should land in a single batch because the timeout (10s)
+        // is much larger than the total event delivery time
+        expect(Chunk.size(updates)).toBe(1);
+        expect(updates.pipe(Chunk.unsafeHead).updates.length).toBe(eventCount);
+      }).pipe(
+        Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
+        Effect.provide(TestContext.TestContext),
+        Effect.scoped,
+        Effect.runPromise,
+      );
+    });
+
+    it('should respect custom batchUpdates.spacing configuration', async () => {
+      const mockEventHex = await createMockEventHex();
+      const eventCount = 30;
+
+      // Events arrive instantly (no delay)
+      const mockSubscriptionFn = createMockSubscriptionFn(eventCount, mockEventHex);
+
+      const secretKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+      const initialState = CoreWallet.initEmpty(secretKeys, NetworkId.NetworkId.Undeployed);
+
+      // With batch size 10 and 30 events, we get 3 batches.
+      // With spacing of 500ms, the stream needs at least 1000ms (2 gaps between 3 batches)
+      // to emit all batches. Advancing only 400ms should yield fewer than 3 batches.
+      await Effect.gen(function* () {
+        const syncService = makeEventsSyncService({
+          indexerClientConnection: {
+            indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+            indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+          },
+          batchUpdates: { size: 10, spacing: Duration.millis(500) },
+        });
+
+        // Fork stream and only advance clock partially
+        const streamFiber = yield* Effect.fork(syncService.updates(initialState, secretKeys).pipe(Stream.runCollect));
+
+        // Advance just enough for the first batch but not all spacing gaps
+        yield* TestClock.adjust(Duration.millis(400));
+        const partialFiber = yield* Effect.fork(Fiber.poll(streamFiber));
+        const partialResult = yield* Fiber.join(partialFiber);
+
+        // Stream should still be running (not all batches emitted yet)
+        expect(Option.isNone(partialResult)).toBe(true);
+
+        // Now advance enough for all batches to complete
+        yield* TestClock.adjust(Duration.seconds(5));
+        const updates = yield* Fiber.join(streamFiber);
+
+        expect(Chunk.size(updates)).toBe(3);
+      }).pipe(
+        Effect.provideService(ZswapEvents.tag, mockSubscriptionFn),
+        Effect.provide(TestContext.TestContext),
+        Effect.scoped,
+        Effect.runPromise,
+      );
     });
 
     it('should handle batching events by introducing a random delay', async () => {
