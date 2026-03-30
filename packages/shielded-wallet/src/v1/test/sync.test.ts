@@ -230,7 +230,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
-          batchUpdates: { size: 100, timeout: Duration.seconds(10) },
+          batchUpdates: { size: 100, timeout: 10_000 },
         });
 
         const streamFiber = yield* Effect.fork(syncService.updates(initialState, secretKeys).pipe(Stream.runCollect));
@@ -272,7 +272,7 @@ describe('Wallet subscription', () => {
             indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
             indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
           },
-          batchUpdates: { size: 10, spacing: Duration.millis(500) },
+          batchUpdates: { size: 10, spacing: 500 },
         });
 
         // Fork stream and only advance clock partially
