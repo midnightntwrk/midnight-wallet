@@ -21,7 +21,7 @@ export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
   type: Schema.String,
   nonce: Schema.String,
   value: Schema.BigInt,
-  mt_index: Schema.BigInt,
+  mtIndex: Schema.BigInt,
 });
 
 export const ShieldedSectionSchema = Schema.Struct({
@@ -103,8 +103,8 @@ const convertUpdateToStorageEntry = (
   protocolVersion,
   status: metadata.status,
   shielded: {
-    receivedCoins: changes.receivedCoins,
-    spentCoins: changes.spentCoins,
+    receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
+    spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
   } satisfies ShieldedSection,
 });
 
