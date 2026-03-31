@@ -33,7 +33,7 @@ if [[ -z "$workflow_id" ]]; then
 fi
 
 # Fetch all successful workflow runs for the specified workflow, ordered by created_at (newest first)
-runs=$(gh api repos/$REPO/actions/workflows/$workflow_id/runs --paginate | jq -r '.workflow_runs[] | select(.status == "completed" and .conclusion == "success") | .id')
+runs=$(gh api repos/$REPO/actions/workflows/$workflow_id/runs --paginate | jq -r '.workflow_runs[] | select(.status == "completed") | .id')
 
 # Iterate over each run to check for the specified artifact, starting from the newest
 for run_id in $runs; do
