@@ -146,18 +146,20 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
           }),
         ).pipe(
           Effect.flatMap(({ changes, protocolVersion }) =>
-            Effect.forEach(
-              changes,
-              (change) =>
-                pipe(
-                  this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
-                  Effect.flatMap((metadata) =>
-                    this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+            pipe(
+              Effect.forEach(
+                changes,
+                (change) =>
+                  pipe(
+                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                    Effect.flatMap((metadata) =>
+                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                    ),
+                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
                   ),
-                  Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
-                  Effect.forkScoped,
-                ),
-              { discard: true, concurrency: 'unbounded' },
+                { discard: true, concurrency: 'unbounded' },
+              ),
+              Effect.forkScoped,
             ),
           ),
           Effect.provideService(Scope.Scope, this.#scope),
