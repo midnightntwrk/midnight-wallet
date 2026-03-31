@@ -18,7 +18,7 @@ export default defineConfig({
     setupFiles: ['../../setup-env.ts', './src/tests/setup-retry-logging.ts'],
     environment: 'node',
     hookTimeout: 1_800_000,
-    testTimeout: 1_800_000,
+    testTimeout: 1_200_000,
     retry: 0,
     globals: true,
     exclude: ['node_modules', 'dist'],
