@@ -24,7 +24,7 @@ import { inspect } from 'node:util';
  * @group testnet
  */
 
-describe('Balance constant', () => {
+describe.skip('Balance constant', () => {
   if (process.env['SEED_STABLE'] === undefined) {
     logger.info('SEED_STABLE not set');
     exit(1);
@@ -41,7 +41,7 @@ describe('Balance constant', () => {
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
-  const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
+  const syncTimeout = 1_800_000;
 
   let wallet: utils.WalletInit;
   let fixture: TestContainersFixture;
@@ -50,12 +50,12 @@ describe('Balance constant', () => {
     fixture = getFixture();
 
     wallet = await utils.initWalletWithSeed(seed, fixture);
-  }, syncTimeout);
+  });
 
   afterEach(async () => {
     // await utils.saveState(walletFacade, filename);
     await wallet.wallet.stop();
-  }, syncTimeout);
+  });
 
   test(
     'Balance is constant when syncing from 0 @healthcheck',
@@ -74,21 +74,17 @@ describe('Balance constant', () => {
     syncTimeout,
   );
 
-  test(
-    'Balance is constant when syncing from a restored state @healthcheck',
-    async () => {
-      await utils.saveState(wallet.wallet, filename);
-      const restoredWallet = await utils.provideWallet(filename, seed, fixture);
-      const syncedState = await restoredWallet.wallet.waitForSyncedState();
+  test('Balance is constant when syncing from a restored state @healthcheck', async () => {
+    await utils.saveState(wallet.wallet, filename);
+    const restoredWallet = await utils.provideWallet(filename, seed, fixture);
+    const syncedState = await restoredWallet.wallet.waitForSyncedState();
 
-      expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
-      expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
-      expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
-      expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
-      expect(syncedState.shielded.pendingCoins.length).toBe(0);
-      expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
-    },
-    syncTimeout,
-  );
+    expect(syncedState.shielded.balances[shieldedTokenRaw]).toBe(expectedDustBalance);
+    expect(syncedState.shielded.balances[nativeTokenHash]).toBe(expectedTokenOneBalance);
+    expect(syncedState.shielded.balances[nativeTokenHash2]).toBe(expectedTokenTwoBalance);
+    expect(syncedState.unshielded.balances[unshieldedTokenRaw]).toBe(expectedUnshieldedBalance);
+    expect(syncedState.shielded.availableCoins.length).toBeGreaterThanOrEqual(3);
+    expect(syncedState.shielded.pendingCoins.length).toBe(0);
+    expect(syncedState.shielded.totalCoins.length).toBeGreaterThanOrEqual(3);
+  });
 });

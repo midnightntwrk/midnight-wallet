@@ -18,7 +18,6 @@ on:
         default: 'preview'
         options:
           - qanet
-          - testnet
           - preview
           - prepod
       seed:
