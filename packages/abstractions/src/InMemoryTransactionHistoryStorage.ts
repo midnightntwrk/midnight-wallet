@@ -26,11 +26,11 @@ export class InMemoryTransactionHistoryStorage<
   I = T,
 > implements TransactionHistoryStorage<T> {
   private entries: Map<TransactionHash, T>;
-  private readonly entrySchema: Schema.Schema<T, unknown>;
+  private readonly entrySchema: Schema.Schema<T, I>;
 
   constructor(entrySchema: Schema.Schema<T, I>) {
     this.entries = new Map<TransactionHash, T>();
-    this.entrySchema = entrySchema as unknown as Schema.Schema<T, unknown>;
+    this.entrySchema = entrySchema;
   }
 
   upsert(entry: T): Promise<void> {
@@ -66,8 +66,8 @@ export class InMemoryTransactionHistoryStorage<
     serialized: SerializedTransactionHistory,
     entrySchema: Schema.Schema<T, I>,
   ): InMemoryTransactionHistoryStorage<T, I> {
-    const decode = Schema.decodeUnknownSync(Schema.Array(entrySchema as unknown as Schema.Schema<T, unknown>));
-    const decoded = decode(JSON.parse(serialized) as unknown) as T[];
+    const decode = Schema.decodeUnknownSync(Schema.Array(entrySchema));
+    const decoded = decode(JSON.parse(serialized));
     const storage = new InMemoryTransactionHistoryStorage<T, I>(entrySchema);
     for (const entry of decoded) {
       storage.entries.set(entry.hash, entry);
