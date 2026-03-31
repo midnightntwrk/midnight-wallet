@@ -19,7 +19,7 @@ export default defineConfig({
     environment: 'node',
     hookTimeout: 1_800_000,
     testTimeout: 1_800_000,
-    retry: 1,
+    retry: 0,
     globals: true,
     exclude: ['node_modules', 'dist'],
     reporters: [

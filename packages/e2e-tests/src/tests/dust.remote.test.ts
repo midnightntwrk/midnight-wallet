@@ -28,7 +28,7 @@ describe('Dust tests', () => {
   const seed = process.env['SEED'];
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const filenameWallet = `${seed.substring(0, 7)}-${TestContainersFixture.network}.state`;
-  const timeout = 3_600_000;
+  const timeout = 1_800_000;
   let wallet: utils.WalletInit;
 
   beforeEach(async () => {
