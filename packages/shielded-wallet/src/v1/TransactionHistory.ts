@@ -65,9 +65,6 @@ export type TransactionHistoryService = {
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
   getAll(): Stream.Stream<ShieldedTransactionHistoryEntry, TransactionHistoryError>;
-  delete(
-    hash: TransactionHistoryStorage.TransactionHash,
-  ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError>;
   getTransactionDetails(
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<TransactionDetails, TransactionHistoryError>;
@@ -84,17 +81,6 @@ const tryProjectToShieldedEntry = (
         shielded: entry['shielded'],
       })
     : Option.none();
-
-const asShieldedEntry = (
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
-): Effect.Effect<ShieldedTransactionHistoryEntry, TransactionHistoryError> =>
-  Option.match(tryProjectToShieldedEntry(entry), {
-    onSome: Effect.succeed,
-    onNone: () =>
-      Effect.fail(
-        new TransactionHistoryError({ message: `No shielded data found in storage for hash: ${entry.hash}` }),
-      ),
-  });
 
 const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
   receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
@@ -176,18 +162,6 @@ export const makeDefaultTransactionHistoryService = (
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(Stream.filterMap((entry) => tryProjectToShieldedEntry(entry))),
 
-    delete: (
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.delete(hash),
-        catch: (e) => new TransactionHistoryError({ message: `Failed to delete history entry for ${hash}`, cause: e }),
-      }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
-        ),
-      ),
-
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
     ): Effect.Effect<TransactionDetails, TransactionHistoryError> =>
@@ -251,18 +225,6 @@ export const makeSimulatorTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate history entries', cause: e }),
       ).pipe(Stream.filterMap((entry) => tryProjectToShieldedEntry(entry))),
-
-    delete: (
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<Option.Option<ShieldedTransactionHistoryEntry>, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.delete(hash),
-        catch: (e) => new TransactionHistoryError({ message: `Failed to delete history entry for ${hash}`, cause: e }),
-      }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asShieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
-        ),
-      ),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,

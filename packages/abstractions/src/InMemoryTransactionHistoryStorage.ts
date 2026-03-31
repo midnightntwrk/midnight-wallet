@@ -39,18 +39,6 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  delete(hash: TransactionHash): Promise<T | undefined> {
-    const existingEntry = this.entries.get(hash);
-
-    if (!existingEntry) {
-      return Promise.resolve(undefined);
-    }
-
-    this.entries.delete(hash);
-
-    return Promise.resolve(existingEntry);
-  }
-
   async *getAll(): AsyncIterableIterator<T> {
     for (const entry of this.entries.values()) {
       yield await Promise.resolve(entry);

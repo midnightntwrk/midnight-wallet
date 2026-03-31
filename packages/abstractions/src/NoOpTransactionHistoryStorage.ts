@@ -24,10 +24,6 @@ export class NoOpTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  delete(_hash: TransactionHash): Promise<T | undefined> {
-    return Promise.resolve(undefined);
-  }
-
   async *getAll(): AsyncIterableIterator<T> {
     return Promise.resolve(yield* []);
   }

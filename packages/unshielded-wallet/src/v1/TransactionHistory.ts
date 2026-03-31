@@ -47,9 +47,6 @@ export type TransactionHistoryService = {
     hash: TransactionHistoryStorage.TransactionHash,
   ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError>;
   getAll(): Stream.Stream<UnshieldedTransactionHistoryEntry, TransactionHistoryError>;
-  delete(
-    hash: TransactionHistoryStorage.TransactionHash,
-  ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError>;
 };
 
 export type DefaultTransactionHistoryConfiguration = {
@@ -80,19 +77,6 @@ const tryProjectToUnshieldedEntry = (
         unshielded: entry['unshielded'],
       })
     : Option.none();
-
-const asUnshieldedEntry = (
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
-): Effect.Effect<UnshieldedTransactionHistoryEntry, TransactionHistoryError> =>
-  Option.match(tryProjectToUnshieldedEntry(entry), {
-    onSome: Effect.succeed,
-    onNone: () =>
-      Effect.fail(
-        new TransactionHistoryError({
-          message: `No unshielded data found in storage for hash: ${entry.hash}`,
-        }),
-      ),
-  });
 
 const convertUpdateToStorageEntry = ({
   transaction,
@@ -151,17 +135,5 @@ export const makeDefaultTransactionHistoryService = (
         txHistoryStorage.getAll(),
         (e) => new TransactionHistoryError({ message: 'Failed to iterate transaction history', cause: e }),
       ).pipe(Stream.filterMap((entry) => tryProjectToUnshieldedEntry(entry))),
-
-    delete: (
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.delete(hash),
-        catch: (e) => new TransactionHistoryError({ message: 'Failed to delete transaction history entry', cause: e }),
-      }).pipe(
-        Effect.flatMap((entry) =>
-          entry ? asUnshieldedEntry(entry).pipe(Effect.map(Option.some)) : Effect.succeed(Option.none()),
-        ),
-      ),
   };
 };

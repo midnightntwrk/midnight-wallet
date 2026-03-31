@@ -46,7 +46,6 @@ export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<
  */
 export interface TransactionHistoryStorage<T extends { hash: TransactionHash } = TransactionHistoryCommon> {
   upsert(entry: T): Promise<void>;
-  delete(hash: TransactionHash): Promise<T | undefined>;
   getAll(): AsyncIterableIterator<T>;
   get(hash: TransactionHash): Promise<T | undefined>;
   serialize(): Promise<SerializedTransactionHistory>;
