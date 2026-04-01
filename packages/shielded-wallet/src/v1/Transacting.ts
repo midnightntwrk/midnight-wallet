@@ -140,7 +140,7 @@ export class TransactingCapabilityImplementation<
         return [undefined, state];
       }
 
-      const { newState: afterFallible, offer: maybeFallible } = yield* this.balanceFallibleSection(
+      const { newState: afterFallible, fallibleOffers } = yield* this.balanceFallibleSection(
         secretKeys,
         state,
         initialImbalances,
@@ -155,7 +155,10 @@ export class TransactingCapabilityImplementation<
         Imbalances.empty(),
       );
 
-      return [ledger.Transaction.fromParts(this.networkId, guaranteed, maybeFallible), afterGuaranteed];
+      const balancedTx = ledger.Transaction.fromParts(this.networkId, guaranteed);
+      // workaround as Transaction.fromParts does not accept fallible offers with specific segments
+      balancedTx.fallibleOffer = fallibleOffers.size > 0 ? fallibleOffers : undefined;
+      return [balancedTx, afterGuaranteed];
     });
   }
 
@@ -269,7 +272,7 @@ export class TransactingCapabilityImplementation<
     secretKeys: ledger.ZswapSecretKeys,
     state: CoreWallet,
     recipe: BalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>,
-    segment: 0 | 1,
+    segment: number,
   ): Option.Option<{ newState: CoreWallet; offer: ledger.ZswapOffer<ledger.PreProof> }> {
     const [inputOffers, stateAfterSpends] = CoreWallet.spendCoins(state, secretKeys, recipe.inputs, segment);
     const stateAfterWatches = CoreWallet.watchCoins(stateAfterSpends, secretKeys, recipe.outputs);
@@ -305,50 +308,68 @@ export class TransactingCapabilityImplementation<
     coinSelection: CoinSelection<ledger.QualifiedShieldedCoinInfo>,
   ): Either.Either<
     {
-      offer: ledger.ZswapOffer<ledger.PreProof> | undefined;
+      fallibleOffers: Map<number, ledger.ZswapOffer<ledger.PreProof>>;
       newState: CoreWallet;
     },
     WalletError
   > {
-    return Either.try({
-      try: () => {
-        const fallibleBalanceRecipe = getBalanceRecipe<ledger.QualifiedShieldedCoinInfo, ledger.ShieldedCoinInfo>({
-          coins: this.getCoins()
-            .getAvailableCoins(state)
-            .map((c) => c.coin),
-          initialImbalances: imbalances.fallible,
-          transactionCostModel: ShieldedCostModel,
-          feeTokenType: '',
-          coinSelection,
-          createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
-          isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
-        });
-        return pipe(
-          this.#prepareOffer(secretKeys, state, fallibleBalanceRecipe, 1),
-          Option.match({
-            onNone: () => ({
-              newState: state,
-              offer: undefined,
+    return Array.from(imbalances.fallible.entries()).reduce<
+      Either.Either<
+        { fallibleOffers: Map<number, ledger.ZswapOffer<ledger.PreProof>>; newState: CoreWallet },
+        WalletError
+      >
+    >(
+      (acc, [segment, segmentImbalances]) =>
+        Either.flatMap(acc, ({ fallibleOffers, newState }) =>
+          pipe(
+            Either.try({
+              try: () => {
+                const fallibleBalanceRecipe = getBalanceRecipe<
+                  ledger.QualifiedShieldedCoinInfo,
+                  ledger.ShieldedCoinInfo
+                >({
+                  coins: this.getCoins()
+                    .getAvailableCoins(newState)
+                    .map((c) => c.coin),
+                  initialImbalances: segmentImbalances,
+                  transactionCostModel: ShieldedCostModel,
+                  feeTokenType: '',
+                  coinSelection,
+                  createOutput: (coin) => ledger.createShieldedCoinInfo(coin.type, coin.value),
+                  isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+                });
+                return this.#prepareOffer(secretKeys, newState, fallibleBalanceRecipe, segment);
+              },
+              catch: (err) => {
+                if (err instanceof BalancingInsufficientFundsError) {
+                  return new InsufficientFundsError({
+                    message: `Insufficient funds for fallible segment ${segment}`,
+                    tokenType: err.tokenType,
+                    amount: segmentImbalances.get(err.tokenType) ?? 0n,
+                  });
+                }
+                return new OtherWalletError({
+                  message: `Balancing fallible segment ${segment} failed`,
+                  cause: err,
+                });
+              },
             }),
-            onSome: (res) => res,
-          }),
-        );
-      },
-      catch: (err) => {
-        if (err instanceof BalancingInsufficientFundsError) {
-          return new InsufficientFundsError({
-            message: 'Insufficient funds',
-            tokenType: err.tokenType,
-            amount: imbalances.fallible.get(err.tokenType) ?? 0n,
-          });
-        } else {
-          return new OtherWalletError({
-            message: 'Balancing fallible section failed',
-            cause: err,
-          });
-        }
-      },
-    });
+            Either.map(
+              Option.match({
+                onNone: () => ({ fallibleOffers, newState }),
+                onSome: (res) => ({
+                  fallibleOffers: new Map([...fallibleOffers, [segment, res.offer]]),
+                  newState: res.newState,
+                }),
+              }),
+            ),
+          ),
+        ),
+      Either.right({
+        fallibleOffers: new Map<number, ledger.ZswapOffer<ledger.PreProof>>(),
+        newState: state,
+      }),
+    );
   }
 
   #balanceGuaranteedSection(
