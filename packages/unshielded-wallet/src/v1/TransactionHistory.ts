@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Effect, Option, Schema, Stream } from 'effect';
+import { Effect, Schema } from 'effect';
 import { UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
@@ -32,8 +32,6 @@ export const UnshieldedSectionSchema = Schema.Struct({
 
 type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
 
-const isUnshieldedSection = Schema.is(UnshieldedSectionSchema);
-
 export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
   ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
   unshielded: UnshieldedSectionSchema,
@@ -43,10 +41,6 @@ export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof Unshie
 
 export type TransactionHistoryService = {
   put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
-  get(
-    hash: TransactionHistoryStorage.TransactionHash,
-  ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError>;
-  getAll(): Stream.Stream<UnshieldedTransactionHistoryEntry, TransactionHistoryError>;
 };
 
 export type DefaultTransactionHistoryConfiguration = {
@@ -62,21 +56,6 @@ type StorageEntryWithUnshielded = Omit<
   readonly fees: bigint | null;
   readonly unshielded: UnshieldedSection;
 };
-
-const tryProjectToUnshieldedEntry = (
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash,
-): Option.Option<UnshieldedTransactionHistoryEntry> =>
-  isUnshieldedSection(entry['unshielded'])
-    ? Option.some({
-        hash: entry.hash,
-        protocolVersion: entry.protocolVersion,
-        identifiers: entry.identifiers ?? [],
-        timestamp: entry.timestamp ?? new Date(),
-        fees: (entry.fees ?? null) as UnshieldedTransactionHistoryEntry['fees'],
-        status: entry.status,
-        unshielded: entry['unshielded'],
-      })
-    : Option.none();
 
 const convertUpdateToStorageEntry = ({
   transaction,
@@ -121,19 +100,5 @@ export const makeDefaultTransactionHistoryService = (
         try: () => txHistoryStorage.upsert(convertUpdateToStorageEntry(update)),
         catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
       }),
-
-    get: (
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Effect.Effect<Option.Option<UnshieldedTransactionHistoryEntry>, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.get(hash),
-        catch: (e) => new TransactionHistoryError({ message: 'Failed to get transaction history entry', cause: e }),
-      }).pipe(Effect.map((entry) => (entry ? tryProjectToUnshieldedEntry(entry) : Option.none()))),
-
-    getAll: (): Stream.Stream<UnshieldedTransactionHistoryEntry, TransactionHistoryError> =>
-      Stream.fromAsyncIterable(
-        txHistoryStorage.getAll(),
-        (e) => new TransactionHistoryError({ message: 'Failed to iterate transaction history', cause: e }),
-      ).pipe(Stream.filterMap((entry) => tryProjectToUnshieldedEntry(entry))),
   };
 };

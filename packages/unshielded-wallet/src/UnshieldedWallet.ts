@@ -21,10 +21,10 @@ import {
   type UnboundTransaction,
 } from './v1/index.js';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, Either, Option, Stream, type Scope } from 'effect';
+import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryService, type UnshieldedTransactionHistoryEntry } from './v1/TransactionHistory.js';
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 import { type CoinsAndBalancesCapability } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -153,10 +153,6 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
   ): Promise<void>;
 
   getAddress(): Promise<UnshieldedAddress>;
-
-  queryTxHistoryByHash(hash: string): Promise<UnshieldedTransactionHistoryEntry | undefined>;
-
-  getAllFromTxHistory(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry>;
 
   stop(): Promise<void>;
 };
@@ -332,23 +328,6 @@ export function CustomUnshieldedWallet<
 
     getAddress(): Promise<UnshieldedAddress> {
       return rx.firstValueFrom(this.state).then((state) => state.address);
-    }
-
-    queryTxHistoryByHash(hash: string): Promise<UnshieldedTransactionHistoryEntry | undefined> {
-      return Effect.runPromise(
-        CustomUnshieldedWalletImplementation.allVariantsRecord()
-          [V1Tag].variant.transactionHistory.get(hash)
-          .pipe(Effect.map(Option.getOrUndefined)),
-      );
-    }
-
-    async *getAllFromTxHistory(): AsyncIterableIterator<UnshieldedTransactionHistoryEntry> {
-      const items = await Effect.runPromise(
-        CustomUnshieldedWalletImplementation.allVariantsRecord()
-          [V1Tag].variant.transactionHistory.getAll()
-          .pipe(Stream.runCollect),
-      );
-      yield* items;
     }
   };
 }

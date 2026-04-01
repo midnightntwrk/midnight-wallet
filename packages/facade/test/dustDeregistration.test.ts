@@ -150,9 +150,7 @@ describe('Dust Deregistration', () => {
     const walletStateAfterDeregistration = await rx.firstValueFrom(
       walletFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await walletFacade.unshielded.queryTxHistoryByHash(
-            finalizedDustDeregistrationTx.transactionHash(),
-          );
+          const txInHistory = await walletFacade.queryTxHistoryByHash(finalizedDustDeregistrationTx.transactionHash());
 
           return {
             state,

@@ -228,9 +228,7 @@ describe('Dust Registration', () => {
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await receiverFacade.unshielded.queryTxHistoryByHash(
-            provenDustRegistrationTx.transactionHash(),
-          );
+          const txInHistory = await receiverFacade.queryTxHistoryByHash(provenDustRegistrationTx.transactionHash());
 
           return {
             state,

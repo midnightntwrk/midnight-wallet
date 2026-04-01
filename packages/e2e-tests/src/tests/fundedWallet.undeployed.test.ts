@@ -171,10 +171,10 @@ describe('Funded wallet', () => {
     'Unshielded transaction history entries contain createdUtxos and spentUtxos',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await Array.fromAsync(funded.wallet.unshielded.getAllFromTxHistory());
+      const txHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
       utils.expectValidUnshieldedTxHistoryEntries(txHistory);
       // At least one entry should have createdUtxos (from genesis funding)
-      const entryWithCreated = txHistory.find((e) => e.unshielded.createdUtxos.length > 0);
+      const entryWithCreated = txHistory.find((e) => (e.unshielded?.createdUtxos.length ?? 0) > 0);
       expect(entryWithCreated).toBeDefined();
     },
     timeout,

@@ -29,11 +29,10 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletFacade, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
   PublicKey,
-  type UnshieldedTransactionHistoryEntry,
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -415,7 +414,7 @@ export const waitForStateAfterDustRegistration = (wallet: WalletFacade, finalize
   rx.firstValueFrom(
     wallet.state().pipe(
       rx.mergeMap(async (state) => {
-        const txInHistory = await wallet.unshielded.queryTxHistoryByHash(finalizedTx.transactionHash());
+        const txInHistory = await wallet.queryTxHistoryByHash(finalizedTx.transactionHash());
 
         return {
           state,
@@ -599,9 +598,7 @@ export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export function expectValidUnshieldedUtxoFields(
-  utxo: UnshieldedTransactionHistoryEntry['unshielded']['createdUtxos'][number],
-) {
+export function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshielded']>['createdUtxos'][number]) {
   expect(typeof utxo.value).toBe('bigint');
   expect(typeof utxo.owner).toBe('string');
   expect(typeof utxo.tokenType).toBe('string');
@@ -609,15 +606,16 @@ export function expectValidUnshieldedUtxoFields(
   expect(typeof utxo.outputIndex).toBe('number');
 }
 
-export function expectValidUnshieldedTxHistoryEntry(entry: UnshieldedTransactionHistoryEntry) {
-  expect(Array.isArray(entry.unshielded.createdUtxos)).toBe(true);
-  expect(Array.isArray(entry.unshielded.spentUtxos)).toBe(true);
-  for (const utxo of [...entry.unshielded.createdUtxos, ...entry.unshielded.spentUtxos]) {
+export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
+  expect(entry.unshielded).toBeDefined();
+  expect(Array.isArray(entry.unshielded!.createdUtxos)).toBe(true);
+  expect(Array.isArray(entry.unshielded!.spentUtxos)).toBe(true);
+  for (const utxo of [...entry.unshielded!.createdUtxos, ...entry.unshielded!.spentUtxos]) {
     expectValidUnshieldedUtxoFields(utxo);
   }
 }
 
-export function expectValidUnshieldedTxHistoryEntries(entries: readonly UnshieldedTransactionHistoryEntry[]) {
+export function expectValidUnshieldedTxHistoryEntries(entries: readonly WalletEntry[]) {
   expect(entries.length).toBeGreaterThan(0);
   for (const entry of entries) {
     expectValidUnshieldedTxHistoryEntry(entry);

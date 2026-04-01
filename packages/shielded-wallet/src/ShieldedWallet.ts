@@ -10,12 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  type ProtocolState,
-  ProtocolVersion,
-  SyncProgress,
-  TransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -25,11 +20,11 @@ import {
   CoreWallet,
 } from './v1/index.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, Either, Option, Stream, type Scope } from 'effect';
+import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryService, type ShieldedTransactionHistoryEntry } from './v1/TransactionHistory.js';
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -166,12 +161,6 @@ export type ShieldedWalletAPI<
     transaction: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   ): Promise<void>;
 
-  queryTxHistoryByHash(
-    hash: TransactionHistoryStorage.TransactionHash,
-  ): Promise<ShieldedTransactionHistoryEntry | undefined>;
-
-  getAllFromTxHistory(): AsyncIterableIterator<ShieldedTransactionHistoryEntry>;
-
   stop(): Promise<void>;
 };
 
@@ -296,25 +285,6 @@ export function CustomShieldedWallet<
           [V1Tag]: (v1) => v1.transferTransaction(secretKeys, outputs),
         })
         .pipe(Effect.runPromise);
-    }
-
-    queryTxHistoryByHash(
-      hash: TransactionHistoryStorage.TransactionHash,
-    ): Promise<ShieldedTransactionHistoryEntry | undefined> {
-      return Effect.runPromise(
-        CustomShieldedWalletImplementation.allVariantsRecord()
-          [V1Tag].variant.transactionHistory.get(hash)
-          .pipe(Effect.map(Option.getOrUndefined)),
-      );
-    }
-
-    async *getAllFromTxHistory(): AsyncIterableIterator<ShieldedTransactionHistoryEntry> {
-      const items = await Effect.runPromise(
-        CustomShieldedWalletImplementation.allVariantsRecord()
-          [V1Tag].variant.transactionHistory.getAll()
-          .pipe(Stream.runCollect),
-      );
-      yield* items;
     }
 
     initSwap(

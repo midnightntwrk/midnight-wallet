@@ -169,15 +169,15 @@ describe('Smoke tests', () => {
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
 
       // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
-      const senderTxHistory = await Array.fromAsync(funded.wallet.unshielded.getAllFromTxHistory());
+      const senderTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
       utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
 
-      const receiverTxHistory = await Array.fromAsync(receiver.wallet.unshielded.getAllFromTxHistory());
+      const receiverTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
       expect(receiverTxHistory.length).toBeGreaterThan(0);
       // Receiver should have at least one entry with createdUtxos
-      const receiverEntryWithCreated = receiverTxHistory.find((e) => e.unshielded.createdUtxos.length > 0);
+      const receiverEntryWithCreated = receiverTxHistory.find((e) => (e.unshielded?.createdUtxos.length ?? 0) > 0);
       expect(receiverEntryWithCreated).toBeDefined();
-      expect(receiverEntryWithCreated!.unshielded.createdUtxos[0].value).toBe(outputValue);
+      expect(receiverEntryWithCreated!.unshielded!.createdUtxos[0].value).toBe(outputValue);
     },
     timeout,
   );

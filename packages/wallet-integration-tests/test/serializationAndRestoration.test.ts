@@ -139,7 +139,7 @@ describe('Wallet serialization and restoration', () => {
     try {
       await wallet.waitForSyncedState();
 
-      const initialTxHistory = await Array.fromAsync(wallet.getAllFromTxHistory());
+      const initialTxHistory = await Array.fromAsync(shieldedConfiguration.txHistoryStorage.getAll());
       const serializedTxHistory = await shieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await wallet.serializeState();
       await wallet.stop();
@@ -157,7 +157,7 @@ describe('Wallet serialization and restoration', () => {
       try {
         await restoredWallet.waitForSyncedState();
 
-        const restoredTxHistory = await Array.fromAsync(restoredWallet.getAllFromTxHistory());
+        const restoredTxHistory = await Array.fromAsync(restoredTxHistoryStorage.getAll());
 
         expect(restoredTxHistory).toEqual(initialTxHistory);
       } finally {
@@ -180,7 +180,7 @@ describe('Wallet serialization and restoration', () => {
       await firstValueFrom(initialWallet.state.pipe(rx.filter((state) => state.availableCoins.length > 0)));
       await initialWallet.waitForSyncedState();
 
-      const initialTxHistory = await Array.fromAsync(initialWallet.getAllFromTxHistory());
+      const initialTxHistory = await Array.fromAsync(unshieldedConfiguration.txHistoryStorage.getAll());
       const serializedTxHistory = await unshieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await initialWallet.serializeState();
       await initialWallet.stop();
@@ -198,7 +198,7 @@ describe('Wallet serialization and restoration', () => {
       try {
         await restoredWallet.waitForSyncedState();
 
-        const restoredTxHistory = await Array.fromAsync(restoredWallet.getAllFromTxHistory());
+        const restoredTxHistory = await Array.fromAsync(restoredTxHistoryStorage.getAll());
 
         expect(restoredTxHistory).toEqual(initialTxHistory);
       } finally {

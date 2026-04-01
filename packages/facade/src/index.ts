@@ -54,22 +54,6 @@ import { finalizedTransactionTrait } from './transaction.js';
 import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
- * Entry schema with common fields only, no wallet-specific extensions.
- */
-export const CommonEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
-});
-
-/**
- * Wallet-specific extensions type — shielded, unshielded, and dust sections.
- */
-export type DefaultExtensions = {
-  readonly shielded?: unknown;
-  readonly unshielded?: unknown;
-  readonly dust?: unknown;
-};
-
-/**
  * Full entry schema for transaction history — common fields + all wallet sections.
  * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
  */
@@ -78,6 +62,10 @@ export const WalletEntrySchema = Schema.Struct({
   shielded: Schema.optional(ShieldedSectionSchema),
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
+
+export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
+
+const isWalletEntry: (u: unknown) => u is WalletEntry = Schema.is(WalletEntrySchema);
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
 
@@ -334,7 +322,15 @@ export class WalletFacade {
     const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
     const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    return new WalletFacade(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
+    return new WalletFacade(
+      shielded,
+      unshielded,
+      dust,
+      submissionService,
+      pendingTransactionsService,
+      provingService,
+      initParams.configuration.txHistoryStorage,
+    );
   }
 
   readonly shielded: ShieldedWalletAPI;
@@ -343,6 +339,7 @@ export class WalletFacade {
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
   readonly provingService: ProvingService<UnboundTransaction>;
+  #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
   #pendingSubscription: Subscription;
 
   private constructor(
@@ -352,6 +349,7 @@ export class WalletFacade {
     submissionService: SubmissionService<ledger.FinalizedTransaction>,
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
     provingService: ProvingService<UnboundTransaction>,
+    txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
@@ -359,6 +357,7 @@ export class WalletFacade {
     this.submissionService = submissionService;
     this.pendingTransactionsService = pendingTransactionsService;
     this.provingService = provingService;
+    this.#txHistoryStorage = txHistoryStorage;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
@@ -927,5 +926,18 @@ export class WalletFacade {
       this.pendingTransactionsService.stop(),
       Promise.resolve(this.#pendingSubscription?.unsubscribe()),
     ]);
+  }
+
+  async queryTxHistoryByHash(hash: TransactionHistoryStorage.TransactionHash): Promise<WalletEntry | undefined> {
+    const raw = await this.#txHistoryStorage.get(hash);
+    return raw && isWalletEntry(raw) ? raw : undefined;
+  }
+
+  async *getAllFromTxHistory(): AsyncIterableIterator<WalletEntry> {
+    for await (const raw of this.#txHistoryStorage.getAll()) {
+      if (isWalletEntry(raw)) {
+        yield raw;
+      }
+    }
   }
 }

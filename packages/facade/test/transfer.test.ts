@@ -13,13 +13,8 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { ShieldedTransactionHistoryEntry, ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import {
-  PublicKey,
-  UnshieldedTransactionHistoryEntry,
-  UnshieldedWallet,
-  createKeystore,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { PublicKey, UnshieldedWallet, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { pipe } from 'effect';
 import { randomUUID } from 'node:crypto';
@@ -180,8 +175,8 @@ describe('Wallet Facade Transfer', () => {
     // Wait for the transaction to appear in sender's transaction history
     const txHistoryEntry = await rx.firstValueFrom(
       senderFacade.state().pipe(
-        rx.concatMap(() => senderFacade.shielded.queryTxHistoryByHash(finalizedTxHash)),
-        rx.filter((entry): entry is ShieldedTransactionHistoryEntry => entry !== undefined),
+        rx.concatMap(() => senderFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
         rx.timeout(30_000),
       ),
     );
@@ -249,8 +244,8 @@ describe('Wallet Facade Transfer', () => {
     // Wait for the transaction to appear in sender's transaction history
     const txHistoryEntry = await rx.firstValueFrom(
       senderFacade.state().pipe(
-        rx.concatMap(() => senderFacade.unshielded.queryTxHistoryByHash(finalizedTxHash)),
-        rx.filter((entry): entry is UnshieldedTransactionHistoryEntry => entry !== undefined),
+        rx.concatMap(() => senderFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
         rx.timeout(30_000),
       ),
     );

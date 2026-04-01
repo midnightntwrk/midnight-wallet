@@ -250,7 +250,7 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Shielded midnight wallet returns no tx history',
     async () => {
-      const entry = await wallet.wallet.shielded.queryTxHistoryByHash('nonexistent');
+      const entry = await wallet.wallet.queryTxHistoryByHash('nonexistent');
       expect(entry).toBeUndefined();
     },
     timeout,
