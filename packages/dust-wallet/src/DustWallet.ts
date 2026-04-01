@@ -62,6 +62,14 @@ export class DustWalletState {
     return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
   }
 
+  pendingCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
+    return this.capabilities.coinsAndBalances.getPendingCoinsWithFullInfo(this.state, time);
+  }
+
+  totalCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
+    return this.capabilities.coinsAndBalances.getTotalCoinsWithFullInfo(this.state, time);
+  }
+
   get publicKey(): DustPublicKey {
     return this.capabilities.keys.getPublicKey(this.state);
   }

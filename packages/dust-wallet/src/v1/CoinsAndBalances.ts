@@ -45,6 +45,8 @@ export type CoinsAndBalancesCapability<TState> = {
   getTotalCoins(state: TState): ReadonlyArray<Dust>;
   getAvailableCoinsWithGeneratedDust(state: TState, currentTime: Date): ReadonlyArray<CoinWithValue<Dust>>;
   getAvailableCoinsWithFullInfo(state: TState, blockTime: Date): readonly DustFullInfo[];
+  getPendingCoinsWithFullInfo(state: TState, time?: Date): readonly DustFullInfo[];
+  getTotalCoinsWithFullInfo(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
   getGenerationInfo(state: TState, coin: Dust): DustGenerationInfo | undefined;
 
   /**
@@ -105,6 +107,12 @@ export const makeDefaultCoinsAndBalancesCapability = (
       : info;
   };
 
+  const toFullInfo = (state: CoreWallet, coins: readonly Dust[], time: Date): readonly DustFullInfo[] =>
+    coins.flatMap((coin) => {
+      const genInfo = getGenerationInfo(state, coin);
+      return genInfo ? [{ token: coin, ...getFullDustInfo(state.state.params, genInfo, coin, time) }] : [];
+    });
+
   const getAvailableCoinsWithGeneratedDust = (state: CoreWallet, currentTime: Date): Array<CoinWithValue<Dust>> => {
     const result: Array<CoinWithValue<Dust>> = [];
     const available = getAvailableCoins(state);
@@ -126,20 +134,15 @@ export const makeDefaultCoinsAndBalancesCapability = (
     return result;
   };
 
-  const getAvailableCoinsWithFullInfo = (state: CoreWallet, blockTime: Date): Array<DustFullInfo> => {
-    const result: Array<DustFullInfo> = [];
-    const available = getAvailableCoins(state);
-    for (const coin of available) {
-      const genInfo = getGenerationInfo(state, coin);
-      if (genInfo) {
-        result.push({
-          token: coin,
-          ...getFullDustInfo(state.state.params, genInfo, coin, blockTime),
-        });
-      }
-    }
+  const getAvailableCoinsWithFullInfo = (state: CoreWallet, blockTime: Date): Array<DustFullInfo> => [
+    ...toFullInfo(state, getAvailableCoins(state), blockTime),
+  ];
 
-    return result;
+  const getPendingCoinsWithFullInfo = (state: CoreWallet, time: Date): readonly DustFullInfo[] =>
+    toFullInfo(state, getPendingCoins(state), time);
+
+  const getTotalCoinsWithFullInfo = (state: CoreWallet, time: Date): ReadonlyArray<DustFullInfo> => {
+    return [...toFullInfo(state, getAvailableCoins(state), time), ...getPendingCoinsWithFullInfo(state, time)];
   };
 
   const getFullDustInfo = (
@@ -223,6 +226,8 @@ export const makeDefaultCoinsAndBalancesCapability = (
     getTotalCoins,
     getAvailableCoinsWithGeneratedDust,
     getAvailableCoinsWithFullInfo,
+    getPendingCoinsWithFullInfo,
+    getTotalCoinsWithFullInfo,
     getGenerationInfo,
     estimateDustGeneration,
     splitNightUtxos,
