@@ -15,7 +15,6 @@
  * Tests for the unified Simulator.
  *
  * These tests verify the core functionality of the Simulator from the capabilities package.
- * For full wallet integration tests using the Simulator, see wallet-integration-tests.
  */
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
@@ -25,6 +24,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   Simulator,
   immediateBlockProducer,
+  strictBlockProducer,
   getCurrentBlockNumber,
   getLastBlock,
   applyTransaction,
@@ -38,17 +38,17 @@ vi.setConfig({ testTimeout: 60_000 });
 const shieldedTokenType = ledger.shieldedToken().raw;
 
 describe('Unified Simulator', () => {
-  describe('genesis mode', () => {
+  describe('with genesis mints', () => {
     it('initializes with genesis mints', async () => {
       return Effect.gen(function* () {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 10_000_000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -56,7 +56,7 @@ describe('Unified Simulator', () => {
 
         const state = yield* simulator.getLatestState();
 
-        // Genesis mode should have processed the initial transaction
+        // Should have processed the initial transaction
         expect(getCurrentBlockNumber(state)).toBe(0n);
         const lastBlock = getLastBlock(state);
         expect(lastBlock).toBeDefined();
@@ -67,24 +67,27 @@ describe('Unified Simulator', () => {
       }).pipe(Effect.scoped, Effect.runPromise);
     });
 
-    it('supports custom networkId in genesis mode', async () => {
+    it('supports custom networkId with genesis mints', async () => {
       return Effect.gen(function* () {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
+        // Use a custom network ID (any string is valid, not just well-known ones)
+        const customNetworkId = `custom-test-network-${Date.now()}`;
+
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
-          networkId: NetworkId.NetworkId.Undeployed,
+          networkId: customNetworkId,
         });
 
         const state = yield* simulator.getLatestState();
-        expect(state.networkId).toBe(NetworkId.NetworkId.Undeployed);
+        expect(state.networkId).toBe(customNetworkId);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
 
@@ -94,16 +97,17 @@ describe('Unified Simulator', () => {
         const wallet2Keys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 2));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: wallet1Keys,
             },
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 2000n,
-              type: shieldedTokenType,
               recipient: wallet2Keys,
             },
           ],
@@ -124,11 +128,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -144,19 +148,137 @@ describe('Unified Simulator', () => {
         }
       }).pipe(Effect.scoped, Effect.runPromise);
     });
+
+    it('supports unshielded genesis mints for custom tokens', async () => {
+      // Note: Native Night tokens cannot be minted from nothing due to fixed supply invariant.
+      // For Night tokens, use NightGenesisMint instead.
+      return Effect.gen(function* () {
+        const recipientAddress = ledger.sampleUserAddress();
+        const customUnshieldedToken = ledger.sampleRawTokenType();
+
+        const simulator = yield* Simulator.init({
+          genesisMints: [
+            {
+              type: 'unshielded',
+              tokenType: customUnshieldedToken,
+              amount: 1000n,
+              recipient: recipientAddress,
+            },
+          ],
+        });
+
+        const state = yield* simulator.getLatestState();
+
+        expect(getCurrentBlockNumber(state)).toBe(0n);
+        const lastBlock = getLastBlock(state);
+        expect(lastBlock).toBeDefined();
+        if (lastBlock === undefined) throw new Error('lastBlock should be defined');
+
+        // Transaction should be successful
+        const txResult = lastBlock.transactions[0]?.result;
+        expect(txResult?.type).toBe('success');
+      }).pipe(Effect.scoped, Effect.runPromise);
+    });
+
+    it('supports Night genesis mints', async () => {
+      return Effect.gen(function* () {
+        const nightAmount = 1_000_000n;
+        const secretKeyHex = Buffer.alloc(32, 42).toString('hex');
+        const verifyingKey = ledger.signatureVerifyingKey(secretKeyHex);
+        const recipientAddress = ledger.addressFromKey(verifyingKey);
+
+        const simulator = yield* Simulator.init({
+          genesisMints: [
+            {
+              type: 'unshielded',
+              tokenType: ledger.nativeToken().raw, // Night is auto-detected by tokenType
+              amount: nightAmount,
+              recipient: recipientAddress,
+              verifyingKey,
+            },
+          ],
+        });
+
+        const state = yield* simulator.getLatestState();
+
+        expect(getCurrentBlockNumber(state)).toBe(0n);
+        const lastBlock = getLastBlock(state);
+        expect(lastBlock).toBeDefined();
+        if (lastBlock === undefined) throw new Error('lastBlock should be defined');
+
+        // Should have a claim rewards transaction
+        expect(lastBlock.transactions.length).toBe(1);
+        const txResult = lastBlock.transactions[0]?.result;
+        expect(txResult?.type).toBe('success');
+
+        // Verify Night UTXOs are available for recipient
+        const utxos = Array.from(state.ledger.utxo.filter(recipientAddress));
+        expect(utxos.length).toBeGreaterThan(0);
+      }).pipe(Effect.scoped, Effect.runPromise);
+    });
+
+    it('supports mixed genesis mints (shielded, unshielded, and Night)', async () => {
+      return Effect.gen(function* () {
+        const shieldedRecipient = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1));
+        const unshieldedRecipient = ledger.sampleUserAddress();
+        const customToken = ledger.sampleRawTokenType();
+        const nightSecretKeyHex = Buffer.alloc(32, 99).toString('hex');
+        const nightVerifyingKey = ledger.signatureVerifyingKey(nightSecretKeyHex);
+        const nightRecipient = ledger.addressFromKey(nightVerifyingKey);
+
+        const simulator = yield* Simulator.init({
+          genesisMints: [
+            {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
+              amount: 1000n,
+              recipient: shieldedRecipient,
+            },
+            {
+              type: 'unshielded',
+              tokenType: customToken,
+              amount: 2000n,
+              recipient: unshieldedRecipient,
+            },
+            {
+              type: 'unshielded',
+              tokenType: ledger.nativeToken().raw, // Night is auto-detected by tokenType
+              // Night claims have a minimum amount (around 14077), so use a larger value
+              amount: 100_000n,
+              recipient: nightRecipient,
+              verifyingKey: nightVerifyingKey,
+            },
+          ],
+        });
+
+        const state = yield* simulator.getLatestState();
+
+        expect(getCurrentBlockNumber(state)).toBe(0n);
+        const lastBlock = getLastBlock(state);
+        expect(lastBlock).toBeDefined();
+        if (lastBlock === undefined) throw new Error('lastBlock should be defined');
+
+        // Should have 2 transactions: one for shielded+unshielded, one for Night claim
+        expect(lastBlock.transactions.length).toBe(2);
+
+        // All transactions should be successful
+        const [firstTx, secondTx] = lastBlock.transactions;
+        expect(firstTx?.result.type).toBe('success');
+        expect(secondTx?.result.type).toBe('success');
+      }).pipe(Effect.scoped, Effect.runPromise);
+    });
   });
 
-  describe('blank mode', () => {
+  describe('without genesis mints', () => {
     it('initializes with empty ledger state', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
         const state = yield* simulator.getLatestState();
 
-        // Blank mode should have no blocks yet
+        // Should have no blocks yet
         expect(getCurrentBlockNumber(state)).toBe(0n);
         expect(getLastBlock(state)).toBeUndefined();
         expect(state.blocks.length).toBe(0);
@@ -167,7 +289,6 @@ describe('Unified Simulator', () => {
     it('supports different network IDs', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -181,7 +302,6 @@ describe('Unified Simulator', () => {
     it('advances the current time without creating blocks', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -206,17 +326,17 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
         });
 
-        // Genesis mode has a genesis block at time 0, currentTime stays at 0
+        // With genesis mints, a genesis block is created at time 0
         const initialState = yield* simulator.getLatestState();
         expect(getLastBlock(initialState)).toBeDefined();
         expect(initialState.blocks.length).toBe(1);
@@ -260,7 +380,20 @@ describe('Unified Simulator', () => {
 
       expect(context.secondsSinceEpoch).toBe(1234567890n);
       expect(context.secondsSinceEpochErr).toBe(1);
+      // Without previous block time, defaults to assuming 1 second since last block
       expect(context.lastBlockTime).toBe(1n);
+      expect(context.parentBlockHash).toMatch(/^[0-9a-f]{64}$/);
+    });
+
+    it('creates block context with correct lastBlockTime when previous block time is provided', async () => {
+      const previousBlockTime = new Date(1234567880000); // 10 seconds before
+      const blockTime = new Date(1234567890000);
+      const context = await nextBlockContext(blockTime, previousBlockTime);
+
+      expect(context.secondsSinceEpoch).toBe(1234567890n);
+      expect(context.secondsSinceEpochErr).toBe(1);
+      // Should calculate time since last block: 1234567890 - 1234567880 = 10 seconds
+      expect(context.lastBlockTime).toBe(10n);
       expect(context.parentBlockHash).toMatch(/^[0-9a-f]{64}$/);
     });
   });
@@ -271,11 +404,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -306,11 +439,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -344,11 +477,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -383,11 +516,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -417,11 +550,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -462,7 +595,6 @@ describe('Unified Simulator', () => {
       // complete wallet infrastructure. This test verifies basic mechanics.
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -498,11 +630,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 10000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -549,11 +681,11 @@ describe('Unified Simulator', () => {
 
           // Default behavior - one block per transaction
           const simulator = yield* Simulator.init({
-            mode: 'genesis',
             genesisMints: [
               {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
                 amount: 10000n,
-                type: shieldedTokenType,
                 recipient: recipientKeys,
               },
             ],
@@ -598,11 +730,11 @@ describe('Unified Simulator', () => {
           const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
           const simulator = yield* Simulator.init({
-            mode: 'genesis',
             genesisMints: [
               {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
                 amount: 10000n,
-                type: shieldedTokenType,
                 recipient: recipientKeys,
               },
             ],
@@ -642,11 +774,11 @@ describe('Unified Simulator', () => {
           };
 
           const simulator = yield* Simulator.init({
-            mode: 'genesis',
             genesisMints: [
               {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
                 amount: 10000n,
-                type: shieldedTokenType,
                 recipient: recipientKeys,
               },
             ],
@@ -693,11 +825,11 @@ describe('Unified Simulator', () => {
             );
 
           const simulator = yield* Simulator.init({
-            mode: 'genesis',
             genesisMints: [
               {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
                 amount: 10000n,
-                type: shieldedTokenType,
                 recipient: recipientKeys,
               },
             ],
@@ -735,13 +867,89 @@ describe('Unified Simulator', () => {
         }).pipe(Effect.scoped, Effect.runPromise);
       });
     });
+
+    describe('strictBlockProducer', () => {
+      it('uses strictBlockProducer to enforce balancing after genesis', async () => {
+        return Effect.gen(function* () {
+          const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+
+          // strictBlockProducer enforces: balancing=true, signatures=true, limits=true
+          const simulator = yield* Simulator.init({
+            genesisMints: [
+              {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
+                amount: 10_000_000n,
+                recipient: recipientKeys,
+              },
+            ],
+            blockProducer: strictBlockProducer(0),
+          });
+
+          // Create an unbalanced transaction (outputs more than inputs - no fee payment)
+          const createUnbalancedTx = () => {
+            const coin = ledger.createShieldedCoinInfo(shieldedTokenType, 100n);
+            const output = ledger.ZswapOutput.new(
+              coin,
+              0,
+              recipientKeys.coinPublicKey,
+              recipientKeys.encryptionPublicKey,
+            );
+            const offer = ledger.ZswapOffer.fromOutput<ledger.PreProof>(output, shieldedTokenType, 100n);
+            return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
+          };
+
+          // The unbalanced transaction should fail because strictBlockProducer enforces balancing
+          const result = yield* Effect.either(simulator.submitTransaction(createUnbalancedTx()));
+
+          // Expect failure due to imbalance (transaction doesn't pay fees)
+          expect(result._tag).toBe('Left');
+        }).pipe(Effect.scoped, Effect.runPromise);
+      });
+
+      it('immediateBlockProducer allows unbalanced transactions by default', async () => {
+        return Effect.gen(function* () {
+          const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
+
+          // Default immediateBlockProducer doesn't enforce balancing
+          const simulator = yield* Simulator.init({
+            genesisMints: [
+              {
+                type: 'shielded',
+                tokenType: shieldedTokenType,
+                amount: 10_000_000n,
+                recipient: recipientKeys,
+              },
+            ],
+            // Default blockProducer (immediateBlockProducer with no strictness)
+          });
+
+          // Create same unbalanced transaction
+          const createUnbalancedTx = () => {
+            const coin = ledger.createShieldedCoinInfo(shieldedTokenType, 100n);
+            const output = ledger.ZswapOutput.new(
+              coin,
+              0,
+              recipientKeys.coinPublicKey,
+              recipientKeys.encryptionPublicKey,
+            );
+            const offer = ledger.ZswapOffer.fromOutput<ledger.PreProof>(output, shieldedTokenType, 100n);
+            return ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer).eraseProofs();
+          };
+
+          // Without strictness override, the transaction should succeed
+          const block = yield* simulator.submitTransaction(createUnbalancedTx());
+
+          expect(block.transactions.length).toBe(1);
+        }).pipe(Effect.scoped, Effect.runPromise);
+      });
+    });
   });
 
   describe('generic query', () => {
     it('queries state with a custom function', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -758,7 +966,6 @@ describe('Unified Simulator', () => {
         const userAddress = ledger.addressFromKey(verifyingKey);
 
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -777,7 +984,6 @@ describe('Unified Simulator', () => {
         const userAddress = ledger.addressFromKey(verifyingKey);
 
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -795,7 +1001,6 @@ describe('Unified Simulator', () => {
     it('queries ledger parameters', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -811,7 +1016,6 @@ describe('Unified Simulator', () => {
     it('queries current fee prices', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -831,11 +1035,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -859,11 +1063,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 1000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -889,7 +1093,6 @@ describe('Unified Simulator', () => {
     it('defaults to 0 fullness when not specified', async () => {
       return Effect.gen(function* () {
         const simulator = yield* Simulator.init({
-          mode: 'blank',
           networkId: NetworkId.NetworkId.Undeployed,
         });
 
@@ -904,11 +1107,11 @@ describe('Unified Simulator', () => {
         const recipientKeys = ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0));
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 10000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],
@@ -950,11 +1153,11 @@ describe('Unified Simulator', () => {
         };
 
         const simulator = yield* Simulator.init({
-          mode: 'genesis',
           genesisMints: [
             {
+              type: 'shielded',
+              tokenType: shieldedTokenType,
               amount: 10000n,
-              type: shieldedTokenType,
               recipient: recipientKeys,
             },
           ],

@@ -50,11 +50,11 @@ const createMockEventHex = async (): Promise<string> => {
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
     const simulator = yield* Simulator.init({
-      mode: 'genesis',
       genesisMints: [
         {
+          type: 'shielded',
+          tokenType: ledger.shieldedToken().raw,
           amount: 1000n,
-          type: ledger.shieldedToken().raw,
           recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
         },
       ],

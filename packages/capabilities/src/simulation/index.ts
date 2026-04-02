@@ -41,6 +41,9 @@ export {
   createStrictness,
   blockHash,
   nextBlockContext,
+  // Strictness constants
+  defaultPostGenesisStrictness,
+  genesisStrictness,
   // Types
   type SimulatorState,
   type Block,
@@ -55,4 +58,4 @@ export {
 } from './SimulatorState.js';
 
 // Re-export from Simulator
-export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simulator.js';
+export { Simulator, immediateBlockProducer, strictBlockProducer, type SimulatorConfig } from './Simulator.js';

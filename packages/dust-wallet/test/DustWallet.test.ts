@@ -185,9 +185,7 @@ describe('DustWallet', () => {
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const scope = yield* Scope.make();
 
-      simulator = yield* Simulator.init({ mode: 'blank', networkId: NETWORK }).pipe(
-        Effect.provideService(Scope.Scope, scope),
-      );
+      simulator = yield* Simulator.init({ networkId: NETWORK }).pipe(Effect.provideService(Scope.Scope, scope));
 
       walletVariant = new V1Builder()
         .withTransactionType<ProofErasedTransaction>()
@@ -531,9 +529,6 @@ describe('DustWallet', () => {
       intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
       const transferTransaction = Transaction.fromParts(NETWORK, undefined, undefined, intent);
 
-      // Save old wallet state before transaction to compare balances
-      const oldWalletState = yield* SubscriptionRef.get(stateRef);
-
       const totalFee = yield* wallet.estimateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
 
       const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(
@@ -578,24 +573,27 @@ describe('DustWallet', () => {
       const walletBalanceAfterTx = walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp);
 
       // validate wallet balance changed to balance_now ≈ balance_before - tx_fee (±2% margin)
+      // Use actual block timestamp instead of toTxTime since fastForward offsets time
       expectWithMargin(
-        walletVariant.coinsAndBalances.getWalletBalance(walletState, toTxTime(lastTxNumber)),
+        walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp),
         walletBalance - totalFee,
         totalFee,
       );
 
       // The balance after paying the fee should be less than balance before minus fee
       // (because old coin has more decay than new coin at the same time point)
-      expect(walletBalanceAfterTx).toBeLessThanOrEqual(walletBalanceBeforeTx - totalFee);
+      expect(walletBalanceAfterTx).toBeLessThanOrEqual(walletBalance - totalFee);
 
       // The balance difference should be close to the fee (within the decay amount for the time gap)
       // The time gap is roughly 10 seconds (from fastForward), so decay difference could be significant
       const decayTolerance = newAvailableCoins[0].rate * 11n; // ~11 seconds of decay difference
-      expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalanceBeforeTx - totalFee - decayTolerance);
+      expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalance - totalFee - decayTolerance);
 
       // validate it decays properly (±2% margin)
+      // Use 1 second after block timestamp for decay validation
+      const oneSecondAfterBlock = new Date(lastBlock.timestamp.getTime() + 1000);
       expectWithMargin(
-        walletVariant.coinsAndBalances.getWalletBalance(walletState, toTxTime(lastTxNumber + 1)),
+        walletVariant.coinsAndBalances.getWalletBalance(walletState, oneSecondAfterBlock),
         walletBalance - totalFee - newAvailableCoins[0].rate,
         totalFee,
       );

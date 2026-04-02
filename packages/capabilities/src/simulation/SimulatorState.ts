@@ -29,6 +29,8 @@ import {
   type SyntheticCost,
   type RawTokenType,
   type ZswapSecretKeys,
+  type UserAddress,
+  type SignatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -92,14 +94,22 @@ export type BlockInfo = Readonly<{
 }>;
 
 /**
- * Request to produce a block with specific transactions and fullness.
- * This mimics how real nodes work - selecting which transactions to include.
+ * Request to produce a block with specific transactions, fullness, and optional strictness override.
+ * This mimics how real nodes work - selecting which transactions to include and how to validate them.
+ *
+ * The block producer can optionally specify a strictness that overrides per-transaction strictness.
+ * This enables patterns like:
+ * - Enforcing balancing for all blocks after genesis
+ * - Using a decorator pattern to modify strictness behavior
+ * - Testing specific validation scenarios
  */
 export type BlockProductionRequest = Readonly<{
   /** Transactions to include in this block (selected from the state's mempool) */
   transactions: readonly PendingTransaction[];
   /** Block fullness (0-1) for fee calculation */
   fullness: number;
+  /** Optional strictness override. If provided, overrides per-transaction strictness for all transactions in this block. */
+  strictnessOverride?: StrictnessConfig;
 }>;
 
 /**
@@ -130,13 +140,76 @@ export type BlockProducer = (states: Stream.Stream<SimulatorState>) => Stream.St
 export type FullnessSpec = number | ((state: SimulatorState) => number);
 
 /**
- * Genesis mint specification for initializing the simulator with pre-funded accounts.
+ * Genesis mint specification for shielded tokens.
+ *
+ * @example
+ * ```typescript
+ * const mint: ShieldedGenesisMint = {
+ *   type: 'shielded',
+ *   tokenType: ledger.shieldedToken().raw,
+ *   amount: 1000n,
+ *   recipient: secretKeys,
+ * };
+ * ```
  */
-export type GenesisMint = Readonly<{
+export type ShieldedGenesisMint = Readonly<{
+  type: 'shielded';
+  tokenType: RawTokenType;
   amount: bigint;
-  type: RawTokenType;
   recipient: ZswapSecretKeys;
 }>;
+
+/**
+ * Genesis mint specification for unshielded tokens.
+ *
+ * For **custom tokens**: Minted directly from nothing (enforceBalancing disabled).
+ *
+ * For **Night tokens** (native token): Requires `verifyingKey` field. Night cannot be
+ * minted from nothing due to supply invariant, so the reward/claim mechanism is used
+ * internally. Night is auto-detected by comparing `tokenType` with `ledger.nativeToken().raw`.
+ *
+ * Note: Night claims have a minimum amount requirement (~14077). Use larger
+ * amounts to ensure the claim transaction succeeds.
+ *
+ * @example
+ * ```typescript
+ * // Custom unshielded token
+ * const customMint: UnshieldedGenesisMint = {
+ *   type: 'unshielded',
+ *   tokenType: customToken,
+ *   amount: 1000n,
+ *   recipient: userAddress,
+ * };
+ *
+ * // Night token (native token) - requires verifyingKey
+ * const nightMint: UnshieldedGenesisMint = {
+ *   type: 'unshielded',
+ *   tokenType: ledger.nativeToken().raw,
+ *   amount: 1_000_000n, // Must exceed minimum claim amount (~14077)
+ *   recipient: userAddress,
+ *   verifyingKey: signatureVerifyingKey,
+ * };
+ * ```
+ */
+export type UnshieldedGenesisMint = Readonly<{
+  type: 'unshielded';
+  tokenType: RawTokenType;
+  amount: bigint;
+  recipient: UserAddress;
+  /** Required for Night tokens (native token). Used for the claim transaction signature. */
+  verifyingKey?: SignatureVerifyingKey;
+}>;
+
+/**
+ * Genesis mint specification for initializing the simulator with pre-funded accounts.
+ *
+ * Uses a tagged union pattern consistent with the facade API:
+ * - **Shielded**: `{ type: 'shielded', tokenType, amount, recipient: ZswapSecretKeys }`
+ * - **Unshielded**: `{ type: 'unshielded', tokenType, amount, recipient, verifyingKey? }`
+ *   - Custom tokens: minted directly (verifyingKey not needed)
+ *   - Night tokens: auto-detected by tokenType, uses reward/claim mechanism (verifyingKey required)
+ */
+export type GenesisMint = ShieldedGenesisMint | UnshieldedGenesisMint;
 
 /**
  * Configuration for well-formedness strictness checks.
@@ -149,6 +222,36 @@ export type StrictnessConfig = Readonly<{
   enforceLimits?: boolean;
   verifySignatures?: boolean;
 }>;
+
+/**
+ * Default strictness for post-genesis blocks.
+ *
+ * In a realistic simulation:
+ * - Signatures should be verified (verifySignatures: true)
+ * - Proofs cannot be verified because they're erased (verifyNativeProofs/verifyContractProofs: false)
+ * - Limits should be enforced (enforceLimits: true)
+ * - Balancing must be enforced (enforceBalancing: true) - transactions must pay fees
+ *
+ * Note: Genesis blocks typically disable all strictness to allow initial token distribution.
+ */
+export const defaultPostGenesisStrictness: StrictnessConfig = {
+  enforceBalancing: true,
+  verifyNativeProofs: false,
+  verifyContractProofs: false,
+  enforceLimits: true,
+  verifySignatures: true,
+};
+
+/**
+ * Strictness for genesis blocks - all checks disabled to allow initial token distribution.
+ */
+export const genesisStrictness: StrictnessConfig = {
+  enforceBalancing: false,
+  verifyNativeProofs: false,
+  verifyContractProofs: false,
+  enforceLimits: false,
+  verifySignatures: false,
+};
 
 // =============================================================================
 // State Accessors (Pure Functions)
@@ -350,6 +453,7 @@ export type TransactionProcessingResult = Readonly<{
  * @param blockTime - Block timestamp
  * @param blockContext - Block context
  * @param minFullness - Minimum block fullness to use
+ * @param strictnessOverride - Optional strictness that overrides the transaction's strictness
  */
 export const processTransaction = (
   ledger: LedgerState,
@@ -357,6 +461,7 @@ export const processTransaction = (
   blockTime: Date,
   blockContext: BlockContext,
   minFullness: number,
+  strictnessOverride?: WellFormedStrictness,
 ): Either.Either<TransactionProcessingResult, LedgerOps.LedgerError> => {
   return LedgerOps.ledgerTry(() => {
     const computedFullness = pendingTx.tx.cost(ledger.parameters);
@@ -370,7 +475,9 @@ export const processTransaction = (
       detailedBlockFullness.bytesChurned,
     );
 
-    const verifiedTransaction = pendingTx.tx.wellFormed(ledger, pendingTx.strictness, blockTime);
+    // Use strictness override if provided, otherwise use per-transaction strictness
+    const effectiveStrictness = strictnessOverride ?? pendingTx.strictness;
+    const verifiedTransaction = pendingTx.tx.wellFormed(ledger, effectiveStrictness, blockTime);
     const transactionContext = new TransactionContext(ledger, blockContext);
     const [newLedgerState, txResult] = ledger.apply(verifiedTransaction, transactionContext);
     const postBlockLedger = newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness);
@@ -392,6 +499,7 @@ export const processTransaction = (
  * @param blockTime - Block timestamp
  * @param blockContext - Block context
  * @param fullness - Block fullness (0-1)
+ * @param strictnessOverride - Optional strictness that overrides per-transaction strictness
  */
 export const processTransactions = (
   ledger: LedgerState,
@@ -399,12 +507,13 @@ export const processTransactions = (
   blockTime: Date,
   blockContext: BlockContext,
   fullness: number,
+  strictnessOverride?: WellFormedStrictness,
 ): Either.Either<{ blockTransactions: BlockTransaction[]; finalLedger: LedgerState }, LedgerOps.LedgerError> => {
   const blockTransactions: BlockTransaction[] = [];
   let currentLedger = ledger;
 
   for (const pendingTx of transactions) {
-    const result = processTransaction(currentLedger, pendingTx, blockTime, blockContext, fullness);
+    const result = processTransaction(currentLedger, pendingTx, blockTime, blockContext, fullness, strictnessOverride);
 
     if (Either.isLeft(result)) {
       return Either.left(result.left);
@@ -495,9 +604,25 @@ export const createStrictness = (config: StrictnessConfig = {}): WellFormedStric
 };
 
 /**
- * Compute block hash from block time (SHA-256 of seconds since epoch).
+ * Compute block hash from block number.
+ * Uses a deterministic hash based on block number for easy recomputation.
+ *
+ * @param blockNumber - The block number to compute hash for
+ * @returns A deterministic 64-character hex hash
  */
-export const blockHash = async (blockTime: Date): Promise<string> => {
+export const blockHash = async (blockNumber: bigint): Promise<string> => {
+  const crypto = await import('crypto');
+  const input = `block-${blockNumber.toString()}`;
+  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const { Encoding } = await import('effect');
+  return Encoding.encodeHex(new Uint8Array(hashBuffer));
+};
+
+/**
+ * @deprecated Use nextBlockContextFromBlock instead for more accurate block context.
+ * Compute block hash from block time (legacy behavior).
+ */
+export const blockHashFromTime = async (blockTime: Date): Promise<string> => {
   const crypto = await import('crypto');
   const input = DateOps.dateToSeconds(blockTime).toString();
   const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
@@ -506,14 +631,46 @@ export const blockHash = async (blockTime: Date): Promise<string> => {
 };
 
 /**
- * Create the next block context from block time.
+ * Create the next block context from the previous block.
+ *
+ * @param previousBlock - The previous block (or undefined for genesis)
+ * @param blockTime - The timestamp for the new block
+ * @returns A BlockContext suitable for transaction processing
  */
-export const nextBlockContext = async (blockTime: Date): Promise<BlockContext> => {
-  const hash = await blockHash(blockTime);
+export const nextBlockContextFromBlock = async (previousBlock: Block | undefined, blockTime: Date): Promise<BlockContext> => {
+  const nextBlockNumber = previousBlock !== undefined ? previousBlock.number + 1n : 0n;
+  const hash = await blockHash(nextBlockNumber);
+  const blockSeconds = DateOps.dateToSeconds(blockTime);
+  const previousSeconds = previousBlock !== undefined ? DateOps.dateToSeconds(previousBlock.timestamp) : blockSeconds - 1n;
+  const timeSinceLastBlock = blockSeconds - previousSeconds;
+
   return {
     parentBlockHash: hash,
-    secondsSinceEpoch: DateOps.dateToSeconds(blockTime),
-    secondsSinceEpochErr: 1,
-    lastBlockTime: 1n,
+    secondsSinceEpoch: blockSeconds,
+    secondsSinceEpochErr: 1, // Clock error tolerance in seconds (reasonable default for simulator)
+    lastBlockTime: timeSinceLastBlock > 0n ? timeSinceLastBlock : 1n,
+  };
+};
+
+/**
+ * Create the next block context from block time.
+ *
+ * @deprecated Use nextBlockContextFromBlock instead for more accurate block context.
+ * @param blockTime - The timestamp for the new block
+ * @param previousBlockTime - Optional timestamp of the previous block (defaults to 1 second before blockTime)
+ * @returns A BlockContext suitable for transaction processing
+ */
+export const nextBlockContext = async (blockTime: Date, previousBlockTime?: Date): Promise<BlockContext> => {
+  // Use block number 0 for backward compatibility
+  const hash = await blockHashFromTime(blockTime);
+  const blockSeconds = DateOps.dateToSeconds(blockTime);
+  const previousSeconds = previousBlockTime ? DateOps.dateToSeconds(previousBlockTime) : blockSeconds - 1n;
+  const timeSinceLastBlock = blockSeconds - previousSeconds;
+
+  return {
+    parentBlockHash: hash,
+    secondsSinceEpoch: blockSeconds,
+    secondsSinceEpochErr: 1, // Clock error tolerance in seconds (reasonable default for simulator)
+    lastBlockTime: timeSinceLastBlock > 0n ? timeSinceLastBlock : 1n,
   };
 };
