@@ -935,9 +935,7 @@ export class WalletFacade {
 
   async *getAllFromTxHistory(): AsyncIterableIterator<WalletEntry> {
     for await (const raw of this.#txHistoryStorage.getAll()) {
-      if (isWalletEntry(raw)) {
-        yield raw;
-      }
+      yield raw;
     }
   }
 }
