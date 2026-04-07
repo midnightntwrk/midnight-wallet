@@ -164,15 +164,22 @@ export const CoreWallet = {
     return { ...wallet, state: newState, coinHashes: newCoinHashes };
   },
 
-  replayEvents(wallet: CoreWallet, secretKeys: ledger.ZswapSecretKeys, events: ledger.Event[]): CoreWallet {
-    const newState = wallet.state.replayEvents(secretKeys, events);
+  replayEventsWithChanges(
+    wallet: CoreWallet,
+    secretKeys: ledger.ZswapSecretKeys,
+    events: ledger.Event[],
+  ): [CoreWallet, ledger.ZswapStateChanges[]] {
+    const stateWithChanges = wallet.state.replayEventsWithChanges(secretKeys, events);
+    const newState = stateWithChanges.state;
     const newCoinHashes = CoinHashesMap.updateWithCoins(
       secretKeys,
       wallet.coinHashes,
       CoinHashesMap.pickAllCoins(newState),
     );
 
-    return { ...wallet, state: newState, coinHashes: newCoinHashes };
+    const updatedWallet = { ...wallet, state: newState, coinHashes: newCoinHashes };
+
+    return [updatedWallet, stateWithChanges.changes];
   },
 
   updateProgress(

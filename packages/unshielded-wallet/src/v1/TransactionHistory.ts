@@ -10,34 +10,67 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { TransactionHistoryStorage, TransactionHistoryEntry, TransactionHash } from '../storage/index.js';
+import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Effect, Schema } from 'effect';
 import { UnshieldedUpdate } from './SyncSchema.js';
+import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { TransactionHistoryError } from './WalletError.js';
 
-export interface TransactionHistoryService<SyncUpdate> {
-  create(update: SyncUpdate): Promise<void>;
-  get(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
-  getAll(): AsyncIterableIterator<TransactionHistoryEntry>;
-  delete(hash: TransactionHash): Promise<TransactionHistoryEntry | undefined>;
-}
+const UtxoSchema = Schema.Struct({
+  value: SafeBigInt.SafeBigInt,
+  owner: Schema.String,
+  tokenType: Schema.String,
+  intentHash: Schema.String,
+  outputIndex: Schema.Number,
+});
 
-export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage;
+export const UnshieldedSectionSchema = Schema.Struct({
+  id: Schema.Number,
+  createdUtxos: Schema.Array(UtxoSchema),
+  spentUtxos: Schema.Array(UtxoSchema),
+});
+
+type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
+
+export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  unshielded: UnshieldedSectionSchema,
+});
+
+export type UnshieldedTransactionHistoryEntry = Schema.Schema.Type<typeof UnshieldedTransactionHistoryEntrySchema>;
+
+export type TransactionHistoryService = {
+  put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
 };
 
-const convertUpdateToEntry = ({
+export type DefaultTransactionHistoryConfiguration = {
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
+};
+
+type StorageEntryWithUnshielded = Omit<
+  TransactionHistoryStorage.TransactionHistoryCommon,
+  'identifiers' | 'timestamp' | 'fees'
+> & {
+  readonly identifiers: readonly string[];
+  readonly timestamp: Date;
+  readonly fees: bigint | null;
+  readonly unshielded: UnshieldedSection;
+};
+
+const convertUpdateToStorageEntry = ({
   transaction,
   createdUtxos,
   spentUtxos,
   status,
-}: UnshieldedUpdate): TransactionHistoryEntry => {
-  return {
+}: UnshieldedUpdate): StorageEntryWithUnshielded => ({
+  hash: transaction.hash,
+  protocolVersion: transaction.protocolVersion,
+  status,
+  identifiers: transaction.identifiers ?? [],
+  timestamp: transaction.block.timestamp,
+  fees: transaction.fees?.paidFees ?? null,
+  unshielded: {
     id: transaction.id,
-    hash: transaction.hash,
-    protocolVersion: transaction.protocolVersion,
-    identifiers: transaction.identifiers ? transaction.identifiers : [],
-    status,
-    timestamp: transaction.block?.timestamp ?? null,
-    fees: transaction.fees?.paidFees ?? null,
     createdUtxos: createdUtxos.map(({ utxo }) => ({
       value: utxo.value,
       owner: utxo.owner,
@@ -52,28 +85,20 @@ const convertUpdateToEntry = ({
       intentHash: utxo.intentHash,
       outputIndex: utxo.outputNo,
     })),
-  };
-};
+  },
+});
 
 export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
-): TransactionHistoryService<UnshieldedUpdate> => {
-  const { txHistoryStorage } = config;
+): TransactionHistoryService => {
+  const txHistoryStorage = config.txHistoryStorage;
 
   return {
-    create: async (update: UnshieldedUpdate): Promise<void> => {
-      const entry = convertUpdateToEntry(update);
-      await txHistoryStorage.create(entry);
-    },
-    get: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
-      return await txHistoryStorage.get(hash);
-    },
-    getAll: (): AsyncIterableIterator<TransactionHistoryEntry> => {
-      return txHistoryStorage.getAll();
-    },
-    delete: async (hash: TransactionHash): Promise<TransactionHistoryEntry | undefined> => {
-      return txHistoryStorage.delete(hash);
-    },
+    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.upsert(convertUpdateToStorageEntry(update)),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
+      }),
   };
 };

@@ -69,7 +69,7 @@ export declare namespace RunningV1Variant {
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<ledger.Utxo>;
-    transactionHistoryService: TransactionHistoryService<WalletSyncUpdate>;
+    transactionHistoryService: TransactionHistoryService;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any>;

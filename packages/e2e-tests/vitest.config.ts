@@ -11,17 +11,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /// <reference types="vitest" />
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
+    exclude: [...configDefaults.exclude, '**/dist/**'],
     setupFiles: ['../../setup-env.ts', './src/tests/setup-retry-logging.ts'],
     environment: 'node',
     hookTimeout: 3_600_000,
     testTimeout: 3_600_000,
     retry: 1,
     globals: true,
-    exclude: ['node_modules', 'dist'],
     reporters: [
       'default',
       ['junit', { outputFile: './reports/test-report.xml' }],

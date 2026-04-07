@@ -52,3 +52,10 @@ reports
 # user files
 **/.sync_cache
 /packages/e2e-tests/res
+
+# Claude Code — personal/local settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Claude Code — credentials (Linux/Windows only; macOS uses Keychain)
+.claude/.credentials.json

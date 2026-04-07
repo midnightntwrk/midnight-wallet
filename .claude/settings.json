@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "yarn format:check:root 2>/dev/null || echo '[Claude Hook] Format check failed - run yarn format to fix'"
+          }
+        ]
+      }
+    ]
+  }
+}

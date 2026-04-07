@@ -11,19 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import {
-  createKeystore,
-  InMemoryTransactionHistoryStorage,
-  PublicKey,
-  UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as crypto from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
-import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
 
 describe('Facade submission', () => {
   it('is gracefully closed when wallet is stopped', async () => {
@@ -53,7 +48,7 @@ describe('Facade submission', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
 
     const facade: WalletFacade = await WalletFacade.init({
@@ -97,7 +92,7 @@ describe('Facade submission', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
     const seed = crypto.randomBytes(32);
     const shielded = ShieldedWallet(config).startWithSeed(seed);

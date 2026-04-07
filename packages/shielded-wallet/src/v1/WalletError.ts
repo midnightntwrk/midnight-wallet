@@ -82,3 +82,8 @@ export class TransactingError extends Data.TaggedError('Wallet.Transacting')<{
   message: string;
   cause?: unknown;
 }> {}
+
+export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
+  message: string;
+  cause?: unknown;
+}> {}
