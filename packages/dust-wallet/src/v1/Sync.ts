@@ -27,6 +27,7 @@ import {
   Simulator,
   SimulatorState,
   getLastBlockEvents,
+  getBlockEventsFrom,
   getLastBlock,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
@@ -315,11 +316,14 @@ export const makeSimulatorSyncService = (
             timestamp: state.currentTime,
           };
         }
+        // Use currentTime instead of lastBlock.timestamp for time-sensitive operations
+        // (e.g., Dust generation calculation). The currentTime reflects any fast-forwarding
+        // that has been done, while lastBlock.timestamp only reflects when the block was produced.
         return {
           hash: lastBlock.hash,
           height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
-          timestamp: lastBlock.timestamp,
+          timestamp: state.currentTime,
         };
       });
     },
@@ -334,9 +338,13 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
       if (lastBlock === undefined) {
         return state;
       }
-      const events = [...getLastBlockEvents(update.update)];
+      // Get all events from blocks starting at appliedIndex (the next block to process).
+      // appliedIndex semantics: the first block number we haven't processed yet.
+      // Initial: appliedIndex = 0 (haven't processed any blocks)
+      // After processing block N: appliedIndex = N + 1 (next block to process)
+      const events = [...getBlockEventsFrom(update.update, state.progress.appliedIndex)];
       return CoreWallet.updateProgress(CoreWallet.applyEvents(state, update.secretKey, events, lastBlock.timestamp), {
-        appliedIndex: lastBlock.number,
+        appliedIndex: lastBlock.number + 1n,
       });
     },
   };

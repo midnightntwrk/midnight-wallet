@@ -80,8 +80,11 @@ const toTxTime = (secs: number | bigint): Date => new Date(Number(secs) * 1000);
 // the expected time of the next block (matching the old lastTxNumber + 1 behavior).
 const getCurrentTime = (simulatorState: SimulatorState) => DateOps.addSeconds(simulatorState.currentTime, 1);
 
-const waitForTx = (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>, txTime: bigint | number) => {
-  const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex === BigInt(txTime)));
+// Waits until the wallet has synced and processed the block at the given number.
+// appliedIndex semantics: next block to process = blockNumber + 1 after processing.
+const waitForBlock = (stateRef: SubscriptionRef.SubscriptionRef<CoreWallet>, blockNumber: bigint | number) => {
+  const targetAppliedIndex = BigInt(blockNumber) + 1n;
+  const stream = stateRef.changes.pipe(Stream.find((val) => val.progress.appliedIndex >= targetAppliedIndex));
   return Stream.runLast(stream);
 };
 
@@ -223,13 +226,13 @@ describe('DustWallet', () => {
       const walletAddress = keyStore.getAddress();
       const awardTokens = 150_000n;
 
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       const simulatorState = yield* simulator.getLatestState();
       expect(getCurrentBlockNumber(simulatorState)).toBe(1n);
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
 
       const nightTokens = getNightTokens(yield* simulator.getLatestState(), walletAddress);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       expect(nightTokens.length).toBe(1);
       expect(nightTokens[0].value).toBe(awardTokens);
@@ -243,9 +246,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1n);
+      yield* waitForBlock(stateRef, 1n);
 
       let latestState = yield* SubscriptionRef.get(stateRef);
       const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(1));
@@ -257,11 +260,11 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokens, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       latestState = yield* SubscriptionRef.get(stateRef);
       const newWalletBalance = walletVariant.coinsAndBalances.getWalletBalance(latestState, toTxTime(3));
-      expect(newWalletBalance).toBe(2_023_348_759_707_626n);
+      expect(newWalletBalance).toBe(2_001_445_580_863_630n);
     }).pipe(Effect.runPromise);
   });
 
@@ -273,15 +276,15 @@ describe('DustWallet', () => {
       const awardUtxos = 5;
 
       // reward & claim Night tokens
-      yield* Effect.repeatN(simulator.rewardNight(walletAddress, singleAwardTokens, nightVerifyingKey), awardUtxos - 1);
+      yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardUtxos - 1);
       const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
-      yield* waitForTx(stateRef, maxBlockNr);
+      yield* waitForBlock(stateRef, maxBlockNr);
 
       const simulatorState = yield* simulator.getLatestState();
       const initialNightTokens = getNightTokensWithMeta(simulatorState, walletAddress);
 
       const { transaction } = yield* registerNightTokens(wallet, initialNightTokens, nightVerifyingKey);
-      yield* waitForTx(stateRef, maxBlockNr + 1n);
+      yield* waitForBlock(stateRef, maxBlockNr + 1n);
 
       expect(sumUtxos(transaction, 'guaranteed', 'input')).toEqual(1);
       expect(sumUtxos(transaction, 'guaranteed', 'output')).toEqual(1);
@@ -301,9 +304,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       const simulatorState = yield* simulator.getLatestState();
       const nightTokens = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -311,7 +314,7 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokens, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       const latestState = yield* SubscriptionRef.get(stateRef);
 
@@ -335,9 +338,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -345,15 +348,15 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       // get more night tokens with a different amount
       const newNightTokenAmount = 160_000_000_000n;
-      yield* simulator.rewardNight(walletAddress, newNightTokenAmount, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
       simulatorState = yield* simulator.getLatestState();
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
-      yield* waitForTx(stateRef, 3);
+      yield* waitForBlock(stateRef, 3);
 
       const walletState = yield* SubscriptionRef.get(stateRef);
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState);
@@ -399,7 +402,7 @@ describe('DustWallet', () => {
       const provenTransaction = yield* provingService.prove(balancedTransaction);
 
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
-      yield* waitForTx(stateRef, 4);
+      yield* waitForBlock(stateRef, 4);
 
       simulatorState = yield* simulator.getLatestState();
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
@@ -426,9 +429,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
       let nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -436,19 +439,19 @@ describe('DustWallet', () => {
 
       // get more night tokens with a different amount
       const newNightTokenAmount = 140_000_000_000n;
-      yield* simulator.rewardNight(walletAddress, newNightTokenAmount, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount);
       simulatorState = yield* simulator.getLatestState();
       expect(getCurrentBlockNumber(simulatorState)).toBe(2n);
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       // get one more night token with a different amount
       const newNightTokenAmount2 = 160_000_000_000n;
-      yield* simulator.rewardNight(walletAddress, newNightTokenAmount2, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, newNightTokenAmount2);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(3n);
       simulatorState = yield* simulator.getLatestState();
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
-      yield* waitForTx(stateRef, 3);
+      yield* waitForBlock(stateRef, 3);
 
       // verify we have 3 Night tokens
       nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -456,7 +459,7 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 4);
+      yield* waitForBlock(stateRef, 4);
       simulatorState = yield* simulator.getLatestState();
 
       const walletState = yield* SubscriptionRef.get(stateRef);
@@ -482,9 +485,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -492,7 +495,7 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       let walletState = yield* SubscriptionRef.get(stateRef);
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState);
@@ -531,10 +534,9 @@ describe('DustWallet', () => {
 
       const totalFee = yield* wallet.estimateFee(dustSecretKey, [transferTransaction], ttl, currentTime);
 
-      const walletBalance = walletVariant.coinsAndBalances.getWalletBalance(
-        walletState,
-        getCurrentTime(simulatorState),
-      );
+      // Capture wallet state before transaction for comparison
+      // We'll compare balances at the block timestamp for consistency
+      const walletStateBeforeTx = walletState;
 
       // cover fees with dust
       const balancingTransaction = yield* wallet.balanceTransactions(
@@ -555,7 +557,7 @@ describe('DustWallet', () => {
       yield* submissionService.submitTransaction(provenTransaction, 'InBlock');
       // Block 3: after rewardNight (1), registerNightTokens (2), and this submission (3)
       // Note: fastForward only advances time, not block numbers
-      yield* waitForTx(stateRef, 3);
+      yield* waitForBlock(stateRef, 3);
 
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();
@@ -569,32 +571,32 @@ describe('DustWallet', () => {
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(lastBlock.timestamp);
 
-      // Query the new balance at the block timestamp (when the change coin was created)
+      // Query both balances at the same time point (block timestamp) for consistent comparison
+      // This eliminates flakiness from comparing balances at different time points
+      const walletBalanceBeforeTx = walletVariant.coinsAndBalances.getWalletBalance(
+        walletStateBeforeTx,
+        lastBlock.timestamp,
+      );
       const walletBalanceAfterTx = walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp);
 
       // validate wallet balance changed to balance_now ≈ balance_before - tx_fee (±2% margin)
-      // Use actual block timestamp instead of toTxTime since fastForward offsets time
-      expectWithMargin(
-        walletVariant.coinsAndBalances.getWalletBalance(walletState, lastBlock.timestamp),
-        walletBalance - totalFee,
-        totalFee,
-      );
+      expectWithMargin(walletBalanceAfterTx, walletBalanceBeforeTx - totalFee, totalFee);
 
       // The balance after paying the fee should be less than balance before minus fee
       // (because old coin has more decay than new coin at the same time point)
-      expect(walletBalanceAfterTx).toBeLessThanOrEqual(walletBalance - totalFee);
+      expect(walletBalanceAfterTx).toBeLessThanOrEqual(walletBalanceBeforeTx - totalFee);
 
       // The balance difference should be close to the fee (within the decay amount for the time gap)
       // The time gap is roughly 10 seconds (from fastForward), so decay difference could be significant
       const decayTolerance = newAvailableCoins[0].rate * 11n; // ~11 seconds of decay difference
-      expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalance - totalFee - decayTolerance);
+      expect(walletBalanceAfterTx).toBeGreaterThanOrEqual(walletBalanceBeforeTx - totalFee - decayTolerance);
 
       // validate it decays properly (±2% margin)
       // Use 1 second after block timestamp for decay validation
       const oneSecondAfterBlock = new Date(lastBlock.timestamp.getTime() + 1000);
       expectWithMargin(
         walletVariant.coinsAndBalances.getWalletBalance(walletState, oneSecondAfterBlock),
-        walletBalance - totalFee - newAvailableCoins[0].rate,
+        walletBalanceBeforeTx - totalFee - newAvailableCoins[0].rate,
         totalFee,
       );
 
@@ -617,9 +619,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -627,7 +629,7 @@ describe('DustWallet', () => {
 
       // register Night tokens to gain dust coins
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       let walletState = yield* SubscriptionRef.get(stateRef);
       expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(1);
@@ -681,16 +683,16 @@ describe('DustWallet', () => {
       const awardCount = 5;
 
       // reward 5 night tokens — registering all at once produces 2 dust coins (guaranteed + fallible)
-      yield* Effect.repeatN(simulator.rewardNight(walletAddress, singleAwardTokens, nightVerifyingKey), awardCount - 1);
+      yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardCount - 1);
       const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
-      yield* waitForTx(stateRef, maxBlockNr);
+      yield* waitForBlock(stateRef, maxBlockNr);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
       expect(nightTokensWithMeta.length).toBe(awardCount);
 
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, maxBlockNr + 1n);
+      yield* waitForBlock(stateRef, maxBlockNr + 1n);
 
       let walletState = yield* SubscriptionRef.get(stateRef);
       expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(2);
@@ -760,16 +762,16 @@ describe('DustWallet', () => {
       const singleAwardTokens = 150_000_000_000n;
       const awardCount = 5;
 
-      yield* Effect.repeatN(simulator.rewardNight(walletAddress, singleAwardTokens, nightVerifyingKey), awardCount - 1);
+      yield* Effect.repeatN(simulator.rewardNight(nightVerifyingKey, singleAwardTokens), awardCount - 1);
       const maxBlockNr = getCurrentBlockNumber(yield* simulator.getLatestState());
-      yield* waitForTx(stateRef, maxBlockNr);
+      yield* waitForBlock(stateRef, maxBlockNr);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
       expect(nightTokensWithMeta.length).toBe(awardCount);
 
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, maxBlockNr + 1n);
+      yield* waitForBlock(stateRef, maxBlockNr + 1n);
 
       let walletState = yield* SubscriptionRef.get(stateRef);
       const dustCoinsCount = walletVariant.coinsAndBalances.getAvailableCoins(walletState).length;
@@ -823,9 +825,9 @@ describe('DustWallet', () => {
       const awardTokens = 150_000_000_000_000n;
 
       // reward & claim Night tokens
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
       expect(getCurrentBlockNumber(yield* simulator.getLatestState())).toBe(1n);
-      yield* waitForTx(stateRef, 1);
+      yield* waitForBlock(stateRef, 1);
 
       let simulatorState = yield* simulator.getLatestState();
       const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
@@ -833,7 +835,7 @@ describe('DustWallet', () => {
 
       // register Night tokens
       yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+      yield* waitForBlock(stateRef, 2);
 
       let walletState = yield* SubscriptionRef.get(stateRef);
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState);
@@ -856,7 +858,7 @@ describe('DustWallet', () => {
       );
       // Block 3: after rewardNight (1), registerNightTokens (2), and deregisterNightTokens (3)
       // Note: fastForward only advances time, not block numbers
-      yield* waitForTx(stateRef, 3);
+      yield* waitForBlock(stateRef, 3);
 
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();

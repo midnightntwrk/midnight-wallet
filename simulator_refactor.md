@@ -63,12 +63,11 @@ This document tracks the planned refactorings for the Simulator module.
 
       **Final Resolution:** Unshielded genesis mints now work for **custom tokens**. The initial failures were caused by
       two separate issues:
-
       1. **TTL bug (fixed):** The Intent TTL was set relative to real time (`Date.now()`), but the genesis block time is
          epoch 0. Fixed by using the block time for TTL calculation.
 
-      2. **Night token supply invariant:** Native Night tokens have a fixed total supply (24 quadrillion) enforced by the
-         ledger. Attempting to mint Night from nothing violates this invariant.
+      2. **Night token supply invariant:** Native Night tokens have a fixed total supply (24 quadrillion) enforced by
+         the ledger. Attempting to mint Night from nothing violates this invariant.
 
       **Current Behavior:**
       - **Custom unshielded tokens**: CAN be minted from nothing via genesis (works with `enforceBalancing: false`)
@@ -85,17 +84,17 @@ This document tracks the planned refactorings for the Simulator module.
 - [x] **17. "creates block context from block time"** Extended `nextBlockContext` to accept optional `previousBlockTime`
       parameter. `lastBlockTime` is now calculated from the time difference between blocks (defaults to 1 second). Added
       a new test verifying the calculation.
-- [x] **18. Make it possible to receive Night in genesis** Added `NightGenesisMint` type that uses the
-      reward/claim mechanism internally. Night claims have a minimum amount requirement (~14077). Tests added for
-      standalone Night mints and mixed mints (shielded + unshielded + Night).
+- [x] **18. Make it possible to receive Night in genesis** Added `NightGenesisMint` type that uses the reward/claim
+      mechanism internally. Night claims have a minimum amount requirement (~14077). Tests added for standalone Night
+      mints and mixed mints (shielded + unshielded + Night).
 - [x] **19. Make block context and block hash more realistic** `blockHash` now takes block number instead of time
-      (deterministic, easy to recompute). Added `nextBlockContextFromBlock` that receives whole previous block.
-      Legacy `blockHashFromTime` and `nextBlockContext` preserved for backward compatibility.
-- [x] **20. Make genesis mints consistent with each other.** Refactored to tagged union pattern:
-      `ShieldedGenesisMint`, `UnshieldedGenesisMint`, `NightGenesisMint` all use `type` discriminator.
-      Updated all test files to use new format.
-- [x] **21. Remove all mentions of 2 modes of simulator** Updated docstrings to describe unified behavior.
-      Renamed test describe blocks from "genesis mode"/"blank mode" to "with genesis mints"/"without genesis mints".
+      (deterministic, easy to recompute). Added `nextBlockContextFromBlock` that receives whole previous block. Legacy
+      `blockHashFromTime` and `nextBlockContext` preserved for backward compatibility.
+- [x] **20. Make genesis mints consistent with each other.** Refactored to tagged union pattern: `ShieldedGenesisMint`,
+      `UnshieldedGenesisMint`, `NightGenesisMint` all use `type` discriminator. Updated all test files to use new
+      format.
+- [x] **21. Remove all mentions of 2 modes of simulator** Updated docstrings to describe unified behavior. Renamed test
+      describe blocks from "genesis mode"/"blank mode" to "with genesis mints"/"without genesis mints".
 - [x] **22. makeTransactions refactored to pure FP** Uses map/filter/reduce pattern, no loops. Pure helper functions
       `toShieldedMint`, `toUnshieldedMint`, `toNightMint` extract mint data. Night mints processed via reduce fold.
 - [~] **23. Simulation mode test in facade** (PARTIAL - some issues remain)
@@ -111,24 +110,98 @@ This document tracks the planned refactorings for the Simulator module.
       - Fee enforcement not yet implemented (test uses `payFees: false`)
       - Transacting capabilities still use simulator-specific variants (deeper refactor needed)
       - genesis mint of night - make recipient a secret key (similarly to how it's with shielded tokens), it removes the need to separately pass recipient and verifying key
+
 - [x] **24. Night genesis mints match real Night definition** Merged `NightGenesisMint` into `UnshieldedGenesisMint`.
-      Night tokens auto-detected by comparing `tokenType` against `ledger.nativeToken().raw`. The optional `verifyingKey`
-      field is required for Night tokens (used for claim transaction signature). Updated all tests to use new format:
-      `{ type: 'unshielded', tokenType: ledger.nativeToken().raw, amount, recipient, verifyingKey }`
-- [x] **25. StrictnessConfig in BlockProductionRequest** Added `strictnessOverride?: StrictnessConfig` to `BlockProductionRequest`.
-      Block producers can now control strictness at block level. Added:
-      - `defaultPostGenesisStrictness`: balancing=true, signatures=true, limits=true, proofs=false
-      - `genesisStrictness`: all checks disabled for initial token distribution
-      - `strictBlockProducer(fullness)`: convenience block producer that enforces post-genesis strictness
-      Tests added for `strictBlockProducer` verifying balancing enforcement.
-- [ ] 26 start builders in `packages/facade/test/utils/helpers.ts` from `.withDefaults` - it will reduce amount of boilerplate
-- [ ] 27 the simulator test "supports mixed genesis mints (shielded, unshielded, and Night)" should verify that the recipients can indeed receive the tokens
-- [ ] 28 remove "strictBlockProducer", it simply needs to be the default block producer
-- [ ] 29 make all "toShieldedMint", "toUnshieldedMint", "toNightMint" functions return arrays, so that they can be used in a `flatMap` without filter afterwards, alternatively see if there is a relevant operator, that would allow to do a map returning `Option` and automatically filter the `None` values
-- [ ] 30 `Simulator.prototype.#produceBlock` need to just take `BlockProductionRequest`. The strictness in `BlockProductionRequest` should be the default strictness, not an override
-- 
-- 
-    
+      Night tokens auto-detected by comparing `tokenType` against `ledger.nativeToken().raw`. The optional
+      `verifyingKey` field is required for Night tokens (used for claim transaction signature). Updated all tests to use
+      new format: `{ type: 'unshielded', tokenType: ledger.nativeToken().raw, amount, recipient, verifyingKey }`
+- [x] **25. StrictnessConfig in BlockProductionRequest** Added `strictnessOverride?: StrictnessConfig` to
+      `BlockProductionRequest`. Block producers can now control strictness at block level. Added: -
+      `defaultPostGenesisStrictness`: balancing=true, signatures=true, limits=true, proofs=false - `genesisStrictness`:
+      all checks disabled for initial token distribution - `strictBlockProducer(fullness)`: convenience block producer
+      that enforces post-genesis strictness Tests added for `strictBlockProducer` verifying balancing enforcement.
+- [x] 26 start builders in `packages/facade/test/utils/helpers.ts` from `.withDefaults` - **CANNOT DO** - `withDefaults()`
+      adds `DefaultSyncConfiguration` to the required config type (including `indexerClientConnection`), and even
+      though we override the sync implementation with `withSync()`, TypeScript still requires those config properties.
+      The current explicit chaining approach is correct. Added documentation comment explaining this limitation.
+- [x] 27 the simulator test "supports mixed genesis mints (shielded, unshielded, and Night)" should verify that the
+      recipients can indeed receive the tokens
+- [x] 28 remove "strictBlockProducer", it simply needs to be the default block producer
+- [x] 29 make all "toShieldedMint", "toUnshieldedMint", "toNightMint" functions return arrays, so that they can be used
+      in a `flatMap` without filter afterwards → Refactored all three functions to return `[]` or `[value]` instead of
+      `undefined` or `value`. Updated usages to use `.flatMap()` instead of `.map().filter()`.
+- [x] 30 `Simulator.prototype.#produceBlock` need to just take `BlockProductionRequest`. The strictness in
+      `BlockProductionRequest` should be the default strictness, not an override
+- [x] 31 `packages/facade/test/simulation-mode.test.ts` now uses default simulator settings with proper Dust fee payment.
+      The test registers Night tokens for Dust generation, fast-forwards time for Dust accumulation, and performs
+      a balanced shielded transfer with fee payment. Key fixes: fast-forward simulator time to match real time
+      (TTL calculation), use `state.currentTime` for Dust balance (not stale block timestamp), compute TTL from
+      simulator time (not `Date.now()`).
+- [x] 32 All minting tests in `Simulator.test.ts` now verify that recipients received tokens:
+      - Shielded mints: verified via `new ZswapLocalState().replayEvents(recipientKeys, events)` → check coins
+      - Unshielded mints: verified via `state.ledger.utxo.filter(recipientAddress)` → check UTXO type and value
+      - Night mints: verified via UTXO filter with token type and value check
+      - Multi-recipient mints: each recipient verified independently (events must be fetched fresh per wallet
+        as `replayEvents` consumes the array)
+- [x] 35 **Implement unshielded wallet simulator sync** - Implemented `makeSimulatorSyncCapability` to properly extract UTXOs from the simulator ledger state and apply them to the wallet. The implementation:
+  - Extracts UTXOs for the wallet's address from `state.ledger.utxo.filter(address)`
+  - Compares with wallet's existing UTXOs to determine created/spent
+  - Creates `UtxoWithMeta` with proper metadata (including `registeredForDustGeneration` check)
+  - Applies updates to the wallet state
+  - Added test `syncs Night tokens from rewardNight to unshielded wallet` in `simulation-mode.test.ts`
+  - Also fixed `rewardNight` to use `genesisStrictness` internally (claim transactions are not balanced)
+- [x] 33 rename `defaultPostGenesisStrictness` into `defaultStrictness` → Done
+- [x] 34 rename `addToMempoolOnly` into `submitAndForget`; Add a comment there and to `submitTransaction` that `submitTransaction` waits for block inclusion while `submitAndForget` does not. → Done, added clarifying comments to both methods
+- [x] 36 `rewardNight` now takes `(verifyingKey, amount)` instead of `(recipient, amount, verifyingKey)`.
+      The recipient `UserAddress` is derived internally via `addressFromKey(verifyingKey)`. Updated all callers
+      in Simulator.test.ts, DustWallet.test.ts, and simulation-mode.test.ts. Also fixed DustWallet `waitForTx`
+      helper to use `>=` comparison with `appliedIndex` (now semantics: next block to process = blockNumber + 1).
+- [x] 37 Default fullness for `immediateBlockProducer` changed from 0 to 0.5 (baseline for fee calculation).
+      Updated all callers: `immediateBlockProducer(0, ...)` → `immediateBlockProducer(undefined, ...)` to rely
+      on defaults. Tests with intentional custom fullness (0.8, 0.9, callbacks) left unchanged. Updated DustWallet
+      expected balance to match new fullness-dependent fee parameters.
+- [x] 38 Added `Clock` abstraction to facade's `InitParams`. `Clock = () => Date` with `systemClock` as default.
+      Factory pattern: `clock?: (config) => MaybePromise<Clock>`. Added `simulatorClock(simulator)` helper that
+      reads time synchronously from the simulator's state ref. Updated `simulation-mode.test.ts`:
+      - Removed fast-forward workaround (no longer need to sync simulator time with `Date.now()`)
+      - Removed manual TTL computation from simulator time
+      - Both facades now use `simulatorClock` so all time-sensitive operations use simulator time
+- [x] 39 Renamed `waitForTx` to `waitForBlock` in DustWallet.test.ts — now correctly reflects that it waits for
+      a block to be processed, not a transaction. Parameter named `blockNumber`.
+- [x] 40 Removed `clock` parameter from `makeSimulatorFacade`. It now always uses `simulatorClock(config.simulator)`
+      internally, so callers don't need to manage the clock.
+- [x] 41 Changed `Clock` type from `() => Date` to `{ now: () => Date }`. Updated `systemClock`, `simulatorClock`,
+      and all usages (`this.clock()` → `this.clock.now()`, `clock()` → `clock.now()`).
+- [x] 42 Test "allows to transfer shielded tokens between two wallets with fee payment" now uses Night genesis mints
+      instead of `rewardNight`. Removed Steps 6 (rewardNight + sync) — Night tokens come from genesis alongside
+      shielded tokens. Reduces test setup from 10 steps to 8.
+- [x] 43 Removed all 15 `Effect.sleep` calls from Simulator.test.ts. `submitTransaction` and `rewardNight` already
+      wait for block inclusion. For the `submitAndForget` + custom block producer test, replaced sleep with
+      `simulator.state$` stream filtering to deterministically wait for block production.
+- [x] 44 Extracted shared test helpers in Simulator.test.ts:
+      - `createKeys(seed)` — wraps `ZswapSecretKeys.fromSeed(Buffer.alloc(32, seed))`
+      - `createUnbalancedTx(recipientKeys, amount?)` — wraps coin/output/offer/transaction creation
+      - `verifyShieldedReceipt(recipientKeys, events, tokenType, expectedAmount)` — wraps replayEvents verification
+      Applied across 23 key creation sites, 14 transaction creation sites, and 5 verification blocks.
+- [x] 45 Added curried overloads (via `dual`) for `getBlockByNumber`, `getBlockEventsFrom`, and `getBlockEventsSince`.
+      They can now be used both as `getBlockByNumber(state, 1n)` and `simulator.query(getBlockByNumber(1n))`.
+- [x] 46 Refactored `makeSimulatorSyncCapability` to pure functional style:
+      - Replaced `new Map()` + for loop + `.set()` with `new Map(array.map(...))`
+      - Replaced mutable `createdUtxos` array + for + push with `Array.from(...).filter(...).map(...)`
+      - Replaced mutable `spentUtxos` array + 2 for loops + push with spread + filter + map
+      - Extracted `utxoKey` and `updateProgress` helpers for clarity
+- [x] 47 `makeSimulatorFacade` no longer takes `provingService` or `submissionService` — creates them internally
+      from `SimulatorConfig`. Removed `createSimulatorProvingService`/`createSimulatorSubmissionService` from
+      all test call sites. Also removed `genesisStrictness` from facade tests: registration now pays its own fee
+      via `allowFeePayment` (fast-forward time before registration so `generatedNow > 0`).
+- [x] 48 Extracted additional shared helpers in Simulator.test.ts:
+      - `createNightKeys(seed)` — wraps 3-line Night key creation (secretKeyHex → verifyingKey → userAddress)
+      - `shieldedGenesisMint(recipientKeys, amount?)` — wraps inline genesis mint object literal
+      Applied across 5 Night key sites and 20 genesis mint sites.
+- [x] 49 Rewrote `processTransactions` as a pure `reduce` over `Either.flatMap` chain. No `let`, no `for`, no
+      `.push()`. Accumulates `(blockTransactions, finalLedger)` functionally, short-circuiting on first error.
+
+
 ## Progress Notes
 
 ### Session 4: Tasks 16-22 Complete
@@ -136,13 +209,18 @@ This document tracks the planned refactorings for the Simulator module.
 **Completed:**
 
 - **Task 16**: Verified test uses custom random networkId (`custom-test-network-${Date.now()}`)
-- **Task 18**: Added `NightGenesisMint` type using reward/claim mechanism internally. Night claims have minimum amount (~14077).
-- **Task 19**: `blockHash` now takes block number (deterministic). Added `nextBlockContextFromBlock` with whole previous block.
-- **Task 20**: Refactored GenesisMint to tagged union pattern with `type` discriminator (`'shielded'`, `'unshielded'`, `'night'`).
-- **Task 21**: Removed "2 modes" references from docstrings. Test describe blocks renamed to "with genesis mints"/"without genesis mints".
+- **Task 18**: Added `NightGenesisMint` type using reward/claim mechanism internally. Night claims have minimum amount
+  (~14077).
+- **Task 19**: `blockHash` now takes block number (deterministic). Added `nextBlockContextFromBlock` with whole previous
+  block.
+- **Task 20**: Refactored GenesisMint to tagged union pattern with `type` discriminator (`'shielded'`, `'unshielded'`,
+  `'night'`).
+- **Task 21**: Removed "2 modes" references from docstrings. Test describe blocks renamed to "with genesis
+  mints"/"without genesis mints".
 - **Task 22**: Verified `makeInitialTransactions` uses pure FP (map/filter/reduce, no loops).
 
 **New Types:**
+
 - `nextBlockContextFromBlock(previousBlock, blockTime)`: More accurate context from whole block
 - `blockHash(blockNumber)`: Deterministic hash from block number
 
@@ -155,12 +233,14 @@ This document tracks the planned refactorings for the Simulator module.
   required for Night tokens (used for claim transaction signature).
 
 **Type Changes:**
+
 - Removed `NightGenesisMint` type
 - `UnshieldedGenesisMint` now has optional `verifyingKey?: SignatureVerifyingKey`
 - `GenesisMint = ShieldedGenesisMint | UnshieldedGenesisMint` (was three-way union)
 - Night detection: `tokenType === nativeToken().raw`
 
 **Test Updates:**
+
 - Updated `Simulator.test.ts` Night genesis tests to use `type: 'unshielded'` with `tokenType: ledger.nativeToken().raw`
 
 ### Session 5 (continued): Task 25 Complete
@@ -171,16 +251,20 @@ This document tracks the planned refactorings for the Simulator module.
   control strictness at the block level, enabling post-genesis balancing enforcement.
 
 **New Exports:**
-- `defaultPostGenesisStrictness`: Realistic post-genesis strictness (balancing, signatures, limits enforced; proofs not verified)
+
+- `defaultPostGenesisStrictness`: Realistic post-genesis strictness (balancing, signatures, limits enforced; proofs not
+  verified)
 - `genesisStrictness`: All checks disabled for genesis block token distribution
 - `strictBlockProducer(fullness)`: Convenience block producer using `defaultPostGenesisStrictness`
 
 **API Changes:**
+
 - `BlockProductionRequest` now has optional `strictnessOverride` field
 - `immediateBlockProducer(fullness, strictnessOverride?)` accepts optional strictness
 - `processTransaction` and `processTransactions` accept optional strictness override
 
 **Test Updates:**
+
 - Added `strictBlockProducer` tests verifying balancing enforcement
 - Added test confirming `immediateBlockProducer` allows unbalanced transactions by default
 
@@ -191,6 +275,7 @@ This document tracks the planned refactorings for the Simulator module.
 - **Task 23** (partial): Refactored simulation-mode.test.ts with helper functions and Effect cleanup
 
 **New Helper Functions (packages/facade/test/utils/helpers.ts):**
+
 - `SimulatorConfig`: Type for simulator configuration
 - `createSimulatorProvingService()`: Promise-based wrapper for simulator proving
 - `createSimulatorSubmissionService(simulator)`: Promise-based wrapper for submission
@@ -201,6 +286,7 @@ This document tracks the planned refactorings for the Simulator module.
 - `waitForUnshieldedBalance(facade, tokenType, minBalance)`: Wait for unshielded balance
 
 **Test Improvements:**
+
 - Reduced boilerplate using new helpers
 - Effect cleanup via `Effect.acquireRelease` - facades auto-stop when scope closes
 - Added Night genesis transfer test (skipped pending unshielded sync investigation)
@@ -242,5 +328,54 @@ This document tracks the planned refactorings for the Simulator module.
 - Updated all imports to use `@midnight-ntwrk/wallet-sdk-capabilities/simulation` directly
 - Enhanced `simulation-mode.test.ts` as reference example for dapp-connector tests
 - All tests pass (capabilities, dust-wallet, shielded-wallet, unshielded-wallet, wallet-integration-tests)
+
+### Session 6: Tasks 27, 28, 30 Complete
+
+**Completed:**
+
+- **Task 27**: Enhanced "supports mixed genesis mints" test to verify recipients can receive tokens by checking ledger
+  state (UTXOs for unshielded, events for shielded)
+- **Task 28**: Removed `strictBlockProducer` - `immediateBlockProducer` now defaults to `defaultPostGenesisStrictness`.
+  Tests updated to use `genesisStrictness` for unbalanced transactions.
+- **Task 30**: Major refactor of strictness handling:
+  - Added `ReadyTransaction` type (strictness required) for block production
+  - `PendingTransaction.strictness` is now optional (mempool)
+  - `BlockProductionRequest.transactions` uses `ReadyTransaction[]` (strictness assigned)
+  - Block producer assigns default strictness via `assignStrictnessToAll`
+  - Per-transaction strictness takes precedence when specified on `submitTransaction`
+  - `#produceBlock` now takes `BlockProductionRequest` directly
+
+**New Types and Functions:**
+
+- `ReadyTransaction`: Transaction with strictness assigned (for block production)
+- `assignStrictness(pendingTx, defaultStrictness)`: Assign strictness to single pending transaction
+- `assignStrictnessToAll(transactions, defaultStrictness)`: Assign strictness to all pending transactions
+- `allMempoolTransactions(state, fullness, defaultStrictness)`: Now requires default strictness
+
+**API Changes:**
+
+- `submitTransaction(tx, options?)`: Only assigns strictness if `options.strictness` is provided
+- `addToMempoolOnly(tx, options?)`: Same behavior
+- Custom block producers must use `assignStrictnessToAll` to convert mempool transactions
+
+### Session 7: Facade Test Fix and FlatMap Refactoring
+
+**Completed:**
+
+- **Task 23**: Fixed `simulation-mode.test.ts` test failure. The test was failing because:
+  - Test uses `payFees: false` which creates unbalanced transactions
+  - With new strictness design, `submitTransaction` doesn't assign strictness when not provided
+  - Block producer assigns `defaultPostGenesisStrictness` which enforces balancing
+  - Unbalanced transactions fail validation
+- **Fix**: Updated test to use `immediateBlockProducer(0, genesisStrictness)` since it explicitly doesn't pay fees
+- All facade simulation-mode tests now pass (~400ms execution)
+
+- **Task 26**: Investigated using `.withDefaults()` in wallet factories. **Cannot be done** due to TypeScript type
+  accumulation - `withDefaults()` adds `DefaultSyncConfiguration` requirements that persist even after `withSync()`
+  override. Added documentation explaining the limitation.
+
+- **Task 29**: Refactored `toShieldedMint`, `toCustomUnshieldedMint`, `toNightMint` to return arrays for use with
+  `flatMap`. Changed from `undefined | value` to `[] | [value]` pattern. Updated usages from `.map().filter()` to
+  `.flatMap()`.
 
 ## Refactor Complete ✓

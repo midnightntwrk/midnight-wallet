@@ -28,19 +28,18 @@
  */
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator, type GenesisMint } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { Simulator, immediateBlockProducer, type GenesisMint } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { Effect, pipe } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, type UnprovenTransactionRecipe } from '../src/index.js';
+import { type CombinedTokenTransfer, type UnprovenTransactionRecipe, type FacadeState } from '../src/index.js';
 import {
-  createSimulatorProvingService,
-  createSimulatorSubmissionService,
   createSimulatorWalletFactories,
   deriveWalletKeys,
   makeSimulatorFacade,
   tokenValue,
   waitForShieldedCoins,
+  waitForUnshieldedBalance,
   type SimulatorConfig,
 } from './utils/index.js';
 
@@ -53,7 +52,16 @@ const SENDER_SEED = '00000000000000000000000000000000000000000000000000000000000
 const RECEIVER_SEED = '0000000000000000000000000000000000000000000000000000000000001111';
 
 describe('WalletFacade in simulation mode', () => {
-  it('allows to transfer shielded tokens between two wallets', async () => {
+  /**
+   * This test demonstrates shielded token transfers in simulation mode with proper fee payment.
+   *
+   * The test:
+   * 1. Creates shielded + Night tokens via genesis mints
+   * 2. Registers Night tokens for Dust generation
+   * 3. Fast-forwards time to accumulate Dust
+   * 4. Performs a shielded transfer with fee payment (default strictness enforces balancing)
+   */
+  it('allows to transfer shielded tokens between two wallets with fee payment', async () => {
     // Wrap entire test in Effect.gen with Effect.scoped to keep simulator resources alive
     // and automatically clean up facades when the scope closes
     return Effect.gen(function* () {
@@ -61,54 +69,87 @@ describe('WalletFacade in simulation mode', () => {
       const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
       const receiverKeys = deriveWalletKeys(RECEIVER_SEED, NETWORK_ID);
 
-      // Step 2: Initialize Simulator with genesis mints (pre-funded accounts)
-      const genesisMints: [GenesisMint] = [
+      // Step 2: Initialize Simulator with shielded + Night genesis mints
+      const nightTokenType = ledger.nativeToken().raw;
+      const genesisMints: [GenesisMint, ...GenesisMint[]] = [
         {
           type: 'shielded',
           tokenType: shieldedTokenType,
           amount: tokenValue(1000n),
           recipient: senderKeys.shieldedKeys,
         },
+        {
+          type: 'unshielded',
+          tokenType: nightTokenType,
+          amount: tokenValue(100_000n), // Enough Night for Dust generation
+          recipient: senderKeys.userAddress,
+          verifyingKey: senderKeys.signatureVerifyingKey,
+        },
       ];
 
-      const simulator = yield* Simulator.init({ genesisMints });
+      // Use default block producer which enforces balancing (requires fee payment)
+      const simulator = yield* Simulator.init({
+        genesisMints,
+        blockProducer: immediateBlockProducer(), // Default strictness enforces balancing
+      });
 
       // Step 3: Create simulator services and wallet factories
+      // The simulatorClock reads time from the simulator's state, so the facade's
+      // TTL calculations and time-sensitive operations use simulator time instead of Date.now().
       const simulatorConfig: SimulatorConfig = {
         simulator,
         networkId: NETWORK_ID,
         costParameters: { feeBlocksMargin: 5 },
       };
 
-      const provingService = createSimulatorProvingService();
-      const submissionService = createSimulatorSubmissionService(simulator);
       const factories = createSimulatorWalletFactories(simulatorConfig);
 
       // Step 4: Initialize WalletFacades for sender and receiver
-      // Using Effect.acquireRelease ensures facades are stopped when scope closes
-      const senderFacade = yield* makeSimulatorFacade(
-        simulatorConfig,
-        senderKeys,
-        factories,
-        provingService,
-        submissionService,
-      );
+      // makeSimulatorFacade creates proving/submission services and clock internally
+      const senderFacade = yield* makeSimulatorFacade(simulatorConfig, senderKeys, factories);
+      const receiverFacade = yield* makeSimulatorFacade(simulatorConfig, receiverKeys, factories);
 
-      const receiverFacade = yield* makeSimulatorFacade(
-        simulatorConfig,
-        receiverKeys,
-        factories,
-        provingService,
-        submissionService,
-      );
-
-      // Step 5: Wait for sender wallet to sync and see the genesis funds
+      // Step 5: Wait for sender wallet to sync and see genesis funds (shielded + Night)
       yield* waitForShieldedCoins(senderFacade);
+      yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      // Step 6: Get receiver address and create transfer
+      // Step 6: Fast-forward time so Night UTXOs accumulate "would-be" Dust.
+      // Registration pays its own fee via allowFeePayment, which is derived from
+      // the Dust that would be generated from the unregistered Night UTXOs.
+      // Without elapsed time, generatedNow=0 and registration can't cover its fee.
+      yield* simulator.fastForward(10_000n);
+
+      // Step 7: Register Night tokens for Dust generation
+      const senderState: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+      );
+
+      const nightUtxos = senderState.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
+      );
+
+      expect(nightUtxos.length).toBeGreaterThan(0);
+
+      // Registration transaction's fee is covered by allowFeePayment (would-be generated Dust)
+      const dustRegistrationRecipe = yield* Effect.promise(() =>
+        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
+          senderKeys.unshieldedKeystore.signData(payload),
+        ),
+      );
+      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
+      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
+
+      // Step 8: Wait for Dust wallet to sync and see accumulated Dust
+      yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
+      );
+
+      // Step 9: Get receiver address and create transfer
       const receiverAddress = yield* Effect.promise(() => receiverFacade.shielded.getAddress());
 
-      const ttl = new Date(Date.now() + 60 * 60 * 1000);
+      // Compute TTL from simulator time (facade uses simulator clock internally for its own TTLs)
+      const simTime = yield* simulator.query((s) => s.currentTime);
+      const ttl = new Date(simTime.getTime() + 60 * 60 * 1000);
       const transferOutputs: CombinedTokenTransfer[] = [
         {
           type: 'shielded',
@@ -122,7 +163,9 @@ describe('WalletFacade in simulation mode', () => {
         },
       ];
 
-      // Step 7: Create, finalize, and submit the transfer transaction
+      // Step 10: Create, finalize, and submit the transfer transaction with fee payment
+      console.log('[test] Step 9: Creating transfer');
+      // payFees: true by default - transaction is balanced with Dust spend
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
           transferOutputs,
@@ -130,7 +173,7 @@ describe('WalletFacade in simulation mode', () => {
             shieldedSecretKeys: senderKeys.shieldedKeys,
             dustSecretKey: senderKeys.dustKey,
           },
-          { ttl, payFees: false }, // No fees in simulation mode without dust registration
+          { ttl },
         ),
       );
 
@@ -139,7 +182,7 @@ describe('WalletFacade in simulation mode', () => {
 
       expect(txHash).toBeTypeOf('string');
 
-      // Step 8: Wait for receiver wallet to see the transferred funds
+      // Step 11: Wait for receiver wallet to see the transferred funds
       const finalBalance = yield* Effect.promise(() =>
         pipe(
           receiverFacade.state(),
@@ -155,104 +198,116 @@ describe('WalletFacade in simulation mode', () => {
     }).pipe(Effect.scoped, Effect.runPromise);
   });
 
-  // TODO: Night token transfers need further investigation
-  // The unshielded wallet sync for Night tokens from genesis is not working as expected.
-  // This is a known issue tracked in simulator_refactor.md Task 23.
-  it.skip('supports Night tokens in genesis and unshielded transfers', async () => {
+  /**
+   * Test that demonstrates the unshielded wallet simulator sync works.
+   * This test verifies that Night tokens from rewardNight are visible in the wallet.
+   */
+  it('syncs Night tokens from rewardNight to unshielded wallet', async () => {
     return Effect.gen(function* () {
-      // Derive keys
       const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
-      const receiverKeys = deriveWalletKeys(RECEIVER_SEED, NETWORK_ID);
 
-      // Night token type is the native token
-      const nightTokenType = ledger.nativeToken().raw;
+      // Initialize simulator without genesis mints (blank ledger)
+      const simulator = yield* Simulator.init({
+        blockProducer: immediateBlockProducer(),
+      });
 
-      // Initialize Simulator with Night genesis mint
-      // Night requires verifyingKey for the claim transaction
-      const genesisMints: [GenesisMint] = [
-        {
-          type: 'unshielded',
-          tokenType: nightTokenType,
-          amount: tokenValue(1000n), // Must exceed minimum claim amount (~14077)
-          recipient: senderKeys.userAddress,
-          verifyingKey: senderKeys.signatureVerifyingKey,
-        },
-      ];
-
-      const simulator = yield* Simulator.init({ genesisMints });
-
-      // Create simulator services and wallet factories
       const simulatorConfig: SimulatorConfig = {
         simulator,
         networkId: NETWORK_ID,
         costParameters: { feeBlocksMargin: 5 },
       };
 
-      const provingService = createSimulatorProvingService();
-      const submissionService = createSimulatorSubmissionService(simulator);
       const factories = createSimulatorWalletFactories(simulatorConfig);
 
-      // Initialize facades
-      const senderFacade = yield* makeSimulatorFacade(
-        simulatorConfig,
-        senderKeys,
-        factories,
-        provingService,
-        submissionService,
-      );
+      const senderFacade = yield* makeSimulatorFacade(simulatorConfig, senderKeys, factories);
 
-      const receiverFacade = yield* makeSimulatorFacade(
-        simulatorConfig,
-        receiverKeys,
-        factories,
-        provingService,
-        submissionService,
-      );
+      // Reward Night tokens to sender
+      const nightTokenType = ledger.nativeToken().raw;
+      yield* simulator.rewardNight(senderKeys.signatureVerifyingKey, tokenValue(100_000n));
 
-      // Wait for sender to see Night balance
-      const senderBalance = yield* Effect.promise(() =>
-        pipe(
-          senderFacade.state(),
-          rx.map((s) => s.unshielded.balances[nightTokenType] ?? 0n),
-          rx.filter((balance) => balance > 0n),
-          rx.firstValueFrom,
-        ),
-      );
+      // Wait for unshielded wallet to sync and see Night tokens
+      const nightBalance = yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
 
-      expect(senderBalance).toEqual(tokenValue(1000n));
+      expect(nightBalance).toEqual(tokenValue(100_000n));
+    }).pipe(Effect.scoped, Effect.runPromise);
+  });
 
-      // Get receiver address for Night transfer
-      const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
+  it('supports Night tokens in genesis and unshielded transfers', async () => {
+    return Effect.gen(function* () {
+      const senderKeys = deriveWalletKeys(SENDER_SEED, NETWORK_ID);
+      const receiverKeys = deriveWalletKeys(RECEIVER_SEED, NETWORK_ID);
+      const nightTokenType = ledger.nativeToken().raw;
 
-      // Create Night transfer
-      const ttl = new Date(Date.now() + 60 * 60 * 1000);
-      const transferOutputs: CombinedTokenTransfer[] = [
+      // Genesis: Night tokens for sender (enough for Dust generation + transfer)
+      const genesisMints: [GenesisMint] = [
         {
           type: 'unshielded',
-          outputs: [
-            {
-              type: nightTokenType,
-              receiverAddress,
-              amount: tokenValue(100n),
-            },
-          ],
+          tokenType: nightTokenType,
+          amount: tokenValue(100_000n),
+          recipient: senderKeys.userAddress,
+          verifyingKey: senderKeys.signatureVerifyingKey,
         },
       ];
 
+      // Default block producer enforces balancing (requires fee payment)
+      const simulator = yield* Simulator.init({
+        genesisMints,
+        blockProducer: immediateBlockProducer(),
+      });
+
+      const simulatorConfig: SimulatorConfig = {
+        simulator,
+        networkId: NETWORK_ID,
+        costParameters: { feeBlocksMargin: 5 },
+      };
+
+      const factories = createSimulatorWalletFactories(simulatorConfig);
+
+      const senderFacade = yield* makeSimulatorFacade(simulatorConfig, senderKeys, factories);
+      const receiverFacade = yield* makeSimulatorFacade(simulatorConfig, receiverKeys, factories);
+
+      // Wait for sender to see Night balance from genesis
+      yield* waitForUnshieldedBalance(senderFacade, nightTokenType, 1n);
+
+      // Fast-forward for Dust generation, then register Night tokens
+      yield* simulator.fastForward(10_000n);
+
+      const senderState: FacadeState = yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0))),
+      );
+      const nightUtxos = senderState.unshielded.availableCoins.filter(
+        (coin) => coin.utxo.type === nightTokenType && coin.meta.registeredForDustGeneration === false,
+      );
+      expect(nightUtxos.length).toBeGreaterThan(0);
+
+      const dustRegistrationRecipe = yield* Effect.promise(() =>
+        senderFacade.registerNightUtxosForDustGeneration(nightUtxos, senderKeys.signatureVerifyingKey, (payload) =>
+          senderKeys.unshieldedKeystore.signData(payload),
+        ),
+      );
+      const registrationTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(dustRegistrationRecipe));
+      yield* Effect.promise(() => senderFacade.submitTransaction(registrationTx));
+
+      // Wait for Dust to be available
+      yield* Effect.promise(() =>
+        rx.firstValueFrom(senderFacade.state().pipe(rx.filter((s) => s.dust.availableCoins.length > 0))),
+      );
+
+      // Create and submit Night transfer with fee payment
+      const receiverAddress = yield* Effect.promise(() => receiverFacade.unshielded.getAddress());
+      const simTime = yield* simulator.query((s) => s.currentTime);
+      const ttl = new Date(simTime.getTime() + 60 * 60 * 1000);
+
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
-          transferOutputs,
-          {
-            shieldedSecretKeys: senderKeys.shieldedKeys,
-            dustSecretKey: senderKeys.dustKey,
-          },
-          { ttl, payFees: false },
+          [{ type: 'unshielded', outputs: [{ type: nightTokenType, receiverAddress, amount: tokenValue(100n) }] }],
+          { shieldedSecretKeys: senderKeys.shieldedKeys, dustSecretKey: senderKeys.dustKey },
+          { ttl }, // payFees: true (default)
         ),
       );
 
       const finalizedTx = yield* Effect.promise(() => senderFacade.finalizeRecipe(transferRecipe));
       const txHash = yield* Effect.promise(() => senderFacade.submitTransaction(finalizedTx));
-
       expect(txHash).toBeTypeOf('string');
 
       // Wait for receiver to see Night balance
@@ -264,7 +319,6 @@ describe('WalletFacade in simulation mode', () => {
           rx.firstValueFrom,
         ),
       );
-
       expect(receiverBalance).toEqual(tokenValue(100n));
     }).pipe(Effect.scoped, Effect.runPromise);
   });

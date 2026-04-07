@@ -19,6 +19,7 @@ import {
   SimulatorState,
   getLastBlock,
   getLastBlockEvents,
+  getBlockEventsFrom,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
@@ -293,10 +294,13 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
         return state;
       }
 
-      const blockNumber = lastBlock.number;
-      const events = [...getLastBlockEvents(simulatorUpdate)];
+      // Get all events from blocks starting at appliedIndex (the next block to process).
+      // appliedIndex semantics: the first block number we haven't processed yet.
+      // Initial: appliedIndex = 0 (haven't processed any blocks)
+      // After processing block N: appliedIndex = N + 1 (next block to process)
+      const events = [...getBlockEventsFrom(simulatorUpdate, state.progress.appliedIndex)];
       return CoreWallet.updateProgress(CoreWallet.replayEvents(state, secretKeys, events), {
-        appliedIndex: blockNumber,
+        appliedIndex: lastBlock.number + 1n,
       });
     },
   };

@@ -12,20 +12,11 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { FacadeState, WalletFacade } from '../../src/index.js';
+import { FacadeState, WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
-import {
-  Sync as ShieldedSync,
-  Transacting as ShieldedTransacting,
-  TransactionHistory,
-  V1Builder as ShieldedV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import { Sync as ShieldedSync, V1Builder as ShieldedV1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import {
-  SyncService as DustSyncService,
-  Transacting as DustTransacting,
-  V1Builder as DustV1Builder,
-} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import { SyncService as DustSyncService, V1Builder as DustV1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
@@ -116,6 +107,14 @@ export const sleep = (secs: number): Promise<void> => {
 // we need to wait for at least one block for Dust to be generated
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
+/**
+ * Creates a clock backed by the simulator's current time.
+ * Reads time synchronously from the simulator's state ref.
+ */
+export const simulatorClock = (simulator: Simulator): Clock => ({
+  now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
+});
+
 // =============================================================================
 // Simulation Mode Helpers
 // =============================================================================
@@ -172,46 +171,55 @@ export type SimulatorWalletFactories = {
 
 /**
  * Creates wallet factory functions for simulation mode.
+ *
+ * Uses default capabilities for everything except sync (which uses simulator).
+ * This ensures transacting and other capabilities match real-network behavior,
+ * with only sync differing for simulator.
+ *
+ * Note: We cannot use `.withDefaults().withSync(...)` pattern because `withDefaults()`
+ * adds `DefaultSyncConfiguration` to the required config type (including `indexerClientConnection`),
+ * and even though we override the sync implementation, TypeScript still requires those config
+ * properties. Instead, we explicitly chain all the individual `.with*Defaults()` methods,
+ * substituting `.withSync(...)` for `.withSyncDefaults()`.
  */
 export const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalletFactories => {
-  // Shielded wallet factory with simulator capabilities
+  // Shielded wallet: all defaults except sync (uses simulator sync)
   const ShieldedWalletFactory = CustomShieldedWallet(
     config,
     new ShieldedV1Builder()
-      .withTransactionType<ledger.FinalizedTransaction>()
-      .withCoinSelectionDefaults()
-      .withTransacting(ShieldedTransacting.makeSimulatorTransactingCapability)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
-      .withTransactionHistory(TransactionHistory.makeSimulatorTransactionHistoryCapability as any)
+      .withDefaultTransactionType()
       .withSync(ShieldedSync.makeSimulatorSyncService, ShieldedSync.makeSimulatorSyncCapability)
+      .withSerializationDefaults()
+      .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
+      .withTransactionHistoryDefaults()
       .withKeysDefaults()
-      .withSerializationDefaults(),
+      .withCoinSelectionDefaults(),
   );
 
-  // Dust wallet factory with simulator capabilities
+  // Dust wallet: all defaults except sync (uses simulator sync)
   const DustWalletFactory = CustomDustWallet(
     config,
     new DustV1Builder()
-      .withTransactionType<ledger.FinalizedTransaction>()
-      .withCoinSelectionDefaults()
-      .withTransacting(DustTransacting.makeSimulatorTransactingCapability)
+      .withDefaultTransactionType()
       .withSync(DustSyncService.makeSimulatorSyncService, DustSyncService.makeSimulatorSyncCapability)
+      .withSerializationDefaults()
+      .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
-      .withSerializationDefaults(),
+      .withCoinSelectionDefaults(),
   );
 
-  // Unshielded wallet factory with simulator capabilities
+  // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
     { ...config, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
     new UnshieldedV1Builder()
-      .withCoinSelectionDefaults()
-      .withTransactingDefaults()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
+      .withSerializationDefaults()
+      .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
       .withKeysDefaults()
-      .withSerializationDefaults()
+      .withCoinSelectionDefaults()
       .withTransactionHistoryDefaults(),
   );
 
@@ -254,15 +262,17 @@ export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId
 /**
  * Creates and initializes a WalletFacade for simulation mode.
  * Returns an Effect that acquires the facade and releases it on scope close.
+ *
+ * Proving and submission services are created internally from the simulator config.
  */
 export const makeSimulatorFacade = (
   config: SimulatorConfig,
   keys: WalletKeys,
   factories: SimulatorWalletFactories,
-  provingService: ProvingService<UnboundTransaction>,
-  submissionService: SubmissionService<ledger.FinalizedTransaction>,
 ): Effect.Effect<WalletFacade, never, Scope.Scope> => {
   const dustParameters = ledger.LedgerParameters.initialParameters().dust;
+  const provingService = createSimulatorProvingService();
+  const submissionService = createSimulatorSubmissionService(config.simulator);
 
   return Effect.acquireRelease(
     Effect.promise(async () => {
@@ -279,6 +289,7 @@ export const makeSimulatorFacade = (
         dust: () => factories.createDustWallet(keys.dustKey, dustParameters),
         provingService: () => provingService,
         submissionService: () => submissionService,
+        clock: () => simulatorClock(config.simulator),
       });
 
       // Start the wallet with keys

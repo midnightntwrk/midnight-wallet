@@ -43,6 +43,7 @@ import {
   Intent,
   UnshieldedOffer,
   nativeToken,
+  addressFromKey,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -52,6 +53,7 @@ import {
   type Block,
   type PendingTransaction,
   type BlockProducer,
+  type BlockProductionRequest,
   type GenesisMint,
   type ShieldedGenesisMint,
   type UnshieldedGenesisMint,
@@ -62,7 +64,7 @@ import {
   allMempoolTransactions,
   blankState,
   createStrictness,
-  defaultPostGenesisStrictness,
+  defaultStrictness,
   genesisStrictness,
   blockHash,
   blockHashFromTime,
@@ -121,7 +123,7 @@ export {
   hasPendingTransactions,
   getCurrentTime,
   applyTransaction,
-  defaultPostGenesisStrictness,
+  defaultStrictness,
   genesisStrictness,
   createStrictness,
 } from './SimulatorState.js';
@@ -133,32 +135,19 @@ export {
 /**
  * Default block producer: produces a block for each state change with non-empty mempool.
  *
+ * By default, uses post-genesis strictness (balancing, signatures, limits enforced).
+ * This ensures realistic simulation where transactions must be properly balanced (pay fees).
+ *
  * @param fullness - Static fullness (0-1) or callback based on state
- * @param strictnessOverride - Optional strictness that overrides per-transaction strictness
+ * @param strictness - Strictness config (defaults to defaultStrictness)
  */
 export const immediateBlockProducer =
-  (fullness: FullnessSpec = 0, strictnessOverride?: StrictnessConfig): BlockProducer =>
+  (fullness: FullnessSpec = 0.5, strictness: StrictnessConfig = defaultStrictness): BlockProducer =>
   (states) =>
     states.pipe(
       Stream.filter(hasPendingTransactions),
-      Stream.map((s) => {
-        const base = allMempoolTransactions(s, resolveFullness(fullness, s));
-        // Only include strictnessOverride if it's defined (exactOptionalPropertyTypes compatibility)
-        return strictnessOverride !== undefined ? { ...base, strictnessOverride } : base;
-      }),
+      Stream.map((s) => allMempoolTransactions(s, resolveFullness(fullness, s), createStrictness(strictness))),
     );
-
-/**
- * Block producer that enforces post-genesis strictness (balancing, signatures, limits).
- * Uses default post-genesis strictness which requires transactions to be properly balanced (pay fees).
- *
- * This is the recommended block producer for realistic simulation where transactions
- * must be properly balanced after genesis.
- *
- * @param fullness - Static fullness (0-1) or callback based on state
- */
-export const strictBlockProducer = (fullness: FullnessSpec = 0): BlockProducer =>
-  immediateBlockProducer(fullness, defaultPostGenesisStrictness);
 
 // =============================================================================
 // Simulator Configuration
@@ -293,25 +282,23 @@ export class Simulator {
   ): Effect.Effect<Simulator, never, Scope.Scope> {
     const noStrictness = createStrictness();
 
-    // Pure function to extract shielded mint data (returns undefined for non-shielded mints)
+    // Pure function to extract shielded mint data (returns array for flatMap)
     const toShieldedMint = (mint: GenesisMint) =>
-      isShieldedMint(mint)
-        ? { tokenType: mint.tokenType, amount: mint.amount, keys: mint.recipient }
-        : undefined;
+      isShieldedMint(mint) ? [{ tokenType: mint.tokenType, amount: mint.amount, keys: mint.recipient }] : [];
 
-    // Pure function to extract non-Night unshielded mint data
+    // Pure function to extract non-Night unshielded mint data (returns array for flatMap)
     // Night is auto-detected by tokenType and excluded from regular unshielded minting
     const toCustomUnshieldedMint = (mint: GenesisMint) =>
       isUnshieldedMint(mint) && !isNightToken(mint.tokenType)
-        ? { tokenType: mint.tokenType, amount: mint.amount, recipient: mint.recipient }
-        : undefined;
+        ? [{ tokenType: mint.tokenType, amount: mint.amount, recipient: mint.recipient }]
+        : [];
 
-    // Pure function to extract Night mint data from unshielded mints
+    // Pure function to extract Night mint data from unshielded mints (returns array for flatMap)
     // Night is auto-detected by comparing tokenType with nativeToken().raw
     const toNightMint = (mint: GenesisMint) =>
       isUnshieldedMint(mint) && isNightToken(mint.tokenType) && mint.verifyingKey !== undefined
-        ? { amount: mint.amount, recipient: mint.recipient, verifyingKey: mint.verifyingKey }
-        : undefined;
+        ? [{ amount: mint.amount, recipient: mint.recipient, verifyingKey: mint.verifyingKey }]
+        : [];
 
     // Pure function to create a ZswapOffer from shielded mint data
     const createShieldedOffer = (transfer: {
@@ -342,19 +329,20 @@ export class Simulator {
       context: import('@midnight-ntwrk/ledger-v8').BlockContext,
       blockTime: Date,
     ) =>
-      Effect.gen(function* () {
+      Effect.sync(() => {
         const verificationTime = blockTime;
 
-        // Separate mints by type using filter/map (pure, no mutation)
+        // Separate mints by type using flatMap (pure, no mutation)
         // Night tokens are excluded and handled separately via reward/claim mechanism
-        const shieldedMints = genesisMints.map(toShieldedMint).filter((m): m is NonNullable<typeof m> => m !== undefined);
-        const customUnshieldedMints = genesisMints
-          .map(toCustomUnshieldedMint)
-          .filter((m): m is NonNullable<typeof m> => m !== undefined);
+        const shieldedMints = genesisMints.flatMap(toShieldedMint);
+        const customUnshieldedMints = genesisMints.flatMap(toCustomUnshieldedMint);
 
         // If no shielded or custom unshielded mints, return empty result
         if (shieldedMints.length === 0 && customUnshieldedMints.length === 0) {
-          return { initialState: ledgerState, transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[] };
+          return {
+            initialState: ledgerState,
+            transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[],
+          };
         }
 
         // Create ZswapOffer for shielded mints (if any)
@@ -365,7 +353,8 @@ export class Simulator {
 
         // Create Intent with UnshieldedOffer for custom unshielded mints (if any)
         const ttl = new Date(blockTime.getTime() + 3600 * 1000); // 1 hour TTL from block time
-        const intent = customUnshieldedMints.length > 0 ? createUnshieldedIntent(customUnshieldedMints, ttl) : undefined;
+        const intent =
+          customUnshieldedMints.length > 0 ? createUnshieldedIntent(customUnshieldedMints, ttl) : undefined;
 
         // Build transaction from parts
         const proofErasedTx = Transaction.fromParts(networkId, zswapOffer, undefined, intent).eraseProofs();
@@ -418,7 +407,7 @@ export class Simulator {
       const postBlockState = init.initialState.postBlockUpdate(genesisTime);
 
       // Process Night mints sequentially using reduce (pure functional fold)
-      const nightMints = genesisMints.map(toNightMint).filter((m): m is NonNullable<typeof m> => m !== undefined);
+      const nightMints = genesisMints.flatMap(toNightMint);
       const nightResults = nightMints.reduce(
         (acc, mint) => {
           const result = processNightMint(acc.ledgerState, mint, genesisTime, context);
@@ -427,7 +416,10 @@ export class Simulator {
             transactions: [...acc.transactions, { tx: result.tx, result: result.result }],
           };
         },
-        { ledgerState: postBlockState, transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[] },
+        {
+          ledgerState: postBlockState,
+          transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[],
+        },
       );
 
       // Apply final post-block update
@@ -482,11 +474,7 @@ export class Simulator {
       const productionRequests = effectiveProducer(statesForProducer);
 
       yield* Effect.forkScoped(
-        productionRequests.pipe(
-          Stream.runForEach((request) =>
-            simulator.#produceBlock(request.transactions, request.fullness, request.strictnessOverride),
-          ),
-        ),
+        productionRequests.pipe(Stream.runForEach((request) => simulator.#produceBlock(request))),
       );
 
       return simulator;
@@ -529,18 +517,17 @@ export class Simulator {
    * 2. Creates and submits a ClaimRewardsTransaction to the mempool
    * 3. The block producer will process the transaction
    *
-   * @param recipient - User address to receive Night tokens
+   * @param verifyingKey - Signature verifying key (recipient address is derived from it)
    * @param amount - Amount of Night tokens to distribute
-   * @param verifyingKey - Signature verifying key for the claim transaction
    */
   rewardNight(
-    recipient: UserAddress,
-    amount: bigint,
     verifyingKey: SignatureVerifyingKey,
+    amount: bigint,
   ): Effect.Effect<Block, LedgerOps.LedgerError> {
     const stateRef = this.#stateRef;
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const simulator = this;
+    const recipient = addressFromKey(verifyingKey);
 
     return Effect.gen(function* () {
       // First, modify ledger state to make Night tokens claimable
@@ -569,35 +556,33 @@ export class Simulator {
       );
       const tx = Transaction.fromRewards(claimRewardsTransaction).eraseProofs();
 
-      // Submit transaction - this now produces a block and returns when applied
-      return yield* simulator.submitTransaction(tx);
+      // Submit transaction with genesisStrictness - reward claims are not balanced transactions
+      return yield* simulator.submitTransaction(tx, { strictness: genesisStrictness });
     });
   }
 
   /**
-   * Submit a transaction and wait for it to be applied to the ledger.
+   * Submit a transaction and wait for it to be included in a block.
    *
-   * This method:
-   * 1. Adds the transaction to the mempool
-   * 2. Waits for the block producer to process it
-   * 3. Returns the block containing the transaction
+   * This method adds the transaction to the mempool and blocks until the block
+   * producer includes it in a block. Use this when you need confirmation that
+   * the transaction was processed.
    *
-   * The block producer stream handles actual block production, ensuring
-   * that custom block producers work correctly with submitTransaction.
-   *
-   * For fire-and-forget scenarios where you don't need to wait for
-   * block production, use `addToMempoolOnly` instead.
+   * For fire-and-forget scenarios where you don't need to wait for block
+   * inclusion, use `submitAndForget` instead.
    *
    * @param tx - Transaction to submit (proofs erased)
    * @param options - Optional submission options
    * @param options.strictness - Override well-formedness strictness
+   * @returns The block containing the transaction
    */
   submitTransaction(
     tx: ProofErasedTransaction,
     options?: { strictness?: StrictnessConfig },
   ): Effect.Effect<Block, LedgerOps.LedgerError> {
-    const strictness = createStrictness(options?.strictness);
-    const pendingTx: PendingTransaction = { tx, strictness };
+    // Only set strictness if explicitly provided; otherwise let block producer assign default
+    const pendingTx: PendingTransaction =
+      options?.strictness !== undefined ? { tx, strictness: createStrictness(options.strictness) } : { tx };
     const stateRef = this.#stateRef;
 
     return Effect.gen(function* () {
@@ -633,16 +618,22 @@ export class Simulator {
   }
 
   /**
-   * Add a transaction to the mempool without producing a block.
-   * Use this for batched or delayed block production scenarios.
+   * Submit a transaction without waiting for block inclusion.
    *
-   * @param tx - Transaction to add
+   * This method adds the transaction to the mempool and returns immediately.
+   * The block producer will process it asynchronously. Use this for fire-and-forget
+   * scenarios or when testing custom block producers with batched transactions.
+   *
+   * To wait for block inclusion, use `submitTransaction` instead.
+   *
+   * @param tx - Transaction to submit (proofs erased)
    * @param options - Optional options
    * @param options.strictness - Override well-formedness strictness
    */
-  addToMempoolOnly(tx: ProofErasedTransaction, options?: { strictness?: StrictnessConfig }): Effect.Effect<void> {
-    const strictness = createStrictness(options?.strictness);
-    const pendingTx: PendingTransaction = { tx, strictness };
+  submitAndForget(tx: ProofErasedTransaction, options?: { strictness?: StrictnessConfig }): Effect.Effect<void> {
+    // Only set strictness if explicitly provided; otherwise let block producer assign default
+    const pendingTx: PendingTransaction =
+      options?.strictness !== undefined ? { tx, strictness: createStrictness(options.strictness) } : { tx };
 
     return SubscriptionRef.update(this.#stateRef, (s) => addToMempool(s, pendingTx));
   }
@@ -666,7 +657,7 @@ export class Simulator {
   // ===========================================================================
 
   /**
-   * Produce a block from the given transactions.
+   * Produce a block from the given block production request.
    * Internal method used by the block producer stream.
    *
    * This method orchestrates block production by:
@@ -674,16 +665,13 @@ export class Simulator {
    * 2. Processing transactions using pure functions from SimulatorState
    * 3. Creating the block and updating state atomically
    *
-   * @param transactions - Transactions to include in the block
-   * @param fullness - Block fullness (0-1) for fee calculation
-   * @param strictnessOverride - Optional strictness that overrides per-transaction strictness
+   * Each transaction in the request has its own strictness assigned by the block producer.
+   *
+   * @param request - Block production request with transactions and fullness
    */
-  #produceBlock(
-    transactions: readonly PendingTransaction[],
-    fullness: number,
-    strictnessOverride?: StrictnessConfig,
-  ): Effect.Effect<Block, LedgerOps.LedgerError> {
+  #produceBlock(request: BlockProductionRequest): Effect.Effect<Block, LedgerOps.LedgerError> {
     const stateRef = this.#stateRef;
+    const { transactions, fullness } = request;
 
     return Effect.gen(function* () {
       const blockResult = yield* SubscriptionRef.modifyEffect(
@@ -704,16 +692,13 @@ export class Simulator {
 
             const context = yield* Effect.promise(() => nextBlockContextFromBlock(previousBlock, blockTime));
 
-            // Process all transactions using pure function
-            // Use strictness override if provided (converted to WellFormedStrictness)
-            const effectiveStrictness = strictnessOverride !== undefined ? createStrictness(strictnessOverride) : undefined;
+            // Process all transactions - each has its own strictness assigned by block producer
             const processingResult = processTransactions(
               simulatorState.ledger,
               transactions,
               blockTime,
               context,
               fullness,
-              effectiveStrictness,
             );
 
             if (Either.isLeft(processingResult)) {

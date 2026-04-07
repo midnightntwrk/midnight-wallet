@@ -20,6 +20,8 @@ export {
   getBlockByNumber,
   getLastBlockResults,
   getLastBlockEvents,
+  getBlockEventsFrom,
+  getBlockEventsSince,
   hasPendingTransactions,
   // State transformation functions
   resolveFullness,
@@ -41,8 +43,10 @@ export {
   createStrictness,
   blockHash,
   nextBlockContext,
+  assignStrictness,
+  assignStrictnessToAll,
   // Strictness constants
-  defaultPostGenesisStrictness,
+  defaultStrictness,
   genesisStrictness,
   // Types
   type SimulatorState,
@@ -50,6 +54,7 @@ export {
   type BlockTransaction,
   type BlockInfo,
   type PendingTransaction,
+  type ReadyTransaction,
   type BlockProductionRequest,
   type BlockProducer,
   type FullnessSpec,
@@ -58,4 +63,4 @@ export {
 } from './SimulatorState.js';
 
 // Re-export from Simulator
-export { Simulator, immediateBlockProducer, strictBlockProducer, type SimulatorConfig } from './Simulator.js';
+export { Simulator, immediateBlockProducer, type SimulatorConfig } from './Simulator.js';

@@ -182,6 +182,18 @@ export class FacadeState {
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
+ * A clock abstraction for obtaining the current time.
+ * By default, the facade uses the system clock.
+ * For testing with a simulator, inject a custom clock (e.g., one backed by the simulator's time).
+ */
+export type Clock = {
+  readonly now: () => Date;
+};
+
+/** Default clock using real system time. */
+export const systemClock: Clock = { now: () => new Date() };
+
+/**
  * The Terms and Conditions returned by the indexer, containing a URL for display
  * and a SHA-256 hash for content verification.
  */
@@ -214,6 +226,8 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
 type MaybePromise<T> = T | Promise<T>;
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
+  /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
+  clock?: (config: TConfig) => MaybePromise<Clock>;
   submissionService?: (config: TConfig) => MaybePromise<SubmissionService<ledger.FinalizedTransaction>>;
   pendingTransactionsService?: (
     config: TConfig,
@@ -306,7 +320,16 @@ export class WalletFacade {
     const shielded = await Promise.resolve(initParams.shielded(initParams.configuration));
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
     const dust = await Promise.resolve(initParams.dust(initParams.configuration));
-    return new WalletFacade(shielded, unshielded, dust, submissionService, pendingTransactionsService, provingService);
+    const clock = await Promise.resolve(initParams.clock ? initParams.clock(initParams.configuration) : systemClock);
+    return new WalletFacade(
+      shielded,
+      unshielded,
+      dust,
+      submissionService,
+      pendingTransactionsService,
+      provingService,
+      clock,
+    );
   }
 
   readonly shielded: ShieldedWalletAPI;
@@ -315,6 +338,7 @@ export class WalletFacade {
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
   readonly provingService: ProvingService<UnboundTransaction>;
+  readonly clock: Clock;
   #pendingSubscription: Subscription;
 
   private constructor(
@@ -324,6 +348,7 @@ export class WalletFacade {
     submissionService: SubmissionService<ledger.FinalizedTransaction>,
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
     provingService: ProvingService<UnboundTransaction>,
+    clock: Clock = systemClock,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
@@ -331,6 +356,7 @@ export class WalletFacade {
     this.submissionService = submissionService;
     this.pendingTransactionsService = pendingTransactionsService;
     this.provingService = provingService;
+    this.clock = clock;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
@@ -341,7 +367,7 @@ export class WalletFacade {
   }
 
   private defaultTtl(): Date {
-    return new Date(Date.now() + DEFAULT_TTL_MS);
+    return new Date(this.clock.now().getTime() + DEFAULT_TTL_MS);
   }
 
   private mergeUnprovenTransactions(
@@ -731,7 +757,7 @@ export class WalletFacade {
     fee: bigint;
     dustGenerationEstimations: ReadonlyArray<DustCoinsAndBalances.UtxoWithFullDustDetails>;
   }> {
-    const now = new Date();
+    const now = this.clock.now();
     const dustState = await this.dust.waitForSyncedState();
     const dustGenerationEstimations = pipe(
       nightUtxos,

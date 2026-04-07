@@ -18,7 +18,7 @@
  * simulator state. All functions are synchronous and side-effect free.
  */
 
-import { Either, Stream } from 'effect';
+import { Either, Function as EFunction, Stream } from 'effect';
 import {
   LedgerState,
   type BlockContext,
@@ -65,9 +65,21 @@ export type Block = Readonly<{
 
 /**
  * Pending transaction waiting for block production.
+ * Strictness is optional - if not specified, block producer assigns default when creating block.
  */
 export type PendingTransaction = Readonly<{
   tx: ProofErasedTransaction;
+  /** Optional per-transaction strictness. If not specified, block producer assigns default. */
+  strictness?: WellFormedStrictness;
+}>;
+
+/**
+ * Transaction ready for block production with strictness assigned.
+ * Block producer ensures all transactions have strictness before block creation.
+ */
+export type ReadyTransaction = Readonly<{
+  tx: ProofErasedTransaction;
+  /** Strictness for validation (assigned by block producer if not specified on pending tx). */
   strictness: WellFormedStrictness;
 }>;
 
@@ -104,12 +116,10 @@ export type BlockInfo = Readonly<{
  * - Testing specific validation scenarios
  */
 export type BlockProductionRequest = Readonly<{
-  /** Transactions to include in this block (selected from the state's mempool) */
-  transactions: readonly PendingTransaction[];
+  /** Transactions to include in this block with strictness assigned */
+  transactions: readonly ReadyTransaction[];
   /** Block fullness (0-1) for fee calculation */
   fullness: number;
-  /** Optional strictness override. If provided, overrides per-transaction strictness for all transactions in this block. */
-  strictnessOverride?: StrictnessConfig;
 }>;
 
 /**
@@ -234,7 +244,7 @@ export type StrictnessConfig = Readonly<{
  *
  * Note: Genesis blocks typically disable all strictness to allow initial token distribution.
  */
-export const defaultPostGenesisStrictness: StrictnessConfig = {
+export const defaultStrictness: StrictnessConfig = {
   enforceBalancing: true,
   verifyNativeProofs: false,
   verifyContractProofs: false,
@@ -252,6 +262,27 @@ export const genesisStrictness: StrictnessConfig = {
   enforceLimits: false,
   verifySignatures: false,
 };
+
+/**
+ * Assign strictness to a pending transaction, creating a ready transaction.
+ * If the pending transaction already has strictness, use it; otherwise use the provided default.
+ */
+export const assignStrictness = (
+  pendingTx: PendingTransaction,
+  defaultStrictness: WellFormedStrictness,
+): ReadyTransaction => ({
+  tx: pendingTx.tx,
+  strictness: pendingTx.strictness ?? defaultStrictness,
+});
+
+/**
+ * Assign strictness to all pending transactions, creating ready transactions.
+ * Transactions with existing strictness keep their strictness; others get the default.
+ */
+export const assignStrictnessToAll = (
+  transactions: readonly PendingTransaction[],
+  defaultStrictness: WellFormedStrictness,
+): readonly ReadyTransaction[] => transactions.map((tx) => assignStrictness(tx, defaultStrictness));
 
 // =============================================================================
 // State Accessors (Pure Functions)
@@ -271,8 +302,13 @@ export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastB
 /**
  * Get a block by its number.
  */
-export const getBlockByNumber = (state: SimulatorState, number: bigint): Block | undefined =>
-  state.blocks.find((b) => b.number === number);
+export const getBlockByNumber: {
+  (number: bigint): (state: SimulatorState) => Block | undefined;
+  (state: SimulatorState, number: bigint): Block | undefined;
+} = EFunction.dual(
+  2,
+  (state: SimulatorState, number: bigint): Block | undefined => state.blocks.find((b) => b.number === number),
+);
 
 /**
  * Get all transaction results from the last block.
@@ -285,6 +321,39 @@ export const getLastBlockResults = (state: SimulatorState): readonly Transaction
  */
 export const getLastBlockEvents = (state: SimulatorState): readonly TransactionResult['events'][number][] =>
   getLastBlockResults(state).flatMap((r) => r.events);
+
+/**
+ * Get all events from blocks with number >= fromBlockNumber.
+ * Returns events ordered by block number, with each block's transactions flattened.
+ *
+ * Use this with the wallet's next-to-process index: `appliedIndex` after processing should be
+ * set to `lastBlockNumber + 1`, not `lastBlockNumber`.
+ */
+export const getBlockEventsFrom: {
+  (fromBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];
+  (state: SimulatorState, fromBlockNumber: bigint): readonly TransactionResult['events'][number][];
+} = EFunction.dual(
+  2,
+  (state: SimulatorState, fromBlockNumber: bigint): readonly TransactionResult['events'][number][] =>
+    state.blocks
+      .filter((b) => b.number >= fromBlockNumber)
+      .flatMap((b) => b.transactions.flatMap((t) => t.result.events)),
+);
+
+/**
+ * @deprecated Use getBlockEventsFrom instead with proper appliedIndex semantics
+ * Get all events from blocks with number > afterBlockNumber.
+ */
+export const getBlockEventsSince: {
+  (afterBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];
+  (state: SimulatorState, afterBlockNumber: bigint): readonly TransactionResult['events'][number][];
+} = EFunction.dual(
+  2,
+  (state: SimulatorState, afterBlockNumber: bigint): readonly TransactionResult['events'][number][] =>
+    state.blocks
+      .filter((b) => b.number > afterBlockNumber)
+      .flatMap((b) => b.transactions.flatMap((t) => t.result.events)),
+);
 
 /**
  * Check if there are pending transactions in the mempool.
@@ -309,8 +378,12 @@ export const resolveFullness = (spec: FullnessSpec, state: SimulatorState): numb
 /**
  * Create a block production request that includes all mempool transactions.
  */
-export const allMempoolTransactions = (state: SimulatorState, fullness: number): BlockProductionRequest => ({
-  transactions: [...state.mempool],
+export const allMempoolTransactions = (
+  state: SimulatorState,
+  fullness: number,
+  defaultStrictness: WellFormedStrictness,
+): BlockProductionRequest => ({
+  transactions: assignStrictnessToAll(state.mempool, defaultStrictness),
   fullness,
 });
 
@@ -336,13 +409,13 @@ export const addToMempool = (state: SimulatorState, pendingTx: PendingTransactio
 /**
  * Remove transactions from the mempool.
  */
-export const removeFromMempool = (
-  state: SimulatorState,
-  transactions: readonly PendingTransaction[],
-): SimulatorState => ({
-  ...state,
-  mempool: state.mempool.filter((tx) => !transactions.includes(tx)),
-});
+export const removeFromMempool = (state: SimulatorState, transactions: readonly ReadyTransaction[]): SimulatorState => {
+  const txsToRemove = new Set(transactions.map((t) => t.tx));
+  return {
+    ...state,
+    mempool: state.mempool.filter((pending) => !txsToRemove.has(pending.tx)),
+  };
+};
 
 /**
  * Advance the simulator time by the given number of seconds.
@@ -453,18 +526,16 @@ export type TransactionProcessingResult = Readonly<{
  * @param blockTime - Block timestamp
  * @param blockContext - Block context
  * @param minFullness - Minimum block fullness to use
- * @param strictnessOverride - Optional strictness that overrides the transaction's strictness
  */
 export const processTransaction = (
   ledger: LedgerState,
-  pendingTx: PendingTransaction,
+  readyTx: ReadyTransaction,
   blockTime: Date,
   blockContext: BlockContext,
   minFullness: number,
-  strictnessOverride?: WellFormedStrictness,
 ): Either.Either<TransactionProcessingResult, LedgerOps.LedgerError> => {
   return LedgerOps.ledgerTry(() => {
-    const computedFullness = pendingTx.tx.cost(ledger.parameters);
+    const computedFullness = readyTx.tx.cost(ledger.parameters);
     const detailedBlockFullness = ledger.parameters.normalizeFullness(computedFullness);
     const computedBlockFullness = Math.max(
       minFullness,
@@ -475,15 +546,14 @@ export const processTransaction = (
       detailedBlockFullness.bytesChurned,
     );
 
-    // Use strictness override if provided, otherwise use per-transaction strictness
-    const effectiveStrictness = strictnessOverride ?? pendingTx.strictness;
-    const verifiedTransaction = pendingTx.tx.wellFormed(ledger, effectiveStrictness, blockTime);
+    // Use the assigned strictness
+    const verifiedTransaction = readyTx.tx.wellFormed(ledger, readyTx.strictness, blockTime);
     const transactionContext = new TransactionContext(ledger, blockContext);
     const [newLedgerState, txResult] = ledger.apply(verifiedTransaction, transactionContext);
     const postBlockLedger = newLedgerState.postBlockUpdate(blockTime, detailedBlockFullness, computedBlockFullness);
 
     return {
-      tx: pendingTx.tx,
+      tx: readyTx.tx,
       result: txResult,
       newLedger: postBlockLedger,
     };
@@ -493,38 +563,33 @@ export const processTransaction = (
 /**
  * Process multiple transactions in sequence, accumulating results.
  * Returns Either with all results and final ledger, or first error.
+ * Each transaction uses its assigned strictness (from ReadyTransaction).
  *
  * @param ledger - Initial ledger state
- * @param transactions - Transactions to process
+ * @param transactions - Transactions to process (each with assigned strictness)
  * @param blockTime - Block timestamp
  * @param blockContext - Block context
  * @param fullness - Block fullness (0-1)
- * @param strictnessOverride - Optional strictness that overrides per-transaction strictness
  */
 export const processTransactions = (
   ledger: LedgerState,
-  transactions: readonly PendingTransaction[],
+  transactions: readonly ReadyTransaction[],
   blockTime: Date,
   blockContext: BlockContext,
   fullness: number,
-  strictnessOverride?: WellFormedStrictness,
-): Either.Either<{ blockTransactions: BlockTransaction[]; finalLedger: LedgerState }, LedgerOps.LedgerError> => {
-  const blockTransactions: BlockTransaction[] = [];
-  let currentLedger = ledger;
-
-  for (const pendingTx of transactions) {
-    const result = processTransaction(currentLedger, pendingTx, blockTime, blockContext, fullness, strictnessOverride);
-
-    if (Either.isLeft(result)) {
-      return Either.left(result.left);
-    }
-
-    blockTransactions.push({ tx: result.right.tx, result: result.right.result });
-    currentLedger = result.right.newLedger;
-  }
-
-  return Either.right({ blockTransactions, finalLedger: currentLedger });
-};
+): Either.Either<{ blockTransactions: readonly BlockTransaction[]; finalLedger: LedgerState }, LedgerOps.LedgerError> =>
+  transactions.reduce<
+    Either.Either<{ blockTransactions: readonly BlockTransaction[]; finalLedger: LedgerState }, LedgerOps.LedgerError>
+  >(
+    (acc, readyTx) =>
+      Either.flatMap(acc, ({ blockTransactions, finalLedger }) =>
+        Either.map(processTransaction(finalLedger, readyTx, blockTime, blockContext, fullness), (result) => ({
+          blockTransactions: [...blockTransactions, { tx: result.tx, result: result.result }],
+          finalLedger: result.newLedger,
+        })),
+      ),
+    Either.right({ blockTransactions: [], finalLedger: ledger }),
+  );
 
 /**
  * Create a block from processed transactions and update state.
@@ -535,7 +600,7 @@ export const processTransactions = (
  * @param blockHash - Pre-computed block hash
  * @param blockTime - Block timestamp
  * @param newLedger - New ledger state after processing transactions
- * @param processedTxs - Original pending transactions to remove from mempool
+ * @param processedTxs - Ready transactions to remove from mempool
  */
 export const createBlock = (
   state: SimulatorState,
@@ -543,7 +608,7 @@ export const createBlock = (
   blockHashValue: string,
   blockTime: Date,
   newLedger: LedgerState,
-  processedTxs: readonly PendingTransaction[],
+  processedTxs: readonly ReadyTransaction[],
 ): [Block, SimulatorState] => {
   const nextBlockNumber = getCurrentBlockNumber(state) + 1n;
 
@@ -554,11 +619,12 @@ export const createBlock = (
     transactions: blockTransactions,
   };
 
+  const txsToRemove = new Set(processedTxs.map((t) => t.tx));
   const newState: SimulatorState = {
     ...state,
     ledger: newLedger,
     blocks: [...state.blocks, block],
-    mempool: state.mempool.filter((tx) => !processedTxs.includes(tx)),
+    mempool: state.mempool.filter((pending) => !txsToRemove.has(pending.tx)),
     currentTime: blockTime,
   };
 
@@ -577,7 +643,7 @@ export const createEmptyBlock = (
   state: SimulatorState,
   blockHashValue: string,
   blockTime: Date,
-  processedTxs: readonly PendingTransaction[] = [],
+  processedTxs: readonly ReadyTransaction[] = [],
 ): [Block, SimulatorState] => {
   return createBlock(state, [], blockHashValue, blockTime, state.ledger, processedTxs);
 };
@@ -637,11 +703,15 @@ export const blockHashFromTime = async (blockTime: Date): Promise<string> => {
  * @param blockTime - The timestamp for the new block
  * @returns A BlockContext suitable for transaction processing
  */
-export const nextBlockContextFromBlock = async (previousBlock: Block | undefined, blockTime: Date): Promise<BlockContext> => {
+export const nextBlockContextFromBlock = async (
+  previousBlock: Block | undefined,
+  blockTime: Date,
+): Promise<BlockContext> => {
   const nextBlockNumber = previousBlock !== undefined ? previousBlock.number + 1n : 0n;
   const hash = await blockHash(nextBlockNumber);
   const blockSeconds = DateOps.dateToSeconds(blockTime);
-  const previousSeconds = previousBlock !== undefined ? DateOps.dateToSeconds(previousBlock.timestamp) : blockSeconds - 1n;
+  const previousSeconds =
+    previousBlock !== undefined ? DateOps.dateToSeconds(previousBlock.timestamp) : blockSeconds - 1n;
   const timeSinceLastBlock = blockSeconds - previousSeconds;
 
   return {
