@@ -30,6 +30,7 @@ export default {
       schema: './indexer.gql',
       preset: 'client',
       config: {
+        emitLegacyCommonJSImports: false,
         avoidOptionals: true,
         skipTypename: true,
         skipTypeNameForRoot: true,

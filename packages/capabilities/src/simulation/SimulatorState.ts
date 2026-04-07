@@ -305,9 +305,8 @@ export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastB
 export const getBlockByNumber: {
   (number: bigint): (state: SimulatorState) => Block | undefined;
   (state: SimulatorState, number: bigint): Block | undefined;
-} = EFunction.dual(
-  2,
-  (state: SimulatorState, number: bigint): Block | undefined => state.blocks.find((b) => b.number === number),
+} = EFunction.dual(2, (state: SimulatorState, number: bigint): Block | undefined =>
+  state.blocks.find((b) => b.number === number),
 );
 
 /**

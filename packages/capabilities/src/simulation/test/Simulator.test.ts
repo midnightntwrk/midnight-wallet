@@ -587,8 +587,8 @@ describe('Unified Simulator', () => {
         const initialState = yield* simulator.getLatestState();
         expect(getCurrentBlockNumber(initialState)).toBe(0n);
 
-        // Create Ed25519 signing key for Night tokens (different from ZswapSecretKeys)
-        const { verifyingKey, userAddress } = createNightKeys(1);
+        // Create signing key for Night tokens (different from ZswapSecretKeys)
+        const { verifyingKey } = createNightKeys(1);
 
         // Reward Night tokens - submits to mempool, block producer handles the rest
         // rewardNight calls submitTransaction internally — waits for block inclusion
@@ -763,7 +763,9 @@ describe('Unified Simulator', () => {
           yield* simulator.submitAndForget(createTx());
           // Wait for block production by watching the state stream
           const state2 = yield* simulator.state$.pipe(
-            Stream.filter((s) => s.mempool.length === 0 && getCurrentBlockNumber(s) > getCurrentBlockNumber(initialState)),
+            Stream.filter(
+              (s) => s.mempool.length === 0 && getCurrentBlockNumber(s) > getCurrentBlockNumber(initialState),
+            ),
             Stream.take(1),
             Stream.runHead,
           );

@@ -31,13 +31,18 @@ import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-nt
 import {
   createKeystore,
   UnshieldedWallet,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
-import { type CombinedTokenTransfer, type DefaultConfiguration, type FacadeState, WalletFacade } from '../src/index.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  type CombinedTokenTransfer,
+  type DefaultConfiguration,
+  type FacadeState,
+  WalletEntrySchema,
+  WalletFacade,
+} from '../src/index.js';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { ArrayOps, DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
@@ -90,7 +95,7 @@ describe('Dust Registration', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 
@@ -223,7 +228,7 @@ describe('Dust Registration', () => {
     const receiverStateAfterRegistration = await rx.firstValueFrom(
       receiverFacade.state().pipe(
         rx.mergeMap(async (state) => {
-          const txInHistory = await state.unshielded.transactionHistory.get(provenDustRegistrationTx.transactionHash());
+          const txInHistory = await receiverFacade.queryTxHistoryByHash(provenDustRegistrationTx.transactionHash());
 
           return {
             state,

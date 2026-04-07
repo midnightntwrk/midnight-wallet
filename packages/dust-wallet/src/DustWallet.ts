@@ -14,6 +14,7 @@ import {
   type DustParameters,
   type DustPublicKey,
   DustSecretKey,
+  type FinalizedTransaction,
   type Signature,
   type SignatureVerifyingKey,
   type UnprovenTransaction,
@@ -31,13 +32,8 @@ import { V1Tag } from './v1/RunningV1Variant.js';
 import { type SerializationCapability } from './v1/Serialization.js';
 import { type Dust, type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
-import {
-  type BaseV1Configuration,
-  type DefaultV1Configuration,
-  type DefaultV1Variant,
-  V1Builder,
-  type V1Variant,
-} from './v1/V1Builder.js';
+import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
+import { type WalletSyncUpdate } from './v1/Sync.js';
 
 export type DustWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
@@ -114,10 +110,10 @@ export class DustWalletState<TSerialized = string> {
   }
 }
 
-export type DustWalletAPI<TSerialized = string> = {
+export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   readonly state: rx.Observable<DustWalletState<TSerialized>>;
 
-  start(secretKey: DustSecretKey): Promise<void>;
+  start(secretKey: TStartAux): Promise<void>;
 
   createDustGenerationTransaction(
     currentTime: Date | undefined,
@@ -158,42 +154,38 @@ export type DustWalletAPI<TSerialized = string> = {
 
 export type CustomizedDustWallet<
   TStartAux = DustSecretKey,
-  TSyncUpdate = unknown,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
-> = DustWalletAPI<TSerialized> &
-  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>]>;
+> = DustWalletAPI<TStartAux, TSerialized> &
+  WalletLike.WalletLike<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]>;
+
+export type DefaultDustConfiguration = DefaultV1Configuration;
 
 export interface CustomizedDustWalletClass<
   TStartAux = DustSecretKey,
-  TSyncUpdate = unknown,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
   TConfig extends BaseV1Configuration = DefaultDustConfiguration,
 > extends WalletLike.BaseWalletClass<
-  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>]
+  [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
 > {
   configuration: TConfig;
   startWithSeed(
     seed: Uint8Array,
     dustParameters: DustParameters,
-  ): CustomizedDustWallet<TStartAux, TSyncUpdate, TSerialized>;
+  ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   startWithSecretKey(
     secretKey: DustSecretKey,
     dustParameters: DustParameters,
-  ): CustomizedDustWallet<TStartAux, TSyncUpdate, TSerialized>;
-  restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TSyncUpdate, TSerialized>;
+  ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
+  restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
 
-export type DustWallet = DustWalletAPI & WalletLike.WalletLike<[Variant.VersionedVariant<DefaultV1Variant>]>;
+export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
 
-export interface DustWalletClass extends WalletLike.BaseWalletClass<[Variant.VersionedVariant<DefaultV1Variant>]> {
-  startWithSeed(seed: Uint8Array, dustParameters: DustParameters): DustWallet;
-
-  startWithSecretKey(secretKey: DustSecretKey, dustParameters: DustParameters): DustWallet;
-
-  restore(serializedState: string): DustWallet;
-}
-
-export type DefaultDustConfiguration = DefaultV1Configuration;
+export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
 
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
   return CustomDustWallet(configuration, new V1Builder().withDefaults());
@@ -202,35 +194,36 @@ export function DustWallet(configuration: DefaultDustConfiguration): DustWalletC
 export function CustomDustWallet<
   TConfig extends BaseV1Configuration = DefaultDustConfiguration,
   TStartAux = DustSecretKey,
-  TSyncUpdate = unknown,
+  TTransaction = FinalizedTransaction,
+  TSyncUpdate = WalletSyncUpdate,
   TSerialized = string,
 >(
   configuration: TConfig,
-  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>, TConfig>,
-): CustomizedDustWalletClass<TStartAux, TSyncUpdate, TSerialized, TConfig> {
+  builder: VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>,
+): CustomizedDustWalletClass<TStartAux, TTransaction, TSyncUpdate, TSerialized, TConfig> {
   const buildArgs = [configuration] as WalletBuilder.BuildArguments<
     [
       VariantBuilder.VersionedVariantBuilder<
-        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>, TConfig>
+        VariantBuilder.VariantBuilder<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>, TConfig>
       >,
     ]
   >;
   const BaseWallet = WalletBuilder.init()
     .withVariant(ProtocolVersion.MinSupportedVersion, builder)
     .build(...buildArgs) as WalletLike.BaseWalletClass<
-    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>],
+    [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>],
     TConfig
   >;
 
   return class CustomDustWalletImplementation
     extends BaseWallet
-    implements CustomizedDustWallet<TStartAux, TSyncUpdate, TSerialized>
+    implements CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>
   {
     static startWithSeed(seed: Uint8Array, dustParameters: DustParameters): CustomDustWalletImplementation {
       const dustSecretKey = DustSecretKey.fromSeed(seed);
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
-        CoreWallet.initEmpty(dustParameters, dustSecretKey, configuration.networkId),
+        CoreWallet.initEmpty(dustParameters, dustSecretKey, CustomDustWalletImplementation.configuration.networkId),
       );
     }
 
@@ -240,7 +233,7 @@ export function CustomDustWallet<
     ): CustomDustWalletImplementation {
       return CustomDustWalletImplementation.startFirst(
         CustomDustWalletImplementation,
-        CoreWallet.initEmpty(dustParameters, secretKey, configuration.networkId),
+        CoreWallet.initEmpty(dustParameters, secretKey, CustomDustWalletImplementation.configuration.networkId),
       );
     }
 
@@ -254,7 +247,9 @@ export function CustomDustWallet<
     readonly state: rx.Observable<DustWalletState<TSerialized>>;
 
     constructor(
-      runtime: Runtime.Runtime<[Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, unknown, TStartAux>>]>,
+      runtime: Runtime.Runtime<
+        [Variant.VersionedVariant<V1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>>]
+      >,
       scope: Scope.CloseableScope,
     ) {
       super(runtime, scope);
@@ -266,10 +261,8 @@ export function CustomDustWallet<
       );
     }
 
-    start(secretKey: DustSecretKey): Promise<void> {
-      return this.runtime
-        .dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey as TStartAux) })
-        .pipe(Effect.runPromise);
+    start(secretKey: TStartAux): Promise<void> {
+      return this.runtime.dispatch({ [V1Tag]: (v1) => v1.startSyncInBackground(secretKey) }).pipe(Effect.runPromise);
     }
 
     async createDustGenerationTransaction(

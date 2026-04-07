@@ -520,10 +520,7 @@ export class Simulator {
    * @param verifyingKey - Signature verifying key (recipient address is derived from it)
    * @param amount - Amount of Night tokens to distribute
    */
-  rewardNight(
-    verifyingKey: SignatureVerifyingKey,
-    amount: bigint,
-  ): Effect.Effect<Block, LedgerOps.LedgerError> {
+  rewardNight(verifyingKey: SignatureVerifyingKey, amount: bigint): Effect.Effect<Block, LedgerOps.LedgerError> {
     const stateRef = this.#stateRef;
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const simulator = this;

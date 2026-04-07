@@ -14,16 +14,20 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { FacadeState, WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { Sync as ShieldedSync, V1Builder as ShieldedV1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
+import {
+  Sync as ShieldedSync,
+  TransactionHistory as ShieldedTransactionHistory,
+  V1Builder as ShieldedV1Builder,
+} from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { SyncService as DustSyncService, V1Builder as DustV1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
   PublicKey,
-  InMemoryTransactionHistoryStorage,
   type UnshieldedWalletAPI,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { NoOpTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
@@ -146,7 +150,9 @@ export const createSimulatorProvingService = (): ProvingService<UnboundTransacti
  * Creates a Promise-based wrapper around the Effect-based simulator submission service.
  * Note: Uses type assertions because simulator uses different transaction types internally.
  */
-export const createSimulatorSubmissionService = (simulator: Simulator): SubmissionService<ledger.FinalizedTransaction> => {
+export const createSimulatorSubmissionService = (
+  simulator: Simulator,
+): SubmissionService<ledger.FinalizedTransaction> => {
   const effectService = Submission.makeSimulatorSubmissionService<ledger.FinalizedTransaction>('InBlock')({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment
     simulator: simulator as any,
@@ -183,16 +189,20 @@ export type SimulatorWalletFactories = {
  * substituting `.withSync(...)` for `.withSyncDefaults()`.
  */
 export const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalletFactories => {
-  // Shielded wallet: all defaults except sync (uses simulator sync)
+  // Shielded wallet: all defaults except sync and transaction history (uses simulator variants)
   const ShieldedWalletFactory = CustomShieldedWallet(
-    config,
+    {
+      ...config,
+      txHistoryStorage: new NoOpTransactionHistoryStorage(),
+      indexerClientConnection: { indexerHttpUrl: 'http://unused:0' },
+    },
     new ShieldedV1Builder()
       .withDefaultTransactionType()
       .withSync(ShieldedSync.makeSimulatorSyncService, ShieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
       .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
-      .withTransactionHistoryDefaults()
+      .withTransactionHistory(ShieldedTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
       .withCoinSelectionDefaults(),
   );
@@ -212,7 +222,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
 
   // Unshielded wallet: all defaults except sync (uses simulator sync)
   const UnshieldedWalletFactory = CustomUnshieldedWallet(
-    { ...config, txHistoryStorage: new InMemoryTransactionHistoryStorage() },
+    { ...config, txHistoryStorage: new NoOpTransactionHistoryStorage() },
     new UnshieldedV1Builder()
       .withSync(UnshieldedSync.makeSimulatorSyncService, UnshieldedSync.makeSimulatorSyncCapability)
       .withSerializationDefaults()
@@ -282,7 +292,7 @@ export const makeSimulatorFacade = (
           // Dummy values - not used in simulation mode
           indexerClientConnection: { indexerHttpUrl: 'http://unused' },
           relayURL: new URL('ws://unused'),
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          txHistoryStorage: new NoOpTransactionHistoryStorage(),
         },
         shielded: () => factories.createShieldedWallet(keys.shieldedKeys),
         unshielded: () => factories.createUnshieldedWallet(keys.unshieldedKeystore),
@@ -307,9 +317,7 @@ export const makeSimulatorFacade = (
  */
 export const waitForShieldedCoins = (facade: WalletFacade): Effect.Effect<void> =>
   Effect.promise(() =>
-    rx.firstValueFrom(
-      facade.state().pipe(rx.filter((s) => s.shielded.availableCoins.length > 0)),
-    ),
+    rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.shielded.availableCoins.length > 0))),
   ).pipe(Effect.asVoid);
 
 /**

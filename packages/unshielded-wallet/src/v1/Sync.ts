@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
+import { Effect, Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
 import { Simulator, SimulatorState, getCurrentBlockNumber } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
@@ -42,7 +42,7 @@ export type DefaultSyncConfiguration = {
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryService: TransactionHistoryService<WalletSyncUpdate>;
+  transactionHistoryService: TransactionHistoryService;
 };
 
 export const makeDefaultSyncService = (config: DefaultSyncConfiguration): SyncService<CoreWallet, WalletSyncUpdate> => {
@@ -128,7 +128,7 @@ export const makeDefaultSyncCapability = (
             });
 
             const { transactionHistoryService } = getContext();
-            void transactionHistoryService.create(update);
+            Effect.runFork(transactionHistoryService.put(update));
 
             return stateAfterUpdatingProgress;
           }),
@@ -203,7 +203,9 @@ export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, Simula
 
       // Created: in simulator but not in wallet (neither available nor pending)
       const createdUtxos = Array.from(simulatorUtxoMap)
-        .filter(([hash]) => !HashMap.has(state.state.availableUtxos, hash) && !HashMap.has(state.state.pendingUtxos, hash))
+        .filter(
+          ([hash]) => !HashMap.has(state.state.availableUtxos, hash) && !HashMap.has(state.state.pendingUtxos, hash),
+        )
         .map(([, utxo]) => utxo);
 
       // Spent: in wallet (pending or available) but no longer in simulator

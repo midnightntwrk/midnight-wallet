@@ -18,22 +18,26 @@ import {
   Simulator,
   SimulatorState,
   getLastBlock,
-  getLastBlockEvents,
   getBlockEventsFrom,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryCapability } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
 }
 
-export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => TState;
+export type ChangesResult = {
+  readonly changes: ledger.ZswapStateChanges[];
+  readonly protocolVersion: number;
+};
+
+export interface SyncCapability<TState, TUpdate, TResult> {
+  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
 }
 
 export type IndexerClientConnection = {
@@ -42,13 +46,29 @@ export type IndexerClientConnection = {
   keepAlive?: number;
 };
 
+export type BatchUpdatesConfig = {
+  /** Maximum number of events to collect into a single batch before emitting.
+   *  @default 10 */
+  readonly size?: number;
+  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
+   *  Controls the `groupedWithin` timeout — lower values mean more responsive
+   *  (but smaller) batches when events arrive slowly.
+   *  @default 1 */
+  readonly timeout?: number;
+  /** Minimum delay in milliseconds injected between consecutive batches.
+   *  Prevents the sync stream from saturating downstream consumers when many
+   *  events are available at once. Set to 0 to disable spacing entirely.
+   *  @default 4 */
+  readonly spacing?: number;
+};
+
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
-  batchSize?: number;
+  batchUpdates?: BatchUpdatesConfig;
 };
 
 export type DefaultSyncContext = {
-  transactionHistoryCapability: TransactionHistoryCapability<CoreWallet, ledger.FinalizedTransaction>;
+  transactionHistoryService: TransactionHistoryService;
 };
 
 const Uint8ArraySchema = Schema.declare(
@@ -112,11 +132,13 @@ const HexedLedgerEvent: Schema.Schema<ledger.Event, string> = pipe(
 const EventsSyncUpdatePayload = Schema.Struct({
   id: Schema.Number,
   raw: Schema.String,
+  protocolVersion: Schema.Number,
   maxId: Schema.Number,
 });
 
 export const EventsSyncUpdate = Schema.TaggedStruct('EventsSyncUpdate', {
   id: Schema.Number,
+  protocolVersion: Schema.Number,
   maxId: Schema.Number,
   event: LedgerEventSchema,
 });
@@ -130,6 +152,7 @@ const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePaylo
       Either.map((event) => ({
         _tag: 'EventsSyncUpdate' as const,
         id: input.id,
+        protocolVersion: input.protocolVersion,
         maxId: input.maxId,
         event,
       })),
@@ -142,6 +165,7 @@ const EventsSyncUpdateFromPayload = Schema.transformOrFail(EventsSyncUpdatePaylo
       Either.map((raw) => ({
         id: output.id,
         raw,
+        protocolVersion: output.protocolVersion,
         maxId: output.maxId,
       })),
       Either.mapLeft((error) => new ParseResult.Unexpected(error, 'Failed to encode ledger event payload')),
@@ -182,9 +206,11 @@ export const makeEventsSyncService = (
       const indexerWsUrl = indexerWsUrlResult.right;
       const appliedIndex = state.progress?.appliedIndex ?? 0n;
 
-      const batchSize = config.batchSize ?? 10;
+      const batchSize = config.batchUpdates?.size ?? 10;
+      const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
+      const batchSpacing = config.batchUpdates?.spacing ?? 4;
 
-      return pipe(
+      const eventsStream = pipe(
         ZswapEvents.run({ id: Number(appliedIndex) }),
         Stream.provideLayer(
           WsSubscriptionClient.layer({ url: indexerWsUrl, keepAlive: config.indexerClientConnection.keepAlive }),
@@ -198,20 +224,23 @@ export const makeEventsSyncService = (
             EitherOps.toEffect,
           ),
         ),
-        Stream.groupedWithin(batchSize, Duration.millis(1)),
+        Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKeys)),
-        Stream.schedule(Schedule.spaced(Duration.millis(4))),
       );
+
+      return batchSpacing > 0
+        ? Stream.schedule(eventsStream, Schedule.spaced(Duration.millis(batchSpacing)))
+        : eventsStream;
     },
   };
 };
 
-export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet => {
+    applyUpdate: (state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] => {
       if (wrappedUpdate.updates.length === 0) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
       const lastUpdate = wrappedUpdate.updates.at(-1)!;
@@ -220,24 +249,29 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
       // in case the nextIndex is less than or equal to the appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
-        return CoreWallet.updateProgress(state, {
-          highestRelevantWalletIndex,
-          isConnected: true,
-        });
+        return [
+          CoreWallet.updateProgress(state, {
+            highestRelevantWalletIndex,
+            isConnected: true,
+          }),
+          { changes: [], protocolVersion: lastUpdate.protocolVersion },
+        ];
       }
 
-      return CoreWallet.updateProgress(
-        CoreWallet.replayEvents(
-          state,
-          wrappedUpdate.secretKeys,
-          wrappedUpdate.updates.map((u) => u.event),
-        ),
-        {
+      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(
+        state,
+        wrappedUpdate.secretKeys,
+        wrappedUpdate.updates.map((u) => u.event),
+      );
+
+      return [
+        CoreWallet.updateProgress(newState, {
           highestRelevantWalletIndex,
           appliedIndex: nextIndex,
           isConnected: true,
-        },
-      );
+        }),
+        { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
+      ];
     },
   };
 };
@@ -283,25 +317,27 @@ export const makeSimulatorSyncService = (
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
-      const { update: simulatorUpdate, secretKeys } = update;
-
-      // In blank mode (no blocks yet), skip update
-      const lastBlock = getLastBlock(simulatorUpdate);
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
+      const { update: simulatorState, secretKeys } = update;
+      const lastBlock = getLastBlock(simulatorState);
       if (lastBlock === undefined) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
       // Get all events from blocks starting at appliedIndex (the next block to process).
       // appliedIndex semantics: the first block number we haven't processed yet.
       // Initial: appliedIndex = 0 (haven't processed any blocks)
       // After processing block N: appliedIndex = N + 1 (next block to process)
-      const events = [...getBlockEventsFrom(simulatorUpdate, state.progress.appliedIndex)];
-      return CoreWallet.updateProgress(CoreWallet.replayEvents(state, secretKeys, events), {
-        appliedIndex: lastBlock.number + 1n,
-      });
+      const events = [...getBlockEventsFrom(simulatorState, state.progress.appliedIndex)];
+      const [newState, newChanges] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
+      return [
+        CoreWallet.updateProgress(newState, {
+          appliedIndex: lastBlock.number + 1n,
+        }),
+        { changes: newChanges, protocolVersion: Number(state.protocolVersion) },
+      ];
     },
   };
 };

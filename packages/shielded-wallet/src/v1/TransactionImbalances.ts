@@ -19,21 +19,23 @@ export const ShieldedCostModel: TransactionCostModel = {
 
 export type TransactionImbalances = Readonly<{
   guaranteed: Imbalances;
-  fallible: Imbalances;
+  fallible: ReadonlyMap<number, Imbalances>;
 }>;
 export const TransactionImbalances = new (class {
   empty = (): TransactionImbalances => {
     return {
       guaranteed: Imbalances.empty(),
-      fallible: Imbalances.empty(),
+      fallible: new Map(),
     };
   };
 
   areBalanced = (imbalances: TransactionImbalances): boolean => {
-    const areFallibleAllZeroes = imbalances.fallible.entries().every(([, value]) => value === 0n);
-
     const areGuaranteedAllZeroes = imbalances.guaranteed.entries().every(([, value]) => value === 0n);
 
-    return areFallibleAllZeroes && areGuaranteedAllZeroes;
+    const areFallibleAllZeroes = Array.from(imbalances.fallible.values()).every((segmentImbalances) =>
+      segmentImbalances.entries().every(([, value]) => value === 0n),
+    );
+
+    return areGuaranteedAllZeroes && areFallibleAllZeroes;
   };
 })();

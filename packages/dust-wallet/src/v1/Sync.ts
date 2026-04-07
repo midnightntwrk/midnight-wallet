@@ -26,7 +26,6 @@ import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js
 import {
   Simulator,
   SimulatorState,
-  getLastBlockEvents,
   getBlockEventsFrom,
   getLastBlock,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
@@ -57,9 +56,26 @@ export type IndexerClientConnection = {
   keepAlive?: number;
 };
 
+export type BatchUpdatesConfig = {
+  /** Maximum number of events to collect into a single batch before emitting.
+   *  @default 10 */
+  readonly size?: number;
+  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
+   *  Controls the `groupedWithin` timeout — lower values mean more responsive
+   *  (but smaller) batches when events arrive slowly.
+   *  @default 1 */
+  readonly timeout?: number;
+  /** Minimum delay in milliseconds injected between consecutive batches.
+   *  Prevents the sync stream from saturating downstream consumers when many
+   *  events are available at once. Set to 0 to disable spacing entirely.
+   *  @default 4 */
+  readonly spacing?: number;
+};
+
 export type DefaultSyncConfiguration = {
   indexerClientConnection: IndexerClientConnection;
   networkId: NetworkId;
+  batchUpdates?: BatchUpdatesConfig;
 };
 
 export type SimulatorSyncConfiguration = {
@@ -145,15 +161,18 @@ export const makeDefaultSyncService = (
       state: CoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<WalletSyncUpdate, WalletError, Scope.Scope> => {
-      const batchSize = 10;
-      const batchTimeout = Duration.millis(1);
+      const batchSize = config.batchUpdates?.size ?? 10;
+      const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
+      const batchSpacing = config.batchUpdates?.spacing ?? 4;
 
       return pipe(
         indexerSyncService.subscribeWallet(state),
         Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
         Stream.map((data) => WalletSyncUpdate.create(data, secretKey, new Date())),
-        Stream.schedule(Schedule.spaced(Duration.millis(4))),
+        batchSpacing > 0
+          ? Stream.schedule(Schedule.spaced(Duration.millis(batchSpacing)))
+          : (eventsStream) => eventsStream,
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },

@@ -24,18 +24,17 @@ Unlike shielded transactions, unshielded operations do not use zero-knowledge pr
 ### Starting the Wallet
 
 ```typescript
-import {
-  UnshieldedWallet,
-  createKeystore,
-  PublicKey,
-  InMemoryTransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { UnshieldedWallet, createKeystore, PublicKey } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { randomBytes } from 'node:crypto';
 
 // Configuration for the wallet
 const configuration = {
-  networkId: 'testnet', // or 'mainnet', 'undeployed'
-  indexerUrl: 'ws://localhost:8088/api/v3/graphql/ws',
+  networkId: NetworkId.Undeployed, // or NetworkId.Testnet, NetworkId.Mainnet
+  indexerClientConnection: {
+    indexerWsUrl: 'ws://localhost:8088/api/v4/graphql/ws',
+    indexerHttpUrl: 'http://localhost:8088/api/v4/graphql',
+  },
   txHistoryStorage: new InMemoryTransactionHistoryStorage(),
 };
 
