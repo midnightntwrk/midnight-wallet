@@ -10,6 +10,25 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './InMemoryTransactionHistoryStorage.js';
-export * from './NoOpTransactionHistoryStorage.js';
-export * from './TransactionHistoryStorage.js';
+import { gql } from '../generated/index.js';
+import { Query } from '../../effect/index.js';
+
+export const TransactionHistoryDetail = Query.make(
+  'TransactionHistoryDetail',
+  gql(`
+    query TransactionHistoryDetail($transactionHash: HexEncoded!) {
+      transactions(offset: {hash: $transactionHash}) {
+        __typename
+        hash
+        block {
+          timestamp
+        }
+        ... on RegularTransaction {
+          transactionResult {
+            status
+          }
+        }
+      }
+    }
+  `),
+);

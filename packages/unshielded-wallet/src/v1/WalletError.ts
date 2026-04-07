@@ -73,6 +73,11 @@ export class SpendUtxoError extends Data.TaggedError('Wallet.SpendUtxo')<{
   cause?: unknown;
 }> {}
 
+export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export class UtxoNotFoundError extends Data.TaggedError('UtxoNotFoundError')<{
   readonly utxo: ledger.Utxo;
 }> {}
