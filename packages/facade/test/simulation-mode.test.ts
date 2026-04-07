@@ -163,8 +163,7 @@ describe('WalletFacade in simulation mode', () => {
         },
       ];
 
-      // Step 10: Create, finalize, and submit the transfer transaction with fee payment
-      console.log('[test] Step 9: Creating transfer');
+      // Step 8: Create, finalize, and submit the transfer transaction with fee payment
       // payFees: true by default - transaction is balanced with Dust spend
       const transferRecipe: UnprovenTransactionRecipe = yield* Effect.promise(() =>
         senderFacade.transferTransaction(
