@@ -441,6 +441,26 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
     ),
   );
 
+export const waitForTxInHistory = async (txHash: string, wallet: WalletFacade) => {
+  const txEntry = await rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.mergeMap(async (state) => {
+        const txEntry = await wallet.queryTxHistoryByHash(txHash);
+        return { state, txEntry };
+      }),
+      rx.tap(({ txEntry }) => {
+        logger.info(`Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}`);
+      }),
+      rx.filter(({ state, txEntry }) => state.isSynced && txEntry !== undefined),
+      rx.map(({ txEntry }) => txEntry!),
+    ),
+  );
+  expect(txEntry).toBeDefined();
+  expect(txEntry.hash).toBe(txHash);
+  expect(txEntry.status).toBe('SUCCESS');
+  return txEntry;
+};
+
 // export const waitForTxInHistory = async (txId: string, wallet: ShieldedWallet) =>
 //   firstValueFrom(
 //     wallet.state.pipe(
@@ -604,6 +624,24 @@ export function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['u
   expect(typeof utxo.tokenType).toBe('string');
   expect(typeof utxo.intentHash).toBe('string');
   expect(typeof utxo.outputIndex).toBe('number');
+}
+
+export function expectValidShieldedCoinFields(coin: NonNullable<WalletEntry['shielded']>['receivedCoins'][number]) {
+  expect(typeof coin.type).toBe('string');
+  expect(coin.type.length).toBeGreaterThan(0);
+  expect(typeof coin.nonce).toBe('string');
+  expect(coin.nonce.length).toBeGreaterThan(0);
+  expect(typeof coin.value).toBe('bigint');
+  expect(typeof coin.mtIndex).toBe('bigint');
+}
+
+export function expectValidShieldedTxHistoryEntry(entry: WalletEntry) {
+  expect(entry.shielded).toBeDefined();
+  expect(Array.isArray(entry.shielded!.receivedCoins)).toBe(true);
+  expect(Array.isArray(entry.shielded!.spentCoins)).toBe(true);
+  for (const coin of [...entry.shielded!.receivedCoins, ...entry.shielded!.spentCoins]) {
+    expectValidShieldedCoinFields(coin);
+  }
 }
 
 export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
