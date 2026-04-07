@@ -1,0 +1,60 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk",
+  "description": "Barrel package re-exporting all Midnight Wallet SDK packages",
+  "version": "1.0.0-beta.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "import": "./dist/capabilities.js"
+    },
+    "./proving": {
+      "types": "./dist/proving.d.ts",
+      "import": "./dist/proving.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    }
+  },
+  "dependencies": {
+    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "dist:publish": "tsc -b ./tsconfig.publish.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
+    "publint": "publint --strict"
+  }
+}
