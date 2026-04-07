@@ -95,7 +95,7 @@ const orderCoinByValue = Order.mapInput(Order.bigint, (coin: { value: bigint }) 
 const makeOutputOffer = (args: {
   recipient: ledger.ZswapSecretKeys | TestWallet;
   coin: ledger.ShieldedCoinInfo | bigint;
-  segment?: 0 | 1;
+  segment?: number;
 }): ledger.ZswapOffer<ledger.PreProof> => {
   const keys: ledger.ZswapSecretKeys =
     args.recipient instanceof ledger.ZswapSecretKeys ? args.recipient : args.recipient.keys;
@@ -235,6 +235,50 @@ describe('V1 Wallet Transacting', () => {
             .map(([_, delta]) => delta.deltas.get(rawShieldedTokenType) ?? 0n)
             .reduce((acc, curr) => acc + curr, 0n),
         ).toEqual(transactionValueFallible);
+
+        // check that the guaranteed section of the balancing transaction is correct
+        expect(balancingTransaction!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(
+          transactionValueGuaranteed,
+        );
+
+        // check that the final transaction is balanced correctly
+        expect(provenTransaction.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeUndefined();
+      }).pipe(Effect.runPromise);
+    });
+
+    it('balances a transaction with a fallible offer at a non-standard segment', () => {
+      const wallets = prepareWallets({
+        A: {
+          keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 0)),
+          coins: [shieldedValue(1), shieldedValue(2), shieldedValue(3)],
+        },
+        B: { keys: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)), coins: [] },
+      });
+      const transacting = makeSimulatorTransactingCapability(defaultConfig, () => defaultContext);
+      const proving = makeSimulatorProvingServiceEffect();
+      const transactionValueFallible = shieldedValue(2);
+      const transactionValueGuaranteed = shieldedValue(1);
+      const guaranteedOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueGuaranteed });
+      const fallibleOffer = makeOutputOffer({ recipient: wallets.B, coin: transactionValueFallible, segment: 1996 });
+      const tx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, guaranteedOffer);
+      // workaround, as Transaction.fromParts does not accept fallible offers with specific segments
+      tx.fallibleOffer = new Map([[1996, fallibleOffer]]);
+
+      return Effect.gen(function* () {
+        const [balancingTransaction] = EitherOps.getOrThrowLeft(
+          transacting.balanceTransaction(wallets.A.keys, wallets.A.wallet, tx),
+        );
+
+        expect(balancingTransaction).toBeDefined();
+
+        const balancedTransaction = tx.merge(balancingTransaction!);
+
+        const provenTransaction = yield* proving.prove(balancedTransaction);
+
+        // check that the fallible section of the balancing transaction is at segment 1996
+        const fallibleOfferAtSegment = balancingTransaction!.fallibleOffer?.get(1996);
+        expect(fallibleOfferAtSegment).toBeDefined();
+        expect(fallibleOfferAtSegment!.deltas.get(rawShieldedTokenType)).toEqual(transactionValueFallible);
 
         // check that the guaranteed section of the balancing transaction is correct
         expect(balancingTransaction!.guaranteedOffer?.deltas.get(rawShieldedTokenType)).toBeGreaterThanOrEqual(

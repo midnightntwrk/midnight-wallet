@@ -10,7 +10,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { pipe } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { TransactionImbalances } from './TransactionImbalances.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
@@ -52,11 +51,10 @@ export const TransactionOps = new (class {
       const guaranteedImbalances = TransactionOps.shared.getGuaranteedImbalances(tx);
       const fallibleImbalances = TransactionOps.shared.getFallibleImbalances(tx);
 
-      return pipe({
+      return {
         guaranteed: guaranteedImbalances,
         fallible: fallibleImbalances,
-        fees: 0n,
-      });
+      };
     },
     getGuaranteedImbalances: (
       tx: ledger.FinalizedTransaction | ledger.UnprovenTransaction | ledger.ProofErasedTransaction,
@@ -66,26 +64,27 @@ export const TransactionOps = new (class {
         .entries()
         .filter(([token]) => token.tag === 'shielded')
         .map(([token, value]) => {
-          return [(token as { tag: 'shielded'; raw: string }).raw.toString(), value] as [string, bigint];
+          return [(token as ledger.ShieldedTokenType).raw, value] as [string, bigint];
         });
 
       return Imbalances.fromEntries(rawGuaranteedImbalances);
     },
     getFallibleImbalances: (
       tx: ledger.FinalizedTransaction | ledger.UnprovenTransaction | ledger.ProofErasedTransaction,
-    ): Imbalances => {
-      try {
-        const rawFallibleImbalances = tx
-          .imbalances(1)
+    ): ReadonlyMap<number, Imbalances> => {
+      const segments = Array.from(tx.fallibleOffer?.keys() ?? []);
+      const fallibleImbalances = segments.flatMap((segment) => {
+        const rawImbalances = tx
+          .imbalances(segment)
           .entries()
           .filter(([token]) => token.tag === 'shielded')
           .map(([token, value]) => {
-            return [(token as { tag: 'shielded'; raw: string }).raw.toString(), value] as [string, bigint];
+            return [(token as ledger.ShieldedTokenType).raw, value] as [string, bigint];
           });
-        return Imbalances.fromEntries(rawFallibleImbalances);
-      } catch {
-        return Imbalances.empty();
-      }
+        return [[segment, Imbalances.fromEntries(rawImbalances)] as const];
+      });
+
+      return new Map(fallibleImbalances);
     },
   };
 })();

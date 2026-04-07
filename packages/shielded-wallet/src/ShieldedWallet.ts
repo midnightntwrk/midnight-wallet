@@ -24,7 +24,7 @@ import { Effect, Either, type Scope } from 'effect';
 import * as rx from 'rxjs';
 import { type BalancingResult } from './v1/Transacting.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type TransactionHistoryCapability } from './v1/TransactionHistory.js';
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 import { type AvailableCoin, type CoinsAndBalancesCapability, type PendingCoin } from './v1/CoinsAndBalances.js';
 import { type KeysCapability } from './v1/Keys.js';
 import {
@@ -37,27 +37,31 @@ import { type WalletSyncUpdate } from './v1/Sync.js';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 
-export type ShieldedWalletCapabilities<TSerialized = string, TTransaction = ledger.FinalizedTransaction> = {
+export type ShieldedWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
-  transactionHistory: TransactionHistoryCapability<CoreWallet, TTransaction>;
+};
+
+export type ShieldedWalletServices = {
+  transactionHistory: TransactionHistoryService;
 };
 
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.FinalizedTransaction> {
+export class ShieldedWalletState<TSerialized = string, _TTransaction = ledger.FinalizedTransaction> {
   static readonly mapState =
-    <TSerialized = string, TTransaction = ledger.FinalizedTransaction>(
-      capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
-    ) =>
-    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized, TTransaction> => {
-      return new ShieldedWalletState(state, capabilities);
+    <TSerialized = string>(variant: ShieldedWalletCapabilities<TSerialized> & ShieldedWalletServices) =>
+    (state: ProtocolState.ProtocolState<CoreWallet>): ShieldedWalletState<TSerialized> => {
+      const { serialization, coinsAndBalances, keys } = variant;
+      const { transactionHistory } = variant;
+      return new ShieldedWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
-  readonly capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>;
+  readonly capabilities: ShieldedWalletCapabilities<TSerialized>;
+  readonly services: ShieldedWalletServices;
 
   get balances(): Record<ledger.RawTokenType, bigint> {
     return this.capabilities.coinsAndBalances.getAvailableBalances(this.state);
@@ -91,21 +95,15 @@ export class ShieldedWalletState<TSerialized = string, TTransaction = ledger.Fin
     return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for ShieldedWallet');
-  }
-
   constructor(
     state: ProtocolState.ProtocolState<CoreWallet>,
-    capabilities: ShieldedWalletCapabilities<TSerialized, TTransaction>,
+    capabilities: ShieldedWalletCapabilities<TSerialized>,
+    services: ShieldedWalletServices,
   ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
+    this.services = services;
   }
 
   serialize(): TSerialized {
@@ -244,7 +242,7 @@ export function CustomShieldedWallet<
       return CustomShieldedWalletImplementation.startFirst(CustomShieldedWalletImplementation, deserialized);
     }
 
-    readonly state: rx.Observable<ShieldedWalletState<TSerialized, TTransaction>>;
+    readonly state: rx.Observable<ShieldedWalletState<TSerialized>>;
 
     constructor(
       runtime: Runtime.Runtime<
@@ -255,7 +253,7 @@ export function CustomShieldedWallet<
       super(runtime, scope);
       this.state = this.rawState.pipe(
         rx.map(
-          ShieldedWalletState.mapState<TSerialized, TTransaction>(
+          ShieldedWalletState.mapState<TSerialized>(
             CustomShieldedWalletImplementation.allVariantsRecord()[V1Tag].variant,
           ),
         ),
@@ -309,7 +307,7 @@ export function CustomShieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized, TTransaction>> {
+    waitForSyncedState(allowedGap: bigint = 0n): Promise<ShieldedWalletState<TSerialized>> {
       return rx.firstValueFrom(
         this.state.pipe(rx.filter((state) => state.state.progress.isCompleteWithin(allowedGap))),
       );
