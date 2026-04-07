@@ -27,13 +27,25 @@
       "types": "./dist/capabilities.d.ts",
       "import": "./dist/capabilities.js"
     },
+    "./dust": {
+      "types": "./dist/dust.d.ts",
+      "import": "./dist/dust.js"
+    },
     "./proving": {
       "types": "./dist/proving.d.ts",
       "import": "./dist/proving.js"
     },
+    "./shielded": {
+      "types": "./dist/shielded.d.ts",
+      "import": "./dist/shielded.js"
+    },
     "./testing": {
       "types": "./dist/testing.d.ts",
       "import": "./dist/testing.js"
+    },
+    "./unshielded": {
+      "types": "./dist/unshielded.d.ts",
+      "import": "./dist/unshielded.js"
     }
   },
   "dependencies": {
