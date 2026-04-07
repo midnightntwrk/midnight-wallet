@@ -15,3 +15,4 @@ export * from './Disconnect.js';
 export * from './BlockHash.js';
 export * from './FetchTermsAndConditions.js';
 export * from './TransactionStatus.js';
+export * from './TransactionHistoryDetail.js';

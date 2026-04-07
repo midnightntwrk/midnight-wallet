@@ -820,12 +820,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/language-service@npm:^0.76.0":
-  version: 0.76.0
-  resolution: "@effect/language-service@npm:0.76.0"
+"@effect/language-service@npm:^0.77.0":
+  version: 0.77.0
+  resolution: "@effect/language-service@npm:0.77.0"
   bin:
     effect-language-service: cli.js
-  checksum: 10c0/4e8773daedf8c7dd643e716b0da2d6ba6173c7dc8f68d9e2cfb712eaac659a2e1f6605b5dbc6abeb1aab2efd28d4cb80286458969e4dda0fd12106b8dfaf542a
+  checksum: 10c0/901e0bf37019c15b2011cf95c614b132548797197639f6c2b7580a18aa8da75bcee73ae47ef577d4623b98ff55c215f408ba3db996c7730d9fbabd737821a698
   languageName: node
   linkType: hard
 
@@ -2772,10 +2772,12 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.1.0"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.2.0"
+    "@midnight-ntwrk/wallet-sdk-facade": "npm:3.0.0"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:3.0.1"
     "@midnight-ntwrk/wallet-sdk-prover-client": "npm:1.2.0"
     "@midnight-ntwrk/wallet-sdk-runtime": "npm:1.0.2"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:2.1.0"
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:2.1.0"
     "@types/node": "npm:^25.3.0"
     effect: "npm:^3.19.19"
     pure-rand: "npm:^7.0.1"
@@ -2858,7 +2860,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-facade@workspace:*, @midnight-ntwrk/wallet-sdk-facade@workspace:^, @midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade":
+"@midnight-ntwrk/wallet-sdk-facade@npm:3.0.0, @midnight-ntwrk/wallet-sdk-facade@workspace:*, @midnight-ntwrk/wallet-sdk-facade@workspace:^, @midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-facade@workspace:packages/facade"
   dependencies:
@@ -2908,7 +2910,7 @@ __metadata:
   resolution: "@midnight-ntwrk/wallet-sdk-monorepo@workspace:."
   dependencies:
     "@changesets/cli": "npm:^2.29.8"
-    "@effect/language-service": "npm:^0.76.0"
+    "@effect/language-service": "npm:^0.77.0"
     "@eslint/compat": "npm:^2.0.2"
     "@eslint/js": "npm:^10.0.1"
     "@tsconfig/node22": "npm:^22.0.5"
@@ -3000,7 +3002,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:^2.1.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
+"@midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:2.1.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@npm:^2.1.0, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:*, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:^, @midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-unshielded-wallet@workspace:packages/unshielded-wallet"
   dependencies:
@@ -6286,12 +6288,12 @@ __metadata:
   linkType: hard
 
 "effect@npm:^3.19.19":
-  version: 3.19.19
-  resolution: "effect@npm:3.19.19"
+  version: 3.21.0
+  resolution: "effect@npm:3.21.0"
   dependencies:
     "@standard-schema/spec": "npm:^1.0.0"
     fast-check: "npm:^3.23.1"
-  checksum: 10c0/9107ddccfc2e4076f996e76ce6fa6dd17fa8b611f408692010a583a20bba25349d54b8d6cc697c523f4c1545a46fe7d85ede8a0e0e9232e25ce803e68788f575
+  checksum: 10c0/665cb8fd0862f334eeb1d0fbadb14913de358948c08929bfd079fd38903132ba54daa99da4c453f738c318fa5ce0de862bf8db08974d97a05d868f6bc685eb50
   languageName: node
   linkType: hard
 
