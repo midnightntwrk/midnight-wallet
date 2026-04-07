@@ -11,7 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
-import { NetworkId, ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  InMemoryTransactionHistoryStorage,
+  NetworkId,
+  ProtocolState,
+  ProtocolVersion,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import { type Variant, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -64,6 +70,7 @@ describe('Wallet Sync', () => {
         indexerHttpUrl: `http://localhost:${startedEnvironment.getContainer(`indexer_${environmentId}`).getMappedPort(8088)}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 

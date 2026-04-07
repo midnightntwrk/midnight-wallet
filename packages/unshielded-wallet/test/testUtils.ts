@@ -14,9 +14,19 @@ import { sampleIntentHash } from '@midnight-ntwrk/ledger-v8';
 import * as rx from 'rxjs';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { UnshieldedUpdate, UtxoWithMeta } from '../src/v1/SyncSchema.js';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import {
+  NetworkId,
+  InMemoryTransactionHistoryStorage,
+  TransactionHistoryStorage,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Schema } from 'effect';
+import { UnshieldedSectionSchema } from '../src/v1/TransactionHistory.js';
 import { DefaultV1Configuration } from '../src/v1/index.js';
-import { InMemoryTransactionHistoryStorage } from '../src/storage/index.js';
+
+const UnshieldedEntrySchema = Schema.Struct({
+  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  unshielded: Schema.optional(UnshieldedSectionSchema),
+});
 import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
 /**
@@ -113,7 +123,7 @@ export const createWalletConfig = (
       indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
     },
     networkId: NetworkId.NetworkId.Undeployed,
-    txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+    txHistoryStorage: new InMemoryTransactionHistoryStorage(UnshieldedEntrySchema),
   };
 
   return { ...defaultConfig, ...overrides };

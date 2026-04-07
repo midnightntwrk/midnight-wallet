@@ -12,13 +12,13 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { type DefaultConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
@@ -41,7 +41,7 @@ export const defaultConfiguration: Configuration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
 };
 
 export const init = async (
