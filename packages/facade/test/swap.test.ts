@@ -11,16 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { V1Builder } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import {
-  InMemoryTransactionHistoryStorage,
-  PublicKey,
-  UnshieldedWallet,
-  createKeystore,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { PublicKey, UnshieldedWallet, createKeystore } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { randomUUID } from 'node:crypto';
 import os from 'node:os';
@@ -31,6 +26,7 @@ import {
   type CombinedSwapInputs,
   type CombinedSwapOutputs,
   type DefaultConfiguration,
+  WalletEntrySchema,
   WalletFacade,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
@@ -94,7 +90,7 @@ describe('Swaps', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
   });
 
@@ -115,7 +111,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
@@ -126,7 +122,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
     });

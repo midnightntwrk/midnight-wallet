@@ -19,15 +19,15 @@ import * as KeyManagement from '@cardano-sdk/key-management';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
-  InMemoryTransactionHistoryStorage,
   PublicKey,
   UnshieldedWallet,
   UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
 import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
@@ -66,7 +66,10 @@ describe('Fresh wallet with empty state', () => {
 
     Dust = DustWallet({ ...walletConfig, ...fixture.getDustWalletConfig() });
     Wallet = ShieldedWallet(walletConfig);
-    Unshielded = UnshieldedWallet({ ...walletConfig, txHistoryStorage: new InMemoryTransactionHistoryStorage() });
+    Unshielded = UnshieldedWallet({
+      ...walletConfig,
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+    });
     shieldedWallet = Wallet.startWithSecretKeys(walletSecretKey);
     unshieldedWallet = Unshielded.startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore));
     dustWallet = Dust.startWithSecretKey(dustSecretKey, ledger.LedgerParameters.initialParameters().dust);
@@ -128,7 +131,7 @@ describe('Fresh wallet with empty state', () => {
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
       }).startWithPublicKey(PublicKey.fromKeyStore(wallet.unshieldedKeystore));
     } catch (error) {
       expect(error).toBeUndefined();
@@ -247,8 +250,8 @@ describe('Fresh wallet with empty state', () => {
   test(
     'Shielded midnight wallet returns no tx history',
     async () => {
-      const state = await firstValueFrom(wallet.wallet.shielded.state);
-      expect(() => state.transactionHistory).toThrow();
+      const entry = await wallet.wallet.queryTxHistoryByHash('nonexistent');
+      expect(entry).toBeUndefined();
     },
     timeout,
   );

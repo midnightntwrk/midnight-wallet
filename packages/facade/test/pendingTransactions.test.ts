@@ -14,17 +14,12 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import {
-  createKeystore,
-  InMemoryTransactionHistoryStorage,
-  PublicKey,
-  UnshieldedWallet,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type DefaultConfiguration, WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as rx from 'rxjs';
@@ -50,7 +45,7 @@ describe('Wallet Facade handling pending transactions', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
     };
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const shieldedSeed = getShieldedSeed(seed);

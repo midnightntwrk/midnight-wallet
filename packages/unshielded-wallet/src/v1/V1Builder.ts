@@ -24,7 +24,7 @@ import {
   makeDefaultSyncService,
   makeDefaultSyncCapability,
 } from './Sync.js';
-import { WalletSyncUpdate, UnshieldedUpdate } from './SyncSchema.js';
+import { WalletSyncUpdate } from './SyncSchema.js';
 import {
   DefaultTransactingConfiguration,
   DefaultTransactingContext,
@@ -69,7 +69,7 @@ export type V1Variant<TSerialized, TSyncUpdate> = Variant.Variant<
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
   serialization: SerializationCapability<CoreWallet, TSerialized>;
-  transactionHistory: TransactionHistoryService<UnshieldedUpdate>;
+  transactionHistory: TransactionHistoryService;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -226,7 +226,7 @@ export class V1Builder<
     transactionHistoryService: (
       configuration: TTransactionHistoryConfig,
       getContext: () => TTransactionHistoryContext,
-    ) => TransactionHistoryService<UnshieldedUpdate>,
+    ) => TransactionHistoryService,
   ): V1Builder<TConfig & TTransactionHistoryConfig, TContext & TTransactionHistoryContext, TSerialized, TSyncUpdate> {
     return new V1Builder<
       TConfig & TTransactionHistoryConfig,
@@ -360,7 +360,7 @@ declare namespace V1Builder {
     readonly transactionHistoryService: (
       configuration: TConfig,
       getContext: () => TContext,
-    ) => TransactionHistoryService<UnshieldedUpdate>;
+    ) => TransactionHistoryService;
   };
 
   type HasKeys<TConfig, TContext> = {
