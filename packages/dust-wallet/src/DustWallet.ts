@@ -30,7 +30,7 @@ import { CoreWallet } from './v1/CoreWallet.js';
 import { type KeysCapability } from './v1/Keys.js';
 import { V1Tag } from './v1/RunningV1Variant.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type Dust, type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
+import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
 import { type WalletSyncUpdate } from './v1/Sync.js';
@@ -52,24 +52,16 @@ export class DustWalletState<TSerialized = string> {
   readonly state: CoreWallet;
   readonly capabilities: DustWalletCapabilities<TSerialized>;
 
-  get totalCoins(): readonly Dust[] {
+  get totalCoins(): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
   }
 
-  get availableCoins(): readonly Dust[] {
+  get availableCoins(): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getAvailableCoins(this.state);
   }
 
-  get pendingCoins(): readonly Dust[] {
+  get pendingCoins(): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getPendingCoins(this.state);
-  }
-
-  pendingCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getPendingCoinsWithFullInfo(this.state, time);
-  }
-
-  totalCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getTotalCoinsWithFullInfo(this.state, time);
   }
 
   get publicKey(): DustPublicKey {
@@ -100,10 +92,6 @@ export class DustWalletState<TSerialized = string> {
 
   balance(time: Date): Balance {
     return this.capabilities.coinsAndBalances.getWalletBalance(this.state, time);
-  }
-
-  availableCoinsWithFullInfo(time: Date): readonly DustFullInfo[] {
-    return this.capabilities.coinsAndBalances.getAvailableCoinsWithFullInfo(this.state, time);
   }
 
   estimateDustGeneration(

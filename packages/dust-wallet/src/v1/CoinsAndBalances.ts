@@ -40,13 +40,10 @@ export const chooseCoin = <TInput>(coins: readonly CoinWithValue<TInput>[]): Coi
 
 export type CoinsAndBalancesCapability<TState> = {
   getWalletBalance(state: TState, time: Date): Balance;
-  getAvailableCoins(state: TState): readonly Dust[];
-  getPendingCoins(state: TState): readonly Dust[];
-  getTotalCoins(state: TState): ReadonlyArray<Dust>;
+  getAvailableCoins(state: TState, time?: Date): readonly DustFullInfo[];
+  getPendingCoins(state: TState, time?: Date): readonly DustFullInfo[];
+  getTotalCoins(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
   getAvailableCoinsWithGeneratedDust(state: TState, currentTime: Date): ReadonlyArray<CoinWithValue<Dust>>;
-  getAvailableCoinsWithFullInfo(state: TState, blockTime: Date): readonly DustFullInfo[];
-  getPendingCoinsWithFullInfo(state: TState, time?: Date): readonly DustFullInfo[];
-  getTotalCoinsWithFullInfo(state: TState, time?: Date): ReadonlyArray<DustFullInfo>;
   getGenerationInfo(state: TState, coin: Dust): DustGenerationInfo | undefined;
 
   /**
@@ -85,18 +82,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
     return state.state.walletBalance(time);
   };
 
-  const getAvailableCoins = (state: CoreWallet): Dust[] => {
-    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
-    return pipe(
-      state.state.utxos,
-      Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
-    );
-  };
-
-  const getPendingCoins = (state: CoreWallet): Dust[] => state.pendingDust;
-
-  const getTotalCoins = (state: CoreWallet): Array<Dust> => [...getAvailableCoins(state), ...getPendingCoins(state)];
-
   const getGenerationInfo = (state: CoreWallet, coin: Dust): DustGenerationInfo | undefined => {
     const info = state.state.generationInfo(coin);
     return info && info.dtime
@@ -107,43 +92,35 @@ export const makeDefaultCoinsAndBalancesCapability = (
       : info;
   };
 
+  const resolveTime = (state: CoreWallet, time?: Date): Date => time ?? state.state.syncTime;
+
   const toFullInfo = (state: CoreWallet, coins: readonly Dust[], time: Date): readonly DustFullInfo[] =>
     coins.flatMap((coin) => {
       const genInfo = getGenerationInfo(state, coin);
       return genInfo ? [{ token: coin, ...getFullDustInfo(state.state.params, genInfo, coin, time) }] : [];
     });
 
-  const getAvailableCoinsWithGeneratedDust = (state: CoreWallet, currentTime: Date): Array<CoinWithValue<Dust>> => {
-    const result: Array<CoinWithValue<Dust>> = [];
-    const available = getAvailableCoins(state);
-
-    for (const coin of available) {
-      const genInfo = getGenerationInfo(state, coin);
-      if (genInfo) {
-        const generatedValue = ledger.updatedValue(
-          coin.ctime,
-          coin.initialValue,
-          genInfo,
-          currentTime,
-          state.state.params,
-        );
-        result.push({ token: coin, value: generatedValue });
-      }
-    }
-
-    return result;
+  const availableDustTokens = (state: CoreWallet): Dust[] => {
+    const pendingSpends = new Set([...state.pendingDust.values()].map((coin) => coin.nonce));
+    return pipe(
+      state.state.utxos,
+      Arr.filter((coin) => !pendingSpends.has(coin.nonce)),
+    );
   };
 
-  const getAvailableCoinsWithFullInfo = (state: CoreWallet, blockTime: Date): Array<DustFullInfo> => [
-    ...toFullInfo(state, getAvailableCoins(state), blockTime),
-  ];
+  const getAvailableCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
+    toFullInfo(state, availableDustTokens(state), resolveTime(state, time));
 
-  const getPendingCoinsWithFullInfo = (state: CoreWallet, time: Date): readonly DustFullInfo[] =>
-    toFullInfo(state, getPendingCoins(state), time);
+  const getPendingCoins = (state: CoreWallet, time?: Date): readonly DustFullInfo[] =>
+    toFullInfo(state, state.pendingDust, resolveTime(state, time));
 
-  const getTotalCoinsWithFullInfo = (state: CoreWallet, time: Date): ReadonlyArray<DustFullInfo> => {
-    return [...toFullInfo(state, getAvailableCoins(state), time), ...getPendingCoinsWithFullInfo(state, time)];
+  const getTotalCoins = (state: CoreWallet, time?: Date): ReadonlyArray<DustFullInfo> => {
+    const effectiveTime = resolveTime(state, time);
+    return [...getAvailableCoins(state, effectiveTime), ...getPendingCoins(state, effectiveTime)];
   };
+
+  const getAvailableCoinsWithGeneratedDust = (state: CoreWallet, currentTime: Date): Array<CoinWithValue<Dust>> =>
+    getAvailableCoins(state, currentTime).map((info) => ({ token: info.token, value: info.generatedNow }));
 
   const getFullDustInfo = (
     parameters: ledger.DustParameters,
@@ -225,9 +202,6 @@ export const makeDefaultCoinsAndBalancesCapability = (
     getPendingCoins,
     getTotalCoins,
     getAvailableCoinsWithGeneratedDust,
-    getAvailableCoinsWithFullInfo,
-    getPendingCoinsWithFullInfo,
-    getTotalCoinsWithFullInfo,
     getGenerationInfo,
     estimateDustGeneration,
     splitNightUtxos,
