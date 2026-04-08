@@ -23,6 +23,7 @@ import {
   SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
+  UnprovenIntent,
   UtxoOutput,
   UtxoSpend,
   FinalizedTransaction,
@@ -144,6 +145,42 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     },
     { result: [], remaining: fee },
   ).result;
+
+function collectIntentSegmentIds(
+  transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
+): Set<number> {
+  const ids = new Set<number>();
+  for (const tx of transactions) {
+    const intents = tx.intents;
+    if (intents) {
+      for (const segId of intents.keys()) {
+        ids.add(segId);
+      }
+    }
+  }
+  return ids;
+}
+
+function createNonCollidingFeeTx(
+  networkId: string,
+  intent: UnprovenIntent,
+  usedSegmentIds: Set<number>,
+): UnprovenTransaction {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const tx = Transaction.fromPartsRandomized(networkId, undefined, undefined, intent);
+    const txIntents = tx.intents;
+    if (!txIntents) return tx;
+    let collision = false;
+    for (const segId of txIntents.keys()) {
+      if (usedSegmentIds.has(segId)) {
+        collision = true;
+        break;
+      }
+    }
+    if (!collision) return tx;
+  }
+  throw new Error('Failed to generate non-colliding segment_id after 100 attempts');
+}
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<
   DustSecretKey,
@@ -377,7 +414,8 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       [],
     );
 
-    const balancingTx = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
+    const usedIds = collectIntentSegmentIds(transactions);
+    const balancingTx = createNonCollidingFeeTx(network, intent, usedIds);
 
     // Erase proofs on everything and merge
     const erasedBalancing = balancingTx.eraseProofs();
@@ -521,7 +559,8 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
             [],
           );
 
-          const feeTransaction = Transaction.fromPartsRandomized(networkId, undefined, undefined, intent);
+          const usedIds = collectIntentSegmentIds(transactions);
+          const feeTransaction = createNonCollidingFeeTx(networkId, intent, usedIds);
 
           return [feeTransaction, updatedState];
         });
