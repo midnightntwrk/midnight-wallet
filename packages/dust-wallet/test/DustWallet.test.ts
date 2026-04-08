@@ -805,6 +805,101 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
+  it('balanceTransactions converges when transaction has zero dust imbalance', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000n;
+
+      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* waitForTx(stateRef, 1);
+
+      const simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 2);
+
+      yield* simulator.fastForward(10n);
+
+      const latestSimState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(latestSimState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+
+      const nightTokens = getNightTokens(latestSimState, walletAddress);
+      const sendToken = nightTokens[0];
+      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobAddress = bobKeyStore.getAddress();
+
+      // fromPartsRandomized matches dApp connector behaviour and produces segment_ids in [2, 65534]
+      const intent = Intent.new(ttl);
+      intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
+        [{ ...sendToken, owner: nightVerifyingKey }],
+        [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+        [],
+      );
+      const transferTx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+
+      const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [transferTx], ttl, currentTime);
+
+      // merge must succeed — if the sign bug is present this never reaches here (infinite loop)
+      const merged = transferTx.merge(balancingTx);
+      expect(merged).toBeTruthy();
+    }).pipe(Effect.runPromise);
+  }, 5000);
+
+  it('balanceTransactions avoids segment_id collision with input transactions', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const singleAwardTokens = 150_000_000_000n;
+      const awardCount = 5;
+
+      const nightRewards: Chunk.Chunk<{ blockNumber: bigint }> = yield* Stream.repeatEffect(
+        simulator.rewardNight(walletAddress, singleAwardTokens, nightVerifyingKey),
+      ).pipe(Stream.take(awardCount), Stream.runCollect);
+      const maxBlockNr = nightRewards.pipe(
+        Chunk.map(({ blockNumber }) => blockNumber),
+        Chunk.reduceRight(0n, BI.max),
+      );
+      yield* waitForTx(stateRef, maxBlockNr);
+
+      const simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, maxBlockNr + 1n);
+
+      yield* simulator.fastForward(10n);
+
+      const latestSimState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(latestSimState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+
+      const nightTokens = getNightTokens(latestSimState, walletAddress);
+      const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+      const bobAddress = bobKeyStore.getAddress();
+
+      const makeTransferTx = (sendToken: (typeof nightTokens)[0]) => {
+        const intent = Intent.new(ttl);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
+          [{ ...sendToken, owner: nightVerifyingKey }],
+          [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+          [],
+        );
+        return Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+      };
+
+      const transferTxs = Array.from({ length: 40 }, () => makeTransferTx(nightTokens[0]));
+
+      const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
+
+      // Merge all input transactions plus the balancing tx — any segment_id collision throws IntentSegmentIdCollision
+      const merged = transferTxs.reduce((acc, tx) => acc.merge(tx), balancingTx);
+      expect(merged).toBeTruthy();
+    }).pipe(Effect.runPromise);
+  });
+
   it('deregisters from Dust generation', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();

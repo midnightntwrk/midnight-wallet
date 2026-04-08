@@ -469,7 +469,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
                     value: coin.value,
                     token: coin.token,
                   })),
-                  initialImbalances: CapImbalances.fromEntry('dust', currentFee),
+                  initialImbalances: CapImbalances.fromEntry('dust', currentFee <= 0n ? currentFee : -currentFee),
                   feeTokenType: 'dust',
                   transactionCostModel: {
                     inputFeeOverhead: 0n,
