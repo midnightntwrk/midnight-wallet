@@ -167,22 +167,12 @@ describe('Token transfer', () => {
       logger.info('Submitting transaction...');
       logger.info(finalizedTx.toString());
       const txId = await sender.wallet.submitTransaction(finalizedTx);
+      const txHash = finalizedTx.transactionHash();
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
-
-      // const pendingState = await utils.waitForFacadePending(sender);
-      // // logger.info(utils.walletStateTrimmed(pendingState));
-      // expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      // expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.unshielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
-
-      // logger.info('waiting for tx in history');
-      // await waitForTxInHistory(txId, sender);
-      // await utils.waitForFacadePendingClear(sender);
-      await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
+      logger.info('waiting for tx in history');
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, sender.wallet);
       const senderFinalState = await sender.wallet.waitForSyncedState();
-      // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
       const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
       const senderFinalDustBalance = senderFinalState.dust.balance(new Date(3 * 1000));
@@ -212,13 +202,8 @@ describe('Token transfer', () => {
       // Verify sender unshielded transaction history grew and contains the specific transaction
       const senderFinalTxHistory = await Array.fromAsync(sender.wallet.getAllFromTxHistory());
       expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
-      const txHash = finalizedTx.transactionHash();
-      const senderTxEntry = await sender.wallet.queryTxHistoryByHash(txHash);
-      expect(senderTxEntry).toBeDefined();
-      expect(senderTxEntry!.hash).toBe(txHash);
-      expect(senderTxEntry!.status).toBe('SUCCESS');
-      expect(senderTxEntry!.unshielded!.spentUtxos.length).toBeGreaterThan(0);
-      utils.expectValidUnshieldedTxHistoryEntry(senderTxEntry!);
+      utils.expectSenderShieldedTxHistory(senderTxEntry);
+      utils.expectSenderUnshieldedTxHistory(senderTxEntry);
 
       const receiverFinalState = await receiver.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState2));
@@ -241,13 +226,8 @@ describe('Token transfer', () => {
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
       const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
       expect(receiverTxEntry).toBeDefined();
-      expect(receiverTxEntry!.hash).toBe(txHash);
-      expect(receiverTxEntry!.status).toBe('SUCCESS');
-      expect(receiverTxEntry!.unshielded!.createdUtxos.length).toBeGreaterThan(0);
-      // Receiver should have received the unshielded output value
-      const receivedUtxo = receiverTxEntry!.unshielded!.createdUtxos.find((u) => u.value === outputValue);
-      expect(receivedUtxo).toBeDefined();
-      utils.expectValidUnshieldedUtxoFields(receivedUtxo!);
+      utils.expectReceiverShieldedTxHistory(receiverTxEntry!, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry!, outputValue);
     },
     syncTimeout,
   );
@@ -293,18 +273,14 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(sender.wallet);
-      // logger.info(utils.walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
       logger.info(inspect(pendingState.shielded.pendingCoins, { depth: null }));
       expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
-      // expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
-      // expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
       const txHash = finalizedTx.transactionHash();
       const txEntry = await utils.waitForTxInHistory(txHash, sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
-      // logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
       // actually deducted fees are greater - PM-7721
@@ -314,10 +290,8 @@ describe('Token transfer', () => {
       expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       // Self-transaction: sender has both spentCoins and receivedCoins
-      expect(txEntry.shielded).toBeDefined();
-      expect(txEntry.shielded!.spentCoins.length).toBeGreaterThan(0);
+      utils.expectSenderShieldedTxHistory(txEntry);
       expect(txEntry.shielded!.receivedCoins.length).toBeGreaterThan(0);
-      utils.expectValidShieldedTxHistoryEntry(txEntry);
     },
     timeout,
   );
