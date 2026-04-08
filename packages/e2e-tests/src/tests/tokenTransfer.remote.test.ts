@@ -301,8 +301,8 @@ describe('Token transfer', () => {
       // expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
       // expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      // await utils.waitForTxInHistory(String(txId), sender.shielded);
-      await utils.waitForFacadePendingClear(sender.wallet);
+      const txHash = finalizedTx.transactionHash();
+      const txEntry = await utils.waitForTxInHistory(txHash, sender.wallet);
       const finalState = await sender.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
@@ -312,8 +312,12 @@ describe('Token transfer', () => {
       expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
-      // expect(finalState.nullifiers.length).toBeGreaterThanOrEqual(initialState.nullifiers.length);
-      // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+
+      // Self-transaction: sender has both spentCoins and receivedCoins
+      expect(txEntry.shielded).toBeDefined();
+      expect(txEntry.shielded!.spentCoins.length).toBeGreaterThan(0);
+      expect(txEntry.shielded!.receivedCoins.length).toBeGreaterThan(0);
+      utils.expectValidShieldedTxHistoryEntry(txEntry);
     },
     timeout,
   );
