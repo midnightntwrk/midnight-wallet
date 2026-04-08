@@ -441,6 +441,33 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
     ),
   );
 
+export const waitForTxInHistory = async (
+  txHash: string,
+  wallet: WalletFacade,
+  ready?: (entry: WalletEntry) => boolean,
+) => {
+  const isReady = ready ?? (() => true);
+  const txEntry = await rx.firstValueFrom(
+    wallet.state().pipe(
+      rx.mergeMap(async (state) => {
+        const txEntry = await wallet.queryTxHistoryByHash(txHash);
+        return { state, txEntry };
+      }),
+      rx.tap(({ txEntry }) => {
+        logger.info(
+          `Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}, ready: ${txEntry !== undefined && isReady(txEntry)}`,
+        );
+      }),
+      rx.filter(({ state, txEntry }) => state.isSynced && txEntry !== undefined && isReady(txEntry)),
+      rx.map(({ txEntry }) => txEntry!),
+    ),
+  );
+  expect(txEntry).toBeDefined();
+  expect(txEntry.hash).toBe(txHash);
+  expect(txEntry.status).toBe('SUCCESS');
+  return txEntry;
+};
+
 // export const waitForTxInHistory = async (txId: string, wallet: ShieldedWallet) =>
 //   firstValueFrom(
 //     wallet.state.pipe(

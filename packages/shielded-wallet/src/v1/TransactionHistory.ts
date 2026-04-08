@@ -12,7 +12,7 @@
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Duration, Array as EArray, Effect, Schedule, Schema } from 'effect';
+import { Duration, Array as EArray, Effect, PartitionedSemaphore, Schedule, Schema } from 'effect';
 import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
@@ -92,7 +92,7 @@ const convertUpdateToStorageEntry = (
   } satisfies ShieldedSection,
 });
 
-const upsertShieldedEntry = (
+export const upsertShieldedEntry = (
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
 ): Effect.Effect<void, TransactionHistoryError> =>
@@ -122,6 +122,11 @@ export const makeDefaultTransactionHistoryService = (
   const txHistoryStorage = config.txHistoryStorage;
   const queryClientLayer = HttpQueryClient.layer({ url: config.indexerClientConnection.indexerHttpUrl });
 
+  // The PartitionedSemaphore is created to be keyed by txHash (string) to  ensures that upserts for the same hash will run
+  // in serial, while upserts for different hashes still run fully in parallel.
+  // This will avoid a possible race condition as this method "put" is forked with concurrency:unbounded
+  const upsertSemaphore = PartitionedSemaphore.makeUnsafe<string>({ permits: 1 });
+
   return {
     put: (
       changes: ledger.ZswapStateChanges,
@@ -129,7 +134,12 @@ export const makeDefaultTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertShieldedEntry(txHistoryStorage, entry);
+
+      // ensure we wrap the method with the semaphore to avoid a possible race condition as this method "put"
+      // is forked with concurrency:unbounded
+      //
+      // This should not be removed to avoid a possible race condition.
+      return upsertSemaphore.withPermits(entry.hash, 1)(upsertShieldedEntry(txHistoryStorage, entry));
     },
 
     getTransactionDetails: (
@@ -168,6 +178,7 @@ export const makeSimulatorTransactionHistoryService = (
   _getContext: () => unknown,
 ): TransactionHistoryService => {
   const txHistoryStorage = config.txHistoryStorage;
+  const upsertSemaphore = PartitionedSemaphore.makeUnsafe<string>({ permits: 1 });
 
   return {
     put: (
@@ -176,10 +187,15 @@ export const makeSimulatorTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertShieldedEntry(txHistoryStorage, {
-        ...entry,
-        timestamp: new Date(metadata.timestamp),
-      });
+      return upsertSemaphore.withPermits(
+        entry.hash,
+        1,
+      )(
+        upsertShieldedEntry(txHistoryStorage, {
+          ...entry,
+          timestamp: new Date(metadata.timestamp),
+        }),
+      );
     },
 
     getTransactionDetails: (
