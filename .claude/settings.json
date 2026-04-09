@@ -1,14 +1,4 @@
 {
-  "permissions": {
-    "allow": [
-      "Bash(grep -n \"TransactionHistory\" /Users/ian/Development/Work/midnight-wallet/packages/shielded-wallet/src/v1/test/*.test.ts)",
-      "Bash(grep -l \"TransactionHistory\" /Users/ian/Development/Work/midnight-wallet/packages/*/test/*.test.ts /Users/ian/Development/Work/midnight-wallet/packages/*/src/**/*.test.ts)",
-      "Bash(grep -n \"TransactionHistory\" /Users/ian/Development/Work/midnight-wallet/packages/unshielded-wallet/test/*.test.ts)",
-      "Bash(grep -n \"getMappedPort\\\\|getMappedPort\\\\|:8088\\\\|:9944\\\\|:6300\" /Users/ian/Development/Work/midnight-wallet/packages/wallet-integration-tests/test/*.ts)",
-      "Bash(yarn effect-language-service:*)",
-      "Bash(npx tsc:*)"
-    ]
-  },
   "hooks": {
     "PostToolUse": [
       {

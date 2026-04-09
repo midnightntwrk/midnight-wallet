@@ -9,6 +9,11 @@ The Midnight Wallet SDK is a TypeScript implementation of the
 It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
 utilities for the Midnight privacy-focused blockchain.
 
+## Claude Code Settings
+
+- **`.claude/settings.json`** is tracked by git — shared team config (hooks only). **NEVER** add `permissions` here.
+- **`.claude/settings.local.json`** is gitignored — personal permissions go here.
+
 ## Key Specifications (ALWAYS CONSULT)
 
 When working on wallet functionality, always consult these specifications:
