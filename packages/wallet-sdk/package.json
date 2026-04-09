@@ -49,15 +49,15 @@
     }
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-abstractions": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-capabilities": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-utilities": "workspace:*"
+    "@midnight-ntwrk/wallet-sdk-abstractions": "^2.0.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.0",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "^3.2.0",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-facade": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.1",
+    "@midnight-ntwrk/wallet-sdk-shielded": "^2.1.0",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "^2.1.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.1.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
