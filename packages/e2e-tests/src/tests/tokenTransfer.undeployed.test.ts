@@ -760,6 +760,7 @@ describe('Token transfer', () => {
       const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
       const initialAvailableCoins = syncedState?.shielded.availableCoins.length ?? 0;
       const initialTotalCoins = syncedState?.shielded.totalCoins.length ?? 0;
+      const initialTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       const initialState2 = await rx.firstValueFrom(funded.wallet.state());
@@ -778,6 +779,7 @@ describe('Token transfer', () => {
       const offer = ledger.ZswapOffer.fromOutput(output, shieldedTokenRaw, outputValue);
       const unprovenTx = ledger.Transaction.fromParts(NetworkId.NetworkId.Undeployed, offer);
       const finalizedTx = await funded.wallet.finalizeTransaction(unprovenTx);
+      const txHash = finalizedTx.transactionHash();
       await expect(
         Promise.all([funded.wallet.submitTransaction(finalizedTx), funded.wallet.submitTransaction(finalizedTx)]),
       ).rejects.toThrow();
@@ -787,49 +789,20 @@ describe('Token transfer', () => {
       expect(finalState.availableCoins.length).toBe(initialAvailableCoins);
       expect(finalState.pendingCoins.length).toBe(0);
       expect(finalState.totalCoins.length).toBe(initialTotalCoins);
+
+      // Verify failed tx appears in history with FAILURE status or does not appear at all
+      const finalTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const failedEntry = await funded.wallet.queryTxHistoryByHash(txHash);
+      if (failedEntry !== undefined) {
+        expect(failedEntry.hash).toBe(txHash);
+        expect(failedEntry.status).not.toBe('SUCCESS');
+      } else {
+        // If the failed tx is not recorded, history length should remain unchanged
+        expect(finalTxHistory.length).toBe(initialTxHistory.length);
+      }
     },
     timeout,
   );
-
-  // test.skip(
-  //   'error message when attempting to send to an invalid address',
-  //   async () => {
-  //     allure.tms('PM-9678', 'PM-9678');
-  //     allure.epic('Headless wallet');
-  //     allure.feature('Transactions');
-  //     allure.story('Invalid address error message');
-  //     const syncedState = await funded.wallet.waitForSyncedState();
-  //     const initialBalance = syncedState?.shielded.balances[dustTokenHash] ?? 0n;
-  //     logger.info(`Wallet 1 balance is: ${initialBalance}`);
-  //     const invalidAddress = 'invalidAddress';
-
-  //     const outputsToCreate: CombinedTokenTransfer[] = [
-  //       {
-  //         type: 'shielded',
-  //         outputs: [
-  //           {
-  //             type: shieldedTokenRaw,
-  //             amount: outputValue,
-  //             receiverAddress: invalidAddress,
-  //           },
-  //         ],
-  //       },
-  //     ];
-  //     await expect(
-  //       funded.wallet.transferTransaction(
-  //         outputsToCreate,
-  //         {
-  //           shieldedSecretKeys: funded.shieldedSecretKeys,
-  //           dustSecretKey: funded.dustSecretKey,
-  //         },
-  //         {
-  //           ttl: new Date(),
-  //         },
-  //       ),
-  //     ).rejects.toThrow(`Address parsing error: invalidAddress`);
-  //   },
-  //   timeout,
-  // );
 
   test(
     'error message when attempting to send an amount greater than available balance',
