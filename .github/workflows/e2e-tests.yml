@@ -204,7 +204,7 @@ jobs:
           include-hidden-files: true
 
       - name: Publish wallet TS Test Report
-        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3
         if: success() || failure()
         with:
           name: Wallet TS packages Junit Tests Report
