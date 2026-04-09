@@ -11,16 +11,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
-import { Effect } from 'effect';
+import { Effect, Schema } from 'effect';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   makeDefaultTransactionHistoryService,
   makeSimulatorTransactionHistoryService,
   upsertShieldedEntry,
+  ShieldedSectionSchema,
   type TransactionDetails,
-  type ShieldedTransactionHistoryEntry,
 } from '../TransactionHistory.js';
+
+const isShieldedSection = Schema.is(ShieldedSectionSchema);
 
 const txHash = 'abc123';
 
@@ -119,8 +121,10 @@ const makeStorage = (
   };
 };
 
-const getShielded = (entries: Map<string, EntryWithHash>, hash: string = txHash) =>
-  entries.get(hash)?.['shielded'] as ShieldedTransactionHistoryEntry['shielded'] | undefined;
+const getShielded = (entries: Map<string, EntryWithHash>, hash: string = txHash) => {
+  const section = entries.get(hash)?.['shielded'];
+  return isShieldedSection(section) ? section : undefined;
+};
 
 describe('TransactionHistory race condition', () => {
   // Calls upsertShieldedEntry directly (bypassing service.put) to avoid the PartitionedSemaphore
