@@ -98,14 +98,14 @@ describe('Funded wallet', () => {
 
       const dustCoins = state.dust.totalCoins;
       expect(dustCoins).toHaveLength(5);
-      expect(utils.isArrayUnique(dustCoins.map((c) => c.nonce))).toBeTruthy();
-      expect(utils.isArrayUnique(dustCoins.map((c) => c.backingNight))).toBeTruthy();
+      expect(utils.isArrayUnique(dustCoins.map((c) => c.token.nonce))).toBeTruthy();
+      expect(utils.isArrayUnique(dustCoins.map((c) => c.token.backingNight))).toBeTruthy();
       dustCoins.forEach((c) => {
-        expect(c.initialValue).toBe(0n);
-        expect(c.seq).toBe(0);
-        expect(typeof c.owner).toBe('bigint');
-        expect(typeof c.nonce).toBe('bigint');
-        expect(typeof c.ctime).toBe('object');
+        expect(c.token.initialValue).toBe(0n);
+        expect(c.token.seq).toBe(0);
+        expect(typeof c.token.owner).toBe('bigint');
+        expect(typeof c.token.nonce).toBe('bigint');
+        expect(typeof c.token.ctime).toBe('object');
       });
     },
     timeout,
@@ -143,14 +143,14 @@ describe('Funded wallet', () => {
 
       const dustCoins = state.dust.availableCoins;
       expect(dustCoins).toHaveLength(5);
-      expect(utils.isArrayUnique(dustCoins.map((c) => c.nonce))).toBeTruthy();
-      expect(utils.isArrayUnique(dustCoins.map((c) => c.backingNight))).toBeTruthy();
+      expect(utils.isArrayUnique(dustCoins.map((c) => c.token.nonce))).toBeTruthy();
+      expect(utils.isArrayUnique(dustCoins.map((c) => c.token.backingNight))).toBeTruthy();
       dustCoins.forEach((c) => {
-        expect(c.initialValue).toBe(0n);
-        expect(c.seq).toBe(0);
-        expect(typeof c.owner).toBe('bigint');
-        expect(typeof c.nonce).toBe('bigint');
-        expect(typeof c.ctime).toBe('object');
+        expect(c.token.initialValue).toBe(0n);
+        expect(c.token.seq).toBe(0);
+        expect(typeof c.token.owner).toBe('bigint');
+        expect(typeof c.token.nonce).toBe('bigint');
+        expect(typeof c.token.ctime).toBe('object');
       });
     },
     timeout,
