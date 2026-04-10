@@ -16,7 +16,7 @@ import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
@@ -120,7 +120,7 @@ const restoreUnshieldedWallet = async (
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
@@ -200,7 +200,7 @@ export const provideWallet = async (
       configuration: {
         ...walletConfig,
         ...dustWalletConfig,
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       },
       shielded: () => restoredShielded,
       unshielded: () => restoredUnshielded,
@@ -284,7 +284,7 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
     configuration: {
       ...walletConfig,
       ...fixture.getDustWalletConfig(),
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),

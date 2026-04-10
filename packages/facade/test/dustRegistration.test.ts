@@ -41,6 +41,7 @@ import {
   type FacadeState,
   WalletEntrySchema,
   WalletFacade,
+  mergeWalletEntries,
 } from '../src/index.js';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
@@ -95,7 +96,7 @@ describe('Dust Registration', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 

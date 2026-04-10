@@ -36,6 +36,7 @@ import {
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
+  mergeShieldedSections,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -64,6 +65,17 @@ export const WalletEntrySchema = Schema.Struct({
 });
 
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
+
+export const mergeWalletEntries = (existing: WalletEntry, incoming: WalletEntry): WalletEntry => ({
+  ...existing,
+  ...incoming,
+  ...(existing.shielded !== undefined && incoming.shielded !== undefined
+    ? { shielded: mergeShieldedSections(existing.shielded, incoming.shielded) }
+    : {}),
+  ...(existing.unshielded !== undefined && incoming.unshielded !== undefined
+    ? { unshielded: { ...existing.unshielded, ...incoming.unshielded } }
+    : {}),
+});
 
 const isWalletEntry: (u: unknown) => u is WalletEntry = Schema.is(WalletEntrySchema);
 

@@ -28,7 +28,7 @@ import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -60,7 +60,7 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
 
     unshieldedConfiguration = {
@@ -69,7 +69,7 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -147,6 +147,7 @@ describe('Wallet serialization and restoration', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = ShieldedWallet({
         ...shieldedConfiguration,
@@ -188,6 +189,7 @@ describe('Wallet serialization and restoration', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = UnshieldedWallet({
         ...unshieldedConfiguration,

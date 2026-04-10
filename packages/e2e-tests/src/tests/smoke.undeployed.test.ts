@@ -20,7 +20,7 @@ import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wa
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { CombinedTokenTransfer, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { CombinedTokenTransfer, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -200,6 +200,7 @@ describe('Smoke tests', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const RestoredWallet = ShieldedWallet({
         ...walletConfig,
@@ -222,7 +223,7 @@ describe('Smoke tests', () => {
     'Unshielded wallet can be serialized and restored',
     async () => {
       fixture = getFixture();
-      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema);
+      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
       const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -244,6 +245,7 @@ describe('Smoke tests', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),

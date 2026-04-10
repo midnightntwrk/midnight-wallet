@@ -22,7 +22,13 @@ import os from 'node:os';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
+import {
+  type CombinedTokenTransfer,
+  DefaultConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+  mergeWalletEntries,
+} from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
@@ -81,7 +87,7 @@ describe('Wallet Facade Transfer', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -105,7 +111,7 @@ describe('Wallet Facade Transfer', () => {
     receiverFacade = await WalletFacade.init({
       configuration: {
         ...configuration,
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       },
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
