@@ -17,11 +17,13 @@ import {
   nativeToken,
   type ProofErasedTransaction,
   Transaction,
+  type UnprovenTransaction,
   UnshieldedOffer,
   type UserAddress,
 } from '@midnight-ntwrk/ledger-v8';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
+import { getBalanceRecipe, Imbalances as CapImbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { beforeEach, describe, it } from '@vitest/runner';
 import { BigInt as BI, Chunk, Effect, Scope, Stream, SubscriptionRef } from 'effect';
@@ -803,6 +805,175 @@ describe('DustWallet', () => {
       expect(walletVariant.coinsAndBalances.getPendingCoins(walletState).length).toBe(0);
       expect(walletVariant.coinsAndBalances.getAvailableCoins(walletState).length).toBe(dustCoinsCount);
     }).pipe(Effect.runPromise);
+  });
+
+  describe('external transaction shapes', () => {
+    // These tests exercise balanceTransactions with transaction structures that
+    // arrive from external sources (dApps via midnight-js through the dApp connector).
+    // The existing tests only cover wallet-originated transactions that always use
+    // guaranteedUnshieldedOffer. External contract call transactions place content
+    // in random/fallible segments, leaving the guaranteed section empty.
+
+    const setupDustCoins = Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+      const walletAddress = keyStore.getAddress();
+      const awardTokens = 150_000_000_000n;
+
+      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+      yield* waitForTx(stateRef, 1);
+
+      const simulatorState = yield* simulator.getLatestState();
+      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+      yield* waitForTx(stateRef, 2);
+
+      yield* simulator.fastForward(10n);
+
+      const latestSimState = yield* simulator.getLatestState();
+      const currentTime = getCurrentTime(latestSimState);
+      const ttl = DateOps.addSeconds(currentTime, 1);
+      const nightTokens = getNightTokens(latestSimState, walletAddress);
+
+      return { nightVerifyingKey, dustSecretKey, walletAddress, currentTime, ttl, nightTokens, latestSimState };
+    });
+
+    it('getBalanceRecipe selects 0 coins when dust imbalance is positive (sign bug)', () => {
+      // Demonstrates the fee sign convention bug in computeBalancingRecipe.
+      //
+      // When a dApp connector contract call transaction produces initialFees = 0,
+      // the first iteration of the convergence loop selects 0 coins (nothing to
+      // balance). dryRunFee then returns a positive fee, which feeds back as
+      // currentFee on the next iteration. The unfixed code passes this positive
+      // value directly to getBalanceRecipe, which interprets it as surplus (not
+      // deficit) and again selects 0 coins — infinite loop.
+      //
+      // The fix negates positive currentFee before passing to getBalanceRecipe:
+      //   initialImbalances: fromEntry('dust', currentFee <= 0n ? currentFee : -currentFee)
+      //
+      // This test directly demonstrates the mechanism: getBalanceRecipe with a
+      // positive dust imbalance selects 0 coins, while negative selects coins.
+      const coins = [{ type: 'dust', value: 100n, token: { type: 'dust' as const, value: 100n } }];
+      const balancerArgs = {
+        coins,
+        feeTokenType: 'dust',
+        transactionCostModel: { inputFeeOverhead: 0n, outputFeeOverhead: 0n },
+        createOutput: (coin: { type: string; value: bigint }) => coin,
+        isCoinEqual: (a: { type: string; value: bigint }, b: { type: string; value: bigint }) =>
+          a.type === b.type && a.value === b.value,
+      };
+
+      // BUG PATH: positive imbalance = surplus → balancer adds output, selects 0 input coins
+      const buggyRecipe = getBalanceRecipe({
+        ...balancerArgs,
+        initialImbalances: CapImbalances.fromEntry('dust', 5n),
+      });
+      expect(buggyRecipe.inputs).toHaveLength(0);
+
+      // FIX PATH: negative imbalance = deficit → balancer selects coins to cover it
+      const fixedRecipe = getBalanceRecipe({
+        ...balancerArgs,
+        initialImbalances: CapImbalances.fromEntry('dust', -5n),
+      });
+      expect(fixedRecipe.inputs.length).toBeGreaterThan(0);
+    });
+
+    it('balanceTransactions handles fallible-only transaction', async () => {
+      // Simulates a contract call that produces fallible outputs but no guaranteed
+      // content. The guaranteed section is empty, matching the dApp connector path.
+      return Effect.gen(function* () {
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+
+        const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+        const bobAddress = bobKeyStore.getAddress();
+        const sendToken = nightTokens[0];
+
+        const intent = Intent.new(ttl);
+        intent.fallibleUnshieldedOffer = UnshieldedOffer.new(
+          [{ ...sendToken, owner: nightVerifyingKey }],
+          [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+          [],
+        );
+        // No guaranteedUnshieldedOffer — only fallible content
+        const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+
+        const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
+        expect(balancingTx).toBeTruthy();
+      }).pipe(Effect.runPromise);
+    });
+
+    it('balanceTransactions handles transaction with both guaranteed and fallible content', async () => {
+      return Effect.gen(function* () {
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+
+        const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+        const bobAddress = bobKeyStore.getAddress();
+        const sendToken = nightTokens[0];
+
+        const inputs = [{ ...sendToken, owner: nightVerifyingKey }];
+        const outputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
+
+        const intent = Intent.new(ttl);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+        intent.fallibleUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+        const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+
+        const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
+        expect(balancingTx).toBeTruthy();
+      }).pipe(Effect.runPromise);
+    });
+
+    it('feeImbalance includes fee as dust deficit even for bare intent', () => {
+      // Documents that imbalances(0, fee) always includes the fee as a dust
+      // deficit in the guaranteed section, regardless of transaction content.
+      // This means bare intents alone do NOT produce initialFees = 0.
+      // The zero-initialFees condition requires transactions with dust content
+      // that exactly offsets the fee (e.g., contract calls from midnight-js
+      // that include fee payment provisions via addCalls).
+      const ttl = new Date(Date.now() + 60_000);
+      const intent = Intent.new(ttl);
+      const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+      const fee = 5n;
+
+      const imbalance = Transacting.TransactingCapabilityImplementation.feeImbalance(tx, fee);
+      expect(imbalance).toBe(-fee);
+    });
+
+    it('balanceTransactions handles serialization round-trip transaction', async () => {
+      // Validates the dApp connector boundary: serialize a transaction (as
+      // midnight-js would), deserialize it (as the wallet SDK does), then
+      // pass it to balanceTransactions.
+      return Effect.gen(function* () {
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+
+        const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+        const bobAddress = bobKeyStore.getAddress();
+        const sendToken = nightTokens[0];
+
+        const intent = Intent.new(ttl);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
+          [{ ...sendToken, owner: nightVerifyingKey }],
+          [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+          [],
+        );
+        const originalTx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+
+        // Serialize/deserialize round-trip (dApp connector boundary)
+        const serialized = originalTx.serialize();
+        // Type cast required: TypeScript cannot infer S/P/B generics back from string
+        // literal markers; the cast is safe because the serialized bytes encode an
+        // UnprovenTransaction (SignatureEnabled, PreProof, PreBinding).
+        const deserializedTx = Transaction.deserialize(
+          'signature',
+          'pre-proof',
+          'pre-binding',
+          serialized,
+        ) as UnprovenTransaction;
+
+        const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [deserializedTx], ttl, currentTime);
+        expect(balancingTx).toBeTruthy();
+      }).pipe(Effect.runPromise);
+    });
   });
 
   it('deregisters from Dust generation', async () => {
