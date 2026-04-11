@@ -317,12 +317,12 @@ describe('DustWallet', () => {
 
       const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
       expect(availableCoins.length).toBe(1);
-      expect(DateOps.dateToSeconds(availableCoins.at(0)!.ctime)).toBe(2n);
+      expect(DateOps.dateToSeconds(availableCoins.at(0)!.token.ctime)).toBe(2n);
 
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
       expect(pendingCoins.length).toBe(0);
 
-      const generationInfo = walletVariant.coinsAndBalances.getGenerationInfo(latestState, availableCoins.at(0)!);
+      const generationInfo = walletVariant.coinsAndBalances.getGenerationInfo(latestState, availableCoins.at(0)!.token);
       expect(generationInfo?.value).toBe(awardTokens);
     }).pipe(Effect.runPromise);
   });
@@ -408,10 +408,10 @@ describe('DustWallet', () => {
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(latestState);
       const generationInfo = walletVariant.coinsAndBalances.getGenerationInfo(
         latestState,
-        newAvailableCoins.find((c) => c.seq === 0)!,
+        newAvailableCoins.find((c) => c.token.seq === 0)!.token,
       );
       expect(newAvailableCoins.length).toBe(2);
-      expect(newAvailableCoins.some((coin) => DateOps.dateToSeconds(coin.ctime) === 4n)).toBe(true);
+      expect(newAvailableCoins.some((coin) => DateOps.dateToSeconds(coin.token.ctime) === 4n)).toBe(true);
       expect(generationInfo?.dtime).toStrictEqual(DateOps.secondsToDate(4n));
 
       const pendingCoins = walletVariant.coinsAndBalances.getPendingCoins(latestState);
@@ -460,7 +460,7 @@ describe('DustWallet', () => {
       simulatorState = yield* simulator.getLatestState();
 
       const walletState = yield* SubscriptionRef.get(stateRef);
-      const availableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
+      const availableCoins = walletVariant.coinsAndBalances.getAvailableCoins(
         walletState,
         toTxTime(simulatorState.lastTxNumber),
       );
@@ -562,10 +562,7 @@ describe('DustWallet', () => {
       expect(simulatorState.lastTxResult?.type).toBe('success');
 
       const lastTxNumber = Number(simulatorState.lastTxNumber);
-      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
-        walletState,
-        toTxTime(lastTxNumber),
-      );
+      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState, toTxTime(lastTxNumber));
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(DateOps.secondsToDate(lastTxNumber));
 
@@ -1088,7 +1085,7 @@ describe('DustWallet', () => {
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();
 
-      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoinsWithFullInfo(
+      const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(
         walletState,
         toTxTime(simulatorState.lastTxNumber),
       );

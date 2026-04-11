@@ -116,7 +116,7 @@ describe('Dust Deregistration', () => {
       walletFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0)),
     );
 
-    const availableCoins = walletStateWithNight.dust.availableCoinsWithFullInfo(new Date());
+    const availableCoins = walletStateWithNight.dust.availableCoins;
     expect(availableCoins.every((availableCoins) => availableCoins.dtime === undefined)).toBeTruthy();
 
     const nightUtxosRegisteredForDustGeneration = walletStateWithNight.unshielded.availableCoins.filter(
@@ -162,7 +162,7 @@ describe('Dust Deregistration', () => {
       ),
     );
 
-    const availableCoinsWithInfo = walletStateAfterDeregistration.dust.availableCoinsWithFullInfo(new Date());
+    const availableCoinsWithInfo = walletStateAfterDeregistration.dust.availableCoins;
     const nightUtxosNotRegisteredForDustGeneration = walletStateAfterDeregistration.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
