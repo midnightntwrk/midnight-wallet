@@ -809,29 +809,30 @@ describe('DustWallet', () => {
     // Covers transaction structures from external dApps (via midnight-js / dApp connector)
     // that the existing wallet-originated tests never exercise.
 
-    const setupDustCoins = () => Effect.gen(function* () {
-      const nightVerifyingKey = keyStore.getPublicKey();
-      const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
-      const walletAddress = keyStore.getAddress();
-      const awardTokens = 150_000_000_000n;
+    const setupDustCoins = () =>
+      Effect.gen(function* () {
+        const nightVerifyingKey = keyStore.getPublicKey();
+        const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+        const walletAddress = keyStore.getAddress();
+        const awardTokens = 150_000_000_000n;
 
-      yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
-      yield* waitForTx(stateRef, 1);
+        yield* simulator.rewardNight(walletAddress, awardTokens, nightVerifyingKey);
+        yield* waitForTx(stateRef, 1);
 
-      const simulatorState = yield* simulator.getLatestState();
-      const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
-      yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
-      yield* waitForTx(stateRef, 2);
+        const simulatorState = yield* simulator.getLatestState();
+        const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+        yield* registerNightTokens(wallet, nightTokensWithMeta, nightVerifyingKey);
+        yield* waitForTx(stateRef, 2);
 
-      yield* simulator.fastForward(10n);
+        yield* simulator.fastForward(10n);
 
-      const latestSimState = yield* simulator.getLatestState();
-      const currentTime = getCurrentTime(latestSimState);
-      const ttl = DateOps.addSeconds(currentTime, 1);
-      const nightTokens = getNightTokens(latestSimState, walletAddress);
+        const latestSimState = yield* simulator.getLatestState();
+        const currentTime = getCurrentTime(latestSimState);
+        const ttl = DateOps.addSeconds(currentTime, 1);
+        const nightTokens = getNightTokens(latestSimState, walletAddress);
 
-      return { nightVerifyingKey, dustSecretKey, walletAddress, currentTime, ttl, nightTokens, latestSimState };
-    });
+        return { nightVerifyingKey, dustSecretKey, walletAddress, currentTime, ttl, nightTokens, latestSimState };
+      });
 
     it('getBalanceRecipe selects 0 coins when dust imbalance is positive', () => {
       // getBalanceRecipe treats positive imbalance as surplus (no coins needed)
@@ -956,10 +957,7 @@ describe('DustWallet', () => {
       class ZeroInitialFeeTransacting extends Transacting.TransactingCapabilityImplementation<ProofErasedTransaction> {
         #initialCallDone = false;
 
-        calculateFee(
-          transaction: AnyTransaction,
-          ledgerParams: LedgerParameters,
-        ): bigint {
+        calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint {
           if (!this.#initialCallDone) {
             this.#initialCallDone = true;
             return 0n;
