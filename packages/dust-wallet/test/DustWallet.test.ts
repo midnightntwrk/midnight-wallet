@@ -839,28 +839,17 @@ describe('DustWallet', () => {
     });
 
     it('getBalanceRecipe selects 0 coins when dust imbalance is positive (sign bug)', () => {
-      // Demonstrates the fee sign convention bug in computeBalancingRecipe.
-      //
-      // When a dApp connector contract call transaction produces initialFees = 0,
-      // the first iteration of the convergence loop selects 0 coins (nothing to
-      // balance). dryRunFee then returns a positive fee, which feeds back as
-      // currentFee on the next iteration. The unfixed code passes this positive
-      // value directly to getBalanceRecipe, which interprets it as surplus (not
-      // deficit) and again selects 0 coins — infinite loop.
-      //
-      // The fix negates positive currentFee before passing to getBalanceRecipe:
-      //   initialImbalances: fromEntry('dust', currentFee <= 0n ? currentFee : -currentFee)
-      //
-      // This test directly demonstrates the mechanism: getBalanceRecipe with a
-      // positive dust imbalance selects 0 coins, while negative selects coins.
+      // Demonstrates the sign convention bug from PR #293: positive dust imbalance
+      // is interpreted as surplus (select 0 coins), not deficit. The fix negates
+      // positive currentFee before passing to getBalanceRecipe.
+      type CoinStub = { type: string; value: bigint };
       const coins = [{ type: 'dust', value: 100n, token: { type: 'dust' as const, value: 100n } }];
       const balancerArgs = {
         coins,
         feeTokenType: 'dust',
         transactionCostModel: { inputFeeOverhead: 0n, outputFeeOverhead: 0n },
-        createOutput: (coin: { type: string; value: bigint }) => coin,
-        isCoinEqual: (a: { type: string; value: bigint }, b: { type: string; value: bigint }) =>
-          a.type === b.type && a.value === b.value,
+        createOutput: (coin: CoinStub) => coin,
+        isCoinEqual: (a: CoinStub, b: CoinStub) => a.type === b.type && a.value === b.value,
       };
 
       // BUG PATH: positive imbalance = surplus → balancer adds output, selects 0 input coins
@@ -870,12 +859,12 @@ describe('DustWallet', () => {
       });
       expect(buggyRecipe.inputs).toHaveLength(0);
 
-      // FIX PATH: negative imbalance = deficit → balancer selects coins to cover it
+      // FIX PATH: negative imbalance = deficit → balancer selects 1 coin to cover it
       const fixedRecipe = getBalanceRecipe({
         ...balancerArgs,
         initialImbalances: CapImbalances.fromEntry('dust', -5n),
       });
-      expect(fixedRecipe.inputs.length).toBeGreaterThan(0);
+      expect(fixedRecipe.inputs).toHaveLength(1);
     });
 
     it('balanceTransactions handles fallible-only transaction', async () => {
@@ -898,7 +887,8 @@ describe('DustWallet', () => {
         const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
 
         const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
-        expect(balancingTx).toBeTruthy();
+        const merged = tx.merge(balancingTx);
+        expect(merged).toBeTruthy();
       }).pipe(Effect.runPromise);
     });
 
@@ -910,16 +900,19 @@ describe('DustWallet', () => {
         const bobAddress = bobKeyStore.getAddress();
         const sendToken = nightTokens[0];
 
-        const inputs = [{ ...sendToken, owner: nightVerifyingKey }];
-        const outputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
+        // Use distinct inputs for guaranteed and fallible to avoid double-spend
+        const guaranteedInputs = [{ ...sendToken, owner: nightVerifyingKey }];
+        const guaranteedOutputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
 
         const intent = Intent.new(ttl);
-        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
-        intent.fallibleUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(guaranteedInputs, guaranteedOutputs, []);
+        // Fallible section with no inputs/outputs (just the section presence matters)
+        intent.fallibleUnshieldedOffer = UnshieldedOffer.new([], [], []);
         const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
 
         const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
-        expect(balancingTx).toBeTruthy();
+        const merged = tx.merge(balancingTx);
+        expect(merged).toBeTruthy();
       }).pipe(Effect.runPromise);
     });
 
@@ -930,7 +923,7 @@ describe('DustWallet', () => {
       // The zero-initialFees condition requires transactions with dust content
       // that exactly offsets the fee (e.g., contract calls from midnight-js
       // that include fee payment provisions via addCalls).
-      const ttl = new Date(Date.now() + 60_000);
+      const ttl = new Date(60_000);
       const intent = Intent.new(ttl);
       const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
       const fee = 5n;
@@ -971,7 +964,8 @@ describe('DustWallet', () => {
         ) as UnprovenTransaction;
 
         const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [deserializedTx], ttl, currentTime);
-        expect(balancingTx).toBeTruthy();
+        const merged = deserializedTx.merge(balancingTx);
+        expect(merged).toBeTruthy();
       }).pipe(Effect.runPromise);
     });
   });
