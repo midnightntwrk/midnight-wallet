@@ -146,20 +146,10 @@ const distributeFeeAcrossInputs = <T extends { value: bigint }>(
     { result: [], remaining: fee },
   ).result;
 
-function collectIntentSegmentIds(
+const collectIntentSegmentIds = (
   transactions: ReadonlyArray<FinalizedTransaction | UnprovenTransaction>,
-): Set<number> {
-  const ids = new Set<number>();
-  for (const tx of transactions) {
-    const intents = tx.intents;
-    if (intents) {
-      for (const segId of intents.keys()) {
-        ids.add(segId);
-      }
-    }
-  }
-  return ids;
-}
+): Set<number> =>
+  new Set(transactions.flatMap((tx) => (tx.intents ? [...tx.intents.keys()] : [])));
 
 function createNonCollidingFeeTx(
   networkId: string,
@@ -170,16 +160,12 @@ function createNonCollidingFeeTx(
     const tx = Transaction.fromPartsRandomized(networkId, undefined, undefined, intent);
     const txIntents = tx.intents;
     if (!txIntents) return tx;
-    let collision = false;
-    for (const segId of txIntents.keys()) {
-      if (usedSegmentIds.has(segId)) {
-        collision = true;
-        break;
-      }
-    }
-    if (!collision) return tx;
+    const hasCollision = [...txIntents.keys()].some((id) => usedSegmentIds.has(id));
+    if (!hasCollision) return tx;
   }
-  throw new Error('Failed to generate non-colliding segment_id after 100 attempts');
+  throw new Error(
+    `Failed to generate non-colliding segment_id after 100 attempts (${usedSegmentIds.size} IDs occupied)`,
+  );
 }
 
 export class TransactingCapabilityImplementation<TTransaction extends AnyTransaction> implements TransactingCapability<

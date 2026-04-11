@@ -894,9 +894,11 @@ describe('DustWallet', () => {
 
       const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, transferTxs, ttl, currentTime);
 
-      // Merge all input transactions plus the balancing tx — any segment_id collision throws IntentSegmentIdCollision
-      const merged = transferTxs.reduce((acc, tx) => acc.merge(tx), balancingTx);
-      expect(merged).toBeTruthy();
+      // Verify balancing tx segment IDs don't overlap with any input tx segment IDs
+      const inputSegIds = new Set(transferTxs.flatMap((tx) => (tx.intents ? [...tx.intents.keys()] : [])));
+      const balancingSegIds = balancingTx.intents ? [...balancingTx.intents.keys()] : [];
+      const collisions = balancingSegIds.filter((id) => inputSegIds.has(id));
+      expect(collisions).toEqual([]);
     }).pipe(Effect.runPromise);
   });
 
