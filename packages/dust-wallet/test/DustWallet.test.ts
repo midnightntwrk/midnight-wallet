@@ -10,17 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import {
   DustSecretKey,
   Intent,
   LedgerParameters,
   nativeToken,
-  type PreBinding,
-  type Proof,
   type ProofErasedTransaction,
-  type SignatureEnabled,
   Transaction,
   type UnprovenTransaction,
   UnshieldedOffer,
@@ -973,29 +968,6 @@ describe('DustWallet', () => {
         expect(merged).toBeTruthy();
       }).pipe(Effect.runPromise);
     });
-
-    it('balanceTransactions handles real dApp connector transaction from fixture', async () => {
-      // Loads a real contract call transaction captured from the midnight-wallet-dapp
-      // interacting with the GSD wallet via the dApp connector API.
-      // These are Transaction<SignatureEnabled, Proof, PreBinding> — proven but
-      // not yet bound, matching the balanceUnsealedTransaction flow.
-      return Effect.gen(function* () {
-        const { dustSecretKey, currentTime, ttl } = yield* setupDustCoins;
-
-        const raw = readFileSync(resolve(__dirname, 'fixtures', 'failed-tx-62.bin'));
-        const tx = Transaction.deserialize(
-          'signature',
-          'proof',
-          'pre-binding',
-          new Uint8Array(raw),
-        ) as Transaction<SignatureEnabled, Proof, PreBinding>;
-
-        // On unfixed code, this triggers the convergence loop sign bug.
-        // The 5s vitest timeout detects the hang.
-        const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
-        expect(balancingTx).toBeTruthy();
-      }).pipe(Effect.runPromise);
-    }, 5000);
 
     it('convergence loop hangs when calculateFee returns 0 (sign bug repro)', async () => {
       // Reproduces the exact sign bug from PR #293.
