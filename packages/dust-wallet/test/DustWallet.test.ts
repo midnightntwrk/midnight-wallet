@@ -996,6 +996,113 @@ describe('DustWallet', () => {
         expect(balancingTx).toBeTruthy();
       }).pipe(Effect.runPromise);
     }, 5000);
+
+    it('convergence loop hangs when calculateFee returns 0 (sign bug repro)', async () => {
+      // Reproduces the exact sign bug from PR #293.
+      //
+      // In production, dApp connector contract calls can produce initialFees = 0
+      // when the transaction's dust content exactly offsets the calculated fee.
+      // We simulate this by subclassing TransactingCapabilityImplementation with
+      // calculateFee returning 0n, which makes feeImbalance return 0n for any tx.
+      //
+      // With initialFees = 0:
+      //   1. getBalanceRecipe(dust, 0) → no imbalance → 0 coins selected
+      //   2. dryRunFee returns positive newFee (merged tx has non-zero cost)
+      //   3. converged = positiveNewFee <= 0 → false
+      //   4. BUG: positive currentFee passed to getBalanceRecipe → surplus → 0 coins → infinite loop
+      //
+      // On unfixed code: hangs (5s vitest timeout). On fixed code: converges in ms.
+      // Simulates the production condition: initialFees = 0 with non-zero dry-run fees.
+      // In computeBalancingRecipe, calculateFee is called once per input transaction to
+      // compute initialFees, then repeatedly inside dryRunFee during the convergence loop.
+      // Returning 0 for the initial call makes initialFees = 0; returning the real fee for
+      // subsequent calls makes dryRunFee return a positive value — triggering the sign bug.
+      class ZeroInitialFeeTransacting extends Transacting.TransactingCapabilityImplementation<ProofErasedTransaction> {
+        #initialCallDone = false;
+
+        calculateFee(
+          transaction: Parameters<Transacting.TransactingCapabilityImplementation<ProofErasedTransaction>['calculateFee']>[0],
+          ledgerParams: Parameters<Transacting.TransactingCapabilityImplementation<ProofErasedTransaction>['calculateFee']>[1],
+        ): bigint {
+          if (!this.#initialCallDone) {
+            this.#initialCallDone = true;
+            return 0n;
+          }
+          return super.calculateFee(transaction, ledgerParams);
+        }
+      }
+
+      const makeZeroInitialFeeTransacting = (
+        config: Transacting.DefaultTransactingConfiguration,
+        getContext: () => Transacting.DefaultTransactingContext,
+      ): Transacting.TransactingCapability<DustSecretKey, CoreWallet, ProofErasedTransaction> =>
+        new ZeroInitialFeeTransacting(
+          config.networkId,
+          config.costParameters,
+          () => getContext().coinSelection,
+          () => getContext().coinsAndBalancesCapability,
+          () => getContext().keysCapability,
+        );
+
+      return Effect.gen(function* () {
+        const scope = yield* Scope.make();
+
+        // Build a wallet variant with zero-fee transacting capability
+        const zeroFeeVariant = new V1Builder()
+          .withTransactionType<ProofErasedTransaction>()
+          .withCoinSelectionDefaults()
+          .withTransacting(makeZeroInitialFeeTransacting)
+          .withSync(makeSimulatorSyncService, makeSimulatorSyncCapability)
+          .withCoinsAndBalancesDefaults()
+          .withKeysDefaults()
+          .withSerializationDefaults()
+          .build({ simulator, networkId: NETWORK, costParameters });
+
+        const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
+        const zeroFeeStateRef = yield* SubscriptionRef.make(
+          CoreWallet.initEmpty(LedgerParameters.initialParameters().dust, dustSecretKey, NETWORK),
+        );
+        const zeroFeeWallet = yield* zeroFeeVariant
+          .start({ stateRef: zeroFeeStateRef })
+          .pipe(Effect.provideService(Scope.Scope, scope));
+        yield* zeroFeeWallet.startSyncInBackground(dustSecretKey);
+
+        // Set up dust coins using the shared simulator
+        const nightVerifyingKey = keyStore.getPublicKey();
+        const walletAddress = keyStore.getAddress();
+
+        yield* simulator.rewardNight(walletAddress, 150_000_000_000n, nightVerifyingKey);
+        yield* waitForTx(zeroFeeStateRef, 1);
+
+        const simulatorState = yield* simulator.getLatestState();
+        const nightTokensWithMeta = getNightTokensWithMeta(simulatorState, walletAddress);
+        yield* registerNightTokens(zeroFeeWallet, nightTokensWithMeta, nightVerifyingKey);
+        yield* waitForTx(zeroFeeStateRef, 2);
+
+        yield* simulator.fastForward(10n);
+
+        const latestSimState = yield* simulator.getLatestState();
+        const currentTime = getCurrentTime(latestSimState);
+        const ttl = DateOps.addSeconds(currentTime, 1);
+        const nightTokens = getNightTokens(latestSimState, walletAddress);
+        const sendToken = nightTokens[0];
+
+        const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
+        const bobAddress = bobKeyStore.getAddress();
+
+        const intent = Intent.new(ttl);
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(
+          [{ ...sendToken, owner: nightVerifyingKey }],
+          [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
+          [],
+        );
+        const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
+
+        // With calculateFee returning 0, initialFees = 0, triggering the sign bug
+        const balancingTx = yield* zeroFeeWallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
+        expect(balancingTx).toBeTruthy();
+      }).pipe(Effect.scoped, Effect.runPromise);
+    }, 5000);
   });
 
   it('deregisters from Dust generation', async () => {
