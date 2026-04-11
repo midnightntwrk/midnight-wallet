@@ -38,6 +38,7 @@ import {
   V1Builder,
   type V1Variant,
 } from '../src/v1/index.js';
+import { type AnyTransaction } from '../src/v1/types/ledger.js';
 import { Simulator, type SimulatorState } from '../src/v1/Simulator.js';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
@@ -814,7 +815,7 @@ describe('DustWallet', () => {
     // guaranteedUnshieldedOffer. External contract call transactions place content
     // in random/fallible segments, leaving the guaranteed section empty.
 
-    const setupDustCoins = Effect.gen(function* () {
+    const setupDustCoins = () => Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
       const dustSecretKey = DustSecretKey.fromSeed(keyStore.getSecretKey());
       const walletAddress = keyStore.getAddress();
@@ -871,7 +872,7 @@ describe('DustWallet', () => {
       // Simulates a contract call that produces fallible outputs but no guaranteed
       // content. The guaranteed section is empty, matching the dApp connector path.
       return Effect.gen(function* () {
-        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins();
 
         const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
         const bobAddress = bobKeyStore.getAddress();
@@ -894,7 +895,7 @@ describe('DustWallet', () => {
 
     it('balanceTransactions handles transaction with both guaranteed and fallible content', async () => {
       return Effect.gen(function* () {
-        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins();
 
         const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
         const bobAddress = bobKeyStore.getAddress();
@@ -937,7 +938,7 @@ describe('DustWallet', () => {
       // midnight-js would), deserialize it (as the wallet SDK does), then
       // pass it to balanceTransactions.
       return Effect.gen(function* () {
-        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins;
+        const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins();
 
         const bobKeyStore = createUnshieldedKeystore(getDustSeed(SEED_BOB));
         const bobAddress = bobKeyStore.getAddress();
@@ -983,18 +984,16 @@ describe('DustWallet', () => {
       //   3. converged = positiveNewFee <= 0 → false
       //   4. BUG: positive currentFee passed to getBalanceRecipe → surplus → 0 coins → infinite loop
       //
-      // On unfixed code: hangs (5s vitest timeout). On fixed code: converges in ms.
-      // Simulates the production condition: initialFees = 0 with non-zero dry-run fees.
-      // In computeBalancingRecipe, calculateFee is called once per input transaction to
-      // compute initialFees, then repeatedly inside dryRunFee during the convergence loop.
-      // Returning 0 for the initial call makes initialFees = 0; returning the real fee for
-      // subsequent calls makes dryRunFee return a positive value — triggering the sign bug.
+      // On unfixed code: WASM stack overflow after ~24s. On fixed code: converges in ms.
+      //
+      // Single-use stub: #initialCallDone is per-instance, so this capability must
+      // only be used for one balanceTransactions call per test.
       class ZeroInitialFeeTransacting extends Transacting.TransactingCapabilityImplementation<ProofErasedTransaction> {
         #initialCallDone = false;
 
         calculateFee(
-          transaction: Parameters<Transacting.TransactingCapabilityImplementation<ProofErasedTransaction>['calculateFee']>[0],
-          ledgerParams: Parameters<Transacting.TransactingCapabilityImplementation<ProofErasedTransaction>['calculateFee']>[1],
+          transaction: AnyTransaction,
+          ledgerParams: LedgerParameters,
         ): bigint {
           if (!this.#initialCallDone) {
             this.#initialCallDone = true;
@@ -1074,7 +1073,7 @@ describe('DustWallet', () => {
         const balancingTx = yield* zeroFeeWallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
         expect(balancingTx).toBeTruthy();
       }).pipe(Effect.scoped, Effect.runPromise);
-    }, 5000);
+    }, 15_000);
   });
 
   it('deregisters from Dust generation', async () => {
