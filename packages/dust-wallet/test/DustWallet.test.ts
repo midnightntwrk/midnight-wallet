@@ -809,11 +809,8 @@ describe('DustWallet', () => {
   });
 
   describe('external transaction shapes', () => {
-    // These tests exercise balanceTransactions with transaction structures that
-    // arrive from external sources (dApps via midnight-js through the dApp connector).
-    // The existing tests only cover wallet-originated transactions that always use
-    // guaranteedUnshieldedOffer. External contract call transactions place content
-    // in random/fallible segments, leaving the guaranteed section empty.
+    // Covers transaction structures from external dApps (via midnight-js / dApp connector)
+    // that the existing wallet-originated tests never exercise.
 
     const setupDustCoins = () => Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();
@@ -839,10 +836,10 @@ describe('DustWallet', () => {
       return { nightVerifyingKey, dustSecretKey, walletAddress, currentTime, ttl, nightTokens, latestSimState };
     });
 
-    it('getBalanceRecipe selects 0 coins when dust imbalance is positive (sign bug)', () => {
-      // Demonstrates the sign convention bug from PR #293: positive dust imbalance
-      // is interpreted as surplus (select 0 coins), not deficit. The fix negates
-      // positive currentFee before passing to getBalanceRecipe.
+    it('getBalanceRecipe selects 0 coins when dust imbalance is positive', () => {
+      // getBalanceRecipe treats positive imbalance as surplus (no coins needed)
+      // and negative as deficit (coins selected). The convergence loop in
+      // computeBalancingRecipe must negate positive fees before calling this.
       type CoinStub = { type: string; value: bigint };
       const coins = [{ type: 'dust', value: 100n, token: { type: 'dust' as const, value: 100n } }];
       const balancerArgs = {
@@ -853,14 +850,12 @@ describe('DustWallet', () => {
         isCoinEqual: (a: CoinStub, b: CoinStub) => a.type === b.type && a.value === b.value,
       };
 
-      // BUG PATH: positive imbalance = surplus → balancer adds output, selects 0 input coins
       const buggyRecipe = getBalanceRecipe({
         ...balancerArgs,
         initialImbalances: CapImbalances.fromEntry('dust', 5n),
       });
       expect(buggyRecipe.inputs).toHaveLength(0);
 
-      // FIX PATH: negative imbalance = deficit → balancer selects 1 coin to cover it
       const fixedRecipe = getBalanceRecipe({
         ...balancerArgs,
         initialImbalances: CapImbalances.fromEntry('dust', -5n),
@@ -869,8 +864,6 @@ describe('DustWallet', () => {
     });
 
     it('balanceTransactions handles fallible-only transaction', async () => {
-      // Simulates a contract call that produces fallible outputs but no guaranteed
-      // content. The guaranteed section is empty, matching the dApp connector path.
       return Effect.gen(function* () {
         const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins();
 
@@ -884,7 +877,6 @@ describe('DustWallet', () => {
           [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }],
           [],
         );
-        // No guaranteedUnshieldedOffer — only fallible content
         const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
 
         const balancingTx = yield* wallet.balanceTransactions(dustSecretKey, [tx], ttl, currentTime);
@@ -901,13 +893,11 @@ describe('DustWallet', () => {
         const bobAddress = bobKeyStore.getAddress();
         const sendToken = nightTokens[0];
 
-        // Use distinct inputs for guaranteed and fallible to avoid double-spend
-        const guaranteedInputs = [{ ...sendToken, owner: nightVerifyingKey }];
-        const guaranteedOutputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
+        const inputs = [{ ...sendToken, owner: nightVerifyingKey }];
+        const outputs = [{ type: NIGHT_TOKEN_TYPE, owner: bobAddress, value: sendToken.value }];
 
         const intent = Intent.new(ttl);
-        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(guaranteedInputs, guaranteedOutputs, []);
-        // Fallible section with no inputs/outputs (just the section presence matters)
+        intent.guaranteedUnshieldedOffer = UnshieldedOffer.new(inputs, outputs, []);
         intent.fallibleUnshieldedOffer = UnshieldedOffer.new([], [], []);
         const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
 
@@ -918,12 +908,9 @@ describe('DustWallet', () => {
     });
 
     it('feeImbalance includes fee as dust deficit even for bare intent', () => {
-      // Documents that imbalances(0, fee) always includes the fee as a dust
-      // deficit in the guaranteed section, regardless of transaction content.
-      // This means bare intents alone do NOT produce initialFees = 0.
-      // The zero-initialFees condition requires transactions with dust content
-      // that exactly offsets the fee (e.g., contract calls from midnight-js
-      // that include fee payment provisions via addCalls).
+      // imbalances(0, fee) always includes the fee as a dust deficit regardless
+      // of transaction content. initialFees = 0 only occurs when the transaction's
+      // dust content exactly offsets the fee (dApp connector contract calls).
       const ttl = new Date(60_000);
       const intent = Intent.new(ttl);
       const tx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
@@ -934,9 +921,6 @@ describe('DustWallet', () => {
     });
 
     it('balanceTransactions handles serialization round-trip transaction', async () => {
-      // Validates the dApp connector boundary: serialize a transaction (as
-      // midnight-js would), deserialize it (as the wallet SDK does), then
-      // pass it to balanceTransactions.
       return Effect.gen(function* () {
         const { dustSecretKey, nightVerifyingKey, currentTime, ttl, nightTokens } = yield* setupDustCoins();
 
@@ -952,11 +936,8 @@ describe('DustWallet', () => {
         );
         const originalTx = Transaction.fromPartsRandomized(NETWORK, undefined, undefined, intent);
 
-        // Serialize/deserialize round-trip (dApp connector boundary)
         const serialized = originalTx.serialize();
-        // Type cast required: TypeScript cannot infer S/P/B generics back from string
-        // literal markers; the cast is safe because the serialized bytes encode an
-        // UnprovenTransaction (SignatureEnabled, PreProof, PreBinding).
+        // Cast required: TS can't infer generics back from string literal markers.
         const deserializedTx = Transaction.deserialize(
           'signature',
           'pre-proof',
@@ -970,24 +951,11 @@ describe('DustWallet', () => {
       }).pipe(Effect.runPromise);
     });
 
-    it('convergence loop hangs when calculateFee returns 0 (sign bug repro)', async () => {
-      // Reproduces the exact sign bug from PR #293.
-      //
-      // In production, dApp connector contract calls can produce initialFees = 0
-      // when the transaction's dust content exactly offsets the calculated fee.
-      // We simulate this by subclassing TransactingCapabilityImplementation with
-      // calculateFee returning 0n, which makes feeImbalance return 0n for any tx.
-      //
-      // With initialFees = 0:
-      //   1. getBalanceRecipe(dust, 0) → no imbalance → 0 coins selected
-      //   2. dryRunFee returns positive newFee (merged tx has non-zero cost)
-      //   3. converged = positiveNewFee <= 0 → false
-      //   4. BUG: positive currentFee passed to getBalanceRecipe → surplus → 0 coins → infinite loop
-      //
-      // On unfixed code: WASM stack overflow after ~24s. On fixed code: converges in ms.
-      //
-      // Single-use stub: #initialCallDone is per-instance, so this capability must
-      // only be used for one balanceTransactions call per test.
+    it('convergence loop hangs when initialFees is 0 (fee sign bug)', async () => {
+      // When initialFees = 0, the convergence loop's first iteration selects 0
+      // coins. dryRunFee returns a positive fee that feeds back without negation,
+      // causing getBalanceRecipe to interpret it as surplus — infinite loop.
+      // Stub returns 0 for the initial calculateFee, real fees for dry runs.
       class ZeroInitialFeeTransacting extends Transacting.TransactingCapabilityImplementation<ProofErasedTransaction> {
         #initialCallDone = false;
 
