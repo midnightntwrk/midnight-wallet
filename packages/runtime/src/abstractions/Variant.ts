@@ -11,13 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any -- unknown does not work well as a default, because it causes assignability issues */
-import { Scope, SubscriptionRef } from 'effect';
+import { type Scope, type SubscriptionRef } from 'effect';
 import type { Effect } from 'effect/Effect';
 import type { Stream } from 'effect/Stream';
 import { Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import type { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletRuntimeError } from './WalletRuntimeError.js';
-import * as StateChange from './StateChange.js';
+import { type WalletRuntimeError } from './WalletRuntimeError.js';
+import type * as StateChange from './StateChange.js';
 
 export interface VariantContext<TState> {
   stateRef: SubscriptionRef.SubscriptionRef<TState>;

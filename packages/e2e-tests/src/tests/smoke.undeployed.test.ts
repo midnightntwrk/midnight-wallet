@@ -14,15 +14,15 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { CombinedTokenTransfer, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
 /**
  * Smoke tests

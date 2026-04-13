@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Imbalances, TransactionCostModel } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { Imbalances, type TransactionCostModel } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 export const ShieldedCostModel: TransactionCostModel = {
   inputFeeOverhead: 0n,

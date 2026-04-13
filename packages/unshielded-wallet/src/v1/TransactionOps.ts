@@ -12,8 +12,8 @@
 // limitations under the License.
 import { Either, pipe, Array as Arr } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { TransactingError, WalletError } from './WalletError.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { TransactingError, type WalletError } from './WalletError.js';
 
 /**
  * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.

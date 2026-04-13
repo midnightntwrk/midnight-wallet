@@ -19,8 +19,8 @@ import {
   type SignatureVerifyingKey,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
-import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { Effect, Either, type Scope } from 'effect';

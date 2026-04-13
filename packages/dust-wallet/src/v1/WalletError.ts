@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
   message: string;

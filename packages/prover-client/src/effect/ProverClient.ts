@@ -10,9 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Context } from 'effect';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type Effect, Context } from 'effect';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/zkir-v2';
 
 /**

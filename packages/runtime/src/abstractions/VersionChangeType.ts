@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * A tagged enum data type that represents a change in Midnight protocol versions.

@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { dispatch, PolyFunction, WithTag } from './polyFunction.js';
+import { dispatch, type PolyFunction, type WithTag } from './polyFunction.js';
 
 /**
  * Heterogeneous list - as in - list, where elements have different types

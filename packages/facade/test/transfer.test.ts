@@ -22,7 +22,12 @@ import os from 'node:os';
 import * as rx from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { type CombinedTokenTransfer, DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
+import {
+  type CombinedTokenTransfer,
+  type DefaultConfiguration,
+  WalletEntrySchema,
+  WalletFacade,
+} from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 

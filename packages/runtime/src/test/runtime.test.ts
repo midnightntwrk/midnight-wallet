@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { VersionChangeType } from '../abstractions/index.js';
 import { toProtocolStateArray } from '../testing/utils.js';
 import {
-  InterceptingRunningVariant,
+  type InterceptingRunningVariant,
   InterceptingVariantBuilder,
   Numeric,
   NumericMultiplier,

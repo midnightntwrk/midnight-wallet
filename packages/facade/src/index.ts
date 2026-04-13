@@ -43,15 +43,19 @@ import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnig
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { combineLatest, map, type Observable, firstValueFrom, Subscription, concatMap } from 'rxjs';
+import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
 import {
-  DefaultPendingTransactionsServiceConfiguration,
+  type DefaultPendingTransactionsServiceConfiguration,
   PendingTransactions,
-  PendingTransactionsService,
+  type PendingTransactionsService,
   PendingTransactionsServiceImpl,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { finalizedTransactionTrait } from './transaction.js';
-import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import {
+  type DustAddress,
+  type ShieldedAddress,
+  type UnshieldedAddress,
+} from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Full entry schema for transaction history — common fields + all wallet sections.

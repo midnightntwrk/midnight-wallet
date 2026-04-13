@@ -14,19 +14,19 @@
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import { describe, test, expect } from 'vitest';
 import { firstValueFrom } from 'rxjs';
-import { ShieldedWallet, ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import * as KeyManagement from '@cardano-sdk/key-management';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as utils from './utils.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
-  UnshieldedWalletClass,
+  type UnshieldedWalletClass,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustWallet, DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
 import { logger } from './logger.js';
 import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';

@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Scope } from 'effect';
-import { Observable } from 'rxjs';
-import { Runtime } from '../Runtime.js';
-import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant.js';
-import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type Scope } from 'effect';
+import { type Observable } from 'rxjs';
+import { type Runtime } from '../Runtime.js';
+import { type AnyVersionedVariantArray, type StateOf, type VariantRecord } from './Variant.js';
+import { type HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 /**
  * Defines the static portion of base wallet class definition
