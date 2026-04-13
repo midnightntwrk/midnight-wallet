@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import * as fc from 'fast-check';
 import { UnshieldedUpdate, UpdateStatus, UtxoWithMeta } from '../UnshieldedState.js';
 
 export const generateMockUtxoWithMeta = (owner: string, type: string): UtxoWithMeta =>
@@ -46,6 +47,54 @@ export const generateMockUpdate = (
     status,
   };
 };
+
+/**
+ * Deterministic UTxO factory. Unlike generateMockUtxoWithMeta, all fields can
+ * be pinned, so tests can assert membership by hash (intentHash#outputNo).
+ */
+export const makeUtxo = (params: {
+  intentHash: string;
+  outputNo: number;
+  owner?: string;
+  type?: string;
+  value?: bigint;
+  ctime?: Date;
+  registeredForDustGeneration?: boolean;
+}): UtxoWithMeta =>
+  new UtxoWithMeta({
+    utxo: {
+      value: params.value ?? 1n,
+      owner: params.owner ?? 'owner1',
+      type: params.type ?? 'type1',
+      intentHash: params.intentHash,
+      outputNo: params.outputNo,
+    },
+    meta: {
+      ctime: params.ctime ?? new Date(0),
+      registeredForDustGeneration: params.registeredForDustGeneration ?? true,
+    },
+  });
+
+/**
+ * Hash of a UtxoWithMeta matching UnshieldedState's internal UtxoHash.
+ * Exposed for tests that assert by hash.
+ */
+export const utxoHash = (u: UtxoWithMeta): string => `${u.utxo.intentHash}#${u.utxo.outputNo}`;
+
+/**
+ * fast-check arbitrary for UtxoWithMeta. Each generated UTxO has a unique
+ * hash (the generator uses fc.uuid for intentHash), so fc.array(utxoArb)
+ * never produces collisions.
+ */
+export const utxoArb: fc.Arbitrary<UtxoWithMeta> = fc
+  .record({
+    intentHash: fc.uuid(),
+    outputNo: fc.integer({ min: 0, max: 1_000_000 }),
+    value: fc.bigInt({ min: 1n, max: 1000n }),
+    owner: fc.constantFrom('owner1', 'owner2'),
+    type: fc.constantFrom('type1', 'type2'),
+  })
+  .map((p) => makeUtxo(p));
 
 export const seedHex = (length: number = 64, seed: number = 42): string =>
   Array.from({ length }, (_, i) => ((seed + i) % 16).toString(16)).join('');
