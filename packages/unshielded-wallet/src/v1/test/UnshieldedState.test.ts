@@ -173,6 +173,22 @@ describe('UnshieldedState', () => {
     expect(HashMap.size(state.pendingUtxos)).toEqual(1);
   });
 
+  it('should fail to spendByUtxo with UtxoNotFoundError when utxo is not available', () => {
+    const ghost = makeUtxo({ intentHash: 'h-ghost', outputNo: 0 });
+
+    const result = UnshieldedState.spendByUtxo(UnshieldedState.empty(), ghost.utxo);
+
+    expect(Either.isLeft(result)).toBe(true);
+    pipe(
+      result,
+      Either.mapLeft((e) => {
+        expect(e).toBeInstanceOf(UtxoNotFoundError);
+        // The error should carry the input utxo so callers can report which one was missing.
+        expect(e.utxo).toEqual(ghost.utxo);
+      }),
+    );
+  });
+
   it('should rollback spend by utxo (ledger.Utxo)', () => {
     const update = generateMockUpdate('SUCCESS', 1, 0);
     const utxoToSpend = update.createdUtxos[0];
@@ -404,6 +420,19 @@ describe('UnshieldedState', () => {
       expect(HashMap.size(after.availableUtxos)).toEqual(2);
       expect(HashMap.has(after.pendingUtxos, utxoHash(a))).toBe(false);
       expect(HashMap.size(after.pendingUtxos)).toEqual(0);
+    });
+
+    it('should reject PARTIAL_SUCCESS status (only FAILURE is valid)', () => {
+      // applyFailedUpdate requires status === 'FAILURE'. SUCCESS is already
+      // covered elsewhere; PARTIAL_SUCCESS must also be rejected so the check
+      // can't be relaxed to `status !== 'SUCCESS'` without a test noticing.
+      const result = UnshieldedState.applyFailedUpdate(UnshieldedState.empty(), {
+        createdUtxos: [],
+        spentUtxos: [],
+        status: 'PARTIAL_SUCCESS',
+      });
+
+      expect(Either.isLeft(result)).toBe(true);
     });
 
     it('should be a no-op for spentUtxos not present in pendingUtxos', () => {
