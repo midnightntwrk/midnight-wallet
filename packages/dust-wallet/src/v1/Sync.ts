@@ -10,9 +10,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
-import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { Effect, Either, Layer, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
+import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { AddressDustGenerations, BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
@@ -26,7 +26,14 @@ import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js
 import { Simulator, SimulatorState } from './Simulator.js';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
-import { Uint8ArraySchema } from './Serialization.js';
+import {
+  DustGenerationsSubscription,
+  DustGenerationsSubscriptionSchema,
+  DustGenerationsSyncUpdate,
+  SyncEventsUpdateSchema,
+  WalletSyncSubscription,
+  WalletSyncUpdate,
+} from './SyncSchema.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -94,59 +101,6 @@ export const SecretKeysResource = {
   },
 };
 
-const LedgerEventSchema = Schema.declare(
-  (input: unknown): input is LedgerEvent => input instanceof LedgerEvent,
-).annotations({
-  identifier: 'ledger.Event',
-});
-
-const LedgerEventFromUInt8Array: Schema.Schema<LedgerEvent, Uint8Array> = Schema.asSchema(
-  Schema.transformOrFail(Uint8ArraySchema, LedgerEventSchema, {
-    encode: (e) => {
-      return Effect.try({
-        try: () => e.serialize(),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize Ledger Event');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () => LedgerEvent.deserialize(bytes),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event');
-        },
-      }),
-  }),
-);
-
-const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(LedgerEventFromUInt8Array),
-);
-
-export const SyncEventsUpdateSchema = Schema.Struct({
-  id: Schema.Number,
-  raw: HexedEvent,
-  maxId: Schema.Number,
-});
-
-export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
-
-export type WalletSyncUpdate = {
-  updates: WalletSyncSubscription[];
-  secretKey: DustSecretKey;
-  timestamp: Date;
-};
-export const WalletSyncUpdate = {
-  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
-    return {
-      updates,
-      secretKey,
-      timestamp,
-    };
-  },
-};
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
@@ -199,11 +153,45 @@ export const makeDefaultSyncService = (
   };
 };
 
+// TODO: re-use indexer service
+
+export const makeDustGenerationsSyncService = (
+  config: DefaultSyncConfiguration,
+): SyncService<CoreWallet, DustSecretKey, DustGenerationsSyncUpdate> => {
+  const defaultSyncService = makeDefaultSyncService(config);
+  const indexerSyncService = makeIndexerSyncService(config);
+  return {
+    updates: (
+      state: CoreWallet,
+      secretKey: DustSecretKey,
+    ): Stream.Stream<DustGenerationsSyncUpdate, WalletError, Scope.Scope> => {
+      const batchSize = config.batchUpdates?.size ?? 10;
+      const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
+      const batchSpacing = config.batchUpdates?.spacing ?? 4;
+
+      return pipe(
+        indexerSyncService.subscribeDustGenerations(state),
+        Stream.groupedWithin(batchSize, batchTimeout),
+        Stream.map(Chunk.toArray),
+        Stream.map((data) => DustGenerationsSyncUpdate.create(data, secretKey, new Date())),
+        batchSpacing > 0
+          ? Stream.schedule(Schedule.spaced(Duration.millis(batchSpacing)))
+          : (eventsStream) => eventsStream,
+        Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
+      );
+    },
+    blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
+  };
+};
+
 export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError, Scope.Scope>;
   subscribeWallet: (
     state: CoreWallet,
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  subscribeDustGenerations: (
+    state: CoreWallet,
+  ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
@@ -247,6 +235,28 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Stream.mapEffect((subscription) =>
           pipe(
             Schema.decodeUnknownEither(SyncEventsUpdateSchema)(subscription.dustLedgerEvents),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          ),
+        ),
+        Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    subscribeDustGenerations(
+      state: CoreWallet,
+    ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      const { appliedIndex } = state.progress;
+      const { publicKey } = state.publicKey;
+
+      return pipe(
+        AddressDustGenerations.run({
+          dustAddress: publicKey.toString(16),
+          startIndex: Number(appliedIndex),
+          endIndex: Number(appliedIndex) + 100, // TODO: make configurable
+        }),
+        Stream.mapEffect((subscription) =>
+          pipe(
+            Schema.decodeUnknownEither(DustGenerationsSubscriptionSchema)(subscription.dustGenerations),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),

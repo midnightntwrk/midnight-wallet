@@ -33,7 +33,7 @@ import { type SerializationCapability } from './v1/Serialization.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
-import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type WalletSyncUpdate } from './v1/SyncSchema.js';
 
 export type DustWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;

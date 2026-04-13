@@ -25,8 +25,8 @@ import {
   type DefaultSyncConfiguration,
   makeDefaultSyncCapability,
   makeDefaultSyncService,
-  type WalletSyncUpdate,
 } from './Sync.js';
+import { type WalletSyncUpdate } from './SyncSchema.js';
 import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
