@@ -1,7 +1,7 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk",
   "description": "Barrel package re-exporting all Midnight Wallet SDK packages",
-  "version": "1.0.0-beta.0",
+  "version": "0.0.0",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
