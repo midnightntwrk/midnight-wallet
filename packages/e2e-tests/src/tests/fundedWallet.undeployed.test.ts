@@ -172,34 +172,28 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      utils.expectValidUnshieldedTxHistoryEntries(txHistory);
+      const unshieldedEntries = txHistory.filter((e) => e.unshielded !== undefined);
+      expect(unshieldedEntries.length).toBeGreaterThan(0);
+      unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
       // At least one entry should have createdUtxos (from genesis funding)
-      const entryWithCreated = txHistory.find((e) => (e.unshielded?.createdUtxos.length ?? 0) > 0);
+      const entryWithCreated = unshieldedEntries.find((e) => e.unshielded!.createdUtxos.length > 0);
       expect(entryWithCreated).toBeDefined();
     },
     timeout,
   );
 
-  // test(
-  //   'Wallet has one tx in tx history',
-  //   async () => {
-  //     const state = await wallet.waitForSyncedState();
-  //     const txHistory = state.shielded.transactionHistory;
-  //     expect(txHistory).toHaveLength(0);
-  //     const expectedIdentifiers = new Map(
-  //       Object.entries({
-  //         '02000000000000000000000000000000000000000000000000000000000000000000': 2n * -100000000000000000n,
-  //         '02000000000000000000000000000000000000000000000000000000000000000001': 2n * -20000000000000000n,
-  //         '02000000000000000000000000000000000000000000000000000000000000000002': 2n * -20000000000000000n,
-  //       }),
-  //     );
-  //     // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-  //     txHistory.forEach((tx) => {
-  //       // deltas are doubled as node team send genesis funds to 2 sets of seeds (legacy key derivation + new key derivation)
-  //       expect(tx.guaranteedOffer?.deltas).toStrictEqual(expectedIdentifiers);
-  //       expect(tx.identifiers()).not.toHaveLength(0);
-  //     });
-  //   },
-  //   timeout,
-  // );
+  test(
+    'Shielded transaction history entries contain receivedCoins and spentCoins',
+    async () => {
+      await funded.wallet.waitForSyncedState();
+      const txHistory = await funded.wallet.getAllFromTxHistory();
+      const shieldedEntries = txHistory.filter((e) => e.shielded !== undefined);
+      expect(shieldedEntries.length).toBeGreaterThan(0);
+      shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+      // At least one entry should have receivedCoins (from genesis funding)
+      const entryWithReceived = shieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);
+      expect(entryWithReceived).toBeDefined();
+    },
+    timeout,
+  );
 });
