@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, Layer, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, LedgerParameters, dustNullifier } from '@midnight-ntwrk/ledger-v8';
 import { AddressDustGenerations, BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -153,8 +153,6 @@ export const makeDefaultSyncService = (
   };
 };
 
-// TODO: re-use indexer service
-
 export const makeDustGenerationsSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, DustGenerationsSyncUpdate> => {
@@ -168,12 +166,13 @@ export const makeDustGenerationsSyncService = (
       const batchSize = config.batchUpdates?.size ?? 10;
       const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
       const batchSpacing = config.batchUpdates?.spacing ?? 4;
+      // const publicKey = state.publicKey.publicKey.toString(16);
 
       return pipe(
         indexerSyncService.subscribeDustGenerations(state),
         Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
-        Stream.map((data) => DustGenerationsSyncUpdate.create(data, secretKey, new Date())),
+        Stream.map((updates) => DustGenerationsSyncUpdate.create(updates, secretKey, new Date())),
         batchSpacing > 0
           ? Stream.schedule(Schedule.spaced(Duration.millis(batchSpacing)))
           : (eventsStream) => eventsStream,
@@ -294,6 +293,42 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         highestRelevantWalletIndex,
         isConnected: true,
       });
+    },
+  };
+};
+
+export const makeDustGenerationsSyncCapability = (): SyncCapability<CoreWallet, DustGenerationsSyncUpdate> => {
+  return {
+    applyUpdate(state: CoreWallet, wrappedUpdate: DustGenerationsSyncUpdate): CoreWallet {
+      const { updates } = wrappedUpdate;
+
+      // Nothing to update yet
+      if (updates.length === 0) {
+        return state;
+      }
+
+      const lastUpdateIndex = updates
+        .filter((u) => u.type === 'DustGenerationsProgress')
+        .map((u) => u.highestIndex)
+        .toSorted()
+        .at(-1);
+
+      const dustGenTreeUpdates = updates
+        .map((u) => u.collapsedMerkleTree)
+        .filter((u) => u !== undefined)
+        .toSorted((u) => u.startIndex);
+
+      const updatedWallet = CoreWallet.applyDustGenerationTreeUpdates(state, dustGenTreeUpdates);
+
+      if (lastUpdateIndex !== undefined) {
+        return CoreWallet.updateProgress(updatedWallet, {
+          appliedIndex: BigInt(lastUpdateIndex),
+          highestRelevantWalletIndex: BigInt(lastUpdateIndex),
+          isConnected: true,
+        });
+      }
+
+      return updatedWallet;
     },
   };
 };

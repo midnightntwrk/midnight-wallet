@@ -11,17 +11,54 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, pipe, Schema } from 'effect';
-import { DustSecretKey, Event as LedgerEvent } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, Event as LedgerEvent, DustStateMerkleTreeCollapsedUpdate } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
+
+const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
+  (input: unknown): input is DustStateMerkleTreeCollapsedUpdate => input instanceof DustStateMerkleTreeCollapsedUpdate,
+).annotations({
+  identifier: 'DustStateMerkleTreeCollapsedUpdate',
+});
+
+const DustStateMerkleTreeCollapsedUpdateFromUInt8Array: Schema.Schema<DustStateMerkleTreeCollapsedUpdate, Uint8Array> =
+  Schema.asSchema(
+    Schema.transformOrFail(Uint8ArraySchema, DustStateMerkleTreeCollapsedUpdateSchema, {
+      encode: (value) => {
+        return Effect.try({
+          try: () => {
+            return value.serialize();
+          },
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not serialize DustStateMerkleTreeCollapsedUpdate');
+          },
+        });
+      },
+      decode: (bytes) =>
+        Effect.try({
+          try: () => DustStateMerkleTreeCollapsedUpdate.deserialize(bytes),
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not deserialize DustStateMerkleTreeCollapsedUpdate');
+          },
+        }),
+    }),
+  );
+
+const HexedDustStateMerkleTreeCollapsedUpdate: Schema.Schema<DustStateMerkleTreeCollapsedUpdate, string> = pipe(
+  Schema.Uint8ArrayFromHex,
+  Schema.compose(DustStateMerkleTreeCollapsedUpdateFromUInt8Array),
+);
 
 export const CollapsedMerkleTreeSchema = Schema.Struct({
   startIndex: Schema.Number,
   endIndex: Schema.Number,
-  update: Schema.String,
+  update: HexedDustStateMerkleTreeCollapsedUpdate,
   protocolVersion: Schema.Number,
 });
 
+export type CollapsedMerkleTree = Schema.Schema.Type<typeof CollapsedMerkleTreeSchema>;
+
 export const WireDustGenerationsUpdateSchema = Schema.Struct({
+  type: Schema.Literal('DustGenerationsUpdate'),
   merkleIndex: Schema.Number,
   owner: Schema.String,
   value: Schema.String,
@@ -35,6 +72,7 @@ export const DustGenerationsUpdateSchema = Schema.transform(
   WireDustGenerationsUpdateSchema,
   Schema.typeSchema(
     Schema.Struct({
+      type: Schema.Literal('DustGenerationsUpdate'),
       merkleIndex: Schema.Number,
       owner: Schema.String,
       value: Schema.String,

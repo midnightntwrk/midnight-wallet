@@ -21,6 +21,7 @@ import {
   Signaturish,
   Transaction,
   Event,
+  DustStateMerkleTreeCollapsedUpdate,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -28,6 +29,7 @@ import { Array as Arr, Option, pipe } from 'effect';
 import { Dust, DustWithNullifier } from './types/Dust.js';
 import { CoinWithValue } from './CoinsAndBalances.js';
 import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
+import { CollapsedMerkleTree } from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
@@ -96,6 +98,17 @@ export const CoreWallet = {
       ...wallet,
       state: updatedState,
       pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
+    };
+  },
+
+  applyDustGenerationTreeUpdates(wallet: CoreWallet, updates: CollapsedMerkleTree[]): CoreWallet {
+    const updatedState = updates.reduce(
+      (state, update) => state.applyGenerationCollapsedUpdate(update.update),
+      wallet.state,
+    );
+    return {
+      ...wallet,
+      state: updatedState,
     };
   },
 
