@@ -319,10 +319,12 @@ describe('Unified Simulator', () => {
 
         const state = yield* simulator.getLatestState();
 
+        const lastBlock = getLastBlock(state);
         // Should have no blocks yet
         expect(getCurrentBlockNumber(state)).toBe(0n);
-        expect(getLastBlock(state)).toBeUndefined();
-        expect(state.blocks.length).toBe(0);
+        expect(lastBlock).toBeDefined();
+        expect(lastBlock.transactions).toEqual([]);
+        expect(state.blocks.length).toBe(1);
         expect(state.networkId).toBe(NetworkId.NetworkId.Undeployed);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
@@ -349,14 +351,14 @@ describe('Unified Simulator', () => {
         const initialState = yield* simulator.getLatestState();
         const initialTime = initialState.currentTime;
         expect(getCurrentBlockNumber(initialState)).toBe(0n);
-        expect(initialState.blocks.length).toBe(0);
+        expect(initialState.blocks.length).toBe(1);
 
         yield* simulator.fastForward(100n);
 
         const advancedState = yield* simulator.getLatestState();
         // Block number should not change (no blocks created)
         expect(getCurrentBlockNumber(advancedState)).toBe(0n);
-        expect(advancedState.blocks.length).toBe(0);
+        expect(advancedState.blocks.length).toBe(1);
         // Time should have advanced by 100 seconds
         expect(advancedState.currentTime.getTime() - initialTime.getTime()).toBe(100 * 1000);
       }).pipe(Effect.scoped, Effect.runPromise);
