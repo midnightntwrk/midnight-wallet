@@ -287,7 +287,6 @@ describe('UnshieldedState', () => {
         getOrThrow,
         (s) => UnshieldedState.spend(s, u),
         getOrThrow,
-        // sanity: u is now in pending
         (s) => {
           expect(HashMap.has(s.pendingUtxos, utxoHash(u))).toBe(true);
           return s;
@@ -423,9 +422,6 @@ describe('UnshieldedState', () => {
     });
 
     it('should reject PARTIAL_SUCCESS status (only FAILURE is valid)', () => {
-      // applyFailedUpdate requires status === 'FAILURE'. SUCCESS is already
-      // covered elsewhere; PARTIAL_SUCCESS must also be rejected so the check
-      // can't be relaxed to `status !== 'SUCCESS'` without a test noticing.
       const result = UnshieldedState.applyFailedUpdate(UnshieldedState.empty(), {
         createdUtxos: [],
         spentUtxos: [],
@@ -456,13 +452,7 @@ describe('UnshieldedState', () => {
           }),
         getOrThrow,
       );
-
-      // present remains exactly as it was; ghost is added to available because
-      // applyFailedUpdate unconditionally restores spentUtxos. This documents
-      // the current (intentional?) contract — see TODO below.
       expect(HashMap.has(after.availableUtxos, utxoHash(present))).toBe(true);
-      // The current implementation (UnshieldedState.ts:132-139) does HashMap.union(available, spentUtxos).
-      // That means a ghost spent-utxo gets ADDED to available. If this is unintended, the test will surface it.
       expect(HashMap.has(after.availableUtxos, utxoHash(ghost))).toBe(true);
       expect(HashMap.size(after.pendingUtxos)).toEqual(0);
     });
@@ -693,11 +683,9 @@ describe('UnshieldedState', () => {
             const finalState = ops.reduce(applyOp, initial);
 
             const availableKeys = new Set(HashMap.keys(finalState.availableUtxos));
-            const pendingKeys = HashMap.keys(finalState.pendingUtxos);
-            for (const k of pendingKeys) {
-              if (availableKeys.has(k)) return false;
-            }
-            return true;
+            const pendingKeys = [...HashMap.keys(finalState.pendingUtxos)];
+            const hasOverlap = pendingKeys.some((k) => availableKeys.has(k));
+            expect(hasOverlap).toBe(false);
           },
         ),
         { numRuns: 100 },
@@ -725,13 +713,10 @@ describe('UnshieldedState', () => {
             getOrThrow,
           );
 
-          // Same shape: same available, same pending.
-          return (
-            HashMap.has(roundTripped.availableUtxos, utxoHash(u)) &&
-            !HashMap.has(roundTripped.pendingUtxos, utxoHash(u)) &&
-            HashMap.size(roundTripped.availableUtxos) === HashMap.size(seeded.availableUtxos) &&
-            HashMap.size(roundTripped.pendingUtxos) === HashMap.size(seeded.pendingUtxos)
-          );
+          expect(HashMap.has(roundTripped.availableUtxos, utxoHash(u))).toBe(true);
+          expect(HashMap.has(roundTripped.pendingUtxos, utxoHash(u))).toBe(false);
+          expect(HashMap.size(roundTripped.availableUtxos)).toEqual(HashMap.size(seeded.availableUtxos));
+          expect(HashMap.size(roundTripped.pendingUtxos)).toEqual(HashMap.size(seeded.pendingUtxos));
         }),
         { numRuns: 50 },
       );
@@ -763,12 +748,10 @@ describe('UnshieldedState', () => {
             getOrThrow,
           );
 
-          return (
-            HashMap.has(roundTripped.availableUtxos, utxoHash(u)) &&
-            !HashMap.has(roundTripped.pendingUtxos, utxoHash(u)) &&
-            HashMap.size(roundTripped.availableUtxos) === HashMap.size(seeded.availableUtxos) &&
-            HashMap.size(roundTripped.pendingUtxos) === HashMap.size(seeded.pendingUtxos)
-          );
+          expect(HashMap.has(roundTripped.availableUtxos, utxoHash(u))).toBe(true);
+          expect(HashMap.has(roundTripped.pendingUtxos, utxoHash(u))).toBe(false);
+          expect(HashMap.size(roundTripped.availableUtxos)).toEqual(HashMap.size(seeded.availableUtxos));
+          expect(HashMap.size(roundTripped.pendingUtxos)).toEqual(HashMap.size(seeded.pendingUtxos));
         }),
         { numRuns: 50 },
       );
