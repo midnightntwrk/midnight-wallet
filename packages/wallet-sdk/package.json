@@ -23,6 +23,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./address-format": {
+      "types": "./dist/address-format.d.ts",
+      "import": "./dist/address-format.js"
+    },
     "./capabilities": {
       "types": "./dist/capabilities.d.ts",
       "import": "./dist/capabilities.js"
@@ -30,6 +34,14 @@
     "./dust": {
       "types": "./dist/dust.d.ts",
       "import": "./dist/dust.js"
+    },
+    "./facade": {
+      "types": "./dist/facade.d.ts",
+      "import": "./dist/facade.js"
+    },
+    "./hd": {
+      "types": "./dist/hd.d.ts",
+      "import": "./dist/hd.js"
     },
     "./proving": {
       "types": "./dist/proving.d.ts",
