@@ -169,7 +169,8 @@ export const makeDustGenerationsSyncService = (
       // const publicKey = state.publicKey.publicKey.toString(16);
 
       return pipe(
-        indexerSyncService.subscribeDustGenerations(state),
+        defaultSyncService.blockData(),
+        Effect.map((block) => indexerSyncService.subscribeDustGenerations(state, block)),
         Stream.groupedWithin(batchSize, batchTimeout),
         Stream.map(Chunk.toArray),
         Stream.map((updates) => DustGenerationsSyncUpdate.create(updates, secretKey, new Date())),
@@ -190,6 +191,7 @@ export type IndexerSyncService = {
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustGenerations: (
     state: CoreWallet,
+    latestBlock: BlockData,
   ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
@@ -243,6 +245,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     },
     subscribeDustGenerations(
       state: CoreWallet,
+      latestBlock: BlockData,
     ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
       const { publicKey } = state.publicKey;
@@ -251,7 +254,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         AddressDustGenerations.run({
           dustAddress: publicKey.toString(16),
           startIndex: Number(appliedIndex),
-          endIndex: Number(appliedIndex) + 100, // TODO: make configurable
+          endIndex: latestBlock.height,
         }),
         Stream.mapEffect((subscription) =>
           pipe(
