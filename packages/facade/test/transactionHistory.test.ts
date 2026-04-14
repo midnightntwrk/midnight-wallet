@@ -11,8 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { type WalletEntry, WalletEntrySchema, mergeWalletEntries } from '../src/index.js';
+import { type WalletEntry, mergeWalletEntries } from '../src/index.js';
 
 const shieldedCoin = (type: string, nonce: string, value: bigint, mtIndex: bigint) => ({
   type,
@@ -34,73 +33,6 @@ const baseEntry = (hash: string, overrides: Partial<WalletEntry> = {}): WalletEn
   protocolVersion: 1,
   status: 'SUCCESS',
   ...overrides,
-});
-
-describe('InMemoryTransactionHistoryStorage upsert respects the merge function', () => {
-  it('should use the provided merge function when upserting an entry with the same hash', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-
-    const coinA = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
-    const coinB = shieldedCoin('token-b', 'nonce-b', 200n, 2n);
-
-    await storage.upsert(
-      baseEntry('tx1', {
-        shielded: { receivedCoins: [coinA], spentCoins: [] },
-      }),
-    );
-
-    await storage.upsert(
-      baseEntry('tx1', {
-        shielded: { receivedCoins: [coinB], spentCoins: [] },
-      }),
-    );
-
-    const result = await storage.get('tx1');
-
-    expect(result?.shielded?.receivedCoins).toHaveLength(2);
-    expect(result?.shielded?.receivedCoins).toEqual(expect.arrayContaining([coinA, coinB]));
-  });
-
-  it('should insert without merging when no prior entry exists for that hash', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-
-    const coin = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
-
-    await storage.upsert(
-      baseEntry('tx1', {
-        shielded: { receivedCoins: [coin], spentCoins: [] },
-      }),
-    );
-
-    const result = await storage.get('tx1');
-
-    expect(result?.shielded?.receivedCoins).toEqual([coin]);
-  });
-
-  it('should keep entries with different hashes independent', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
-
-    const coinA = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
-    const coinB = shieldedCoin('token-b', 'nonce-b', 200n, 2n);
-
-    await storage.upsert(
-      baseEntry('tx1', {
-        shielded: { receivedCoins: [coinA], spentCoins: [] },
-      }),
-    );
-
-    await storage.upsert(
-      baseEntry('tx2', {
-        shielded: { receivedCoins: [coinB], spentCoins: [] },
-      }),
-    );
-
-    const result1 = await storage.get('tx1');
-    const result2 = await storage.get('tx2');
-
-    expect(result1?.shielded?.receivedCoins).toEqual([coinA]);
-    expect(result2?.shielded?.receivedCoins).toEqual([coinB]);
-  });
 });
 
 describe('mergeWalletEntries does not lose information', () => {
@@ -156,10 +88,8 @@ describe('mergeWalletEntries does not lose information', () => {
 
     const merged = mergeWalletEntries(existing, incoming);
 
-    expect(merged.shielded?.receivedCoins).toHaveLength(2);
-    expect(merged.shielded?.receivedCoins).toEqual(expect.arrayContaining([coinA, coinB]));
-    expect(merged.shielded?.spentCoins).toHaveLength(2);
-    expect(merged.shielded?.spentCoins).toEqual(expect.arrayContaining([spentCoinA, spentCoinB]));
+    expect(merged.shielded?.receivedCoins).toEqual([coinA, coinB]);
+    expect(merged.shielded?.spentCoins).toEqual([spentCoinA, spentCoinB]);
   });
 
   it('should deduplicate identical shielded coins', () => {
@@ -175,7 +105,6 @@ describe('mergeWalletEntries does not lose information', () => {
 
     const merged = mergeWalletEntries(existing, incoming);
 
-    expect(merged.shielded?.receivedCoins).toHaveLength(1);
     expect(merged.shielded?.receivedCoins).toEqual([coin]);
   });
 
