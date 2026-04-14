@@ -379,8 +379,6 @@ describe('Token transfer', () => {
   test(
     'can perform a self-transaction',
     async () => {
-      await utils.waitForBlockAdvancement(fixture.getIndexerUri());
-
       const initialState = await funded.wallet.waitForSyncedState();
       const initialBalance = initialState.shielded.balances[shieldedTokenRaw];
       const initialDustBalance = initialState.dust.balance(new Date());
