@@ -1,8 +1,8 @@
 # @midnight-ntwrk/wallet-sdk
 
 Barrel package for the Midnight Wallet SDK. Instead of installing and importing from multiple
-`@midnight-ntwrk/wallet-sdk-*` packages individually, this package re-exports them all through
-a single dependency with multiple entry points.
+`@midnight-ntwrk/wallet-sdk-*` packages individually, this package re-exports them all through a single dependency with
+multiple entry points.
 
 ## Installation
 
@@ -12,26 +12,24 @@ npm install @midnight-ntwrk/wallet-sdk
 
 ## Overview
 
-This package provides a unified installation and import experience for the Midnight Wallet SDK.
-The main entry point re-exports the core wallet types, while dedicated sub-path exports give
-access to each underlying package:
+This package provides a unified installation and import experience for the Midnight Wallet SDK. The main entry point
+re-exports the core wallet types, while dedicated sub-path exports give access to each underlying package:
 
-| Entry Point | Re-exports |
-|---|---|
-| `@midnight-ntwrk/wallet-sdk` | Core: abstractions, address-format, dust-wallet, facade, hd, shielded, unshielded-wallet |
-| `@midnight-ntwrk/wallet-sdk/address-format` | `@midnight-ntwrk/wallet-sdk-address-format` |
-| `@midnight-ntwrk/wallet-sdk/capabilities` | `@midnight-ntwrk/wallet-sdk-capabilities` |
-| `@midnight-ntwrk/wallet-sdk/dust` | `@midnight-ntwrk/wallet-sdk-dust-wallet` |
-| `@midnight-ntwrk/wallet-sdk/facade` | `@midnight-ntwrk/wallet-sdk-facade` |
-| `@midnight-ntwrk/wallet-sdk/hd` | `@midnight-ntwrk/wallet-sdk-hd` |
-| `@midnight-ntwrk/wallet-sdk/proving` | `@midnight-ntwrk/wallet-sdk-capabilities/proving` |
-| `@midnight-ntwrk/wallet-sdk/shielded` | `@midnight-ntwrk/wallet-sdk-shielded` |
-| `@midnight-ntwrk/wallet-sdk/testing` | `@midnight-ntwrk/wallet-sdk-utilities/testing` |
-| `@midnight-ntwrk/wallet-sdk/unshielded` | `@midnight-ntwrk/wallet-sdk-unshielded-wallet` |
+| Entry Point                                 | Re-exports                                                                               |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `@midnight-ntwrk/wallet-sdk`                | Core: abstractions, address-format, dust-wallet, facade, hd, shielded, unshielded-wallet |
+| `@midnight-ntwrk/wallet-sdk/address-format` | `@midnight-ntwrk/wallet-sdk-address-format`                                              |
+| `@midnight-ntwrk/wallet-sdk/capabilities`   | `@midnight-ntwrk/wallet-sdk-capabilities`                                                |
+| `@midnight-ntwrk/wallet-sdk/dust`           | `@midnight-ntwrk/wallet-sdk-dust-wallet`                                                 |
+| `@midnight-ntwrk/wallet-sdk/facade`         | `@midnight-ntwrk/wallet-sdk-facade`                                                      |
+| `@midnight-ntwrk/wallet-sdk/hd`             | `@midnight-ntwrk/wallet-sdk-hd`                                                          |
+| `@midnight-ntwrk/wallet-sdk/proving`        | `@midnight-ntwrk/wallet-sdk-capabilities/proving`                                        |
+| `@midnight-ntwrk/wallet-sdk/shielded`       | `@midnight-ntwrk/wallet-sdk-shielded`                                                    |
+| `@midnight-ntwrk/wallet-sdk/testing`        | `@midnight-ntwrk/wallet-sdk-utilities/testing`                                           |
+| `@midnight-ntwrk/wallet-sdk/unshielded`     | `@midnight-ntwrk/wallet-sdk-unshielded-wallet`                                           |
 
-The Wallet Facade (`WalletFacade`) provides a high-level unified interface that aggregates the
-functionality of all wallet types (shielded, unshielded, and dust). It simplifies wallet
-operations by providing:
+The Wallet Facade (`WalletFacade`) provides a high-level unified interface that aggregates the functionality of all
+wallet types (shielded, unshielded, and dust). It simplifies wallet operations by providing:
 
 - Combined state management across all wallet types
 - Unified transaction balancing for shielded, unshielded, and dust

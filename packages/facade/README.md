@@ -1,7 +1,7 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
-> **Note:** It is recommended to use the [`@midnight-ntwrk/wallet-sdk`](../wallet-sdk/README.md) barrel package,
-> which re-exports this and all other wallet SDK packages through a single dependency.
+> **Note:** It is recommended to use the [`@midnight-ntwrk/wallet-sdk`](../wallet-sdk/README.md) barrel package, which
+> re-exports this and all other wallet SDK packages through a single dependency.
 
 Unified facade for the Midnight Wallet SDK that combines all wallet types into a single API.
 
