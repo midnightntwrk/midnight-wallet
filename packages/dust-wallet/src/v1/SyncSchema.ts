@@ -107,6 +107,16 @@ export const DustGenerationsSubscriptionSchema = Schema.Union(DustGenerationsUpd
 
 export type DustGenerationsSubscription = Schema.Schema.Type<typeof DustGenerationsSubscriptionSchema>;
 
+export const DustNullifierTransactionSchema = Schema.Struct({
+  nullifier: Schema.String,
+  commitment: Schema.String,
+  transactionId: Schema.Number,
+  blockHeight: Schema.Number,
+  blockHash: Schema.String,
+});
+
+export type DustNullifierTransactionsSubscription = Schema.Schema.Type<typeof DustNullifierTransactionSchema>;
+
 export type DustGenerationsSyncUpdate = {
   updates: DustGenerationsSubscription[];
   secretKey: DustSecretKey;

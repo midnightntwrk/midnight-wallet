@@ -10,9 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './AddressDustGenerations.js';
-export * from './DustLedgerEvents.js';
-export * from './DustNullifierTransactions.js';
-export * from './ShieldedTransactions.js';
-export * from './UnshieldedTransactions.js';
-export * from './ZswapEvents.js';
+import { Subscription } from '../../effect/index.js';
+import { gql } from '../generated/index.js';
+
+export const DustNullifierTransactions = Subscription.make(
+  'DustNullifierTransactions',
+  gql(`
+    subscription DustNullifierTransactions($nullifierPrefixes: [HexEncoded!]!, $fromBlock: Int, $toBlock: Int) {
+      dustNullifierTransactions(nullifierPrefixes: $nullifierPrefixes, fromBlock: $fromBlock, toBlock: $toBlock) {
+        nullifier
+        commitment
+        transactionId
+        blockHeight
+        blockHash
+      }
+    }
+  `),
+);
