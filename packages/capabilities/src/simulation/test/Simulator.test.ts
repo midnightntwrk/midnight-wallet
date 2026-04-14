@@ -27,8 +27,6 @@ import {
   genesisStrictness,
   getCurrentBlockNumber,
   getLastBlock,
-  applyTransaction,
-  nextBlockContext,
   assignStrictnessToAll,
   createStrictness,
   type BlockProducer,
@@ -123,7 +121,7 @@ describe('Unified Simulator', () => {
         expect(state.networkId).toBe(customNetworkId);
 
         // Verify recipient received the shielded tokens
-        const events = getLastBlock(state)!.transactions.flatMap((tx) => tx.result.events);
+        const events = getLastBlock(state).transactions.flatMap((tx) => tx.result.events);
         verifyShieldedReceipt(recipientKeys, events, shieldedTokenType, 1000n);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
@@ -392,101 +390,6 @@ describe('Unified Simulator', () => {
     });
   });
 
-  describe('static methods', () => {
-    it('computes block hash deterministically', async () => {
-      const blockTime1 = new Date(1000000);
-      const blockTime2 = new Date(1000000);
-      const blockTime3 = new Date(2000000);
-
-      const hash1 = await Effect.runPromise(Simulator.blockHash(blockTime1));
-      const hash2 = await Effect.runPromise(Simulator.blockHash(blockTime2));
-      const hash3 = await Effect.runPromise(Simulator.blockHash(blockTime3));
-
-      // Same input should produce same output
-      expect(hash1).toBe(hash2);
-      // Different input should produce different output
-      expect(hash1).not.toBe(hash3);
-      // Hash should be a valid hex string (64 chars for SHA-256)
-      expect(hash1).toMatch(/^[0-9a-f]{64}$/);
-    });
-
-    it('creates block context from block time', async () => {
-      const blockTime = new Date(1234567890000);
-      const context = await Effect.runPromise(Simulator.nextBlockContext(blockTime));
-
-      expect(context.secondsSinceEpoch).toBe(1234567890n);
-      expect(context.secondsSinceEpochErr).toBe(1);
-      // Without previous block time, defaults to assuming 1 second since last block
-      expect(context.lastBlockTime).toBe(1n);
-      expect(context.parentBlockHash).toMatch(/^[0-9a-f]{64}$/);
-    });
-
-    it('creates block context with correct lastBlockTime when previous block time is provided', async () => {
-      const previousBlockTime = new Date(1234567880000); // 10 seconds before
-      const blockTime = new Date(1234567890000);
-      const context = await nextBlockContext(blockTime, previousBlockTime);
-
-      expect(context.secondsSinceEpoch).toBe(1234567890n);
-      expect(context.secondsSinceEpochErr).toBe(1);
-      // Should calculate time since last block: 1234567890 - 1234567880 = 10 seconds
-      expect(context.lastBlockTime).toBe(10n);
-      expect(context.parentBlockHash).toMatch(/^[0-9a-f]{64}$/);
-    });
-  });
-
-  describe('apply (pure state transition)', () => {
-    it('returns Either with new state on success', async () => {
-      return Effect.gen(function* () {
-        const recipientKeys = createKeys(0);
-
-        const simulator = yield* Simulator.init({
-          genesisMints: [shieldedGenesisMint(recipientKeys)],
-        });
-
-        const state = yield* simulator.getLatestState();
-
-        // Create a transaction with an output
-        const tx = createUnbalancedTx(recipientKeys);
-
-        const strictness = new ledger.WellFormedStrictness();
-        strictness.enforceBalancing = false;
-
-        const blockContext = yield* Effect.promise(() => nextBlockContext(state.currentTime));
-
-        const result = applyTransaction(state, tx, strictness, blockContext);
-
-        // The result should be an Either
-        expect(result._tag).toBe('Right');
-      }).pipe(Effect.scoped, Effect.runPromise);
-    });
-
-    it('returns Either Left on invalid transaction', async () => {
-      return Effect.gen(function* () {
-        const recipientKeys = createKeys(0);
-
-        const simulator = yield* Simulator.init({
-          genesisMints: [shieldedGenesisMint(recipientKeys)],
-        });
-
-        const state = yield* simulator.getLatestState();
-
-        // Create a transaction with an output (unbalanced when enforceBalancing is true)
-        const tx = createUnbalancedTx(recipientKeys);
-
-        // Enable balance enforcement to make the transaction invalid
-        const strictness = new ledger.WellFormedStrictness();
-        strictness.enforceBalancing = true;
-
-        const blockContext = yield* Effect.promise(() => nextBlockContext(state.currentTime));
-
-        const result = applyTransaction(state, tx, strictness, blockContext);
-
-        // The result should be an Either Left (error)
-        expect(result._tag).toBe('Left');
-      }).pipe(Effect.scoped, Effect.runPromise);
-    });
-  });
-
   describe('submitTransaction', () => {
     it('submits a transaction and updates state', async () => {
       return Effect.gen(function* () {
@@ -512,7 +415,7 @@ describe('Unified Simulator', () => {
         expect(getCurrentBlockNumber(newState)).toBeGreaterThan(getCurrentBlockNumber(initialState));
         const lastBlock = getLastBlock(newState);
         expect(lastBlock).toBeDefined();
-        expect(lastBlock!.transactions.length).toBeGreaterThan(0);
+        expect(lastBlock.transactions.length).toBeGreaterThan(0);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
 
@@ -598,10 +501,10 @@ describe('Unified Simulator', () => {
         const newState = yield* simulator.getLatestState();
         const lastBlock = getLastBlock(newState);
         expect(lastBlock).toBeDefined();
-        expect(lastBlock!.number).toBeGreaterThan(0n);
-        expect(lastBlock!.hash).toMatch(/^[0-9a-f]{64}$/);
-        expect(lastBlock!.transactions.length).toBeGreaterThan(0);
-        expect(getCurrentBlockNumber(newState)).toBe(lastBlock!.number);
+        expect(lastBlock.number).toBeGreaterThan(0n);
+        expect(lastBlock.hash).toMatch(/^[0-9a-f]{64}$/);
+        expect(lastBlock.transactions.length).toBeGreaterThan(0);
+        expect(getCurrentBlockNumber(newState)).toBe(lastBlock.number);
       }).pipe(Effect.scoped, Effect.runPromise);
     });
   });

@@ -42,7 +42,6 @@ export {
   // Helper functions
   createStrictness,
   blockHash,
-  nextBlockContext,
   assignStrictness,
   assignStrictnessToAll,
   // Strictness constants

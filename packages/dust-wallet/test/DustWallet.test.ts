@@ -563,7 +563,7 @@ describe('DustWallet', () => {
       simulatorState = yield* simulator.getLatestState();
       expect(getLastBlockResults(simulatorState)[0]?.type).toBe('success');
 
-      const lastBlock = getLastBlock(simulatorState)!;
+      const lastBlock = getLastBlock(simulatorState);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState, lastBlock.timestamp);
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(lastBlock.timestamp);
@@ -860,7 +860,7 @@ describe('DustWallet', () => {
       walletState = yield* SubscriptionRef.get(stateRef);
       simulatorState = yield* simulator.getLatestState();
 
-      const lastBlock = getLastBlock(simulatorState)!;
+      const lastBlock = getLastBlock(simulatorState);
       const newAvailableCoins = walletVariant.coinsAndBalances.getAvailableCoins(walletState, lastBlock.timestamp);
       expect(newAvailableCoins.length).toBe(1);
       expect(newAvailableCoins[0].dtime).toStrictEqual(lastBlock.timestamp);

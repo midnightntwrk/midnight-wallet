@@ -18,7 +18,7 @@
  * simulator state. All functions are synchronous and side-effect free.
  */
 
-import { Either, Function as EFunction, Stream } from 'effect';
+import { Either, Function as EFunction, Stream, Array as EArray } from 'effect';
 import {
   LedgerState,
   type BlockContext,
@@ -90,7 +90,7 @@ export type SimulatorState = Readonly<{
   networkId: NetworkId.NetworkId;
   ledger: LedgerState;
   /** All produced blocks, ordered by block number */
-  blocks: readonly Block[];
+  blocks: EArray.NonEmptyArray<Block>;
   /** Pending transactions waiting for block production */
   mempool: readonly PendingTransaction[];
   /** Current simulator time (independent of block numbers) */
@@ -291,13 +291,12 @@ export const assignStrictnessToAll = (
 /**
  * Get the last produced block, or undefined if no blocks yet.
  */
-export const getLastBlock = (state: SimulatorState): Block | undefined =>
-  state.blocks.length > 0 ? state.blocks[state.blocks.length - 1] : undefined;
+export const getLastBlock = (state: SimulatorState): Block => EArray.lastNonEmpty(state.blocks);
 
 /**
  * Get the current block number (height of the last block, or 0 if no blocks).
  */
-export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastBlock(state)?.number ?? 0n;
+export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastBlock(state)?.number;
 
 /**
  * Get a block by its number.
@@ -389,13 +388,21 @@ export const allMempoolTransactions = (
 /**
  * Create a blank initial state.
  */
-export const blankState = (networkId: NetworkId.NetworkId): SimulatorState => ({
-  networkId,
-  ledger: LedgerState.blank(networkId),
-  blocks: [],
-  mempool: [],
-  currentTime: new Date(0),
-});
+export const blankState = async (networkId: NetworkId.NetworkId): Promise<SimulatorState> => {
+  const blankGenesis: Block = {
+    number: 0n,
+    hash: await blockHash(0n),
+    timestamp: new Date(0),
+    transactions: [],
+  };
+  return {
+    networkId,
+    ledger: LedgerState.blank(networkId),
+    blocks: [blankGenesis],
+    mempool: [],
+    currentTime: new Date(0),
+  };
+};
 
 /**
  * Add a pending transaction to the mempool.
@@ -676,21 +683,8 @@ export const createStrictness = (config: StrictnessConfig = {}): WellFormedStric
  * @returns A deterministic 64-character hex hash
  */
 export const blockHash = async (blockNumber: bigint): Promise<string> => {
-  const crypto = await import('crypto');
   const input = `block-${blockNumber.toString()}`;
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
-  const { Encoding } = await import('effect');
-  return Encoding.encodeHex(new Uint8Array(hashBuffer));
-};
-
-/**
- * @deprecated Use nextBlockContextFromBlock instead for more accurate block context.
- * Compute block hash from block time (legacy behavior).
- */
-export const blockHashFromTime = async (blockTime: Date): Promise<string> => {
-  const crypto = await import('crypto');
-  const input = DateOps.dateToSeconds(blockTime).toString();
-  const hashBuffer = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
+  const hashBuffer = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(input));
   const { Encoding } = await import('effect');
   return Encoding.encodeHex(new Uint8Array(hashBuffer));
 };
@@ -711,29 +705,6 @@ export const nextBlockContextFromBlock = async (
   const blockSeconds = DateOps.dateToSeconds(blockTime);
   const previousSeconds =
     previousBlock !== undefined ? DateOps.dateToSeconds(previousBlock.timestamp) : blockSeconds - 1n;
-  const timeSinceLastBlock = blockSeconds - previousSeconds;
-
-  return {
-    parentBlockHash: hash,
-    secondsSinceEpoch: blockSeconds,
-    secondsSinceEpochErr: 1, // Clock error tolerance in seconds (reasonable default for simulator)
-    lastBlockTime: timeSinceLastBlock > 0n ? timeSinceLastBlock : 1n,
-  };
-};
-
-/**
- * Create the next block context from block time.
- *
- * @deprecated Use nextBlockContextFromBlock instead for more accurate block context.
- * @param blockTime - The timestamp for the new block
- * @param previousBlockTime - Optional timestamp of the previous block (defaults to 1 second before blockTime)
- * @returns A BlockContext suitable for transaction processing
- */
-export const nextBlockContext = async (blockTime: Date, previousBlockTime?: Date): Promise<BlockContext> => {
-  // Use block number 0 for backward compatibility
-  const hash = await blockHashFromTime(blockTime);
-  const blockSeconds = DateOps.dateToSeconds(blockTime);
-  const previousSeconds = previousBlockTime ? DateOps.dateToSeconds(previousBlockTime) : blockSeconds - 1n;
   const timeSinceLastBlock = blockSeconds - previousSeconds;
 
   return {

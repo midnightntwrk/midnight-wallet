@@ -326,15 +326,6 @@ export const makeSimulatorSyncService = (
       return Effect.gen(function* () {
         const state = yield* config.simulator.getLatestState();
         const lastBlock = getLastBlock(state);
-        // For blank state, return defaults
-        if (lastBlock === undefined) {
-          return {
-            hash: yield* Simulator.blockHash(state.currentTime),
-            height: 0,
-            ledgerParameters: state.ledger.parameters,
-            timestamp: state.currentTime,
-          };
-        }
         // Use currentTime instead of lastBlock.timestamp for time-sensitive operations
         // (e.g., Dust generation calculation). The currentTime reflects any fast-forwarding
         // that has been done, while lastBlock.timestamp only reflects when the block was produced.

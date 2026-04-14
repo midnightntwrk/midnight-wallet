@@ -24,59 +24,55 @@
 
 import { Array as Arr, Effect, Either, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
 import {
-  LedgerState,
-  type UserAddress,
+  addressFromKey,
   ClaimRewardsTransaction,
+  createShieldedCoinInfo,
+  Intent,
+  LedgerState,
+  nativeToken,
+  type PreBinding,
+  type PreProof,
+  type ProofErasedTransaction,
+  type SignatureEnabled,
   SignatureErased,
   type SignatureVerifyingKey,
   Transaction,
-  WellFormedStrictness,
   TransactionContext,
-  type ProofErasedTransaction,
   type TransactionResult,
-  createShieldedCoinInfo,
-  ZswapOutput,
-  ZswapOffer,
-  type PreProof,
-  type PreBinding,
-  type SignatureEnabled,
-  Intent,
   UnshieldedOffer,
-  nativeToken,
-  addressFromKey,
+  type UserAddress,
+  ZswapOffer,
+  ZswapOutput,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 import {
-  type SimulatorState,
-  type Block,
-  type PendingTransaction,
-  type BlockProducer,
-  type BlockProductionRequest,
-  type GenesisMint,
-  type ShieldedGenesisMint,
-  type UnshieldedGenesisMint,
-  type StrictnessConfig,
-  type FullnessSpec,
-  hasPendingTransactions,
-  resolveFullness,
+  addToMempool,
   allMempoolTransactions,
   blankState,
-  createStrictness,
-  defaultStrictness,
-  genesisStrictness,
+  type Block,
   blockHash,
-  blockHashFromTime,
-  nextBlockContext,
-  nextBlockContextFromBlock,
-  applyTransaction,
-  processTransactions,
+  type BlockProducer,
+  type BlockProductionRequest,
   createBlock,
   createEmptyBlock,
-  removeFromMempool,
-  addToMempool,
+  createStrictness,
+  defaultStrictness,
+  type FullnessSpec,
+  type GenesisMint,
+  genesisStrictness,
   getLastBlock,
+  hasPendingTransactions,
+  nextBlockContextFromBlock,
+  type PendingTransaction,
+  processTransactions,
+  removeFromMempool,
+  resolveFullness,
+  type ShieldedGenesisMint,
+  type SimulatorState,
+  type StrictnessConfig,
+  type UnshieldedGenesisMint,
 } from './SimulatorState.js';
 
 // =============================================================================
@@ -200,37 +196,6 @@ export class Simulator {
   // ===========================================================================
 
   /**
-   * Compute block hash from block time.
-   * @deprecated Use blockHash from SimulatorState instead (now takes blockNumber)
-   */
-  static blockHash = (blockTime: Date): Effect.Effect<string> => Effect.promise(() => blockHashFromTime(blockTime));
-
-  /**
-   * Create the next block context from block time.
-   * @deprecated Use nextBlockContext from SimulatorState instead
-   */
-  static nextBlockContext = (blockTime: Date): Effect.Effect<import('@midnight-ntwrk/ledger-v8').BlockContext> =>
-    Effect.promise(() => nextBlockContext(blockTime));
-
-  /**
-   * Pure state transition: apply a transaction to the simulator state.
-   * @deprecated Use applyTransaction from SimulatorState instead
-   */
-  static apply = (
-    simulatorState: SimulatorState,
-    tx: ProofErasedTransaction,
-    strictness: WellFormedStrictness,
-    blockContext: import('@midnight-ntwrk/ledger-v8').BlockContext,
-    options?: {
-      blockNumber?: bigint;
-      blockFullness?: import('@midnight-ntwrk/ledger-v8').SyntheticCost;
-      overallBlockFullness?: number;
-    },
-  ): Either.Either<[Block, SimulatorState], LedgerOps.LedgerError> => {
-    return applyTransaction(simulatorState, tx, strictness, blockContext, options);
-  };
-
-  /**
    * Initialize a new simulator.
    *
    * @param config - Configuration options (all optional)
@@ -267,7 +232,10 @@ export class Simulator {
     networkId: NetworkId.NetworkId,
     blockProducer?: BlockProducer,
   ): Effect.Effect<Simulator, never, Scope.Scope> {
-    return Simulator.fromState(blankState(networkId), blockProducer);
+    return pipe(
+      Effect.promise(() => blankState(networkId)),
+      Effect.flatMap((state) => Simulator.fromState(state, blockProducer)),
+    );
   }
 
   /**
@@ -328,44 +296,42 @@ export class Simulator {
       ledgerState: LedgerState,
       context: import('@midnight-ntwrk/ledger-v8').BlockContext,
       blockTime: Date,
-    ) =>
-      Effect.sync(() => {
-        const verificationTime = blockTime;
+    ) => {
+      const verificationTime = blockTime;
 
-        // Separate mints by type using flatMap (pure, no mutation)
-        // Night tokens are excluded and handled separately via reward/claim mechanism
-        const shieldedMints = genesisMints.flatMap(toShieldedMint);
-        const customUnshieldedMints = genesisMints.flatMap(toCustomUnshieldedMint);
+      // Separate mints by type using flatMap (pure, no mutation)
+      // Night tokens are excluded and handled separately via reward/claim mechanism
+      const shieldedMints = genesisMints.flatMap(toShieldedMint);
+      const customUnshieldedMints = genesisMints.flatMap(toCustomUnshieldedMint);
 
-        // If no shielded or custom unshielded mints, return empty result
-        if (shieldedMints.length === 0 && customUnshieldedMints.length === 0) {
-          return {
-            initialState: ledgerState,
-            transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[],
-          };
-        }
-
-        // Create ZswapOffer for shielded mints (if any)
-        const zswapOffer: ZswapOffer<PreProof> | undefined =
-          shieldedMints.length > 0
-            ? shieldedMints.map(createShieldedOffer).reduce((acc, offer) => acc.merge(offer))
-            : undefined;
-
-        // Create Intent with UnshieldedOffer for custom unshielded mints (if any)
-        const ttl = new Date(blockTime.getTime() + 3600 * 1000); // 1 hour TTL from block time
-        const intent =
-          customUnshieldedMints.length > 0 ? createUnshieldedIntent(customUnshieldedMints, ttl) : undefined;
-
-        // Build transaction from parts
-        const proofErasedTx = Transaction.fromParts(networkId, zswapOffer, undefined, intent).eraseProofs();
-        const verifiedTx = proofErasedTx.wellFormed(ledgerState, noStrictness, verificationTime);
-        const [newState, result] = ledgerState.apply(verifiedTx, new TransactionContext(ledgerState, context));
-
+      // If no shielded or custom unshielded mints, return empty result
+      if (shieldedMints.length === 0 && customUnshieldedMints.length === 0) {
         return {
-          initialState: newState,
-          transactions: [{ tx: proofErasedTx, result }] as const,
+          initialState: ledgerState,
+          transactions: [] as readonly { tx: ProofErasedTransaction; result: TransactionResult }[],
         };
-      });
+      }
+
+      // Create ZswapOffer for shielded mints (if any)
+      const zswapOffer: ZswapOffer<PreProof> | undefined =
+        shieldedMints.length > 0
+          ? shieldedMints.map(createShieldedOffer).reduce((acc, offer) => acc.merge(offer))
+          : undefined;
+
+      // Create Intent with UnshieldedOffer for custom unshielded mints (if any)
+      const ttl = new Date(blockTime.getTime() + 3600 * 1000); // 1 hour TTL from block time
+      const intent = customUnshieldedMints.length > 0 ? createUnshieldedIntent(customUnshieldedMints, ttl) : undefined;
+
+      // Build transaction from parts
+      const proofErasedTx = Transaction.fromParts(networkId, zswapOffer, undefined, intent).eraseProofs();
+      const verifiedTx = proofErasedTx.wellFormed(ledgerState, noStrictness, verificationTime);
+      const [newState, result] = ledgerState.apply(verifiedTx, new TransactionContext(ledgerState, context));
+
+      return {
+        initialState: newState,
+        transactions: [{ tx: proofErasedTx, result }] as const,
+      };
+    };
 
     // Process a single Night mint by distributing Night and creating claim transaction
     const processNightMint = (
@@ -397,10 +363,10 @@ export class Simulator {
     return Effect.gen(function* () {
       const genesisTime = new Date(0);
       const emptyState = LedgerState.blank(networkId);
-      const context = yield* Simulator.nextBlockContext(genesisTime);
+      const context = yield* Effect.promise(() => nextBlockContextFromBlock(undefined, genesisTime));
 
       // Process shielded and unshielded mints first
-      const init = yield* makeInitialTransactions(emptyState, context, genesisTime);
+      const init = makeInitialTransactions(emptyState, context, genesisTime);
 
       // Apply post-block update before processing Night mints
       // Night distribution requires the ledger to be in a consistent post-block state
