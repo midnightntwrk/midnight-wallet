@@ -48,10 +48,8 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  async *getAll(): AsyncIterableIterator<T> {
-    for (const entry of this.storage.values()) {
-      yield await Promise.resolve(entry);
-    }
+  getAll(): Promise<readonly T[]> {
+    return Array.fromAsync(this.storage.values());
   }
 
   get(hash: TransactionHash): Promise<T | undefined> {
@@ -63,12 +61,9 @@ export class InMemoryTransactionHistoryStorage<
   }
 
   async serialize(): Promise<SerializedTransactionHistory> {
-    const allEntries: T[] = [];
-    for await (const entry of this.getAll()) {
-      allEntries.push(entry);
-    }
+    const allEntries = await this.getAll();
     const encode = Schema.encodeSync(Schema.Array(this.schema));
-    return JSON.stringify(encode(allEntries));
+    return JSON.stringify(encode([...allEntries]));
   }
 
   static restore<T extends { hash: string }, I>(

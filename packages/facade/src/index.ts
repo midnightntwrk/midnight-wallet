@@ -945,9 +945,8 @@ export class WalletFacade {
     return raw && isWalletEntry(raw) ? raw : undefined;
   }
 
-  async *getAllFromTxHistory(): AsyncIterableIterator<WalletEntry> {
-    for await (const raw of this.#txHistoryStorage.getAll()) {
-      yield raw;
-    }
+  async getAllFromTxHistory(): Promise<WalletEntry[]> {
+    const allEntries = await this.#txHistoryStorage.getAll();
+    return [...allEntries];
   }
 }
