@@ -133,6 +133,7 @@ describe('Smoke tests', () => {
       const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
       const txId = await funded.wallet.submitTransaction(finalizedTx);
       logger.info('Transaction id: ' + txId);
+      const txHash = finalizedTx.transactionHash();
 
       const pendingState = await utils.waitForFacadePending(funded.wallet);
       expect(pendingState.shielded.totalCoins.length).toBe(7);
@@ -168,16 +169,28 @@ describe('Smoke tests', () => {
       expect(finalState2.shielded.pendingCoins.length).toBe(0);
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
 
-      // Verify unshielded transaction history entries contain createdUtxos and spentUtxos
+      // Verify unshielded transaction history
       const senderTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
-      utils.expectValidUnshieldedTxHistoryEntries(senderTxHistory);
+      const senderUnshieldedEntries = senderTxHistory.filter((e) => e.unshielded !== undefined);
+      expect(senderUnshieldedEntries.length).toBeGreaterThan(0);
+      senderUnshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
+
+      const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
+      expect(receiverTxEntry).toBeDefined();
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry!, outputValue);
+
+      // Verify shielded transaction history
+      const senderShieldedEntries = senderTxHistory.filter((e) => e.shielded !== undefined);
+      expect(senderShieldedEntries.length).toBeGreaterThan(0);
+      senderShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
 
       const receiverTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
-      expect(receiverTxHistory.length).toBeGreaterThan(0);
-      // Receiver should have at least one entry with createdUtxos
-      const receiverEntryWithCreated = receiverTxHistory.find((e) => (e.unshielded?.createdUtxos.length ?? 0) > 0);
-      expect(receiverEntryWithCreated).toBeDefined();
-      expect(receiverEntryWithCreated!.unshielded!.createdUtxos[0].value).toBe(outputValue);
+      const receiverShieldedEntries = receiverTxHistory.filter((e) => e.shielded !== undefined);
+      expect(receiverShieldedEntries.length).toBeGreaterThan(0);
+      receiverShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
+      const receiverShieldedWithReceived = receiverShieldedEntries.find((e) => e.shielded!.receivedCoins.length > 0);
+      expect(receiverShieldedWithReceived).toBeDefined();
+      utils.expectReceiverShieldedTxHistory(receiverShieldedWithReceived!, outputValue);
     },
     timeout,
   );
@@ -191,6 +204,11 @@ describe('Smoke tests', () => {
       expect(Number(stateObject.offset)).toBeGreaterThan(0);
       expect(typeof stateObject.state).toBe('string');
       expect(stateObject.state).toBeTruthy();
+
+      // Verify tx history has shielded entries before serialization
+      const txHistoryBeforeSerialize = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const shieldedEntries = txHistoryBeforeSerialize.filter((e) => e.shielded !== undefined);
+      expect(shieldedEntries.length).toBeGreaterThan(0);
 
       const walletConfig = fixture.getWalletConfig();
       const txHistoryStorage = walletConfig.txHistoryStorage;
@@ -237,6 +255,10 @@ describe('Smoke tests', () => {
       // TODO IAN - Check if this is correct
       await initialWallet.start();
       await utils.waitForSyncUnshielded(initialWallet);
+
+      // Verify tx history has unshielded entries before serialization
+      await utils.expectTxHistoryHasSection(unshieldedTxHistoryStorage, 'unshielded');
+
       const serializedState = await initialWallet.serializeState();
       const serializedTxHistory = await unshieldedTxHistoryStorage.serialize();
       await initialWallet.stop();
@@ -255,9 +277,17 @@ describe('Smoke tests', () => {
       }).restore(serializedState);
 
       await restoredWallet.start();
-      const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
-      expect(restoredState).toBeTruthy();
-      await restoredWallet.stop();
+      try {
+        const restoredState = await utils.waitForSyncUnshielded(restoredWallet);
+        expect(restoredState).toBeTruthy();
+        const restoredSerializedTxHistory = await restoredTxHistoryStorage.serialize();
+        expect(restoredSerializedTxHistory).toEqual(serializedTxHistory);
+
+        // Verify unshielded tx history entries survive serialization round-trip
+        await utils.expectTxHistoryHasSection(restoredTxHistoryStorage, 'unshielded');
+      } finally {
+        await restoredWallet.stop();
+      }
     },
     timeout,
   );
@@ -289,105 +319,3 @@ describe('Smoke tests', () => {
     timeout,
   );
 });
-
-// describe('Wallet building', () => {
-//   const getFixture = useTestContainersFixture();
-//   const seedFunded = '0000000000000000000000000000000000000000000000000000000000000001';
-//   const rawNativeTokenType = (nativeToken() as { tag: string; raw: string }).raw;
-//   const timeout = 60_000;
-
-//   let walletFunded: ShieldedWallet;
-//   let fixture: TestContainersFixture;
-
-//   afterEach(async () => {
-//     await walletFunded.stop();
-//   });
-
-//   test(
-//     'Unshielded wallet is working if txHistoryStorage is not defined @healthcheck',
-//     async () => {
-//       fixture = getFixture();
-//       const unshieldedKeyStore = createKeystore(getUnshieldedSeed(seedFunded), fixture.getNetworkId());
-//       const unshieldedWallet = await WalletBuilder.build({
-//         publicKey: PublicKey.fromKeyStore(unshieldedKeyStore),
-//         networkId: fixture.getNetworkId(),
-//         indexerUrl: fixture.getIndexerUri(),
-//       });
-//       logger.info(`Waiting to receive tokens...`);
-//       const syncedState = await waitForSyncUnshielded(unshieldedWallet);
-//       // logger.info(`Wallet 1 balance: ${syncedState.balances[rawNativeTokenType]}`);
-//       // expect(syncedState.transactionHistory).toHaveLength(1);
-//     },
-//     timeout,
-//   );
-
-//   test(
-//     'Is working if discardTxHistory is set to false @healthcheck',
-//     async () => {
-//       allure.tag('smoke');
-//       allure.tag('healthcheck');
-//       allure.tms('PM-11090', 'PM-11090');
-//       allure.epic('Headless wallet');
-//       allure.feature('Wallet building');
-//       allure.story('Building with discardTxHistory set to false');
-
-//       await allure.step('Start a wallet', async function () {
-//         fixture = getFixture();
-
-//         walletFunded = await WalletBuilder.build(
-//           fixture.getIndexerUri(),
-//           fixture.getIndexerWsUri(),
-//           fixture.getProverUri(),
-//           fixture.getNodeUri(),
-//           seedFunded,
-//           NetworkId.Undeployed,
-//           'info',
-//           false,
-//         );
-
-//         walletFunded.start();
-//       });
-
-//       logger.info(`Waiting to receive tokens...`);
-//       const syncedState = await waitForSync(walletFunded);
-//       logger.info(`Wallet 1 balance: ${syncedState.balances[nativeToken()]}`);
-//       expect(syncedState.transactionHistory).toHaveLength(1);
-//     },
-//     timeout,
-//   );
-
-//   test(
-//     'Is working if discardTxHistory is set to true @healthcheck',
-//     async () => {
-//       allure.tag('smoke');
-//       allure.tag('healthcheck');
-//       allure.tms('PM-11091', 'PM-11091');
-//       allure.epic('Headless wallet');
-//       allure.feature('Wallet building');
-//       allure.story('Building with discardTxHistory set to true');
-
-//       await allure.step('Start a wallet', async function () {
-//         fixture = getFixture();
-
-//         walletFunded = await WalletBuilder.build(
-//           fixture.getIndexerUri(),
-//           fixture.getIndexerWsUri(),
-//           fixture.getProverUri(),
-//           fixture.getNodeUri(),
-//           seedFunded,
-//           NetworkId.Undeployed,
-//           'info',
-//           true,
-//         );
-
-//         walletFunded.start();
-//       });
-
-//       logger.info(`Waiting to receive tokens...`);
-//       const syncedState = await waitForSync(walletFunded);
-//       logger.info(`Wallet 1 balance: ${syncedState.balances[nativeToken()]}`);
-//       expect(syncedState.transactionHistory).toHaveLength(0);
-//     },
-//     timeout,
-//   );
-// });
