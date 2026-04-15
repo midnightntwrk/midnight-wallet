@@ -271,9 +271,10 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     subscribeDustNullifierTransactions(
       dustNullifiers: DustNullifier[],
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      const fullNullifiers = new Set(dustNullifiers.map((n) => n.toString()));
       return pipe(
         DustNullifierTransactions.run({
-          nullifierPrefixes: dustNullifiers.map((n) => n.toString().substring(0, n.toString().length / 2)),
+          nullifierPrefixes: [...fullNullifiers].map((n) => n.substring(0, n.length / 2)),
           fromBlock: null,
           toBlock: null,
         }),
@@ -282,11 +283,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(
               subscription.dustNullifierTransactions,
             ),
-            // TODO: filter out unrelated records
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),
         ),
+        Stream.filter((record) => fullNullifiers.has(record.nullifier)),
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
