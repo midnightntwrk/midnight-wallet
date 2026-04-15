@@ -96,6 +96,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                 snapshot.state,
                 snapshot.publicKey,
                 [],
+                [], // TODO: add support for recovery
                 {
                   appliedIndex: snapshot.offset ?? 0n,
                   highestRelevantWalletIndex: 0n,

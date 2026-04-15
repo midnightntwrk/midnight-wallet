@@ -58,7 +58,7 @@ export const CollapsedMerkleTreeSchema = Schema.Struct({
 export type CollapsedMerkleTree = Schema.Schema.Type<typeof CollapsedMerkleTreeSchema>;
 
 export const WireDustGenerationsUpdateSchema = Schema.Struct({
-  type: Schema.Literal('DustGenerationsUpdate'),
+  type: Schema.Literal('DustGenerationsItem'),
   merkleIndex: Schema.Number,
   owner: Schema.String,
   value: Schema.String,
@@ -72,7 +72,7 @@ export const DustGenerationsUpdateSchema = Schema.transform(
   WireDustGenerationsUpdateSchema,
   Schema.typeSchema(
     Schema.Struct({
-      type: Schema.Literal('DustGenerationsUpdate'),
+      type: Schema.Literal('DustGenerationsItem'),
       merkleIndex: Schema.Number,
       owner: Schema.String,
       value: Schema.String,
@@ -107,7 +107,7 @@ export const DustGenerationsSubscriptionSchema = Schema.Union(DustGenerationsUpd
 
 export type DustGenerationsSubscription = Schema.Schema.Type<typeof DustGenerationsSubscriptionSchema>;
 
-export const DustNullifierTransactionSchema = Schema.Struct({
+export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
   nullifier: Schema.String,
   commitment: Schema.String,
   transactionId: Schema.Number,
@@ -115,7 +115,9 @@ export const DustNullifierTransactionSchema = Schema.Struct({
   blockHash: Schema.String,
 });
 
-export type DustNullifierTransactionsSubscription = Schema.Schema.Type<typeof DustNullifierTransactionSchema>;
+export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
+  typeof DustNullifierTransactionSubscriptionSchema
+>;
 
 export type DustGenerationsSyncUpdate = {
   updates: DustGenerationsSubscription[];

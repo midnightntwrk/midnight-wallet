@@ -10,9 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, LedgerParameters, dustNullifier } from '@midnight-ntwrk/ledger-v8';
-import { AddressDustGenerations, BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import { Effect, Either, Layer, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule, Encoding } from 'effect';
+import { DustSecretKey, LedgerParameters, dustNullifier, DustNullifier } from '@midnight-ntwrk/ledger-v8';
+import {
+  AddressDustGenerations,
+  BlockHash,
+  DustLedgerEvents,
+  DustNullifierTransactions,
+} from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
@@ -24,12 +29,14 @@ import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilit
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
 import { Simulator, SimulatorState } from './Simulator.js';
-import { CoreWallet } from './CoreWallet.js';
+import { CoreWallet, SyncedDustNullifier } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import {
   DustGenerationsSubscription,
   DustGenerationsSubscriptionSchema,
   DustGenerationsSyncUpdate,
+  DustNullifierTransactionsSubscription,
+  DustNullifierTransactionSubscriptionSchema,
   SyncEventsUpdateSchema,
   WalletSyncSubscription,
   WalletSyncUpdate,
@@ -163,20 +170,12 @@ export const makeDustGenerationsSyncService = (
       state: CoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<DustGenerationsSyncUpdate, WalletError, Scope.Scope> => {
-      const batchSize = config.batchUpdates?.size ?? 10;
-      const batchTimeout = Duration.millis(config.batchUpdates?.timeout ?? 1);
-      const batchSpacing = config.batchUpdates?.spacing ?? 4;
-      // const publicKey = state.publicKey.publicKey.toString(16);
-
       return pipe(
-        defaultSyncService.blockData(),
-        Effect.map((block) => indexerSyncService.subscribeDustGenerations(state, block)),
-        Stream.groupedWithin(batchSize, batchTimeout),
+        Stream.fromEffect(defaultSyncService.blockData()),
+        Stream.flatMap((blockData) => indexerSyncService.subscribeDustGenerations(state, blockData.height)),
+        Stream.runCollect,
         Stream.map(Chunk.toArray),
         Stream.map((updates) => DustGenerationsSyncUpdate.create(updates, secretKey, new Date())),
-        batchSpacing > 0
-          ? Stream.schedule(Schedule.spaced(Duration.millis(batchSpacing)))
-          : (eventsStream) => eventsStream,
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
@@ -191,8 +190,11 @@ export type IndexerSyncService = {
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustGenerations: (
     state: CoreWallet,
-    latestBlock: BlockData,
+    latestBlock: number,
   ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  subscribeDustNullifierTransactions: (
+    dustNullifiers: DustNullifier[],
+  ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
@@ -220,7 +222,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             WsSubscriptionClient.layer({ url, keepAlive: indexerClientConnection.keepAlive }),
         }),
         Layer.mapError(
-          (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+          (e: URLError) => new SyncWalletError({ message: 'Failed to obtain correct indexer URLs', cause: e }),
         ),
       );
     },
@@ -245,7 +247,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     },
     subscribeDustGenerations(
       state: CoreWallet,
-      latestBlock: BlockData,
+      latestBlock: number,
     ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
       const { publicKey } = state.publicKey;
@@ -254,11 +256,33 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         AddressDustGenerations.run({
           dustAddress: publicKey.toString(16),
           startIndex: Number(appliedIndex),
-          endIndex: latestBlock.height,
+          endIndex: latestBlock,
         }),
         Stream.mapEffect((subscription) =>
           pipe(
             Schema.decodeUnknownEither(DustGenerationsSubscriptionSchema)(subscription.dustGenerations),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          ),
+        ),
+        Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    subscribeDustNullifierTransactions(
+      dustNullifiers: DustNullifier[],
+    ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      return pipe(
+        DustNullifierTransactions.run({
+          nullifierPrefixes: dustNullifiers.map((n) => n.toString().substring(0, n.toString().length / 2)),
+          fromBlock: null,
+          toBlock: null,
+        }),
+        Stream.mapEffect((subscription) =>
+          pipe(
+            Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(
+              subscription.dustNullifierTransactions,
+            ),
+            // TODO: filter out unrelated records
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           ),
@@ -303,7 +327,8 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
 export const makeDustGenerationsSyncCapability = (): SyncCapability<CoreWallet, DustGenerationsSyncUpdate> => {
   return {
     applyUpdate(state: CoreWallet, wrappedUpdate: DustGenerationsSyncUpdate): CoreWallet {
-      const { updates } = wrappedUpdate;
+      const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
+      const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
       if (updates.length === 0) {
@@ -319,9 +344,25 @@ export const makeDustGenerationsSyncCapability = (): SyncCapability<CoreWallet, 
       const dustGenTreeUpdates = updates
         .map((u) => u.collapsedMerkleTree)
         .filter((u) => u !== undefined)
-        .toSorted((u) => u.startIndex);
+        .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-      const updatedWallet = CoreWallet.applyDustGenerationTreeUpdates(state, dustGenTreeUpdates);
+      const nullifiers = updates
+        .filter((u) => u.type === 'DustGenerationsItem')
+        .filter((u) => u.owner === publicKey)
+        .map((u) => {
+          const qdo = {
+            initialValue: BigInt(u.value),
+            owner: state.publicKey.publicKey,
+            nonce: BigInt(u.nonce),
+            seq: 0,
+            ctime: u.ctime,
+            backingNight: '', // we don't need this to calculate the nullifier
+            mtIndex: BigInt(u.merkleIndex),
+          };
+          return { dustNullifier: dustNullifier(qdo, secretKey), isSynced: false } as SyncedDustNullifier;
+        });
+
+      const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
 
       if (lastUpdateIndex !== undefined) {
         return CoreWallet.updateProgress(updatedWallet, {

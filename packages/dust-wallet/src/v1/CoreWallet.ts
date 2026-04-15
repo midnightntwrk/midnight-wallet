@@ -21,7 +21,6 @@ import {
   Signaturish,
   Transaction,
   Event,
-  DustStateMerkleTreeCollapsedUpdate,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -33,6 +32,11 @@ import { CollapsedMerkleTree } from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
+};
+
+export type SyncedDustNullifier = {
+  dustNullifier: DustNullifier;
+  isSynced: boolean;
 };
 
 export const PublicKey = {
@@ -50,6 +54,7 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
   pendingDust: Array<DustWithNullifier>;
+  dustNullifiers: Array<SyncedDustNullifier>;
 }>;
 
 export const CoreWallet = {
@@ -67,6 +72,7 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: [],
+      dustNullifiers: [],
       progress: SyncProgress.createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -76,6 +82,7 @@ export const CoreWallet = {
     localState: DustLocalState,
     publicKey: PublicKey,
     pendingTokens: Array<DustWithNullifier>,
+    dustNullifiers: Array<SyncedDustNullifier>,
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
@@ -85,6 +92,7 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: pendingTokens,
+      dustNullifiers,
       progress: SyncProgress.createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -101,7 +109,11 @@ export const CoreWallet = {
     };
   },
 
-  applyDustGenerationTreeUpdates(wallet: CoreWallet, updates: CollapsedMerkleTree[]): CoreWallet {
+  applyDustGenerations(
+    wallet: CoreWallet,
+    updates: CollapsedMerkleTree[],
+    dustNullifiers: SyncedDustNullifier[],
+  ): CoreWallet {
     const updatedState = updates.reduce(
       (state, update) => state.applyGenerationCollapsedUpdate(update.update),
       wallet.state,
@@ -109,6 +121,7 @@ export const CoreWallet = {
     return {
       ...wallet,
       state: updatedState,
+      dustNullifiers: wallet.dustNullifiers.concat(dustNullifiers),
     };
   },
 
