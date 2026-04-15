@@ -23,7 +23,7 @@ import {
   type UnshieldedKeystore,
   UnshieldedWallet,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { WalletFacade, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
 /**
@@ -71,7 +71,7 @@ describe('Syncing', () => {
             indexerHttpUrl: fixture.getIndexerUri(),
             indexerWsUrl: fixture.getIndexerWsUri(),
           },
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystores[i]));
       }
 
@@ -80,7 +80,7 @@ describe('Syncing', () => {
           configuration: {
             ...fixture.getWalletConfig(),
             ...fixture.getDustWalletConfig(),
-            txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+            txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
           },
           shielded: () => shieldedWallets[i],
           unshielded: () => unshieldedWallets[i],

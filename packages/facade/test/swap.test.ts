@@ -28,6 +28,7 @@ import {
   type DefaultConfiguration,
   WalletEntrySchema,
   WalletFacade,
+  mergeWalletEntries,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
@@ -90,7 +91,7 @@ describe('Swaps', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -111,7 +112,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletAKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletASeed, dustParameters),
     });
@@ -122,7 +123,7 @@ describe('Swaps', () => {
       unshielded: (config) =>
         UnshieldedWallet({
           ...config,
-          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
         }).startWithPublicKey(PublicKey.fromKeyStore(unshieldedWalletBKeystore)),
       dust: (config) => DustWallet(config).startWithSeed(dustWalletBSeed, dustParameters),
     });

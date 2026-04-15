@@ -19,7 +19,7 @@ import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wal
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, sleep } from './utils/index.js';
 import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities/pendingTransactions';
 import * as rx from 'rxjs';
@@ -45,7 +45,7 @@ describe('Wallet Facade handling pending transactions', () => {
       costParameters: {
         feeBlocksMargin: 0,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
     const seed = '0000000000000000000000000000000000000000000000000000000000000001';
     const shieldedSeed = getShieldedSeed(seed);
