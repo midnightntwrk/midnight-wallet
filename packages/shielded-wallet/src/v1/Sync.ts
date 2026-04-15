@@ -14,7 +14,12 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import {
+  Simulator,
+  SimulatorState,
+  getLastBlock,
+  getBlockEventsFrom,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { SyncWalletError, WalletError } from './WalletError.js';
@@ -284,22 +289,55 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, ledger.ZswapSecretKeys, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) =>
-      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKeys: secretKeys }))),
+    updates: (_state: CoreWallet, secretKeys: ledger.ZswapSecretKeys) => {
+      // Get the initial state immediately to ensure we process the genesis block.
+      // Then subscribe to state$ for subsequent changes, but deduplicate by block number
+      // to avoid processing the same block twice.
+      let lastSeenBlockNumber: bigint | undefined;
+
+      return pipe(
+        Stream.fromEffect(config.simulator.getLatestState()),
+        Stream.concat(config.simulator.state$),
+        Stream.filter((state) => {
+          const lastBlock = getLastBlock(state);
+          if (lastBlock === undefined) {
+            return false; // Skip blank state
+          }
+          const blockNumber = lastBlock.number;
+          // Skip if we've already seen this block (deduplication)
+          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+            return false;
+          }
+          lastSeenBlockNumber = blockNumber;
+          return true;
+        }),
+        Stream.map((state) => ({ update: state, secretKeys })),
+      );
+    },
   };
 };
 
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
     applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
-      const {
-        update: {
-          lastTxResult: { events },
-        },
-        secretKeys,
-      } = update;
+      const { update: simulatorState, secretKeys } = update;
+      const lastBlock = getLastBlock(simulatorState);
+      if (lastBlock === undefined) {
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+      }
+
+      // Get all events from blocks starting at appliedIndex (the next block to process).
+      // appliedIndex semantics: the first block number we haven't processed yet.
+      // Initial: appliedIndex = 0 (haven't processed any blocks)
+      // After processing block N: appliedIndex = N + 1 (next block to process)
+      const events = [...getBlockEventsFrom(simulatorState, state.progress.appliedIndex)];
       const [newState, newChanges] = CoreWallet.replayEventsWithChanges(state, secretKeys, events);
-      return [newState, { changes: newChanges, protocolVersion: Number(state.protocolVersion) }];
+      return [
+        CoreWallet.updateProgress(newState, {
+          appliedIndex: lastBlock.number + 1n,
+        }),
+        { changes: newChanges, protocolVersion: Number(state.protocolVersion) },
+      ];
     },
   };
 };
