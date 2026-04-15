@@ -19,6 +19,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-node-client/effect';
 import { SerializedTransaction } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { type FinalizedTransaction } from '@midnight-ntwrk/ledger-v8';
+import { type SimulatorState, getLastBlock } from '../simulation/Simulator.js';
 
 export const SubmissionEvent = SubmissionEventImported;
 export type SubmissionEvent = SubmissionEventImported.SubmissionEvent;
@@ -139,7 +140,8 @@ export const makeDefaultSubmissionService = <
 
 export type SimulatorSubmissionConfiguration<TTransaction> = {
   simulator: {
-    submitTransaction: (transaction: TTransaction) => Effect.Effect<{ blockNumber: bigint; blockHash: string }, Error>;
+    submitTransaction: (transaction: TTransaction) => Effect.Effect<void, Error>;
+    getLatestState: () => Effect.Effect<SimulatorState>;
   };
 };
 export const makeSimulatorSubmissionService =
@@ -148,8 +150,16 @@ export const makeSimulatorSubmissionService =
   ) =>
   (config: SimulatorSubmissionConfiguration<TTransaction>): SubmissionServiceEffect<TTransaction> => {
     const submit = (transaction: TTransaction): Effect.Effect<SubmissionEvent, SubmissionError> => {
-      return config.simulator.submitTransaction(transaction).pipe(
-        Effect.map((output) => {
+      return pipe(
+        config.simulator.submitTransaction(transaction),
+        // Wait for stream-based block production
+        Effect.andThen(Effect.sleep('100 millis')),
+        Effect.andThen(config.simulator.getLatestState()),
+      ).pipe(
+        Effect.map((state) => {
+          const lastBlock = getLastBlock(state);
+          const blockNumber = lastBlock?.number ?? 0n;
+          const blockHash = lastBlock?.hash ?? '';
           const serializedTransaction = SerializedTransaction.from(transaction);
           const fakeTxHash = Encoding.encodeHex(serializedTransaction).slice(0, 64);
           // Let's mimic node's client behavior here
@@ -162,15 +172,15 @@ export const makeSimulatorSubmissionService =
             case 'InBlock':
               return SubmissionEvent.InBlock({
                 tx: serializedTransaction,
-                blockHash: output.blockHash,
-                blockHeight: output.blockNumber,
+                blockHash,
+                blockHeight: blockNumber,
                 txHash: fakeTxHash,
               });
             case 'Finalized':
               return SubmissionEvent.Finalized({
                 tx: serializedTransaction,
-                blockHash: output.blockHash,
-                blockHeight: output.blockNumber,
+                blockHash,
+                blockHeight: blockNumber,
                 txHash: fakeTxHash,
               });
           }
