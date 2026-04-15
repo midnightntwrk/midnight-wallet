@@ -148,10 +148,6 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   stop(): Promise<void>;
 };
 
-export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
-export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
 export type CustomizedDustWallet<
   TStartAux = DustSecretKey,
   TTransaction = FinalizedTransaction,
@@ -182,6 +178,10 @@ export interface CustomizedDustWalletClass<
   ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
+
+export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
+
+export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
 
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
   return CustomDustWallet(configuration, new V1Builder().withDefaults());
@@ -333,10 +333,6 @@ export function CustomDustWallet<
       );
     }
 
-    /**
-     * Serializes the most recent state
-     * It's preferable to use [[DustWalletState.serialize]] instead, to know exactly, which state is serialized
-     */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
     }
