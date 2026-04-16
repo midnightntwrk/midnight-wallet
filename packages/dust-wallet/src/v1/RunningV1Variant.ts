@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, SubscriptionRef, Stream, pipe, Scope, Sink, Console, Duration, Schedule, Array as Arr } from 'effect';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 import {
   type DustSecretKey,
   nativeToken,
@@ -30,7 +31,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Dust, type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type SyncCapability, type SyncService } from './Sync.js';
+import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
@@ -71,11 +72,12 @@ export declare namespace RunningV1Variant {
   export type Context<TSerialized, TSyncUpdate, TTransaction, TStartAux> = {
     serializationCapability: SerializationCapability<CoreWallet, null, TSerialized>;
     syncService: SyncService<CoreWallet, TStartAux, TSyncUpdate>;
-    syncCapability: SyncCapability<CoreWallet, TSyncUpdate>;
+    syncCapability: SyncCapability<CoreWallet, TSyncUpdate, ChangesResult>;
     transactingCapability: TransactingCapability<DustSecretKey, CoreWallet, TTransaction>;
     coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
     keysCapability: KeysCapability<CoreWallet>;
     coinSelection: CoinSelection<Dust>;
+    transactionHistoryService: TransactionHistoryService;
   };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   export type AnyContext = Context<any, any, any, any>;
@@ -138,18 +140,40 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       SubscriptionRef.get(this.#context.stateRef),
       Stream.fromEffect,
       Stream.flatMap((state) => this.#v1Context.syncService.updates(state, startAux)),
-      Stream.mapEffect((update) => {
-        return SubscriptionRef.updateEffect(this.#context.stateRef, (state) =>
+      Stream.mapEffect((update) =>
+        SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
           Effect.try({
-            try: () => this.#v1Context.syncCapability.applyUpdate(state, update),
+            try: () => {
+              const [newState, changesResult] = this.#v1Context.syncCapability.applyUpdate(state, update);
+              return [changesResult, newState] as const;
+            },
             catch: (err) =>
               new OtherWalletError({
                 message: 'Error while applying sync update',
                 cause: err,
               }),
           }),
-        );
-      }),
+        ).pipe(
+          Effect.flatMap(({ changes, protocolVersion }) =>
+            pipe(
+              Effect.forEach(
+                changes,
+                (change) =>
+                  pipe(
+                    this.#v1Context.transactionHistoryService.getTransactionDetails(change.source),
+                    Effect.flatMap((metadata) =>
+                      this.#v1Context.transactionHistoryService.put(change, metadata, protocolVersion),
+                    ),
+                    Effect.catchAllCause((cause) => Console.error('Error processing tx history metadata', cause)),
+                  ),
+                { discard: true, concurrency: 'unbounded' },
+              ),
+              Effect.forkScoped,
+            ),
+          ),
+          Effect.provideService(Scope.Scope, this.#scope),
+        ),
+      ),
       Stream.tapError((error) => Console.error(error)),
       Stream.retry(
         pipe(

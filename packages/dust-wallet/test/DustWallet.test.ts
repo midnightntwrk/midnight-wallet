@@ -44,6 +44,11 @@ import {
   getLastBlockResults,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { makeSimulatorSyncCapability, makeSimulatorSyncService, type SimulatorSyncUpdate } from '../src/v1/Sync.js';
+import {
+  DustTransactionHistoryEntrySchema,
+  makeSimulatorTransactionHistoryService,
+} from '../src/v1/TransactionHistory.js';
+import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { createUnshieldedKeystore, type UnshieldedKeystore } from './UnshieldedKeyStore.js';
 import { getDustSeed, sumUtxos } from './utils.js';
 
@@ -198,10 +203,13 @@ describe('DustWallet', () => {
         .withCoinsAndBalancesDefaults()
         .withKeysDefaults()
         .withSerializationDefaults()
+        .withTransactionHistory(makeSimulatorTransactionHistoryService)
         .build({
           simulator,
           networkId: NETWORK,
           costParameters,
+          txHistoryStorage: new InMemoryTransactionHistoryStorage(DustTransactionHistoryEntrySchema),
+          indexerClientConnection: { indexerHttpUrl: '' },
         });
 
       const initialState = CoreWallet.initEmpty(dustParameters, dustSecretKey, NETWORK);

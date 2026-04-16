@@ -20,3 +20,5 @@ export * from './RunningV1Variant.js';
 export * from './V1Builder.js';
 export * from './types/index.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
+export * as TransactionHistory from './TransactionHistory.js';
+export { DustSectionSchema, DustUtxoInfoSchema, mergeDustSections } from './TransactionHistory.js';

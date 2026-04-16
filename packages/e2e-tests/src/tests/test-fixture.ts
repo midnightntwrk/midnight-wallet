@@ -253,6 +253,10 @@ export class TestContainersFixture {
       costParameters: {
         feeBlocksMargin: 5,
       },
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
+      indexerClientConnection: {
+        indexerHttpUrl: this.getIndexerUri(),
+      },
     };
   }
 }

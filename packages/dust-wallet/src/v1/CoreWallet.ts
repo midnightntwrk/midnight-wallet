@@ -17,6 +17,7 @@ import {
   DustParameters,
   DustPublicKey,
   DustSecretKey,
+  DustStateChanges,
   Proofish,
   Signaturish,
   Transaction,
@@ -88,15 +89,23 @@ export const CoreWallet = {
     };
   },
 
-  applyEvents(wallet: CoreWallet, secretKey: DustSecretKey, events: Event[], currentTime: Date): CoreWallet {
-    // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
-    const updatedState = wallet.state.replayEvents(secretKey, events).processTtls(currentTime);
+  applyEventsWithChanges(
+    wallet: CoreWallet,
+    secretKey: DustSecretKey,
+    events: Event[],
+    currentTime: Date,
+  ): [CoreWallet, DustStateChanges[]] {
+    const stateWithChanges = wallet.state.replayEventsWithChanges(secretKey, events);
+    const updatedState = stateWithChanges.state.processTtls(currentTime);
     const availableNonces = updatedState.utxos.map((utxo) => utxo.nonce);
-    return {
-      ...wallet,
-      state: updatedState,
-      pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
-    };
+    return [
+      {
+        ...wallet,
+        state: updatedState,
+        pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
+      },
+      stateWithChanges.changes,
+    ];
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {
