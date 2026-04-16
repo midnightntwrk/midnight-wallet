@@ -55,8 +55,8 @@ import { finalizedTransactionTrait } from './transaction.js';
 import { DustAddress, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
- * Full entry schema for transaction history — common fields + all wallet sections.
- * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
+ * Full entry schema for transaction history — common fields + all wallet sections. Pass this to
+ * `InMemoryTransactionHistoryStorage` to enable serialize/restore.
  */
 export const WalletEntrySchema = Schema.Struct({
   ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
@@ -210,9 +210,8 @@ export class FacadeState {
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * A clock abstraction for obtaining the current time.
- * By default, the facade uses the system clock.
- * For testing with a simulator, inject a custom clock (e.g., one backed by the simulator's time).
+ * A clock abstraction for obtaining the current time. By default, the facade uses the system clock. For testing with a
+ * simulator, inject a custom clock (e.g., one backed by the simulator's time).
  */
 export type Clock = {
   readonly now: () => Date;
@@ -222,8 +221,8 @@ export type Clock = {
 export const systemClock: Clock = { now: () => new Date() };
 
 /**
- * The Terms and Conditions returned by the indexer, containing a URL for display
- * and a SHA-256 hash for content verification.
+ * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
+ * verification.
  */
 export type TermsAndConditions = {
   /** The hex-encoded SHA-256 hash of the Terms and Conditions document. */
@@ -233,9 +232,9 @@ export type TermsAndConditions = {
 };
 
 /**
- * Minimal configuration required for {@link WalletFacade.fetchTermsAndConditions}.
- * Accepts the shared `indexerClientConnection` sub-object found on all wallet configurations,
- * so callers can pass the full wallet configuration directly without any adaptation.
+ * Minimal configuration required for {@link WalletFacade.fetchTermsAndConditions}. Accepts the shared
+ * `indexerClientConnection` sub-object found on all wallet configurations, so callers can pass the full wallet
+ * configuration directly without any adaptation.
  */
 export type FetchTermsAndConditionsConfiguration = {
   indexerClientConnection: {
@@ -252,6 +251,13 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   Partial<DefaultProvingConfiguration>;
 
 type MaybePromise<T> = T | Promise<T>;
+
+/**
+ * Parameters object for {@link WalletFacade.init}. It features configuration and bunch of initializers for the wallets
+ * and services, all of them are in a form of a function that takes the configuration and returns proper implementation,
+ * either synchronously or wrapped in a Promise. Services are optional to provide ({@link WalletFacade.init} will provide
+ * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present
+ */
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
@@ -299,18 +305,17 @@ export class WalletFacade {
   /**
    * Fetches the current Terms and Conditions from the network indexer.
    *
-   * This is a static, pre-initialization utility — no wallet instance is required.
-   * Wallet builders should call this before or independently of wallet initialization
-   * to display the current T&C to end users and obtain the hash for content verification.
+   * This is a static, pre-initialization utility — no wallet instance is required. Wallet builders should call this
+   * before or independently of wallet initialization to display the current T&C to end users and obtain the hash for
+   * content verification.
    *
-   * The returned `hash` is the hex-encoded SHA-256 hash of the document at `url`.
-   * Wallet builders are responsible for fetching and rendering the document content
-   * via `url` in whatever manner suits their application.
+   * The returned `hash` is the hex-encoded SHA-256 hash of the document at `url`. Wallet builders are responsible for
+   * fetching and rendering the document content via `url` in whatever manner suits their application.
    *
-   * @param configuration - An object with an `indexerClientConnection.indexerHttpUrl`.
-   *   Any wallet configuration that satisfies {@link FetchTermsAndConditionsConfiguration} can be passed directly.
-   * @returns A promise resolving to the current {@link TermsAndConditions}, or rejecting if
-   *   no Terms and Conditions have been set on the network yet.
+   * @param configuration - An object with an `indexerClientConnection.indexerHttpUrl`. Any wallet configuration that
+   *   satisfies {@link FetchTermsAndConditionsConfiguration} can be passed directly.
+   * @returns A promise resolving to the current {@link TermsAndConditions}, or rejecting if no Terms and Conditions have
+   *   been set on the network yet.
    */
   static async fetchTermsAndConditions(
     configuration: FetchTermsAndConditionsConfiguration,
@@ -329,6 +334,27 @@ export class WalletFacade {
     return tc;
   }
 
+  /**
+   * Default initialization for {@link WalletFacade}. It is a static method, which takes an object holding configuration
+   * and initialization of necessary components. Specifically - it requires following fields:
+   *
+   * - `configuration` - holding a configuration, which needs to extend {@link DefaultConfiguration} - this way allows to
+   *   convey use-case-specific settings in the same way, as the SDK works by default
+   * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
+   *   implementing {@link ShieldedWalletAPI}
+   * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
+   *   implementing {@link UnshieldedWalletAPI}
+   * - `dust` - a function taking the configuration and returning Dust wallet (or a promise with such) implementing
+   *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
+   *   implementations will be used, each of them is initialized by a function taking the configuration and returning
+   *   proper implementation (wrapped in a {@link Promise} or not).
+   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledger.FinalizedTransaction} to
+   *   submit transactions to the network, default uses Node RPC connection
+   * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
+   *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
+   * - `provingService` - needs to implement {@link ProvingService} to prove it, default uses proving server
+   * - `clock` - needs to implement {@link Clock} for getting current time, default uses system clock
+   */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
     const submissionService = await Promise.resolve(
       initParams.submissionService
@@ -371,6 +397,12 @@ export class WalletFacade {
   readonly clock: Clock;
   #pendingSubscription: Subscription;
 
+  /**
+   * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
+   * new parameters is a breaking change to the users Use {@link WalletFacade.init} instead
+   *
+   * @private
+   */
   private constructor(
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
@@ -782,8 +814,10 @@ export class WalletFacade {
 
   /**
    * Provides estimate of the fee of issuing registration transaction with provided UTxOs
+   *
    * @param nightUtxos - Night UTxOs to use for the registration
-   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s), that would be used for paying the fee. These include data that allows to compute when the fee could be paid
+   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s),
+   *   that would be used for paying the fee. These include data that allows to compute when the fee could be paid
    */
   async estimateRegistration(nightUtxos: readonly UtxoWithMeta[]): Promise<{
     fee: bigint;

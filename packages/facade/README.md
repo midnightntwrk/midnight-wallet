@@ -21,6 +21,11 @@ The Wallet Facade provides a high-level unified interface that aggregates the fu
 
 ## Usage
 
+More detailed and complete examples can be found at [docs snippets](../docs-snippets/src/snippets) (always up-to-date
+with the recent changes) or at the
+[SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned with the recent
+release)
+
 ### Initializing the Facade
 
 ```typescript

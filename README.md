@@ -12,6 +12,14 @@ It provides components for:
 - syncing state with [indexer](https://github.com/midnightntwrk/midnight-indexer)
 - testing without external infrastructure
 
+## Examples and documentation
+
+[Docs](./docs) directory features some design documentation and development guidelines.
+
+Example usage can be found at [docs snippets](./packages/docs-snippets/src/snippets) (always up-to-date with the recent
+changes) or at the [SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned
+with the recent release)
+
 ## Modules structure
 
 This project is a Yarn workspaces monorepo combined with Turborepo. Packages are organized under `packages/` and
