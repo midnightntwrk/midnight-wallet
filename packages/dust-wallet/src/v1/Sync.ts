@@ -16,6 +16,7 @@ import {
   AddressDustGenerations,
   BlockHash,
   DustLedgerEvents,
+  TransactionEvents,
   DustNullifierTransactions,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
@@ -38,6 +39,7 @@ import {
   DustNullifierTransactionsSubscription,
   DustNullifierTransactionSubscriptionSchema,
   SyncEventsUpdateSchema,
+  TransactionEventsSchema,
   WalletSyncSubscription,
   WalletSyncUpdate,
 } from './SyncSchema.js';
@@ -165,17 +167,51 @@ export const makeDustGenerationsSyncService = (
 ): SyncService<CoreWallet, DustSecretKey, DustGenerationsSyncUpdate> => {
   const defaultSyncService = makeDefaultSyncService(config);
   const indexerSyncService = makeIndexerSyncService(config);
+
+  const syncNullifiers = (
+    dustNullifiers: DustNullifier[],
+    blockHeight: number | null,
+  ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope> => {
+    return pipe(
+      indexerSyncService.subscribeDustNullifierTransactions(dustNullifiers, blockHeight),
+      // Stream.mapEffect((subscription) =>
+      //   pipe(
+      //
+      //   ),
+      // ),
+      Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
+    );
+  };
+
   return {
     updates: (
       state: CoreWallet,
       secretKey: DustSecretKey,
     ): Stream.Stream<DustGenerationsSyncUpdate, WalletError, Scope.Scope> => {
       return pipe(
-        Stream.fromEffect(defaultSyncService.blockData()),
-        Stream.flatMap((blockData) => indexerSyncService.subscribeDustGenerations(state, blockData.height)),
-        Stream.runCollect,
-        Stream.map(Chunk.toArray),
-        Stream.map((updates) => DustGenerationsSyncUpdate.create(updates, secretKey, new Date())),
+        Effect.gen(function* () {
+          const blockData = yield* defaultSyncService.blockData();
+          const rawGenerations = yield* pipe(
+            indexerSyncService.subscribeDustGenerations(state, blockData.height),
+            Stream.runCollect,
+            Effect.map(Chunk.toArray),
+          );
+          const generations = DustGenerationsSyncUpdate.create(rawGenerations, secretKey);
+          let updatedWallet = applyDustGenerationsUpdate(state, generations);
+
+          let nullifiers = updatedWallet.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier);
+
+          while (nullifiers.length > 0) {
+            const nullifierTransactions = yield* pipe(
+              syncNullifiers(nullifiers, blockData.height),
+              Stream.runCollect,
+              Effect.map(Chunk.toArray),
+            );
+            updatedWallet = applyNullifiersUpdate(state, nullifierTransactions);
+            nullifiers = [];
+          }
+        }),
+        Stream.unwrap,
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
@@ -194,6 +230,7 @@ export type IndexerSyncService = {
   ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   subscribeDustNullifierTransactions: (
     dustNullifiers: DustNullifier[],
+    toBlock: number | null,
   ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
@@ -270,13 +307,14 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
     },
     subscribeDustNullifierTransactions(
       dustNullifiers: DustNullifier[],
+      toBlock: number | null,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const fullNullifiers = new Set(dustNullifiers.map((n) => n.toString()));
       return pipe(
         DustNullifierTransactions.run({
           nullifierPrefixes: [...fullNullifiers].map((n) => n.substring(0, n.length / 2)),
-          fromBlock: null,
-          toBlock: null,
+          fromBlock: 0,
+          toBlock,
         }),
         Stream.mapEffect((subscription) =>
           pipe(
@@ -289,6 +327,29 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         ),
         Stream.filter((record) => fullNullifiers.has(record.nullifier)),
         Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    transactionEvents(
+      txId: number,
+    ): Effect.Effect<typeof TransactionEventsSchema, WalletError, Scope.Scope | SubscriptionClient> {
+      return pipe(
+        TransactionEvents.run({ transactionId: txId }),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
+        Effect.flatMap((result) => {
+          const nonSystemTransactions = result.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
+          if (!nonSystemTransactions.length) {
+            throw new OtherWalletError({ message: `Unable to find a transaction by id: ${txId}` });
+          }
+          const { dustLedgerEvents, zswapLedgerEvents } = nonSystemTransactions[0];
+          return Schema.decodeUnknownEither(TransactionEventsSchema)({
+            dustLedgerEvents,
+            zswapLedgerEvents,
+          });
+        }),
+        Either.mapLeft((err) => new SyncWalletError(err)),
+        EitherOps.toEffect,
       );
     },
   };
@@ -325,57 +386,117 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
   };
 };
 
-export const makeDustGenerationsSyncCapability = (): SyncCapability<CoreWallet, DustGenerationsSyncUpdate> => {
-  return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: DustGenerationsSyncUpdate): CoreWallet {
-      const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
-      const { updates, secretKey } = wrappedUpdate;
+export const applyDustGenerationsUpdate = (state: CoreWallet, wrappedUpdate: DustGenerationsSyncUpdate): CoreWallet => {
+  const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
+  const { updates, secretKey } = wrappedUpdate;
 
-      // Nothing to update yet
-      if (updates.length === 0) {
-        return state;
-      }
+  // Nothing to update yet
+  if (updates.length === 0) {
+    return state;
+  }
 
-      const lastUpdateIndex = updates
-        .filter((u) => u.type === 'DustGenerationsProgress')
-        .map((u) => u.highestIndex)
-        .toSorted()
-        .at(-1);
+  const lastUpdateIndex = updates
+    .filter((u) => u.type === 'DustGenerationsProgress')
+    .map((u) => u.highestIndex)
+    .toSorted()
+    .at(-1);
 
-      const dustGenTreeUpdates = updates
-        .map((u) => u.collapsedMerkleTree)
-        .filter((u) => u !== undefined)
-        .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
+  const dustGenTreeUpdates = updates
+    .map((u) => u.collapsedMerkleTree)
+    .filter((u) => u !== undefined)
+    .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-      const nullifiers = updates
-        .filter((u) => u.type === 'DustGenerationsItem')
-        .filter((u) => u.owner === publicKey)
-        .map((u) => {
-          const qdo = {
-            initialValue: BigInt(u.value),
-            owner: state.publicKey.publicKey,
-            nonce: BigInt(u.nonce),
-            seq: 0,
-            ctime: u.ctime,
-            backingNight: '', // we don't need this to calculate the nullifier
-            mtIndex: BigInt(u.merkleIndex),
-          };
-          return { dustNullifier: dustNullifier(qdo, secretKey), isSynced: false } as SyncedDustNullifier;
-        });
+  const nullifiers = updates
+    .filter((u) => u.type === 'DustGenerationsItem')
+    .filter((u) => u.owner === publicKey)
+    .map(
+      (u) =>
+        ({
+          dustNullifier: dustNullifier(
+            {
+              initialValue: BigInt(u.value),
+              owner: state.publicKey.publicKey,
+              nonce: BigInt(u.nonce),
+              seq: 0,
+              ctime: u.ctime,
+              backingNight: '', // we don't need this to calculate the nullifier
+              mtIndex: BigInt(u.merkleIndex),
+            },
+            secretKey,
+          ),
+          isSynced: false,
+        }) as SyncedDustNullifier,
+    );
 
-      const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
+  const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
 
-      if (lastUpdateIndex !== undefined) {
-        return CoreWallet.updateProgress(updatedWallet, {
-          appliedIndex: BigInt(lastUpdateIndex),
-          highestRelevantWalletIndex: BigInt(lastUpdateIndex),
-          isConnected: true,
-        });
-      }
+  if (lastUpdateIndex !== undefined) {
+    return CoreWallet.updateProgress(updatedWallet, {
+      appliedIndex: BigInt(lastUpdateIndex),
+      highestRelevantWalletIndex: BigInt(lastUpdateIndex),
+      isConnected: true,
+    });
+  }
 
-      return updatedWallet;
-    },
-  };
+  return updatedWallet;
+};
+
+export const applyNullifiersUpdate = (
+  state: CoreWallet,
+  nullifierTransactions: DustNullifierTransactionsSubscription[],
+): CoreWallet => {
+  const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
+  const { updates, secretKey } = wrappedUpdate;
+
+  // Nothing to update yet
+  if (updates.length === 0) {
+    return state;
+  }
+
+  const lastUpdateIndex = updates
+    .filter((u) => u.type === 'DustGenerationsProgress')
+    .map((u) => u.highestIndex)
+    .toSorted()
+    .at(-1);
+
+  const dustGenTreeUpdates = updates
+    .map((u) => u.collapsedMerkleTree)
+    .filter((u) => u !== undefined)
+    .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
+
+  const nullifiers = updates
+    .filter((u) => u.type === 'DustGenerationsItem')
+    .filter((u) => u.owner === publicKey)
+    .map(
+      (u) =>
+        ({
+          dustNullifier: dustNullifier(
+            {
+              initialValue: BigInt(u.value),
+              owner: state.publicKey.publicKey,
+              nonce: BigInt(u.nonce),
+              seq: 0,
+              ctime: u.ctime,
+              backingNight: '', // we don't need this to calculate the nullifier
+              mtIndex: BigInt(u.merkleIndex),
+            },
+            secretKey,
+          ),
+          isSynced: false,
+        }) as SyncedDustNullifier,
+    );
+
+  const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
+
+  if (lastUpdateIndex !== undefined) {
+    return CoreWallet.updateProgress(updatedWallet, {
+      appliedIndex: BigInt(lastUpdateIndex),
+      highestRelevantWalletIndex: BigInt(lastUpdateIndex),
+      isConnected: true,
+    });
+  }
+
+  return updatedWallet;
 };
 
 export const makeSimulatorSyncService = (

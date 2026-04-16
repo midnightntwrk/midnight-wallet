@@ -122,18 +122,12 @@ export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
 export type DustGenerationsSyncUpdate = {
   updates: DustGenerationsSubscription[];
   secretKey: DustSecretKey;
-  timestamp: Date;
 };
 export const DustGenerationsSyncUpdate = {
-  create: (
-    updates: DustGenerationsSubscription[],
-    secretKey: DustSecretKey,
-    timestamp: Date,
-  ): DustGenerationsSyncUpdate => {
+  create: (updates: DustGenerationsSubscription[], secretKey: DustSecretKey): DustGenerationsSyncUpdate => {
     return {
       updates,
       secretKey,
-      timestamp,
     };
   },
 };
@@ -191,3 +185,15 @@ export const WalletSyncUpdate = {
     };
   },
 };
+
+export const TransactionEvent = Schema.Struct({
+  id: Schema.Number,
+  raw: HexedEvent,
+  maxId: Schema.Number,
+  protocolVersion: Schema.Number,
+});
+
+export const TransactionEventsSchema = Schema.Struct({
+  dustLedgerEvents: Schema.Array(TransactionEvent),
+  zswapLedgerEvents: Schema.Array(TransactionEvent),
+});
