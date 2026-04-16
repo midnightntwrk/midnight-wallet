@@ -371,7 +371,7 @@ export class WalletFacade {
   readonly clock: Clock;
   #pendingSubscription: Subscription;
 
-  private constructor(
+  protected constructor(
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
     dustWallet: DustWalletAPI,

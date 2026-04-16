@@ -9,7 +9,7 @@
   ],
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
-    "@effect/language-service": "^0.77.0",
+    "@effect/language-service": "^0.79.0",
     "@eslint/compat": "^2.0.2",
     "@eslint/js": "^10.0.1",
     "@tsconfig/node22": "^22.0.5",
@@ -37,7 +37,8 @@
     "readdir-glob": "^3.0.0",
     "minimatch": "^10.2.3",
     "tar": "^7.5.5",
-    "lodash": "^4.17.23"
+    "lodash": "^4.17.23",
+    "@midnight-ntwrk/dapp-connector-api": "portal:/home/akopec/mn/midnight-dapp-connector-api"
   },
   "scripts": {
     "format:root": "prettier --write --ignore-path .prettierignore.root \"**/*.{ts,js,json,yaml,yml,md}\"",
