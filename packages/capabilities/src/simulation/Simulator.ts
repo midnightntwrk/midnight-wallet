@@ -14,8 +14,9 @@
 /**
  * Unified Simulator for wallet testing.
  *
- * This module provides a simulated ledger environment for testing wallet functionality
- * without requiring a real blockchain node. It supports:
+ * This module provides a simulated ledger environment for testing wallet functionality without requiring a real
+ * blockchain node. It supports:
+ *
  * - Optional genesis mints for pre-funded accounts (shielded, unshielded, or Night tokens)
  * - Transaction submission with configurable strictness
  * - Night token rewards via rewardNight()
@@ -79,19 +80,15 @@ import {
 // Type Guards and Helpers for Genesis Mints
 // =============================================================================
 
-/**
- * Type guard for shielded genesis mint.
- */
+/** Type guard for shielded genesis mint. */
 const isShieldedMint = (mint: GenesisMint): mint is ShieldedGenesisMint => mint.type === 'shielded';
 
-/**
- * Type guard for unshielded genesis mint.
- */
+/** Type guard for unshielded genesis mint. */
 const isUnshieldedMint = (mint: GenesisMint): mint is UnshieldedGenesisMint => mint.type === 'unshielded';
 
 /**
- * Check if an unshielded mint is for the native Night token.
- * Night is auto-detected by comparing tokenType with ledger.nativeToken().raw.
+ * Check if an unshielded mint is for the native Night token. Night is auto-detected by comparing tokenType with
+ * ledger.nativeToken().raw.
  */
 const isNightToken = (tokenType: string): boolean => tokenType === nativeToken().raw;
 
@@ -131,8 +128,8 @@ export {
 /**
  * Default block producer: produces a block for each state change with non-empty mempool.
  *
- * By default, uses post-genesis strictness (balancing, signatures, limits enforced).
- * This ensures realistic simulation where transactions must be properly balanced (pay fees).
+ * By default, uses post-genesis strictness (balancing, signatures, limits enforced). This ensures realistic simulation
+ * where transactions must be properly balanced (pay fees).
  *
  * @param fullness - Static fullness (0-1) or callback based on state
  * @param strictness - Strictness config (defaults to defaultStrictness)
@@ -149,23 +146,16 @@ export const immediateBlockProducer =
 // Simulator Configuration
 // =============================================================================
 
-/**
- * Simulator initialization configuration.
- */
+/** Simulator initialization configuration. */
 export type SimulatorConfig = Readonly<{
   /**
-   * Pre-funded accounts to create at genesis.
-   * When provided, creates a genesis block with transactions minting tokens to recipients.
-   * When omitted, the simulator starts with an empty ledger.
+   * Pre-funded accounts to create at genesis. When provided, creates a genesis block with transactions minting tokens
+   * to recipients. When omitted, the simulator starts with an empty ledger.
    */
   genesisMints?: Arr.NonEmptyArray<GenesisMint>;
-  /**
-   * Network identifier. Defaults to Undeployed.
-   */
+  /** Network identifier. Defaults to Undeployed. */
   networkId?: NetworkId.NetworkId;
-  /**
-   * Custom block producer. Defaults to immediateBlockProducer().
-   */
+  /** Custom block producer. Defaults to immediateBlockProducer(). */
   blockProducer?: BlockProducer;
 }>;
 
@@ -176,19 +166,19 @@ export type SimulatorConfig = Readonly<{
 /**
  * Unified simulator for wallet testing.
  *
- * Provides a simulated ledger environment for testing wallet functionality without
- * a real blockchain. Optionally pre-funds accounts via genesis mints.
+ * Provides a simulated ledger environment for testing wallet functionality without a real blockchain. Optionally
+ * pre-funds accounts via genesis mints.
  *
  * @example
- * ```typescript
- * // Empty ledger (useful for dust/Night token testing via rewardNight)
- * const simulator = yield* Simulator.init({});
+ *   ```typescript
+ *   // Empty ledger (useful for dust/Night token testing via rewardNight)
+ *   const simulator = yield* Simulator.init({});
  *
- * // Pre-funded accounts (useful for token transfer testing)
- * const simulator = yield* Simulator.init({
- *   genesisMints: [{ amount: 1000n, tokenType, shieldedRecipient: secretKeys }],
- * });
- * ```
+ *   // Pre-funded accounts (useful for token transfer testing)
+ *   const simulator = yield* Simulator.init({
+ *     genesisMints: [{ amount: 1000n, tokenType, shieldedRecipient: secretKeys }],
+ *   });
+ *   ```;
  */
 export class Simulator {
   // ===========================================================================
@@ -198,25 +188,25 @@ export class Simulator {
   /**
    * Initialize a new simulator.
    *
+   * @example
+   *   ```typescript
+   *   // Empty ledger - use rewardNight() for Night tokens
+   *   const simulator = yield* Simulator.init({});
+   *
+   *   // Pre-funded accounts for token transfer testing
+   *   const simulator = yield* Simulator.init({
+   *     genesisMints: [{ amount: 1000n, tokenType, shieldedRecipient: secretKeys }],
+   *   });
+   *
+   *   // With custom network ID
+   *   const simulator = yield* Simulator.init({
+   *     networkId: NetworkId.Preview,
+   *     genesisMints: [...],
+   *   });
+   *   ```;
+   *
    * @param config - Configuration options (all optional)
    * @returns Effect that produces a Simulator instance
-   *
-   * @example
-   * ```typescript
-   * // Empty ledger - use rewardNight() for Night tokens
-   * const simulator = yield* Simulator.init({});
-   *
-   * // Pre-funded accounts for token transfer testing
-   * const simulator = yield* Simulator.init({
-   *   genesisMints: [{ amount: 1000n, tokenType, shieldedRecipient: secretKeys }],
-   * });
-   *
-   * // With custom network ID
-   * const simulator = yield* Simulator.init({
-   *   networkId: NetworkId.Preview,
-   *   genesisMints: [...],
-   * });
-   * ```
    */
   static init(config: SimulatorConfig = {}): Effect.Effect<Simulator, never, Scope.Scope> {
     const networkId = config.networkId ?? NetworkId.NetworkId.Undeployed;
@@ -225,9 +215,7 @@ export class Simulator {
       : Simulator.initBlank(networkId, config.blockProducer);
   }
 
-  /**
-   * Initialize simulator with blank ledger state.
-   */
+  /** Initialize simulator with blank ledger state. */
   private static initBlank(
     networkId: NetworkId.NetworkId,
     blockProducer?: BlockProducer,
@@ -239,9 +227,8 @@ export class Simulator {
   }
 
   /**
-   * Initialize simulator with genesis mints (pre-funded accounts).
-   * Supports shielded and unshielded token mints.
-   * Night tokens are auto-detected by comparing tokenType with nativeToken().raw.
+   * Initialize simulator with genesis mints (pre-funded accounts). Supports shielded and unshielded token mints. Night
+   * tokens are auto-detected by comparing tokenType with nativeToken().raw.
    */
   private static initWithGenesis(
     genesisMints: Arr.NonEmptyArray<GenesisMint>,
@@ -413,9 +400,7 @@ export class Simulator {
     });
   }
 
-  /**
-   * Create a Simulator from an initial state with proper stream setup.
-   */
+  /** Create a Simulator from an initial state with proper stream setup. */
   private static fromState(
     initialState: SimulatorState,
     blockProducer?: BlockProducer,
@@ -453,9 +438,7 @@ export class Simulator {
 
   readonly #stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>;
 
-  /**
-   * Observable stream of simulator state changes.
-   */
+  /** Observable stream of simulator state changes. */
   readonly state$: Stream.Stream<SimulatorState>;
 
   constructor(stateRef: SubscriptionRef.SubscriptionRef<SimulatorState>, state$: Stream.Stream<SimulatorState>) {
@@ -467,18 +450,17 @@ export class Simulator {
   // Instance Methods
   // ===========================================================================
 
-  /**
-   * Get the current simulator state.
-   */
+  /** Get the current simulator state. */
   getLatestState(): Effect.Effect<SimulatorState> {
     return SubscriptionRef.get(this.#stateRef);
   }
 
   /**
-   * Distribute Night tokens to a recipient and submit claim transaction to mempool.
-   * Used for testing dust token generation.
+   * Distribute Night tokens to a recipient and submit claim transaction to mempool. Used for testing dust token
+   * generation.
    *
    * This method:
+   *
    * 1. Modifies the ledger to make Night tokens claimable
    * 2. Creates and submits a ClaimRewardsTransaction to the mempool
    * 3. The block producer will process the transaction
@@ -527,12 +509,10 @@ export class Simulator {
   /**
    * Submit a transaction and wait for it to be included in a block.
    *
-   * This method adds the transaction to the mempool and blocks until the block
-   * producer includes it in a block. Use this when you need confirmation that
-   * the transaction was processed.
+   * This method adds the transaction to the mempool and blocks until the block producer includes it in a block. Use
+   * this when you need confirmation that the transaction was processed.
    *
-   * For fire-and-forget scenarios where you don't need to wait for block
-   * inclusion, use `submitAndForget` instead.
+   * For fire-and-forget scenarios where you don't need to wait for block inclusion, use `submitAndForget` instead.
    *
    * @param tx - Transaction to submit (proofs erased)
    * @param options - Optional submission options
@@ -583,9 +563,9 @@ export class Simulator {
   /**
    * Submit a transaction without waiting for block inclusion.
    *
-   * This method adds the transaction to the mempool and returns immediately.
-   * The block producer will process it asynchronously. Use this for fire-and-forget
-   * scenarios or when testing custom block producers with batched transactions.
+   * This method adds the transaction to the mempool and returns immediately. The block producer will process it
+   * asynchronously. Use this for fire-and-forget scenarios or when testing custom block producers with batched
+   * transactions.
    *
    * To wait for block inclusion, use `submitTransaction` instead.
    *
@@ -602,9 +582,8 @@ export class Simulator {
   }
 
   /**
-   * Fast-forward the simulator time by the given number of seconds.
-   * Does not produce a block - only advances the internal clock.
-   * Useful for testing time-sensitive functionality like TTL.
+   * Fast-forward the simulator time by the given number of seconds. Does not produce a block - only advances the
+   * internal clock. Useful for testing time-sensitive functionality like TTL.
    *
    * @param seconds - Number of seconds to advance (must be positive)
    */
@@ -620,10 +599,10 @@ export class Simulator {
   // ===========================================================================
 
   /**
-   * Produce a block from the given block production request.
-   * Internal method used by the block producer stream.
+   * Produce a block from the given block production request. Internal method used by the block producer stream.
    *
    * This method orchestrates block production by:
+   *
    * 1. Computing the block hash (async)
    * 2. Processing transactions using pure functions from SimulatorState
    * 3. Creating the block and updating state atomically
@@ -699,33 +678,32 @@ export class Simulator {
   // ===========================================================================
 
   /**
-   * Query the simulator state with a custom function.
-   * This is a generic query mechanism that allows extracting any information
-   * from the current state without modifying it.
+   * Query the simulator state with a custom function. This is a generic query mechanism that allows extracting any
+   * information from the current state without modifying it.
+   *
+   * @example
+   *   ```typescript
+   *   // Query fee prices
+   *   const feePrices = yield* simulator.query(state => state.ledger.parameters.feePrices);
+   *
+   *   // Use composable state accessors
+   *   const blockNumber = yield* simulator.query(getCurrentBlockNumber);
+   *   const lastBlock = yield* simulator.query(getLastBlock);
+   *   const events = yield* simulator.query(getLastBlockEvents);
+   *
+   *   // Query UTXOs for an address
+   *   const utxos = yield* simulator.query(state => Array.from(state.ledger.utxo.filter(address)));
+   *
+   *   // Complex query returning multiple values
+   *   const info = yield* simulator.query(state => ({
+   *     networkId: state.networkId,
+   *     blockNumber: getCurrentBlockNumber(state),
+   *     feePrices: state.ledger.parameters.feePrices,
+   *   }));
+   *   ```;
    *
    * @param fn - Function that receives the current state and returns a result
    * @returns The result of applying the function to the current state
-   *
-   * @example
-   * ```typescript
-   * // Query fee prices
-   * const feePrices = yield* simulator.query(state => state.ledger.parameters.feePrices);
-   *
-   * // Use composable state accessors
-   * const blockNumber = yield* simulator.query(getCurrentBlockNumber);
-   * const lastBlock = yield* simulator.query(getLastBlock);
-   * const events = yield* simulator.query(getLastBlockEvents);
-   *
-   * // Query UTXOs for an address
-   * const utxos = yield* simulator.query(state => Array.from(state.ledger.utxo.filter(address)));
-   *
-   * // Complex query returning multiple values
-   * const info = yield* simulator.query(state => ({
-   *   networkId: state.networkId,
-   *   blockNumber: getCurrentBlockNumber(state),
-   *   feePrices: state.ledger.parameters.feePrices,
-   * }));
-   * ```
    */
   query<T>(fn: (state: SimulatorState) => T): Effect.Effect<T> {
     return Effect.map(SubscriptionRef.get(this.#stateRef), fn);

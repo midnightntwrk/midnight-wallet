@@ -81,7 +81,8 @@ export class HDWallet {
   }
 
   /**
-   * Once all keys are derived - clear internals from private data, so that they do not reside in memory longer than needed.
+   * Once all keys are derived - clear internals from private data, so that they do not reside in memory longer than
+   * needed.
    */
   public clear(): void {
     this.rootKey.wipePrivateData();

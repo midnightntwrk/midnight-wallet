@@ -559,9 +559,8 @@ const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
 };
 
 /**
- * Waits for the blockchain to produce at least one new block by polling the
- * indexer for the current block height. Resolves as soon as the height
- * increases from its initial value.
+ * Waits for the blockchain to produce at least one new block by polling the indexer for the current block height.
+ * Resolves as soon as the height increases from its initial value.
  */
 export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs = 60_000): Promise<void> => {
   const initialHeight = await fetchBlockHeight(indexerHttpUrl);
@@ -626,9 +625,7 @@ export function expectValidUnshieldedTxHistoryEntries(entries: readonly WalletEn
   }
 }
 
-/**
- * Asserts a sender's shielded tx history entry has valid spentCoins.
- */
+/** Asserts a sender's shielded tx history entry has valid spentCoins. */
 export function expectSenderShieldedTxHistory(entry: WalletEntry) {
   expect(entry.shielded).toBeDefined();
   expect(entry.shielded!.spentCoins.length).toBeGreaterThan(0);
@@ -636,8 +633,8 @@ export function expectSenderShieldedTxHistory(entry: WalletEntry) {
 }
 
 /**
- * Asserts a receiver's shielded tx history entry has valid receivedCoins,
- * and that a coin matching the expected value exists with valid fields.
+ * Asserts a receiver's shielded tx history entry has valid receivedCoins, and that a coin matching the expected value
+ * exists with valid fields.
  */
 export function expectReceiverShieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
   expect(entry.shielded).toBeDefined();
@@ -648,9 +645,7 @@ export function expectReceiverShieldedTxHistory(entry: WalletEntry, expectedValu
   expectValidShieldedTxHistoryEntry(entry);
 }
 
-/**
- * Asserts a sender's unshielded tx history entry has valid spentUtxos.
- */
+/** Asserts a sender's unshielded tx history entry has valid spentUtxos. */
 export function expectSenderUnshieldedTxHistory(entry: WalletEntry) {
   expect(entry.unshielded).toBeDefined();
   expect(entry.unshielded!.spentUtxos.length).toBeGreaterThan(0);
@@ -658,8 +653,8 @@ export function expectSenderUnshieldedTxHistory(entry: WalletEntry) {
 }
 
 /**
- * Asserts a receiver's unshielded tx history entry has valid createdUtxos,
- * and that a UTXO matching the expected value exists with valid fields.
+ * Asserts a receiver's unshielded tx history entry has valid createdUtxos, and that a UTXO matching the expected value
+ * exists with valid fields.
  */
 export function expectReceiverUnshieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
   expect(entry.unshielded).toBeDefined();
@@ -671,8 +666,8 @@ export function expectReceiverUnshieldedTxHistory(entry: WalletEntry, expectedVa
 }
 
 /**
- * Asserts that tx history entries from a storage contain at least one entry
- * with the specified section ('shielded' or 'unshielded').
+ * Asserts that tx history entries from a storage contain at least one entry with the specified section ('shielded' or
+ * 'unshielded').
  */
 export async function expectTxHistoryHasSection(
   storage: { getAll(): Promise<readonly Record<string, unknown>[]> },

@@ -13,19 +13,13 @@
 import * as Brand from 'effect/Brand';
 import * as Schema from 'effect/Schema';
 
-/**
- * A branded `Uint8Array` that represents a BIP32 compatible seed phrase.
- */
+/** A branded `Uint8Array` that represents a BIP32 compatible seed phrase. */
 export type WalletSeed = Brand.Branded<Uint8Array, 'WalletSeed'>;
 
-/**
- * Constructs a branded `Uint8Array` representing a BIP32 compatible seed phrase.
- */
+/** Constructs a branded `Uint8Array` representing a BIP32 compatible seed phrase. */
 export const WalletSeed = Brand.nominal<WalletSeed>();
 
-/**
- * A schema that transforms an array of numbers into a {@link WalletSeed}.
- */
+/** A schema that transforms an array of numbers into a {@link WalletSeed}. */
 export const WalletSeedSchema = Schema.Uint8Array.pipe(Schema.fromBrand(WalletSeed));
 
 /**

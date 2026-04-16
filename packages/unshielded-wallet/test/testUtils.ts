@@ -29,9 +29,7 @@ const UnshieldedEntrySchema = Schema.Struct({
 });
 import { UnshieldedWallet, UnshieldedWalletState } from '../src/UnshieldedWallet.js';
 
-/**
- * TODO: place in separate package with more additional mock functions
- */
+/** TODO: place in separate package with more additional mock functions */
 export const generateMockTransaction = (
   owner: string,
   type: string,
@@ -106,8 +104,8 @@ export const getUnshieldedSeed = (seed: string): Uint8Array => {
 };
 
 /**
- * Creates a default wallet configuration for testing.
- * This encapsulates the common configuration pattern used across tests.
+ * Creates a default wallet configuration for testing. This encapsulates the common configuration pattern used across
+ * tests.
  *
  * @param indexerPort - The port number for the indexer service
  * @param overrides - Optional partial configuration to override defaults

@@ -68,8 +68,8 @@ const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: str
 
 /**
  * These tests need to be fairly high-level to examine interfaces and observable behaviors given already built wallet.
- * For that reason - they mostly examine happy-path or well-known failure handling scenarios
- * It's the job of unit tests in various setups to perform quick and exhaustive testing
+ * For that reason - they mostly examine happy-path or well-known failure handling scenarios It's the job of unit tests
+ * in various setups to perform quick and exhaustive testing
  *
  * NOTE: Shielded wallet cannot transact on its own anymore, so these tests are skipped for now
  */

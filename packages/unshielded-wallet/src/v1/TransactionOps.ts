@@ -15,15 +15,10 @@ import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, WalletError } from './WalletError.js';
 
-/**
- * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
- */
+/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-/**
- * Utility type to extract the Intent type from a Transaction type.
- * Maps Transaction<S, P, B> to Intent<S, P, B>.
- */
+/** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
 export type IntentOf<T> = T extends ledger.Transaction<infer S, infer P, infer B> ? ledger.Intent<S, P, B> : never;
 
 export type TransactionOps = {

@@ -885,10 +885,7 @@ describe('V1 Wallet Transacting', () => {
     });
   });
 
-  /**
-   *
-   * .applyFailed is missing from ZswapLocalState [https://shielded.atlassian.net/browse/PM-19678]
-   */
+  /** .applyFailed is missing from ZswapLocalState [https://shielded.atlassian.net/browse/PM-19678] */
   describe.skip('when reverting and cancelling transactions', () => {
     it('reverts a transaction (e.g. due to a submission failure), releasing booked coins', () => {
       const wallets = prepareWallets({

@@ -15,9 +15,7 @@ import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/n
 import { SubscriptionClient } from './SubscriptionClient.js';
 import type { Query } from './Query.js';
 
-/**
- * Describes a subscription of elements from an invocable GraphQL query.
- */
+/** Describes a subscription of elements from an invocable GraphQL query. */
 export interface Subscription<
   R,
   V,

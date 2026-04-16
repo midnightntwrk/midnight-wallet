@@ -78,6 +78,7 @@ export class DustWalletState<TSerialized = string> {
 
   /**
    * Transaction history for the wallet.
+   *
    * @throws Error - Not yet implemented
    */
   get transactionHistory(): never {

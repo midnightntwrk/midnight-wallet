@@ -130,8 +130,8 @@ export const makeSimulatorTransactingCapability = (
 };
 
 /**
- * Distributes the fee across multiple inputs, draining smaller inputs first
- * when the fee exceeds any single input's value.
+ * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
+ * value.
  */
 const distributeFeeAcrossInputs = <T extends { value: bigint }>(
   inputs: ReadonlyArray<T>,

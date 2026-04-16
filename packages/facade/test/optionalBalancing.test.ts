@@ -26,9 +26,7 @@ import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities'
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
-/**
- * TODO: Check dust spends instead of imbalance when refactoring to simulator
- */
+/** TODO: Check dust spends instead of imbalance when refactoring to simulator */
 const getImbalances = (
   tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   segmentIndex: number,
@@ -45,9 +43,7 @@ const getImbalances = (
   );
 };
 
-/**
- * TODO: Replace docker environment with simulator once simulator is implemented
- */
+/** TODO: Replace docker environment with simulator once simulator is implemented */
 describe('Optional Balancing', () => {
   const environmentId = randomUUID();
 
