@@ -39,7 +39,8 @@ import {
   DustNullifierTransactionsSubscription,
   DustNullifierTransactionSubscriptionSchema,
   SyncEventsUpdateSchema,
-  TransactionEventsSchema,
+  TransactionEventsUpdate,
+  TransactionEventsUpdateSchema,
   WalletSyncSubscription,
   WalletSyncUpdate,
 } from './SyncSchema.js';
@@ -168,18 +169,13 @@ export const makeDustGenerationsSyncService = (
   const defaultSyncService = makeDefaultSyncService(config);
   const indexerSyncService = makeIndexerSyncService(config);
 
-  const syncNullifiers = (
+  const nullifierTransactionsSubscription = (
     dustNullifiers: DustNullifier[],
     blockHeight: number | null,
-  ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope> => {
+  ): Stream.Stream<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
     return pipe(
       indexerSyncService.subscribeDustNullifierTransactions(dustNullifiers, blockHeight),
-      // Stream.mapEffect((subscription) =>
-      //   pipe(
-      //
-      //   ),
-      // ),
-      Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
+      Stream.mapEffect((subscription) => indexerSyncService.transactionEvents(subscription.transactionId)),
     );
   };
 
@@ -197,17 +193,17 @@ export const makeDustGenerationsSyncService = (
             Effect.map(Chunk.toArray),
           );
           const generations = DustGenerationsSyncUpdate.create(rawGenerations, secretKey);
-          let updatedWallet = applyDustGenerationsUpdate(state, generations);
+          const updatedWallet = applyDustGenerationsUpdate(state, generations);
 
           let nullifiers = updatedWallet.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier);
 
           while (nullifiers.length > 0) {
             const nullifierTransactions = yield* pipe(
-              syncNullifiers(nullifiers, blockData.height),
+              nullifierTransactionsSubscription(nullifiers, blockData.height),
               Stream.runCollect,
               Effect.map(Chunk.toArray),
             );
-            updatedWallet = applyNullifiersUpdate(state, nullifierTransactions);
+            // updatedWallet = applyNullifiersUpdate(state, nullifierTransactions);
             nullifiers = [];
           }
         }),
@@ -232,6 +228,7 @@ export type IndexerSyncService = {
     dustNullifiers: DustNullifier[],
     toBlock: number | null,
   ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  transactionEvents: (txId: number) => Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
@@ -329,27 +326,23 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
-    transactionEvents(
-      txId: number,
-    ): Effect.Effect<typeof TransactionEventsSchema, WalletError, Scope.Scope | SubscriptionClient> {
+    transactionEvents(txId: number): Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient> {
       return pipe(
-        TransactionEvents.run({ transactionId: txId }),
-        Effect.catchAll((err) =>
-          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
-        ),
+        TransactionEvents.run({ transactionId: Encoding.encodeHex(txId.toString()) }),
         Effect.flatMap((result) => {
           const nonSystemTransactions = result.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
           if (!nonSystemTransactions.length) {
             throw new OtherWalletError({ message: `Unable to find a transaction by id: ${txId}` });
           }
-          const { dustLedgerEvents, zswapLedgerEvents } = nonSystemTransactions[0];
-          return Schema.decodeUnknownEither(TransactionEventsSchema)({
-            dustLedgerEvents,
-            zswapLedgerEvents,
-          });
+          return pipe(
+            Schema.decodeUnknownEither(TransactionEventsUpdateSchema)(nonSystemTransactions[0]),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
         }),
-        Either.mapLeft((err) => new SyncWalletError(err)),
-        EitherOps.toEffect,
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
       );
     },
   };
@@ -387,64 +380,6 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
 };
 
 export const applyDustGenerationsUpdate = (state: CoreWallet, wrappedUpdate: DustGenerationsSyncUpdate): CoreWallet => {
-  const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
-  const { updates, secretKey } = wrappedUpdate;
-
-  // Nothing to update yet
-  if (updates.length === 0) {
-    return state;
-  }
-
-  const lastUpdateIndex = updates
-    .filter((u) => u.type === 'DustGenerationsProgress')
-    .map((u) => u.highestIndex)
-    .toSorted()
-    .at(-1);
-
-  const dustGenTreeUpdates = updates
-    .map((u) => u.collapsedMerkleTree)
-    .filter((u) => u !== undefined)
-    .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
-
-  const nullifiers = updates
-    .filter((u) => u.type === 'DustGenerationsItem')
-    .filter((u) => u.owner === publicKey)
-    .map(
-      (u) =>
-        ({
-          dustNullifier: dustNullifier(
-            {
-              initialValue: BigInt(u.value),
-              owner: state.publicKey.publicKey,
-              nonce: BigInt(u.nonce),
-              seq: 0,
-              ctime: u.ctime,
-              backingNight: '', // we don't need this to calculate the nullifier
-              mtIndex: BigInt(u.merkleIndex),
-            },
-            secretKey,
-          ),
-          isSynced: false,
-        }) as SyncedDustNullifier,
-    );
-
-  const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
-
-  if (lastUpdateIndex !== undefined) {
-    return CoreWallet.updateProgress(updatedWallet, {
-      appliedIndex: BigInt(lastUpdateIndex),
-      highestRelevantWalletIndex: BigInt(lastUpdateIndex),
-      isConnected: true,
-    });
-  }
-
-  return updatedWallet;
-};
-
-export const applyNullifiersUpdate = (
-  state: CoreWallet,
-  nullifierTransactions: DustNullifierTransactionsSubscription[],
-): CoreWallet => {
   const publicKey = Encoding.encodeHex(state.publicKey.publicKey.toString());
   const { updates, secretKey } = wrappedUpdate;
 

@@ -193,7 +193,34 @@ export const TransactionEvent = Schema.Struct({
   protocolVersion: Schema.Number,
 });
 
-export const TransactionEventsSchema = Schema.Struct({
+export const WireTransactionEventsUpdateSchema = Schema.Struct({
+  __typename: Schema.Literal('RegularTransaction'),
   dustLedgerEvents: Schema.Array(TransactionEvent),
   zswapLedgerEvents: Schema.Array(TransactionEvent),
 });
+
+export const TransactionEventsUpdateSchema = Schema.transform(
+  WireTransactionEventsUpdateSchema,
+  Schema.typeSchema(
+    Schema.Struct({
+      type: Schema.Literal('TransactionEvents'),
+      dustLedgerEvents: Schema.Array(TransactionEvent),
+      zswapLedgerEvents: Schema.Array(TransactionEvent),
+    }),
+  ),
+  {
+    strict: true,
+    decode: ({ dustLedgerEvents, zswapLedgerEvents }) => ({
+      type: 'TransactionEvents' as const,
+      dustLedgerEvents,
+      zswapLedgerEvents,
+    }),
+    encode: ({ dustLedgerEvents, zswapLedgerEvents }) => ({
+      __typename: 'RegularTransaction' as const,
+      dustLedgerEvents,
+      zswapLedgerEvents,
+    }),
+  },
+);
+
+export type TransactionEventsUpdate = Schema.Schema.Type<typeof TransactionEventsUpdateSchema>;
