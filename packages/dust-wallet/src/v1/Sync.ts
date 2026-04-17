@@ -203,7 +203,26 @@ export const makeDustGenerationsSyncService = (
               Stream.runCollect,
               Effect.map(Chunk.toArray),
             );
-            // updatedWallet = applyNullifiersUpdate(state, nullifierTransactions);
+            /*
+            {
+                tag: 'dustSpendProcessed',
+                commitment: DustCommitment,
+                commitmentIndex: bigint,
+                nullifier: DustNullifier,
+                vFee: bigint,
+                declaredTime: Date,
+                blockTime: Date,
+              }
+            const qdo = updatedState.findUtxoByNullifier(nullifier);
+            const newUtxo = localState.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
+            const newDustNullifier = dustNullifier(newUtxo, secretKey)
+             */
+            for (const tx of nullifierTransactions) {
+              const dustSpends = tx.dustLedgerEvents.filter(
+                (dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed',
+              );
+            }
+            // [updatedWallet, newDustNullifiers] = applyNullifiersUpdate(state, nullifierTransactions);
             nullifiers = [];
           }
         }),

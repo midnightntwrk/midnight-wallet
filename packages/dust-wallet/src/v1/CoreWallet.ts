@@ -115,6 +115,7 @@ export const CoreWallet = {
     dustNullifiers: SyncedDustNullifier[],
   ): CoreWallet {
     const updatedState = updates.reduce(
+      // TODO: state.addUtxo(nullifier, qdo);
       (state, update) => state.applyGenerationCollapsedUpdate(update.update),
       wallet.state,
     );
