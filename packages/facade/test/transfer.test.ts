@@ -321,6 +321,113 @@ describe('Wallet Facade Transfer', () => {
     expect(isValid).toBeTruthy();
   });
 
+  it('records shielded, unshielded, and dust sections in tx history for a combined transfer matches expecteed structure', async () => {
+    const transferAmount = tokenValue(1n);
+
+    await Promise.all([
+      pipe(
+        senderFacade.state(),
+        rx.filter((s) => s.isSynced),
+        rx.first(
+          (s) =>
+            s.shielded.availableCoins.length > 0 &&
+            s.unshielded.availableCoins.length > 0 &&
+            s.dust.availableCoins.length > 0,
+        ),
+        rx.firstValueFrom,
+      ),
+      waitForFullySynced(receiverFacade),
+    ]);
+
+    const shieldedReceiverAddress = await receiverFacade.shielded.getAddress();
+    const unshieldedReceiverAddress = await receiverFacade.unshielded.getAddress();
+
+    const ttl = new Date(Date.now() + 30 * 60 * 1000);
+    const tokenTransfer: CombinedTokenTransfer[] = [
+      {
+        type: 'shielded',
+        outputs: [
+          {
+            amount: transferAmount,
+            receiverAddress: shieldedReceiverAddress,
+            type: ledger.shieldedToken().raw,
+          },
+        ],
+      },
+      {
+        type: 'unshielded',
+        outputs: [
+          {
+            amount: transferAmount,
+            receiverAddress: unshieldedReceiverAddress,
+            type: ledger.unshieldedToken().raw,
+          },
+        ],
+      },
+    ];
+
+    const transactionRecipe = await senderFacade.transferTransaction(
+      tokenTransfer,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      { ttl },
+    );
+
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
+      unshieldedSenderKeystore.signData(payload),
+    );
+    const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
+
+    // Wait for the combined tx to be fully observed by all three wallets on the SENDER side:
+    // all sections present, unshielded-sourced metadata merged (fees/identifiers), and the expected
+    // sender-side evidence (spent shielded coin, spent Night UTXO, spent Dust for fees) visible.
+    // The receiver-side outputs live in the receiver's history, not the sender's.
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap(() => senderFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
+        rx.filter(
+          (entry) =>
+            entry.status === 'SUCCESS' &&
+            entry.fees !== undefined &&
+            entry.identifiers !== undefined &&
+            entry.shielded !== undefined &&
+            entry.unshielded !== undefined &&
+            entry.dust !== undefined &&
+            entry.shielded.spentCoins.some((c) => c.type === ledger.shieldedToken().raw) &&
+            entry.unshielded.spentUtxos.some((u) => u.tokenType === ledger.unshieldedToken().raw) &&
+            entry.dust.spentUtxos.some((u) => typeof u.backingNight === 'string'),
+        ),
+        rx.timeout(60_000),
+      ),
+    );
+
+    // The filter already proved the structural shape; assert the hash, and that the
+    // identifier returned from submitTransaction is among the tx's recorded identifiers.
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
+    expect(txHistoryEntry.identifiers).toContain(submittedTxIdentifier);
+
+    // Receiver sees both assets arrive with the exact values we sent.
+    const receiverState = await rx.firstValueFrom(
+      receiverFacade
+        .state()
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.shielded.availableCoins.some((c) => c.coin.value === transferAmount) &&
+              s.unshielded.availableCoins.some((c) => c.utxo.value === transferAmount),
+          ),
+        ),
+    );
+
+    expect(receiverState.shielded.balances[ledger.shieldedToken().raw]).toBe(transferAmount);
+    expect(receiverState.unshielded.balances[ledger.unshieldedToken().raw]).toBe(transferAmount);
+  });
+
   it('allows to balance and submit an arbitrary unshielded transaction', async () => {
     await pipe(
       senderFacade.state(),
