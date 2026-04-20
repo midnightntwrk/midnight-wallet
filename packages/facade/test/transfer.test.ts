@@ -29,7 +29,7 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -137,15 +137,7 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer shielded tokens only', async () => {
-    await Promise.all([
-      pipe(
-        senderFacade.state(),
-        rx.filter((s) => s.isSynced),
-        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
-        rx.firstValueFrom,
-      ),
-      waitForFullySynced(receiverFacade),
-    ]);
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.shielded.getAddress();
 
@@ -199,15 +191,7 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer unshielded tokens', async () => {
-    await Promise.all([
-      pipe(
-        senderFacade.state(),
-        rx.filter((s) => s.isSynced),
-        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
-        rx.firstValueFrom,
-      ),
-      waitForFullySynced(receiverFacade),
-    ]);
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.unshielded.getAddress();
 
@@ -321,23 +305,40 @@ describe('Wallet Facade Transfer', () => {
     expect(isValid).toBeTruthy();
   });
 
-  it('records shielded, unshielded, and dust sections in tx history for a combined transfer matches expecteed structure', async () => {
+  it('records shielded, unshielded, and dust sections in tx history for a combined transfer matches expected structure', async () => {
     const transferAmount = tokenValue(1n);
 
-    await Promise.all([
-      pipe(
-        senderFacade.state(),
-        rx.filter((s) => s.isSynced),
-        rx.first(
-          (s) =>
-            s.shielded.availableCoins.length > 0 &&
-            s.unshielded.availableCoins.length > 0 &&
-            s.dust.availableCoins.length > 0,
-        ),
-        rx.firstValueFrom,
-      ),
-      waitForFullySynced(receiverFacade),
+    const [, receiverPreState] = await Promise.all([
+      senderFacade.waitForSyncedState(),
+      receiverFacade.waitForSyncedState(),
     ]);
+
+    // Snapshot the receiver's pre-existing coins.
+    const receiverPreShieldedNonces = new Set(receiverPreState.shielded.availableCoins.map((c) => c.coin.nonce));
+    const receiverPreUnshieldedKeys = new Set(
+      receiverPreState.unshielded.availableCoins.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+
+    // Snapshot the sender's available coins.
+    const senderPreState = await rx.firstValueFrom(
+      senderFacade
+        .state()
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.shielded.availableCoins.some((c) => c.coin.type === ledger.shieldedToken().raw) &&
+              s.unshielded.availableCoins.some((c) => c.utxo.type === ledger.unshieldedToken().raw) &&
+              s.dust.availableCoins.length > 0,
+          ),
+        ),
+    );
+
+    // Snapshot every sender-owned coin/UTXO.
+    const senderShieldedNonces = new Set(senderPreState.shielded.availableCoins.map((c) => c.coin.nonce));
+    const senderUnshieldedKeys = new Set(
+      senderPreState.unshielded.availableCoins.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+    const senderDustNonces = new Set(senderPreState.dust.availableCoins.map((c) => c.token.nonce));
 
     const shieldedReceiverAddress = await receiverFacade.shielded.getAddress();
     const unshieldedReceiverAddress = await receiverFacade.unshielded.getAddress();
@@ -382,10 +383,7 @@ describe('Wallet Facade Transfer', () => {
     const finalizedTxHash = finalizedTx.transactionHash().toString();
     const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
 
-    // Wait for the combined tx to be fully observed by all three wallets on the SENDER side:
-    // all sections present, unshielded-sourced metadata merged (fees/identifiers), and the expected
-    // sender-side evidence (spent shielded coin, spent Night UTXO, spent Dust for fees) visible.
-    // The receiver-side outputs live in the receiver's history, not the sender's.
+    // Wait for the tx to land in sender history as a SUCCESS with all three sections present.
     const txHistoryEntry = await rx.firstValueFrom(
       senderFacade.state().pipe(
         rx.concatMap(() => senderFacade.queryTxHistoryByHash(finalizedTxHash)),
@@ -393,39 +391,55 @@ describe('Wallet Facade Transfer', () => {
         rx.filter(
           (entry) =>
             entry.status === 'SUCCESS' &&
-            entry.fees !== undefined &&
-            entry.identifiers !== undefined &&
             entry.shielded !== undefined &&
             entry.unshielded !== undefined &&
-            entry.dust !== undefined &&
-            entry.shielded.spentCoins.some((c) => c.type === ledger.shieldedToken().raw) &&
-            entry.unshielded.spentUtxos.some((u) => u.tokenType === ledger.unshieldedToken().raw) &&
-            entry.dust.spentUtxos.some((u) => typeof u.backingNight === 'string'),
+            entry.dust !== undefined,
         ),
         rx.timeout(60_000),
       ),
     );
 
-    // The filter already proved the structural shape; assert the hash, and that the
-    // identifier returned from submitTransaction is among the tx's recorded identifiers.
     expect(txHistoryEntry.hash).toBe(finalizedTxHash);
     expect(txHistoryEntry.identifiers).toContain(submittedTxIdentifier);
+    expect(txHistoryEntry.fees).toBeDefined();
 
-    // Receiver sees both assets arrive with the exact values we sent.
-    const receiverState = await rx.firstValueFrom(
-      receiverFacade
-        .state()
-        .pipe(
-          rx.filter(
-            (s) =>
-              s.shielded.availableCoins.some((c) => c.coin.value === transferAmount) &&
-              s.unshielded.availableCoins.some((c) => c.utxo.value === transferAmount),
-          ),
-        ),
+    expect(txHistoryEntry.shielded!.spentCoins.length).toBeGreaterThan(0);
+    expect(txHistoryEntry.shielded!.spentCoins.every((c) => senderShieldedNonces.has(c.nonce))).toBe(true);
+
+    expect(txHistoryEntry.unshielded!.spentUtxos.length).toBeGreaterThan(0);
+    expect(
+      txHistoryEntry.unshielded!.spentUtxos.every((u) => senderUnshieldedKeys.has(`${u.intentHash}#${u.outputIndex}`)),
+    ).toBe(true);
+
+    expect(txHistoryEntry.dust!.spentUtxos.some((u) => senderDustNonces.has(u.nonce))).toBe(true);
+
+    // Once the tx is present in the receiver's history, the state update has already
+    // been applied — no extra state-filter wait needed; the expects below suffice.
+    await rx.firstValueFrom(
+      receiverFacade.state().pipe(
+        rx.concatMap(() => receiverFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
+        rx.timeout(60_000),
+      ),
     );
 
-    expect(receiverState.shielded.balances[ledger.shieldedToken().raw]).toBe(transferAmount);
-    expect(receiverState.unshielded.balances[ledger.unshieldedToken().raw]).toBe(transferAmount);
+    const receiverState = await rx.firstValueFrom(receiverFacade.state());
+
+    const newShieldedCoin = receiverState.shielded.availableCoins.find(
+      (c) =>
+        c.coin.type === ledger.shieldedToken().raw &&
+        c.coin.value === transferAmount &&
+        !receiverPreShieldedNonces.has(c.coin.nonce),
+    );
+    const newUnshieldedUtxo = receiverState.unshielded.availableCoins.find(
+      (u) =>
+        u.utxo.type === ledger.unshieldedToken().raw &&
+        u.utxo.value === transferAmount &&
+        !receiverPreUnshieldedKeys.has(`${u.utxo.intentHash}#${u.utxo.outputNo}`),
+    );
+
+    expect(newShieldedCoin).toBeDefined();
+    expect(newUnshieldedUtxo).toBeDefined();
   });
 
   it('allows to balance and submit an arbitrary unshielded transaction', async () => {

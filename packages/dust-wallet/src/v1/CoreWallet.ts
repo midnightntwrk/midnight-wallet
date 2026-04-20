@@ -95,6 +95,7 @@ export const CoreWallet = {
     events: Event[],
     currentTime: Date,
   ): [CoreWallet, DustStateChanges[]] {
+    // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
     const stateWithChanges = wallet.state.replayEventsWithChanges(secretKey, events);
     const updatedState = stateWithChanges.state.processTtls(currentTime);
     const availableNonces = updatedState.utxos.map((utxo) => utxo.nonce);
