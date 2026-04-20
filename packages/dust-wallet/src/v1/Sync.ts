@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, DustStateChanges, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -46,8 +46,13 @@ export interface BlockData {
   timestamp: Date;
 }
 
-export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => TState;
+export type ChangesResult = {
+  readonly changes: DustStateChanges[];
+  readonly protocolVersion: number;
+};
+
+export interface SyncCapability<TState, TUpdate, TResult> {
+  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
 }
 
 export type IndexerClientConnection = {
@@ -262,14 +267,14 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
-export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
+    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] {
       const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
       if (updates.length === 0) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
       const lastUpdate = updates.at(-1)!;
@@ -279,16 +284,23 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // in case the nextIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
-        return CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true });
+        return [
+          CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true }),
+          { changes: [], protocolVersion: Number(state.protocolVersion) },
+        ];
       }
 
       const events = updates.map((u) => u.raw).filter((event) => event !== null);
 
-      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, secretKey, events, wrappedUpdate.timestamp), {
+      const [newState, changes] = CoreWallet.applyEventsWithChanges(state, secretKey, events, wrappedUpdate.timestamp);
+
+      const updatedState = CoreWallet.updateProgress(newState, {
         appliedIndex: nextIndex,
         highestRelevantWalletIndex,
         isConnected: true,
       });
+
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
     },
   };
 };
@@ -340,22 +352,29 @@ export const makeSimulatorSyncService = (
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) => {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
       const lastBlock = getLastBlock(update.update);
       // If no block exists yet (blank simulator), skip update
       if (lastBlock === undefined) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
       // Get all events from blocks starting at appliedIndex (the next block to process).
       // appliedIndex semantics: the first block number we haven't processed yet.
       // Initial: appliedIndex = 0 (haven't processed any blocks)
       // After processing block N: appliedIndex = N + 1 (next block to process)
       const events = [...getBlockEventsFrom(update.update, state.progress.appliedIndex)];
-      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, update.secretKey, events, lastBlock.timestamp), {
+      const [newState, changes] = CoreWallet.applyEventsWithChanges(
+        state,
+        update.secretKey,
+        events,
+        lastBlock.timestamp,
+      );
+      const updatedState = CoreWallet.updateProgress(newState, {
         appliedIndex: lastBlock.number + 1n,
       });
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
     },
   };
 };
