@@ -35,22 +35,31 @@ import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
 import { type WalletSyncUpdate } from './v1/Sync.js';
 
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+
 export type DustWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
 };
 
+export type DustWalletServices = {
+  transactionHistory: TransactionHistoryService;
+};
+
 export class DustWalletState<TSerialized = string> {
   static readonly mapState =
-    <TSerialized = string>(capabilities: DustWalletCapabilities<TSerialized>) =>
+    <TSerialized = string>(variant: DustWalletCapabilities<TSerialized> & DustWalletServices) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): DustWalletState<TSerialized> => {
-      return new DustWalletState(state, capabilities);
+      const { serialization, coinsAndBalances, keys } = variant;
+      const { transactionHistory } = variant;
+      return new DustWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
   readonly capabilities: DustWalletCapabilities<TSerialized>;
+  readonly services: DustWalletServices;
 
   get totalCoins(): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
@@ -76,18 +85,15 @@ export class DustWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for DustWallet');
-  }
-
-  constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: DustWalletCapabilities<TSerialized>) {
+  constructor(
+    state: ProtocolState.ProtocolState<CoreWallet>,
+    capabilities: DustWalletCapabilities<TSerialized>,
+    services: DustWalletServices,
+  ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
+    this.services = services;
   }
 
   balance(time: Date): Balance {
