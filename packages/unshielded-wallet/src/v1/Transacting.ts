@@ -209,7 +209,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const segmentId = Option.getOrElse(this.txOps.findAvailableSegmentId(transaction), () => 1);
       // @TODO in ledger 8.1.0 will be able to set the segment id when constructing the tx
       const balancingTx = ledger.Transaction.fromParts(this.networkId, undefined, undefined, undefined);
-      balancingTx.intents = balancingTx.intents!.set(segmentId, balancingIntent);
+      balancingTx.intents = new Map([[segmentId, balancingIntent]]);
       return [balancingTx, newState];
     });
   }

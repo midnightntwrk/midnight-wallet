@@ -403,7 +403,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
     // @TODO in ledger 8.1.0 will be able to set the segment id when constructing the tx
     const balancingTx = Transaction.fromParts(network, undefined, undefined, undefined);
-    balancingTx.intents = balancingTx.intents!.set(segmentId, intent);
+    balancingTx.intents = new Map([[segmentId, intent]]);
     const erasedBalancing = balancingTx.eraseProofs();
 
     const mergedTx = mergedExisting ? mergedExisting.merge(erasedBalancing) : erasedBalancing;
@@ -552,7 +552,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
           const segmentId = mergedExisting ? Option.getOrElse(findAvailableSegmentId(mergedExisting), () => 1) : 1;
 
           const feeTransaction = Transaction.fromParts(networkId, undefined, undefined, undefined);
-          feeTransaction.intents = feeTransaction.intents!.set(segmentId, intent);
+          feeTransaction.intents = new Map([[segmentId, intent]]);
 
           return [feeTransaction, updatedState];
         });
