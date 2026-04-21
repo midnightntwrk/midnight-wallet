@@ -20,6 +20,7 @@ import {
   Proofish,
   Signaturish,
   Transaction,
+  QualifiedDustOutput,
   Event,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -36,6 +37,7 @@ export type PublicKey = {
 
 export type SyncedDustNullifier = {
   dustNullifier: DustNullifier;
+  qdo: QualifiedDustOutput;
   isSynced: boolean;
 };
 
@@ -114,11 +116,13 @@ export const CoreWallet = {
     updates: CollapsedMerkleTree[],
     dustNullifiers: SyncedDustNullifier[],
   ): CoreWallet {
-    const updatedState = updates.reduce(
-      // TODO: state.addUtxo(nullifier, qdo);
+    let updatedState = updates.reduce(
       (state, update) => state.applyGenerationCollapsedUpdate(update.update),
       wallet.state,
     );
+    updatedState = dustNullifiers.reduce((state, { dustNullifier, qdo }) => {
+      return state.addUtxo(dustNullifier, qdo);
+    }, updatedState);
     return {
       ...wallet,
       state: updatedState,
