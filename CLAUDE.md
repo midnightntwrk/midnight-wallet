@@ -9,6 +9,11 @@ The Midnight Wallet SDK is a TypeScript implementation of the
 It provides key generation, address formatting, transaction building, state syncing with the indexer, and testing
 utilities for the Midnight privacy-focused blockchain.
 
+## Claude Code Settings
+
+- **`.claude/settings.json`** is tracked by git — shared team config (hooks only). **NEVER** add `permissions` here.
+- **`.claude/settings.local.json`** is gitignored — personal permissions go here.
+
 ## Key Specifications (ALWAYS CONSULT)
 
 When working on wallet functionality, always consult these specifications:
@@ -28,7 +33,7 @@ Key sections:
 
 ### DApp Connector API Specification
 
-**Repository:** [midnight-dapp-connector-api](https://github.com/input-output-hk/midnight-dapp-connector-api) **NPM:**
+**Repository:** [midnight-dapp-connector-api](https://github.com/midnightntwrk/midnight-dapp-connector-api) **NPM:**
 [@midnight-ntwrk/dapp-connector-api](https://www.npmjs.com/package/@midnight-ntwrk/dapp-connector-api) **Path:**
 `SPECIFICATION.md`
 
@@ -47,7 +52,7 @@ TypeScript type definitions for the connector API.
 
 ### Ledger Specification
 
-**Repository:** [midnight-ledger](https://github.com/input-output-hk/midnight-ledger) **Path:** `spec/`
+**Repository:** [midnight-ledger](https://github.com/midnightntwrk/midnight-ledger) **Path:** `spec/`
 
 Key documents:
 
@@ -162,6 +167,21 @@ directly (e.g., `tsconfig.build.json` or `tsconfig.test.json`), not one that onl
 ```bash
 git diff --name-only --diff-filter=ACMR HEAD -- '*.ts' | xargs -I{} yarn effect-language-service diagnostics --file "$(pwd)/{}" --format pretty
 ```
+
+### Code Reference Repos (Shelf)
+
+The project uses [shelf](https://github.com/Rika-Labs/shelf) to maintain local caches of upstream reference repositories
+for AI-assisted development. The `shelffile` in the repo root declares which repos are needed.
+
+Shelf requires [Bun](https://bun.sh/) and is installed globally:
+
+```bash
+bun install -g @rikalabs/shelf
+shelf install              # clones repos declared in shelffile
+```
+
+This is optional — everything works without it. It just gives Claude Code fast local access to upstream source code
+instead of relying on web searches.
 
 ## Architecture
 

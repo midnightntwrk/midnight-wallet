@@ -13,10 +13,11 @@
 export * from './CoreWallet.js';
 export * from '../DustWallet.js';
 export * as Keys from './Keys.js';
-export * as Simulator from './Simulator.js';
+export * as Simulator from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 export * as SyncService from './Sync.js';
 export * as Transacting from './Transacting.js';
 export * from './RunningV1Variant.js';
 export * from './V1Builder.js';
 export * from './types/index.js';
 export * as CoinsAndBalances from './CoinsAndBalances.js';
+export * as TransactionHistory from './TransactionHistory.js';

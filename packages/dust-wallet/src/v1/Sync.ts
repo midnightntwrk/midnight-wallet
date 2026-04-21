@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import { DustSecretKey, DustStateChanges, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -20,10 +20,15 @@ import {
   SubscriptionClient,
   QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
-import { Simulator, SimulatorState } from './Simulator.js';
+import {
+  Simulator,
+  SimulatorState,
+  getBlockEventsFrom,
+  getLastBlock,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
@@ -41,8 +46,13 @@ export interface BlockData {
   timestamp: Date;
 }
 
-export interface SyncCapability<TState, TUpdate> {
-  applyUpdate: (state: TState, update: TUpdate) => TState;
+export type ChangesResult = {
+  readonly changes: DustStateChanges[];
+  readonly protocolVersion: number;
+};
+
+export interface SyncCapability<TState, TUpdate, TResult> {
+  applyUpdate: (state: TState, update: TUpdate) => [TState, TResult];
 }
 
 export type IndexerClientConnection = {
@@ -257,14 +267,14 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
-export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate> => {
+export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
-    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): CoreWallet {
+    applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] {
       const { updates, secretKey } = wrappedUpdate;
 
       // Nothing to update yet
       if (updates.length === 0) {
-        return state;
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
       }
 
       const lastUpdate = updates.at(-1)!;
@@ -274,16 +284,23 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
       // in case the nextIndex is less than or equal to the current appliedIndex
       // just update highestRelevantWalletIndex
       if (nextIndex <= state.progress.appliedIndex) {
-        return CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true });
+        return [
+          CoreWallet.updateProgress(state, { highestRelevantWalletIndex, isConnected: true }),
+          { changes: [], protocolVersion: Number(state.protocolVersion) },
+        ];
       }
 
       const events = updates.map((u) => u.raw).filter((event) => event !== null);
 
-      return CoreWallet.updateProgress(CoreWallet.applyEvents(state, secretKey, events, wrappedUpdate.timestamp), {
+      const [newState, changes] = CoreWallet.applyEventsWithChanges(state, secretKey, events, wrappedUpdate.timestamp);
+
+      const updatedState = CoreWallet.updateProgress(newState, {
         appliedIndex: nextIndex,
         highestRelevantWalletIndex,
         isConnected: true,
       });
+
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
     },
   };
 };
@@ -292,32 +309,72 @@ export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, SimulatorSyncUpdate> => {
   return {
-    updates: (_state: CoreWallet, secretKey: DustSecretKey) =>
-      config.simulator.state$.pipe(Stream.map((state) => ({ update: state, secretKey }))),
+    updates: (_state: CoreWallet, secretKey: DustSecretKey) => {
+      // Get the initial state immediately to ensure we process the genesis block.
+      // Then subscribe to state$ for subsequent changes, but deduplicate by block number
+      // to avoid processing the same block twice.
+      let lastSeenBlockNumber: bigint | undefined;
+
+      return pipe(
+        Stream.fromEffect(config.simulator.getLatestState()),
+        Stream.concat(config.simulator.state$),
+        Stream.filter((state) => {
+          const lastBlock = getLastBlock(state);
+          if (lastBlock === undefined) {
+            return false; // Skip blank state
+          }
+          const blockNumber = lastBlock.number;
+          // Skip if we've already seen this block (deduplication)
+          if (lastSeenBlockNumber !== undefined && blockNumber <= lastSeenBlockNumber) {
+            return false;
+          }
+          lastSeenBlockNumber = blockNumber;
+          return true;
+        }),
+        Stream.map((state) => ({ update: state, secretKey })),
+      );
+    },
     blockData: (): Effect.Effect<BlockData> => {
       return Effect.gen(function* () {
         const state = yield* config.simulator.getLatestState();
-        const timestamp = DateOps.secondsToDate(state.lastTxNumber);
+        const lastBlock = getLastBlock(state);
+        // Use currentTime instead of lastBlock.timestamp for time-sensitive operations
+        // (e.g., Dust generation calculation). The currentTime reflects any fast-forwarding
+        // that has been done, while lastBlock.timestamp only reflects when the block was produced.
         return {
-          hash: yield* Simulator.blockHash(timestamp),
-          height: Number(state.lastTxNumber),
+          hash: lastBlock.hash,
+          height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
-          timestamp,
+          timestamp: state.currentTime,
         };
       });
     },
   };
 };
 
-export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => ({
-  applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate) =>
-    CoreWallet.updateProgress(
-      CoreWallet.applyEvents(
+export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate, ChangesResult> => {
+  return {
+    applyUpdate: (state: CoreWallet, update: SimulatorSyncUpdate): [CoreWallet, ChangesResult] => {
+      const lastBlock = getLastBlock(update.update);
+      // If no block exists yet (blank simulator), skip update
+      if (lastBlock === undefined) {
+        return [state, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+      }
+      // Get all events from blocks starting at appliedIndex (the next block to process).
+      // appliedIndex semantics: the first block number we haven't processed yet.
+      // Initial: appliedIndex = 0 (haven't processed any blocks)
+      // After processing block N: appliedIndex = N + 1 (next block to process)
+      const events = [...getBlockEventsFrom(update.update, state.progress.appliedIndex)];
+      const [newState, changes] = CoreWallet.applyEventsWithChanges(
         state,
         update.secretKey,
-        update.update.lastTxResult?.events || [],
-        DateOps.secondsToDate(update.update.lastTxNumber),
-      ),
-      { appliedIndex: update.update.lastTxNumber },
-    ),
-});
+        events,
+        lastBlock.timestamp,
+      );
+      const updatedState = CoreWallet.updateProgress(newState, {
+        appliedIndex: lastBlock.number + 1n,
+      });
+      return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
+    },
+  };
+};

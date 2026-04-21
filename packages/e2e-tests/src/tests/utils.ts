@@ -20,7 +20,7 @@ import {
   InMemoryTransactionHistoryStorage,
   TransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
@@ -289,7 +289,7 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
     configuration: {
       ...walletConfig,
       ...fixture.getDustWalletConfig(),
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
@@ -446,18 +446,22 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
     ),
   );
 
-export const waitForTxInHistory = async (txHash: string, wallet: WalletFacade) => {
+export const waitForTxInHistory = async (
+  txHash: string,
+  wallet: WalletFacade,
+  ready?: (entry: WalletEntry) => boolean,
+) => {
+  const isReady = ready ?? (() => true);
   const txEntry = await rx.firstValueFrom(
     wallet.state().pipe(
-      rx.mergeMap(async (state) => {
-        const txEntry = await wallet.queryTxHistoryByHash(txHash);
-        return { state, txEntry };
+      rx.filter((state) => state.isSynced),
+      rx.mergeMap(async () => wallet.queryTxHistoryByHash(txHash)),
+      rx.tap((txEntry) => {
+        logger.info(
+          `Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}, ready: ${txEntry !== undefined && isReady(txEntry)}`,
+        );
       }),
-      rx.tap(({ txEntry }) => {
-        logger.info(`Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}`);
-      }),
-      rx.filter(({ state, txEntry }) => state.isSynced && txEntry !== undefined),
-      rx.map(({ txEntry }) => txEntry!),
+      rx.filter((txEntry): txEntry is WalletEntry => txEntry !== undefined && isReady(txEntry)),
     ),
   );
   expect(txEntry).toBeDefined();
@@ -671,10 +675,10 @@ export function expectReceiverUnshieldedTxHistory(entry: WalletEntry, expectedVa
  * with the specified section ('shielded' or 'unshielded').
  */
 export async function expectTxHistoryHasSection(
-  storage: { getAll(): AsyncIterable<Record<string, unknown>> },
+  storage: { getAll(): Promise<readonly Record<string, unknown>[]> },
   section: 'shielded' | 'unshielded',
 ) {
-  const entries = await Array.fromAsync(storage.getAll());
+  const entries = await storage.getAll();
   expect(entries.length).toBeGreaterThan(0);
   const matching = entries.filter((e) => e[section] !== undefined);
   expect(matching.length).toBeGreaterThan(0);
