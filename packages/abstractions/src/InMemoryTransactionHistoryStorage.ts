@@ -20,57 +20,62 @@ import {
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
+ *
+ * An optional `merge` function can be provided to control how existing and
+ * incoming entries are combined during {@link upsert}.  When omitted the
+ * default behaviour is a shallow spread (`{ ...existing, ...incoming }`).
+ *
+ * Because the merge runs **synchronously** inside `upsert`, the single-threaded
+ * nature of JavaScript guarantees atomicity — no external semaphore is needed.
  */
 export class InMemoryTransactionHistoryStorage<
   T extends { hash: TransactionHash } = TransactionHistoryCommon,
   I = T,
 > implements TransactionHistoryStorage<T> {
-  private entries: Map<TransactionHash, T>;
-  private readonly entrySchema: Schema.Schema<T, I>;
+  private storage: Map<TransactionHash, T>;
+  private readonly schema: Schema.Schema<T, I>;
+  private readonly merge: (existing: T, incoming: T) => T;
 
-  constructor(entrySchema: Schema.Schema<T, I>) {
-    this.entries = new Map<TransactionHash, T>();
-    this.entrySchema = entrySchema;
+  constructor(schema: Schema.Schema<T, I>, merge?: (existing: T, incoming: T) => T) {
+    this.storage = new Map<TransactionHash, T>();
+    this.schema = schema;
+    this.merge = merge ?? ((existing, incoming) => ({ ...existing, ...incoming }));
   }
 
   upsert(entry: T): Promise<void> {
-    const existing = this.entries.get(entry.hash);
-    this.entries.set(entry.hash, existing ? { ...existing, ...entry } : entry);
+    const existing = this.storage.get(entry.hash);
+    this.storage.set(entry.hash, existing ? this.merge(existing, entry) : entry);
     return Promise.resolve();
   }
 
-  async *getAll(): AsyncIterableIterator<T> {
-    for (const entry of this.entries.values()) {
-      yield await Promise.resolve(entry);
-    }
+  getAll(): Promise<readonly T[]> {
+    return Array.fromAsync(this.storage.values());
   }
 
   get(hash: TransactionHash): Promise<T | undefined> {
-    return Promise.resolve(this.entries.get(hash));
+    return Promise.resolve(this.storage.get(hash));
   }
 
   reset(): void {
-    this.entries.clear();
+    this.storage.clear();
   }
 
   async serialize(): Promise<SerializedTransactionHistory> {
-    const allEntries: T[] = [];
-    for await (const entry of this.getAll()) {
-      allEntries.push(entry);
-    }
-    const encode = Schema.encodeSync(Schema.Array(this.entrySchema));
-    return JSON.stringify(encode(allEntries));
+    const allEntries = await this.getAll();
+    const encode = Schema.encodeSync(Schema.Array(this.schema));
+    return JSON.stringify(encode([...allEntries]));
   }
 
   static restore<T extends { hash: string }, I>(
     serialized: SerializedTransactionHistory,
-    entrySchema: Schema.Schema<T, I>,
+    schema: Schema.Schema<T, I>,
+    merge?: (existing: T, incoming: T) => T,
   ): InMemoryTransactionHistoryStorage<T, I> {
-    const decode = Schema.decodeUnknownSync(Schema.Array(entrySchema));
+    const decode = Schema.decodeUnknownSync(Schema.Array(schema));
     const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<T, I>(entrySchema);
+    const storage = new InMemoryTransactionHistoryStorage<T, I>(schema, merge);
     for (const entry of decoded) {
-      storage.entries.set(entry.hash, entry);
+      storage.storage.set(entry.hash, entry);
     }
     return storage;
   }

@@ -14,7 +14,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
-import { InsufficientFundsError, OtherWalletError, SignError, TransactingError, WalletError } from './WalletError.js';
+import { InsufficientFundsError, OtherWalletError, TransactingError, WalletError } from './WalletError.js';
 import {
   BalanceRecipe,
   CoinSelection,
@@ -206,7 +206,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       const balancingIntent = ledger.Intent.new(intent!.ttl);
       balancingIntent.guaranteedUnshieldedOffer = offer;
 
-      return [ledger.Transaction.fromPartsRandomized(this.networkId, undefined, undefined, balancingIntent), newState];
+      const segmentId = Option.getOrElse(this.txOps.findAvailableSegmentId(transaction), () => 1);
+      // @TODO in ledger 8.1.0 will be able to set the segment id when constructing the tx
+      const balancingTx = ledger.Transaction.fromParts(this.networkId, undefined, undefined, undefined);
+      balancingTx.intents = new Map([[segmentId, balancingIntent]]);
+      return [balancingTx, newState];
     });
   }
 
@@ -345,9 +349,6 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   ): Either.Either<T, WalletError> {
     return Either.gen(this, function* () {
       const segments = this.txOps.getSegments(transaction);
-      if (!segments.length) {
-        throw new SignError({ message: 'No segments found in the provided transaction' });
-      }
 
       for (const segment of segments) {
         const signedData = yield* this.txOps.getSignatureData(transaction, segment);

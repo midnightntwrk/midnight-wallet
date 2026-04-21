@@ -23,6 +23,7 @@ import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
+  mergeWalletEntries,
 } from '@midnight-ntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 import { pick } from 'lodash-es';
@@ -44,7 +45,7 @@ const configuration: DefaultConfiguration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
 const initWalletWithSeed = async (seed: Buffer) => {

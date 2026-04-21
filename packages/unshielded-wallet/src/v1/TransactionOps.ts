@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, pipe, Array as Arr } from 'effect';
+import { Either, Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { TransactingError, WalletError } from './WalletError.js';
@@ -32,6 +32,9 @@ export type TransactionOps = {
     segment: number,
   ) => Either.Either<Uint8Array, WalletError>;
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[];
+  findAvailableSegmentId(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Option.Option<number>;
   addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
     transaction: TTransaction,
     signature: ledger.Signature,
@@ -76,6 +79,15 @@ export const TransactionOps: TransactionOps = {
   },
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[] {
     return transaction.intents?.keys().toArray() ?? [];
+  },
+  findAvailableSegmentId(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Option.Option<number> {
+    const used = new Set(transaction.intents?.keys() ?? []);
+    return pipe(
+      IterableOps.range(1, 65535),
+      IterableOps.findFirst((segmentId) => !used.has(segmentId)),
+    );
   },
   // @TODO - https://shielded.atlassian.net/browse/PM-21260
   addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(

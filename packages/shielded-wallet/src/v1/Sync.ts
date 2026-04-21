@@ -264,14 +264,13 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         wrappedUpdate.updates.map((u) => u.event),
       );
 
-      return [
-        CoreWallet.updateProgress(newState, {
-          highestRelevantWalletIndex,
-          appliedIndex: nextIndex,
-          isConnected: true,
-        }),
-        { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
-      ];
+      const updatedState = CoreWallet.updateProgress(newState, {
+        highestRelevantWalletIndex,
+        appliedIndex: nextIndex,
+        isConnected: true,
+      });
+
+      return [updatedState, { changes: newChanges, protocolVersion: lastUpdate.protocolVersion }];
     },
   };
 };

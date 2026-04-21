@@ -19,14 +19,7 @@ import { Array as Arr, Order, pipe } from 'effect';
 import { type Observable } from 'rxjs';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import {
-  getShieldedSeed,
-  getUnshieldedSeed,
-  getDustSeed,
-  tokenValue,
-  waitForFullySynced,
-  waitForDustGenerated,
-} from './utils/helpers.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed, tokenValue, waitForDustGenerated } from './utils/helpers.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import {
   createKeystore,
@@ -41,6 +34,7 @@ import {
   type FacadeState,
   WalletEntrySchema,
   WalletFacade,
+  mergeWalletEntries,
 } from '../src/index.js';
 import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
@@ -95,7 +89,7 @@ describe('Dust Registration', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -152,7 +146,7 @@ describe('Dust Registration', () => {
   });
 
   it('registers dust generation after receiving unshielded tokens', async () => {
-    await Promise.all([waitForFullySynced(senderFacade), waitForFullySynced(receiverFacade)]);
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const unshieldedReceiverState = await receiverFacade.unshielded.getAddress();
 

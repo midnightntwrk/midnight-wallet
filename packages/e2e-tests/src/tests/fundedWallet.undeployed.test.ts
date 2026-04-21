@@ -171,7 +171,7 @@ describe('Funded wallet', () => {
     'Unshielded transaction history entries contain createdUtxos and spentUtxos',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const txHistory = await funded.wallet.getAllFromTxHistory();
       const unshieldedEntries = txHistory.filter((e) => e.unshielded !== undefined);
       expect(unshieldedEntries.length).toBeGreaterThan(0);
       unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
@@ -186,7 +186,7 @@ describe('Funded wallet', () => {
     'Shielded transaction history entries contain receivedCoins and spentCoins',
     async () => {
       await funded.wallet.waitForSyncedState();
-      const txHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const txHistory = await funded.wallet.getAllFromTxHistory();
       const shieldedEntries = txHistory.filter((e) => e.shielded !== undefined);
       expect(shieldedEntries.length).toBeGreaterThan(0);
       shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));

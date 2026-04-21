@@ -25,6 +25,7 @@ import {
   PublicKey,
   type UnshieldedKeystore,
   UnshieldedWallet,
+  mergeWalletEntries,
 } from '@midnight-ntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
@@ -44,7 +45,7 @@ export const defaultConfiguration: Configuration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
 export const init = async (

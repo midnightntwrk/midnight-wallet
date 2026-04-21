@@ -23,6 +23,7 @@ import {
   createKeystore,
   PublicKey,
   UnshieldedWallet,
+  mergeWalletEntries,
 } from '@midnight-ntwrk/wallet-sdk';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk/capabilities';
 import { Buffer } from 'buffer';
@@ -43,7 +44,7 @@ const configuration: DefaultConfiguration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
 const initWalletWithSeed = async (seed: Buffer) => {

@@ -36,9 +36,11 @@ import {
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
+  mergeShieldedSections,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
@@ -61,9 +63,24 @@ export const WalletEntrySchema = Schema.Struct({
   ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
   shielded: Schema.optional(ShieldedSectionSchema),
   unshielded: Schema.optional(UnshieldedSectionSchema),
+  dust: Schema.optional(DustSectionSchema),
 });
 
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
+
+export const mergeWalletEntries = (existing: WalletEntry, incoming: WalletEntry): WalletEntry => ({
+  ...existing,
+  ...incoming,
+  ...(existing.shielded !== undefined && incoming.shielded !== undefined
+    ? { shielded: mergeShieldedSections(existing.shielded, incoming.shielded) }
+    : {}),
+  ...(existing.unshielded !== undefined && incoming.unshielded !== undefined
+    ? { unshielded: { ...existing.unshielded, ...incoming.unshielded } }
+    : {}),
+  ...(existing.dust !== undefined && incoming.dust !== undefined
+    ? { dust: mergeDustSections(existing.dust, incoming.dust) }
+    : {}),
+});
 
 const isWalletEntry: (u: unknown) => u is WalletEntry = Schema.is(WalletEntrySchema);
 
@@ -952,9 +969,8 @@ export class WalletFacade {
     return raw && isWalletEntry(raw) ? raw : undefined;
   }
 
-  async *getAllFromTxHistory(): AsyncIterableIterator<WalletEntry> {
-    for await (const raw of this.#txHistoryStorage.getAll()) {
-      yield raw;
-    }
+  async getAllFromTxHistory(): Promise<WalletEntry[]> {
+    const allEntries = await this.#txHistoryStorage.getAll();
+    return [...allEntries];
   }
 }

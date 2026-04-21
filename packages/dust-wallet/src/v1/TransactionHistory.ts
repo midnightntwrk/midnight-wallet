@@ -17,35 +17,36 @@ import { TransactionHistoryDetail } from '@midnight-ntwrk/wallet-sdk-indexer-cli
 import { HttpQueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { TransactionHistoryError } from './WalletError.js';
 
-export const QualifiedShieldedCoinInfoSchema = Schema.Struct({
-  type: Schema.String,
-  nonce: Schema.String,
-  value: Schema.BigInt,
+export const DustUtxoInfoSchema = Schema.Struct({
+  initialValue: Schema.BigInt,
+  nonce: Schema.BigInt,
+  seq: Schema.Number,
+  backingNight: Schema.String,
   mtIndex: Schema.BigInt,
 });
 
-export const ShieldedSectionSchema = Schema.Struct({
-  receivedCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
-  spentCoins: Schema.Array(QualifiedShieldedCoinInfoSchema),
+export const DustSectionSchema = Schema.Struct({
+  receivedUtxos: Schema.Array(DustUtxoInfoSchema),
+  spentUtxos: Schema.Array(DustUtxoInfoSchema),
 });
 
-type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
+type DustSection = Schema.Schema.Type<typeof DustSectionSchema>;
 
-export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
+export const DustTransactionHistoryEntrySchema = Schema.Struct({
   hash: TransactionHistoryStorage.TransactionHashSchema,
   protocolVersion: Schema.Number,
   status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
-  shielded: ShieldedSectionSchema,
+  dust: DustSectionSchema,
 });
 
-export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
+export type DustTransactionHistoryEntry = Schema.Schema.Type<typeof DustTransactionHistoryEntrySchema>;
 
 export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
   indexerClientConnection: { indexerHttpUrl: string };
 };
 
-const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
+const utxoEquals = Schema.equivalence(DustUtxoInfoSchema);
 
 export type TransactionDetails = {
   hash: string;
@@ -55,7 +56,7 @@ export type TransactionDetails = {
 
 export type TransactionHistoryService = {
   put(
-    changes: ledger.ZswapStateChanges,
+    changes: ledger.DustStateChanges,
     metadata: TransactionDetails,
     protocolVersion: number,
   ): Effect.Effect<void, TransactionHistoryError>;
@@ -64,35 +65,43 @@ export type TransactionHistoryService = {
   ): Effect.Effect<TransactionDetails, TransactionHistoryError>;
 };
 
-export const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
-  receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
-  spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
+export const mergeDustSections = (existing: DustSection, incoming: DustSection): DustSection => ({
+  receivedUtxos: EArray.unionWith(existing.receivedUtxos, incoming.receivedUtxos, utxoEquals),
+  spentUtxos: EArray.unionWith(existing.spentUtxos, incoming.spentUtxos, utxoEquals),
 });
 
-type StorageEntryWithShielded = Omit<
+type StorageEntryWithDust = Omit<
   TransactionHistoryStorage.TransactionHistoryCommon,
   'identifiers' | 'timestamp' | 'fees'
 > & {
-  readonly shielded: ShieldedSection;
+  readonly dust: DustSection;
 };
 
+const convertQualifiedDustOutput = (utxo: ledger.QualifiedDustOutput) => ({
+  initialValue: utxo.initialValue,
+  nonce: utxo.nonce,
+  seq: utxo.seq,
+  backingNight: utxo.backingNight,
+  mtIndex: utxo.mtIndex,
+});
+
 const convertUpdateToStorageEntry = (
-  changes: ledger.ZswapStateChanges,
+  changes: ledger.DustStateChanges,
   metadata: TransactionDetails,
   protocolVersion: number,
-): StorageEntryWithShielded => ({
+): StorageEntryWithDust => ({
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
-  shielded: {
-    receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
-    spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
-  } satisfies ShieldedSection,
+  dust: {
+    receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
+    spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
+  } satisfies DustSection,
 });
 
-const upsertShieldedEntry = (
+const upsertDustEntry = (
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
+  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { dust: DustSection },
 ): Effect.Effect<void, TransactionHistoryError> =>
   Effect.tryPromise({
     try: () => txHistoryStorage.upsert(entry),
@@ -109,12 +118,12 @@ export const makeDefaultTransactionHistoryService = (
 
   return {
     put: (
-      changes: ledger.ZswapStateChanges,
+      changes: ledger.DustStateChanges,
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertShieldedEntry(txHistoryStorage, entry);
+      return upsertDustEntry(txHistoryStorage, entry);
     },
 
     getTransactionDetails: (
@@ -156,12 +165,12 @@ export const makeSimulatorTransactionHistoryService = (
 
   return {
     put: (
-      changes: ledger.ZswapStateChanges,
+      changes: ledger.DustStateChanges,
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertShieldedEntry(txHistoryStorage, {
+      return upsertDustEntry(txHistoryStorage, {
         ...entry,
         timestamp: new Date(metadata.timestamp),
       });
