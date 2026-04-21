@@ -318,7 +318,8 @@ export const getBlockEventsFrom: {
 
 /**
  * @deprecated Use getBlockEventsFrom instead with proper appliedIndex semantics Get all events from blocks with number
- *   > afterBlockNumber.
+ *
+ * > AfterBlockNumber.
  */
 export const getBlockEventsSince: {
   (afterBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];

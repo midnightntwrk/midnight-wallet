@@ -131,15 +131,13 @@ export const makeSimulatorTransactingCapability = (
 
 /**
  * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
- * value.
- * Finds the next available intent segment id in a transaction.
+ * value. Finds the next available intent segment id in a transaction.
  *
- * Fallible intent segments occupy the range `[1, 65535]`; segment `0` is
- * reserved for the guaranteed section and is never returned.
+ * Fallible intent segments occupy the range `[1, 65535]`; segment `0` is reserved for the guaranteed section and is
+ * never returned.
  *
  * @param transaction - Transaction whose intent map is inspected.
- * @returns `Some(segmentId)` with the lowest unused id, or `None` if all
- *   65535 fallible segments are taken.
+ * @returns `Some(segmentId)` with the lowest unused id, or `None` if all 65535 fallible segments are taken.
  */
 export const findAvailableSegmentId = (transaction: AnyTransaction): Option.Option<number> => {
   const used = new Set(transaction.intents?.keys() ?? []);
@@ -150,8 +148,8 @@ export const findAvailableSegmentId = (transaction: AnyTransaction): Option.Opti
 };
 
 /**
- * Distributes the fee across multiple inputs, draining smaller inputs first
- * when the fee exceeds any single input's value.
+ * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
+ * value.
  */
 const distributeFeeAcrossInputs = <T extends { value: bigint }>(
   inputs: ReadonlyArray<T>,
