@@ -35,7 +35,7 @@
     "web-worker": "^1.5.0"
   },
   "devDependencies": {
-    "@effect/platform": "^0.96.0"
+    "@effect/platform": "0.96.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
