@@ -319,8 +319,8 @@ export function CustomUnshieldedWallet<
     }
 
     /**
-     * Serializes the most recent state
-     * It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know exactly, which state is serialized
+     * Serializes the most recent state It's preferable to use [[UnshieldedWalletState.serialize]] instead, to know
+     * exactly, which state is serialized
      */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());

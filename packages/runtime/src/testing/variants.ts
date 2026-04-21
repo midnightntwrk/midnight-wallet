@@ -199,8 +199,8 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
 }
 
 /**
- * Builder of an intercepting variant
- * It allows removing the possibility of race conditions by requiring an explicit gesture to migrate to a next/specific protocol version
+ * Builder of an intercepting variant It allows removing the possibility of race conditions by requiring an explicit
+ * gesture to migrate to a next/specific protocol version
  */
 export class InterceptingVariantBuilder<TTag extends string | symbol, TState> implements VariantBuilder.VariantBuilder<
   InterceptingVariant<TTag, TState>,

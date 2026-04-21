@@ -45,9 +45,7 @@ export type RunningVariant<TTag extends symbol | string, TState> = Poly.WithTag<
   state: Stream<StateChange.StateChange<TState>, WalletRuntimeError>;
 };
 
-/**
- * A utility type that represents any {@link Variant}.
- */
+/** A utility type that represents any {@link Variant}. */
 export type AnyVariant = Variant<string | symbol, any, any, AnyRunningVariant>;
 
 export type AnyRunningVariant = RunningVariant<string | symbol, any>;
@@ -73,14 +71,10 @@ export type PreviousStateOf<T> =
       ? S
       : never;
 
-/**
- * An array of {@link Variant} instances.
- */
+/** An array of {@link Variant} instances. */
 export type AnyVariantArray = AnyVariant[];
 
-/**
- * A type that associates a {@link Variant} with a given version of the Midnight protocol.
- */
+/** A type that associates a {@link Variant} with a given version of the Midnight protocol. */
 export type VersionedVariant<T extends AnyVariant> = Readonly<{
   sinceVersion: ProtocolVersion.ProtocolVersion;
   variant: T;
@@ -92,7 +86,7 @@ export type AnyVersionedVariant = VersionedVariant<AnyVariant>;
  * An ordered array of types that associates a {@link Variant} with a given version of the Midnight protocol.
  *
  * @remarks
- * The expected order of the variants will be ascending on `sinceVersion`.
+ *   The expected order of the variants will be ascending on `sinceVersion`.
  */
 export type AnyVersionedVariantArray = AnyVersionedVariant[];
 

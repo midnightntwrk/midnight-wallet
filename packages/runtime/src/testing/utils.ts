@@ -19,9 +19,7 @@ import { Observable, OperatorFunction, reduce } from 'rxjs';
  *
  * @param observable The RxJS observable from which state values should be read.
  * @param onErrCallback An optional callback to invoke if an error is encountered reading a state value.
- * @returns A `Promise` that resolves with an array of state values that were received before encountering
- * any error.
- *
+ * @returns A `Promise` that resolves with an array of state values that were received before encountering any error.
  * @internal
  */
 export const toProtocolStateArray = <T>(

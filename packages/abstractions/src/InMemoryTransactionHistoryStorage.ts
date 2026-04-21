@@ -21,12 +21,11 @@ import {
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
  *
- * An optional `merge` function can be provided to control how existing and
- * incoming entries are combined during {@link upsert}.  When omitted the
- * default behaviour is a shallow spread (`{ ...existing, ...incoming }`).
+ * An optional `merge` function can be provided to control how existing and incoming entries are combined during
+ * {@link upsert}. When omitted the default behaviour is a shallow spread (`{ ...existing, ...incoming }`).
  *
- * Because the merge runs **synchronously** inside `upsert`, the single-threaded
- * nature of JavaScript guarantees atomicity — no external semaphore is needed.
+ * Because the merge runs **synchronously** inside `upsert`, the single-threaded nature of JavaScript guarantees
+ * atomicity — no external semaphore is needed.
  */
 export class InMemoryTransactionHistoryStorage<
   T extends { hash: TransactionHash } = TransactionHistoryCommon,

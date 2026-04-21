@@ -240,8 +240,9 @@ describe('Swaps', () => {
   });
 
   /**
-   * Disabled due to error validating Transaction: FeeCalculation(OutsideTimeToDismiss { time_to_dismiss: 15.494ms, allowed_time_to_dismiss: 15.000ms, size: 4601 })
-   * We'll likely need to allow user to set payments in the fallible section of the transaction in order to avoid the issue above
+   * Disabled due to error validating Transaction: FeeCalculation(OutsideTimeToDismiss { time_to_dismiss: 15.494ms,
+   * allowed_time_to_dismiss: 15.000ms, size: 4601 }) We'll likely need to allow user to set payments in the fallible
+   * section of the transaction in order to avoid the issue above
    */
   it.skip('can perform an unshielded swap', async () => {
     await Promise.all([walletAFacade.waitForSyncedState(), walletBFacade.waitForSyncedState()]);

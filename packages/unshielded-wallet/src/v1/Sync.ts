@@ -163,17 +163,17 @@ export const makeSimulatorSyncService = (
 };
 
 /**
- * Creates a sync capability that extracts UTXOs from the simulator's ledger state
- * and applies them to the wallet.
+ * Creates a sync capability that extracts UTXOs from the simulator's ledger state and applies them to the wallet.
  *
  * This capability:
+ *
  * 1. Extracts all UTXOs for the wallet's address from the simulator ledger
  * 2. Compares with the wallet's current UTXOs to determine created/spent
  * 3. Applies the update to the wallet state
  *
- * Note: The `registeredForDustGeneration` flag is set based on whether the address
- * appears in the ledger's dust delegation table. This is a heuristic that may not
- * perfectly match the indexer's behavior but provides reasonable accuracy.
+ * Note: The `registeredForDustGeneration` flag is set based on whether the address appears in the ledger's dust
+ * delegation table. This is a heuristic that may not perfectly match the indexer's behavior but provides reasonable
+ * accuracy.
  */
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;

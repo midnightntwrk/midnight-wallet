@@ -136,8 +136,8 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances an unbound transaction
-   * Note: Unbound transactions are balanced in place and returned
+   * Balances an unbound transaction Note: Unbound transactions are balanced in place and returned
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
@@ -150,8 +150,9 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances an unproven transaction
-   * Note: This method does the same thing as balanceUnboundTransaction but is provided for convenience and type safety
+   * Balances an unproven transaction Note: This method does the same thing as balanceUnboundTransaction but is provided
+   * for convenience and type safety
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
@@ -164,12 +165,12 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
   }
 
   /**
-   * Balances a bound transaction
-   * Note: In bound transactions we can only balance the guaranteed section in intents
+   * Balances a bound transaction Note: In bound transactions we can only balance the guaranteed section in intents
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
-   * @returns A balancing counterpart transaction (which should be merged with the original transaction )
-   * and the new wallet state if successful, otherwise an error
+   * @returns A balancing counterpart transaction (which should be merged with the original transaction ) and the new
+   *   wallet state if successful, otherwise an error
    */
   balanceFinalizedTransaction(
     wallet: CoreWallet,
@@ -216,6 +217,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Makes a transfer transaction
+   *
    * @param wallet - The wallet to make the transfer with
    * @param outputs - The outputs for the transfer
    * @param ttl - The TTL for the transaction
@@ -272,6 +274,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Initializes a swap transaction
+   *
    * @param wallet - The wallet to initialize the swap for
    * @param desiredInputs - The desired inputs for the swap
    * @param desiredOutputs - The desired outputs for the swap
@@ -339,6 +342,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Internal method to sign either an unproven or unbound transaction
+   *
    * @param transaction - The transaction to sign
    * @param signSegment - The signing function
    * @returns The signed transaction if successful, otherwise an error
@@ -361,8 +365,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Reverts a transaction by rolling back all inputs owned by this wallet
+   *
    * @param wallet - The wallet to revert the transaction for
-   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or UnprovenTransaction)
+   * @param transaction - The transaction to revert (can be FinalizedTransaction, UnboundTransaction, or
+   *   UnprovenTransaction)
    * @returns The updated wallet with rolled back UTXOs if successful, otherwise an error
    */
   revertTransaction(
@@ -382,6 +388,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Balances a segment of a transaction
+   *
    * @param wallet - The wallet to balance the segment for
    * @param imbalances - The imbalances to balance the segment for
    * @param targetImbalances - The target imbalances to balance the segment for
@@ -433,6 +440,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Prepares an offer for a given balance recipe
+   *
    * @param wallet - The wallet to prepare the offer for
    * @param balanceRecipe - The balance recipe to prepare the offer for
    * @returns The prepared offer and the new wallet state if successful, otherwise an error
@@ -487,10 +495,11 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
   /**
    * Balances an unboundish (unproven or unbound) transaction
+   *
    * @param wallet - The wallet to balance the transaction with
    * @param transaction - The transaction to balance
    * @returns The balanced transaction and the new wallet state if successful, otherwise an error
-   * @TODO - https://shielded.atlassian.net/browse/PM-21260
+   * @todo - https://shielded.atlassian.net/browse/PM-21260
    */
   #balanceUnboundishTransaction<T extends ledger.UnprovenTransaction | UnboundTransaction>(
     wallet: CoreWallet,
