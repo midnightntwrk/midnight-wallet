@@ -37,6 +37,11 @@ export type PublicKey = {
 
 export type SyncedDustNullifier = {
   dustNullifier: DustNullifier;
+  isSynced: boolean;
+};
+
+export type DustNullifierUpdate = {
+  dustNullifier: DustNullifier;
   qdo: QualifiedDustOutput;
   isSynced: boolean;
 };
@@ -114,19 +119,32 @@ export const CoreWallet = {
   applyDustGenerations(
     wallet: CoreWallet,
     updates: CollapsedMerkleTree[],
-    dustNullifiers: SyncedDustNullifier[],
+    dustNullifiers: DustNullifierUpdate[],
   ): CoreWallet {
-    let updatedState = updates.reduce(
+    const updatedState = updates.reduce(
       (state, update) => state.applyGenerationCollapsedUpdate(update.update),
       wallet.state,
     );
-    updatedState = dustNullifiers.reduce((state, { dustNullifier, qdo }) => {
-      return state.addUtxo(dustNullifier, qdo);
-    }, updatedState);
+    return this.applyDustNullifiers(
+      {
+        ...wallet,
+        state: updatedState,
+      },
+      dustNullifiers,
+    );
+  },
+
+  applyDustNullifiers(wallet: CoreWallet, dustNullifiers: DustNullifierUpdate[]): CoreWallet {
+    const updatedState = dustNullifiers.reduce(
+      (state, { dustNullifier, qdo }) => state.addUtxo(dustNullifier, qdo),
+      wallet.state,
+    );
     return {
       ...wallet,
       state: updatedState,
-      dustNullifiers: wallet.dustNullifiers.concat(dustNullifiers),
+      dustNullifiers: wallet.dustNullifiers.concat(
+        dustNullifiers.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
+      ),
     };
   },
 
