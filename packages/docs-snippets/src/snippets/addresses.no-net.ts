@@ -18,8 +18,8 @@ import {
   ShieldedEncryptionPublicKey,
   ShieldedCoinPublicKey,
   mainnet,
-} from '@midnight-ntwrk/wallet-sdk-address-format';
-import type { NetworkId } from '@midnight-ntwrk/wallet-sdk-address-format';
+  type NetworkId,
+} from '@midnight-ntwrk/wallet-sdk';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 const networkId: NetworkId = 'undeployed';

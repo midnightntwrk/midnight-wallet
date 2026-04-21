@@ -30,7 +30,7 @@ import {
   WalletFacade,
   mergeWalletEntries,
 } from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -147,8 +147,8 @@ describe('Swaps', () => {
   it('can perform a shielded swap', async () => {
     const provingService = makeWasmProvingService();
 
-    const facadeAState = await waitForFullySynced(walletAFacade);
-    const facadeBState = await waitForFullySynced(walletBFacade);
+    const facadeAState = await walletAFacade.waitForSyncedState();
+    const facadeBState = await walletBFacade.waitForSyncedState();
 
     const { shielded: walletAShieldedStateBefore } = facadeAState;
     const { shielded: walletBShieldedStateBefore } = facadeBState;
@@ -245,7 +245,7 @@ describe('Swaps', () => {
    * section of the transaction in order to avoid the issue above
    */
   it.skip('can perform an unshielded swap', async () => {
-    await Promise.all([waitForFullySynced(walletAFacade), waitForFullySynced(walletBFacade)]);
+    await Promise.all([walletAFacade.waitForSyncedState(), walletBFacade.waitForSyncedState()]);
 
     const ttl = new Date(Date.now() + 60 * 60 * 1000);
 

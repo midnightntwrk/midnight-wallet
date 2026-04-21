@@ -14,7 +14,7 @@
  */
 
 import React, { useEffect } from 'react';
-import { WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletFacade } from '@midnight-ntwrk/wallet-sdk';
 import * as rx from 'rxjs';
 
 const useAnimationFrame = (callback: (delta: number) => void) => {

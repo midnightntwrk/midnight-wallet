@@ -50,6 +50,7 @@ packages/src/**/*.d.ts*
 reports
 
 # user files
+/.scratch
 **/.sync_cache
 /packages/e2e-tests/res
 
