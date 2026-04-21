@@ -11,7 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, ParseResult, pipe, Schema } from 'effect';
-import { DustSecretKey, Event as LedgerEvent, DustStateMerkleTreeCollapsedUpdate } from '@midnight-ntwrk/ledger-v8';
+import {
+  DustSecretKey,
+  Event as LedgerEvent,
+  DustStateMerkleTreeCollapsedUpdate,
+  DustCommitment,
+  DustNullifier,
+} from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
 
 const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
@@ -224,3 +230,13 @@ export const TransactionEventsUpdateSchema = Schema.transform(
 );
 
 export type TransactionEventsUpdate = Schema.Schema.Type<typeof TransactionEventsUpdateSchema>;
+
+export type DustSpendProcessedEvent = {
+  tag: 'dustSpendProcessed';
+  commitment: DustCommitment;
+  commitmentIndex: bigint;
+  nullifier: DustNullifier;
+  vFee: bigint;
+  declaredTime: Date;
+  blockTime: Date;
+};

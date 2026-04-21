@@ -11,7 +11,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Either, Layer, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule, Encoding } from 'effect';
-import { DustSecretKey, LedgerParameters, dustNullifier, DustNullifier } from '@midnight-ntwrk/ledger-v8';
+import {
+  DustSecretKey,
+  LedgerParameters,
+  dustNullifier,
+  DustNullifier,
+  QualifiedDustOutput,
+} from '@midnight-ntwrk/ledger-v8';
 import {
   AddressDustGenerations,
   BlockHash,
@@ -38,6 +44,7 @@ import {
   DustGenerationsSyncUpdate,
   DustNullifierTransactionsSubscription,
   DustNullifierTransactionSubscriptionSchema,
+  DustSpendProcessedEvent,
   SyncEventsUpdateSchema,
   TransactionEventsUpdate,
   TransactionEventsUpdateSchema,
@@ -195,35 +202,35 @@ export const makeDustGenerationsSyncService = (
           const generations = DustGenerationsSyncUpdate.create(rawGenerations, secretKey);
           const updatedWallet = applyDustGenerationsUpdate(state, generations);
 
-          let nullifiers = updatedWallet.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier);
+          let nonSyncedNullifiers = updatedWallet.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier);
 
-          while (nullifiers.length > 0) {
+          while (nonSyncedNullifiers.length > 0) {
             const nullifierTransactions = yield* pipe(
-              nullifierTransactionsSubscription(nullifiers, blockData.height),
+              nullifierTransactionsSubscription(nonSyncedNullifiers, blockData.height),
               Stream.runCollect,
               Effect.map(Chunk.toArray),
             );
-            /*
-            {
-                tag: 'dustSpendProcessed',
-                commitment: DustCommitment,
-                commitmentIndex: bigint,
-                nullifier: DustNullifier,
-                vFee: bigint,
-                declaredTime: Date,
-                blockTime: Date,
-              }
-            const qdo = updatedState.findUtxoByNullifier(nullifier);
-            const newUtxo = localState.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
-            const newDustNullifier = dustNullifier(newUtxo, secretKey)
-             */
+            const newNullifiers: DustNullifier[] = [];
             for (const tx of nullifierTransactions) {
               const dustSpends = tx.dustLedgerEvents.filter(
                 (dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed',
               );
+              for (const dustSpend of dustSpends) {
+                const { nullifier, vFee, commitmentIndex, blockTime } = dustSpend.raw
+                  .content as DustSpendProcessedEvent;
+                const qdo = updatedWallet.state.findUtxoByNullifier(nullifier);
+                if (!qdo) {
+                  return yield* Effect.fail(
+                    new SyncWalletError(new Error(`Failed to find qdo by nullifier: ${nullifier}`)),
+                  );
+                }
+                const newUtxo = updatedWallet.state.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
+                const newDustNullifier = dustNullifier(newUtxo, secretKey);
+                newNullifiers.push(newDustNullifier);
+              }
             }
             // [updatedWallet, newDustNullifiers] = applyNullifiersUpdate(state, nullifierTransactions);
-            nullifiers = [];
+            nonSyncedNullifiers = newNullifiers;
           }
         }),
         Stream.unwrap,
@@ -418,27 +425,31 @@ export const applyDustGenerationsUpdate = (state: CoreWallet, wrappedUpdate: Dus
     .filter((u) => u !== undefined)
     .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-  const nullifiers = updates
+  const qdos = updates
     .filter((u) => u.type === 'DustGenerationsItem')
     .filter((u) => u.owner === publicKey)
+    .toSorted((u1, u2) => u1.merkleIndex - u2.merkleIndex)
     .map(
       (u) =>
         ({
-          dustNullifier: dustNullifier(
-            {
-              initialValue: BigInt(u.value),
-              owner: state.publicKey.publicKey,
-              nonce: BigInt(u.nonce),
-              seq: 0,
-              ctime: u.ctime,
-              backingNight: '', // we don't need this to calculate the nullifier
-              mtIndex: BigInt(u.merkleIndex),
-            },
-            secretKey,
-          ),
-          isSynced: false,
-        }) as SyncedDustNullifier,
+          initialValue: BigInt(u.value), // TODO: this is wrong, u.value is generation_info.value, but we need the qdo.initialValue here
+          owner: state.publicKey.publicKey,
+          nonce: BigInt(u.nonce),
+          seq: 0,
+          ctime: u.ctime,
+          backingNight: '', // TODO: add the real value once indexer updates
+          mtIndex: BigInt(u.merkleIndex), // TODO: double-check that's the right tree's index
+        }) as QualifiedDustOutput,
     );
+
+  const nullifiers = qdos.map(
+    (qdo) =>
+      ({
+        dustNullifier: dustNullifier(qdo, secretKey),
+        qdo,
+        isSynced: false,
+      }) as SyncedDustNullifier,
+  );
 
   const updatedWallet = CoreWallet.applyDustGenerations(state, dustGenTreeUpdates, nullifiers);
 
