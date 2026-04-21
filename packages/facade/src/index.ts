@@ -40,7 +40,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
