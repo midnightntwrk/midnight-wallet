@@ -28,12 +28,14 @@
     }
   },
   "dependencies": {
-    "@effect/platform": "^0.96.0",
     "@midnight-ntwrk/ledger-v8": "^8.0.3",
     "@midnight-ntwrk/wallet-sdk-utilities": "1.1.0",
     "@midnight-ntwrk/zkir-v2": "2.1.0",
     "effect": "^3.19.19",
     "web-worker": "^1.5.0"
+  },
+  "devDependencies": {
+    "@effect/platform": "^0.96.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
