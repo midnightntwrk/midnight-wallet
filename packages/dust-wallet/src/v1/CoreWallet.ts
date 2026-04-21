@@ -26,7 +26,7 @@ import {
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
-import { Dust, DustWithNullifier } from './types/Dust.js';
+import { Dust, DustGenerationInfo, DustWithNullifier } from './types/Dust.js';
 import { CoinWithValue } from './CoinsAndBalances.js';
 import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
 import { CollapsedMerkleTree } from './SyncSchema.js';
@@ -40,11 +40,15 @@ export type SyncedDustNullifier = {
   isSynced: boolean;
 };
 
-export type DustNullifierUpdate = {
+export type DustGenerationWithNullifierUpdate = {
   dustNullifier: DustNullifier;
+  genInfo: DustGenerationInfo;
+  generationIndex: number;
   qdo: QualifiedDustOutput;
   isSynced: boolean;
 };
+
+export type DustNullifierUpdate = Pick<DustGenerationWithNullifierUpdate, 'dustNullifier' | 'qdo' | 'isSynced'>;
 
 export const PublicKey = {
   fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
@@ -119,23 +123,37 @@ export const CoreWallet = {
   applyDustGenerations(
     wallet: CoreWallet,
     updates: CollapsedMerkleTree[],
-    dustNullifiers: DustNullifierUpdate[],
+    generationUpdates: DustGenerationWithNullifierUpdate[],
   ): CoreWallet {
-    const updatedState = updates.reduce(
-      (state, update) => state.applyGenerationCollapsedUpdate(update.update),
-      wallet.state,
-    );
+    let updatedState = wallet.state;
+
+    let lastUpdatedIndex = -1;
+    for (const { generationIndex, genInfo, qdo } of generationUpdates) {
+      // apply updates prior to the current generation index
+      updatedState = updates
+        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationIndex)
+        .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+      updatedState = updatedState.insertGenerationInfo(BigInt(generationIndex), genInfo, qdo.backingNight);
+      lastUpdatedIndex = generationIndex;
+    }
+
+    // apply the rest of the updates
+    updatedState = updates
+      .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
+      .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
     return this.applyDustNullifiers(
       {
         ...wallet,
         state: updatedState,
       },
-      dustNullifiers,
+      generationUpdates,
     );
   },
 
-  applyDustNullifiers(wallet: CoreWallet, dustNullifiers: DustNullifierUpdate[]): CoreWallet {
-    const updatedState = dustNullifiers.reduce(
+  applyDustNullifiers(wallet: CoreWallet, nullifierUpdates: DustNullifierUpdate[]): CoreWallet {
+    const updatedState = nullifierUpdates.reduce(
       (state, { dustNullifier, qdo }) => state.addUtxo(dustNullifier, qdo),
       wallet.state,
     );
@@ -143,7 +161,7 @@ export const CoreWallet = {
       ...wallet,
       state: updatedState,
       dustNullifiers: wallet.dustNullifiers.concat(
-        dustNullifiers.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
+        nullifierUpdates.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
       ),
     };
   },
