@@ -22,7 +22,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
-const networkId: NetworkId = 'undeployed';
+const networkId: NetworkId.NetworkId = 'undeployed';
 
 // seeds/keys below are derived from the testing seed 0000000000000000000000000000000000000000000000000000000000000001
 const unshieldedSecretKey = Buffer.from('b76bd8d92eb76098e938051af9d6bf2c81d8bf47ead2aa5442ca60c04346378b', 'hex');

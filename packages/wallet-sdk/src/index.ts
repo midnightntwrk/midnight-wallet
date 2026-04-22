@@ -11,17 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-export {
-  WalletSeed,
-  WalletState,
-  SerializedTransaction,
-  ProtocolState,
-  ProtocolVersion,
-  SyncProgress,
-  TransactionHistoryStorage,
-  InMemoryTransactionHistoryStorage,
-  NoOpTransactionHistoryStorage,
-} from '@midnight-ntwrk/wallet-sdk-abstractions';
+export * from '@midnight-ntwrk/wallet-sdk-abstractions';
 export * from '@midnight-ntwrk/wallet-sdk-address-format';
 export * from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 export * from '@midnight-ntwrk/wallet-sdk-facade';

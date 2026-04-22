@@ -15,7 +15,7 @@ import { bech32m } from '@scure/base';
 import * as subsquidScale from '@subsquid/scale-codec';
 
 export const mainnet: unique symbol = Symbol('Mainnet');
-export type NetworkId = string | typeof mainnet;
+type NetworkId = string | typeof mainnet;
 const NetworkId = {
   toString: (networkId: NetworkId): string => {
     return networkId === mainnet ? 'mainnet' : networkId;
