@@ -13,9 +13,9 @@
 import { Either, HashMap, Option, pipe } from 'effect';
 import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { UnshieldedState, UnshieldedUpdate, UtxoWithMeta } from '../UnshieldedState.js';
+import { UnshieldedState, type UnshieldedUpdate, type UtxoWithMeta } from '../UnshieldedState.js';
 import { UtxoNotFoundError } from '../WalletError.js';
-import { generateMockUpdate, generateMockUtxoWithMeta, makeUtxo, utxoArb, utxoHash } from './testUtils.js';
+import { generateMockUpdate, generateMockUtxoWithMeta, utxoArb, utxoHash } from './testUtils.js';
 
 const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
   pipe(
@@ -24,212 +24,39 @@ const getOrThrow = <E, A>(either: Either.Either<A, E>): A =>
   );
 
 describe('UnshieldedState', () => {
-  it('should apply a successful update', () => {
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, generateMockUpdate('SUCCESS', 1, 0)),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(1);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
-  it('should apply update with multiple created outputs', () => {
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, generateMockUpdate('SUCCESS', 3, 0)),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(3);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
-  it('should spend a utxo', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, update.createdUtxos[0]),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(0);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(1);
-  });
-
-  it('should fail to spend a utxo that does not exist', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-
-    const result = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, generateMockUtxoWithMeta('owner21', 'type12')),
-    );
-
-    expect(Either.isLeft(result)).toBe(true);
-    pipe(
-      result,
-      Either.mapLeft((e) => expect(e).toBeInstanceOf(UtxoNotFoundError)),
-    );
-  });
-
-  it('should rollback a spend', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-    const utxoToSpend = update.createdUtxos[0];
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, utxoToSpend),
-      getOrThrow,
-      (s) => UnshieldedState.rollbackSpend(s, utxoToSpend),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(1);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
-  it('should apply a failed update (restore spent utxos)', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-    const utxoToSpend = update.createdUtxos[0];
-
-    const failedUpdate: UnshieldedUpdate = {
-      createdUtxos: [],
-      spentUtxos: [utxoToSpend],
-      status: 'FAILURE',
-    };
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, utxoToSpend),
-      getOrThrow,
-      (s) => UnshieldedState.applyFailedUpdate(s, failedUpdate),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(1);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
-  it('should reject applying update with wrong status', () => {
-    const result = pipe(UnshieldedState.empty(), (s) =>
-      UnshieldedState.applyUpdate(s, generateMockUpdate('FAILURE', 1, 0)),
-    );
-
-    expect(Either.isLeft(result)).toBe(true);
-  });
-
-  it('should reject applying failed update with wrong status', () => {
-    const result = pipe(UnshieldedState.empty(), (s) =>
-      UnshieldedState.applyFailedUpdate(s, generateMockUpdate('SUCCESS', 0, 1)),
-    );
-
-    expect(Either.isLeft(result)).toBe(true);
-  });
-
-  it('should restore state from arrays', () => {
-    const utxo1 = generateMockUtxoWithMeta('owner1', 'type1');
-    const utxo2 = generateMockUtxoWithMeta('owner2', 'type2');
-    const pendingUtxo = generateMockUtxoWithMeta('owner3', 'type3');
-
-    const state = UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]);
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(2);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(1);
-  });
-
-  it('should convert state to arrays', () => {
-    const utxo1 = generateMockUtxoWithMeta('owner1', 'type1');
-    const utxo2 = generateMockUtxoWithMeta('owner2', 'type2');
-    const pendingUtxo = generateMockUtxoWithMeta('owner3', 'type3');
-
-    const arrays = pipe(UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]), UnshieldedState.toArrays);
-
-    expect(arrays.availableUtxos.length).toEqual(2);
-    expect(arrays.pendingUtxos.length).toEqual(1);
-  });
-
-  it('should spend by utxo (ledger.Utxo)', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spendByUtxo(s, update.createdUtxos[0].utxo),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(0);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(1);
-  });
-
-  it('should fail to spendByUtxo with UtxoNotFoundError when utxo is not available', () => {
-    const ghost = makeUtxo({ intentHash: 'h-ghost', outputNo: 0 });
-
-    const result = UnshieldedState.spendByUtxo(UnshieldedState.empty(), ghost.utxo);
-
-    expect(Either.isLeft(result)).toBe(true);
-    pipe(
-      result,
-      Either.mapLeft((e) => {
-        expect(e).toBeInstanceOf(UtxoNotFoundError);
-        // The error should carry the input utxo so callers can report which one was missing.
-        expect(e.utxo).toEqual(ghost.utxo);
-      }),
-    );
-  });
-
-  it('should rollback spend by utxo (ledger.Utxo)', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-    const utxoToSpend = update.createdUtxos[0];
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, utxoToSpend),
-      getOrThrow,
-      (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(1);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
-  it('should not throw when rollbackSpendByUtxo is called twice', () => {
-    const update = generateMockUpdate('SUCCESS', 1, 0);
-    const utxoToSpend = update.createdUtxos[0];
-
-    const state = pipe(
-      UnshieldedState.empty(),
-      (s) => UnshieldedState.applyUpdate(s, update),
-      getOrThrow,
-      (s) => UnshieldedState.spend(s, utxoToSpend),
-      getOrThrow,
-      (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
-      getOrThrow,
-      (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
-      getOrThrow,
-    );
-
-    expect(HashMap.size(state.availableUtxos)).toEqual(1);
-    expect(HashMap.size(state.pendingUtxos)).toEqual(0);
-  });
-
   describe('applyUpdate', () => {
+    it('should apply a successful update', () => {
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, generateMockUpdate('SUCCESS', 1, 0)),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(1);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('should apply update with multiple created outputs', () => {
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, generateMockUpdate('SUCCESS', 3, 0)),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(3);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('should reject applying update with wrong status', () => {
+      const result = pipe(UnshieldedState.empty(), (s) =>
+        UnshieldedState.applyUpdate(s, generateMockUpdate('FAILURE', 1, 0)),
+      );
+
+      expect(Either.isLeft(result)).toBe(true);
+    });
+
     it('should apply PARTIAL_SUCCESS update the same as SUCCESS', () => {
-      const created = makeUtxo({ intentHash: 'h-partial', outputNo: 0 });
+      const created = generateMockUtxoWithMeta({ intentHash: 'h-partial', outputNo: 0 });
       const update: UnshieldedUpdate = {
         createdUtxos: [created],
         spentUtxos: [],
@@ -244,8 +71,8 @@ describe('UnshieldedState', () => {
     });
 
     it('should apply update that both creates and spends utxos', () => {
-      const existing = makeUtxo({ intentHash: 'h-existing', outputNo: 0 });
-      const created = makeUtxo({ intentHash: 'h-new', outputNo: 0 });
+      const existing = generateMockUtxoWithMeta({ intentHash: 'h-existing', outputNo: 0 });
+      const created = generateMockUtxoWithMeta({ intentHash: 'h-new', outputNo: 0 });
 
       const initial = pipe(
         UnshieldedState.empty(),
@@ -274,7 +101,7 @@ describe('UnshieldedState', () => {
     });
 
     it('should remove confirmed spent utxos from pendingUtxos', () => {
-      const u = makeUtxo({ intentHash: 'h-confirm', outputNo: 0 });
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-confirm', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -305,7 +132,7 @@ describe('UnshieldedState', () => {
     });
 
     it('should be a no-op for an empty SUCCESS update', () => {
-      const seed = makeUtxo({ intentHash: 'h-seed', outputNo: 0 });
+      const seed = generateMockUtxoWithMeta({ intentHash: 'h-seed', outputNo: 0 });
 
       const before = pipe(
         UnshieldedState.empty(),
@@ -333,8 +160,8 @@ describe('UnshieldedState', () => {
     });
 
     it('should silently ignore spentUtxos that are not in state', () => {
-      const present = makeUtxo({ intentHash: 'h-present', outputNo: 0 });
-      const ghost = makeUtxo({ intentHash: 'h-ghost', outputNo: 0 });
+      const present = generateMockUtxoWithMeta({ intentHash: 'h-present', outputNo: 0 });
+      const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
 
       const state = pipe(
         UnshieldedState.empty(),
@@ -360,8 +187,8 @@ describe('UnshieldedState', () => {
     });
 
     it('should place the specific created utxo into availableUtxos by hash', () => {
-      const a = makeUtxo({ intentHash: 'h-a', outputNo: 0 });
-      const b = makeUtxo({ intentHash: 'h-b', outputNo: 1 });
+      const a = generateMockUtxoWithMeta({ intentHash: 'h-a', outputNo: 0 });
+      const b = generateMockUtxoWithMeta({ intentHash: 'h-b', outputNo: 1 });
 
       const state = pipe(
         UnshieldedState.empty(),
@@ -381,11 +208,43 @@ describe('UnshieldedState', () => {
   });
 
   describe('applyFailedUpdate', () => {
+    it('should apply a failed update (restore spent utxos)', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+      const utxoToSpend = update.createdUtxos[0];
+
+      const failedUpdate: UnshieldedUpdate = {
+        createdUtxos: [],
+        spentUtxos: [utxoToSpend],
+        status: 'FAILURE',
+      };
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, utxoToSpend),
+        getOrThrow,
+        (s) => UnshieldedState.applyFailedUpdate(s, failedUpdate),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(1);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('should reject applying failed update with wrong status', () => {
+      const result = pipe(UnshieldedState.empty(), (s) =>
+        UnshieldedState.applyFailedUpdate(s, generateMockUpdate('SUCCESS', 0, 1)),
+      );
+
+      expect(Either.isLeft(result)).toBe(true);
+    });
+
     it('should restore spent utxo to availableUtxos AND remove it from pendingUtxos', () => {
       // Two-utxo setup: spend A, leave B available. After applyFailedUpdate(A),
       // available should contain BOTH A and B, pending should be empty.
-      const a = makeUtxo({ intentHash: 'h-a', outputNo: 0 });
-      const b = makeUtxo({ intentHash: 'h-b', outputNo: 0 });
+      const a = generateMockUtxoWithMeta({ intentHash: 'h-a', outputNo: 0 });
+      const b = generateMockUtxoWithMeta({ intentHash: 'h-b', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -432,8 +291,8 @@ describe('UnshieldedState', () => {
     });
 
     it('should be a no-op for spentUtxos not present in pendingUtxos', () => {
-      const present = makeUtxo({ intentHash: 'h-present', outputNo: 0 });
-      const ghost = makeUtxo({ intentHash: 'h-ghost', outputNo: 0 });
+      const present = generateMockUtxoWithMeta({ intentHash: 'h-present', outputNo: 0 });
+      const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -458,9 +317,156 @@ describe('UnshieldedState', () => {
     });
   });
 
+  describe('spend / spendByUtxo', () => {
+    it('should spend a utxo', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, update.createdUtxos[0]),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('should fail to spend a utxo that does not exist', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+
+      const result = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, generateMockUtxoWithMeta({ owner: 'owner21', type: 'type12' })),
+      );
+
+      expect(Either.isLeft(result)).toBe(true);
+      pipe(
+        result,
+        Either.mapLeft((e) => expect(e).toBeInstanceOf(UtxoNotFoundError)),
+      );
+    });
+
+    it('should spend by utxo (ledger.Utxo)', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spendByUtxo(s, update.createdUtxos[0].utxo),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(0);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('should fail to spendByUtxo with UtxoNotFoundError when utxo is not available', () => {
+      const ghost = generateMockUtxoWithMeta({ intentHash: 'h-ghost', outputNo: 0 });
+
+      const result = UnshieldedState.spendByUtxo(UnshieldedState.empty(), ghost.utxo);
+
+      expect(Either.isLeft(result)).toBe(true);
+      pipe(
+        result,
+        Either.mapLeft((e) => {
+          expect(e).toBeInstanceOf(UtxoNotFoundError);
+          // The error should carry the input utxo so callers can report which one was missing.
+          expect(e.utxo).toEqual(ghost.utxo);
+        }),
+      );
+    });
+  });
+
+  describe('rollbackSpend / rollbackSpendByUtxo', () => {
+    it('should rollback a spend', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+      const utxoToSpend = update.createdUtxos[0];
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, utxoToSpend),
+        getOrThrow,
+        (s) => UnshieldedState.rollbackSpend(s, utxoToSpend),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(1);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('should rollback spend by utxo (ledger.Utxo)', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+      const utxoToSpend = update.createdUtxos[0];
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, utxoToSpend),
+        getOrThrow,
+        (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(1);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+
+    it('should not throw when rollbackSpendByUtxo is called twice', () => {
+      const update = generateMockUpdate('SUCCESS', 1, 0);
+      const utxoToSpend = update.createdUtxos[0];
+
+      const state = pipe(
+        UnshieldedState.empty(),
+        (s) => UnshieldedState.applyUpdate(s, update),
+        getOrThrow,
+        (s) => UnshieldedState.spend(s, utxoToSpend),
+        getOrThrow,
+        (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
+        getOrThrow,
+        (s) => UnshieldedState.rollbackSpendByUtxo(s, utxoToSpend.utxo),
+        getOrThrow,
+      );
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(1);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(0);
+    });
+  });
+
+  describe('restore / toArrays', () => {
+    it('should restore state from arrays', () => {
+      const utxo1 = generateMockUtxoWithMeta({ owner: 'owner1', type: 'type1' });
+      const utxo2 = generateMockUtxoWithMeta({ owner: 'owner2', type: 'type2' });
+      const pendingUtxo = generateMockUtxoWithMeta({ owner: 'owner3', type: 'type3' });
+
+      const state = UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]);
+
+      expect(HashMap.size(state.availableUtxos)).toEqual(2);
+      expect(HashMap.size(state.pendingUtxos)).toEqual(1);
+    });
+
+    it('should convert state to arrays', () => {
+      const utxo1 = generateMockUtxoWithMeta({ owner: 'owner1', type: 'type1' });
+      const utxo2 = generateMockUtxoWithMeta({ owner: 'owner2', type: 'type2' });
+      const pendingUtxo = generateMockUtxoWithMeta({ owner: 'owner3', type: 'type3' });
+
+      const arrays = pipe(UnshieldedState.restore([utxo1, utxo2], [pendingUtxo]), UnshieldedState.toArrays);
+
+      expect(arrays.availableUtxos.length).toEqual(2);
+      expect(arrays.pendingUtxos.length).toEqual(1);
+    });
+  });
+
   describe('lifecycle sequences', () => {
     it('happy path: create → spend → confirm leaves both collections empty', () => {
-      const u = makeUtxo({ intentHash: 'h-life', outputNo: 0 });
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-life', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -487,7 +493,7 @@ describe('UnshieldedState', () => {
     });
 
     it('failure path: spend → applyFailedUpdate makes utxo re-spendable', () => {
-      const u = makeUtxo({ intentHash: 'h-fail', outputNo: 0 });
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-fail', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -517,7 +523,7 @@ describe('UnshieldedState', () => {
     });
 
     it('rollback path: spend → rollbackSpend makes utxo re-spendable', () => {
-      const u = makeUtxo({ intentHash: 'h-rb', outputNo: 0 });
+      const u = generateMockUtxoWithMeta({ intentHash: 'h-rb', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),
@@ -541,8 +547,8 @@ describe('UnshieldedState', () => {
     });
 
     it('reorg shape: applyUpdate(A) → applyUpdate(B) → applyFailedUpdate(B) leaves A intact', () => {
-      const a = makeUtxo({ intentHash: 'h-A', outputNo: 0 });
-      const b = makeUtxo({ intentHash: 'h-B', outputNo: 0 });
+      const a = generateMockUtxoWithMeta({ intentHash: 'h-A', outputNo: 0 });
+      const b = generateMockUtxoWithMeta({ intentHash: 'h-B', outputNo: 0 });
 
       // First A is created and confirmed spent (so it's gone).
       // Then B is created, spent, and then the spend fails — B should come back.
@@ -579,8 +585,8 @@ describe('UnshieldedState', () => {
     it('pending cleanup is keyed by hash, not order', () => {
       // Spend two utxos in order [a, b]. Confirm with spentUtxos in REVERSE order [b, a].
       // Both must be removed from pending; result should not depend on input order.
-      const a = makeUtxo({ intentHash: 'h-pa', outputNo: 0 });
-      const b = makeUtxo({ intentHash: 'h-pb', outputNo: 0 });
+      const a = generateMockUtxoWithMeta({ intentHash: 'h-pa', outputNo: 0 });
+      const b = generateMockUtxoWithMeta({ intentHash: 'h-pb', outputNo: 0 });
 
       const after = pipe(
         UnshieldedState.empty(),

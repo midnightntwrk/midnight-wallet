@@ -10,18 +10,16 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Chunk } from 'effect';
-import { Observable, OperatorFunction, reduce } from 'rxjs';
+import { type Observable, type OperatorFunction, reduce } from 'rxjs';
 
 /**
  * Utility function that takes state values from an RxJS observable until it completes or errors.
  *
  * @param observable The RxJS observable from which state values should be read.
  * @param onErrCallback An optional callback to invoke if an error is encountered reading a state value.
- * @returns A `Promise` that resolves with an array of state values that were received before encountering
- * any error.
- *
+ * @returns A `Promise` that resolves with an array of state values that were received before encountering any error.
  * @internal
  */
 export const toProtocolStateArray = <T>(

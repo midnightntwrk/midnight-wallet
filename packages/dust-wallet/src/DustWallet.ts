@@ -19,8 +19,8 @@ import {
   type SignatureVerifyingKey,
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
-import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { type Runtime, WalletBuilder } from '@midnight-ntwrk/wallet-sdk-runtime';
 import { type Variant, type VariantBuilder, type WalletLike } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { Effect, Either, type Scope } from 'effect';
@@ -35,22 +35,31 @@ import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
 import { type WalletSyncUpdate } from './v1/Sync.js';
 
+import { type TransactionHistoryService } from './v1/TransactionHistory.js';
+
 export type DustWalletCapabilities<TSerialized = string> = {
   serialization: SerializationCapability<CoreWallet, null, TSerialized>;
   coinsAndBalances: CoinsAndBalancesCapability<CoreWallet>;
   keys: KeysCapability<CoreWallet>;
 };
 
+export type DustWalletServices = {
+  transactionHistory: TransactionHistoryService;
+};
+
 export class DustWalletState<TSerialized = string> {
   static readonly mapState =
-    <TSerialized = string>(capabilities: DustWalletCapabilities<TSerialized>) =>
+    <TSerialized = string>(variant: DustWalletCapabilities<TSerialized> & DustWalletServices) =>
     (state: ProtocolState.ProtocolState<CoreWallet>): DustWalletState<TSerialized> => {
-      return new DustWalletState(state, capabilities);
+      const { serialization, coinsAndBalances, keys } = variant;
+      const { transactionHistory } = variant;
+      return new DustWalletState(state, { serialization, coinsAndBalances, keys }, { transactionHistory });
     };
 
   readonly protocolVersion: ProtocolVersion.ProtocolVersion;
   readonly state: CoreWallet;
   readonly capabilities: DustWalletCapabilities<TSerialized>;
+  readonly services: DustWalletServices;
 
   get totalCoins(): readonly DustFullInfo[] {
     return this.capabilities.coinsAndBalances.getTotalCoins(this.state);
@@ -76,18 +85,15 @@ export class DustWalletState<TSerialized = string> {
     return this.state.progress;
   }
 
-  /**
-   * Transaction history for the wallet.
-   * @throws Error - Not yet implemented
-   */
-  get transactionHistory(): never {
-    throw new Error('Transaction history is not yet implemented for DustWallet');
-  }
-
-  constructor(state: ProtocolState.ProtocolState<CoreWallet>, capabilities: DustWalletCapabilities<TSerialized>) {
+  constructor(
+    state: ProtocolState.ProtocolState<CoreWallet>,
+    capabilities: DustWalletCapabilities<TSerialized>,
+    services: DustWalletServices,
+  ) {
     this.protocolVersion = state.version;
     this.state = state.state;
     this.capabilities = capabilities;
+    this.services = services;
   }
 
   balance(time: Date): Balance {
@@ -148,10 +154,6 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   stop(): Promise<void>;
 };
 
-export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
-export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
-
 export type CustomizedDustWallet<
   TStartAux = DustSecretKey,
   TTransaction = FinalizedTransaction,
@@ -182,6 +184,10 @@ export interface CustomizedDustWalletClass<
   ): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
   restore(serializedState: TSerialized): CustomizedDustWallet<TStartAux, TTransaction, TSyncUpdate, TSerialized>;
 }
+
+export type DustWallet = CustomizedDustWallet<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
+
+export type DustWalletClass = CustomizedDustWalletClass<DustSecretKey, FinalizedTransaction, WalletSyncUpdate, string>;
 
 export function DustWallet(configuration: DefaultDustConfiguration): DustWalletClass {
   return CustomDustWallet(configuration, new V1Builder().withDefaults());
@@ -333,10 +339,6 @@ export function CustomDustWallet<
       );
     }
 
-    /**
-     * Serializes the most recent state
-     * It's preferable to use [[DustWalletState.serialize]] instead, to know exactly, which state is serialized
-     */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());
     }

@@ -13,4 +13,5 @@
 export * from './balancer/index.js';
 export * from './pendingTransactions/index.js';
 export * from './proving/index.js';
+export * from './simulation/index.js';
 export * from './submission/index.js';

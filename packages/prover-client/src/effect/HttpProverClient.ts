@@ -10,13 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
   ClientError,
   HttpURL,
-  InvalidProtocolSchemeError,
+  type InvalidProtocolSchemeError,
   ServerError,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { BlobOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -29,8 +29,8 @@ const CHECK_TX_PATH = '/check';
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
  *
  * @param config The server configuration to use when configuring the HTTP elements of the layer.
- * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP.
- * The layer can fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
+ * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP. The layer can
+ *   fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
  */
 export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverClient, InvalidProtocolSchemeError> = (
   config,

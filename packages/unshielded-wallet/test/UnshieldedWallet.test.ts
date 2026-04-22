@@ -13,7 +13,7 @@
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { firstValueFrom } from 'rxjs';
 import { randomUUID } from 'node:crypto';
-import { DockerComposeEnvironment, StartedDockerComposeEnvironment, Wait } from 'testcontainers';
+import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UnshieldedWallet } from '../src/index.js';
 import { getUnshieldedSeed, createWalletConfig, waitForCoins } from './testUtils.js';
@@ -65,7 +65,7 @@ describe('UnshieldedWallet', () => {
     expect(state.availableCoins.length).toBeGreaterThan(0);
     expect(state.pendingCoins).toHaveLength(0);
 
-    const transactionHistory = await Array.fromAsync(config.txHistoryStorage.getAll());
+    const transactionHistory = await config.txHistoryStorage.getAll();
 
     expect(transactionHistory.length).toBeGreaterThan(1);
   });

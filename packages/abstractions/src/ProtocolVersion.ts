@@ -13,20 +13,14 @@
 import * as Brand from 'effect/Brand';
 import * as Schema from 'effect/Schema';
 
-/**
- * A branded `bigint` that represents a protocol version.
- */
+/** A branded `bigint` that represents a protocol version. */
 export type ProtocolVersion = Brand.Branded<bigint, 'ProtocolVersion'>;
 
-/**
- * Constructs a branded `bigint` represents a protocol version.
- */
+/** Constructs a branded `bigint` represents a protocol version. */
 export const ProtocolVersion = Brand.nominal<ProtocolVersion>();
 
 export declare namespace ProtocolVersion {
-  /**
-   * A tuple type that represents a start and ending protocol version.
-   */
+  /** A tuple type that represents a start and ending protocol version. */
   type Range = readonly [start: ProtocolVersion, end: ProtocolVersion];
 }
 
@@ -36,9 +30,7 @@ export declare namespace ProtocolVersion {
  * @param start The start value.
  * @param end The end value.
  * @returns A {@link ProtocolVersion.Range} defined by `start` and `end`.
- *
- * @throws `TypeError`
- * Thrown when `start` is after `end`, or the difference between them is less than one.
+ * @throws `TypeError` Thrown when `start` is after `end`, or the difference between them is less than one.
  */
 // TODO: make it possible to represent an open range on the end side to remove special "MaxSupportedVersion"
 export const makeRange = (start: ProtocolVersion, end: ProtocolVersion): ProtocolVersion.Range => {
@@ -58,9 +50,7 @@ export const withinRange = (version: ProtocolVersion, range: ProtocolVersion.Ran
   return version >= min && version < max;
 };
 
-/**
- * A schema that transforms a `bigint` into a {@link ProtocolVersion}.
- */
+/** A schema that transforms a `bigint` into a {@link ProtocolVersion}. */
 export const ProtocolVersionSchema = Schema.BigInt.pipe(Schema.fromBrand(ProtocolVersion));
 
 /**
@@ -71,12 +61,8 @@ export const ProtocolVersionSchema = Schema.BigInt.pipe(Schema.fromBrand(Protoco
  */
 export const is = Schema.is(ProtocolVersionSchema);
 
-/**
- * Represents the minimum supported protocol version.
- */
+/** Represents the minimum supported protocol version. */
 export const MinSupportedVersion = ProtocolVersion(0n);
 
-/**
- * Represents the maximum supported protocol version.
- */
+/** Represents the maximum supported protocol version. */
 export const MaxSupportedVersion = ProtocolVersion(BigInt(Number.MAX_SAFE_INTEGER));

@@ -11,17 +11,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
-import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
+  type DefaultConfiguration,
+  DustWallet,
+  InMemoryTransactionHistoryStorage,
+  WalletEntrySchema,
+  WalletFacade,
+  HDWallet,
+  Roles,
+  ShieldedWallet,
   createKeystore,
   PublicKey as UnshieldedPublicKey,
   UnshieldedWallet,
   type UnshieldedKeystore,
-} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+  mergeWalletEntries,
+} from '@midnight-ntwrk/wallet-sdk';
 import { type Buffer } from 'buffer';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
@@ -41,7 +45,7 @@ const configuration: DefaultConfiguration = {
     indexerHttpUrl: INDEXER_HTTP_URL,
     indexerWsUrl: INDEXER_WS_URL,
   },
-  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+  txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
 };
 
 export const initWalletWithSeed = async (

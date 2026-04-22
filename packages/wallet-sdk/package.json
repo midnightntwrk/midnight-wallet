@@ -1,0 +1,84 @@
+{
+  "name": "@midnight-ntwrk/wallet-sdk",
+  "description": "Barrel package re-exporting all Midnight Wallet SDK packages",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "author": "Midnight Foundation",
+  "license": "Apache-2.0",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "files": [
+    "dist/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./address-format": {
+      "types": "./dist/address-format.d.ts",
+      "import": "./dist/address-format.js"
+    },
+    "./capabilities": {
+      "types": "./dist/capabilities.d.ts",
+      "import": "./dist/capabilities.js"
+    },
+    "./dust": {
+      "types": "./dist/dust.d.ts",
+      "import": "./dist/dust.js"
+    },
+    "./facade": {
+      "types": "./dist/facade.d.ts",
+      "import": "./dist/facade.js"
+    },
+    "./hd": {
+      "types": "./dist/hd.d.ts",
+      "import": "./dist/hd.js"
+    },
+    "./proving": {
+      "types": "./dist/proving.d.ts",
+      "import": "./dist/proving.js"
+    },
+    "./shielded": {
+      "types": "./dist/shielded.d.ts",
+      "import": "./dist/shielded.js"
+    },
+    "./testing": {
+      "types": "./dist/testing.d.ts",
+      "import": "./dist/testing.js"
+    },
+    "./unshielded": {
+      "types": "./dist/unshielded.d.ts",
+      "import": "./dist/unshielded.js"
+    }
+  },
+  "dependencies": {
+    "@midnight-ntwrk/wallet-sdk-abstractions": "^2.0.0",
+    "@midnight-ntwrk/wallet-sdk-address-format": "^3.1.0",
+    "@midnight-ntwrk/wallet-sdk-capabilities": "^3.2.0",
+    "@midnight-ntwrk/wallet-sdk-dust-wallet": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-facade": "^3.0.0",
+    "@midnight-ntwrk/wallet-sdk-hd": "^3.0.1",
+    "@midnight-ntwrk/wallet-sdk-shielded": "^2.1.0",
+    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "^2.1.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.1.0"
+  },
+  "scripts": {
+    "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
+    "lint": "eslint --max-warnings 0",
+    "format": "prettier --write \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,js,json,yaml,yml,md}\"",
+    "dist": "tsc -b ./tsconfig.build.json",
+    "dist:publish": "tsc -b ./tsconfig.publish.json",
+    "clean": "rimraf --glob dist 'tsconfig.*.tsbuildinfo' && date +%s > .clean-timestamp",
+    "publint": "publint --strict"
+  }
+}

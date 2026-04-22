@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as rx from 'rxjs';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
 
 /**
@@ -77,8 +77,8 @@ describe('Token transfer', () => {
         `wallet 2 address: ${utils.getUnshieldedAddress(NetworkId.NetworkId.Undeployed, initialState2.unshielded.address)}`,
       );
 
-      const senderInitialTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
-      const receiverInitialTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const senderInitialTxHistory = await funded.wallet.getAllFromTxHistory();
+      const receiverInitialTxHistory = await receiver.wallet.getAllFromTxHistory();
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -122,8 +122,8 @@ describe('Token transfer', () => {
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       const txHash = finalizedTx.transactionHash();
-      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet);
-      const senderFinalTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, (e) => e.shielded !== undefined);
+      const senderFinalTxHistory = await funded.wallet.getAllFromTxHistory();
       expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
       utils.expectSenderShieldedTxHistory(senderTxEntry);
       const finalState = await funded.wallet.waitForSyncedState();
@@ -136,8 +136,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]} ${shieldedTokenRaw}`);
       logger.info(`Dust fees paid: ${initialDustBalance - finalState.dust.balance(new Date(3 * 1000))}`);
 
-      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet);
-      const receiverFinalTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet, (e) => e.shielded !== undefined);
+      const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
       utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
       const finalState2 = await receiver.wallet.waitForSyncedState();
@@ -176,8 +176,8 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${initialBalance2} unshielded token`);
       logger.info(`Wallet 2 available coins: ${initialState2.unshielded.availableCoins.length}`);
 
-      const senderInitialTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
-      const receiverInitialTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const senderInitialTxHistory = await funded.wallet.getAllFromTxHistory();
+      const receiverInitialTxHistory = await receiver.wallet.getAllFromTxHistory();
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -219,8 +219,8 @@ describe('Token transfer', () => {
       expect(pendingState.unshielded.totalCoins.length).toBe(initialState.unshielded.totalCoins.length);
 
       const txHash = finalizedTx.transactionHash();
-      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet);
-      const senderFinalTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, (e) => e.unshielded !== undefined);
+      const senderFinalTxHistory = await funded.wallet.getAllFromTxHistory();
       expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
       utils.expectSenderUnshieldedTxHistory(senderTxEntry);
       const finalState = await rx.firstValueFrom(
@@ -244,8 +244,12 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${finalState.unshielded.balances[unshieldedTokenRaw]} unshielded tokens`);
       logger.info(`Dust fees paid: ${initialDustBalance - finalState.dust.balance(new Date(3 * 1000))}`);
 
-      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet);
-      const receiverFinalTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const receiverTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        receiver.wallet,
+        (e) => e.unshielded !== undefined,
+      );
+      const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
       utils.expectReceiverUnshieldedTxHistory(receiverTxEntry, outputValue);
 
@@ -327,7 +331,7 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1: ${pendingState.dust.balance(new Date())} tDUST`);
 
       const txHash = provenTx.transactionHash();
-      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet);
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, (e) => e.shielded !== undefined);
       const finalState = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       expect(finalState.shielded.balances[nativeToken1Raw]).toBe(initialShieldedToken1Balance - outputValueNativeToken);
@@ -345,7 +349,7 @@ describe('Token transfer', () => {
       // Verify sender tx history entry has spentCoins for both token types
       utils.expectSenderShieldedTxHistory(senderTxEntry);
 
-      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet);
+      const receiverTxEntry = await utils.waitForTxInHistory(txHash, receiver.wallet, (e) => e.shielded !== undefined);
       const finalState2 = await receiver.wallet.waitForSyncedState();
       logger.info(`Wallet 2 available coins: ${finalState2.shielded.availableCoins.length}`);
       logger.info(`Wallet 2: ${finalState2.dust.balance(new Date())} tDUST`);
@@ -415,25 +419,13 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + txId);
 
       const txHash = finalizedTx.transactionHash();
-      const txEntry = await rx.firstValueFrom(
-        funded.wallet.state().pipe(
-          rx.mergeMap(async (state) => {
-            const txEntry = await funded.wallet.queryTxHistoryByHash(txHash);
-            return { state, txEntry };
-          }),
-          rx.tap(({ txEntry }) => {
-            logger.info(`Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}`);
-          }),
-          rx.filter(
-            ({ state, txEntry }) =>
-              state.isSynced &&
-              txEntry !== undefined &&
-              txEntry.shielded !== undefined &&
-              txEntry.shielded.spentCoins.length > 0 &&
-              txEntry.shielded.receivedCoins.length > 0,
-          ),
-          rx.map(({ txEntry }) => txEntry!),
-        ),
+      const txEntry = await utils.waitForTxInHistory(
+        txHash,
+        funded.wallet,
+        (entry) =>
+          entry.shielded !== undefined &&
+          entry.shielded.spentCoins.length > 0 &&
+          entry.shielded.receivedCoins.length > 0,
       );
       const finalState = await funded.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
@@ -556,21 +548,19 @@ describe('Token transfer', () => {
       expect(finalReceiver2State.unshielded.balances[shieldedTokenRaw]).toBe(outputValue);
 
       // Verify sender tx history for combined shielded+unshielded transfer
-      const senderTxEntry = await funded.wallet.queryTxHistoryByHash(txHash);
-      expect(senderTxEntry).toBeDefined();
-      utils.expectSenderShieldedTxHistory(senderTxEntry!);
-      utils.expectSenderUnshieldedTxHistory(senderTxEntry!);
+      const bothSectionsReady = (e: WalletEntry) => e.shielded !== undefined && e.unshielded !== undefined;
+      const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, bothSectionsReady);
+      utils.expectSenderShieldedTxHistory(senderTxEntry);
+      utils.expectSenderUnshieldedTxHistory(senderTxEntry);
 
       // Verify both receivers see the tx with correct shielded and unshielded sections
-      const receiver1TxEntry = await receiver1.wallet.queryTxHistoryByHash(txHash);
-      expect(receiver1TxEntry).toBeDefined();
-      utils.expectReceiverShieldedTxHistory(receiver1TxEntry!, outputValue);
-      utils.expectReceiverUnshieldedTxHistory(receiver1TxEntry!, outputValue);
+      const receiver1TxEntry = await utils.waitForTxInHistory(txHash, receiver1.wallet, bothSectionsReady);
+      utils.expectReceiverShieldedTxHistory(receiver1TxEntry, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiver1TxEntry, outputValue);
 
-      const receiver2TxEntry = await receiver2.wallet.queryTxHistoryByHash(txHash);
-      expect(receiver2TxEntry).toBeDefined();
-      utils.expectReceiverShieldedTxHistory(receiver2TxEntry!, outputValue);
-      utils.expectReceiverUnshieldedTxHistory(receiver2TxEntry!, outputValue);
+      const receiver2TxEntry = await utils.waitForTxInHistory(txHash, receiver2.wallet, bothSectionsReady);
+      utils.expectReceiverShieldedTxHistory(receiver2TxEntry, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiver2TxEntry, outputValue);
 
       await receiver1.wallet.stop();
       await receiver2.wallet.stop();
@@ -760,7 +750,7 @@ describe('Token transfer', () => {
       const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
       const initialAvailableCoins = syncedState?.shielded.availableCoins.length ?? 0;
       const initialTotalCoins = syncedState?.shielded.totalCoins.length ?? 0;
-      const initialTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const initialTxHistory = await funded.wallet.getAllFromTxHistory();
       logger.info(`Wallet 1 balance is: ${initialBalance}`);
 
       const initialState2 = await rx.firstValueFrom(funded.wallet.state());
@@ -791,7 +781,7 @@ describe('Token transfer', () => {
       expect(finalState.totalCoins.length).toBe(initialTotalCoins);
 
       // Verify failed tx appears in history with FAILURE status or does not appear at all
-      const finalTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const finalTxHistory = await funded.wallet.getAllFromTxHistory();
       const failedEntry = await funded.wallet.queryTxHistoryByHash(txHash);
       if (failedEntry !== undefined) {
         expect(failedEntry.hash).toBe(txHash);

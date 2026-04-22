@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export class OtherWalletError extends Data.TaggedError('Wallet.Other')<{
   message: string;
@@ -33,9 +33,15 @@ export class InsufficientFundsError extends Data.TaggedError('Wallet.Insufficien
   tokenType: string;
 }> {}
 
+export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export type WalletError =
   | OtherWalletError
   | SyncWalletError
   | TransactingError
   | InsufficientFundsError
+  | TransactionHistoryError
   | LedgerOps.LedgerError;

@@ -11,11 +11,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { dispatch, PolyFunction, WithTag } from './polyFunction.js';
+import { dispatch, type PolyFunction, type WithTag } from './polyFunction.js';
 
 /**
- * Heterogeneous list - as in - list, where elements have different types
- * Here - more as an additional API over TS's tuple type
+ * Heterogeneous list - as in - list, where elements have different types Here - more as an additional API over TS's
+ * tuple type
  */
 export type Empty = [];
 export type NonEmpty<T> = T extends Array<infer E> ? [E, ...T] : never;

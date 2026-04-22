@@ -10,17 +10,17 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Exit, Scope, Types } from 'effect';
+import { Effect, Exit, Scope, type Types } from 'effect';
 import * as rx from 'rxjs';
-import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletLike, WalletRuntimeError } from './abstractions/index.js';
-import { StateOf } from './abstractions/Variant.js';
-import { ObservableOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { Variant, type VariantBuilder, type WalletLike, WalletRuntimeError } from './abstractions/index.js';
+import { type StateOf } from './abstractions/Variant.js';
+import { ObservableOps, HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 import * as Runtime from './Runtime.js';
 
 /**
- * Builds a wallet-like implementation from a collection of wallet-like variants, each specific
- * to a given version of the Midnight protocol.
+ * Builds a wallet-like implementation from a collection of wallet-like variants, each specific to a given version of
+ * the Midnight protocol.
  *
  * @typeParam TBuilders The sequence of variant builders that will manage the wallet state
  */
@@ -63,9 +63,7 @@ export class WalletBuilder<TBuilders extends VariantBuilder.AnyVersionedVariantB
     });
   }
 
-  /**
-   * Builds a wallet like implementation.
-   */
+  /** Builds a wallet like implementation. */
   build(
     ...[maybeConfiguration]: WalletBuilder.BuildArguments<TBuilders>
   ): WalletLike.BaseWalletClass<
@@ -167,15 +165,13 @@ export declare namespace WalletBuilder {
    * The internal build state of {@link WalletBuilder}.
    *
    * @remarks
-   * Represents the collection of configured variants and their configuration.
+   *   Represents the collection of configured variants and their configuration.
    */
   type BuildState<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> = {
     readonly variants: TBuilders;
   };
 
-  /**
-   * Allows properly expressing no need for configuration if an empty one needs to be provided
-   */
+  /** Allows properly expressing no need for configuration if an empty one needs to be provided */
   export type BuildArguments<TBuilders extends VariantBuilder.AnyVersionedVariantBuilder[]> =
     VoidIfEmpty<FullConfiguration<TBuilders>> extends undefined ? [] : [FullConfiguration<TBuilders>];
 

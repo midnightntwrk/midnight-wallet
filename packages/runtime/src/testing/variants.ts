@@ -10,8 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { StateChange, Variant, VariantBuilder, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
-import { Effect, Option, PubSub, Scope, Stream } from 'effect';
+import {
+  StateChange,
+  type Variant,
+  type VariantBuilder,
+  VersionChangeType,
+  WalletRuntimeError,
+} from '../abstractions/index.js';
+import { Effect, Option, PubSub, type Scope, Stream } from 'effect';
 
 export type RangeConfig = {
   min: number;
@@ -199,8 +205,8 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
 }
 
 /**
- * Builder of an intercepting variant
- * It allows removing the possibility of race conditions by requiring an explicit gesture to migrate to a next/specific protocol version
+ * Builder of an intercepting variant It allows removing the possibility of race conditions by requiring an explicit
+ * gesture to migrate to a next/specific protocol version
  */
 export class InterceptingVariantBuilder<TTag extends string | symbol, TState> implements VariantBuilder.VariantBuilder<
   InterceptingVariant<TTag, TState>,
