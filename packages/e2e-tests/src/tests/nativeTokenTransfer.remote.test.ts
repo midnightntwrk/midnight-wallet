@@ -82,7 +82,7 @@ describe('Token transfer', () => {
     logger.info('Wallets stopped');
   }, timeout);
 
-  test.only(
+  test(
     'Is working for valid native token transfer @smoke @healthcheck',
     async () => {
       await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
