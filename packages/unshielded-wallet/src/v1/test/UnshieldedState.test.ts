@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Either, HashMap, pipe } from 'effect';
 import { describe, expect, it } from 'vitest';
-import { UnshieldedState, UnshieldedUpdate } from '../UnshieldedState.js';
+import { UnshieldedState, type UnshieldedUpdate } from '../UnshieldedState.js';
 import { UtxoNotFoundError } from '../WalletError.js';
 import { generateMockUpdate, generateMockUtxoWithMeta } from './testUtils.js';
 

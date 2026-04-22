@@ -10,10 +10,10 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
+import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { TransactingError, WalletError } from './WalletError.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { TransactingError, type WalletError } from './WalletError.js';
 
 /** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;

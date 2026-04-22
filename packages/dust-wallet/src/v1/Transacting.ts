@@ -14,36 +14,36 @@ import { Effect, Either, pipe, BigInt as BigIntOps, Iterable as IterableOps, Opt
 import {
   DustActions,
   DustRegistration,
-  DustSecretKey,
+  type DustSecretKey,
   Intent,
-  PreBinding,
-  PreProof,
-  Signature,
+  type PreBinding,
+  type PreProof,
+  type Signature,
   SignatureEnabled,
-  SignatureVerifyingKey,
+  type SignatureVerifyingKey,
   Transaction,
   UnshieldedOffer,
-  UtxoOutput,
-  UtxoSpend,
-  FinalizedTransaction,
-  ProofErasedTransaction,
-  UnprovenTransaction,
+  type UtxoOutput,
+  type UtxoSpend,
+  type FinalizedTransaction,
+  type ProofErasedTransaction,
+  type UnprovenTransaction,
   addressFromKey,
-  LedgerParameters,
+  type LedgerParameters,
   nativeToken,
 } from '@midnight-ntwrk/ledger-v8';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import { OtherWalletError, TransactingError, WalletError, InsufficientFundsError } from './WalletError.js';
+import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { OtherWalletError, TransactingError, type WalletError, InsufficientFundsError } from './WalletError.js';
 import { LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
-import { AnyTransaction, Dust, NetworkId, TotalCostParameters } from './types/index.js';
+import { type AnyTransaction, type Dust, type NetworkId, type TotalCostParameters } from './types/index.js';
 import {
-  CoinsAndBalancesCapability,
-  CoinSelection,
-  CoinWithValue,
-  UtxoWithFullDustDetails,
+  type CoinsAndBalancesCapability,
+  type CoinSelection,
+  type CoinWithValue,
+  type UtxoWithFullDustDetails,
 } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
+import { type KeysCapability } from './Keys.js';
 import { BindingMarker, ProofMarker, SignatureMarker } from './Utils.js';
 import {
   getBalanceRecipe,

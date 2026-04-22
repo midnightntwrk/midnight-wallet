@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Data } from 'effect';
-import { VersionChangeType } from './VersionChangeType.js';
+import { type VersionChangeType } from './VersionChangeType.js';
 
 /**
  * A tagged enum data type that represents the state changes across wallet implementation variants.

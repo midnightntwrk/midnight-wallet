@@ -11,23 +11,23 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Array as Arr, Either, Option, pipe, Record } from 'effect';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { CoreWallet } from './CoreWallet.js';
-import { InsufficientFundsError, OtherWalletError, WalletError } from './WalletError.js';
+import { InsufficientFundsError, OtherWalletError, type WalletError } from './WalletError.js';
 import {
-  BalanceRecipe,
-  CoinSelection,
+  type BalanceRecipe,
+  type CoinSelection,
   getBalanceRecipe,
   Imbalances,
   InsufficientFundsError as BalancingInsufficientFundsError,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type ShieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { ShieldedCostModel, TransactionImbalances } from './TransactionImbalances.js';
 import { TransactionOps } from './TransactionOps.js';
-import { CoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability } from './Keys.js';
+import { type CoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability } from './Keys.js';
 
 export interface TokenTransfer {
   readonly amount: bigint;

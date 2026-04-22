@@ -13,11 +13,11 @@
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';
 import { logger } from './logger.js';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
 /**

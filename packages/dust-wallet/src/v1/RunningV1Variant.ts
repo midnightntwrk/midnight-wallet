@@ -21,7 +21,7 @@ import {
   type UnprovenTransaction,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { OtherWalletError, WalletError } from './WalletError.js';
+import { OtherWalletError, type WalletError } from './WalletError.js';
 import { ArrayOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import {
   type WalletRuntimeError,
@@ -42,7 +42,7 @@ import { type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
-import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { type DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 const progress = (state: CoreWallet): StateChange.StateChange<CoreWallet>[] => {
   const appliedIndex = state.progress?.appliedIndex ?? 0n;

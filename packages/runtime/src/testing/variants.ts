@@ -10,8 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { StateChange, Variant, VariantBuilder, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
-import { Effect, Option, PubSub, Scope, Stream } from 'effect';
+import {
+  StateChange,
+  type Variant,
+  type VariantBuilder,
+  VersionChangeType,
+  WalletRuntimeError,
+} from '../abstractions/index.js';
+import { Effect, Option, PubSub, type Scope, Stream } from 'effect';
 
 export type RangeConfig = {
   min: number;

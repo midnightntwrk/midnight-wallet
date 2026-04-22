@@ -10,13 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Chunk, Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
-import { FetchHttpClient, HttpClient, HttpClientRequest, HttpClientResponse } from '@effect/platform';
+import { Chunk, type Context, Duration, Effect, Either, Layer, pipe, Schedule, Stream } from 'effect';
+import { FetchHttpClient, HttpClient, HttpClientRequest, type HttpClientResponse } from '@effect/platform';
 import { ProverClient } from './ProverClient.js';
 import {
   ClientError,
   HttpURL,
-  InvalidProtocolSchemeError,
+  type InvalidProtocolSchemeError,
   ServerError,
 } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { BlobOps, EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';

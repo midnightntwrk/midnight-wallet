@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type Role, AccountKey, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk';
+import { type Role, type AccountKey, HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk';
 import { Buffer } from 'buffer';
 
 function deriveRoleKey(accountKey: AccountKey, role: Role, addressIndex: number = 0): Buffer {
