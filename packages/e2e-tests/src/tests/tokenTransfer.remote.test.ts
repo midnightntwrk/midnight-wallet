@@ -171,7 +171,11 @@ describe('Token transfer', () => {
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
       logger.info('waiting for tx in history');
-      const senderTxEntry = await utils.waitForTxInHistory(txHash, sender.wallet);
+      const senderTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        sender.wallet,
+        (entry) => entry.shielded !== undefined && entry.unshielded !== undefined,
+      );
       const senderFinalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
       const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
@@ -224,10 +228,13 @@ describe('Token transfer', () => {
       // Verify receiver unshielded transaction history grew and contains the specific transaction
       const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
-      const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
-      expect(receiverTxEntry).toBeDefined();
-      utils.expectReceiverShieldedTxHistory(receiverTxEntry!, outputValue);
-      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry!, outputValue);
+      const receiverTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        receiver.wallet,
+        (entry) => entry.shielded !== undefined && entry.unshielded !== undefined,
+      );
+      utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry, outputValue);
     },
     syncTimeout,
   );
