@@ -65,10 +65,12 @@ export type CollapsedMerkleTree = Schema.Schema.Type<typeof CollapsedMerkleTreeS
 
 export const WireDustGenerationsUpdateSchema = Schema.Struct({
   type: Schema.Literal('DustGenerationsItem'),
-  merkleIndex: Schema.Number,
+  commitmentMtIndex: Schema.Number,
+  generationMtIndex: Schema.Number,
   owner: Schema.String,
   value: Schema.String,
-  nonce: Schema.String,
+  initialValue: Schema.String,
+  backingNight: Schema.String,
   ctime: Schema.Number,
   transactionId: Schema.Number,
   collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),
@@ -79,10 +81,12 @@ export const DustGenerationsUpdateSchema = Schema.transform(
   Schema.typeSchema(
     Schema.Struct({
       type: Schema.Literal('DustGenerationsItem'),
-      merkleIndex: Schema.Number,
+      commitmentMtIndex: Schema.Number,
+      generationMtIndex: Schema.Number,
       owner: Schema.String,
       value: Schema.String,
-      nonce: Schema.String,
+      initialValue: Schema.String,
+      backingNight: Schema.String,
       ctime: Schema.DateFromSelf,
       transactionId: Schema.Number,
       collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),

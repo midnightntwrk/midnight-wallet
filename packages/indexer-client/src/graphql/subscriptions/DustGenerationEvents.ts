@@ -13,17 +13,19 @@
 import { Subscription } from '../../effect/index.js';
 import { gql } from '../generated/index.js';
 
-export const AddressDustGenerations = Subscription.make(
+export const DustGenerationEvents = Subscription.make(
   'DustGenerations',
   gql(`
     subscription DustGenerations($dustAddress: HexEncoded!, $startIndex: Int!, $endIndex: Int!) {
       dustGenerations(dustAddress: $dustAddress, startIndex: $startIndex, endIndex: $endIndex) {
         __typename
         ... on DustGenerationsItem {
-          merkleIndex
+          commitmentMtIndex
+          generationMtIndex
           owner
           value
-          nonce
+          initialValue
+          backingNight
           ctime
           transactionId
           collapsedMerkleTree {

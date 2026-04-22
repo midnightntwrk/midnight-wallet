@@ -18,9 +18,10 @@ import {
   DustNullifier,
   QualifiedDustOutput,
   DustGenerationInfo,
+  dustNonce,
 } from '@midnight-ntwrk/ledger-v8';
 import {
-  AddressDustGenerations,
+  DustGenerationEvents,
   BlockHash,
   DustLedgerEvents,
   TransactionEvents,
@@ -298,7 +299,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       const { publicKey } = state.publicKey;
 
       return pipe(
-        AddressDustGenerations.run({
+        DustGenerationEvents.run({
           dustAddress: publicKey.toString(16),
           startIndex: Number(appliedIndex),
           endIndex: latestBlock,
@@ -417,23 +418,23 @@ export const applyDustGenerationsUpdate = (
   const generationUpdates = updates
     .filter((u) => u.type === 'DustGenerationsItem')
     .filter((u) => u.owner === publicKey)
-    .toSorted((u1, u2) => u1.merkleIndex - u2.merkleIndex)
+    .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
     .map((u) => ({
       genInfo: {
         value: BigInt(u.value),
         owner: wallet.publicKey.publicKey,
-        nonce: '', // TODO: put value backing_night here
+        nonce: u.backingNight,
         dtime: undefined,
       } as DustGenerationInfo,
-      generationIndex: u.merkleIndex,
+      generationIndex: u.generationMtIndex,
       qdo: {
-        initialValue: BigInt(u.value), // TODO: this is wrong, u.value is generation_info.value, but we need the qdo.initialValue here
+        initialValue: BigInt(u.initialValue),
         owner: wallet.publicKey.publicKey,
-        nonce: BigInt(u.nonce),
+        nonce: dustNonce(u.backingNight, 0n, secretKey),
         seq: 0,
         ctime: u.ctime,
-        backingNight: '', // TODO: add the real value once indexer updates
-        mtIndex: BigInt(u.merkleIndex), // TODO: this is the index of the dust commitment tree
+        backingNight: u.backingNight,
+        mtIndex: BigInt(u.commitmentMtIndex),
       } as QualifiedDustOutput,
     }));
 
