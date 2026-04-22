@@ -120,8 +120,8 @@ describe('Token transfer', () => {
         `Wallet 2 shielded address: ${utils.getShieldedAddress(networkId, initialReceiverState.shielded.address)}`,
       );
 
-      const senderInitialTxHistory = await Array.fromAsync(sender.wallet.getAllFromTxHistory());
-      const receiverInitialTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const senderInitialTxHistory = await sender.wallet.getAllFromTxHistory();
+      const receiverInitialTxHistory = await receiver.wallet.getAllFromTxHistory();
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -200,7 +200,7 @@ describe('Token transfer', () => {
         senderInitialState.unshielded.totalCoins.length,
       );
       // Verify sender unshielded transaction history grew and contains the specific transaction
-      const senderFinalTxHistory = await Array.fromAsync(sender.wallet.getAllFromTxHistory());
+      const senderFinalTxHistory = await sender.wallet.getAllFromTxHistory();
       expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
       utils.expectSenderShieldedTxHistory(senderTxEntry);
       utils.expectSenderUnshieldedTxHistory(senderTxEntry);
@@ -222,7 +222,7 @@ describe('Token transfer', () => {
       );
 
       // Verify receiver unshielded transaction history grew and contains the specific transaction
-      const receiverFinalTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
       const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
       expect(receiverTxEntry).toBeDefined();

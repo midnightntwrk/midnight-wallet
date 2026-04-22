@@ -12,7 +12,7 @@
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { type FacadeState, WalletFacade, type Clock } from '../../src/index.js';
+import { WalletFacade, type Clock } from '../../src/index.js';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
@@ -20,7 +20,11 @@ import {
   V1Builder as ShieldedV1Builder,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { SyncService as DustSyncService, V1Builder as DustV1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import {
+  SyncService as DustSyncService,
+  TransactionHistory as DustTransactionHistory,
+  V1Builder as DustV1Builder,
+} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
@@ -100,10 +104,6 @@ export const getDustSeed = (seed: string): Uint8Array<ArrayBufferLike> => {
 
 export const tokenValue = (value: bigint): bigint => value * 10n ** 6n;
 
-export const waitForFullySynced = async (facade: WalletFacade): Promise<FacadeState> => {
-  return await rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.isSynced)));
-};
-
 export const sleep = (secs: number): Promise<void> => {
   return new Promise((resolve) => setTimeout(resolve, secs * 1000));
 };
@@ -111,10 +111,7 @@ export const sleep = (secs: number): Promise<void> => {
 // we need to wait for at least one block for Dust to be generated
 export const waitForDustGenerated = (seconds: number = 10): Promise<void> => sleep(seconds);
 
-/**
- * Creates a clock backed by the simulator's current time.
- * Reads time synchronously from the simulator's state ref.
- */
+/** Creates a clock backed by the simulator's current time. Reads time synchronously from the simulator's state ref. */
 export const simulatorClock = (simulator: Simulator): Clock => ({
   now: () => Effect.runSync(simulator.query((s) => s.currentTime)),
 });
@@ -123,9 +120,7 @@ export const simulatorClock = (simulator: Simulator): Clock => ({
 // Simulation Mode Helpers
 // =============================================================================
 
-/**
- * Configuration for simulator-based testing.
- */
+/** Configuration for simulator-based testing. */
 export type SimulatorConfig = {
   simulator: Simulator;
   networkId: NetworkId.NetworkId;
@@ -133,9 +128,9 @@ export type SimulatorConfig = {
 };
 
 /**
- * Creates a Promise-based wrapper around the Effect-based simulator proving service.
- * Note: Uses type assertion because simulator proving returns ProofErasedTransaction
- * but facade expects UnboundTransaction - they are compatible at runtime.
+ * Creates a Promise-based wrapper around the Effect-based simulator proving service. Note: Uses type assertion because
+ * simulator proving returns ProofErasedTransaction but facade expects UnboundTransaction - they are compatible at
+ * runtime.
  */
 export const createSimulatorProvingService = (): ProvingService<UnboundTransaction> => {
   const effectService = makeSimulatorProvingServiceEffect();
@@ -147,8 +142,8 @@ export const createSimulatorProvingService = (): ProvingService<UnboundTransacti
 };
 
 /**
- * Creates a Promise-based wrapper around the Effect-based simulator submission service.
- * Note: Uses type assertions because simulator uses different transaction types internally.
+ * Creates a Promise-based wrapper around the Effect-based simulator submission service. Note: Uses type assertions
+ * because simulator uses different transaction types internally.
  */
 export const createSimulatorSubmissionService = (
   simulator: Simulator,
@@ -166,9 +161,7 @@ export const createSimulatorSubmissionService = (
   };
 };
 
-/**
- * Wallet factory type for simulation mode.
- */
+/** Wallet factory type for simulation mode. */
 export type SimulatorWalletFactories = {
   createShieldedWallet: (keys: ledger.ZswapSecretKeys) => ShieldedWalletAPI;
   createDustWallet: (key: ledger.DustSecretKey, params: ledger.DustParameters) => DustWalletAPI;
@@ -178,15 +171,13 @@ export type SimulatorWalletFactories = {
 /**
  * Creates wallet factory functions for simulation mode.
  *
- * Uses default capabilities for everything except sync (which uses simulator).
- * This ensures transacting and other capabilities match real-network behavior,
- * with only sync differing for simulator.
+ * Uses default capabilities for everything except sync (which uses simulator). This ensures transacting and other
+ * capabilities match real-network behavior, with only sync differing for simulator.
  *
- * Note: We cannot use `.withDefaults().withSync(...)` pattern because `withDefaults()`
- * adds `DefaultSyncConfiguration` to the required config type (including `indexerClientConnection`),
- * and even though we override the sync implementation, TypeScript still requires those config
- * properties. Instead, we explicitly chain all the individual `.with*Defaults()` methods,
- * substituting `.withSync(...)` for `.withSyncDefaults()`.
+ * Note: We cannot use `.withDefaults().withSync(...)` pattern because `withDefaults()` adds `DefaultSyncConfiguration`
+ * to the required config type (including `indexerClientConnection`), and even though we override the sync
+ * implementation, TypeScript still requires those config properties. Instead, we explicitly chain all the individual
+ * `.with*Defaults()` methods, substituting `.withSync(...)` for `.withSyncDefaults()`.
  */
 export const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalletFactories => {
   // Shielded wallet: all defaults except sync and transaction history (uses simulator variants)
@@ -216,6 +207,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
       .withSerializationDefaults()
       .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
+      .withTransactionHistory(DustTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
       .withCoinSelectionDefaults(),
   );
@@ -241,9 +233,7 @@ export const createSimulatorWalletFactories = (config: SimulatorConfig): Simulat
   };
 };
 
-/**
- * Keys derived from a seed for wallet initialization.
- */
+/** Keys derived from a seed for wallet initialization. */
 export type WalletKeys = {
   shieldedKeys: ledger.ZswapSecretKeys;
   dustKey: ledger.DustSecretKey;
@@ -252,9 +242,7 @@ export type WalletKeys = {
   userAddress: ledger.UserAddress;
 };
 
-/**
- * Derives all wallet keys from a hex seed.
- */
+/** Derives all wallet keys from a hex seed. */
 export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId): WalletKeys => {
   const shieldedSeed = getShieldedSeed(hexSeed);
   const dustSeed = getDustSeed(hexSeed);
@@ -270,8 +258,8 @@ export const deriveWalletKeys = (hexSeed: string, networkId: NetworkId.NetworkId
 };
 
 /**
- * Creates and initializes a WalletFacade for simulation mode.
- * Returns an Effect that acquires the facade and releases it on scope close.
+ * Creates and initializes a WalletFacade for simulation mode. Returns an Effect that acquires the facade and releases
+ * it on scope close.
  *
  * Proving and submission services are created internally from the simulator config.
  */
@@ -312,17 +300,13 @@ export const makeSimulatorFacade = (
   );
 };
 
-/**
- * Wait for a facade's shielded wallet to have available coins.
- */
+/** Wait for a facade's shielded wallet to have available coins. */
 export const waitForShieldedCoins = (facade: WalletFacade): Effect.Effect<void> =>
   Effect.promise(() =>
     rx.firstValueFrom(facade.state().pipe(rx.filter((s) => s.shielded.availableCoins.length > 0))),
   ).pipe(Effect.asVoid);
 
-/**
- * Wait for a facade's unshielded wallet to have a specific balance.
- */
+/** Wait for a facade's unshielded wallet to have a specific balance. */
 export const waitForUnshieldedBalance = (
   facade: WalletFacade,
   tokenType: string,

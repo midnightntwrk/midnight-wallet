@@ -20,10 +20,7 @@ import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 
-/**
- *
- * @group undeployed
- */
+/** @group undeployed */
 
 describe('Dust tests', () => {
   const getFixture = useTestContainersFixture();

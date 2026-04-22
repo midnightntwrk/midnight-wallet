@@ -15,9 +15,7 @@ import { type ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-
 import { StateChange, type Variant, VersionChangeType, WalletRuntimeError } from './abstractions/index.js';
 import { EitherOps, HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
 
-/**
- * The {@link Runtime} service type.
- */
+/** The {@link Runtime} service type. */
 export interface Runtime<Variants extends Variant.AnyVersionedVariantArray> {
   readonly stateChanges: Stream.Stream<
     ProtocolState.ProtocolState<Variant.StateOf<HList.Each<Variants>>>,
@@ -54,8 +52,8 @@ type EachRunningVariant<TAll extends Variant.AnyVersionedVariantArray> = TAll ex
   ? RunningVariant<THead, TRest> | EachRunningVariant<TRest>
   : never;
 /**
- * A type that represents the reported progress of a variant expressed in terms of gaps to reaching synced
- * progress in application site and data source site
+ * A type that represents the reported progress of a variant expressed in terms of gaps to reaching synced progress in
+ * application site and data source site
  */
 type Progress = { readonly sourceGap: bigint; readonly applyGap: bigint };
 

@@ -28,7 +28,7 @@ import * as rx from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getShieldedSeed, getUnshieldedSeed } from './utils.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 
 vi.setConfig({ testTimeout: 120_000, hookTimeout: 120_000 });
 
@@ -60,7 +60,7 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
 
     unshieldedConfiguration = {
@@ -69,7 +69,7 @@ describe('Wallet serialization and restoration', () => {
         indexerHttpUrl: `http://localhost:${indexerPort}/api/v4/graphql`,
       },
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -139,7 +139,7 @@ describe('Wallet serialization and restoration', () => {
     try {
       await wallet.waitForSyncedState();
 
-      const initialTxHistory = await Array.fromAsync(shieldedConfiguration.txHistoryStorage.getAll());
+      const initialTxHistory = await shieldedConfiguration.txHistoryStorage.getAll();
       const serializedTxHistory = await shieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await wallet.serializeState();
       await wallet.stop();
@@ -147,6 +147,7 @@ describe('Wallet serialization and restoration', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = ShieldedWallet({
         ...shieldedConfiguration,
@@ -157,7 +158,7 @@ describe('Wallet serialization and restoration', () => {
       try {
         await restoredWallet.waitForSyncedState();
 
-        const restoredTxHistory = await Array.fromAsync(restoredTxHistoryStorage.getAll());
+        const restoredTxHistory = await restoredTxHistoryStorage.getAll();
 
         expect(restoredTxHistory).toEqual(initialTxHistory);
       } finally {
@@ -180,7 +181,7 @@ describe('Wallet serialization and restoration', () => {
       await firstValueFrom(initialWallet.state.pipe(rx.filter((state) => state.availableCoins.length > 0)));
       await initialWallet.waitForSyncedState();
 
-      const initialTxHistory = await Array.fromAsync(unshieldedConfiguration.txHistoryStorage.getAll());
+      const initialTxHistory = await unshieldedConfiguration.txHistoryStorage.getAll();
       const serializedTxHistory = await unshieldedConfiguration.txHistoryStorage.serialize();
       const serializedState = await initialWallet.serializeState();
       await initialWallet.stop();
@@ -188,6 +189,7 @@ describe('Wallet serialization and restoration', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = UnshieldedWallet({
         ...unshieldedConfiguration,
@@ -198,7 +200,7 @@ describe('Wallet serialization and restoration', () => {
       try {
         await restoredWallet.waitForSyncedState();
 
-        const restoredTxHistory = await Array.fromAsync(restoredTxHistoryStorage.getAll());
+        const restoredTxHistory = await restoredTxHistoryStorage.getAll();
 
         expect(restoredTxHistory).toEqual(initialTxHistory);
       } finally {

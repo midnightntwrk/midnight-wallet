@@ -34,8 +34,8 @@ export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHist
 export type SerializedTransactionHistory = string;
 
 /**
- * An entry with common fields plus any additional properties (wallet sections).
- * Used by wallet packages for projection/filtering when the exact type is not known.
+ * An entry with common fields plus any additional properties (wallet sections). Used by wallet packages for
+ * projection/filtering when the exact type is not known.
  */
 export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<string, unknown>;
 
@@ -46,7 +46,7 @@ export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<
  */
 export interface TransactionHistoryStorage<T extends { hash: TransactionHash } = TransactionHistoryCommon> {
   upsert(entry: T): Promise<void>;
-  getAll(): AsyncIterableIterator<T>;
+  getAll(): Promise<readonly T[]>;
   get(hash: TransactionHash): Promise<T | undefined>;
   serialize(): Promise<SerializedTransactionHistory>;
 }

@@ -1,0 +1,5 @@
+effect https://github.com/Effect-TS/effect.git pin:tag:effect@3.21.0
+midnight-architecture https://github.com/midnightntwrk/midnight-architecture.git
+midnight-ledger https://github.com/midnightntwrk/midnight-ledger.git
+midnight-dapp-connector-api https://github.com/midnightntwrk/midnight-dapp-connector-api.git
+language-service https://github.com/Effect-TS/language-service.git

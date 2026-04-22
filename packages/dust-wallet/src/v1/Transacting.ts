@@ -130,8 +130,26 @@ export const makeSimulatorTransactingCapability = (
 };
 
 /**
- * Distributes the fee across multiple inputs, draining smaller inputs first
- * when the fee exceeds any single input's value.
+ * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
+ * value. Finds the next available intent segment id in a transaction.
+ *
+ * Fallible intent segments occupy the range `[1, 65535]`; segment `0` is reserved for the guaranteed section and is
+ * never returned.
+ *
+ * @param transaction - Transaction whose intent map is inspected.
+ * @returns `Some(segmentId)` with the lowest unused id, or `None` if all 65535 fallible segments are taken.
+ */
+export const findAvailableSegmentId = (transaction: AnyTransaction): Option.Option<number> => {
+  const used = new Set(transaction.intents?.keys() ?? []);
+  return pipe(
+    IterableOps.range(1, 65535),
+    IterableOps.findFirst((segmentId) => !used.has(segmentId)),
+  );
+};
+
+/**
+ * Distributes the fee across multiple inputs, draining smaller inputs first when the fee exceeds any single input's
+ * value.
  */
 const distributeFeeAcrossInputs = <T extends { value: bigint }>(
   inputs: ReadonlyArray<T>,
@@ -377,11 +395,18 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       [],
     );
 
-    const balancingTx = Transaction.fromPartsRandomized(network, undefined, undefined, intent);
+    // Merge existing transactions first so we can pick a segment that doesn't collide
+    const [first, ...rest] = transactions.map((tx) => tx.eraseProofs());
+    const mergedExisting = first ? rest.reduce((acc, tx) => acc.merge(tx), first) : undefined;
 
-    // Erase proofs on everything and merge
+    const segmentId = mergedExisting ? Option.getOrElse(findAvailableSegmentId(mergedExisting), () => 1) : 1;
+
+    // @TODO in ledger 8.1.0 will be able to set the segment id when constructing the tx
+    const balancingTx = Transaction.fromParts(network, undefined, undefined, undefined);
+    balancingTx.intents = new Map([[segmentId, intent]]);
     const erasedBalancing = balancingTx.eraseProofs();
-    const mergedTx = transactions.reduce((acc, tx) => acc.merge(tx.eraseProofs()), erasedBalancing);
+
+    const mergedTx = mergedExisting ? mergedExisting.merge(erasedBalancing) : erasedBalancing;
 
     return this.calculateFee(mergedTx, ledgerParams);
   }
@@ -521,7 +546,13 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
             [],
           );
 
-          const feeTransaction = Transaction.fromPartsRandomized(networkId, undefined, undefined, intent);
+          // Merge existing transactions first so we can pick a segment that doesn't collide
+          const [first, ...rest] = transactions.map((tx) => tx.eraseProofs());
+          const mergedExisting = first ? rest.reduce((acc, tx) => acc.merge(tx), first) : undefined;
+          const segmentId = mergedExisting ? Option.getOrElse(findAvailableSegmentId(mergedExisting), () => 1) : 1;
+
+          const feeTransaction = Transaction.fromParts(networkId, undefined, undefined, undefined);
+          feeTransaction.intents = new Map([[segmentId, intent]]);
 
           return [feeTransaction, updatedState];
         });

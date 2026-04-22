@@ -19,16 +19,15 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type DefaultConfiguration, WalletEntrySchema, WalletFacade } from '../src/index.js';
-import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type DefaultConfiguration, WalletEntrySchema, WalletFacade, mergeWalletEntries } from '../src/index.js';
+import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DustWallet } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { pipe } from 'effect';
 
 vi.setConfig({ testTimeout: 200_000, hookTimeout: 200_000 });
 
-/**
- * TODO: Check dust spends instead of imbalance when refactoring to simulator
- */
+/** TODO: Check dust spends instead of imbalance when refactoring to simulator */
 const getImbalances = (
   tx: ledger.Transaction<ledger.Signaturish, ledger.Proofish, ledger.Bindingish>,
   segmentIndex: number,
@@ -45,9 +44,7 @@ const getImbalances = (
   );
 };
 
-/**
- * TODO: Replace docker environment with simulator once simulator is implemented
- */
+/** TODO: Replace docker environment with simulator once simulator is implemented */
 describe('Optional Balancing', () => {
   const environmentId = randomUUID();
 
@@ -96,7 +93,7 @@ describe('Optional Balancing', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -125,7 +122,7 @@ describe('Optional Balancing', () => {
   const shieldedTokenType = ledger.shieldedToken().raw;
   const unshieldedTokenType = ledger.unshieldedToken().raw;
 
-  const createArbitraryTx = (networkId: NetworkId.NetworkId): ledger.UnprovenTransaction => {
+  const createArbitraryShieldedOffer = () => {
     const coin = ledger.createShieldedCoinInfo(shieldedTokenType, tokenValue(1n));
     const zswapOutput = ledger.ZswapOutput.new(
       coin,
@@ -133,7 +130,11 @@ describe('Optional Balancing', () => {
       ledger.sampleCoinPublicKey(),
       ledger.sampleEncryptionPublicKey(),
     );
-    const zswapOutputOffer = ledger.ZswapOffer.fromOutput(zswapOutput, shieldedTokenType, tokenValue(1n));
+    return ledger.ZswapOffer.fromOutput(zswapOutput, shieldedTokenType, tokenValue(1n));
+  };
+
+  const createArbitraryTx = (networkId: NetworkId.NetworkId): ledger.UnprovenTransaction => {
+    const shieldedOffer = createArbitraryShieldedOffer();
 
     const unshieldedOutput = [
       {
@@ -145,7 +146,7 @@ describe('Optional Balancing', () => {
     const intent = ledger.Intent.new(new Date(Date.now() + 3600));
     intent.guaranteedUnshieldedOffer = ledger.UnshieldedOffer.new([], unshieldedOutput, []);
 
-    return ledger.Transaction.fromParts(networkId, zswapOutputOffer, undefined, intent);
+    return ledger.Transaction.fromParts(networkId, shieldedOffer, undefined, intent);
   };
 
   describe('balanceUnprovenTransaction', () => {
@@ -172,6 +173,28 @@ describe('Optional Balancing', () => {
 
       // Verify unshielded is NOT balanced (unshielded imbalance < 0)
       expect(imbalances.unshielded).toBeLessThan(0n);
+    });
+
+    it('allows to progress to signing when only shielded tokens are being utilized', async () => {
+      await facade.waitForSyncedState();
+
+      const tx = pipe(createArbitraryShieldedOffer(), (offer) =>
+        ledger.Transaction.fromParts(configuration.networkId, offer),
+      );
+      const recipe = await facade.balanceUnprovenTransaction(
+        tx,
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, tokenKindsToBalance: ['shielded'] },
+      );
+
+      const signed = await facade.signRecipe(recipe, () => {
+        throw new Error('Should not be called');
+      });
+
+      expect(signed).toEqual(recipe);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -286,6 +309,37 @@ describe('Optional Balancing', () => {
 
       // Verify base tx unshielded is NOT balanced (unshielded imbalance < 0n)
       expect(baseImbalances.unshielded).toBeLessThan(0n);
+    });
+
+    it('allows to progress to signing when only shielded tokens are being utilized', async () => {
+      await facade.waitForSyncedState();
+
+      const tx = await pipe(
+        createArbitraryShieldedOffer(),
+        (offer) => ledger.Transaction.fromParts(configuration.networkId, offer),
+        (tx) =>
+          tx.prove(
+            {
+              check: () => Promise.resolve([]),
+              prove: () => Promise.resolve(tx.mockProve().guaranteedOffer!.outputs.at(0)!.proof.serialize()),
+            },
+            ledger.LedgerParameters.initialParameters().transactionCostModel.runtimeCostModel,
+          ),
+      );
+      const recipe = await facade.balanceUnboundTransaction(
+        tx,
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, tokenKindsToBalance: ['shielded'] },
+      );
+
+      const signed = await facade.signRecipe(recipe, () => {
+        throw new Error('Should not be called');
+      });
+
+      expect(signed).toEqual(recipe);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -421,6 +475,30 @@ describe('Optional Balancing', () => {
 
       // Verify unshielded is NOT balanced (no unshielded contribution, imbalance = 0)
       expect(imbalances.unshielded).toBe(0n);
+    });
+
+    it('allows to progress to signing when only shielded tokens are being utilized', async () => {
+      await facade.waitForSyncedState();
+
+      const tx = pipe(
+        createArbitraryShieldedOffer(),
+        (offer) => ledger.Transaction.fromParts(configuration.networkId, offer),
+        (tx) => tx.mockProve(),
+      );
+      const recipe = await facade.balanceFinalizedTransaction(
+        tx,
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, tokenKindsToBalance: ['shielded'] },
+      );
+
+      const signed = await facade.signRecipe(recipe, () => {
+        throw new Error('Should not be called');
+      });
+
+      expect(signed).toEqual(recipe);
     });
 
     it('only balances unshielded when tokenKindsToBalance is ["unshielded"]', async () => {
@@ -567,6 +645,41 @@ describe('Optional Balancing', () => {
       // Verify dust fees ARE paid (dust imbalance > 0n)
       expect(imbalances.dust).toBeGreaterThan(0n);
     });
+
+    it('allows to continue with signing even when no signatures are needed and `payFees` is false', async () => {
+      const { shielded } = await facade.waitForSyncedState();
+
+      const recipe = await facade.initSwap(
+        {
+          shielded: {
+            [shieldedTokenType]: tokenValue(1n),
+          },
+        },
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: shielded.address,
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: false },
+      );
+
+      const signed = await facade.signRecipe(recipe, () => {
+        throw new Error('Should not be called');
+      });
+
+      expect(signed).toEqual(recipe);
+    });
   });
 
   describe('transferTransaction', () => {
@@ -626,6 +739,36 @@ describe('Optional Balancing', () => {
 
       // Verify dust fees ARE paid (dust imbalance > 0n)
       expect(imbalances.dust).toBeGreaterThan(0n);
+    });
+
+    it('allows to continue with signing even when no signatures are needed and `payFees` is false', async () => {
+      const { shielded } = await facade.waitForSyncedState();
+
+      const recipe = await facade.transferTransaction(
+        [
+          {
+            type: 'shielded',
+            outputs: [
+              {
+                type: shieldedTokenType,
+                receiverAddress: shielded.address,
+                amount: tokenValue(1n),
+              },
+            ],
+          },
+        ],
+        {
+          shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSeed),
+          dustSecretKey: ledger.DustSecretKey.fromSeed(dustSeed),
+        },
+        { ttl, payFees: false },
+      );
+
+      const signed = await facade.signRecipe(recipe, () => {
+        throw new Error('Should not be called');
+      });
+
+      expect(signed).toEqual(recipe);
     });
   });
 });

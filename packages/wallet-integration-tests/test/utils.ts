@@ -18,7 +18,7 @@ import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
  *
  * @param imbalances
  * @param rawTokenType
- * @returns bigint
+ * @returns Bigint
  */
 export const getNonDustImbalance = (
   imbalances: Map<ledger.TokenType, bigint>,

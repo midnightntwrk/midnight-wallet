@@ -17,6 +17,8 @@ It provides components for:
 This project is a Yarn workspaces monorepo combined with Turborepo. Packages are organized under `packages/` and
 applications under `apps/`. Main packages are:
 
+- `wallet-sdk` - **barrel package** re-exporting all wallet SDK packages through a single dependency (recommended for
+  consumers)
 - `facade` - unified wallet API combining shielded, unshielded, and dust wallet types into a single interface
 - `shielded-wallet` - shielded token operations with zero-knowledge proof support
 - `unshielded-wallet` - unshielded token operations on the ledger

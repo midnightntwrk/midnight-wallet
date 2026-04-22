@@ -17,7 +17,7 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
  *
  * @param imbalances
  * @param rawTokenType
- * @returns bigint
+ * @returns Bigint
  */
 export const getNonDustImbalance = (
   imbalances: Map<ledger.TokenType, bigint>,

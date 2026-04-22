@@ -27,8 +27,9 @@ import {
   type DefaultConfiguration,
   WalletEntrySchema,
   WalletFacade,
+  mergeWalletEntries,
 } from '../src/index.js';
-import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue, waitForFullySynced } from './utils/index.js';
+import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
 import { makeWasmProvingService } from '@midnight-ntwrk/wallet-sdk-capabilities';
 
 vi.setConfig({ testTimeout: 800_000, hookTimeout: 800_000 });
@@ -86,7 +87,7 @@ describe('Wallet Facade Transfer', () => {
       costParameters: {
         feeBlocksMargin: 5,
       },
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 
@@ -110,7 +111,7 @@ describe('Wallet Facade Transfer', () => {
     receiverFacade = await WalletFacade.init({
       configuration: {
         ...configuration,
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
       },
       shielded: (config) => ShieldedWallet(config).startWithSeed(shieldedReceiverSeed),
       unshielded: (config) =>
@@ -136,15 +137,7 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer shielded tokens only', async () => {
-    await Promise.all([
-      pipe(
-        senderFacade.state(),
-        rx.filter((s) => s.isSynced),
-        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
-        rx.firstValueFrom,
-      ),
-      waitForFullySynced(receiverFacade),
-    ]);
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.shielded.getAddress();
 
@@ -198,15 +191,7 @@ describe('Wallet Facade Transfer', () => {
   });
 
   it('allows to transfer unshielded tokens', async () => {
-    await Promise.all([
-      pipe(
-        senderFacade.state(),
-        rx.filter((s) => s.isSynced),
-        rx.first((s) => s.unshielded.availableCoins.length > 0 && s.dust.availableCoins.length > 0),
-        rx.firstValueFrom,
-      ),
-      waitForFullySynced(receiverFacade),
-    ]);
+    await Promise.all([senderFacade.waitForSyncedState(), receiverFacade.waitForSyncedState()]);
 
     const receiverAddress = await receiverFacade.unshielded.getAddress();
 
@@ -370,5 +355,146 @@ describe('Wallet Facade Transfer', () => {
     );
 
     expect(isValid).toBeTruthy();
+  });
+
+  // NOTE: This test runs last because the combined (shielded + unshielded) transfer leaves
+  // sender-side state that causes the earlier arbitrary-unshielded test to fail submission
+  // with MalformedError::FeeCalculation (node error code 168). Keeping this test last
+  // avoids the cross-test interference until the underlying fee-calc divergence is fixed.
+  it('records shielded, unshielded, and dust sections in tx history for a combined transfer matches expected structure', async () => {
+    const transferAmount = tokenValue(1n);
+
+    const [, receiverPreState] = await Promise.all([
+      senderFacade.waitForSyncedState(),
+      receiverFacade.waitForSyncedState(),
+    ]);
+
+    // Snapshot the receiver's pre-existing coins.
+    const receiverPreShieldedNonces = new Set(receiverPreState.shielded.availableCoins.map((c) => c.coin.nonce));
+    const receiverPreUnshieldedKeys = new Set(
+      receiverPreState.unshielded.availableCoins.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+
+    // Snapshot the sender's available coins.
+    const senderPreState = await rx.firstValueFrom(
+      senderFacade
+        .state()
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.shielded.availableCoins.some((c) => c.coin.type === ledger.shieldedToken().raw) &&
+              s.unshielded.availableCoins.some((c) => c.utxo.type === ledger.unshieldedToken().raw) &&
+              s.dust.availableCoins.length > 0,
+          ),
+        ),
+    );
+
+    // Snapshot every sender-owned coin/UTXO.
+    const senderShieldedNonces = new Set(senderPreState.shielded.availableCoins.map((c) => c.coin.nonce));
+    const senderUnshieldedKeys = new Set(
+      senderPreState.unshielded.availableCoins.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+    const senderDustNonces = new Set(senderPreState.dust.availableCoins.map((c) => c.token.nonce));
+
+    const shieldedReceiverAddress = await receiverFacade.shielded.getAddress();
+    const unshieldedReceiverAddress = await receiverFacade.unshielded.getAddress();
+
+    const ttl = new Date(Date.now() + 30 * 60 * 1000);
+    const tokenTransfer: CombinedTokenTransfer[] = [
+      {
+        type: 'shielded',
+        outputs: [
+          {
+            amount: transferAmount,
+            receiverAddress: shieldedReceiverAddress,
+            type: ledger.shieldedToken().raw,
+          },
+        ],
+      },
+      {
+        type: 'unshielded',
+        outputs: [
+          {
+            amount: transferAmount,
+            receiverAddress: unshieldedReceiverAddress,
+            type: ledger.unshieldedToken().raw,
+          },
+        ],
+      },
+    ];
+
+    const transactionRecipe = await senderFacade.transferTransaction(
+      tokenTransfer,
+      {
+        shieldedSecretKeys: ledger.ZswapSecretKeys.fromSeed(shieldedSenderSeed),
+        dustSecretKey: ledger.DustSecretKey.fromSeed(dustSenderSeed),
+      },
+      { ttl },
+    );
+
+    const signedTxRecipe = await senderFacade.signRecipe(transactionRecipe, (payload) =>
+      unshieldedSenderKeystore.signData(payload),
+    );
+    const finalizedTx = await senderFacade.finalizeRecipe(signedTxRecipe);
+    const finalizedTxHash = finalizedTx.transactionHash().toString();
+    const submittedTxIdentifier = await senderFacade.submitTransaction(finalizedTx);
+
+    // Wait for the tx to land in sender history as a SUCCESS with all three sections present.
+    const txHistoryEntry = await rx.firstValueFrom(
+      senderFacade.state().pipe(
+        rx.concatMap(() => senderFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
+        rx.filter(
+          (entry) =>
+            entry.status === 'SUCCESS' &&
+            entry.shielded !== undefined &&
+            entry.unshielded !== undefined &&
+            entry.dust !== undefined,
+        ),
+        rx.timeout(60_000),
+      ),
+    );
+
+    expect(txHistoryEntry.hash).toBe(finalizedTxHash);
+    expect(txHistoryEntry.identifiers).toContain(submittedTxIdentifier);
+    expect(txHistoryEntry.fees).toBeDefined();
+
+    expect(txHistoryEntry.shielded!.spentCoins.length).toBeGreaterThan(0);
+    expect(txHistoryEntry.shielded!.spentCoins.every((c) => senderShieldedNonces.has(c.nonce))).toBe(true);
+
+    expect(txHistoryEntry.unshielded!.spentUtxos.length).toBeGreaterThan(0);
+    expect(
+      txHistoryEntry.unshielded!.spentUtxos.every((u) => senderUnshieldedKeys.has(`${u.intentHash}#${u.outputIndex}`)),
+    ).toBe(true);
+
+    expect(txHistoryEntry.dust!.spentUtxos.some((u) => senderDustNonces.has(u.nonce))).toBe(true);
+
+    // Once the tx is present in the receiver's history, the state update has already
+    // been applied — no extra state-filter wait needed; the expects below suffice.
+    await rx.firstValueFrom(
+      receiverFacade.state().pipe(
+        rx.concatMap(() => receiverFacade.queryTxHistoryByHash(finalizedTxHash)),
+        rx.filter((entry) => entry !== undefined),
+        rx.timeout(60_000),
+      ),
+    );
+
+    const receiverState = await rx.firstValueFrom(receiverFacade.state());
+
+    const newShieldedCoin = receiverState.shielded.availableCoins.find(
+      (c) =>
+        c.coin.type === ledger.shieldedToken().raw &&
+        c.coin.value === transferAmount &&
+        !receiverPreShieldedNonces.has(c.coin.nonce),
+    );
+    const newUnshieldedUtxo = receiverState.unshielded.availableCoins.find(
+      (u) =>
+        u.utxo.type === ledger.unshieldedToken().raw &&
+        u.utxo.value === transferAmount &&
+        !receiverPreUnshieldedKeys.has(`${u.utxo.intentHash}#${u.utxo.outputNo}`),
+    );
+
+    expect(newShieldedCoin).toBeDefined();
+    expect(newUnshieldedUtxo).toBeDefined();
   });
 });

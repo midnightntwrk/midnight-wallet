@@ -14,8 +14,8 @@
 /**
  * SimulatorState types and pure functions for state manipulation.
  *
- * This module contains the core data types and pure functions for working with
- * simulator state. All functions are synchronous and side-effect free.
+ * This module contains the core data types and pure functions for working with simulator state. All functions are
+ * synchronous and side-effect free.
  */
 
 import { Either, Function as EFunction, type Stream, Array as EArray } from 'effect';
@@ -39,9 +39,7 @@ import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 // Types
 // =============================================================================
 
-/**
- * A transaction included in a block with its execution result.
- */
+/** A transaction included in a block with its execution result. */
 export type BlockTransaction = Readonly<{
   /** The transaction that was executed */
   tx: ProofErasedTransaction;
@@ -49,9 +47,7 @@ export type BlockTransaction = Readonly<{
   result: TransactionResult;
 }>;
 
-/**
- * A produced block containing transactions and metadata.
- */
+/** A produced block containing transactions and metadata. */
 export type Block = Readonly<{
   /** Block number (height) */
   number: bigint;
@@ -64,8 +60,8 @@ export type Block = Readonly<{
 }>;
 
 /**
- * Pending transaction waiting for block production.
- * Strictness is optional - if not specified, block producer assigns default when creating block.
+ * Pending transaction waiting for block production. Strictness is optional - if not specified, block producer assigns
+ * default when creating block.
  */
 export type PendingTransaction = Readonly<{
   tx: ProofErasedTransaction;
@@ -74,8 +70,8 @@ export type PendingTransaction = Readonly<{
 }>;
 
 /**
- * Transaction ready for block production with strictness assigned.
- * Block producer ensures all transactions have strictness before block creation.
+ * Transaction ready for block production with strictness assigned. Block producer ensures all transactions have
+ * strictness before block creation.
  */
 export type ReadyTransaction = Readonly<{
   tx: ProofErasedTransaction;
@@ -83,9 +79,7 @@ export type ReadyTransaction = Readonly<{
   strictness: WellFormedStrictness;
 }>;
 
-/**
- * Simulator state containing the ledger, block history, and pending mempool.
- */
+/** Simulator state containing the ledger, block history, and pending mempool. */
 export type SimulatorState = Readonly<{
   networkId: NetworkId.NetworkId;
   ledger: LedgerState;
@@ -97,20 +91,19 @@ export type SimulatorState = Readonly<{
   currentTime: Date;
 }>;
 
-/**
- * Result of a successful block production.
- */
+/** Result of a successful block production. */
 export type BlockInfo = Readonly<{
   blockNumber: bigint;
   blockHash: string;
 }>;
 
 /**
- * Request to produce a block with specific transactions, fullness, and optional strictness override.
- * This mimics how real nodes work - selecting which transactions to include and how to validate them.
+ * Request to produce a block with specific transactions, fullness, and optional strictness override. This mimics how
+ * real nodes work - selecting which transactions to include and how to validate them.
  *
- * The block producer can optionally specify a strictness that overrides per-transaction strictness.
- * This enables patterns like:
+ * The block producer can optionally specify a strictness that overrides per-transaction strictness. This enables
+ * patterns like:
+ *
  * - Enforcing balancing for all blocks after genesis
  * - Using a decorator pattern to modify strictness behavior
  * - Testing specific validation scenarios
@@ -125,42 +118,39 @@ export type BlockProductionRequest = Readonly<{
 /**
  * A block producer is a stream transformer that decides when blocks should be produced.
  *
- * It receives a stream of simulator state changes and transforms it into a stream
- * of block production requests. Each request specifies which transactions to include
- * and the block fullness for fee calculation.
+ * It receives a stream of simulator state changes and transforms it into a stream of block production requests. Each
+ * request specifies which transactions to include and the block fullness for fee calculation.
  *
  * @example
- * ```typescript
- * // Custom producer: produce block when mempool has 5+ transactions
- * const batchedProducer: BlockProducer = (states) =>
- *   states.pipe(
- *     Stream.filter((s) => s.mempool.length >= 5),
- *     Stream.map((s) => ({
- *       transactions: [...s.mempool],
- *       fullness: 0.5,
- *     }))
- *   );
- * ```
+ *   ```typescript
+ *   // Custom producer: produce block when mempool has 5+ transactions
+ *   const batchedProducer: BlockProducer = (states) =>
+ *     states.pipe(
+ *       Stream.filter((s) => s.mempool.length >= 5),
+ *       Stream.map((s) => ({
+ *         transactions: [...s.mempool],
+ *         fullness: 0.5,
+ *       }))
+ *     );
+ *   ```;
  */
 export type BlockProducer = (states: Stream.Stream<SimulatorState>) => Stream.Stream<BlockProductionRequest>;
 
-/**
- * Fullness specification: static number or callback based on state.
- */
+/** Fullness specification: static number or callback based on state. */
 export type FullnessSpec = number | ((state: SimulatorState) => number);
 
 /**
  * Genesis mint specification for shielded tokens.
  *
  * @example
- * ```typescript
- * const mint: ShieldedGenesisMint = {
- *   type: 'shielded',
- *   tokenType: ledger.shieldedToken().raw,
- *   amount: 1000n,
- *   recipient: secretKeys,
- * };
- * ```
+ *   ```typescript
+ *   const mint: ShieldedGenesisMint = {
+ *     type: 'shielded',
+ *     tokenType: ledger.shieldedToken().raw,
+ *     amount: 1000n,
+ *     recipient: secretKeys,
+ *   };
+ *   ```;
  */
 export type ShieldedGenesisMint = Readonly<{
   type: 'shielded';
@@ -174,32 +164,32 @@ export type ShieldedGenesisMint = Readonly<{
  *
  * For **custom tokens**: Minted directly from nothing (enforceBalancing disabled).
  *
- * For **Night tokens** (native token): Requires `verifyingKey` field. Night cannot be
- * minted from nothing due to supply invariant, so the reward/claim mechanism is used
- * internally. Night is auto-detected by comparing `tokenType` with `ledger.nativeToken().raw`.
+ * For **Night tokens** (native token): Requires `verifyingKey` field. Night cannot be minted from nothing due to supply
+ * invariant, so the reward/claim mechanism is used internally. Night is auto-detected by comparing `tokenType` with
+ * `ledger.nativeToken().raw`.
  *
- * Note: Night claims have a minimum amount requirement (~14077). Use larger
- * amounts to ensure the claim transaction succeeds.
+ * Note: Night claims have a minimum amount requirement (~14077). Use larger amounts to ensure the claim transaction
+ * succeeds.
  *
  * @example
- * ```typescript
- * // Custom unshielded token
- * const customMint: UnshieldedGenesisMint = {
- *   type: 'unshielded',
- *   tokenType: customToken,
- *   amount: 1000n,
- *   recipient: userAddress,
- * };
+ *   ```typescript
+ *   // Custom unshielded token
+ *   const customMint: UnshieldedGenesisMint = {
+ *     type: 'unshielded',
+ *     tokenType: customToken,
+ *     amount: 1000n,
+ *     recipient: userAddress,
+ *   };
  *
- * // Night token (native token) - requires verifyingKey
- * const nightMint: UnshieldedGenesisMint = {
- *   type: 'unshielded',
- *   tokenType: ledger.nativeToken().raw,
- *   amount: 1_000_000n, // Must exceed minimum claim amount (~14077)
- *   recipient: userAddress,
- *   verifyingKey: signatureVerifyingKey,
- * };
- * ```
+ *   // Night token (native token) - requires verifyingKey
+ *   const nightMint: UnshieldedGenesisMint = {
+ *     type: 'unshielded',
+ *     tokenType: ledger.nativeToken().raw,
+ *     amount: 1_000_000n, // Must exceed minimum claim amount (~14077)
+ *     recipient: userAddress,
+ *     verifyingKey: signatureVerifyingKey,
+ *   };
+ *   ```;
  */
 export type UnshieldedGenesisMint = Readonly<{
   type: 'unshielded';
@@ -214,17 +204,16 @@ export type UnshieldedGenesisMint = Readonly<{
  * Genesis mint specification for initializing the simulator with pre-funded accounts.
  *
  * Uses a tagged union pattern consistent with the facade API:
+ *
  * - **Shielded**: `{ type: 'shielded', tokenType, amount, recipient: ZswapSecretKeys }`
  * - **Unshielded**: `{ type: 'unshielded', tokenType, amount, recipient, verifyingKey? }`
+ *
  *   - Custom tokens: minted directly (verifyingKey not needed)
  *   - Night tokens: auto-detected by tokenType, uses reward/claim mechanism (verifyingKey required)
  */
 export type GenesisMint = ShieldedGenesisMint | UnshieldedGenesisMint;
 
-/**
- * Configuration for well-formedness strictness checks.
- * All options default to false for testing flexibility.
- */
+/** Configuration for well-formedness strictness checks. All options default to false for testing flexibility. */
 export type StrictnessConfig = Readonly<{
   enforceBalancing?: boolean;
   verifyNativeProofs?: boolean;
@@ -237,6 +226,7 @@ export type StrictnessConfig = Readonly<{
  * Default strictness for post-genesis blocks.
  *
  * In a realistic simulation:
+ *
  * - Signatures should be verified (verifySignatures: true)
  * - Proofs cannot be verified because they're erased (verifyNativeProofs/verifyContractProofs: false)
  * - Limits should be enforced (enforceLimits: true)
@@ -252,9 +242,7 @@ export const defaultStrictness: StrictnessConfig = {
   verifySignatures: true,
 };
 
-/**
- * Strictness for genesis blocks - all checks disabled to allow initial token distribution.
- */
+/** Strictness for genesis blocks - all checks disabled to allow initial token distribution. */
 export const genesisStrictness: StrictnessConfig = {
   enforceBalancing: false,
   verifyNativeProofs: false,
@@ -264,8 +252,8 @@ export const genesisStrictness: StrictnessConfig = {
 };
 
 /**
- * Assign strictness to a pending transaction, creating a ready transaction.
- * If the pending transaction already has strictness, use it; otherwise use the provided default.
+ * Assign strictness to a pending transaction, creating a ready transaction. If the pending transaction already has
+ * strictness, use it; otherwise use the provided default.
  */
 export const assignStrictness = (
   pendingTx: PendingTransaction,
@@ -276,8 +264,8 @@ export const assignStrictness = (
 });
 
 /**
- * Assign strictness to all pending transactions, creating ready transactions.
- * Transactions with existing strictness keep their strictness; others get the default.
+ * Assign strictness to all pending transactions, creating ready transactions. Transactions with existing strictness
+ * keep their strictness; others get the default.
  */
 export const assignStrictnessToAll = (
   transactions: readonly PendingTransaction[],
@@ -288,19 +276,13 @@ export const assignStrictnessToAll = (
 // State Accessors (Pure Functions)
 // =============================================================================
 
-/**
- * Get the last produced block, or undefined if no blocks yet.
- */
+/** Get the last produced block, or undefined if no blocks yet. */
 export const getLastBlock = (state: SimulatorState): Block => EArray.lastNonEmpty(state.blocks);
 
-/**
- * Get the current block number (height of the last block, or 0 if no blocks).
- */
+/** Get the current block number (height of the last block, or 0 if no blocks). */
 export const getCurrentBlockNumber = (state: SimulatorState): bigint => getLastBlock(state)?.number;
 
-/**
- * Get a block by its number.
- */
+/** Get a block by its number. */
 export const getBlockByNumber: {
   (number: bigint): (state: SimulatorState) => Block | undefined;
   (state: SimulatorState, number: bigint): Block | undefined;
@@ -308,24 +290,20 @@ export const getBlockByNumber: {
   state.blocks.find((b) => b.number === number),
 );
 
-/**
- * Get all transaction results from the last block.
- */
+/** Get all transaction results from the last block. */
 export const getLastBlockResults = (state: SimulatorState): readonly TransactionResult[] =>
   getLastBlock(state)?.transactions.map((t) => t.result) ?? [];
 
-/**
- * Get all events from the last block (flattened from all transactions).
- */
+/** Get all events from the last block (flattened from all transactions). */
 export const getLastBlockEvents = (state: SimulatorState): readonly TransactionResult['events'][number][] =>
   getLastBlockResults(state).flatMap((r) => r.events);
 
 /**
- * Get all events from blocks with number >= fromBlockNumber.
- * Returns events ordered by block number, with each block's transactions flattened.
+ * Get all events from blocks with number >= fromBlockNumber. Returns events ordered by block number, with each block's
+ * transactions flattened.
  *
- * Use this with the wallet's next-to-process index: `appliedIndex` after processing should be
- * set to `lastBlockNumber + 1`, not `lastBlockNumber`.
+ * Use this with the wallet's next-to-process index: `appliedIndex` after processing should be set to `lastBlockNumber +
+ * 1`, not `lastBlockNumber`.
  */
 export const getBlockEventsFrom: {
   (fromBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];
@@ -339,8 +317,9 @@ export const getBlockEventsFrom: {
 );
 
 /**
- * @deprecated Use getBlockEventsFrom instead with proper appliedIndex semantics
- * Get all events from blocks with number > afterBlockNumber.
+ * @deprecated Use getBlockEventsFrom instead with proper appliedIndex semantics Get all events from blocks with number
+ *
+ * > AfterBlockNumber.
  */
 export const getBlockEventsSince: {
   (afterBlockNumber: bigint): (state: SimulatorState) => readonly TransactionResult['events'][number][];
@@ -353,29 +332,21 @@ export const getBlockEventsSince: {
       .flatMap((b) => b.transactions.flatMap((t) => t.result.events)),
 );
 
-/**
- * Check if there are pending transactions in the mempool.
- */
+/** Check if there are pending transactions in the mempool. */
 export const hasPendingTransactions = (state: SimulatorState): boolean => state.mempool.length > 0;
 
-/**
- * Get the current simulator time.
- */
+/** Get the current simulator time. */
 export const getCurrentTime = (state: SimulatorState): Date => state.currentTime;
 
 // =============================================================================
 // State Transformations (Pure Functions)
 // =============================================================================
 
-/**
- * Resolve fullness from spec and state.
- */
+/** Resolve fullness from spec and state. */
 export const resolveFullness = (spec: FullnessSpec, state: SimulatorState): number =>
   typeof spec === 'function' ? spec(state) : spec;
 
-/**
- * Create a block production request that includes all mempool transactions.
- */
+/** Create a block production request that includes all mempool transactions. */
 export const allMempoolTransactions = (
   state: SimulatorState,
   fullness: number,
@@ -385,9 +356,7 @@ export const allMempoolTransactions = (
   fullness,
 });
 
-/**
- * Create a blank initial state.
- */
+/** Create a blank initial state. */
 export const blankState = async (networkId: NetworkId.NetworkId): Promise<SimulatorState> => {
   const blankGenesis: Block = {
     number: 0n,
@@ -404,17 +373,13 @@ export const blankState = async (networkId: NetworkId.NetworkId): Promise<Simula
   };
 };
 
-/**
- * Add a pending transaction to the mempool.
- */
+/** Add a pending transaction to the mempool. */
 export const addToMempool = (state: SimulatorState, pendingTx: PendingTransaction): SimulatorState => ({
   ...state,
   mempool: [...state.mempool, pendingTx],
 });
 
-/**
- * Remove transactions from the mempool.
- */
+/** Remove transactions from the mempool. */
 export const removeFromMempool = (state: SimulatorState, transactions: readonly ReadyTransaction[]): SimulatorState => {
   const txsToRemove = new Set(transactions.map((t) => t.tx));
   return {
@@ -423,25 +388,19 @@ export const removeFromMempool = (state: SimulatorState, transactions: readonly 
   };
 };
 
-/**
- * Advance the simulator time by the given number of seconds.
- */
+/** Advance the simulator time by the given number of seconds. */
 export const advanceTime = (state: SimulatorState, seconds: bigint): SimulatorState => ({
   ...state,
   currentTime: DateOps.addSeconds(state.currentTime, seconds),
 });
 
-/**
- * Update the ledger state.
- */
+/** Update the ledger state. */
 export const updateLedger = (state: SimulatorState, ledger: LedgerState): SimulatorState => ({
   ...state,
   ledger,
 });
 
-/**
- * Append a block to the state and update time.
- */
+/** Append a block to the state and update time. */
 export const appendBlock = (state: SimulatorState, block: Block, newLedger: LedgerState): SimulatorState => ({
   ...state,
   ledger: newLedger,
@@ -454,8 +413,7 @@ export const appendBlock = (state: SimulatorState, block: Block, newLedger: Ledg
 // =============================================================================
 
 /**
- * Pure state transition: apply a transaction to the simulator state.
- * Returns Either with the new state or an error.
+ * Pure state transition: apply a transaction to the simulator state. Returns Either with the new state or an error.
  *
  * @param state - Current simulator state
  * @param tx - Transaction to apply
@@ -514,9 +472,7 @@ export const applyTransaction = (
 // Block Production (Pure Functions)
 // =============================================================================
 
-/**
- * Result of processing a single transaction.
- */
+/** Result of processing a single transaction. */
 export type TransactionProcessingResult = Readonly<{
   tx: ProofErasedTransaction;
   result: TransactionResult;
@@ -524,8 +480,8 @@ export type TransactionProcessingResult = Readonly<{
 }>;
 
 /**
- * Process a single pending transaction against the current ledger.
- * Returns Either with the processing result or an error.
+ * Process a single pending transaction against the current ledger. Returns Either with the processing result or an
+ * error.
  *
  * @param ledger - Current ledger state
  * @param readyTx - Transaction to process
@@ -567,9 +523,8 @@ export const processTransaction = (
 };
 
 /**
- * Process multiple transactions in sequence, accumulating results.
- * Returns Either with all results and final ledger, or first error.
- * Each transaction uses its assigned strictness (from ReadyTransaction).
+ * Process multiple transactions in sequence, accumulating results. Returns Either with all results and final ledger, or
+ * first error. Each transaction uses its assigned strictness (from ReadyTransaction).
  *
  * @param ledger - Initial ledger state
  * @param transactions - Transactions to process (each with assigned strictness)
@@ -598,8 +553,7 @@ export const processTransactions = (
   );
 
 /**
- * Create a block from processed transactions and update state.
- * Pure function that takes pre-computed block hash.
+ * Create a block from processed transactions and update state. Pure function that takes pre-computed block hash.
  *
  * @param state - Current simulator state
  * @param blockTransactions - Processed transactions to include
@@ -659,11 +613,11 @@ export const createEmptyBlock = (
 // =============================================================================
 
 /**
- * Create a WellFormedStrictness instance with configurable options.
- * All options default to false for maximum testing flexibility.
+ * Create a WellFormedStrictness instance with configurable options. All options default to false for maximum testing
+ * flexibility.
  *
- * Note: WellFormedStrictness is a class from the ledger library that requires
- * mutation to configure. This is unavoidable given the external API design.
+ * Note: WellFormedStrictness is a class from the ledger library that requires mutation to configure. This is
+ * unavoidable given the external API design.
  */
 export const createStrictness = (config: StrictnessConfig = {}): WellFormedStrictness => {
   const strictness = new WellFormedStrictness();
@@ -676,8 +630,7 @@ export const createStrictness = (config: StrictnessConfig = {}): WellFormedStric
 };
 
 /**
- * Compute block hash from block number.
- * Uses a deterministic hash based on block number for easy recomputation.
+ * Compute block hash from block number. Uses a deterministic hash based on block number for easy recomputation.
  *
  * @param blockNumber - The block number to compute hash for
  * @returns A deterministic 64-character hex hash

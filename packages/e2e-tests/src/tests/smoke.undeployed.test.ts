@@ -20,7 +20,7 @@ import { NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wa
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
-import { type CombinedTokenTransfer, WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
@@ -170,7 +170,7 @@ describe('Smoke tests', () => {
       expect(finalState2.unshielded.pendingCoins.length).toBe(0);
 
       // Verify unshielded transaction history
-      const senderTxHistory = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const senderTxHistory = await funded.wallet.getAllFromTxHistory();
       const senderUnshieldedEntries = senderTxHistory.filter((e) => e.unshielded !== undefined);
       expect(senderUnshieldedEntries.length).toBeGreaterThan(0);
       senderUnshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
@@ -184,7 +184,7 @@ describe('Smoke tests', () => {
       expect(senderShieldedEntries.length).toBeGreaterThan(0);
       senderShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
 
-      const receiverTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const receiverTxHistory = await receiver.wallet.getAllFromTxHistory();
       const receiverShieldedEntries = receiverTxHistory.filter((e) => e.shielded !== undefined);
       expect(receiverShieldedEntries.length).toBeGreaterThan(0);
       receiverShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
@@ -206,7 +206,7 @@ describe('Smoke tests', () => {
       expect(stateObject.state).toBeTruthy();
 
       // Verify tx history has shielded entries before serialization
-      const txHistoryBeforeSerialize = await Array.fromAsync(funded.wallet.getAllFromTxHistory());
+      const txHistoryBeforeSerialize = await funded.wallet.getAllFromTxHistory();
       const shieldedEntries = txHistoryBeforeSerialize.filter((e) => e.shielded !== undefined);
       expect(shieldedEntries.length).toBeGreaterThan(0);
 
@@ -218,6 +218,7 @@ describe('Smoke tests', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const RestoredWallet = ShieldedWallet({
         ...walletConfig,
@@ -240,7 +241,7 @@ describe('Smoke tests', () => {
     'Unshielded wallet can be serialized and restored',
     async () => {
       fixture = getFixture();
-      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema);
+      const unshieldedTxHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
       const unshieldedKeyStore = createKeystore(utils.getUnshieldedSeed(seedFunded), fixture.getNetworkId());
       const initialWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),
@@ -266,6 +267,7 @@ describe('Smoke tests', () => {
       const restoredTxHistoryStorage = InMemoryTransactionHistoryStorage.restore(
         serializedTxHistory,
         WalletEntrySchema,
+        mergeWalletEntries,
       );
       const restoredWallet = UnshieldedWallet({
         networkId: fixture.getNetworkId(),

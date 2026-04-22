@@ -14,8 +14,8 @@
 import { dispatch, type PolyFunction, type WithTag } from './polyFunction.js';
 
 /**
- * Heterogeneous list - as in - list, where elements have different types
- * Here - more as an additional API over TS's tuple type
+ * Heterogeneous list - as in - list, where elements have different types Here - more as an additional API over TS's
+ * tuple type
  */
 export type Empty = [];
 export type NonEmpty<T> = T extends Array<infer E> ? [E, ...T] : never;

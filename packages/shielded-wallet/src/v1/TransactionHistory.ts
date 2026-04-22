@@ -31,8 +31,6 @@ export const ShieldedSectionSchema = Schema.Struct({
 
 type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
 
-const isShieldedSection = Schema.is(ShieldedSectionSchema);
-
 export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
   hash: TransactionHistoryStorage.TransactionHashSchema,
   protocolVersion: Schema.Number,
@@ -66,7 +64,7 @@ export type TransactionHistoryService = {
   ): Effect.Effect<TransactionDetails, TransactionHistoryError>;
 };
 
-const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
+export const mergeShieldedSections = (existing: ShieldedSection, incoming: ShieldedSection): ShieldedSection => ({
   receivedCoins: EArray.unionWith(existing.receivedCoins, incoming.receivedCoins, coinEquals),
   spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
@@ -96,23 +94,10 @@ const upsertShieldedEntry = (
   txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
   entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
 ): Effect.Effect<void, TransactionHistoryError> =>
-  Effect.gen(function* () {
-    const existing = yield* Effect.tryPromise({
-      try: () => txHistoryStorage.get(entry.hash),
-      catch: (e) =>
-        new TransactionHistoryError({ message: `Failed to get existing entry for ${entry.hash}`, cause: e }),
-    });
-
-    const shieldedSection =
-      existing && isShieldedSection(existing['shielded'])
-        ? mergeShieldedSections(existing['shielded'], entry.shielded)
-        : entry.shielded;
-
-    yield* Effect.tryPromise({
-      try: () => txHistoryStorage.upsert({ ...existing, ...entry, shielded: shieldedSection }),
-      catch: (e) =>
-        new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
-    });
+  Effect.tryPromise({
+    try: () => txHistoryStorage.upsert(entry),
+    catch: (e) =>
+      new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
   });
 
 export const makeDefaultTransactionHistoryService = (

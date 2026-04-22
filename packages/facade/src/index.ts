@@ -36,9 +36,11 @@ import {
   type ShieldedWalletAPI,
   type ShieldedWalletState,
   ShieldedSectionSchema,
+  mergeShieldedSections,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
@@ -58,16 +60,31 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
- * Full entry schema for transaction history — common fields + all wallet sections.
- * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
+ * Full entry schema for transaction history — common fields + all wallet sections. Pass this to
+ * `InMemoryTransactionHistoryStorage` to enable serialize/restore.
  */
 export const WalletEntrySchema = Schema.Struct({
   ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
   shielded: Schema.optional(ShieldedSectionSchema),
   unshielded: Schema.optional(UnshieldedSectionSchema),
+  dust: Schema.optional(DustSectionSchema),
 });
 
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
+
+export const mergeWalletEntries = (existing: WalletEntry, incoming: WalletEntry): WalletEntry => ({
+  ...existing,
+  ...incoming,
+  ...(existing.shielded !== undefined && incoming.shielded !== undefined
+    ? { shielded: mergeShieldedSections(existing.shielded, incoming.shielded) }
+    : {}),
+  ...(existing.unshielded !== undefined && incoming.unshielded !== undefined
+    ? { unshielded: { ...existing.unshielded, ...incoming.unshielded } }
+    : {}),
+  ...(existing.dust !== undefined && incoming.dust !== undefined
+    ? { dust: mergeDustSections(existing.dust, incoming.dust) }
+    : {}),
+});
 
 const isWalletEntry: (u: unknown) => u is WalletEntry = Schema.is(WalletEntrySchema);
 
@@ -202,9 +219,8 @@ export class FacadeState {
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /**
- * A clock abstraction for obtaining the current time.
- * By default, the facade uses the system clock.
- * For testing with a simulator, inject a custom clock (e.g., one backed by the simulator's time).
+ * A clock abstraction for obtaining the current time. By default, the facade uses the system clock. For testing with a
+ * simulator, inject a custom clock (e.g., one backed by the simulator's time).
  */
 export type Clock = {
   readonly now: () => Date;
@@ -214,8 +230,8 @@ export type Clock = {
 export const systemClock: Clock = { now: () => new Date() };
 
 /**
- * The Terms and Conditions returned by the indexer, containing a URL for display
- * and a SHA-256 hash for content verification.
+ * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
+ * verification.
  */
 export type TermsAndConditions = {
   /** The hex-encoded SHA-256 hash of the Terms and Conditions document. */
@@ -225,9 +241,9 @@ export type TermsAndConditions = {
 };
 
 /**
- * Minimal configuration required for {@link WalletFacade.fetchTermsAndConditions}.
- * Accepts the shared `indexerClientConnection` sub-object found on all wallet configurations,
- * so callers can pass the full wallet configuration directly without any adaptation.
+ * Minimal configuration required for {@link WalletFacade.fetchTermsAndConditions}. Accepts the shared
+ * `indexerClientConnection` sub-object found on all wallet configurations, so callers can pass the full wallet
+ * configuration directly without any adaptation.
  */
 export type FetchTermsAndConditionsConfiguration = {
   indexerClientConnection: {
@@ -291,18 +307,17 @@ export class WalletFacade {
   /**
    * Fetches the current Terms and Conditions from the network indexer.
    *
-   * This is a static, pre-initialization utility — no wallet instance is required.
-   * Wallet builders should call this before or independently of wallet initialization
-   * to display the current T&C to end users and obtain the hash for content verification.
+   * This is a static, pre-initialization utility — no wallet instance is required. Wallet builders should call this
+   * before or independently of wallet initialization to display the current T&C to end users and obtain the hash for
+   * content verification.
    *
-   * The returned `hash` is the hex-encoded SHA-256 hash of the document at `url`.
-   * Wallet builders are responsible for fetching and rendering the document content
-   * via `url` in whatever manner suits their application.
+   * The returned `hash` is the hex-encoded SHA-256 hash of the document at `url`. Wallet builders are responsible for
+   * fetching and rendering the document content via `url` in whatever manner suits their application.
    *
-   * @param configuration - An object with an `indexerClientConnection.indexerHttpUrl`.
-   *   Any wallet configuration that satisfies {@link FetchTermsAndConditionsConfiguration} can be passed directly.
-   * @returns A promise resolving to the current {@link TermsAndConditions}, or rejecting if
-   *   no Terms and Conditions have been set on the network yet.
+   * @param configuration - An object with an `indexerClientConnection.indexerHttpUrl`. Any wallet configuration that
+   *   satisfies {@link FetchTermsAndConditionsConfiguration} can be passed directly.
+   * @returns A promise resolving to the current {@link TermsAndConditions}, or rejecting if no Terms and Conditions have
+   *   been set on the network yet.
    */
   static async fetchTermsAndConditions(
     configuration: FetchTermsAndConditionsConfiguration,
@@ -774,8 +789,10 @@ export class WalletFacade {
 
   /**
    * Provides estimate of the fee of issuing registration transaction with provided UTxOs
+   *
    * @param nightUtxos - Night UTxOs to use for the registration
-   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s), that would be used for paying the fee. These include data that allows to compute when the fee could be paid
+   * @returns And object informing about fee at the moment, as well as estimation of dust generation of the UTxO(s),
+   *   that would be used for paying the fee. These include data that allows to compute when the fee could be paid
    */
   async estimateRegistration(nightUtxos: readonly UtxoWithMeta[]): Promise<{
     fee: bigint;
@@ -956,9 +973,8 @@ export class WalletFacade {
     return raw && isWalletEntry(raw) ? raw : undefined;
   }
 
-  async *getAllFromTxHistory(): AsyncIterableIterator<WalletEntry> {
-    for await (const raw of this.#txHistoryStorage.getAll()) {
-      yield raw;
-    }
+  async getAllFromTxHistory(): Promise<WalletEntry[]> {
+    const allEntries = await this.#txHistoryStorage.getAll();
+    return [...allEntries];
   }
 }

@@ -47,18 +47,25 @@ export type IndexerClientConnection = {
 };
 
 export type BatchUpdatesConfig = {
-  /** Maximum number of events to collect into a single batch before emitting.
-   *  @default 10 */
+  /**
+   * Maximum number of events to collect into a single batch before emitting.
+   *
+   * @default 10
+   */
   readonly size?: number;
-  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
-   *  Controls the `groupedWithin` timeout — lower values mean more responsive
-   *  (but smaller) batches when events arrive slowly.
-   *  @default 1 */
+  /**
+   * Maximum time in milliseconds to wait for a full batch before emitting a partial one. Controls the `groupedWithin`
+   * timeout — lower values mean more responsive (but smaller) batches when events arrive slowly.
+   *
+   * @default 1
+   */
   readonly timeout?: number;
-  /** Minimum delay in milliseconds injected between consecutive batches.
-   *  Prevents the sync stream from saturating downstream consumers when many
-   *  events are available at once. Set to 0 to disable spacing entirely.
-   *  @default 4 */
+  /**
+   * Minimum delay in milliseconds injected between consecutive batches. Prevents the sync stream from saturating
+   * downstream consumers when many events are available at once. Set to 0 to disable spacing entirely.
+   *
+   * @default 4
+   */
   readonly spacing?: number;
 };
 
@@ -264,14 +271,13 @@ export const makeEventsSyncCapability = (): SyncCapability<CoreWallet, WalletSyn
         wrappedUpdate.updates.map((u) => u.event),
       );
 
-      return [
-        CoreWallet.updateProgress(newState, {
-          highestRelevantWalletIndex,
-          appliedIndex: nextIndex,
-          isConnected: true,
-        }),
-        { changes: newChanges, protocolVersion: lastUpdate.protocolVersion },
-      ];
+      const updatedState = CoreWallet.updateProgress(newState, {
+        highestRelevantWalletIndex,
+        appliedIndex: nextIndex,
+        isConnected: true,
+      });
+
+      return [updatedState, { changes: newChanges, protocolVersion: lastUpdate.protocolVersion }];
     },
   };
 };

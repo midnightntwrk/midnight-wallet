@@ -33,9 +33,15 @@ export class InsufficientFundsError extends Data.TaggedError('Wallet.Insufficien
   tokenType: string;
 }> {}
 
+export class TransactionHistoryError extends Data.TaggedError('Wallet.TransactionHistory')<{
+  message: string;
+  cause?: unknown;
+}> {}
+
 export type WalletError =
   | OtherWalletError
   | SyncWalletError
   | TransactingError
   | InsufficientFundsError
+  | TransactionHistoryError
   | LedgerOps.LedgerError;

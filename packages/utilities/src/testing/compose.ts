@@ -35,20 +35,15 @@ export function getComposeDirectory(): string {
   return path.join(repoRoot, 'infra', 'compose');
 }
 
-/**
- * Options for building test environment variables.
- */
+/** Options for building test environment variables. */
 export interface BuildTestEnvironmentVariablesOptions {
-  /**
-   * Additional environment variables to include.
-   * These will be merged with the variables collected from process.env.
-   */
+  /** Additional environment variables to include. These will be merged with the variables collected from process.env. */
   additionalVars?: Record<string, string>;
 }
 
 /**
- * Builds and validates environment variables for test containers.
- * Throws an error if any required environment variable from envVarsToPass is missing.
+ * Builds and validates environment variables for test containers. Throws an error if any required environment variable
+ * from envVarsToPass is missing.
  *
  * @param envVarsToPass - Array of environment variable names to collect from process.env
  * @param options - Optional configuration for building environment variables

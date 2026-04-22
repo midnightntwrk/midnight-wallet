@@ -371,9 +371,7 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
-  /**
-   * The internal build state of {@link V1Builder}.
-   */
+  /** The internal build state of {@link V1Builder}. */
   type FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = Types.Simplify<
     HasSync<TConfig, TContext, TSyncUpdate> &
       HasSerialization<TConfig, TContext, TSerialized> &
@@ -389,9 +387,7 @@ declare namespace V1Builder {
       | undefined;
   };
 
-  /**
-   * Utility interface that manages the type variance of {@link V1Builder}.
-   */
+  /** Utility interface that manages the type variance of {@link V1Builder}. */
   interface Variance<R> {
     readonly [V1BuilderSymbol.typeId]: {
       readonly _R: Types.Covariant<R>;
@@ -412,9 +408,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
     'keysCapability',
     'transactionHistoryService',
   ] as const;
-  /**
-   * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
-   */
+  /** This type will fail compilation if any key is omitted, letting the `isFull` check work properly */
   type _1 = Expect<
     Equal<keyof V1Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
   >;

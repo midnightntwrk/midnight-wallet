@@ -29,8 +29,8 @@ const CHECK_TX_PATH = '/check';
  * Creates a layer for a {@link ProverClient} that sends requests to a Proof Server over HTTP.
  *
  * @param config The server configuration to use when configuring the HTTP elements of the layer.
- * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP.
- * The layer can fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
+ * @returns A `Layer` for {@link ProverClient} that sends requests to a configured Proof Server over HTTP. The layer can
+ *   fail with an `InvalidProtocolSchemeError` if `config` is invalid for a HTTP context.
  */
 export const layer: (config: ProverClient.ServerConfig) => Layer.Layer<ProverClient, InvalidProtocolSchemeError> = (
   config,

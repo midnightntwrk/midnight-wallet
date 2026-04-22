@@ -14,7 +14,7 @@ import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type FacadeState } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type FacadeState } from '@midnight-ntwrk/wallet-sdk';
 
 const alice = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),
