@@ -12,25 +12,25 @@
 // limitations under the License.
 import { describe, expect, it } from 'vitest';
 import {
-  Append,
+  type Append,
   append,
-  Each,
-  Empty,
+  type Each,
+  type Empty,
   empty,
   find,
-  Find,
+  type Find,
   foldLeft,
   foldRight,
   head,
-  Head,
+  type Head,
   headOr,
-  HeadOr,
-  Prepend,
+  type HeadOr,
+  type Prepend,
   prepend,
   reverse,
-  Reverse,
-  Tail,
-  Tails,
+  type Reverse,
+  type Tail,
+  type Tails,
 } from '../hlist.js';
 import type { Equal, Expect } from '../testUtils.js';
 

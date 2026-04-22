@@ -23,9 +23,10 @@
  * - Time advancement for TTL and time-sensitive tests
  */
 
-import { Array as Arr, Effect, Either, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
+import { type Array as Arr, Effect, Either, pipe, type Scope, Stream, SubscriptionRef } from 'effect';
 import {
   addressFromKey,
+  type BlockContext,
   ClaimRewardsTransaction,
   createShieldedCoinInfo,
   Intent,
@@ -44,6 +45,7 @@ import {
   type UserAddress,
   ZswapOffer,
   ZswapOutput,
+  type ZswapSecretKeys,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -259,7 +261,7 @@ export class Simulator {
     const createShieldedOffer = (transfer: {
       tokenType: string;
       amount: bigint;
-      keys: import('@midnight-ntwrk/ledger-v8').ZswapSecretKeys;
+      keys: ZswapSecretKeys;
     }): ZswapOffer<PreProof> => {
       const coin = createShieldedCoinInfo(transfer.tokenType, transfer.amount);
       const output = ZswapOutput.new(coin, 0, transfer.keys.coinPublicKey, transfer.keys.encryptionPublicKey);
@@ -279,11 +281,7 @@ export class Simulator {
     };
 
     // Process shielded and custom unshielded mints in initial block (Night handled separately)
-    const makeInitialTransactions = (
-      ledgerState: LedgerState,
-      context: import('@midnight-ntwrk/ledger-v8').BlockContext,
-      blockTime: Date,
-    ) => {
+    const makeInitialTransactions = (ledgerState: LedgerState, context: BlockContext, blockTime: Date) => {
       const verificationTime = blockTime;
 
       // Separate mints by type using flatMap (pure, no mutation)
@@ -325,7 +323,7 @@ export class Simulator {
       ledgerState: LedgerState,
       mint: { amount: bigint; recipient: UserAddress; verifyingKey: SignatureVerifyingKey },
       blockTime: Date,
-      context: import('@midnight-ntwrk/ledger-v8').BlockContext,
+      context: BlockContext,
     ): { ledgerState: LedgerState; tx: ProofErasedTransaction; result: TransactionResult } => {
       // Distribute Night tokens (makes them claimable)
       const ledgerWithReward = ledgerState.testingDistributeNight(mint.recipient, mint.amount, blockTime);

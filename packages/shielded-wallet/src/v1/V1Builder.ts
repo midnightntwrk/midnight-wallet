@@ -42,7 +42,7 @@ import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
 import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet, PublicKeys } from './CoreWallet.js';
 import {
-  DefaultTransactionHistoryConfiguration,
+  type DefaultTransactionHistoryConfiguration,
   makeDefaultTransactionHistoryService,
   type TransactionHistoryService,
 } from './TransactionHistory.js';

@@ -36,16 +36,16 @@ import {
   Sync as UnshieldedSync,
   V1Builder as UnshieldedV1Builder,
 } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet/v1';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as Submission from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
 import {
   makeSimulatorProvingServiceEffect,
   type ProvingService,
   type UnboundTransaction,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
-import { Simulator } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import { type Simulator } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import type { SubmissionService } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import { Effect, Scope } from 'effect';
+import { Effect, type Scope } from 'effect';
 import * as rx from 'rxjs';
 
 export const getShieldedSeed = (seed: string): Uint8Array => {

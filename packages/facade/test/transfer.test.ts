@@ -24,7 +24,7 @@ import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type CombinedTokenTransfer,
-  DefaultConfiguration,
+  type DefaultConfiguration,
   WalletEntrySchema,
   WalletFacade,
   mergeWalletEntries,

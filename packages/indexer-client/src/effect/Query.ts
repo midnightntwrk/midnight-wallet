@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { Effect, Context, Effectable, Option, identity } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { QueryClient } from './QueryClient.js';
 

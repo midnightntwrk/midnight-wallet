@@ -10,27 +10,44 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Either, Layer, ParseResult, pipe, Schema, Scope, Stream, Duration, Chunk, Schedule } from 'effect';
-import { DustSecretKey, DustStateChanges, Event as LedgerEvent, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
+import {
+  Effect,
+  Either,
+  Layer,
+  ParseResult,
+  pipe,
+  Schema,
+  type Scope,
+  Stream,
+  Duration,
+  Chunk,
+  Schedule,
+} from 'effect';
+import {
+  type DustSecretKey,
+  type DustStateChanges,
+  Event as LedgerEvent,
+  LedgerParameters,
+} from '@midnight-ntwrk/ledger-v8';
 import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
   ConnectionHelper,
-  SubscriptionClient,
-  QueryClient,
+  type SubscriptionClient,
+  type QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
+import { type URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import {
-  Simulator,
-  SimulatorState,
+  type Simulator,
+  type SimulatorState,
   getBlockEventsFrom,
   getLastBlock,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
-import { NetworkId } from './types/ledger.js';
+import { type NetworkId } from './types/ledger.js';
 import { Uint8ArraySchema } from './Serialization.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {

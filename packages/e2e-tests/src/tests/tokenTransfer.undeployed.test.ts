@@ -11,12 +11,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as rx from 'rxjs';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { CombinedTokenTransfer, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
 
 /**

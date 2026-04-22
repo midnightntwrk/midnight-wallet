@@ -18,7 +18,7 @@
  * synchronous and side-effect free.
  */
 
-import { Either, Function as EFunction, Stream, Array as EArray } from 'effect';
+import { Either, Function as EFunction, type Stream, Array as EArray } from 'effect';
 import {
   LedgerState,
   type BlockContext,
@@ -33,7 +33,7 @@ import {
   type SignatureVerifyingKey,
 } from '@midnight-ntwrk/ledger-v8';
 import { DateOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
 // =============================================================================
 // Types
@@ -475,7 +475,7 @@ export const applyTransaction = (
 /** Result of processing a single transaction. */
 export type TransactionProcessingResult = Readonly<{
   tx: ProofErasedTransaction;
-  result: import('@midnight-ntwrk/ledger-v8').TransactionResult;
+  result: TransactionResult;
   newLedger: LedgerState;
 }>;
 
@@ -484,7 +484,7 @@ export type TransactionProcessingResult = Readonly<{
  * error.
  *
  * @param ledger - Current ledger state
- * @param pendingTx - Transaction to process
+ * @param readyTx - Transaction to process
  * @param blockTime - Block timestamp
  * @param blockContext - Block context
  * @param minFullness - Minimum block fullness to use

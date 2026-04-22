@@ -18,7 +18,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import {
   type NetworkId,
   InMemoryTransactionHistoryStorage,
-  TransactionHistoryStorage,
+  type TransactionHistoryStorage,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { existsSync } from 'node:fs';
