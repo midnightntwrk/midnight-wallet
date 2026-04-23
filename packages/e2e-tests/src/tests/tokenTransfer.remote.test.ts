@@ -174,7 +174,7 @@ describe('Token transfer', () => {
       const senderTxEntry = await utils.waitForTxInHistory(
         txHash,
         sender.wallet,
-        (entry) => entry.shielded !== undefined && entry.unshielded !== undefined,
+        (e) => e.shielded !== undefined && e.unshielded !== undefined,
       );
       const senderFinalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
@@ -286,7 +286,7 @@ describe('Token transfer', () => {
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
 
       const txHash = finalizedTx.transactionHash();
-      const txEntry = await utils.waitForTxInHistory(txHash, sender.wallet);
+      const txEntry = await utils.waitForTxInHistory(txHash, sender.wallet, (e) => e.shielded !== undefined);
       const finalState = await sender.wallet.waitForSyncedState();
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
