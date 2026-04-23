@@ -1,5 +1,33 @@
 # @midnight-ntwrk/wallet-sdk-shielded
 
+## 3.0.0
+
+### Major Changes
+
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+
+### Patch Changes
+
+- e57a94b: Unify Simulator into capabilities package with proper fee payment and block production model
+- c1ae369: Fix transaction history race condition by consolidating merge logic in the facade and delegating it to
+  storage at construction time.
+- 6e67871: Support balancing shielded offers across multiple fallible segments
+- 0db3290: chore: bump ledger version to 8.0.3
+- 0529e6a: Add `batchUpdates` option to `DefaultSyncConfiguration` for controlling sync stream batching (size, timeout,
+  and spacing between batches)
+- Updated dependencies [e57a94b]
+- Updated dependencies [c1ae369]
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.1
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.1
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.3
+
 ## 2.1.0
 
 ### Minor Changes

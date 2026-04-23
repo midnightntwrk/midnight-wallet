@@ -1,5 +1,45 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 4.0.0
+
+### Major Changes
+
+- 3763803: Add txHistory functionality to the dust wallet
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+
+### Minor Changes
+
+- e57a94b: Unify Simulator into capabilities package with proper fee payment and block production model
+
+### Patch Changes
+
+- c1ae369: Fix transaction history race condition by consolidating merge logic in the facade and delegating it to
+  storage at construction time.
+- 8383f7b: Remove the double exporting of TransactionHistory.js
+- 0db3290: chore: bump ledger version to 8.0.3
+- aaa0bf1: In certain cases valid transactions won't contain any intents, which would cause the
+  `WalletFacade.prototype.signRecipe` fail. Now it won't fail and return same recipe
+- Updated dependencies [e57a94b]
+- Updated dependencies [c1ae369]
+- Updated dependencies [55715af]
+- Updated dependencies [eba8e08]
+- Updated dependencies [6e67871]
+- Updated dependencies [3763803]
+- Updated dependencies [8383f7b]
+- Updated dependencies [1f794fa]
+- Updated dependencies [0db3290]
+- Updated dependencies [0529e6a]
+- Updated dependencies [7f82432]
+- Updated dependencies [aaa0bf1]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.0
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@4.0.0
+  - @midnight-ntwrk/wallet-sdk-shielded@3.0.0
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@3.0.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.1
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.1
+
 ## 3.0.0
 
 ### Major Changes
