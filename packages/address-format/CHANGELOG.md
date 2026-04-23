@@ -1,5 +1,14 @@
 # @midnight-ntwrk/wallet-sdk-address-format
 
+## 3.1.1
+
+### Patch Changes
+
+- 0db3290: chore: bump ledger version to 8.0.3
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+
 ## 3.1.0
 
 ### Minor Changes

@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-prover-client
 
+## 1.2.1
+
+### Patch Changes
+
+- 0db3290: chore: bump ledger version to 8.0.3
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+
 ## 1.2.0
 
 ### Minor Changes
