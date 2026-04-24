@@ -48,7 +48,7 @@ export type DustGenerationWithNullifierUpdate = {
   isSynced: boolean;
 };
 
-export type DustNullifierUpdate = Pick<DustGenerationWithNullifierUpdate, 'dustNullifier' | 'qdo' | 'isSynced'>;
+export type DustUtxoUpdate = Pick<DustGenerationWithNullifierUpdate, 'dustNullifier' | 'qdo' | 'isSynced'>;
 
 export const PublicKey = {
   fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
@@ -134,6 +134,7 @@ export const CoreWallet = {
         .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationIndex)
         .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
+      // now, insert the generation info
       updatedState = updatedState.insertGenerationInfo(BigInt(generationIndex), genInfo, qdo.backingNight);
       lastUpdatedIndex = generationIndex;
     }
@@ -143,7 +144,7 @@ export const CoreWallet = {
       .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
       .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
-    return this.applyDustNullifiers(
+    return this.applyDustUtxos(
       {
         ...wallet,
         state: updatedState,
@@ -152,8 +153,8 @@ export const CoreWallet = {
     );
   },
 
-  applyDustNullifiers(wallet: CoreWallet, nullifierUpdates: DustNullifierUpdate[]): CoreWallet {
-    const updatedState = nullifierUpdates.reduce(
+  applyDustUtxos(wallet: CoreWallet, utxoUpdates: DustUtxoUpdate[]): CoreWallet {
+    const updatedState = utxoUpdates.reduce(
       (state, { dustNullifier, qdo }) => state.addUtxo(dustNullifier, qdo),
       wallet.state,
     );
@@ -161,9 +162,41 @@ export const CoreWallet = {
       ...wallet,
       state: updatedState,
       dustNullifiers: wallet.dustNullifiers.concat(
-        nullifierUpdates.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
+        utxoUpdates.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
       ),
     };
+  },
+
+  applyDustCommitments(
+    wallet: CoreWallet,
+    newUtxos: QualifiedDustOutput[],
+    collapsedCommitments: CollapsedMerkleTree[],
+  ): CoreWallet {
+    let updatedState = wallet.state;
+    for (const { startIndex, update } of collapsedCommitments) {
+      // apply utxos going before the current index
+      const utxos = newUtxos.filter((utxo) => Number(utxo.mtIndex) < startIndex);
+      updatedState = utxos.reduce((state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true), updatedState);
+      // apply current update
+      updatedState = updatedState.applyCommitmentCollapsedUpdate(update);
+    }
+
+    // check utxos after the last index
+    const lastCollapsedIndex = collapsedCommitments.at(-1);
+    if (lastCollapsedIndex !== undefined) {
+      const utxosAfterLastIndex = newUtxos.filter((utxo) => Number(utxo.mtIndex) > lastCollapsedIndex.endIndex);
+      updatedState = utxosAfterLastIndex.reduce(
+        (state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true),
+        updatedState,
+      );
+    }
+
+    // edge-case: no collapsed commitments but new utxos
+    if (!collapsedCommitments.length && newUtxos.length) {
+      updatedState = newUtxos.reduce((state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true), updatedState);
+    }
+
+    return { ...wallet, state: updatedState };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {

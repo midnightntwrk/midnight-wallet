@@ -26,6 +26,7 @@ import {
   DustLedgerEvents,
   TransactionEvents,
   DustNullifierTransactions,
+  DustCommitmentMerkleTreeUpdate,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
@@ -38,9 +39,11 @@ import { DateOps, EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilit
 import { URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, WalletError } from './WalletError.js';
 import { Simulator, SimulatorState } from './Simulator.js';
-import { CoreWallet, DustGenerationWithNullifierUpdate, DustNullifierUpdate } from './CoreWallet.js';
+import { CoreWallet, DustGenerationWithNullifierUpdate, DustUtxoUpdate } from './CoreWallet.js';
 import { NetworkId } from './types/ledger.js';
 import {
+  CollapsedMerkleTree,
+  CollapsedMerkleTreeSchema,
   DustGenerationsSubscription,
   DustGenerationsSubscriptionSchema,
   DustGenerationsSyncUpdate,
@@ -188,6 +191,40 @@ export const makeDustGenerationsSyncService = (
     );
   };
 
+  const loadCollapsedCommitments = (
+    fromBlock: bigint,
+    toBlock: bigint,
+    newUtxos: Map<bigint, QualifiedDustOutput>,
+  ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
+    const skipMtIndexes = [...newUtxos.keys()];
+
+    // 1: split into groups
+    const groups = [];
+    const firstSkipIndex = skipMtIndexes.at(0);
+
+    if (firstSkipIndex !== undefined && fromBlock < firstSkipIndex) {
+      groups.push({ start: fromBlock, end: firstSkipIndex - 1n });
+    } else if (firstSkipIndex === undefined) {
+      groups.push({ start: fromBlock, end: toBlock });
+    }
+
+    skipMtIndexes.forEach((item, index) => {
+      const start = item;
+      const end = skipMtIndexes.at(index + 1);
+      if (end !== undefined && end - start > 1n) {
+        groups.push({ start, end });
+      } else if (end === undefined && start < toBlock) {
+        groups.push({ start, end: toBlock });
+      }
+    });
+
+    // 2: Query all groups in parallel
+    return pipe(
+      groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(Number(start), Number(end))),
+      Effect.all,
+    );
+  };
+
   return {
     updates: (
       state: CoreWallet,
@@ -196,6 +233,7 @@ export const makeDustGenerationsSyncService = (
       return pipe(
         Effect.gen(function* () {
           const blockData = yield* defaultSyncService.blockData();
+          const lastSyncedCommitmentIndex = 0n - 1n; // TODO: read from the dust local state (keep in mind it will be +1)
           const rawGenerations = yield* pipe(
             indexerSyncService.subscribeDustGenerations(state, blockData.height),
             Stream.runCollect,
@@ -205,6 +243,9 @@ export const makeDustGenerationsSyncService = (
           let updatedWallet = applyDustGenerationsUpdate(state, generations);
 
           let newNullifiers = updatedWallet.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier);
+          const newUtxos: Map<bigint, QualifiedDustOutput> = new Map(
+            updatedWallet.state.utxos.filter((u) => u.mtIndex > lastSyncedCommitmentIndex).map((u) => [u.mtIndex, u]),
+          );
 
           while (newNullifiers.length > 0) {
             const nullifierTransactions = yield* pipe(
@@ -212,12 +253,30 @@ export const makeDustGenerationsSyncService = (
               Stream.runCollect,
               Effect.map(Chunk.toArray),
             );
-            [updatedWallet, newNullifiers] = yield* applyNullifierTransactionsUpdate(
-              updatedWallet,
-              nullifierTransactions,
-              secretKey,
-            );
+
+            const result = yield* applyNullifierTransactionsUpdate(updatedWallet, nullifierTransactions, secretKey);
+            updatedWallet = result.wallet;
+            newNullifiers = result.newUtxos.map((u) => u.dustNullifier);
+
+            for (const { qdo } of result.newUtxos) {
+              newUtxos.set(qdo.mtIndex, qdo);
+            }
           }
+
+          const sortedNewUtxos = new Map([...newUtxos].sort((a, b) => Number(a[0] - b[0])));
+          const collapsedCommitments = yield* loadCollapsedCommitments(
+            lastSyncedCommitmentIndex,
+            BigInt(blockData.height),
+            sortedNewUtxos,
+          );
+
+          updatedWallet = CoreWallet.applyDustCommitments(
+            updatedWallet,
+            [...sortedNewUtxos.values()],
+            collapsedCommitments,
+          );
+
+          // TODO: convert to stream
         }),
         Stream.unwrap,
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
@@ -241,6 +300,10 @@ export type IndexerSyncService = {
     toBlock: number | null,
   ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
   transactionEvents: (txId: number) => Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient>;
+  dustCommitmentMerkleTreeUpdate: (
+    startIndex: number,
+    endIndex: number,
+  ) => Effect.Effect<CollapsedMerkleTree, WalletError, Scope.Scope | QueryClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
@@ -348,6 +411,24 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           }
           return pipe(
             Schema.decodeUnknownEither(TransactionEventsUpdateSchema)(nonSystemTransactions[0]),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
+        }),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
+      );
+    },
+    dustCommitmentMerkleTreeUpdate(
+      startIndex: number,
+      endIndex: number,
+    ): Effect.Effect<CollapsedMerkleTree, WalletError, Scope.Scope | QueryClient> {
+      return pipe(
+        DustCommitmentMerkleTreeUpdate.run({ startIndex, endIndex }),
+        Effect.flatMap((result) => {
+          return pipe(
+            Schema.decodeUnknownEither(CollapsedMerkleTreeSchema)(result.dustCommitmentMerkleTreeUpdate),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
           );
@@ -466,10 +547,9 @@ export const applyNullifierTransactionsUpdate = (
   wallet: CoreWallet,
   nullifierTransactions: TransactionEventsUpdate[],
   secretKey: DustSecretKey,
-): Effect.Effect<[CoreWallet, DustNullifier[]], SyncWalletError> =>
+): Effect.Effect<{ wallet: CoreWallet; newUtxos: DustUtxoUpdate[] }, SyncWalletError> =>
   Effect.gen(function* () {
-    const newNullifiers: DustNullifier[] = [];
-    const nullifierUpdates: DustNullifierUpdate[] = [];
+    const utxoUpdates: DustUtxoUpdate[] = [];
 
     for (const tx of nullifierTransactions) {
       const dustSpends = tx.dustLedgerEvents.filter((dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed');
@@ -481,26 +561,22 @@ export const applyNullifierTransactionsUpdate = (
           return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
         }
 
-        // TODO: update old qdo's pendingUntil field
-        nullifierUpdates.push({
+        utxoUpdates.push({
           dustNullifier: nullifier,
           qdo,
           isSynced: true,
         });
 
         const newUtxo = wallet.state.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
-        const newDustNullifier = dustNullifier(newUtxo, secretKey);
-
-        newNullifiers.push(newDustNullifier);
-        nullifierUpdates.push({
-          dustNullifier: newDustNullifier,
+        utxoUpdates.push({
+          dustNullifier: dustNullifier(newUtxo, secretKey),
           qdo: newUtxo,
           isSynced: false,
         });
       }
     }
 
-    return [CoreWallet.applyDustNullifiers(wallet, nullifierUpdates), newNullifiers];
+    return { wallet: CoreWallet.applyDustUtxos(wallet, utxoUpdates), newUtxos: utxoUpdates.filter((u) => !u.isSynced) };
   });
 
 export const makeSimulatorSyncService = (
