@@ -228,10 +228,13 @@ describe('Token transfer', () => {
       // Verify receiver unshielded transaction history grew and contains the specific transaction
       const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
-      const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
-      expect(receiverTxEntry).toBeDefined();
-      utils.expectReceiverShieldedTxHistory(receiverTxEntry!, outputValue);
-      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry!, outputValue);
+      const receiverTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        receiver.wallet,
+        (entry) => entry.shielded !== undefined && entry.unshielded !== undefined,
+      );
+      utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry, outputValue);
     },
     syncTimeout,
   );

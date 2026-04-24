@@ -162,8 +162,12 @@ export const provideWallet = async (
   seed: string,
   fixture: TestContainersFixture,
 ): Promise<WalletInit> => {
-  const walletConfig = fixture.getWalletConfig();
-  const dustWalletConfig = fixture.getDustWalletConfig();
+  // Single shared tx-history storage so all three sub-wallets and the facade read/write
+  // the same instance; otherwise shielded/unshielded writes go to a storage the facade
+  // never queries.
+  const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+  const walletConfig = { ...fixture.getWalletConfig(), txHistoryStorage };
+  const dustWalletConfig = { ...fixture.getDustWalletConfig(), txHistoryStorage };
   const Wallet = ShieldedWallet(walletConfig);
 
   const directoryPath = process.env['SYNC_CACHE'];
@@ -188,13 +192,7 @@ export const provideWallet = async (
 
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
-    restoreUnshieldedWallet(
-      `${directoryPath}/unshielded-${filename}`,
-      seed,
-      fixture,
-      readIfExists,
-      walletConfig.txHistoryStorage,
-    ),
+    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists, txHistoryStorage),
     restoreDustWallet(`${directoryPath}/dust-${filename}`, { ...walletConfig, ...dustWalletConfig }, readIfExists),
   ]);
 
@@ -341,7 +339,7 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
       rx.tap((state) => {
         const shieldedPending = state.shielded.pendingCoins.length;
         logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins...`);
-        const unshieldedPending = state.shielded.pendingCoins.length;
+        const unshieldedPending = state.unshielded.pendingCoins.length;
         logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins...`);
       }),
       rx.filter(
@@ -452,16 +450,42 @@ export const waitForTxInHistory = async (
   ready?: (entry: WalletEntry) => boolean,
 ) => {
   const isReady = ready ?? (() => true);
+  const describeSections = (e: WalletEntry): string =>
+    (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
+  let pollsSinceDump = 0;
   const txEntry = await rx.firstValueFrom(
-    wallet.state().pipe(
-      rx.filter((state) => state.isSynced),
-      rx.mergeMap(async () => wallet.queryTxHistoryByHash(txHash)),
-      rx.tap((txEntry) => {
-        logger.info(
-          `Waiting for tx ${txHash} in history, found: ${txEntry !== undefined}, ready: ${txEntry !== undefined && isReady(txEntry)}`,
-        );
+    rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
+      rx.mergeMap(async () => {
+        const entry = await wallet.queryTxHistoryByHash(txHash);
+        if (entry !== undefined && entry.status !== 'SUCCESS') {
+          logger.info(
+            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — non-SUCCESS, aborting wait`,
+          );
+          return entry;
+        }
+        const notReady = entry === undefined || !isReady(entry);
+        const needsDump = notReady && pollsSinceDump >= 20;
+        if (entry === undefined) {
+          logger.info(`Waiting for tx ${txHash} in history: not found yet`);
+        } else {
+          logger.info(`Waiting for tx ${txHash} in history: found, status=${entry.status}, ready=${isReady(entry)}`);
+        }
+        if (needsDump) {
+          const all = await wallet.getAllFromTxHistory();
+          const summary = all.map((e) => ({
+            hash: e.hash,
+            status: e.status,
+            sections: describeSections(e),
+            identifiers: e.identifiers ?? [],
+          }));
+          logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
+          pollsSinceDump = 0;
+        } else {
+          pollsSinceDump = notReady ? pollsSinceDump + 1 : 0;
+        }
+        return entry;
       }),
-      rx.filter((txEntry): txEntry is WalletEntry => txEntry !== undefined && isReady(txEntry)),
+      rx.filter((entry): entry is WalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry))),
     ),
   );
   expect(txEntry).toBeDefined();

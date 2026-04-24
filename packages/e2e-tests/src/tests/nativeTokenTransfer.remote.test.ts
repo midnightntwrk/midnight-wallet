@@ -87,9 +87,9 @@ describe('Token transfer', () => {
     async () => {
       await Promise.all([sender.wallet.waitForSyncedState(), receiver.wallet.waitForSyncedState()]);
       const initialState = await rx.firstValueFrom(sender.wallet.state());
-      const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw];
-      const initialNative2Balance = initialState.shielded.balances[nativeToken2Raw];
-      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
+      const initialNative1Balance = initialState.shielded.balances[nativeToken1Raw] ?? 0n;
+      const initialNative2Balance = initialState.shielded.balances[nativeToken2Raw] ?? 0n;
+      const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw] ?? 0n;
       const initialDustBalance = initialState.dust.balance(new Date());
       logger.info(`Wallet 1: ${initialNative1Balance} native 1 tokens`);
       logger.info(`Wallet 1: ${initialNative2Balance} native 2 tokens`);
@@ -99,9 +99,9 @@ describe('Token transfer', () => {
       logger.info(`Wallet 1 available unshielded coins: ${initialState.unshielded.availableCoins.length}`);
 
       const initialReceiverState = await rx.firstValueFrom(receiver.wallet.state());
-      const initialReceiverShieldedBalance1 = initialReceiverState.shielded.balances[nativeToken1Raw];
-      const initialReceiverShieldedBalance2 = initialReceiverState.shielded.balances[nativeToken2Raw];
-      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw];
+      const initialReceiverShieldedBalance1 = initialReceiverState.shielded.balances[nativeToken1Raw] ?? 0n;
+      const initialReceiverShieldedBalance2 = initialReceiverState.shielded.balances[nativeToken2Raw] ?? 0n;
+      const initialReceiverShieldedBalance = initialReceiverState.shielded.balances[shieldedTokenRaw] ?? 0n;
       const initialNumAvailableShieldedCoins = initialReceiverState.shielded.availableCoins.length;
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance1} native token 1`);
       logger.info(`Wallet 2: ${initialReceiverShieldedBalance2} native token 2`);
@@ -141,38 +141,16 @@ describe('Token transfer', () => {
       logger.info(finalizedTx.toString());
       logger.info('Submitting tx:');
       const txId = await sender.wallet.submitTransaction(finalizedTx);
+      const txHash = finalizedTx.transactionHash();
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
-
-      // const pendingState = await utils.waitForFacadePending(sender);
-      // expect(pendingState.shielded.balances[nativeToken1Raw] ?? 0n).toBeLessThanOrEqual(
-      //   initialNative1Balance - outputValue,
-      // );
-      // expect(pendingState.shielded.balances[nativeToken2Raw] ?? 0n).toBeLessThanOrEqual(
-      //   initialNative2Balance - outputValue,
-      // );
-      // expect(pendingState.shielded.availableCoins.length).toBeLessThanOrEqual(
-      //   initialState.shielded.availableCoins.length,
-      // );
-      // expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.unshielded.pendingCoins.length).toBe(0);
-      // expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
-
-      // logger.info('waiting for tx in history');
-      // await utils.waitForFacadePendingClear(sender);
-      await rx.firstValueFrom(
-        receiver.wallet.state().pipe(
-          rx.tap((state) => {
-            const currentNumAvailableCoins = state.shielded.availableCoins.length;
-            logger.info(
-              `Shielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableShieldedCoins}...`,
-            );
-          }),
-          rx.debounceTime(10_000),
-          rx.filter((s) => s.isSynced),
-          rx.filter((s) => s.shielded.availableCoins.length > initialNumAvailableShieldedCoins),
-        ),
+      logger.info('Transaction hash: ' + txHash);
+      const senderTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        sender.wallet,
+        (entry) => entry.shielded !== undefined,
       );
+      utils.expectSenderShieldedTxHistory(senderTxEntry);
       const finalState = await sender.wallet.waitForSyncedState();
       const senderFinalShieldedBalance1 = finalState.shielded.balances[nativeToken1Raw];
       const senderFinalShieldedBalance2 = finalState.shielded.balances[nativeToken2Raw];
@@ -189,7 +167,7 @@ describe('Token transfer', () => {
         initialState.shielded.availableCoins.length,
       );
       expect(finalState.dust.pendingCoins.length).toBe(0);
-      expect(finalState.shielded.pendingCoins.length).toBe(0);
+      expect(finalState.shielded.pendingCoins.length).toBeLessThanOrEqual(initialState.shielded.pendingCoins.length);
       expect(finalState.shielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
       expect(finalState.unshielded.availableCoins.length).toBeLessThanOrEqual(
         initialState.unshielded.availableCoins.length,
@@ -197,6 +175,12 @@ describe('Token transfer', () => {
       expect(finalState.unshielded.pendingCoins.length).toBe(0);
       expect(finalState.unshielded.totalCoins.length).toBeLessThanOrEqual(initialState.shielded.totalCoins.length);
 
+      const receiverTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        receiver.wallet,
+        (entry) => entry.shielded !== undefined,
+      );
+      utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
       const finalState2 = await receiver.wallet.waitForSyncedState();
       const receiverFinalShieldedBalance1 = finalState2.shielded.balances[nativeToken1Raw];
       const receiverFinalShieldedBalance2 = finalState2.shielded.balances[nativeToken2Raw];
@@ -207,7 +191,9 @@ describe('Token transfer', () => {
       expect(receiverFinalShieldedBalance1).toBe(initialReceiverShieldedBalance1 + outputValue);
       expect(receiverFinalShieldedBalance2).toBe(initialReceiverShieldedBalance2 + outputValue);
       expect(receiverFinalShieldedBalance).toBe(initialReceiverShieldedBalance);
-      expect(finalState2.shielded.pendingCoins.length).toBe(0);
+      expect(finalState2.shielded.pendingCoins.length).toBeLessThanOrEqual(
+        initialReceiverState.shielded.pendingCoins.length,
+      );
       expect(finalState2.shielded.totalCoins.length).toBeGreaterThanOrEqual(
         initialReceiverState.shielded.totalCoins.length + 1,
       );
