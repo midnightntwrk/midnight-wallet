@@ -1,5 +1,18 @@
 # @midnight-ntwrk/wallet-sdk-runtime
 
+## 1.0.3
+
+### Patch Changes
+
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+- Updated dependencies [c1ae369]
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+
 ## 1.0.2
 
 ### Patch Changes
