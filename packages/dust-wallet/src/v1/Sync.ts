@@ -234,7 +234,8 @@ export const makeDustGenerationsSyncService = (
       return pipe(
         Effect.gen(function* () {
           const blockData = yield* defaultSyncService.blockData();
-          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree - 1n;
+          const lastSyncedCommitmentIndex =
+            state.state.commitmentTreeFirstFree === 0n ? 0n : state.state.commitmentTreeFirstFree - 1n;
           const rawGenerations = yield* pipe(
             indexerSyncService.subscribeDustGenerations(state, blockData.height),
             Stream.runCollect,
@@ -293,8 +294,8 @@ export const makeDustGenerationsSyncService = (
           };
         }),
         Stream.fromEffect,
-        Stream.unwrap,
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
+        Stream.provideSomeLayer(indexerSyncService.queryClient()),
       );
     },
     blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
