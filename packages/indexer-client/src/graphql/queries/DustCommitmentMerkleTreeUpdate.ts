@@ -16,8 +16,13 @@ import { gql } from '../generated/index.js';
 export const DustCommitmentMerkleTreeUpdate = Query.make(
   'DustCommitmentMerkleTreeUpdate',
   gql(`
-    query DustCommitmentMerkleTreeUpdate($startIndex: Int!, $endIndex: Int) {
-      dustCommitmentMerkleTreeUpdate(startIndex: $startIndex, endIndex: $endIndex)
+    query DustCommitmentMerkleTreeUpdate($startIndex: Int!, $endIndex: Int!) {
+      dustCommitmentMerkleTreeUpdate(startIndex: $startIndex, endIndex: $endIndex) {
+        startIndex
+        endIndex
+        update
+        protocolVersion
+      }
     }
   `),
 );

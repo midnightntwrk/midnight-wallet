@@ -80,6 +80,12 @@ export type CommitteeMember = {
   readonly spoSkHex: Maybe<Scalars['String']['output']>;
 };
 
+/** Options for the connect mutation. */
+export type ConnectOptions = {
+  /** Transaction index to start searching for relevant transactions (inclusive). */
+  readonly startIndex: InputMaybe<Scalars['Int']['input']>;
+};
+
 /** A contract action. */
 export type ContractAction = {
   readonly address: Scalars['HexEncoded']['output'];
@@ -234,12 +240,6 @@ export type DustGenerationsItem = {
   readonly generationMtIndex: Scalars['Int']['output'];
   /** The DUST value at creation, in SPECK. */
   readonly initialValue: Scalars['String']['output'];
-  /**
-   * Deprecated alias of `commitmentMtIndex`. Scheduled for removal in a
-   * follow-up release.
-   * @deprecated Use `commitmentMtIndex` or `generationMtIndex` to disambiguate which tree. This field mirrors `commitmentMtIndex`.
-   */
-  readonly merkleIndex: Scalars['Int']['output'];
   /** The hex-encoded owner (dust address). */
   readonly owner: Scalars['HexEncoded']['output'];
   /** The originating transaction ID. */
@@ -374,6 +374,7 @@ export type Mutation = {
 
 
 export type MutationConnectArgs = {
+  options: InputMaybe<ConnectOptions>;
   viewingKey: Scalars['ViewingKey']['input'];
 };
 
@@ -423,7 +424,9 @@ export type Query = {
   /** Get the full history of D-parameter changes for governance auditability. */
   readonly dParameterHistory: ReadonlyArray<DParameterChange>;
   /** Get a collapsed Merkle tree update for the dust commitment tree. */
-  readonly dustCommitmentMerkleTreeUpdate: Scalars['HexEncoded']['output'];
+  readonly dustCommitmentMerkleTreeUpdate: MerkleTreeCollapsedUpdate;
+  /** Get a collapsed Merkle tree update for the dust generation tree. */
+  readonly dustGenerationMerkleTreeUpdate: MerkleTreeCollapsedUpdate;
   /** Get DUST generation status for specific Cardano reward addresses. */
   readonly dustGenerationStatus: ReadonlyArray<DustGenerationStatus>;
   /**
@@ -493,7 +496,13 @@ export type QueryContractActionArgs = {
 
 
 export type QueryDustCommitmentMerkleTreeUpdateArgs = {
-  endIndex: InputMaybe<Scalars['Int']['input']>;
+  endIndex: Scalars['Int']['input'];
+  startIndex: Scalars['Int']['input'];
+};
+
+
+export type QueryDustGenerationMerkleTreeUpdateArgs = {
+  endIndex: Scalars['Int']['input'];
   startIndex: Scalars['Int']['input'];
 };
 
@@ -657,7 +666,12 @@ export type RegularTransaction = Transaction & {
    * @deprecated Use zswapEndIndex instead
    */
   readonly endIndex: Scalars['Int']['output'];
-  /** Fee information for this transaction. */
+  /** The fee for this transaction in SPECK (atomic unit of DUST). */
+  readonly fee: Scalars['String']['output'];
+  /**
+   * Fee information for this transaction.
+   * @deprecated Use fee instead
+   */
   readonly fees: TransactionFees;
   /** The hex-encoded transaction hash. */
   readonly hash: Scalars['HexEncoded']['output'];
@@ -724,6 +738,18 @@ export type Segment = {
   readonly id: Scalars['Int']['output'];
   /** Successful or not. */
   readonly success: Scalars['Boolean']['output'];
+};
+
+/** A transaction containing a shielded (zswap) nullifier match with block context. */
+export type ShieldedNullifierTransaction = {
+  /** The hex-encoded block hash (use to query block with ledger parameters). */
+  readonly blockHash: Scalars['HexEncoded']['output'];
+  /** The block height containing this transaction. */
+  readonly blockHeight: Scalars['Int']['output'];
+  /** The hex-encoded matched nullifier. */
+  readonly nullifier: Scalars['HexEncoded']['output'];
+  /** The transaction ID (use to query full transaction via `transaction` query). */
+  readonly transactionId: Scalars['Int']['output'];
 };
 
 /** An event of the shielded transactions subscription. */
@@ -862,6 +888,12 @@ export type Subscription = {
    */
   readonly dustNullifierTransactions: DustNullifierTransaction;
   /**
+   * Subscribe to transactions containing shielded (zswap) nullifiers matching the provided
+   * prefixes. Returns transaction and block references for wallet to fetch full data.
+   * If `toBlock` is specified, the subscription finishes after reaching that block.
+   */
+  readonly shieldedNullifierTransactions: ShieldedNullifierTransaction;
+  /**
    * Subscribe to shielded transaction events for the given session ID starting at the given
    * index or at zero if omitted.
    */
@@ -900,6 +932,13 @@ export type SubscriptionDustLedgerEventsArgs = {
 
 
 export type SubscriptionDustNullifierTransactionsArgs = {
+  fromBlock: InputMaybe<Scalars['Int']['input']>;
+  nullifierPrefixes: ReadonlyArray<Scalars['HexEncoded']['input']>;
+  toBlock: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SubscriptionShieldedNullifierTransactionsArgs = {
   fromBlock: InputMaybe<Scalars['Int']['input']>;
   nullifierPrefixes: ReadonlyArray<Scalars['HexEncoded']['input']>;
   toBlock: InputMaybe<Scalars['Int']['input']>;
@@ -990,11 +1029,14 @@ export type Transaction = {
   readonly zswapLedgerEvents: ReadonlyArray<ZswapLedgerEvent>;
 };
 
-/** Fees information for a transaction, including both paid and estimated fees. */
+/** Fees information for a transaction. */
 export type TransactionFees = {
-  /** The estimated fees that was calculated for this transaction in DUST. */
+  /**
+   * The fees for this transaction in SPECK (atomic unit of DUST).
+   * @deprecated Use paidFees instead
+   */
   readonly estimatedFees: Scalars['String']['output'];
-  /** The actual fees paid for this transaction in DUST. */
+  /** The fees for this transaction in SPECK (atomic unit of DUST). */
   readonly paidFees: Scalars['String']['output'];
 };
 
@@ -1099,11 +1141,11 @@ export type DisconnectMutation = { readonly disconnect: null };
 
 export type DustCommitmentMerkleTreeUpdateQueryVariables = Exact<{
   startIndex: Scalars['Int']['input'];
-  endIndex: InputMaybe<Scalars['Int']['input']>;
+  endIndex: Scalars['Int']['input'];
 }>;
 
 
-export type DustCommitmentMerkleTreeUpdateQuery = { readonly dustCommitmentMerkleTreeUpdate: string };
+export type DustCommitmentMerkleTreeUpdateQuery = { readonly dustCommitmentMerkleTreeUpdate: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } };
 
 export type FetchTermsAndConditionsQueryVariables = Exact<{ [key: string]: never; }>;
 
@@ -1214,7 +1256,7 @@ export type ZswapEventsSubscription = { readonly zswapLedgerEvents: { readonly i
 export const BlockHashDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"BlockHash"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"BlockOffset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"block"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"ledgerParameters"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}}]}}]} as unknown as DocumentNode<BlockHashQuery, BlockHashQueryVariables>;
 export const ConnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Connect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ViewingKey"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"connect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"viewingKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}}}]}]}}]} as unknown as DocumentNode<ConnectMutation, ConnectMutationVariables>;
 export const DisconnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Disconnect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"disconnect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}]}}]} as unknown as DocumentNode<DisconnectMutation, DisconnectMutationVariables>;
-export const DustCommitmentMerkleTreeUpdateDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DustCommitmentMerkleTreeUpdate"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustCommitmentMerkleTreeUpdate"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"startIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}}},{"kind":"Argument","name":{"kind":"Name","value":"endIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}}}]}]}}]} as unknown as DocumentNode<DustCommitmentMerkleTreeUpdateQuery, DustCommitmentMerkleTreeUpdateQueryVariables>;
+export const DustCommitmentMerkleTreeUpdateDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DustCommitmentMerkleTreeUpdate"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustCommitmentMerkleTreeUpdate"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"startIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}}},{"kind":"Argument","name":{"kind":"Name","value":"endIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]} as unknown as DocumentNode<DustCommitmentMerkleTreeUpdateQuery, DustCommitmentMerkleTreeUpdateQueryVariables>;
 export const FetchTermsAndConditionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FetchTermsAndConditions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"systemParameters"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"termsAndConditions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"url"}}]}}]}}]}}]}}]} as unknown as DocumentNode<FetchTermsAndConditionsQuery, FetchTermsAndConditionsQueryVariables>;
 export const TransactionEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"identifier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustLedgerEvents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}},{"kind":"Field","name":{"kind":"Name","value":"zswapLedgerEvents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionEventsQuery, TransactionEventsQueryVariables>;
 export const TransactionHistoryDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionHistoryDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"hash"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionHistoryDetailQuery, TransactionHistoryDetailQueryVariables>;

@@ -104,6 +104,16 @@ type CommitteeMember {
 }
 
 """
+Options for the connect mutation.
+"""
+input ConnectOptions {
+    """
+    Transaction index to start searching for relevant transactions (inclusive).
+    """
+    startIndex: Int
+}
+
+"""
 A contract action.
 """
 interface ContractAction {
@@ -357,11 +367,6 @@ A dust generations item with optional collapsed Merkle tree update.
 """
 type DustGenerationsItem {
     """
-    Deprecated alias of `commitmentMtIndex`. Scheduled for removal in a
-    follow-up release.
-    """
-    merkleIndex: Int! @deprecated(reason: "Use `commitmentMtIndex` or `generationMtIndex` to disambiguate which tree. This field mirrors `commitmentMtIndex`.")
-    """
     Index of this output in the dust commitment Merkle tree.
     """
     commitmentMtIndex: Int!
@@ -598,7 +603,7 @@ type Mutation {
     """
     Connect the wallet with the given viewing key and return a session ID.
     """
-    connect(viewingKey: ViewingKey!): HexEncoded!
+    connect(viewingKey: ViewingKey!, options: ConnectOptions): HexEncoded!
     """
     Disconnect the wallet with the given session ID.
     """
@@ -675,7 +680,11 @@ type Query {
     """
     Get a collapsed Merkle tree update for the dust commitment tree.
     """
-    dustCommitmentMerkleTreeUpdate(startIndex: Int!, endIndex: Int): HexEncoded!
+    dustCommitmentMerkleTreeUpdate(startIndex: Int!, endIndex: Int!): MerkleTreeCollapsedUpdate!
+    """
+    Get a collapsed Merkle tree update for the dust generation tree.
+    """
+    dustGenerationMerkleTreeUpdate(startIndex: Int!, endIndex: Int!): MerkleTreeCollapsedUpdate!
     """
     Get the full history of D-parameter changes for governance auditability.
     """
@@ -856,9 +865,13 @@ type RegularTransaction implements Transaction {
     """
     dustGenerationEndIndex: Int!
     """
+    The fee for this transaction in SPECK (atomic unit of DUST).
+    """
+    fee: String!
+    """
     Fee information for this transaction.
     """
-    fees: TransactionFees!
+    fees: TransactionFees! @deprecated(reason: "Use fee instead")
     """
     The block for this transaction.
     """
@@ -919,6 +932,28 @@ type Segment {
     Successful or not.
     """
     success: Boolean!
+}
+
+"""
+A transaction containing a shielded (zswap) nullifier match with block context.
+"""
+type ShieldedNullifierTransaction {
+    """
+    The transaction ID (use to query full transaction via `transaction` query).
+    """
+    transactionId: Int!
+    """
+    The hex-encoded block hash (use to query block with ledger parameters).
+    """
+    blockHash: HexEncoded!
+    """
+    The block height containing this transaction.
+    """
+    blockHeight: Int!
+    """
+    The hex-encoded matched nullifier.
+    """
+    nullifier: HexEncoded!
 }
 
 """
@@ -1090,6 +1125,12 @@ type Subscription {
     """
     dustNullifierTransactions(nullifierPrefixes: [HexEncoded!]!, fromBlock: Int, toBlock: Int): DustNullifierTransaction!
     """
+    Subscribe to transactions containing shielded (zswap) nullifiers matching the provided
+    prefixes. Returns transaction and block references for wallet to fetch full data.
+    If `toBlock` is specified, the subscription finishes after reaching that block.
+    """
+    shieldedNullifierTransactions(nullifierPrefixes: [HexEncoded!]!, fromBlock: Int, toBlock: Int): ShieldedNullifierTransaction!
+    """
     Subscribe to shielded transaction events for the given session ID starting at the given
     index or at zero if omitted.
     """
@@ -1222,17 +1263,17 @@ interface Transaction {
 }
 
 """
-Fees information for a transaction, including both paid and estimated fees.
+Fees information for a transaction.
 """
 type TransactionFees {
     """
-    The actual fees paid for this transaction in DUST.
+    The fees for this transaction in SPECK (atomic unit of DUST).
     """
     paidFees: String!
     """
-    The estimated fees that was calculated for this transaction in DUST.
+    The fees for this transaction in SPECK (atomic unit of DUST).
     """
-    estimatedFees: String!
+    estimatedFees: String! @deprecated(reason: "Use paidFees instead")
 }
 
 """
@@ -1395,4 +1436,3 @@ schema {
     mutation: Mutation
     subscription: Subscription
 }
-
