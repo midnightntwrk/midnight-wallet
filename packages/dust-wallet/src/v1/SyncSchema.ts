@@ -17,6 +17,7 @@ import {
   DustStateMerkleTreeCollapsedUpdate,
   DustCommitment,
   DustNullifier,
+  QualifiedDustOutput,
 } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
 
@@ -243,4 +244,11 @@ export type DustSpendProcessedEvent = {
   vFee: bigint;
   declaredTime: Date;
   blockTime: Date;
+};
+
+export type DustProjectionsUpdate = {
+  generations: DustGenerationsSyncUpdate;
+  syncedNullifiers: DustNullifier[];
+  newUtxos: QualifiedDustOutput[];
+  collapsedCommitments: CollapsedMerkleTree[];
 };
