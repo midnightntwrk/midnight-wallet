@@ -209,15 +209,17 @@ export const makeDustGenerationsSyncService = (
       groups.push({ start: fromBlock, end: toBlock });
     }
 
-    skipMtIndexes.forEach((item, index) => {
-      const start = item;
+    skipMtIndexes.forEach((skipMtIndex, index) => {
+      const start = skipMtIndex + 1n;
       const end = skipMtIndexes.at(index + 1);
-      if (end !== undefined && end - start > 1n) {
-        groups.push({ start, end });
-      } else if (end === undefined && start < toBlock) {
+      if (end !== undefined && end - start > 0n) {
+        groups.push({ start, end: end - 1n });
+      } else if (end === undefined && start <= toBlock) {
         groups.push({ start, end: toBlock });
       }
     });
+    console.log(`Skipping:`, skipMtIndexes);
+    console.log(`Fetching groups:`, groups);
 
     // 2: Query all groups in parallel
     return pipe(
