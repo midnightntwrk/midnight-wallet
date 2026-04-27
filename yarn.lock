@@ -2727,6 +2727,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@midnight-ntwrk/ledger-v8@link:../../../midnight-ledger-master/result/lib/node_modules/@midnight-ntwrk/ledger-v8::locator=%40midnight-ntwrk%2Fwallet-sdk-dust-wallet%40workspace%3Apackages%2Fdust-wallet":
+  version: 0.0.0-use.local
+  resolution: "@midnight-ntwrk/ledger-v8@link:../../../midnight-ledger-master/result/lib/node_modules/@midnight-ntwrk/ledger-v8::locator=%40midnight-ntwrk%2Fwallet-sdk-dust-wallet%40workspace%3Apackages%2Fdust-wallet"
+  languageName: node
+  linkType: soft
+
 "@midnight-ntwrk/ledger-v8@npm:^8.1.0-rc.1":
   version: 8.1.0-rc.1
   resolution: "@midnight-ntwrk/ledger-v8@npm:8.1.0-rc.1::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fledger-v8%2F8.1.0-rc.1%2F791a8a78dc25c0fe9d5955e37143dd00cd39e415"
@@ -2847,7 +2853,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-dust-wallet@workspace:packages/dust-wallet"
   dependencies:
-    "@midnight-ntwrk/ledger-v8": "npm:^8.1.0-rc.1"
+    "@midnight-ntwrk/ledger-v8": "link:../../../midnight-ledger-master/result/lib/node_modules/@midnight-ntwrk/ledger-v8"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.0.0"
     "@midnight-ntwrk/wallet-sdk-address-format": "npm:3.1.0"
     "@midnight-ntwrk/wallet-sdk-capabilities": "npm:3.2.0"
