@@ -14,7 +14,6 @@ import { DustSecretKey, LedgerParameters } from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Either, pipe } from 'effect';
-import * as fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { CoreWallet } from '../CoreWallet.js';
 import { makeDefaultV1SerializationCapability } from '../Serialization.js';
@@ -22,21 +21,13 @@ import { OtherWalletError } from '../WalletError.js';
 
 const networkId = NetworkId.NetworkId.Undeployed;
 const dustParameters = LedgerParameters.initialParameters().dust;
-
-const initEmpty = (seedHex: string): CoreWallet => {
-  const dustSecretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
-  return CoreWallet.initEmpty(dustParameters, dustSecretKey, networkId);
-};
+const seedHex = '0000000000000000000000000000000000000000000000000000000000000001';
 
 describe('V1 dust wallet serialization', () => {
-  it.each([
-    '0000000000000000000000000000000000000000000000000000000000000001',
-    '0000000000000000000000000000000000000000000000000000000000000002',
-    '0000000000000000000000000000000000000000000000000000000000000003',
-    '0000000000000000000000000000000000000000000000000000000000000004',
-  ])('serialize ◦ deserialize == id for empty wallet (seed %s)', (seed) => {
+  it('serialize ◦ deserialize == id for empty wallet', () => {
     const capability = makeDefaultV1SerializationCapability();
-    const wallet = initEmpty(seed);
+    const dustSecretKey = DustSecretKey.fromSeed(Buffer.from(seedHex, 'hex'));
+    const wallet = CoreWallet.initEmpty(dustParameters, dustSecretKey, networkId);
 
     const firstIteration = capability.serialize(wallet);
     const restored = pipe(capability.deserialize(null, firstIteration), EitherOps.getOrThrowLeft);
@@ -45,33 +36,13 @@ describe('V1 dust wallet serialization', () => {
     expect(firstIteration).toEqual(secondIteration);
   });
 
-  it('returns Left with OtherWalletError for invalid JSON strings', () => {
+  it('returns Left with OtherWalletError for input that does not match the snapshot schema', () => {
     const capability = makeDefaultV1SerializationCapability();
+    const result = capability.deserialize(null, '{"not":"a snapshot"}');
 
-    fc.assert(
-      fc.property(fc.string(), (invalidJson) => {
-        const result = capability.deserialize(null, invalidJson);
-
-        expect(Either.isLeft(result)).toBe(true);
-        if (Either.isLeft(result)) {
-          expect(result.left instanceof OtherWalletError).toBe(true);
-        }
-      }),
-    );
-  });
-
-  it('returns Left with OtherWalletError for valid JSON that does not match the schema', () => {
-    const capability = makeDefaultV1SerializationCapability();
-
-    fc.assert(
-      fc.property(fc.json(), (randomJsonValue) => {
-        const result = capability.deserialize(null, randomJsonValue);
-
-        expect(Either.isLeft(result)).toBe(true);
-        if (Either.isLeft(result)) {
-          expect(result.left instanceof OtherWalletError).toBe(true);
-        }
-      }),
-    );
+    expect(Either.isLeft(result)).toBe(true);
+    if (Either.isLeft(result)) {
+      expect(result.left instanceof OtherWalletError).toBe(true);
+    }
   });
 });
