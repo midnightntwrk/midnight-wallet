@@ -72,6 +72,12 @@ export const WalletEntrySchema = Schema.Struct({
 
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
 
+export type PendingWalletEntry = TransactionHistoryStorage.PendingTransactionHistoryCommon;
+
+export const isPendingWalletEntry: (u: unknown) => u is PendingWalletEntry = Schema.is(
+  TransactionHistoryStorage.PendingTransactionHistoryCommonSchema,
+);
+
 export const mergeWalletEntries = (existing: WalletEntry, incoming: WalletEntry): WalletEntry => ({
   ...existing,
   ...incoming,
@@ -478,7 +484,24 @@ export class WalletFacade {
       await this.pendingTransactionsService.addPendingTransaction(tx);
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
-      return tx.identifiers().at(-1)!;
+      const identifiers = tx.identifiers();
+      const firstIdentifier = identifiers[0];
+      // Pending entries are keyed by the first tx identifier rather than `tx.transactionHash()`.
+      // `transactionHash()` only works on fully proven+signed+bound txs (and throws in simulator-mode flows).
+      // Identifiers are stable across tx states and are what the sync side already matches against.
+      if (firstIdentifier !== undefined) {
+        await this.#txHistoryStorage.upsertPending({
+          hash: firstIdentifier,
+          identifiers,
+          submittedAt: this.clock.now(),
+        });
+        // TODO Ian — temp, remove
+        // eslint-disable-next-line no-console
+        console.log('[pending-tx-history] ADD', { key: firstIdentifier, identifiers });
+        // TODO Ian — end temp, remove
+      }
+
+      return identifiers.at(-1)!;
     } catch (error) {
       await this.revert(tx);
       throw error;
@@ -945,7 +968,16 @@ export class WalletFacade {
       this.shielded.revertTransaction(tx),
       this.unshielded.revertTransaction(tx),
       this.dust.revertTransaction(tx),
-    ]).then(() => this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction));
+    ]).then(async () => {
+      await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
+      // Delete is the default policy here. Reviewer to confirm — see
+      // .scratch/docs/concepts/transaction-send-lifecycle.md "TODO — reviewer to decide on revert behaviour".
+      // Identifier-based lookup, not by hash: tx.transactionHash() requires proven+signed+bound,
+      // but revertTransaction also runs for earlier-state txs that never reached pending storage.
+      // TODO Ian — temp, remove the `'revert'` label (helper takes optional source for logging)
+      await TransactionHistoryStorage.clearPendingMatching(this.#txHistoryStorage, tx.identifiers(), 'revert');
+      // TODO Ian — end temp, remove
+    });
   }
 
   async start(shieldedSecretKeys: ledger.ZswapSecretKeys, dustSecretKey: ledger.DustSecretKey): Promise<void> {
@@ -973,8 +1005,11 @@ export class WalletFacade {
     return raw && isWalletEntry(raw) ? raw : undefined;
   }
 
-  async getAllFromTxHistory(): Promise<WalletEntry[]> {
-    const allEntries = await this.#txHistoryStorage.getAll();
-    return [...allEntries];
+  async getAllFromTxHistory(): Promise<(WalletEntry | PendingWalletEntry)[]> {
+    const [confirmed, pending] = await Promise.all([
+      this.#txHistoryStorage.getAll(),
+      this.#txHistoryStorage.getAllPending(),
+    ]);
+    return [...confirmed.filter(isWalletEntry), ...pending];
   }
 }

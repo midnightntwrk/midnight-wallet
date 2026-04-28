@@ -24,6 +24,7 @@ export const TransactionHistoryDetail = Query.make(
           timestamp
         }
         ... on RegularTransaction {
+          identifiers
           transactionResult {
             status
           }

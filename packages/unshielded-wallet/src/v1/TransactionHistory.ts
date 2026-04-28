@@ -16,6 +16,17 @@ import { type UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
 
+const clearPendingForIdentifiers = (
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
+  identifiers: readonly string[],
+): Effect.Effect<void, TransactionHistoryError> =>
+  Effect.tryPromise({
+    // TODO Ian — temp, remove the `'unshielded-sync'` label (helper takes optional source for logging)
+    try: () => TransactionHistoryStorage.clearPendingMatching(txHistoryStorage, identifiers, 'unshielded-sync'),
+    // TODO Ian — end temp, remove
+    catch: (e) => new TransactionHistoryError({ message: 'Failed to clear pending entry on confirmation', cause: e }),
+  });
+
 const UtxoSchema = Schema.Struct({
   value: SafeBigInt.SafeBigInt,
   owner: Schema.String,
@@ -95,10 +106,15 @@ export const makeDefaultTransactionHistoryService = (
   const txHistoryStorage = config.txHistoryStorage;
 
   return {
-    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
-      Effect.tryPromise({
-        try: () => txHistoryStorage.upsert(convertUpdateToStorageEntry(update)),
-        catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
-      }),
+    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> => {
+      const entry = convertUpdateToStorageEntry(update);
+      return Effect.gen(function* () {
+        yield* Effect.tryPromise({
+          try: () => txHistoryStorage.upsert(entry),
+          catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
+        });
+        yield* clearPendingForIdentifiers(txHistoryStorage, entry.identifiers);
+      });
+    },
   };
 };

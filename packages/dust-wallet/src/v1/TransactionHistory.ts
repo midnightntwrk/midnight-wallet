@@ -36,6 +36,7 @@ export const DustTransactionHistoryEntrySchema = Schema.Struct({
   hash: TransactionHistoryStorage.TransactionHashSchema,
   protocolVersion: Schema.Number,
   status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
+  identifiers: Schema.optional(Schema.Array(Schema.String)),
   dust: DustSectionSchema,
 });
 
@@ -52,6 +53,7 @@ export type TransactionDetails = {
   hash: string;
   timestamp: number;
   status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
+  identifiers: readonly string[];
 };
 
 export type TransactionHistoryService = {
@@ -70,10 +72,7 @@ export const mergeDustSections = (existing: DustSection, incoming: DustSection):
   spentUtxos: EArray.unionWith(existing.spentUtxos, incoming.spentUtxos, utxoEquals),
 });
 
-type StorageEntryWithDust = Omit<
-  TransactionHistoryStorage.TransactionHistoryCommon,
-  'identifiers' | 'timestamp' | 'fees'
-> & {
+type StorageEntryWithDust = Omit<TransactionHistoryStorage.TransactionHistoryCommon, 'timestamp' | 'fees'> & {
   readonly dust: DustSection;
 };
 
@@ -93,6 +92,7 @@ const convertUpdateToStorageEntry = (
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
+  identifiers: metadata.identifiers,
   dust: {
     receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
     spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
@@ -109,6 +109,17 @@ const upsertDustEntry = (
       new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
   });
 
+const clearPendingForIdentifiers = (
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
+  identifiers: readonly string[],
+): Effect.Effect<void, TransactionHistoryError> =>
+  Effect.tryPromise({
+    // TODO Ian — temp, remove the `'dust-sync'` label (helper takes optional source for logging)
+    try: () => TransactionHistoryStorage.clearPendingMatching(txHistoryStorage, identifiers, 'dust-sync'),
+    // TODO Ian — end temp, remove
+    catch: (e) => new TransactionHistoryError({ message: 'Failed to clear pending entry on confirmation', cause: e }),
+  });
+
 export const makeDefaultTransactionHistoryService = (
   config: DefaultTransactionHistoryConfiguration,
   _getContext: () => unknown,
@@ -123,7 +134,10 @@ export const makeDefaultTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertDustEntry(txHistoryStorage, entry);
+      return Effect.gen(function* () {
+        yield* upsertDustEntry(txHistoryStorage, entry);
+        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
+      });
     },
 
     getTransactionDetails: (
@@ -136,11 +150,13 @@ export const makeDefaultTransactionHistoryService = (
         const rawStatus = tx.__typename === 'RegularTransaction' ? tx.transactionResult.status : undefined;
         const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
+        const identifiers = tx.__typename === 'RegularTransaction' ? tx.identifiers : [];
 
         return {
           hash: tx.hash,
           timestamp: tx.block.timestamp,
           status,
+          identifiers,
         };
       }).pipe(
         Effect.provide(queryClientLayer),
@@ -170,9 +186,9 @@ export const makeSimulatorTransactionHistoryService = (
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
       const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return upsertDustEntry(txHistoryStorage, {
-        ...entry,
-        timestamp: new Date(metadata.timestamp),
+      return Effect.gen(function* () {
+        yield* upsertDustEntry(txHistoryStorage, { ...entry, timestamp: new Date(metadata.timestamp) });
+        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
       });
     },
 
@@ -190,6 +206,7 @@ export const makeSimulatorTransactionHistoryService = (
                 hash: entry.hash,
                 timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),
                 status: entry.status,
+                identifiers: entry.identifiers ?? [],
               })
             : Effect.fail(
                 new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),

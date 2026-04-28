@@ -27,6 +27,7 @@ import {
   type DefaultConfiguration,
   WalletEntrySchema,
   WalletFacade,
+  isPendingWalletEntry,
   mergeWalletEntries,
 } from '../src/index.js';
 import { getDustSeed, getShieldedSeed, getUnshieldedSeed, tokenValue } from './utils/index.js';
@@ -468,6 +469,13 @@ describe('Wallet Facade Transfer', () => {
     ).toBe(true);
 
     expect(txHistoryEntry.dust!.spentUtxos.some((u) => senderDustNonces.has(u.nonce))).toBe(true);
+
+    // TODO Ian — temp for testing the new pending-tx-history flow.
+    // cleared by the per-wallet sync-handler promotion (clearPendingMatching).
+    const senderHistory = await senderFacade.getAllFromTxHistory();
+    const stillPending = senderHistory.filter(isPendingWalletEntry);
+    expect(stillPending).toEqual([]);
+    // TODO Ian — end temp for testing.
 
     // Once the tx is present in the receiver's history, the state update has already
     // been applied — no extra state-filter wait needed; the expects below suffice.
