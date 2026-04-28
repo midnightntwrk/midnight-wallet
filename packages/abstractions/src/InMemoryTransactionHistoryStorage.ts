@@ -15,6 +15,7 @@ import {
   type TransactionHistoryStorage,
   type TransactionHash,
   type TransactionHistoryCommon,
+  type PendingTransactionHistoryCommon,
   type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
@@ -30,13 +31,16 @@ import {
 export class InMemoryTransactionHistoryStorage<
   T extends { hash: TransactionHash } = TransactionHistoryCommon,
   I = T,
-> implements TransactionHistoryStorage<T> {
+  P extends { hash: TransactionHash; identifiers: readonly string[] } = PendingTransactionHistoryCommon,
+> implements TransactionHistoryStorage<T, P> {
   private storage: Map<TransactionHash, T>;
+  private pendingStorage: Map<TransactionHash, P>;
   private readonly schema: Schema.Schema<T, I>;
   private readonly merge: (existing: T, incoming: T) => T;
 
   constructor(schema: Schema.Schema<T, I>, merge?: (existing: T, incoming: T) => T) {
     this.storage = new Map<TransactionHash, T>();
+    this.pendingStorage = new Map<TransactionHash, P>();
     this.schema = schema;
     this.merge = merge ?? ((existing, incoming) => ({ ...existing, ...incoming }));
   }
@@ -55,8 +59,35 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve(this.storage.get(hash));
   }
 
+  upsertPending(entry: P): Promise<void> {
+    this.pendingStorage.set(entry.hash, entry);
+    return Promise.resolve();
+  }
+
+  getPending(hash: TransactionHash): Promise<P | undefined> {
+    return Promise.resolve(this.pendingStorage.get(hash));
+  }
+
+  getAllPending(): Promise<readonly P[]> {
+    return Promise.resolve([...this.pendingStorage.values()]);
+  }
+
+  deletePending(hash: TransactionHash): Promise<void> {
+    this.pendingStorage.delete(hash);
+    return Promise.resolve();
+  }
+
+  findPendingMatching(identifiers: readonly string[]): Promise<P | undefined> {
+    const provided = new Set(identifiers);
+    const match = [...this.pendingStorage.values()].find(
+      (entry) => entry.identifiers.length > 0 && entry.identifiers.every((id) => provided.has(id)),
+    );
+    return Promise.resolve(match);
+  }
+
   reset(): void {
     this.storage.clear();
+    this.pendingStorage.clear();
   }
 
   async serialize(): Promise<SerializedTransactionHistory> {
@@ -65,14 +96,18 @@ export class InMemoryTransactionHistoryStorage<
     return JSON.stringify(encode([...allEntries]));
   }
 
-  static restore<T extends { hash: string }, I>(
+  static restore<
+    T extends { hash: string },
+    I,
+    P extends { hash: TransactionHash; identifiers: readonly string[] } = PendingTransactionHistoryCommon,
+  >(
     serialized: SerializedTransactionHistory,
     schema: Schema.Schema<T, I>,
     merge?: (existing: T, incoming: T) => T,
-  ): InMemoryTransactionHistoryStorage<T, I> {
+  ): InMemoryTransactionHistoryStorage<T, I, P> {
     const decode = Schema.decodeUnknownSync(Schema.Array(schema));
     const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<T, I>(schema, merge);
+    const storage = new InMemoryTransactionHistoryStorage<T, I, P>(schema, merge);
     for (const entry of decoded) {
       storage.storage.set(entry.hash, entry);
     }

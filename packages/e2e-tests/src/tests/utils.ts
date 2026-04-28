@@ -28,7 +28,7 @@ import type * as fs from 'node:fs';
 import { ShieldedWallet, type ShieldedWalletAPI, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { WalletFacade, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletFacade, type WalletEntry, isPendingWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   createKeystore,
   PublicKey,
@@ -472,12 +472,21 @@ export const waitForTxInHistory = async (
         }
         if (needsDump) {
           const all = await wallet.getAllFromTxHistory();
-          const summary = all.map((e) => ({
-            hash: e.hash,
-            status: e.status,
-            sections: describeSections(e),
-            identifiers: e.identifiers ?? [],
-          }));
+          const summary = all.map((e) =>
+            isPendingWalletEntry(e)
+              ? {
+                  hash: e.hash,
+                  status: 'PENDING', // TODO Ian - I am adding this here - it is a string..
+                  sections: '(pending placeholder)',
+                  identifiers: e.identifiers,
+                }
+              : {
+                  hash: e.hash,
+                  status: e.status,
+                  sections: describeSections(e),
+                  identifiers: e.identifiers ?? [],
+                },
+          );
           logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
           pollsSinceDump = 0;
         } else {
