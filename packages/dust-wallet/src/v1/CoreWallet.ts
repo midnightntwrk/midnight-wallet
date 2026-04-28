@@ -26,29 +26,14 @@ import {
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
-import { Dust, DustGenerationInfo, DustWithNullifier } from './types/Dust.js';
+import { Dust, DustWithNullifier } from './types/Dust.js';
 import { CoinWithValue } from './CoinsAndBalances.js';
 import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
-import { CollapsedMerkleTree } from './SyncSchema.js';
+import { CollapsedMerkleTree, DustGenerationUpdate, DustUtxoUpdate } from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
 };
-
-export type SyncedDustNullifier = {
-  dustNullifier: DustNullifier;
-  isSynced: boolean;
-};
-
-export type DustGenerationWithNullifierUpdate = {
-  dustNullifier: DustNullifier;
-  genInfo: DustGenerationInfo;
-  generationIndex: number;
-  qdo: QualifiedDustOutput;
-  isSynced: boolean;
-};
-
-export type DustUtxoUpdate = Pick<DustGenerationWithNullifierUpdate, 'dustNullifier' | 'qdo' | 'isSynced'>;
 
 export const PublicKey = {
   fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
@@ -56,6 +41,11 @@ export const PublicKey = {
       publicKey: secretKey.publicKey,
     };
   },
+};
+
+export type SyncedDustNullifier = {
+  dustNullifier: DustNullifier;
+  isSynced: boolean;
 };
 
 export type CoreWallet = Readonly<{
@@ -123,7 +113,7 @@ export const CoreWallet = {
   applyDustGenerations(
     wallet: CoreWallet,
     updates: CollapsedMerkleTree[],
-    generationUpdates: DustGenerationWithNullifierUpdate[],
+    generationUpdates: DustGenerationUpdate[],
   ): CoreWallet {
     let updatedState = wallet.state;
 
@@ -144,35 +134,33 @@ export const CoreWallet = {
       .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
       .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
-    return this.applyDustUtxos(
-      {
-        ...wallet,
-        state: updatedState,
-      },
-      generationUpdates,
-    );
+    return {
+      ...wallet,
+      state: updatedState,
+    };
   },
 
-  applyDustUtxos(wallet: CoreWallet, utxoUpdates: DustUtxoUpdate[]): CoreWallet {
-    const updatedState = utxoUpdates.reduce(
-      (state, { dustNullifier, qdo }) => state.addUtxo(dustNullifier, qdo),
+  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: Map<DustNullifier, QualifiedDustOutput>): CoreWallet {
+    const updatedState = [...newDustUtxos].reduce(
+      (state, [dustNullifier, qdo]) => state.addUtxo(dustNullifier, qdo),
       wallet.state,
     );
     return {
       ...wallet,
       state: updatedState,
       dustNullifiers: wallet.dustNullifiers.concat(
-        utxoUpdates.map(({ dustNullifier, isSynced }) => ({ dustNullifier, isSynced })),
+        [...newDustUtxos.keys()].map((dustNullifier) => ({ dustNullifier, isSynced: false })),
       ),
     };
   },
 
   applyDustCommitments(
     wallet: CoreWallet,
-    newUtxos: QualifiedDustOutput[],
+    newDustUtxos: Map<DustNullifier, QualifiedDustOutput>,
     collapsedCommitments: CollapsedMerkleTree[],
   ): CoreWallet {
     let updatedState = wallet.state;
+    const newUtxos = [...newDustUtxos.values()];
     for (const { startIndex, update } of collapsedCommitments) {
       // apply utxos going before the current index
       const utxos = newUtxos.filter((utxo) => Number(utxo.mtIndex) < startIndex);
@@ -197,6 +185,21 @@ export const CoreWallet = {
     }
 
     return { ...wallet, state: updatedState };
+  },
+
+  applySyncedNullifiers(wallet: CoreWallet, syncedNullifiers: Array<DustNullifier>): CoreWallet {
+    const dustNullifiers = wallet.dustNullifiers.map((r) => ({
+      dustNullifier: r.dustNullifier,
+      isSynced: syncedNullifiers.includes(r.dustNullifier) ? true : r.isSynced,
+    }));
+    const existingDustNullifiersMap = new Map(dustNullifiers.map((r) => [r.dustNullifier, r]));
+    const newNullifiers = syncedNullifiers
+      .filter((n) => !existingDustNullifiersMap.has(n))
+      .map((n) => ({ dustNullifier: n, isSynced: false }));
+    return {
+      ...wallet,
+      dustNullifiers: dustNullifiers.concat(newNullifiers),
+    };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {

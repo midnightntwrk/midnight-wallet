@@ -10,16 +10,20 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, ParseResult, pipe, Schema } from 'effect';
+import { Effect, Encoding, ParseResult, pipe, Schema } from 'effect';
 import {
   DustSecretKey,
   Event as LedgerEvent,
   DustStateMerkleTreeCollapsedUpdate,
   DustCommitment,
   DustNullifier,
+  DustPublicKey,
   QualifiedDustOutput,
+  dustNonce,
+  dustNullifier,
 } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
+import { DustGenerationInfo } from './types/index.js';
 
 const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
   (input: unknown): input is DustStateMerkleTreeCollapsedUpdate => input instanceof DustStateMerkleTreeCollapsedUpdate,
@@ -106,7 +110,18 @@ export const DustGenerationsUpdateSchema = Schema.transform(
   },
 );
 
-export type DustGenerationsUpdate = Schema.Schema.Type<typeof DustGenerationsUpdateSchema>;
+export type DustGenerationUpdate = {
+  dustNullifier: DustNullifier;
+  genInfo: DustGenerationInfo;
+  generationIndex: number;
+  qdo: QualifiedDustOutput;
+};
+
+export type DustUtxoUpdate = {
+  dustNullifier: DustNullifier;
+  qdo: QualifiedDustOutput;
+  isSynced: boolean;
+};
 
 export const ProgressSchema = Schema.Struct({
   type: Schema.Literal('DustGenerationsProgress'),
@@ -131,14 +146,55 @@ export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
 >;
 
 export type DustGenerationsSyncUpdate = {
-  updates: DustGenerationsSubscription[];
-  secretKey: DustSecretKey;
+  rawUpdates: DustGenerationsSubscription[];
+  generations: DustGenerationUpdate[];
+  lastUpdateIndex: number | undefined;
 };
 export const DustGenerationsSyncUpdate = {
-  create: (updates: DustGenerationsSubscription[], secretKey: DustSecretKey): DustGenerationsSyncUpdate => {
+  create: (
+    rawUpdates: DustGenerationsSubscription[],
+    secretKey: DustSecretKey,
+    publicKey: DustPublicKey,
+  ): DustGenerationsSyncUpdate => {
+    const publicKeyHex = Encoding.encodeHex(publicKey.toString());
+
+    const generations = rawUpdates
+      .filter((u) => u.type === 'DustGenerationsItem')
+      .filter((u) => u.owner === publicKeyHex)
+      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
+      .map((u) => {
+        const qdo = {
+          initialValue: BigInt(u.initialValue),
+          owner: publicKey,
+          nonce: dustNonce(u.backingNight, 0n, secretKey),
+          seq: 0,
+          ctime: u.ctime,
+          backingNight: u.backingNight,
+          mtIndex: BigInt(u.commitmentMtIndex),
+        };
+        return {
+          dustNullifier: dustNullifier(qdo, secretKey),
+          genInfo: {
+            value: BigInt(u.value),
+            owner: publicKey,
+            nonce: u.backingNight,
+            dtime: undefined,
+          },
+          generationIndex: u.generationMtIndex,
+          qdo,
+        };
+      });
+
+    const lastUpdateIndex = rawUpdates
+      .filter((u) => u.type === 'DustGenerationsProgress')
+      .map((u) => u.highestIndex)
+      .toSorted()
+      .at(-1);
+
     return {
-      updates,
-      secretKey,
+      rawUpdates,
+      generations,
+      lastUpdateIndex,
     };
   },
 };
@@ -247,8 +303,8 @@ export type DustSpendProcessedEvent = {
 };
 
 export type DustProjectionsUpdate = {
-  generations: DustGenerationsSyncUpdate;
+  dustGenerations: DustGenerationsSyncUpdate;
   syncedNullifiers: DustNullifier[];
-  newUtxos: QualifiedDustOutput[];
+  newUtxos: Map<DustNullifier, QualifiedDustOutput>;
   collapsedCommitments: CollapsedMerkleTree[];
 };
