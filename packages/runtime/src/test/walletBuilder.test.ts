@@ -11,19 +11,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { ProtocolState, ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Equal, type Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { Effect, Option, PubSub, Scope, Stream } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { StateChange, Variant, VariantBuilder, WalletLike } from '../abstractions/index.js';
-import { Runtime } from '../Runtime.js';
+import {
+  StateChange,
+  type Variant,
+  type VariantBuilder,
+  VersionChangeType,
+  type WalletLike,
+} from '../abstractions/index.js';
+import { type Runtime } from '../Runtime.js';
 import { isRange, reduceToChunk, toProtocolStateArray } from '../testing/utils.js';
 import {
-  NumericRange,
+  type NumericRange,
   NumericRangeBuilder,
-  NumericRangeMultiplier,
+  type NumericRangeMultiplier,
   NumericRangeMultiplierBuilder,
-  RangeConfig,
+  type RangeConfig,
 } from '../testing/variants.js';
 import { WalletBuilder } from '../WalletBuilder.js';
 
@@ -32,6 +38,25 @@ describe('Wallet Builder', () => {
     it('should not build a valid wallet', () => {
       //TODO: it should be possible to play with types to hide build method unless variant is registered
       expect(() => WalletBuilder.init().build()).toThrow();
+    });
+  });
+
+  describe('protocol version ordering', () => {
+    it('should reject adding a variant with the same protocol version as the previous one', () => {
+      const version = ProtocolVersion.ProtocolVersion(10n);
+      const builder = WalletBuilder.init().withVariant(version, new NumericRangeBuilder());
+
+      expect(() => builder.withVariant(version, new NumericRangeMultiplierBuilder())).toThrow(
+        'ProtocolMismatch: sinceVersion is prior to previously registered version',
+      );
+    });
+
+    it('should reject adding a variant with a lower protocol version than the previous one', () => {
+      const builder = WalletBuilder.init().withVariant(ProtocolVersion.ProtocolVersion(50n), new NumericRangeBuilder());
+
+      expect(() =>
+        builder.withVariant(ProtocolVersion.ProtocolVersion(10n), new NumericRangeMultiplierBuilder()),
+      ).toThrow('ProtocolMismatch: sinceVersion is prior to previously registered version');
     });
   });
 
@@ -93,6 +118,65 @@ describe('Wallet Builder', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 4 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 6 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
+    ]);
+  });
+
+  it('should support three sequential variant migrations', async () => {
+    const V2Tag = 'V2' as const;
+
+    // A middle variant that emits two state changes then automatically triggers migration via Next()
+    const v2Builder: VariantBuilder.VariantBuilder<
+      Variant.Variant<typeof V2Tag, number, number, Variant.RunningVariant<typeof V2Tag, number>>
+    > = {
+      build: () => ({
+        __polyTag__: V2Tag,
+        start(context) {
+          return context.stateRef.get.pipe(
+            Effect.map((state) => ({
+              __polyTag__: V2Tag,
+              state: Stream.fromIterable(
+                (function* () {
+                  yield StateChange.State({ state });
+                  yield StateChange.State({ state: state + 1 });
+                  yield StateChange.VersionChange({ change: VersionChangeType.Next() });
+                })(),
+              ),
+            })),
+          );
+        },
+        migrateState(previousState: number) {
+          return Effect.succeed(previousState + 1);
+        },
+      }),
+    };
+
+    const builder = WalletBuilder.init()
+      .withVariant(ProtocolVersion.MinSupportedVersion, new NumericRangeBuilder(2))
+      .withVariant(ProtocolVersion.ProtocolVersion(50n), v2Builder)
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder());
+
+    const Wallet = builder.build({
+      min: 0,
+      max: 6,
+      multiplier: 2,
+    });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    // V1 (NumericRange): migrateState(null) → 0, emits State(0), State(1), then Next()
+    // V2 (inline):       migrateState(1) → 2,    emits State(2), State(3), then Next()
+    // V3 (Multiplier):   migrateState(3) → 4,    emits State(4*2=8), State(5*2=10), State(6*2=12)
+    const state = wallet.rawState.pipe(rx.take(8));
+    const receivedStates = await toProtocolStateArray(state);
+
+    expect(receivedStates).toEqual([
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 0 },
+      { version: ProtocolVersion.MinSupportedVersion, state: 1 },
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 2 },
+      { version: ProtocolVersion.ProtocolVersion(50n), state: 3 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 8 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 10 },
+      { version: ProtocolVersion.ProtocolVersion(100n), state: 12 },
     ]);
   });
 

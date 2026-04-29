@@ -13,11 +13,11 @@
 import { firstValueFrom } from 'rxjs';
 import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';
 import { logger } from './logger.js';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
 /**
@@ -120,8 +120,8 @@ describe('Token transfer', () => {
         `Wallet 2 shielded address: ${utils.getShieldedAddress(networkId, initialReceiverState.shielded.address)}`,
       );
 
-      const senderInitialTxHistory = await Array.fromAsync(sender.wallet.getAllFromTxHistory());
-      const receiverInitialTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const senderInitialTxHistory = await sender.wallet.getAllFromTxHistory();
+      const receiverInitialTxHistory = await receiver.wallet.getAllFromTxHistory();
 
       const outputsToCreate: CombinedTokenTransfer[] = [
         {
@@ -167,22 +167,16 @@ describe('Token transfer', () => {
       logger.info('Submitting transaction...');
       logger.info(finalizedTx.toString());
       const txId = await sender.wallet.submitTransaction(finalizedTx);
+      const txHash = finalizedTx.transactionHash();
       logger.info('txProcessing');
       logger.info('Transaction id: ' + txId);
-
-      // const pendingState = await utils.waitForFacadePending(sender);
-      // // logger.info(utils.walletStateTrimmed(pendingState));
-      // expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
-      // expect(pendingState.shielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.unshielded.pendingCoins.length).toBeGreaterThanOrEqual(1);
-      // expect(pendingState.dust.pendingCoins.length).toBeGreaterThanOrEqual(1);
-
-      // logger.info('waiting for tx in history');
-      // await waitForTxInHistory(txId, sender);
-      // await utils.waitForFacadePendingClear(sender);
-      await utils.waitForUnshieldedCoinUpdate(receiver.wallet, initialReceiverState.unshielded.availableCoins.length);
+      logger.info('waiting for tx in history');
+      const senderTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        sender.wallet,
+        (e) => e.shielded !== undefined && e.unshielded !== undefined,
+      );
       const senderFinalState = await sender.wallet.waitForSyncedState();
-      // logger.info(walletStateTrimmed(finalState));
       const senderFinalShieldedBalance = senderFinalState.shielded.balances[shieldedTokenRaw];
       const senderFinalUnshieldedBalance = senderFinalState.unshielded.balances[unshieldedTokenRaw];
       const senderFinalDustBalance = senderFinalState.dust.balance(new Date(3 * 1000));
@@ -210,15 +204,10 @@ describe('Token transfer', () => {
         senderInitialState.unshielded.totalCoins.length,
       );
       // Verify sender unshielded transaction history grew and contains the specific transaction
-      const senderFinalTxHistory = await Array.fromAsync(sender.wallet.getAllFromTxHistory());
+      const senderFinalTxHistory = await sender.wallet.getAllFromTxHistory();
       expect(senderFinalTxHistory.length).toBeGreaterThanOrEqual(senderInitialTxHistory.length + 1);
-      const txHash = finalizedTx.transactionHash();
-      const senderTxEntry = await sender.wallet.queryTxHistoryByHash(txHash);
-      expect(senderTxEntry).toBeDefined();
-      expect(senderTxEntry!.hash).toBe(txHash);
-      expect(senderTxEntry!.status).toBe('SUCCESS');
-      expect(senderTxEntry!.unshielded!.spentUtxos.length).toBeGreaterThan(0);
-      utils.expectValidUnshieldedTxHistoryEntry(senderTxEntry!);
+      utils.expectSenderShieldedTxHistory(senderTxEntry);
+      utils.expectSenderUnshieldedTxHistory(senderTxEntry);
 
       const receiverFinalState = await receiver.wallet.waitForSyncedState();
       // logger.info(walletStateTrimmed(finalState2));
@@ -237,17 +226,15 @@ describe('Token transfer', () => {
       );
 
       // Verify receiver unshielded transaction history grew and contains the specific transaction
-      const receiverFinalTxHistory = await Array.fromAsync(receiver.wallet.getAllFromTxHistory());
+      const receiverFinalTxHistory = await receiver.wallet.getAllFromTxHistory();
       expect(receiverFinalTxHistory.length).toBeGreaterThanOrEqual(receiverInitialTxHistory.length + 1);
-      const receiverTxEntry = await receiver.wallet.queryTxHistoryByHash(txHash);
-      expect(receiverTxEntry).toBeDefined();
-      expect(receiverTxEntry!.hash).toBe(txHash);
-      expect(receiverTxEntry!.status).toBe('SUCCESS');
-      expect(receiverTxEntry!.unshielded!.createdUtxos.length).toBeGreaterThan(0);
-      // Receiver should have received the unshielded output value
-      const receivedUtxo = receiverTxEntry!.unshielded!.createdUtxos.find((u) => u.value === outputValue);
-      expect(receivedUtxo).toBeDefined();
-      utils.expectValidUnshieldedUtxoFields(receivedUtxo!);
+      const receiverTxEntry = await utils.waitForTxInHistory(
+        txHash,
+        receiver.wallet,
+        (entry) => entry.shielded !== undefined && entry.unshielded !== undefined,
+      );
+      utils.expectReceiverShieldedTxHistory(receiverTxEntry, outputValue);
+      utils.expectReceiverUnshieldedTxHistory(receiverTxEntry, outputValue);
     },
     syncTimeout,
   );
@@ -293,18 +280,14 @@ describe('Token transfer', () => {
       logger.info('Transaction id: ' + txId);
 
       const pendingState = await utils.waitForFacadePending(sender.wallet);
-      // logger.info(utils.walletStateTrimmed(pendingState));
       logger.info(`Wallet 1 available coins: ${pendingState.shielded.availableCoins.length}`);
       logger.info(inspect(pendingState.shielded.pendingCoins, { depth: null }));
       expect(pendingState.shielded.availableCoins.length).toBeLessThan(initialState.shielded.availableCoins.length);
       expect(pendingState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
-      // expect(pendingState.nullifiers.length).toBe(initialState.nullifiers.length);
-      // expect(pendingState.transactionHistory.length).toBe(initialState.transactionHistory.length);
 
-      // await utils.waitForTxInHistory(String(txId), sender.shielded);
-      await utils.waitForFacadePendingClear(sender.wallet);
+      const txHash = finalizedTx.transactionHash();
+      const txEntry = await utils.waitForTxInHistory(txHash, sender.wallet, (e) => e.shielded !== undefined);
       const finalState = await sender.wallet.waitForSyncedState();
-      // logger.info(walletStateTrimmed(finalState));
       logger.info(`Wallet 1 available coins: ${finalState.shielded.availableCoins.length}`);
       logger.info(`Wallet 1: ${finalState.shielded.balances[shieldedTokenRaw]}`);
       // actually deducted fees are greater - PM-7721
@@ -312,8 +295,10 @@ describe('Token transfer', () => {
       expect(finalState.shielded.availableCoins.length).toBe(initialState.shielded.availableCoins.length);
       expect(finalState.shielded.pendingCoins.length).toBe(0);
       expect(finalState.shielded.totalCoins.length).toBe(initialState.shielded.totalCoins.length);
-      // expect(finalState.nullifiers.length).toBeGreaterThanOrEqual(initialState.nullifiers.length);
-      // expect(finalState.transactionHistory.length).toBeGreaterThanOrEqual(initialState.transactionHistory.length + 1);
+
+      // Self-transaction: sender has both spentCoins and receivedCoins
+      utils.expectSenderShieldedTxHistory(txEntry);
+      expect(txEntry.shielded!.receivedCoins.length).toBeGreaterThan(0);
     },
     timeout,
   );
@@ -512,46 +497,6 @@ describe('Token transfer', () => {
     timeout,
   );
 
-  // test.skip(
-  //   'error message when attempting to send to an invalid address',
-  //   async () => {
-  //     allure.tms('PM-9678', 'PM-9678');
-  //     allure.epic('Headless wallet');
-  //     allure.feature('Transactions');
-  //     allure.story('Invalid address error message');
-  //     const syncedState = await sender.wallet.waitForSyncedState();
-  //     const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-  //     logger.info(`Wallet 1 balance is: ${initialBalance}`);
-  //     const invalidAddress = new ShieldedAddress('invalidCPK', 'invalidEPK');
-
-  //     const outputsToCreate: CombinedTokenTransfer[] = [
-  //       {
-  //         type: 'shielded',
-  //         outputs: [
-  //           {
-  //             type: shieldedTokenRaw,
-  //             amount: outputValue,
-  //             receiverAddress: invalidAddress,
-  //           },
-  //         ],
-  //       },
-  //     ];
-  //     await expect(
-  //       sender.wallet.transferTransaction(
-  //         outputsToCreate,
-  //         {
-  //           shieldedSecretKeys: sender.shieldedSecretKeys,
-  //           dustSecretKey: sender.dustSecretKey,
-  //         },
-  //         {
-  //           ttl: new Date(),
-  //         },
-  //       ),
-  //     ).rejects.toThrow(`Address parsing error: invalidAddress`);
-  //   },
-  //   timeout,
-  // );
-
   test(
     'error message when attempting to send an invalid amount',
     async () => {
@@ -696,83 +641,4 @@ describe('Token transfer', () => {
     },
     timeout,
   );
-
-  // test.skip('error message when sending token to bech32m address from different networkId', async () => {
-  //   allure.tms('PM-14147', 'PM-14147');
-  //   allure.epic('Headless wallet');
-  //   allure.feature('Wallet state - Bech32m');
-  //   allure.story('Tx to addresss from different networkId');
-  //   const bech32mAddress =
-  //     'mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043';
-
-  //   const syncedState = await sender.wallet.waitForSyncedState();
-  //   const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-  //   logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-  //   const outputsToCreate: CombinedTokenTransfer[] = [
-  //     {
-  //       type: 'shielded',
-  //       outputs: [
-  //         {
-  //           type: shieldedTokenRaw,
-  //           amount: 1n,
-  //           receiverAddress: bech32mAddress,
-  //         },
-  //       ],
-  //     },
-  //   ];
-
-  //   await expect(
-  //     sender.wallet.transferTransaction(
-  //       outputsToCreate,
-  //       {
-  //         shieldedSecretKeys: sender.shieldedSecretKeys,
-  //         dustSecretKey: sender.dustSecretKey,
-  //       },
-  //       {
-  //         ttl: new Date(),
-  //       },
-  //     ),
-  //   ).rejects.toThrow(
-  //     'Address parsing error: mn_shield-addr_undeployed1kav2zmw5u5qtvfpcx0xnkdrsrsmnqpxd8c6rt6nrqs34yy0ttahsxqpmpljwuf6rjg0pzseww9l8xlpjwjf2sxackw69numxqs9ag2hphgx2cfjgtqvqyaeqtx97rpvy0sp2gmc60zreapu488v043',
-  //   );
-  // });
-
-  // test.skip('error message when sending token to bech32m address from different chain', async () => {
-  //   allure.tms('PM-14148', 'PM-14148');
-  //   allure.epic('Headless wallet');
-  //   allure.feature('Wallet state - Bech32m');
-  //   allure.story('Tx to addresss from different chain');
-  //   const bech32mAddress = 'bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297';
-
-  //   const syncedState = await sender.wallet.waitForSyncedState();
-  //   const initialBalance = syncedState?.shielded.balances[shieldedTokenRaw] ?? 0n;
-  //   logger.info(`Wallet 1 balance is: ${initialBalance}`);
-
-  //   const outputsToCreate: CombinedTokenTransfer[] = [
-  //     {
-  //       type: 'shielded',
-  //       outputs: [
-  //         {
-  //           type: shieldedTokenRaw,
-  //           amount: 1n,
-  //           receiverAddress: bech32mAddress,
-  //         },
-  //       ],
-  //     },
-  //   ];
-
-  //   await expect(
-  //     sender.wallet.transferTransaction(
-  //       outputsToCreate,
-  //       {
-  //         shieldedSecretKeys: sender.shieldedSecretKeys,
-  //         dustSecretKey: sender.dustSecretKey,
-  //       },
-  //       {
-  //         ttl: new Date(),
-  //       },
-  //     ),
-  //   ).rejects.toThrow('Address parsing error: bc1p5d7rjq7g6rdk2yhzks9smlaqtedr4dekq08ge8ztwac72sfr9rusxg3297');
-  // });
 });

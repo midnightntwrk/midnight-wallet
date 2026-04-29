@@ -27,8 +27,8 @@ import {
   Ref,
   Number as Num,
 } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { describe, expect, it } from 'vitest';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import type {
@@ -38,7 +38,7 @@ import type {
 import { makeEventsSyncService } from '../Sync.js';
 import { CoreWallet } from '../CoreWallet.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Simulator } from '../Simulator.js';
+import { Simulator, getLastBlock, getLastBlockEvents } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 
 vi.setConfig({
   testTimeout: 60_000,
@@ -49,13 +49,16 @@ const createMockEventHex = async (): Promise<string> => {
   // Use Simulator to generate a real event, then serialize it
   return await Effect.gen(function* () {
     const scope = yield* Scope.make();
-    const simulator = yield* Simulator.init([
-      {
-        amount: 1000n,
-        type: ledger.shieldedToken().raw,
-        recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
-      },
-    ]).pipe(Effect.provideService(Scope.Scope, scope));
+    const simulator = yield* Simulator.init({
+      genesisMints: [
+        {
+          type: 'shielded',
+          tokenType: ledger.shieldedToken().raw,
+          amount: 1000n,
+          recipient: ledger.ZswapSecretKeys.fromSeed(Buffer.alloc(32, 1)),
+        },
+      ],
+    }).pipe(Effect.provideService(Scope.Scope, scope));
 
     const stateOption = yield* simulator.state$.pipe(Stream.take(1), Stream.runHead);
     const state = Option.match(stateOption, {
@@ -65,7 +68,11 @@ const createMockEventHex = async (): Promise<string> => {
       onSome: (s) => s,
     });
 
-    const events = state.lastTxResult.events;
+    const lastBlock = getLastBlock(state);
+    if (lastBlock === undefined) {
+      throw new Error('No block from simulator');
+    }
+    const events = getLastBlockEvents(state);
     if (events.length === 0) {
       throw new Error('No events generated from simulator');
     }

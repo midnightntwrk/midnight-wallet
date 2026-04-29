@@ -12,7 +12,7 @@
 // limitations under the License.
 import { Effect, ParseResult, Either, pipe, Schema } from 'effect';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { OtherWalletError, WalletError } from './WalletError.js';
+import { OtherWalletError, type WalletError } from './WalletError.js';
 import { CoreWallet } from './CoreWallet.js';
 
 export type SerializationCapability<TWallet, TAux, TSerialized> = {

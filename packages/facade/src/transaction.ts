@@ -14,7 +14,7 @@
  */
 
 import { Array as Arr, DateTime, Duration, HashSet, Option, Order, pipe } from 'effect';
-import { PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type PendingTransactions } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 export const finalizedTransactionTrait: PendingTransactions.TransactionTrait<ledger.FinalizedTransaction> = {

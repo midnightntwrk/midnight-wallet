@@ -11,25 +11,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  Bindingish,
+  type Bindingish,
   DustLocalState,
-  DustNullifier,
-  DustParameters,
-  DustPublicKey,
-  DustSecretKey,
-  Proofish,
-  Signaturish,
-  Transaction,
-  QualifiedDustOutput,
-  Event,
+  type DustNullifier,
+  type DustParameters,
+  type DustPublicKey,
+  type DustSecretKey,
+  type DustStateChanges,
+  type Proofish,
+  type Signaturish,
+  type Transaction,
+  type QualifiedDustOutput,
+  type Event,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { Array as Arr, Option, pipe } from 'effect';
-import { Dust, DustWithNullifier } from './types/Dust.js';
-import { CoinWithValue } from './CoinsAndBalances.js';
-import { NetworkId, UnprovenDustSpend } from './types/ledger.js';
-import { CollapsedMerkleTree, DustGenerationUpdate, DustUtxoUpdate } from './SyncSchema.js';
+import { type Dust, type DustWithNullifier } from './types/Dust.js';
+import { type CoinWithValue } from './CoinsAndBalances.js';
+import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
+import { type CollapsedMerkleTree, type DustGenerationUpdate, type DustUtxoUpdate } from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
@@ -99,15 +100,24 @@ export const CoreWallet = {
     };
   },
 
-  applyEvents(wallet: CoreWallet, secretKey: DustSecretKey, events: Event[], currentTime: Date): CoreWallet {
+  applyEventsWithChanges(
+    wallet: CoreWallet,
+    secretKey: DustSecretKey,
+    events: Event[],
+    currentTime: Date,
+  ): [CoreWallet, DustStateChanges[]] {
     // TODO: replace currentTime with `updatedState.syncTime` introduced in ledger-6.2.0-rc.1
-    const updatedState = wallet.state.replayEvents(secretKey, events).processTtls(currentTime);
+    const stateWithChanges = wallet.state.replayEventsWithChanges(secretKey, events);
+    const updatedState = stateWithChanges.state.processTtls(currentTime);
     const availableNonces = updatedState.utxos.map((utxo) => utxo.nonce);
-    return {
-      ...wallet,
-      state: updatedState,
-      pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
-    };
+    return [
+      {
+        ...wallet,
+        state: updatedState,
+        pendingDust: wallet.pendingDust.filter((t) => availableNonces.includes(t.nonce)),
+      },
+      stateWithChanges.changes,
+    ];
   },
 
   applyDustGenerations(

@@ -15,18 +15,17 @@ import * as rx from 'rxjs';
 import { logger } from './logger.js';
 import { TestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { type NetworkId, InMemoryTransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import {
+  type NetworkId,
+  InMemoryTransactionHistoryStorage,
+  type TransactionHistoryStorage,
+} from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
 import type * as fs from 'node:fs';
-import {
-  ShieldedWallet,
-  type ShieldedWalletAPI,
-  type ShieldedWalletClass,
-  type ShieldedWalletState,
-} from '@midnight-ntwrk/wallet-sdk-shielded';
+import { ShieldedWallet, type ShieldedWalletAPI, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
 import { WalletFacade, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -109,6 +108,7 @@ const restoreUnshieldedWallet = async (
   seed: string,
   fixture: TestContainersFixture,
   readIfExists: (path: string) => Promise<string | undefined>,
+  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
 ) => {
   try {
     const serialized = await readIfExists(path);
@@ -120,7 +120,7 @@ const restoreUnshieldedWallet = async (
           indexerHttpUrl: fixture.getIndexerUri(),
           indexerWsUrl: fixture.getIndexerWsUri(),
         },
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+        txHistoryStorage,
       }).startWithPublicKey(PublicKey.fromKeyStore(keyStore));
       logger.info(`Restored unshielded wallet from ${path}`);
       return wallet;
@@ -162,8 +162,12 @@ export const provideWallet = async (
   seed: string,
   fixture: TestContainersFixture,
 ): Promise<WalletInit> => {
-  const walletConfig = fixture.getWalletConfig();
-  const dustWalletConfig = fixture.getDustWalletConfig();
+  // Single shared tx-history storage so all three sub-wallets and the facade read/write
+  // the same instance; otherwise shielded/unshielded writes go to a storage the facade
+  // never queries.
+  const txHistoryStorage = new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries);
+  const walletConfig = { ...fixture.getWalletConfig(), txHistoryStorage };
+  const dustWalletConfig = { ...fixture.getDustWalletConfig(), txHistoryStorage };
   const Wallet = ShieldedWallet(walletConfig);
 
   const directoryPath = process.env['SYNC_CACHE'];
@@ -188,7 +192,7 @@ export const provideWallet = async (
 
   const [restoredShielded, restoredUnshielded, restoredDust] = await Promise.all([
     restoreShieldedWallet(`${directoryPath}/shielded-${filename}`, Wallet, readIfExists),
-    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists),
+    restoreUnshieldedWallet(`${directoryPath}/unshielded-${filename}`, seed, fixture, readIfExists, txHistoryStorage),
     restoreDustWallet(`${directoryPath}/dust-${filename}`, { ...walletConfig, ...dustWalletConfig }, readIfExists),
   ]);
 
@@ -200,7 +204,6 @@ export const provideWallet = async (
       configuration: {
         ...walletConfig,
         ...dustWalletConfig,
-        txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
       },
       shielded: () => restoredShielded,
       unshielded: () => restoredUnshielded,
@@ -284,7 +287,7 @@ export const initWalletWithSeed = async (seed: string, fixture: TestContainersFi
     configuration: {
       ...walletConfig,
       ...fixture.getDustWalletConfig(),
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     },
     shielded: (config) => ShieldedWallet(config).startWithSeed(getShieldedSeed(seed)),
     unshielded: (config) => UnshieldedWallet(config).startWithPublicKey(PublicKey.fromKeyStore(unshieldedKeystore)),
@@ -336,7 +339,7 @@ export const waitForFacadePending = (wallet: WalletFacade) =>
       rx.tap((state) => {
         const shieldedPending = state.shielded.pendingCoins.length;
         logger.info(`Shielded wallet pending coins: ${shieldedPending}, waiting for pending coins...`);
-        const unshieldedPending = state.shielded.pendingCoins.length;
+        const unshieldedPending = state.unshielded.pendingCoins.length;
         logger.info(`Unshielded wallet pending coins: ${unshieldedPending}, waiting for pending coins...`);
       }),
       rx.filter(
@@ -441,48 +444,55 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
     ),
   );
 
-// export const waitForTxInHistory = async (txId: string, wallet: ShieldedWallet) =>
-//   firstValueFrom(
-//     wallet.state.pipe(
-//       tap({
-//         next: (state) => {
-//           logger.info(`Current transactionHistory: ${state.transactionHistory}`);
-//           state.transactionHistory.forEach((tx, idx) => {
-//             logger.info(`Tx[${idx}] identifiers: ${JSON.stringify(tx.identifiers())}`);
-//           });
-//           const txFound = state.transactionHistory.some((tx) => tx.identifiers().includes(txId));
-//           logger.info(`Transaction ${txId} found: ${txFound}`);
-//         },
-//       }),
-//       filter((state) => state.transactionHistory.some((tx) => tx.identifiers().includes(txId))),
-//     ),
-//   );
-
-// export const walletStateTrimmed = (state: ShieldedWalletState) => {
-//   const { totalCoins, availableCoins, ...rest } = state; // eslint-disable-line @typescript-eslint/no-unused-vars
-//   return rest;
-// };
-
-// export function normalizeWalletState(state: ShieldedWalletState) {
-//   const normalized = state.transactionHistory.map((txHistoryEntry: Transaction) => {
-//     const { identifiers, ...otherProps } = txHistoryEntry; // eslint-disable-line @typescript-eslint/no-unused-vars
-//     return otherProps;
-//   });
-//   const { transactionHistory, syncProgress, ...otherProps } = state; // eslint-disable-line @typescript-eslint/no-unused-vars
-//   return { ...otherProps, normalized };
-// }
-
-/** Disabled until tx history is implemented in the shielded wallet */
-export const getTransactionHistoryIds = (_state: ShieldedWalletState) => {
-  // return state.transactionHistory.map((tx) => tx.identifiers());
-  return [];
+export const waitForTxInHistory = async (
+  txHash: string,
+  wallet: WalletFacade,
+  ready?: (entry: WalletEntry) => boolean,
+) => {
+  const isReady = ready ?? (() => true);
+  const describeSections = (e: WalletEntry): string =>
+    (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
+  let pollsSinceDump = 0;
+  const txEntry = await rx.firstValueFrom(
+    rx.merge(wallet.state().pipe(rx.filter((state) => state.isSynced)), rx.interval(500)).pipe(
+      rx.mergeMap(async () => {
+        const entry = await wallet.queryTxHistoryByHash(txHash);
+        if (entry !== undefined && entry.status !== 'SUCCESS') {
+          logger.info(
+            `Waiting for tx ${txHash} in history: found, status=${entry.status}, sections=[${describeSections(entry)}] — non-SUCCESS, aborting wait`,
+          );
+          return entry;
+        }
+        const notReady = entry === undefined || !isReady(entry);
+        const needsDump = notReady && pollsSinceDump >= 20;
+        if (entry === undefined) {
+          logger.info(`Waiting for tx ${txHash} in history: not found yet`);
+        } else {
+          logger.info(`Waiting for tx ${txHash} in history: found, status=${entry.status}, ready=${isReady(entry)}`);
+        }
+        if (needsDump) {
+          const all = await wallet.getAllFromTxHistory();
+          const summary = all.map((e) => ({
+            hash: e.hash,
+            status: e.status,
+            sections: describeSections(e),
+            identifiers: e.identifiers ?? [],
+          }));
+          logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
+          pollsSinceDump = 0;
+        } else {
+          pollsSinceDump = notReady ? pollsSinceDump + 1 : 0;
+        }
+        return entry;
+      }),
+      rx.filter((entry): entry is WalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry))),
+    ),
+  );
+  expect(txEntry).toBeDefined();
+  expect(txEntry.hash).toBe(txHash);
+  expect(txEntry.status).toBe('SUCCESS');
+  return txEntry;
 };
-
-// export function compareStates(state1: ShieldedWalletState, state2: ShieldedWalletState) {
-//   const normalized1 = normalizeWalletState(state1);
-//   const normalized2 = normalizeWalletState(state2);
-//   expect(normalized1).toStrictEqual(normalized2);
-// }
 
 export function validateNetworkInAddress(address: string) {
   switch (TestContainersFixture.network) {
@@ -573,9 +583,8 @@ const fetchBlockHeight = async (indexerHttpUrl: string): Promise<number> => {
 };
 
 /**
- * Waits for the blockchain to produce at least one new block by polling the
- * indexer for the current block height. Resolves as soon as the height
- * increases from its initial value.
+ * Waits for the blockchain to produce at least one new block by polling the indexer for the current block height.
+ * Resolves as soon as the height increases from its initial value.
  */
 export const waitForBlockAdvancement = async (indexerHttpUrl: string, timeoutMs = 60_000): Promise<void> => {
   const initialHeight = await fetchBlockHeight(indexerHttpUrl);
@@ -606,6 +615,24 @@ export function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['u
   expect(typeof utxo.outputIndex).toBe('number');
 }
 
+export function expectValidShieldedCoinFields(coin: NonNullable<WalletEntry['shielded']>['receivedCoins'][number]) {
+  expect(typeof coin.type).toBe('string');
+  expect(coin.type.length).toBeGreaterThan(0);
+  expect(typeof coin.nonce).toBe('string');
+  expect(coin.nonce.length).toBeGreaterThan(0);
+  expect(typeof coin.value).toBe('bigint');
+  expect(typeof coin.mtIndex).toBe('bigint');
+}
+
+export function expectValidShieldedTxHistoryEntry(entry: WalletEntry) {
+  expect(entry.shielded).toBeDefined();
+  expect(Array.isArray(entry.shielded!.receivedCoins)).toBe(true);
+  expect(Array.isArray(entry.shielded!.spentCoins)).toBe(true);
+  for (const coin of [...entry.shielded!.receivedCoins, ...entry.shielded!.spentCoins]) {
+    expectValidShieldedCoinFields(coin);
+  }
+}
+
 export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
   expect(entry.unshielded).toBeDefined();
   expect(Array.isArray(entry.unshielded!.createdUtxos)).toBe(true);
@@ -620,6 +647,61 @@ export function expectValidUnshieldedTxHistoryEntries(entries: readonly WalletEn
   for (const entry of entries) {
     expectValidUnshieldedTxHistoryEntry(entry);
   }
+}
+
+/** Asserts a sender's shielded tx history entry has valid spentCoins. */
+export function expectSenderShieldedTxHistory(entry: WalletEntry) {
+  expect(entry.shielded).toBeDefined();
+  expect(entry.shielded!.spentCoins.length).toBeGreaterThan(0);
+  expectValidShieldedTxHistoryEntry(entry);
+}
+
+/**
+ * Asserts a receiver's shielded tx history entry has valid receivedCoins, and that a coin matching the expected value
+ * exists with valid fields.
+ */
+export function expectReceiverShieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
+  expect(entry.shielded).toBeDefined();
+  expect(entry.shielded!.receivedCoins.length).toBeGreaterThan(0);
+  const receivedCoin = entry.shielded!.receivedCoins.find((c) => c.value === expectedValue);
+  expect(receivedCoin).toBeDefined();
+  expectValidShieldedCoinFields(receivedCoin!);
+  expectValidShieldedTxHistoryEntry(entry);
+}
+
+/** Asserts a sender's unshielded tx history entry has valid spentUtxos. */
+export function expectSenderUnshieldedTxHistory(entry: WalletEntry) {
+  expect(entry.unshielded).toBeDefined();
+  expect(entry.unshielded!.spentUtxos.length).toBeGreaterThan(0);
+  expectValidUnshieldedTxHistoryEntry(entry);
+}
+
+/**
+ * Asserts a receiver's unshielded tx history entry has valid createdUtxos, and that a UTXO matching the expected value
+ * exists with valid fields.
+ */
+export function expectReceiverUnshieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
+  expect(entry.unshielded).toBeDefined();
+  expect(entry.unshielded!.createdUtxos.length).toBeGreaterThan(0);
+  const receivedUtxo = entry.unshielded!.createdUtxos.find((u) => u.value === expectedValue);
+  expect(receivedUtxo).toBeDefined();
+  expectValidUnshieldedUtxoFields(receivedUtxo!);
+  expectValidUnshieldedTxHistoryEntry(entry);
+}
+
+/**
+ * Asserts that tx history entries from a storage contain at least one entry with the specified section ('shielded' or
+ * 'unshielded').
+ */
+export async function expectTxHistoryHasSection(
+  storage: { getAll(): Promise<readonly Record<string, unknown>[]> },
+  section: 'shielded' | 'unshielded',
+) {
+  const entries = await storage.getAll();
+  expect(entries.length).toBeGreaterThan(0);
+  const matching = entries.filter((e) => e[section] !== undefined);
+  expect(matching.length).toBeGreaterThan(0);
+  return entries;
 }
 
 export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';

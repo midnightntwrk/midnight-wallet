@@ -10,15 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CanAssign, Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
-import { VariantBuilder } from '../abstractions/index.js';
-import { WalletBuilder } from '../WalletBuilder.js';
+import { type CanAssign, type Equal, type Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type VariantBuilder } from '../abstractions/index.js';
+import { type WalletBuilder } from '../WalletBuilder.js';
 import {
-  InterceptingVariantBuilder,
-  NumericRangeBuilder,
-  NumericRangeMultiplierBuilder,
-  RangeConfig,
-  RangeMultiplierConfig,
+  type InterceptingVariantBuilder,
+  type NumericRangeBuilder,
+  type NumericRangeMultiplierBuilder,
+  type RangeConfig,
+  type RangeMultiplierConfig,
 } from '../testing/variants.js';
 import { describe, it } from 'vitest';
 

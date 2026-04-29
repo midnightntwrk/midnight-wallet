@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type FetchTermsAndConditionsConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type FetchTermsAndConditionsConfiguration, WalletFacade } from '@midnight-ntwrk/wallet-sdk';
 
 const INDEXER_PORT = Number.parseInt(process.env['INDEXER_PORT'] ?? '8088', 10);
 const INDEXER_HTTP_URL = `http://localhost:${INDEXER_PORT}/api/v4/graphql`;

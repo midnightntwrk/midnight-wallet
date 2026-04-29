@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-prover-client",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "type": "module",
   "main": "./dist/index.js",
   "module": "./dist/index.js",
@@ -28,9 +28,9 @@
     }
   },
   "dependencies": {
-    "@effect/platform": "^0.94.5",
+    "@effect/platform": "^0.96.0",
     "@midnight-ntwrk/ledger-v8": "^8.1.0-rc.1",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.1.0",
+    "@midnight-ntwrk/wallet-sdk-utilities": "1.1.1",
     "@midnight-ntwrk/zkir-v2": "2.1.0",
     "effect": "^3.19.19",
     "web-worker": "^1.5.0"

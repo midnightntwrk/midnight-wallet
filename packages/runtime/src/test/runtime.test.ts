@@ -14,10 +14,10 @@ import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Effect } from 'effect';
 import * as rx from 'rxjs';
 import { describe, expect, it } from 'vitest';
-import { VersionChangeType } from '../abstractions/index.js';
+import { StateChange, VersionChangeType } from '../abstractions/index.js';
 import { toProtocolStateArray } from '../testing/utils.js';
 import {
-  InterceptingRunningVariant,
+  type InterceptingRunningVariant,
   InterceptingVariantBuilder,
   Numeric,
   NumericMultiplier,
@@ -165,5 +165,139 @@ describe('Wallet runtime', () => {
       { version: ProtocolVersion.ProtocolVersion(100n), state: 90 },
       { version: ProtocolVersion.ProtocolVersion(100n), state: 92 },
     ]);
+  });
+
+  it('reports progress updates from variant through runtime.progress', async () => {
+    const progressTag = 'progress' as const;
+    const Wallet = WalletBuilder.init()
+      .withVariant(
+        ProtocolVersion.MinSupportedVersion,
+        new InterceptingVariantBuilder<typeof progressTag, number>(progressTag),
+      )
+      .build();
+    const wallet = Wallet.startEmpty(Wallet);
+
+    // Wait for the intercepting variant to be initiated
+    await rx.firstValueFrom(wallet.rawState);
+
+    // Initial progress should be zero
+    const initialProgress = await Effect.runPromise(wallet.runtime.progress);
+    expect(initialProgress).toMatchObject({ sourceGap: 0n, applyGap: 0n });
+
+    // Emit a ProgressUpdate with non-zero gaps, followed by a State change as a synchronization point
+    await wallet.runtime
+      .dispatch({
+        [progressTag]: (variant) =>
+          variant
+            .emit(StateChange.ProgressUpdate({ sourceGap: 10n, applyGap: 5n }))
+            .pipe(Effect.flatMap(() => variant.emit(StateChange.State({ state: 42 })))),
+      })
+      .pipe(Effect.runPromise);
+
+    // Wait for the State change to arrive, ensuring the preceding ProgressUpdate has been processed
+    await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state === 42)));
+
+    const midProgress = await Effect.runPromise(wallet.runtime.progress);
+    expect(midProgress).toMatchObject({ sourceGap: 10n, applyGap: 5n });
+
+    // Emit a ProgressUpdate showing sync is complete, followed by another State change
+    await wallet.runtime
+      .dispatch({
+        [progressTag]: (variant) =>
+          variant
+            .emit(StateChange.ProgressUpdate({ sourceGap: 0n, applyGap: 0n }))
+            .pipe(Effect.flatMap(() => variant.emit(StateChange.State({ state: 43 })))),
+      })
+      .pipe(Effect.runPromise);
+
+    await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state === 43)));
+
+    const finalProgress = await Effect.runPromise(wallet.runtime.progress);
+    expect(finalProgress).toMatchObject({ sourceGap: 0n, applyGap: 0n });
+
+    await wallet.stop();
+  });
+
+  it('updates protocol version annotation without migrating when version change is within valid range', async () => {
+    const interceptingTag = 'intercept' as const;
+    const Wallet = WalletBuilder.init()
+      .withVariant(
+        ProtocolVersion.MinSupportedVersion,
+        new InterceptingVariantBuilder<typeof interceptingTag, number>(interceptingTag),
+      )
+      .withVariant(ProtocolVersion.ProtocolVersion(100n), new NumericRangeMultiplierBuilder())
+      .build({ min: 0, max: 10, multiplier: 2 });
+    const wallet = Wallet.startEmpty(Wallet);
+
+    // Wait for the intercepting variant to be initiated
+    await rx.firstValueFrom(wallet.rawState);
+
+    // Emit a VersionChange to version 50n, which is within the current variant's valid range [0n, 100n)
+    // This should NOT trigger migration — only update the protocol version annotation
+    await wallet.runtime
+      .dispatch({
+        [interceptingTag]: (variant) =>
+          variant
+            .emitProtocolVersionChange(VersionChangeType.Version({ version: ProtocolVersion.ProtocolVersion(50n) }))
+            .pipe(Effect.flatMap(() => variant.emit(StateChange.State({ state: 42 })))),
+        [NumericMultiplier]: () => Effect.void,
+      })
+      .pipe(Effect.runPromise);
+
+    // The state emission after the version change should carry the updated version 50n
+    const stateAfterVersionChange = await rx.firstValueFrom(
+      wallet.rawState.pipe(rx.filter(({ state }) => state === 42)),
+    );
+    expect(stateAfterVersionChange).toEqual({ version: ProtocolVersion.ProtocolVersion(50n), state: 42 });
+
+    // Verify the variant was NOT migrated — we can still dispatch to the intercepting variant
+    const stillIntercepting = await wallet.runtime
+      .dispatch({
+        [interceptingTag]: () => Effect.succeed(true),
+        [NumericMultiplier]: () => Effect.succeed(false),
+      })
+      .pipe(Effect.runPromise);
+    expect(stillIntercepting).toBe(true);
+
+    await wallet.stop();
+  });
+
+  it('ignores VersionChangeType.Next when there is no next variant', async () => {
+    const interceptingTag = 'sole' as const;
+    const Wallet = WalletBuilder.init()
+      .withVariant(
+        ProtocolVersion.MinSupportedVersion,
+        new InterceptingVariantBuilder<typeof interceptingTag, number>(interceptingTag),
+      )
+      .build();
+    const wallet = Wallet.startEmpty(Wallet);
+
+    // Wait for the intercepting variant to be initiated
+    await rx.firstValueFrom(wallet.rawState);
+
+    // Emit VersionChangeType.Next() — with no next variant, nextProtocolVersion is null,
+    // so this should be a no-op: no migration, protocol version unchanged
+    await wallet.runtime
+      .dispatch({
+        [interceptingTag]: (variant) =>
+          variant
+            .emitProtocolVersionChange(VersionChangeType.Next())
+            .pipe(Effect.flatMap(() => variant.emit(StateChange.State({ state: 99 })))),
+      })
+      .pipe(Effect.runPromise);
+
+    // State should still be annotated with the original version
+    const stateAfter = await rx.firstValueFrom(wallet.rawState.pipe(rx.filter(({ state }) => state === 99)));
+    expect(stateAfter).toEqual({ version: ProtocolVersion.MinSupportedVersion, state: 99 });
+
+    // Variant was not migrated — dispatching still reaches the intercepting variant
+    const stillSoleVariant = await wallet.runtime
+      .dispatch({
+        [interceptingTag]: () => Effect.succeed(true),
+      })
+      .pipe(Effect.runPromise);
+    expect(stillSoleVariant).toBe(true);
+
+    await wallet.stop();
   });
 });

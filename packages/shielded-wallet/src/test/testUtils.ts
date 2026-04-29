@@ -10,14 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
 /**
  * Temporary function until the ledger fixes imbalances.get()
  *
  * @param imbalances
  * @param rawTokenType
- * @returns bigint
+ * @returns Bigint
  */
 export const getNonDustImbalance = (
   imbalances: Map<ledger.TokenType, bigint>,

@@ -16,7 +16,7 @@ import {
   ProtocolState,
   ProtocolVersion,
 } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { WalletEntrySchema } from '@midnight-ntwrk/wallet-sdk-facade';
+import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import {
   ShieldedAddress,
   ShieldedCoinPublicKey,
@@ -68,8 +68,8 @@ const shieldedTokenType = (ledger.shieldedToken() as { tag: 'shielded'; raw: str
 
 /**
  * These tests need to be fairly high-level to examine interfaces and observable behaviors given already built wallet.
- * For that reason - they mostly examine happy-path or well-known failure handling scenarios
- * It's the job of unit tests in various setups to perform quick and exhaustive testing
+ * For that reason - they mostly examine happy-path or well-known failure handling scenarios It's the job of unit tests
+ * in various setups to perform quick and exhaustive testing
  *
  * NOTE: Shielded wallet cannot transact on its own anymore, so these tests are skipped for now
  */
@@ -105,7 +105,7 @@ describe.skip('Wallet transacting', () => {
         `ws://127.0.0.1:${startedEnvironment.getContainer(`node_${environmentId}`).getMappedPort(9944)}`,
       ),
       networkId: NetworkId.NetworkId.Undeployed,
-      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema),
+      txHistoryStorage: new InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries),
     };
   });
 

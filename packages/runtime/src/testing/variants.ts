@@ -10,8 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { StateChange, Variant, VariantBuilder, VersionChangeType, WalletRuntimeError } from '../abstractions/index.js';
-import { Effect, Option, PubSub, Scope, Stream } from 'effect';
+import {
+  StateChange,
+  type Variant,
+  type VariantBuilder,
+  VersionChangeType,
+  WalletRuntimeError,
+} from '../abstractions/index.js';
+import { Effect, Option, PubSub, type Scope, Stream } from 'effect';
 
 export type RangeConfig = {
   min: number;
@@ -159,6 +165,7 @@ export class NumericRangeMultiplierBuilder implements VariantBuilder.VariantBuil
 
 export type InterceptingRunningVariant<TTag extends string | symbol, TState> = Variant.RunningVariant<TTag, TState> & {
   emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => Effect.Effect<void>;
+  emit: (change: StateChange.StateChange<TState>) => Effect.Effect<void>;
 };
 export class InterceptingVariant<TTag extends string | symbol, TState> implements Variant.Variant<
   TTag,
@@ -185,22 +192,24 @@ export class InterceptingVariant<TTag extends string | symbol, TState> implement
       });
       const state = yield* context.stateRef.get;
       yield* PubSub.publish(pubsub, StateChange.State({ state }));
+      const emit = (change: StateChange.StateChange<TState>) => PubSub.publish(pubsub, change);
       return {
         __polyTag__: tag,
         state: Stream.fromPubSub(pubsub, {
           shutdown: true,
         }),
         emitProtocolVersionChange: (change: VersionChangeType.VersionChangeType) => {
-          return PubSub.publish(pubsub, StateChange.VersionChange({ change }));
+          return emit(StateChange.VersionChange({ change }));
         },
+        emit,
       };
     });
   }
 }
 
 /**
- * Builder of an intercepting variant
- * It allows removing the possibility of race conditions by requiring an explicit gesture to migrate to a next/specific protocol version
+ * Builder of an intercepting variant It allows removing the possibility of race conditions by requiring an explicit
+ * gesture to migrate to a next/specific protocol version
  */
 export class InterceptingVariantBuilder<TTag extends string | symbol, TState> implements VariantBuilder.VariantBuilder<
   InterceptingVariant<TTag, TState>,

@@ -12,7 +12,7 @@
 // limitations under the License.
 import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Effect, Schema } from 'effect';
-import { UnshieldedUpdate } from './SyncSchema.js';
+import { type UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
 
