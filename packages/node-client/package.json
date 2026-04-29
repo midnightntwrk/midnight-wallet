@@ -41,18 +41,18 @@
     "effect": "^3.19.19"
   },
   "devDependencies": {
-    "@effect/cluster": "^0.58.0",
-    "@effect/experimental": "^0.60.0",
-    "@effect/platform": "^0.96.0",
-    "@effect/platform-node": "^0.106.0",
-    "@effect/rpc": "^0.75.0",
-    "@effect/sql": "^0.51.0",
-    "@effect/workflow": "^0.18.0",
+    "@effect/cluster": "0.58.1",
+    "@effect/experimental": "0.60.0",
+    "@effect/platform": "0.96.0",
+    "@effect/platform-node": "0.106.0",
+    "@effect/rpc": "0.75.0",
+    "@effect/sql": "0.51.0",
+    "@effect/workflow": "0.18.0",
     "@midnight-ntwrk/ledger-v8": "^8.0.3",
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.2.1",
-    "@types/tar-stream": "^3.1.4",
-    "tar-stream": "^3.1.7",
-    "tsx": "^4.21.0"
+    "@types/tar-stream": "3.1.4",
+    "tar-stream": "3.1.7",
+    "tsx": "4.21.0"
   },
   "scripts": {
     "typecheck-script": "tsc -b ./tsconfig.script.json --noEmit",
