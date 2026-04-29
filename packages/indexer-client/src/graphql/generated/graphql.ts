@@ -193,6 +193,23 @@ export type DustGenerationDtimeUpdate = DustLedgerEvent & {
   readonly raw: Scalars['HexEncoded']['output'];
 };
 
+/**
+ * A dust generation dtime update emitted when the backing Night UTXO is
+ * spent and the entry's decay time is set.
+ */
+export type DustGenerationDtimeUpdateItem = {
+  /** Generation-tree index of the entry whose dtime changed. */
+  readonly generationMtIndex: Scalars['Int']['output'];
+  /** The decay time as observed in this ledger event. */
+  readonly newDtime: Scalars['Int']['output'];
+  /** Hex-encoded hash of the NIGHT UTXO that backs this dust output. */
+  readonly nightUtxoHash: Scalars['HexEncoded']['output'];
+  /** The hex-encoded owner (dust address). */
+  readonly owner: Scalars['HexEncoded']['output'];
+  /** The originating transaction ID. */
+  readonly transactionId: Scalars['Int']['output'];
+};
+
 /** DUST generation status for a specific Cardano reward address. */
 export type DustGenerationStatus = {
   /** The Bech32-encoded Cardano reward address (e.g., stake_test1... or stake1...). */
@@ -224,7 +241,7 @@ export type DustGenerations = {
 };
 
 /** An event of the dust generations subscription. */
-export type DustGenerationsEvent = DustGenerationsItem | DustGenerationsProgress;
+export type DustGenerationsEvent = DustGenerationDtimeUpdateItem | DustGenerationsItem | DustGenerationsProgress;
 
 /** A dust generations item with optional collapsed Merkle tree update. */
 export type DustGenerationsItem = {
@@ -874,9 +891,16 @@ export type Subscription = {
    */
   readonly contractActions: ContractAction;
   /**
-   * Subscribe to dust generation entries for a dust address within an index range.
-   * Entries are interleaved with collapsed Merkle tree updates to fill gaps.
-   * The subscription finishes after reaching the end index with a final collapsed update.
+   * Subscribe to dust generation entries for a dust address within an index
+   * range, interleaved with collapsed Merkle tree updates and
+   * `DustGenerationDtimeUpdateItem` events for entries the subscriber owns.
+   * Finishes at end_index with a final collapsed update.
+   *
+   * On reconnect, historical dtime updates after the wallet's last fully-
+   * synced block (derived from the entry below `startIndex`) are replayed
+   * before entry backfill. Fresh subscriptions skip historical dtime
+   * backfill; the wallet learns of pre-existing spends primarily via block
+   * sync and `dustNullifierTransactions`.
    */
   readonly dustGenerations: DustGenerationsEvent;
   /** Subscribe to dust ledger events starting at the given ID or at the very start if omitted. */
@@ -1195,6 +1219,7 @@ export type DustGenerationsSubscriptionVariables = Exact<{
 
 
 export type DustGenerationsSubscription = { readonly dustGenerations:
+    | { readonly __typename: 'DustGenerationDtimeUpdateItem' }
     | { readonly __typename: 'DustGenerationsItem', readonly commitmentMtIndex: number, readonly generationMtIndex: number, readonly owner: string, readonly value: string, readonly initialValue: string, readonly backingNight: string, readonly ctime: number, readonly transactionId: number, readonly collapsedMerkleTree: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } | null }
     | { readonly __typename: 'DustGenerationsProgress', readonly highestIndex: number, readonly collapsedMerkleTree: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } | null }
    };

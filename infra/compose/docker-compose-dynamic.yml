@@ -19,7 +19,7 @@ services:
       start_period: 10s
 
   indexer:
-    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.0.0'
+    image: 'ghcr.io/midnight-ntwrk/indexer-standalone:4.2.1-1e5cbcbd'
     container_name: indexer_$TESTCONTAINERS_UID
     cap_drop:
       - ALL
@@ -29,9 +29,10 @@ services:
       - '127.0.0.1::8088'
     environment:
       RUST_LOG: 'indexer=debug,chain_indexer=debug,indexer_api=debug,wallet_indexer=debug,indexer_common=debug,fastrace_opentelemetry=off,info'
-      APP__INFRA__NODE__URL: 'ws://node:9944'
+      APP__INFRA__SPO_NODE__URL: 'ws://node:9944'
       APP__APPLICATION__NETWORK_ID: 'undeployed'
       APP__INFRA__SECRET: '${APP_INFRA_SECRET}'
+      APP__INFRA__SPO_NODE__BLOCKFROST_ID: 'abcabcabcabceabc'
 
     healthcheck:
       test: ['CMD-SHELL', 'cat /var/run/indexer-standalone/running']
