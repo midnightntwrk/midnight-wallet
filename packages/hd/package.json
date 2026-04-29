@@ -28,7 +28,7 @@
     "@scure/bip39": "^2.0.1"
   },
   "devDependencies": {
-    "@ethereumjs/wallet": "^10.0.0"
+    "@ethereumjs/wallet": "10.0.0"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
