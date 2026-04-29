@@ -708,15 +708,15 @@ __metadata:
   linkType: hard
 
 "@effect/platform@npm:^0.96.0":
-  version: 0.96.0
-  resolution: "@effect/platform@npm:0.96.0"
+  version: 0.96.1
+  resolution: "@effect/platform@npm:0.96.1"
   dependencies:
     find-my-way-ts: "npm:^0.1.6"
-    msgpackr: "npm:^1.11.4"
+    msgpackr: "npm:^1.11.10"
     multipasta: "npm:^0.2.7"
   peerDependencies:
-    effect: ^3.21.0
-  checksum: 10c0/e76a0196db8e0bda88070aad4a3f0d0f1ff02e470265bfc3996bd3bb17ea42ee49f52e976213e8d09dd481616e217cfffd7228ae473defb29016e08884b22c06
+    effect: ^3.21.2
+  checksum: 10c0/eab00a4e66d1a921f2bf05e66f9dd35088a01215027839b852b9d8656488958a471aa7a3c61a9cb7604e4374d542f9fa99b1e09a1d99e6129432170604dab7ec
   languageName: node
   linkType: hard
 
@@ -8243,6 +8243,18 @@ __metadata:
   bin:
     download-msgpackr-prebuilds: bin/download-prebuilds.js
   checksum: 10c0/e504fd8bf86a29d7527c83776530ee6dc92dcb0273bb3679fd4a85173efead7f0ee32fb82c8410a13c33ef32828c45f81118ffc0fbed5d6842e72299894623b4
+  languageName: node
+  linkType: hard
+
+"msgpackr@npm:^1.11.10":
+  version: 1.11.10
+  resolution: "msgpackr@npm:1.11.10"
+  dependencies:
+    msgpackr-extract: "npm:^3.0.2"
+  dependenciesMeta:
+    msgpackr-extract:
+      optional: true
+  checksum: 10c0/fa5b8b90661cc66127d4550bc3757d0e72fe3217a47f952acd0df647afb4593ffde0bbdb1c9f5a13b9df15d5a170a570a59728dd7ede9b0d711e20e4f970fa82
   languageName: node
   linkType: hard
 
