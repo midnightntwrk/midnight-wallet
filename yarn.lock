@@ -5701,12 +5701,12 @@ __metadata:
   linkType: hard
 
 "effect@npm:^3.19.19":
-  version: 3.21.1
-  resolution: "effect@npm:3.21.1"
+  version: 3.21.2
+  resolution: "effect@npm:3.21.2"
   dependencies:
     "@standard-schema/spec": "npm:^1.0.0"
     fast-check: "npm:^3.23.1"
-  checksum: 10c0/aea18a9978e8a453cb54941d9932d554566394cb490663188174f42b0060f960c75e1d814fc757262fbafd7342ef12e3c8c011fa1905cb78f1fcf6399366a138
+  checksum: 10c0/c6ebf877b11b68a4bced8c89b03a1412a0e55d8b7ab275870dd4845bbc6d697a30065e72e7a370f43e9705fe857b4b89315fea60cdcc061fab85af7f772a0763
   languageName: node
   linkType: hard
 
