@@ -1,5 +1,13 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 4.0.1
+
+### Patch Changes
+
+- 8004393: Fix `@midnight-ntwrk/wallet-sdk-abstractions` being declared as a devDependency despite being imported at
+  runtime from `src/index.ts`. Consumers of the facade now correctly receive `wallet-sdk-abstractions` on install,
+  resolving Vite/esbuild dep-optimization failures with `No matching export ... for import "TransactionHistoryStorage"`.
+
 ## 4.0.0
 
 ### Major Changes
