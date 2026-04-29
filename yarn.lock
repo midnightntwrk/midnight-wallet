@@ -2369,7 +2369,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet-sdk-runtime@npm:1.0.3, @midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime":
+"@midnight-ntwrk/wallet-sdk-runtime@npm:1.0.3, @midnight-ntwrk/wallet-sdk-runtime@npm:^1.0.3, @midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime":
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-runtime@workspace:packages/runtime"
   dependencies:
@@ -2433,6 +2433,10 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-dust-wallet": "npm:^4.0.0"
     "@midnight-ntwrk/wallet-sdk-facade": "npm:^4.0.0"
     "@midnight-ntwrk/wallet-sdk-hd": "npm:^3.0.2"
+    "@midnight-ntwrk/wallet-sdk-indexer-client": "npm:^1.2.1"
+    "@midnight-ntwrk/wallet-sdk-node-client": "npm:^1.1.1"
+    "@midnight-ntwrk/wallet-sdk-prover-client": "npm:^1.2.1"
+    "@midnight-ntwrk/wallet-sdk-runtime": "npm:^1.0.3"
     "@midnight-ntwrk/wallet-sdk-shielded": "npm:^3.0.0"
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "npm:^3.0.0"
     "@midnight-ntwrk/wallet-sdk-utilities": "npm:^1.1.1"
