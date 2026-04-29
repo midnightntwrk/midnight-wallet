@@ -41,7 +41,7 @@
     "lodash": "^4.17.23",
     "protobufjs": "^7.5.5",
     "flatted": "^3.4.2",
-    "immutable": "^3.8.3",
+    "immutable": "^5.0.0",
     "picomatch@npm:^2.3.1": "^2.3.2",
     "picomatch@npm:^4.0.2": "^4.0.4",
     "picomatch@npm:^4.0.3": "^4.0.4",
