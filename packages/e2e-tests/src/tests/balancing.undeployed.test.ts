@@ -18,11 +18,7 @@ import { randomBytes } from 'node:crypto';
 import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
-/**
- * Tests checking transaction balancing
- *
- * @group undeployed
- */
+/** Tests checking transaction balancing */
 
 describe('Transaction balancing examples', () => {
   const getFixture = useTestContainersFixture();

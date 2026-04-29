@@ -496,9 +496,6 @@ export const waitForTxInHistory = async (
 
 export function validateNetworkInAddress(address: string) {
   switch (TestContainersFixture.network) {
-    case 'testnet':
-      expect(address).toContain('test');
-      break;
     case 'devnet':
       expect(address).toContain('dev');
       break;
@@ -704,4 +701,4 @@ export async function expectTxHistoryHasSection(
   return entries;
 }
 
-export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'testnet' | 'preview' | 'preprod';
+export type MidnightNetwork = 'undeployed' | 'qanet' | 'devnet' | 'preview' | 'preprod';

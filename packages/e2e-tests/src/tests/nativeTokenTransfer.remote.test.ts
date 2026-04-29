@@ -18,12 +18,7 @@ import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 
-/**
- * Tests performing a token transfer
- *
- * @group devnet
- * @group testnet
- */
+/** Tests performing a token transfer */
 
 describe('Token transfer', () => {
   if (process.env['NT_SEED'] === undefined || process.env['NT_SEED2'] === undefined) {
