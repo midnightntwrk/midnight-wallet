@@ -13,8 +13,8 @@
 import {
   Effect,
   Either,
+  Encoding,
   Layer,
-  ParseResult,
   pipe,
   Schema,
   type Scope,
@@ -24,12 +24,21 @@ import {
   Schedule,
 } from 'effect';
 import {
+  dustNullifier,
+  type DustNullifier,
   type DustSecretKey,
   type DustStateChanges,
-  Event as LedgerEvent,
+  QualifiedDustOutput,
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
-import { BlockHash, DustLedgerEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import {
+  DustGenerationEvents,
+  BlockHash,
+  DustLedgerEvents,
+  TransactionEvents,
+  DustNullifierTransactions,
+  DustCommitmentMerkleTreeUpdate,
+} from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import {
   WsSubscriptionClient,
   HttpQueryClient,
@@ -48,7 +57,23 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
-import { Uint8ArraySchema } from './Serialization.js';
+import {
+  CollapsedMerkleTree,
+  CollapsedMerkleTreeSchema,
+  DustGenerationsSubscription,
+  DustGenerationsSubscriptionSchema,
+  DustGenerationsSyncUpdate,
+  DustNullifierTransactionsSubscription,
+  DustNullifierTransactionSubscriptionSchema,
+  DustProjectionsUpdate,
+  DustSpendProcessedEvent,
+  DustUtxoUpdate,
+  SyncEventsUpdateSchema,
+  TransactionEventsUpdate,
+  TransactionEventsUpdateSchema,
+  WalletSyncSubscription,
+  WalletSyncUpdate,
+} from './SyncSchema.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -128,59 +153,6 @@ export const SecretKeysResource = {
   },
 };
 
-const LedgerEventSchema = Schema.declare(
-  (input: unknown): input is LedgerEvent => input instanceof LedgerEvent,
-).annotations({
-  identifier: 'ledger.Event',
-});
-
-const LedgerEventFromUInt8Array: Schema.Schema<LedgerEvent, Uint8Array> = Schema.asSchema(
-  Schema.transformOrFail(Uint8ArraySchema, LedgerEventSchema, {
-    encode: (e) => {
-      return Effect.try({
-        try: () => e.serialize(),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not serialize Ledger Event');
-        },
-      });
-    },
-    decode: (bytes) =>
-      Effect.try({
-        try: () => LedgerEvent.deserialize(bytes),
-        catch: (err) => {
-          return new ParseResult.Unexpected(err, 'Could not deserialize Ledger Event');
-        },
-      }),
-  }),
-);
-
-const HexedEvent: Schema.Schema<LedgerEvent, string> = pipe(
-  Schema.Uint8ArrayFromHex,
-  Schema.compose(LedgerEventFromUInt8Array),
-);
-
-export const SyncEventsUpdateSchema = Schema.Struct({
-  id: Schema.Number,
-  raw: HexedEvent,
-  maxId: Schema.Number,
-});
-
-export type WalletSyncSubscription = Schema.Schema.Type<typeof SyncEventsUpdateSchema>;
-
-export type WalletSyncUpdate = {
-  updates: WalletSyncSubscription[];
-  secretKey: DustSecretKey;
-  timestamp: Date;
-};
-export const WalletSyncUpdate = {
-  create: (updates: WalletSyncSubscription[], secretKey: DustSecretKey, timestamp: Date): WalletSyncUpdate => {
-    return {
-      updates,
-      secretKey,
-      timestamp,
-    };
-  },
-};
 export const makeDefaultSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, WalletSyncUpdate> => {
@@ -233,11 +205,155 @@ export const makeDefaultSyncService = (
   };
 };
 
+export const makeDustGenerationsSyncService = (
+  config: DefaultSyncConfiguration,
+): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
+  const defaultSyncService = makeDefaultSyncService(config);
+  const indexerSyncService = makeIndexerSyncService(config);
+
+  const nullifierTransactionsSubscription = (
+    dustNullifiers: DustNullifier[],
+    blockHeight: number | null,
+  ): Stream.Stream<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+    return pipe(
+      indexerSyncService.subscribeDustNullifierTransactions(dustNullifiers, blockHeight),
+      Stream.mapEffect((subscription) => indexerSyncService.transactionEvents(subscription.transactionId)),
+    );
+  };
+
+  const loadCollapsedCommitments = (
+    fromBlock: bigint,
+    toBlock: bigint,
+    newUtxos: Map<bigint, QualifiedDustOutput>,
+  ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
+    const skipMtIndexes = [...newUtxos.keys()];
+
+    // 1: split into groups
+    const groups = [];
+    const firstSkipIndex = skipMtIndexes.at(0);
+
+    if (firstSkipIndex !== undefined && fromBlock < firstSkipIndex) {
+      groups.push({ start: fromBlock, end: firstSkipIndex - 1n });
+    } else if (firstSkipIndex === undefined) {
+      groups.push({ start: fromBlock, end: toBlock });
+    }
+
+    skipMtIndexes.forEach((skipMtIndex, index) => {
+      const start = skipMtIndex + 1n;
+      const end = skipMtIndexes.at(index + 1);
+      if (end !== undefined && end - start > 0n) {
+        groups.push({ start, end: end - 1n });
+      } else if (end === undefined && start <= toBlock) {
+        groups.push({ start, end: toBlock });
+      }
+    });
+    console.log(`Skipping:`, skipMtIndexes);
+    console.log(`Fetching groups:`, groups);
+
+    // 2: Query all groups in parallel
+    return pipe(
+      groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(Number(start), Number(end))),
+      Effect.all,
+    );
+  };
+
+  return {
+    updates: (
+      state: CoreWallet,
+      secretKey: DustSecretKey,
+    ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> => {
+      return pipe(
+        Effect.gen(function* () {
+          const blockData = yield* defaultSyncService.blockData();
+          const lastSyncedCommitmentIndex =
+            state.state.commitmentTreeFirstFree === 0n ? 0n : state.state.commitmentTreeFirstFree - 1n;
+          const rawGenerations = yield* pipe(
+            indexerSyncService.subscribeDustGenerations(state, blockData.height),
+            Stream.runCollect,
+            Effect.map(Chunk.toArray),
+          );
+          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(
+            rawGenerations,
+            secretKey,
+            state.publicKey.publicKey,
+          );
+
+          let newNullifiers = dustGenerationUpdates.generations
+            .map((n) => n.dustNullifier)
+            .concat(state.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier));
+
+          // track new utxos to calculate the successor utxo when the nullifier is spent
+          let newUtxos: Map<DustNullifier, QualifiedDustOutput> = new Map(
+            dustGenerationUpdates.generations.map((u) => [u.dustNullifier, u.qdo]),
+          );
+
+          const syncedNullifiers = [];
+
+          while (newNullifiers.length > 0) {
+            const nullifierTransactions = yield* pipe(
+              nullifierTransactionsSubscription(newNullifiers, blockData.height),
+              Stream.runCollect,
+              Effect.map(Chunk.toArray),
+            );
+
+            const dustUtxoUpdates = yield* createDustUtxoUpdates(state, nullifierTransactions, secretKey, newUtxos);
+
+            for (const update of dustUtxoUpdates) {
+              if (update.isSynced) {
+                syncedNullifiers.push(update.dustNullifier);
+                continue;
+              }
+              newUtxos.set(update.dustNullifier, update.qdo);
+            }
+
+            newNullifiers = dustUtxoUpdates.filter((u) => !u.isSynced).map((u) => u.dustNullifier);
+          }
+
+          if ([...newUtxos].some((u) => u[1].mtIndex <= lastSyncedCommitmentIndex)) {
+            throw new OtherWalletError({ message: 'Spotted stale utxo' });
+          }
+          newUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].mtIndex - b[1].mtIndex)));
+
+          const collapsedCommitments = yield* loadCollapsedCommitments(
+            lastSyncedCommitmentIndex,
+            BigInt(blockData.height),
+            newUtxos,
+          );
+
+          return {
+            dustGenerations: dustGenerationUpdates,
+            syncedNullifiers,
+            newUtxos,
+            collapsedCommitments,
+          };
+        }),
+        Stream.fromEffect,
+        Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
+        Stream.provideSomeLayer(indexerSyncService.queryClient()),
+      );
+    },
+    blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
+  };
+};
+
 export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError, Scope.Scope>;
   subscribeWallet: (
     state: CoreWallet,
   ) => Stream.Stream<WalletSyncSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  subscribeDustGenerations: (
+    state: CoreWallet,
+    latestBlock: number,
+  ) => Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  subscribeDustNullifierTransactions: (
+    dustNullifiers: DustNullifier[],
+    toBlock: number | null,
+  ) => Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient>;
+  transactionEvents: (txId: number) => Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient>;
+  dustCommitmentMerkleTreeUpdate: (
+    startIndex: number,
+    endIndex: number,
+  ) => Effect.Effect<CollapsedMerkleTree, WalletError, Scope.Scope | QueryClient>;
   queryClient: () => Layer.Layer<QueryClient, WalletError, Scope.Scope>;
 };
 
@@ -265,7 +381,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             WsSubscriptionClient.layer({ url, keepAlive: indexerClientConnection.keepAlive }),
         }),
         Layer.mapError(
-          (e: URLError) => new SyncWalletError({ message: 'Failed to to obtain correct indexer URLs', cause: e }),
+          (e: URLError) => new SyncWalletError({ message: 'Failed to obtain correct indexer URLs', cause: e }),
         ),
       );
     },
@@ -286,6 +402,90 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           ),
         ),
         Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    subscribeDustGenerations(
+      state: CoreWallet,
+      latestBlock: number,
+    ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      const { appliedIndex } = state.progress;
+      const { publicKey } = state.publicKey;
+
+      return pipe(
+        DustGenerationEvents.run({
+          dustAddress: publicKey.toString(16),
+          startIndex: Number(appliedIndex),
+          endIndex: latestBlock,
+        }),
+        Stream.mapEffect((subscription) =>
+          pipe(
+            Schema.decodeUnknownEither(DustGenerationsSubscriptionSchema)(subscription.dustGenerations),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          ),
+        ),
+        Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    subscribeDustNullifierTransactions(
+      dustNullifiers: DustNullifier[],
+      toBlock: number | null,
+    ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
+      const fullNullifiers = new Set(dustNullifiers.map((n) => n.toString()));
+      return pipe(
+        DustNullifierTransactions.run({
+          nullifierPrefixes: [...fullNullifiers].map((n) => n.substring(0, n.length / 2)),
+          fromBlock: 0,
+          toBlock,
+        }),
+        Stream.mapEffect((subscription) =>
+          pipe(
+            Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(
+              subscription.dustNullifierTransactions,
+            ),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          ),
+        ),
+        Stream.filter((record) => fullNullifiers.has(record.nullifier)),
+        Stream.mapError((error) => new SyncWalletError(error)),
+      );
+    },
+    transactionEvents(txId: number): Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient> {
+      return pipe(
+        TransactionEvents.run({ transactionId: Encoding.encodeHex(txId.toString()) }),
+        Effect.flatMap((result) => {
+          const nonSystemTransactions = result.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
+          if (!nonSystemTransactions.length) {
+            throw new OtherWalletError({ message: `Unable to find a transaction by id: ${txId}` });
+          }
+          return pipe(
+            Schema.decodeUnknownEither(TransactionEventsUpdateSchema)(nonSystemTransactions[0]),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
+        }),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
+      );
+    },
+    dustCommitmentMerkleTreeUpdate(
+      startIndex: number,
+      endIndex: number,
+    ): Effect.Effect<CollapsedMerkleTree, WalletError, Scope.Scope | QueryClient> {
+      return pipe(
+        DustCommitmentMerkleTreeUpdate.run({ startIndex, endIndex }),
+        Effect.flatMap((result) => {
+          return pipe(
+            Schema.decodeUnknownEither(CollapsedMerkleTreeSchema)(result.dustCommitmentMerkleTreeUpdate),
+            Either.mapLeft((err) => new SyncWalletError(err)),
+            EitherOps.toEffect,
+          );
+        }),
+        Effect.catchAll((err) =>
+          Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
+        ),
       );
     },
   };
@@ -328,6 +528,69 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
     },
   };
 };
+
+export const applyDustProjectionsUpdate = (wallet: CoreWallet, update: DustProjectionsUpdate): CoreWallet => {
+  const publicKey = Encoding.encodeHex(wallet.publicKey.publicKey.toString());
+  console.log(`Applying dust updates for wallet ${publicKey}`, update);
+  const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
+
+  const dustGenTreeUpdates = dustGenerations.rawUpdates
+    .map((u) => u.collapsedMerkleTree)
+    .filter((u) => u !== undefined)
+    .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
+
+  let updatedWallet = CoreWallet.applyDustGenerations(wallet, dustGenTreeUpdates, dustGenerations.generations);
+  updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
+  updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
+  updatedWallet = CoreWallet.applySyncedNullifiers(updatedWallet, syncedNullifiers);
+
+  if (dustGenerations.lastUpdateIndex !== undefined) {
+    return CoreWallet.updateProgress(updatedWallet, {
+      appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
+      highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
+      isConnected: true,
+    });
+  }
+
+  return updatedWallet;
+};
+
+export const createDustUtxoUpdates = (
+  wallet: CoreWallet,
+  nullifierTransactions: TransactionEventsUpdate[],
+  secretKey: DustSecretKey,
+  knownUtxos: Map<DustNullifier, QualifiedDustOutput>,
+): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
+  Effect.gen(function* () {
+    const utxoUpdates: DustUtxoUpdate[] = [];
+
+    for (const tx of nullifierTransactions) {
+      const dustSpends = tx.dustLedgerEvents.filter((dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed');
+
+      for (const dustSpend of dustSpends) {
+        const { nullifier, vFee, commitmentIndex, blockTime } = dustSpend.raw.content as DustSpendProcessedEvent;
+        const qdo = knownUtxos.get(nullifier) ?? wallet.state.findUtxoByNullifier(nullifier);
+        if (!qdo) {
+          return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
+        }
+
+        utxoUpdates.push({
+          dustNullifier: nullifier,
+          qdo,
+          isSynced: true,
+        });
+
+        const newUtxo = wallet.state.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
+        utxoUpdates.push({
+          dustNullifier: dustNullifier(newUtxo, secretKey),
+          qdo: newUtxo,
+          isSynced: false,
+        });
+      }
+    }
+
+    return utxoUpdates;
+  });
 
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,

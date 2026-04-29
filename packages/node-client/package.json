@@ -48,7 +48,7 @@
     "@effect/rpc": "^0.75.0",
     "@effect/sql": "^0.51.0",
     "@effect/workflow": "^0.18.0",
-    "@midnight-ntwrk/ledger-v8": "^8.0.3",
+    "@midnight-ntwrk/ledger-v8": "^8.1.0-rc.1",
     "@midnight-ntwrk/wallet-sdk-prover-client": "1.2.1",
     "@types/tar-stream": "^3.1.4",
     "tar-stream": "^3.1.7",

@@ -9,23 +9,27 @@ export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> =
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
 /** All built-in and custom scalars, mapped to their actual values */
 export type Scalars = {
-  ID: { input: string; output: string };
-  String: { input: string; output: string };
-  Boolean: { input: boolean; output: boolean };
-  Int: { input: number; output: number };
-  Float: { input: number; output: number };
-  CardanoRewardAddress: { input: string; output: string };
-  DustAddress: { input: string; output: string };
-  HexEncoded: { input: string; output: string };
-  Unit: { input: null; output: null };
-  UnshieldedAddress: { input: string; output: string };
-  ViewingKey: { input: string; output: string };
+  ID: { input: string; output: string; }
+  String: { input: string; output: string; }
+  Boolean: { input: boolean; output: boolean; }
+  Int: { input: number; output: number; }
+  Float: { input: number; output: number; }
+  CardanoRewardAddress: { input: string; output: string; }
+  DustAddress: { input: string; output: string; }
+  HexEncoded: { input: string; output: string; }
+  Unit: { input: null; output: null; }
+  UnshieldedAddress: { input: string; output: string; }
+  ViewingKey: { input: string; output: string; }
 };
 
 /** A block with its relevant data. */
 export type Block = {
   /** The hex-encoded block author. */
   readonly author: Maybe<Scalars['HexEncoded']['output']>;
+  /** The hex-encoded dust commitment Merkle tree root at the latest indexed state. */
+  readonly dustCommitmentMerkleTreeRoot: Maybe<Scalars['HexEncoded']['output']>;
+  /** The hex-encoded dust generation Merkle tree root at the latest indexed state. */
+  readonly dustGenerationMerkleTreeRoot: Maybe<Scalars['HexEncoded']['output']>;
   /** The block hash. */
   readonly hash: Scalars['HexEncoded']['output'];
   /** The block height. */
@@ -42,20 +46,24 @@ export type Block = {
   readonly timestamp: Scalars['Int']['output'];
   /** The transactions within this block. */
   readonly transactions: ReadonlyArray<Transaction>;
+  /** The hex-encoded serialized zswap state Merkle tree root. */
+  readonly zswapMerkleTreeRoot: Scalars['HexEncoded']['output'];
 };
 
 /** Either a block hash or a block height. */
 export type BlockOffset =
   /** A hex-encoded block hash. */
-  | { readonly hash: Scalars['HexEncoded']['input']; readonly height?: never } /** A block height. */
-  | { readonly hash?: never; readonly height: Scalars['Int']['input'] };
+  { readonly hash: Scalars['HexEncoded']['input']; readonly height?: never; }
+  |  /** A block height. */
+  { readonly hash?: never; readonly height: Scalars['Int']['input']; };
 
+/** A Merkle tree collapsed update between two indices. */
 export type CollapsedMerkleTree = {
-  /** The zswap state end index. */
+  /** The end index. */
   readonly endIndex: Scalars['Int']['output'];
   /** The protocol version. */
   readonly protocolVersion: Scalars['Int']['output'];
-  /** The zswap state start index. */
+  /** The start index. */
   readonly startIndex: Scalars['Int']['output'];
   /** The hex-encoded value. */
   readonly update: Scalars['HexEncoded']['output'];
@@ -72,6 +80,12 @@ export type CommitteeMember = {
   readonly spoSkHex: Maybe<Scalars['String']['output']>;
 };
 
+/** Options for the connect mutation. */
+export type ConnectOptions = {
+  /** Transaction index to start searching for relevant transactions (inclusive). */
+  readonly startIndex: InputMaybe<Scalars['Int']['input']>;
+};
+
 /** A contract action. */
 export type ContractAction = {
   readonly address: Scalars['HexEncoded']['output'];
@@ -84,14 +98,13 @@ export type ContractAction = {
 /** Either a block offset or a transaction offset. */
 export type ContractActionOffset =
   /** Either a block hash or a block height. */
-  | {
-      readonly blockOffset: BlockOffset;
-      readonly transactionOffset?: never;
-    } /** Either a transaction hash or a transaction identifier. */
-  | { readonly blockOffset?: never; readonly transactionOffset: TransactionOffset };
+  { readonly blockOffset: BlockOffset; readonly transactionOffset?: never; }
+  |  /** Either a transaction hash or a transaction identifier. */
+  { readonly blockOffset?: never; readonly transactionOffset: TransactionOffset; };
 
 /**
- * Represents a token balance held by a contract. This type is exposed through the GraphQL API to allow clients to query
+ * Represents a token balance held by a contract.
+ * This type is exposed through the GraphQL API to allow clients to query
  * unshielded token balances for any contract action (Deploy, Call, Update).
  */
 export type ContractBalance = {
@@ -180,6 +193,23 @@ export type DustGenerationDtimeUpdate = DustLedgerEvent & {
   readonly raw: Scalars['HexEncoded']['output'];
 };
 
+/**
+ * A dust generation dtime update emitted when the backing Night UTXO is
+ * spent and the entry's decay time is set.
+ */
+export type DustGenerationDtimeUpdateItem = {
+  /** Generation-tree index of the entry whose dtime changed. */
+  readonly generationMtIndex: Scalars['Int']['output'];
+  /** The decay time as observed in this ledger event. */
+  readonly newDtime: Scalars['Int']['output'];
+  /** Hex-encoded hash of the NIGHT UTXO that backs this dust output. */
+  readonly nightUtxoHash: Scalars['HexEncoded']['output'];
+  /** The hex-encoded owner (dust address). */
+  readonly owner: Scalars['HexEncoded']['output'];
+  /** The originating transaction ID. */
+  readonly transactionId: Scalars['Int']['output'];
+};
+
 /** DUST generation status for a specific Cardano reward address. */
 export type DustGenerationStatus = {
   /** The Bech32-encoded Cardano reward address (e.g., stake_test1... or stake1...). */
@@ -200,6 +230,47 @@ export type DustGenerationStatus = {
   readonly utxoOutputIndex: Maybe<Scalars['Int']['output']>;
   /** Cardano UTXO transaction hash for update/unregister operations. */
   readonly utxoTxHash: Maybe<Scalars['HexEncoded']['output']>;
+};
+
+/** Dust generations for a Cardano reward address. */
+export type DustGenerations = {
+  /** The Bech32-encoded Cardano reward address. */
+  readonly cardanoRewardAddress: Scalars['CardanoRewardAddress']['output'];
+  /** All active registrations with aggregated generation stats. */
+  readonly registrations: ReadonlyArray<DustRegistration>;
+};
+
+/** An event of the dust generations subscription. */
+export type DustGenerationsEvent = DustGenerationDtimeUpdateItem | DustGenerationsItem | DustGenerationsProgress;
+
+/** A dust generations item with optional collapsed Merkle tree update. */
+export type DustGenerationsItem = {
+  /** Hex-encoded hash of the NIGHT UTXO that backs this dust output. */
+  readonly backingNight: Scalars['HexEncoded']['output'];
+  /** Collapsed Merkle tree update filling the gap before this entry. */
+  readonly collapsedMerkleTree: Maybe<MerkleTreeCollapsedUpdate>;
+  /** Index of this output in the dust commitment Merkle tree. */
+  readonly commitmentMtIndex: Scalars['Int']['output'];
+  /** The creation timestamp. */
+  readonly ctime: Scalars['Int']['output'];
+  /** Index of this output in the dust generation Merkle tree. */
+  readonly generationMtIndex: Scalars['Int']['output'];
+  /** The DUST value at creation, in SPECK. */
+  readonly initialValue: Scalars['String']['output'];
+  /** The hex-encoded owner (dust address). */
+  readonly owner: Scalars['HexEncoded']['output'];
+  /** The originating transaction ID. */
+  readonly transactionId: Scalars['Int']['output'];
+  /** The NIGHT value backing this output, in STAR. */
+  readonly value: Scalars['String']['output'];
+};
+
+/** Progress indicator for dust generations subscription (includes final collapsed update). */
+export type DustGenerationsProgress = {
+  /** Final collapsed Merkle tree update covering remaining range. */
+  readonly collapsedMerkleTree: Maybe<MerkleTreeCollapsedUpdate>;
+  /** The highest index processed so far. */
+  readonly highestIndex: Scalars['Int']['output'];
 };
 
 export type DustInitialUtxo = DustLedgerEvent & {
@@ -223,10 +294,44 @@ export type DustLedgerEvent = {
   readonly raw: Scalars['HexEncoded']['output'];
 };
 
+/** A transaction containing a dust nullifier match with block context. */
+export type DustNullifierTransaction = {
+  /** The hex-encoded block hash (use to query block with ledger parameters). */
+  readonly blockHash: Scalars['HexEncoded']['output'];
+  /** The block height containing this transaction. */
+  readonly blockHeight: Scalars['Int']['output'];
+  /** The hex-encoded commitment. */
+  readonly commitment: Scalars['HexEncoded']['output'];
+  /** The hex-encoded matched nullifier. */
+  readonly nullifier: Scalars['HexEncoded']['output'];
+  /** The transaction ID (use to query full transaction via `transaction` query). */
+  readonly transactionId: Scalars['Int']['output'];
+};
+
 /** A dust output. */
 export type DustOutput = {
   /** The hex-encoded 32-byte nonce. */
   readonly nonce: Scalars['HexEncoded']['output'];
+};
+
+/** A single dust registration with aggregated generation stats. */
+export type DustRegistration = {
+  /** Current generated DUST capacity in SPECK. */
+  readonly currentCapacity: Scalars['String']['output'];
+  /** The Bech32m-encoded DUST address. */
+  readonly dustAddress: Scalars['DustAddress']['output'];
+  /** DUST generation rate in SPECK per second. */
+  readonly generationRate: Scalars['String']['output'];
+  /** Maximum DUST capacity in SPECK. */
+  readonly maxCapacity: Scalars['String']['output'];
+  /** NIGHT balance backing generation in STAR. */
+  readonly nightBalance: Scalars['String']['output'];
+  /** Cardano UTXO output index. */
+  readonly utxoOutputIndex: Maybe<Scalars['Int']['output']>;
+  /** Cardano UTXO transaction hash. */
+  readonly utxoTxHash: Maybe<Scalars['HexEncoded']['output']>;
+  /** Whether this registration is valid. */
+  readonly valid: Scalars['Boolean']['output'];
 };
 
 export type DustSpendProcessed = DustLedgerEvent & {
@@ -265,6 +370,18 @@ export type FirstValidEpoch = {
   readonly idKey: Scalars['String']['output'];
 };
 
+/** A Merkle tree collapsed update between two indices. */
+export type MerkleTreeCollapsedUpdate = {
+  /** The end index. */
+  readonly endIndex: Scalars['Int']['output'];
+  /** The protocol version. */
+  readonly protocolVersion: Scalars['Int']['output'];
+  /** The start index. */
+  readonly startIndex: Scalars['Int']['output'];
+  /** The hex-encoded value. */
+  readonly update: Scalars['HexEncoded']['output'];
+};
+
 export type Mutation = {
   /** Connect the wallet with the given viewing key and return a session ID. */
   readonly connect: Scalars['HexEncoded']['output'];
@@ -272,9 +389,12 @@ export type Mutation = {
   readonly disconnect: Scalars['Unit']['output'];
 };
 
+
 export type MutationConnectArgs = {
+  options: InputMaybe<ConnectOptions>;
   viewingKey: Scalars['ViewingKey']['input'];
 };
+
 
 export type MutationDisconnectArgs = {
   sessionId: Scalars['HexEncoded']['input'];
@@ -320,8 +440,17 @@ export type Query = {
   readonly currentEpochInfo: Maybe<EpochInfo>;
   /** Get the full history of D-parameter changes for governance auditability. */
   readonly dParameterHistory: ReadonlyArray<DParameterChange>;
+  /** Get a collapsed Merkle tree update for the dust commitment tree. */
+  readonly dustCommitmentMerkleTreeUpdate: MerkleTreeCollapsedUpdate;
+  /** Get a collapsed Merkle tree update for the dust generation tree. */
+  readonly dustGenerationMerkleTreeUpdate: MerkleTreeCollapsedUpdate;
   /** Get DUST generation status for specific Cardano reward addresses. */
   readonly dustGenerationStatus: ReadonlyArray<DustGenerationStatus>;
+  /**
+   * Get all active DUST registrations and aggregated generation stats for Cardano reward
+   * addresses.
+   */
+  readonly dustGenerations: ReadonlyArray<DustGenerations>;
   /** Get epoch performance for all SPOs. */
   readonly epochPerformance: ReadonlyArray<EpochPerf>;
   /** Get epoch utilization (produced/expected ratio). */
@@ -362,24 +491,48 @@ export type Query = {
   readonly termsAndConditionsHistory: ReadonlyArray<TermsAndConditionsChange>;
   /** Find transactions for the given offset. */
   readonly transactions: ReadonlyArray<Transaction>;
+  /** Get a Merkle tree collapsed update for the given zswap state index range. */
+  readonly zswapMerkleTreeCollapsedUpdate: MerkleTreeCollapsedUpdate;
 };
+
 
 export type QueryBlockArgs = {
   offset: InputMaybe<BlockOffset>;
 };
 
+
 export type QueryCommitteeArgs = {
   epoch: Scalars['Int']['input'];
 };
+
 
 export type QueryContractActionArgs = {
   address: Scalars['HexEncoded']['input'];
   offset: InputMaybe<ContractActionOffset>;
 };
 
+
+export type QueryDustCommitmentMerkleTreeUpdateArgs = {
+  endIndex: Scalars['Int']['input'];
+  startIndex: Scalars['Int']['input'];
+};
+
+
+export type QueryDustGenerationMerkleTreeUpdateArgs = {
+  endIndex: Scalars['Int']['input'];
+  startIndex: Scalars['Int']['input'];
+};
+
+
 export type QueryDustGenerationStatusArgs = {
   cardanoRewardAddresses: ReadonlyArray<Scalars['CardanoRewardAddress']['input']>;
 };
+
+
+export type QueryDustGenerationsArgs = {
+  cardanoRewardAddresses: ReadonlyArray<Scalars['CardanoRewardAddress']['input']>;
+};
+
 
 export type QueryEpochPerformanceArgs = {
   epoch: Scalars['Int']['input'];
@@ -387,13 +540,16 @@ export type QueryEpochPerformanceArgs = {
   offset: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type QueryEpochUtilizationArgs = {
   epoch: Scalars['Int']['input'];
 };
 
+
 export type QueryPoolMetadataArgs = {
   poolIdHex: Scalars['String']['input'];
 };
+
 
 export type QueryPoolMetadataListArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
@@ -401,41 +557,50 @@ export type QueryPoolMetadataListArgs = {
   withNameOnly: InputMaybe<Scalars['Boolean']['input']>;
 };
 
+
 export type QueryRegisteredFirstValidEpochsArgs = {
   uptoEpoch: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type QueryRegisteredPresenceArgs = {
   fromEpoch: Scalars['Int']['input'];
   toEpoch: Scalars['Int']['input'];
 };
 
+
 export type QueryRegisteredSpoSeriesArgs = {
   fromEpoch: Scalars['Int']['input'];
   toEpoch: Scalars['Int']['input'];
 };
+
 
 export type QueryRegisteredTotalsSeriesArgs = {
   fromEpoch: Scalars['Int']['input'];
   toEpoch: Scalars['Int']['input'];
 };
 
+
 export type QuerySpoByPoolIdArgs = {
   poolIdHex: Scalars['String']['input'];
 };
 
+
 export type QuerySpoCompositeByPoolIdArgs = {
   poolIdHex: Scalars['String']['input'];
 };
+
 
 export type QuerySpoIdentitiesArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
   offset: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type QuerySpoIdentityByPoolIdArgs = {
   poolIdHex: Scalars['String']['input'];
 };
+
 
 export type QuerySpoListArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
@@ -443,16 +608,19 @@ export type QuerySpoListArgs = {
   search: InputMaybe<Scalars['String']['input']>;
 };
 
+
 export type QuerySpoPerformanceBySpoSkArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
   offset: InputMaybe<Scalars['Int']['input']>;
   spoSkHex: Scalars['String']['input'];
 };
 
+
 export type QuerySpoPerformanceLatestArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
   offset: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type QueryStakeDistributionArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
@@ -461,12 +629,20 @@ export type QueryStakeDistributionArgs = {
   search: InputMaybe<Scalars['String']['input']>;
 };
 
+
 export type QueryStakePoolOperatorsArgs = {
   limit: InputMaybe<Scalars['Int']['input']>;
 };
 
+
 export type QueryTransactionsArgs = {
   offset: TransactionOffset;
+};
+
+
+export type QueryZswapMerkleTreeCollapsedUpdateArgs = {
+  endIndex: Scalars['Int']['input'];
+  startIndex: Scalars['Int']['input'];
 };
 
 /** Registration statistics for an epoch. */
@@ -492,11 +668,27 @@ export type RegularTransaction = Transaction & {
   readonly block: Block;
   /** The contract actions for this transaction. */
   readonly contractActions: ReadonlyArray<ContractAction>;
+  /** The dust commitment tree end index. */
+  readonly dustCommitmentEndIndex: Scalars['Int']['output'];
+  /** The dust commitment tree start index. */
+  readonly dustCommitmentStartIndex: Scalars['Int']['output'];
+  /** The dust generation tree end index. */
+  readonly dustGenerationEndIndex: Scalars['Int']['output'];
+  /** The dust generation tree start index. */
+  readonly dustGenerationStartIndex: Scalars['Int']['output'];
   /** Dust ledger events of this transaction. */
   readonly dustLedgerEvents: ReadonlyArray<DustLedgerEvent>;
-  /** The zswap state end index. */
+  /**
+   * The end index into the zswap state; exclusive, i.e. the next free index.
+   * @deprecated Use zswapEndIndex instead
+   */
   readonly endIndex: Scalars['Int']['output'];
-  /** Fee information for this transaction. */
+  /** The fee for this transaction in SPECK (atomic unit of DUST). */
+  readonly fee: Scalars['String']['output'];
+  /**
+   * Fee information for this transaction.
+   * @deprecated Use fee instead
+   */
   readonly fees: TransactionFees;
   /** The hex-encoded transaction hash. */
   readonly hash: Scalars['HexEncoded']['output'];
@@ -504,13 +696,19 @@ export type RegularTransaction = Transaction & {
   readonly id: Scalars['Int']['output'];
   /** The hex-encoded serialized transaction identifiers. */
   readonly identifiers: ReadonlyArray<Scalars['HexEncoded']['output']>;
-  /** The hex-encoded serialized merkle-tree root. */
+  /**
+   * The hex-encoded serialized zswap state Merkle tree root.
+   * @deprecated Use zswapMerkleTreeRoot instead
+   */
   readonly merkleTreeRoot: Scalars['HexEncoded']['output'];
   /** The protocol version. */
   readonly protocolVersion: Scalars['Int']['output'];
   /** The hex-encoded serialized transaction content. */
   readonly raw: Scalars['HexEncoded']['output'];
-  /** The zswap state start index. */
+  /**
+   * The start index into the zswap state.
+   * @deprecated Use zswapStartIndex instead
+   */
   readonly startIndex: Scalars['Int']['output'];
   /** The result of applying this transaction to the ledger state. */
   readonly transactionResult: TransactionResult;
@@ -518,24 +716,57 @@ export type RegularTransaction = Transaction & {
   readonly unshieldedCreatedOutputs: ReadonlyArray<UnshieldedUtxo>;
   /** Unshielded UTXOs spent (consumed) by this transaction. */
   readonly unshieldedSpentOutputs: ReadonlyArray<UnshieldedUtxo>;
+  /** The end index into the zswap state; exclusive, i.e. the next free index. */
+  readonly zswapEndIndex: Scalars['Int']['output'];
   /** Zswap ledger events of this transaction. */
   readonly zswapLedgerEvents: ReadonlyArray<ZswapLedgerEvent>;
+  /** The hex-encoded serialized zswap state Merkle tree root. */
+  readonly zswapMerkleTreeRoot: Scalars['HexEncoded']['output'];
+  /** The start index into the zswap state. */
+  readonly zswapStartIndex: Scalars['Int']['output'];
 };
 
-/** A transaction relevant for the subscribing wallet and an optional collapsed merkle tree. */
+/**
+ * A transaction relevant for the subscribing wallet and an optional zswap state Merkle tree
+ * collapsed update.
+ */
 export type RelevantTransaction = {
-  /** An optional collapsed merkle tree. */
+  /**
+   * An optional collapsed Merkle tree.
+   * @deprecated Use zswapCollapsedUpdate instead
+   */
   readonly collapsedMerkleTree: Maybe<CollapsedMerkleTree>;
   /** A transaction relevant for the subscribing wallet. */
   readonly transaction: RegularTransaction;
+  /**
+   * Only include a zswap state Merkle tree collapsed update if there is a gap between the
+   * current zswap index "driving" the subscription and the zswap start index of the
+   * transaction.
+   */
+  readonly zswapCollapsedUpdate: Maybe<MerkleTreeCollapsedUpdate>;
 };
 
-/** One of many segments for a partially successful transaction result showing success for some segment. */
+/**
+ * One of many segments for a partially successful transaction result showing success for some
+ * segment.
+ */
 export type Segment = {
   /** Segment ID. */
   readonly id: Scalars['Int']['output'];
   /** Successful or not. */
   readonly success: Scalars['Boolean']['output'];
+};
+
+/** A transaction containing a shielded (zswap) nullifier match with block context. */
+export type ShieldedNullifierTransaction = {
+  /** The hex-encoded block hash (use to query block with ledger parameters). */
+  readonly blockHash: Scalars['HexEncoded']['output'];
+  /** The block height containing this transaction. */
+  readonly blockHeight: Scalars['Int']['output'];
+  /** The hex-encoded matched nullifier. */
+  readonly nullifier: Scalars['HexEncoded']['output'];
+  /** The transaction ID (use to query full transaction via `transaction` query). */
+  readonly transactionId: Scalars['Int']['output'];
 };
 
 /** An event of the shielded transactions subscription. */
@@ -544,25 +775,48 @@ export type ShieldedTransactionsEvent = RelevantTransaction | ShieldedTransactio
 /** Information about the shielded transactions indexing progress. */
 export type ShieldedTransactionsProgress = {
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions checked for relevance.
-   * Initially less than and eventually (when some wallet has been fully indexed) equal to `highest_end_index`. A value
-   * of zero (very unlikely) means that no wallet has subscribed before and indexing for the subscribing wallet has not
-   * yet started.
+   * The highest highest end index into the zswap state for all transactions checked for
+   * relevance. Initially less than and eventually (when some wallet has been fully indexed)
+   * equal to `highest_end_index`. A value of zero (very unlikely) means that no wallet
+   * has subscribed before and indexing for the subscribing wallet has not yet started.
+   * @deprecated Use highestCheckedZswapEndIndex instead
    */
   readonly highestCheckedEndIndex: Scalars['Int']['output'];
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions. It represents the known
-   * state of the blockchain. A value of zero (completely unlikely) means that no shielded transactions have been
-   * indexed yet.
+   * The highest highest end index into the zswap state for all transactions checked for
+   * relevance. Initially less than and eventually (when some wallet has been fully indexed)
+   * equal to `highest_end_index`. A value of zero (very unlikely) means that no wallet
+   * has subscribed before and indexing for the subscribing wallet has not yet started.
+   */
+  readonly highestCheckedZswapEndIndex: Scalars['Int']['output'];
+  /**
+   * The highest end index into the zswap state for all transactions. It represents the known
+   * state of the blockchain. A value of zero (completely unlikely) means that no shielded
+   * transactions have been indexed yet.
+   * @deprecated Use highestZswapEndIndex instead
    */
   readonly highestEndIndex: Scalars['Int']['output'];
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all relevant transactions for the
-   * subscribing wallet. Usually less than `highest_checked_end_index` unless the latest checked transaction is relevant
-   * for the subscribing wallet. A value of zero means that no relevant transactions have been indexed for the
-   * subscribing wallet.
+   * The highest highest end index into the zswap state for all relevant transactions for the
+   * subscribing wallet. Usually less than `highest_checked_end_index` unless the latest
+   * checked transaction is relevant for the subscribing wallet. A value of zero means that
+   * no relevant transactions have been indexed for the subscribing wallet.
+   * @deprecated Use highestRelevantZswapEndIndex instead
    */
   readonly highestRelevantEndIndex: Scalars['Int']['output'];
+  /**
+   * The highest highest end index into the zswap state for all relevant transactions for the
+   * subscribing wallet. Usually less than `highest_checked_end_index` unless the latest
+   * checked transaction is relevant for the subscribing wallet. A value of zero means that
+   * no relevant transactions have been indexed for the subscribing wallet.
+   */
+  readonly highestRelevantZswapEndIndex: Scalars['Int']['output'];
+  /**
+   * The highest end index into the zswap state for all transactions. It represents the known
+   * state of the blockchain. A value of zero (completely unlikely) means that no shielded
+   * transactions have been indexed yet.
+   */
+  readonly highestZswapEndIndex: Scalars['Int']['output'];
 };
 
 /** SPO with optional metadata. */
@@ -626,48 +880,106 @@ export type StakeShare = {
 };
 
 export type Subscription = {
-  /** Subscribe to blocks starting at the given offset or at the latest block if the offset is omitted. */
+  /**
+   * Subscribe to blocks starting at the given offset or at the latest block if the offset is
+   * omitted.
+   */
   readonly blocks: Block;
   /**
-   * Subscribe to contract actions with the given address starting at the given offset or at the latest block if the
-   * offset is omitted.
+   * Subscribe to contract actions with the given address starting at the given offset or at the
+   * latest block if the offset is omitted.
    */
   readonly contractActions: ContractAction;
+  /**
+   * Subscribe to dust generation entries for a dust address within an index
+   * range, interleaved with collapsed Merkle tree updates and
+   * `DustGenerationDtimeUpdateItem` events for entries the subscriber owns.
+   * Finishes at end_index with a final collapsed update.
+   *
+   * On reconnect, historical dtime updates after the wallet's last fully-
+   * synced block (derived from the entry below `startIndex`) are replayed
+   * before entry backfill. Fresh subscriptions skip historical dtime
+   * backfill; the wallet learns of pre-existing spends primarily via block
+   * sync and `dustNullifierTransactions`.
+   */
+  readonly dustGenerations: DustGenerationsEvent;
   /** Subscribe to dust ledger events starting at the given ID or at the very start if omitted. */
   readonly dustLedgerEvents: DustLedgerEvent;
   /**
-   * Subscribe to shielded transaction events for the given session ID starting at the given index or at zero if
-   * omitted.
+   * Subscribe to transactions containing dust nullifiers matching the provided prefixes.
+   * Returns transaction and block references for wallet to fetch full data.
+   * If `toBlock` is specified, the subscription finishes after reaching that block.
+   */
+  readonly dustNullifierTransactions: DustNullifierTransaction;
+  /**
+   * Subscribe to transactions containing shielded (zswap) nullifiers matching the provided
+   * prefixes. Returns transaction and block references for wallet to fetch full data.
+   * If `toBlock` is specified, the subscription finishes after reaching that block.
+   */
+  readonly shieldedNullifierTransactions: ShieldedNullifierTransaction;
+  /**
+   * Subscribe to shielded transaction events for the given session ID starting at the given
+   * index or at zero if omitted.
    */
   readonly shieldedTransactions: ShieldedTransactionsEvent;
-  /** Subscribe unshielded transaction events for the given address and the given transaction ID or zero if omitted. */
+  /**
+   * Subscribe unshielded transaction events for the given address and the given transaction ID
+   * or zero if omitted.
+   */
   readonly unshieldedTransactions: UnshieldedTransactionsEvent;
   /** Subscribe to zswap ledger events starting at the given ID or at the very start if omitted. */
   readonly zswapLedgerEvents: ZswapLedgerEvent;
 };
 
+
 export type SubscriptionBlocksArgs = {
   offset: InputMaybe<BlockOffset>;
 };
+
 
 export type SubscriptionContractActionsArgs = {
   address: Scalars['HexEncoded']['input'];
   offset: InputMaybe<BlockOffset>;
 };
 
+
+export type SubscriptionDustGenerationsArgs = {
+  dustAddress: Scalars['HexEncoded']['input'];
+  endIndex: Scalars['Int']['input'];
+  startIndex: Scalars['Int']['input'];
+};
+
+
 export type SubscriptionDustLedgerEventsArgs = {
   id: InputMaybe<Scalars['Int']['input']>;
 };
+
+
+export type SubscriptionDustNullifierTransactionsArgs = {
+  fromBlock: InputMaybe<Scalars['Int']['input']>;
+  nullifierPrefixes: ReadonlyArray<Scalars['HexEncoded']['input']>;
+  toBlock: InputMaybe<Scalars['Int']['input']>;
+};
+
+
+export type SubscriptionShieldedNullifierTransactionsArgs = {
+  fromBlock: InputMaybe<Scalars['Int']['input']>;
+  nullifierPrefixes: ReadonlyArray<Scalars['HexEncoded']['input']>;
+  toBlock: InputMaybe<Scalars['Int']['input']>;
+};
+
 
 export type SubscriptionShieldedTransactionsArgs = {
   index: InputMaybe<Scalars['Int']['input']>;
   sessionId: Scalars['HexEncoded']['input'];
 };
 
+
 export type SubscriptionUnshieldedTransactionsArgs = {
   address: Scalars['UnshieldedAddress']['input'];
   transactionId: InputMaybe<Scalars['Int']['input']>;
 };
+
 
 export type SubscriptionZswapLedgerEventsArgs = {
   id: InputMaybe<Scalars['Int']['input']>;
@@ -741,26 +1053,27 @@ export type Transaction = {
   readonly zswapLedgerEvents: ReadonlyArray<ZswapLedgerEvent>;
 };
 
-/** Fees information for a transaction, including both paid and estimated fees. */
+/** Fees information for a transaction. */
 export type TransactionFees = {
-  /** The estimated fees that was calculated for this transaction in DUST. */
+  /**
+   * The fees for this transaction in SPECK (atomic unit of DUST).
+   * @deprecated Use paidFees instead
+   */
   readonly estimatedFees: Scalars['String']['output'];
-  /** The actual fees paid for this transaction in DUST. */
+  /** The fees for this transaction in SPECK (atomic unit of DUST). */
   readonly paidFees: Scalars['String']['output'];
 };
 
 /** Either a transaction hash or a transaction identifier. */
 export type TransactionOffset =
   /** A hex-encoded transaction hash. */
-  | {
-      readonly hash: Scalars['HexEncoded']['input'];
-      readonly identifier?: never;
-    } /** A hex-encoded transaction identifier. */
-  | { readonly hash?: never; readonly identifier: Scalars['HexEncoded']['input'] };
+  { readonly hash: Scalars['HexEncoded']['input']; readonly identifier?: never; }
+  |  /** A hex-encoded transaction identifier. */
+  { readonly hash?: never; readonly identifier: Scalars['HexEncoded']['input']; };
 
 /**
- * The result of applying a transaction to the ledger state. In case of a partial success (status), there will be
- * segments.
+ * The result of applying a transaction to the ledger state. In case of a partial success (status),
+ * there will be segments.
  */
 export type TransactionResult = {
   readonly segments: Maybe<ReadonlyArray<Segment>>;
@@ -768,7 +1081,11 @@ export type TransactionResult = {
 };
 
 /** The status of the transaction result: success, partial success or failure. */
-export type TransactionResultStatus = 'FAILURE' | 'PARTIAL_SUCCESS' | 'SUCCESS' | '%future added value';
+export type TransactionResultStatus =
+  | 'FAILURE'
+  | 'PARTIAL_SUCCESS'
+  | 'SUCCESS'
+  | '%future added value';
 
 /** A transaction that created and/or spent UTXOs alongside these and other information. */
 export type UnshieldedTransaction = {
@@ -829,18 +1146,13 @@ export type BlockHashQueryVariables = Exact<{
   offset: InputMaybe<BlockOffset>;
 }>;
 
-export type BlockHashQuery = {
-  readonly block: {
-    readonly height: number;
-    readonly hash: string;
-    readonly ledgerParameters: string;
-    readonly timestamp: number;
-  } | null;
-};
+
+export type BlockHashQuery = { readonly block: { readonly height: number, readonly hash: string, readonly ledgerParameters: string, readonly timestamp: number } | null };
 
 export type ConnectMutationVariables = Exact<{
   viewingKey: Scalars['ViewingKey']['input'];
 }>;
+
 
 export type ConnectMutation = { readonly connect: string };
 
@@ -848,867 +1160,135 @@ export type DisconnectMutationVariables = Exact<{
   sessionId: Scalars['HexEncoded']['input'];
 }>;
 
+
 export type DisconnectMutation = { readonly disconnect: null };
 
-export type FetchTermsAndConditionsQueryVariables = Exact<{ [key: string]: never }>;
+export type DustCommitmentMerkleTreeUpdateQueryVariables = Exact<{
+  startIndex: Scalars['Int']['input'];
+  endIndex: Scalars['Int']['input'];
+}>;
 
-export type FetchTermsAndConditionsQuery = {
-  readonly block: {
-    readonly systemParameters: { readonly termsAndConditions: { readonly hash: string; readonly url: string } | null };
-  } | null;
-};
+
+export type DustCommitmentMerkleTreeUpdateQuery = { readonly dustCommitmentMerkleTreeUpdate: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } };
+
+export type FetchTermsAndConditionsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type FetchTermsAndConditionsQuery = { readonly block: { readonly systemParameters: { readonly termsAndConditions: { readonly hash: string, readonly url: string } | null } } | null };
+
+export type TransactionEventsQueryVariables = Exact<{
+  transactionId: Scalars['HexEncoded']['input'];
+}>;
+
+
+export type TransactionEventsQuery = { readonly transactions: ReadonlyArray<
+    | { readonly __typename: 'RegularTransaction', readonly dustLedgerEvents: ReadonlyArray<
+        | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
+        | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
+        | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
+        | { readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }
+      >, readonly zswapLedgerEvents: ReadonlyArray<{ readonly id: number, readonly raw: string, readonly maxId: number, readonly protocolVersion: number }> }
+    | { readonly __typename: 'SystemTransaction' }
+  > };
 
 export type TransactionHistoryDetailQueryVariables = Exact<{
   transactionHash: Scalars['HexEncoded']['input'];
 }>;
 
-export type TransactionHistoryDetailQuery = {
-  readonly transactions: ReadonlyArray<
-    | {
-        readonly __typename: 'RegularTransaction';
-        readonly hash: string;
-        readonly transactionResult: { readonly status: TransactionResultStatus };
-        readonly block: { readonly timestamp: number };
-      }
-    | {
-        readonly __typename: 'SystemTransaction';
-        readonly hash: string;
-        readonly block: { readonly timestamp: number };
-      }
-  >;
-};
+
+export type TransactionHistoryDetailQuery = { readonly transactions: ReadonlyArray<
+    | { readonly __typename: 'RegularTransaction', readonly hash: string, readonly transactionResult: { readonly status: TransactionResultStatus }, readonly block: { readonly timestamp: number } }
+    | { readonly __typename: 'SystemTransaction', readonly hash: string, readonly block: { readonly timestamp: number } }
+  > };
 
 export type TransactionStatusQueryVariables = Exact<{
   transactionId: Scalars['HexEncoded']['input'];
 }>;
 
-export type TransactionStatusQuery = {
-  readonly transactions: ReadonlyArray<
-    | {
-        readonly __typename: 'RegularTransaction';
-        readonly identifiers: ReadonlyArray<string>;
-        readonly transactionResult: {
-          readonly __typename: 'TransactionResult';
-          readonly status: TransactionResultStatus;
-          readonly segments: ReadonlyArray<{ readonly id: number; readonly success: boolean }> | null;
-        };
-      }
+
+export type TransactionStatusQuery = { readonly transactions: ReadonlyArray<
+    | { readonly __typename: 'RegularTransaction', readonly identifiers: ReadonlyArray<string>, readonly transactionResult: { readonly __typename: 'TransactionResult', readonly status: TransactionResultStatus, readonly segments: ReadonlyArray<{ readonly id: number, readonly success: boolean }> | null } }
     | { readonly __typename: 'SystemTransaction' }
-  >;
-};
+  > };
+
+export type DustGenerationsSubscriptionVariables = Exact<{
+  dustAddress: Scalars['HexEncoded']['input'];
+  startIndex: Scalars['Int']['input'];
+  endIndex: Scalars['Int']['input'];
+}>;
+
+
+export type DustGenerationsSubscription = { readonly dustGenerations:
+    | { readonly __typename: 'DustGenerationDtimeUpdateItem' }
+    | { readonly __typename: 'DustGenerationsItem', readonly commitmentMtIndex: number, readonly generationMtIndex: number, readonly owner: string, readonly value: string, readonly initialValue: string, readonly backingNight: string, readonly ctime: number, readonly transactionId: number, readonly collapsedMerkleTree: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } | null }
+    | { readonly __typename: 'DustGenerationsProgress', readonly highestIndex: number, readonly collapsedMerkleTree: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } | null }
+   };
 
 export type DustLedgerEventsSubscriptionVariables = Exact<{
   id: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type DustLedgerEventsSubscription = {
-  readonly dustLedgerEvents:
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustGenerationDtimeUpdate' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustInitialUtxo' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'DustSpendProcessed' }
-    | { readonly id: number; readonly raw: string; readonly maxId: number; readonly type: 'ParamChange' };
-};
+
+export type DustLedgerEventsSubscription = { readonly dustLedgerEvents:
+    | { readonly id: number, readonly raw: string, readonly maxId: number, readonly type: 'DustGenerationDtimeUpdate' }
+    | { readonly id: number, readonly raw: string, readonly maxId: number, readonly type: 'DustInitialUtxo' }
+    | { readonly id: number, readonly raw: string, readonly maxId: number, readonly type: 'DustSpendProcessed' }
+    | { readonly id: number, readonly raw: string, readonly maxId: number, readonly type: 'ParamChange' }
+   };
+
+export type DustNullifierTransactionsSubscriptionVariables = Exact<{
+  nullifierPrefixes: ReadonlyArray<Scalars['HexEncoded']['input']> | Scalars['HexEncoded']['input'];
+  fromBlock: InputMaybe<Scalars['Int']['input']>;
+  toBlock: InputMaybe<Scalars['Int']['input']>;
+}>;
+
+
+export type DustNullifierTransactionsSubscription = { readonly dustNullifierTransactions: { readonly nullifier: string, readonly commitment: string, readonly transactionId: number, readonly blockHeight: number, readonly blockHash: string } };
 
 export type ShieldedTransactionsSubscriptionVariables = Exact<{
   sessionId: Scalars['HexEncoded']['input'];
   index: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type ShieldedTransactionsSubscription = {
-  readonly shieldedTransactions:
-    | {
-        readonly __typename: 'RelevantTransaction';
-        readonly transaction: {
-          readonly id: number;
-          readonly raw: string;
-          readonly hash: string;
-          readonly protocolVersion: number;
-          readonly identifiers: ReadonlyArray<string>;
-          readonly startIndex: number;
-          readonly endIndex: number;
-          readonly fees: { readonly paidFees: string; readonly estimatedFees: string };
-          readonly transactionResult: {
-            readonly status: TransactionResultStatus;
-            readonly segments: ReadonlyArray<{ readonly id: number; readonly success: boolean }> | null;
-          };
-        };
-        readonly collapsedMerkleTree: {
-          readonly startIndex: number;
-          readonly endIndex: number;
-          readonly update: string;
-          readonly protocolVersion: number;
-        } | null;
-      }
-    | {
-        readonly __typename: 'ShieldedTransactionsProgress';
-        readonly highestEndIndex: number;
-        readonly highestCheckedEndIndex: number;
-        readonly highestRelevantEndIndex: number;
-      };
-};
+
+export type ShieldedTransactionsSubscription = { readonly shieldedTransactions:
+    | { readonly __typename: 'RelevantTransaction', readonly transaction: { readonly id: number, readonly raw: string, readonly hash: string, readonly protocolVersion: number, readonly identifiers: ReadonlyArray<string>, readonly startIndex: number, readonly endIndex: number, readonly fees: { readonly paidFees: string, readonly estimatedFees: string }, readonly transactionResult: { readonly status: TransactionResultStatus, readonly segments: ReadonlyArray<{ readonly id: number, readonly success: boolean }> | null } }, readonly collapsedMerkleTree: { readonly startIndex: number, readonly endIndex: number, readonly update: string, readonly protocolVersion: number } | null }
+    | { readonly __typename: 'ShieldedTransactionsProgress', readonly highestEndIndex: number, readonly highestCheckedEndIndex: number, readonly highestRelevantEndIndex: number }
+   };
 
 export type UnshieldedTransactionsSubscriptionVariables = Exact<{
   address: Scalars['UnshieldedAddress']['input'];
   transactionId: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type UnshieldedTransactionsSubscription = {
-  readonly unshieldedTransactions:
-    | {
-        readonly type: 'UnshieldedTransaction';
-        readonly transaction:
-          | {
-              readonly identifiers: ReadonlyArray<string>;
-              readonly id: number;
-              readonly hash: string;
-              readonly protocolVersion: number;
-              readonly type: 'RegularTransaction';
-              readonly fees: { readonly paidFees: string; readonly estimatedFees: string };
-              readonly transactionResult: {
-                readonly status: TransactionResultStatus;
-                readonly segments: ReadonlyArray<{ readonly id: number; readonly success: boolean }> | null;
-              };
-              readonly block: { readonly timestamp: number };
-            }
-          | {
-              readonly id: number;
-              readonly hash: string;
-              readonly protocolVersion: number;
-              readonly type: 'SystemTransaction';
-              readonly block: { readonly timestamp: number };
-            };
-        readonly createdUtxos: ReadonlyArray<{
-          readonly owner: string;
-          readonly tokenType: string;
-          readonly value: string;
-          readonly outputIndex: number;
-          readonly intentHash: string;
-          readonly ctime: number | null;
-          readonly registeredForDustGeneration: boolean;
-        }>;
-        readonly spentUtxos: ReadonlyArray<{
-          readonly owner: string;
-          readonly tokenType: string;
-          readonly value: string;
-          readonly outputIndex: number;
-          readonly intentHash: string;
-          readonly ctime: number | null;
-          readonly registeredForDustGeneration: boolean;
-        }>;
-      }
-    | { readonly highestTransactionId: number; readonly type: 'UnshieldedTransactionsProgress' };
-};
+
+export type UnshieldedTransactionsSubscription = { readonly unshieldedTransactions:
+    | { readonly type: 'UnshieldedTransaction', readonly transaction:
+        | { readonly identifiers: ReadonlyArray<string>, readonly id: number, readonly hash: string, readonly protocolVersion: number, readonly type: 'RegularTransaction', readonly fees: { readonly paidFees: string, readonly estimatedFees: string }, readonly transactionResult: { readonly status: TransactionResultStatus, readonly segments: ReadonlyArray<{ readonly id: number, readonly success: boolean }> | null }, readonly block: { readonly timestamp: number } }
+        | { readonly id: number, readonly hash: string, readonly protocolVersion: number, readonly type: 'SystemTransaction', readonly block: { readonly timestamp: number } }
+      , readonly createdUtxos: ReadonlyArray<{ readonly owner: string, readonly tokenType: string, readonly value: string, readonly outputIndex: number, readonly intentHash: string, readonly ctime: number | null, readonly registeredForDustGeneration: boolean }>, readonly spentUtxos: ReadonlyArray<{ readonly owner: string, readonly tokenType: string, readonly value: string, readonly outputIndex: number, readonly intentHash: string, readonly ctime: number | null, readonly registeredForDustGeneration: boolean }> }
+    | { readonly highestTransactionId: number, readonly type: 'UnshieldedTransactionsProgress' }
+   };
 
 export type ZswapEventsSubscriptionVariables = Exact<{
   id: InputMaybe<Scalars['Int']['input']>;
 }>;
 
-export type ZswapEventsSubscription = {
-  readonly zswapLedgerEvents: {
-    readonly id: number;
-    readonly raw: string;
-    readonly protocolVersion: number;
-    readonly maxId: number;
-  };
-};
 
-export const BlockHashDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'BlockHash' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'BlockOffset' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'block' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'offset' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'height' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'ledgerParameters' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'timestamp' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<BlockHashQuery, BlockHashQueryVariables>;
-export const ConnectDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'mutation',
-      name: { kind: 'Name', value: 'Connect' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'viewingKey' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'ViewingKey' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'connect' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'viewingKey' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'viewingKey' } },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ConnectMutation, ConnectMutationVariables>;
-export const DisconnectDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'mutation',
-      name: { kind: 'Name', value: 'Disconnect' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'sessionId' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'disconnect' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'sessionId' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'sessionId' } },
-              },
-            ],
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<DisconnectMutation, DisconnectMutationVariables>;
-export const FetchTermsAndConditionsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'FetchTermsAndConditions' },
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'block' },
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'systemParameters' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'termsAndConditions' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'url' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<FetchTermsAndConditionsQuery, FetchTermsAndConditionsQueryVariables>;
-export const TransactionHistoryDetailDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'TransactionHistoryDetail' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'transactionHash' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'transactions' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'hash' },
-                      value: { kind: 'Variable', name: { kind: 'Name', value: 'transactionHash' } },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
-                {
-                  kind: 'Field',
-                  name: { kind: 'Name', value: 'block' },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [{ kind: 'Field', name: { kind: 'Name', value: 'timestamp' } }],
-                  },
-                },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'RegularTransaction' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'transactionResult' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [{ kind: 'Field', name: { kind: 'Name', value: 'status' } }],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<TransactionHistoryDetailQuery, TransactionHistoryDetailQueryVariables>;
-export const TransactionStatusDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'query',
-      name: { kind: 'Name', value: 'TransactionStatus' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'transactionId' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'transactions' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'offset' },
-                value: {
-                  kind: 'ObjectValue',
-                  fields: [
-                    {
-                      kind: 'ObjectField',
-                      name: { kind: 'Name', value: 'identifier' },
-                      value: { kind: 'Variable', name: { kind: 'Name', value: 'transactionId' } },
-                    },
-                  ],
-                },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'RegularTransaction' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'identifiers' } },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'transactionResult' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'segments' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'success' } },
-                                ],
-                              },
-                            },
-                            { kind: 'Field', name: { kind: 'Name', value: 'status' } },
-                            { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<TransactionStatusQuery, TransactionStatusQueryVariables>;
-export const DustLedgerEventsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'subscription',
-      name: { kind: 'Name', value: 'DustLedgerEvents' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'dustLedgerEvents' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', alias: { kind: 'Name', value: 'type' }, name: { kind: 'Name', value: '__typename' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<DustLedgerEventsSubscription, DustLedgerEventsSubscriptionVariables>;
-export const ShieldedTransactionsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'subscription',
-      name: { kind: 'Name', value: 'ShieldedTransactions' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'sessionId' } },
-          type: { kind: 'NonNullType', type: { kind: 'NamedType', name: { kind: 'Name', value: 'HexEncoded' } } },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'index' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'shieldedTransactions' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'sessionId' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'sessionId' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'index' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'index' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: '__typename' } },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'ShieldedTransactionsProgress' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      { kind: 'Field', name: { kind: 'Name', value: 'highestEndIndex' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'highestCheckedEndIndex' } },
-                      { kind: 'Field', name: { kind: 'Name', value: 'highestRelevantEndIndex' } },
-                    ],
-                  },
-                },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'RelevantTransaction' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'transaction' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'identifiers' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'startIndex' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'endIndex' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'fees' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'paidFees' } },
-                                  { kind: 'Field', name: { kind: 'Name', value: 'estimatedFees' } },
-                                ],
-                              },
-                            },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'transactionResult' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'status' } },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'segments' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'success' } },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'collapsedMerkleTree' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'startIndex' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'endIndex' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'update' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ShieldedTransactionsSubscription, ShieldedTransactionsSubscriptionVariables>;
-export const UnshieldedTransactionsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'subscription',
-      name: { kind: 'Name', value: 'UnshieldedTransactions' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'address' } },
-          type: {
-            kind: 'NonNullType',
-            type: { kind: 'NamedType', name: { kind: 'Name', value: 'UnshieldedAddress' } },
-          },
-        },
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'transactionId' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'unshieldedTransactions' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'address' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'address' } },
-              },
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'transactionId' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'transactionId' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UnshieldedTransaction' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        alias: { kind: 'Name', value: 'type' },
-                        name: { kind: 'Name', value: '__typename' },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'transaction' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            {
-                              kind: 'Field',
-                              alias: { kind: 'Name', value: 'type' },
-                              name: { kind: 'Name', value: '__typename' },
-                            },
-                            { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'hash' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
-                            {
-                              kind: 'Field',
-                              name: { kind: 'Name', value: 'block' },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [{ kind: 'Field', name: { kind: 'Name', value: 'timestamp' } }],
-                              },
-                            },
-                            {
-                              kind: 'InlineFragment',
-                              typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'RegularTransaction' } },
-                              selectionSet: {
-                                kind: 'SelectionSet',
-                                selections: [
-                                  { kind: 'Field', name: { kind: 'Name', value: 'identifiers' } },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'fees' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'paidFees' } },
-                                        { kind: 'Field', name: { kind: 'Name', value: 'estimatedFees' } },
-                                      ],
-                                    },
-                                  },
-                                  {
-                                    kind: 'Field',
-                                    name: { kind: 'Name', value: 'transactionResult' },
-                                    selectionSet: {
-                                      kind: 'SelectionSet',
-                                      selections: [
-                                        { kind: 'Field', name: { kind: 'Name', value: 'status' } },
-                                        {
-                                          kind: 'Field',
-                                          name: { kind: 'Name', value: 'segments' },
-                                          selectionSet: {
-                                            kind: 'SelectionSet',
-                                            selections: [
-                                              { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                                              { kind: 'Field', name: { kind: 'Name', value: 'success' } },
-                                            ],
-                                          },
-                                        },
-                                      ],
-                                    },
-                                  },
-                                ],
-                              },
-                            },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'createdUtxos' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'owner' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'tokenType' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'value' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'outputIndex' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'intentHash' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'ctime' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'registeredForDustGeneration' } },
-                          ],
-                        },
-                      },
-                      {
-                        kind: 'Field',
-                        name: { kind: 'Name', value: 'spentUtxos' },
-                        selectionSet: {
-                          kind: 'SelectionSet',
-                          selections: [
-                            { kind: 'Field', name: { kind: 'Name', value: 'owner' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'tokenType' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'value' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'outputIndex' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'intentHash' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'ctime' } },
-                            { kind: 'Field', name: { kind: 'Name', value: 'registeredForDustGeneration' } },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-                {
-                  kind: 'InlineFragment',
-                  typeCondition: { kind: 'NamedType', name: { kind: 'Name', value: 'UnshieldedTransactionsProgress' } },
-                  selectionSet: {
-                    kind: 'SelectionSet',
-                    selections: [
-                      {
-                        kind: 'Field',
-                        alias: { kind: 'Name', value: 'type' },
-                        name: { kind: 'Name', value: '__typename' },
-                      },
-                      { kind: 'Field', name: { kind: 'Name', value: 'highestTransactionId' } },
-                    ],
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<UnshieldedTransactionsSubscription, UnshieldedTransactionsSubscriptionVariables>;
-export const ZswapEventsDocument = {
-  kind: 'Document',
-  definitions: [
-    {
-      kind: 'OperationDefinition',
-      operation: 'subscription',
-      name: { kind: 'Name', value: 'ZswapEvents' },
-      variableDefinitions: [
-        {
-          kind: 'VariableDefinition',
-          variable: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-          type: { kind: 'NamedType', name: { kind: 'Name', value: 'Int' } },
-        },
-      ],
-      selectionSet: {
-        kind: 'SelectionSet',
-        selections: [
-          {
-            kind: 'Field',
-            name: { kind: 'Name', value: 'zswapLedgerEvents' },
-            arguments: [
-              {
-                kind: 'Argument',
-                name: { kind: 'Name', value: 'id' },
-                value: { kind: 'Variable', name: { kind: 'Name', value: 'id' } },
-              },
-            ],
-            selectionSet: {
-              kind: 'SelectionSet',
-              selections: [
-                { kind: 'Field', name: { kind: 'Name', value: 'id' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'raw' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'protocolVersion' } },
-                { kind: 'Field', name: { kind: 'Name', value: 'maxId' } },
-              ],
-            },
-          },
-        ],
-      },
-    },
-  ],
-} as unknown as DocumentNode<ZswapEventsSubscription, ZswapEventsSubscriptionVariables>;
+export type ZswapEventsSubscription = { readonly zswapLedgerEvents: { readonly id: number, readonly raw: string, readonly protocolVersion: number, readonly maxId: number } };
+
+
+export const BlockHashDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"BlockHash"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"offset"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"BlockOffset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"block"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"Variable","name":{"kind":"Name","value":"offset"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"ledgerParameters"}},{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}}]}}]} as unknown as DocumentNode<BlockHashQuery, BlockHashQueryVariables>;
+export const ConnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Connect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ViewingKey"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"connect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"viewingKey"},"value":{"kind":"Variable","name":{"kind":"Name","value":"viewingKey"}}}]}]}}]} as unknown as DocumentNode<ConnectMutation, ConnectMutationVariables>;
+export const DisconnectDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"Disconnect"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"disconnect"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}}]}]}}]} as unknown as DocumentNode<DisconnectMutation, DisconnectMutationVariables>;
+export const DustCommitmentMerkleTreeUpdateDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"DustCommitmentMerkleTreeUpdate"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustCommitmentMerkleTreeUpdate"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"startIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}}},{"kind":"Argument","name":{"kind":"Name","value":"endIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]} as unknown as DocumentNode<DustCommitmentMerkleTreeUpdateQuery, DustCommitmentMerkleTreeUpdateQueryVariables>;
+export const FetchTermsAndConditionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FetchTermsAndConditions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"systemParameters"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"termsAndConditions"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"url"}}]}}]}}]}}]}}]} as unknown as DocumentNode<FetchTermsAndConditionsQuery, FetchTermsAndConditionsQueryVariables>;
+export const TransactionEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"identifier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustLedgerEvents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}},{"kind":"Field","name":{"kind":"Name","value":"zswapLedgerEvents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionEventsQuery, TransactionEventsQueryVariables>;
+export const TransactionHistoryDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionHistoryDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"hash"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionHash"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionHistoryDetailQuery, TransactionHistoryDetailQueryVariables>;
+export const TransactionStatusDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"TransactionStatus"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"offset"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"identifier"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}},{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"__typename"}}]}}]}}]}}]}}]} as unknown as DocumentNode<TransactionStatusQuery, TransactionStatusQueryVariables>;
+export const DustGenerationsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"DustGenerations"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"dustAddress"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustGenerations"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"dustAddress"},"value":{"kind":"Variable","name":{"kind":"Name","value":"dustAddress"}}},{"kind":"Argument","name":{"kind":"Name","value":"startIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"startIndex"}}},{"kind":"Argument","name":{"kind":"Name","value":"endIndex"},"value":{"kind":"Variable","name":{"kind":"Name","value":"endIndex"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"DustGenerationsItem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"commitmentMtIndex"}},{"kind":"Field","name":{"kind":"Name","value":"generationMtIndex"}},{"kind":"Field","name":{"kind":"Name","value":"owner"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"initialValue"}},{"kind":"Field","name":{"kind":"Name","value":"backingNight"}},{"kind":"Field","name":{"kind":"Name","value":"ctime"}},{"kind":"Field","name":{"kind":"Name","value":"transactionId"}},{"kind":"Field","name":{"kind":"Name","value":"collapsedMerkleTree"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"DustGenerationsProgress"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"highestIndex"}},{"kind":"Field","name":{"kind":"Name","value":"collapsedMerkleTree"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]}}]}}]} as unknown as DocumentNode<DustGenerationsSubscription, DustGenerationsSubscriptionVariables>;
+export const DustLedgerEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"DustLedgerEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustLedgerEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}}]}}]}}]} as unknown as DocumentNode<DustLedgerEventsSubscription, DustLedgerEventsSubscriptionVariables>;
+export const DustNullifierTransactionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"DustNullifierTransactions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"nullifierPrefixes"}},"type":{"kind":"NonNullType","type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"fromBlock"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"toBlock"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"dustNullifierTransactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"nullifierPrefixes"},"value":{"kind":"Variable","name":{"kind":"Name","value":"nullifierPrefixes"}}},{"kind":"Argument","name":{"kind":"Name","value":"fromBlock"},"value":{"kind":"Variable","name":{"kind":"Name","value":"fromBlock"}}},{"kind":"Argument","name":{"kind":"Name","value":"toBlock"},"value":{"kind":"Variable","name":{"kind":"Name","value":"toBlock"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"nullifier"}},{"kind":"Field","name":{"kind":"Name","value":"commitment"}},{"kind":"Field","name":{"kind":"Name","value":"transactionId"}},{"kind":"Field","name":{"kind":"Name","value":"blockHeight"}},{"kind":"Field","name":{"kind":"Name","value":"blockHash"}}]}}]}}]} as unknown as DocumentNode<DustNullifierTransactionsSubscription, DustNullifierTransactionsSubscriptionVariables>;
+export const ShieldedTransactionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ShieldedTransactions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"HexEncoded"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"index"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"shieldedTransactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"sessionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"sessionId"}}},{"kind":"Argument","name":{"kind":"Name","value":"index"},"value":{"kind":"Variable","name":{"kind":"Name","value":"index"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"ShieldedTransactionsProgress"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"highestEndIndex"}},{"kind":"Field","name":{"kind":"Name","value":"highestCheckedEndIndex"}},{"kind":"Field","name":{"kind":"Name","value":"highestRelevantEndIndex"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RelevantTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"transaction"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"fees"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"paidFees"}},{"kind":"Field","name":{"kind":"Name","value":"estimatedFees"}}]}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"collapsedMerkleTree"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"startIndex"}},{"kind":"Field","name":{"kind":"Name","value":"endIndex"}},{"kind":"Field","name":{"kind":"Name","value":"update"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}}]}}]}}]}}]}}]} as unknown as DocumentNode<ShieldedTransactionsSubscription, ShieldedTransactionsSubscriptionVariables>;
+export const UnshieldedTransactionsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"UnshieldedTransactions"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"address"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedAddress"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"unshieldedTransactions"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"address"},"value":{"kind":"Variable","name":{"kind":"Name","value":"address"}}},{"kind":"Argument","name":{"kind":"Name","value":"transactionId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"transactionId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"transaction"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"hash"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"block"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"timestamp"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"RegularTransaction"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"identifiers"}},{"kind":"Field","name":{"kind":"Name","value":"fees"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"paidFees"}},{"kind":"Field","name":{"kind":"Name","value":"estimatedFees"}}]}},{"kind":"Field","name":{"kind":"Name","value":"transactionResult"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"status"}},{"kind":"Field","name":{"kind":"Name","value":"segments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"success"}}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"createdUtxos"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"owner"}},{"kind":"Field","name":{"kind":"Name","value":"tokenType"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"outputIndex"}},{"kind":"Field","name":{"kind":"Name","value":"intentHash"}},{"kind":"Field","name":{"kind":"Name","value":"ctime"}},{"kind":"Field","name":{"kind":"Name","value":"registeredForDustGeneration"}}]}},{"kind":"Field","name":{"kind":"Name","value":"spentUtxos"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"owner"}},{"kind":"Field","name":{"kind":"Name","value":"tokenType"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"outputIndex"}},{"kind":"Field","name":{"kind":"Name","value":"intentHash"}},{"kind":"Field","name":{"kind":"Name","value":"ctime"}},{"kind":"Field","name":{"kind":"Name","value":"registeredForDustGeneration"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"UnshieldedTransactionsProgress"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","alias":{"kind":"Name","value":"type"},"name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"highestTransactionId"}}]}}]}}]}}]} as unknown as DocumentNode<UnshieldedTransactionsSubscription, UnshieldedTransactionsSubscriptionVariables>;
+export const ZswapEventsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"subscription","name":{"kind":"Name","value":"ZswapEvents"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NamedType","name":{"kind":"Name","value":"Int"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"zswapLedgerEvents"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"raw"}},{"kind":"Field","name":{"kind":"Name","value":"protocolVersion"}},{"kind":"Field","name":{"kind":"Name","value":"maxId"}}]}}]}}]} as unknown as DocumentNode<ZswapEventsSubscription, ZswapEventsSubscriptionVariables>;
