@@ -26,11 +26,7 @@ import {
 import { WalletFacade, WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
 import { DustWallet } from '../../../dust-wallet/dist/DustWallet.js';
 
-/**
- * Syncing tests
- *
- * @group undeployed
- */
+/** Syncing tests */
 
 describe('Syncing', () => {
   const getFixture = useTestContainersFixture();

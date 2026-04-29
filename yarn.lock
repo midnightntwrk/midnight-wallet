@@ -2464,7 +2464,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.4, @midnight-ntwrk/wallet_testnet@npm:@midnight-ntwrk/wallet@3.7.4":
+"@midnight-ntwrk/wallet_qanet@npm:@midnight-ntwrk/wallet@3.7.4":
   version: 3.7.4
   resolution: "@midnight-ntwrk/wallet@npm:3.7.4::__archiveUrl=https%3A%2F%2Fnpm.pkg.github.com%2Fdownload%2F%40midnight-ntwrk%2Fwallet%2F3.7.4%2F4b2e2ea506862eca50295098b6497cf37305d55b"
   dependencies:
@@ -2514,7 +2514,6 @@ __metadata:
     "@midnight-ntwrk/wallet-sdk-shielded": "workspace:^"
     "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:^"
     "@midnight-ntwrk/wallet_qanet": "npm:@midnight-ntwrk/wallet@3.7.4"
-    "@midnight-ntwrk/wallet_testnet": "npm:@midnight-ntwrk/wallet@3.7.4"
     "@types/node": "npm:^25.3.0"
     "@types/ws": "npm:^8.18.1"
     "@vitest/runner": "npm:^4.1.4"
