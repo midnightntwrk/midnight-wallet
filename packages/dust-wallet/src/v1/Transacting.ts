@@ -456,7 +456,19 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
                     value: coin.value,
                     token: coin.token,
                   })),
-                  initialImbalances: CapImbalances.fromEntry('dust', currentFee),
+                  // Sign-bug fix:
+                  // `getBalanceRecipe` interprets a positive imbalance as surplus (creates an
+                  // output) and a negative imbalance as deficit (selects an input coin). The
+                  // iterate body sets `currentFee: newFee` where `newFee` is the *positive* fee
+                  // amount returned by `dryRunFee`, not a `feeImbalance`-shape value. Feeding it
+                  // verbatim makes the next iteration treat fees as surplus and pick zero coins,
+                  // so the convergence predicate `newFee <= recipeAmountCoverage` (= `>=1 <= 0`)
+                  // is permanently false. Triggers whenever `initialFees == 0n` — i.e.
+                  // transactions whose `calculateFee` is 0 because all contract actions ended
+                  // up in the fallible half with no segment-0 zswap or unshielded offer.
+                  // Negating positive `currentFee` here keeps the sign convention consistent
+                  // across iterations.
+                  initialImbalances: CapImbalances.fromEntry('dust', currentFee <= 0n ? currentFee : -currentFee),
                   feeTokenType: 'dust',
                   transactionCostModel: {
                     inputFeeOverhead: 0n,
