@@ -16,9 +16,6 @@ import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { TestContainersFixture } from '../test-fixture.js';
 
-// TODO: validateNetworkInAddress reads `TestContainersFixture.network` (a static
-// populated from process.env). Pass network in explicitly in a follow-up so this
-// helper isn't coupled to fixture state.
 export function validateNetworkInAddress(address: string) {
   switch (TestContainersFixture.network) {
     case 'testnet':
