@@ -326,6 +326,12 @@ type DustGenerationDtimeUpdateItem {
     The originating transaction ID.
     """
     transactionId: Int!
+    """
+    Hex-encoded tagged-serialised `TreeInsertionPath<DustGenerationInfo>`
+    from the originating ledger event. Wallets deserialise this and hand
+    it to `generating_tree.update_from_evidence(...)`.
+    """
+    treeInsertionPath: HexEncoded!
 }
 
 """
@@ -1136,18 +1142,12 @@ type Subscription {
     """
     contractActions(address: HexEncoded!, offset: BlockOffset): ContractAction!
     """
-    Subscribe to dust generation entries for a dust address within an index
-    range, interleaved with collapsed Merkle tree updates and
+    Subscribe to dust generation entries for a dust address within an index range.
+    Entries are interleaved with collapsed Merkle tree updates and
     `DustGenerationDtimeUpdateItem` events for entries the subscriber owns.
-    Finishes at end_index with a final collapsed update.
-
-    On reconnect, historical dtime updates after the wallet's last fully-
-    synced block (derived from the entry below `startIndex`) are replayed
-    before entry backfill. Fresh subscriptions skip historical dtime
-    backfill; the wallet learns of pre-existing spends primarily via block
-    sync and `dustNullifierTransactions`.
+    The subscription finishes after reaching the end index with a final collapsed update.
     """
-    dustGenerations(dustAddress: HexEncoded!, startIndex: Int!, endIndex: Int!): DustGenerationsEvent!
+    dustGenerations(dustAddress: DustAddress!, startIndex: Int!, endIndex: Int!): DustGenerationsEvent!
     """
     Subscribe to dust ledger events starting at the given ID or at the very start if omitted.
     """

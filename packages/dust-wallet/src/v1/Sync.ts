@@ -10,25 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import {
-  Effect,
-  Either,
-  Encoding,
-  Layer,
-  pipe,
-  Schema,
-  type Scope,
-  Stream,
-  Duration,
-  Chunk,
-  Schedule,
-} from 'effect';
+import { Effect, Either, Encoding, Layer, pipe, Schema, type Scope, Stream, Duration, Chunk, Schedule } from 'effect';
 import {
   dustNullifier,
   type DustNullifier,
   type DustSecretKey,
   type DustStateChanges,
-  QualifiedDustOutput,
+  type QualifiedDustOutput,
   LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
 import {
@@ -58,20 +46,20 @@ import {
 import { CoreWallet } from './CoreWallet.js';
 import { type NetworkId } from './types/ledger.js';
 import {
-  CollapsedMerkleTree,
+  type CollapsedMerkleTree,
   CollapsedMerkleTreeSchema,
-  DustGenerationsSubscription,
+  type DustGenerationsSubscription,
   DustGenerationsSubscriptionSchema,
   DustGenerationsSyncUpdate,
-  DustNullifierTransactionsSubscription,
+  type DustNullifierTransactionsSubscription,
   DustNullifierTransactionSubscriptionSchema,
-  DustProjectionsUpdate,
-  DustSpendProcessedEvent,
-  DustUtxoUpdate,
+  type DustProjectionsUpdate,
+  type DustSpendProcessedEvent,
+  type DustUtxoUpdate,
   SyncEventsUpdateSchema,
-  TransactionEventsUpdate,
+  type TransactionEventsUpdate,
   TransactionEventsUpdateSchema,
-  WalletSyncSubscription,
+  type WalletSyncSubscription,
   WalletSyncUpdate,
 } from './SyncSchema.js';
 
@@ -278,13 +266,13 @@ export const makeDustGenerationsSyncService = (
             state.publicKey.publicKey,
           );
 
-          let newNullifiers = dustGenerationUpdates.generations
+          let newNullifiers = dustGenerationUpdates.newGenerations
             .map((n) => n.dustNullifier)
             .concat(state.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier));
 
           // track new utxos to calculate the successor utxo when the nullifier is spent
           let newUtxos: Map<DustNullifier, QualifiedDustOutput> = new Map(
-            dustGenerationUpdates.generations.map((u) => [u.dustNullifier, u.qdo]),
+            dustGenerationUpdates.newGenerations.map((u) => [u.dustNullifier, u.qdo]),
           );
 
           const syncedNullifiers = [];
@@ -401,7 +389,10 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             EitherOps.toEffect,
           ),
         ),
-        Stream.mapError((error) => new SyncWalletError(error)),
+        Stream.mapError((error) => {
+          console.log('====> ', error);
+          return new SyncWalletError(error);
+        }),
       );
     },
     subscribeDustGenerations(
@@ -535,11 +526,17 @@ export const applyDustProjectionsUpdate = (wallet: CoreWallet, update: DustProje
   const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
 
   const dustGenTreeUpdates = dustGenerations.rawUpdates
-    .map((u) => u.collapsedMerkleTree)
-    .filter((u) => u !== undefined)
+    .filter((u) => u.type === 'DustGenerationsItem' || u.type === 'DustGenerationsProgress')
+    .filter((u) => u.collapsedMerkleTree !== undefined)
+    .map((u) => u.collapsedMerkleTree as CollapsedMerkleTree)
     .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-  let updatedWallet = CoreWallet.applyDustGenerations(wallet, dustGenTreeUpdates, dustGenerations.generations);
+  let updatedWallet = CoreWallet.applyDustGenerations(
+    wallet,
+    dustGenTreeUpdates,
+    dustGenerations.newGenerations,
+    dustGenerations.generationDtimeUpdates,
+  );
   updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
   updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
   updatedWallet = CoreWallet.applySyncedNullifiers(updatedWallet, syncedNullifiers);

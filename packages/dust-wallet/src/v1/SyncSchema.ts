@@ -12,18 +12,19 @@
 // limitations under the License.
 import { Effect, Encoding, ParseResult, pipe, Schema } from 'effect';
 import {
-  DustSecretKey,
+  type DustSecretKey,
   Event as LedgerEvent,
   DustStateMerkleTreeCollapsedUpdate,
-  DustCommitment,
-  DustNullifier,
-  DustPublicKey,
-  QualifiedDustOutput,
+  DustGenerationTreeInsertionPath,
+  type DustCommitment,
+  type DustNullifier,
+  type DustPublicKey,
+  type QualifiedDustOutput,
   dustNonce,
   dustNullifier,
 } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
-import { DustGenerationInfo } from './types/index.js';
+import { type DustGenerationInfo } from './types/index.js';
 
 const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
   (input: unknown): input is DustStateMerkleTreeCollapsedUpdate => input instanceof DustStateMerkleTreeCollapsedUpdate,
@@ -110,11 +111,17 @@ export const DustGenerationsUpdateSchema = Schema.transform(
   },
 );
 
-export type DustGenerationUpdate = {
+export type NewDustGeneration = {
   dustNullifier: DustNullifier;
   genInfo: DustGenerationInfo;
   generationIndex: number;
   qdo: QualifiedDustOutput;
+};
+
+export type DustGenerationDtimUpdate = {
+  owner: bigint;
+  generationIndex: number;
+  treeInsertionPath: DustGenerationTreeInsertionPath;
 };
 
 export type DustUtxoUpdate = {
@@ -129,7 +136,52 @@ export const ProgressSchema = Schema.Struct({
   collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),
 });
 
-export const DustGenerationsSubscriptionSchema = Schema.Union(DustGenerationsUpdateSchema, ProgressSchema);
+const DustGenerationTreeInsertionPathSchema = Schema.declare(
+  (input: unknown): input is DustGenerationTreeInsertionPath => input instanceof DustGenerationTreeInsertionPath,
+).annotations({
+  identifier: 'DustGenerationTreeInsertionPath',
+});
+
+const DustGenerationTreeInsertionPathFromUInt8Array: Schema.Schema<DustGenerationTreeInsertionPath, Uint8Array> =
+  Schema.asSchema(
+    Schema.transformOrFail(Uint8ArraySchema, DustGenerationTreeInsertionPathSchema, {
+      encode: (value) => {
+        return Effect.try({
+          try: () => {
+            return value.serialize();
+          },
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not serialize DustGenerationTreeInsertionPath');
+          },
+        });
+      },
+      decode: (bytes) =>
+        Effect.try({
+          try: () => DustGenerationTreeInsertionPath.deserialize(bytes),
+          catch: (err) => {
+            return new ParseResult.Unexpected(err, 'Could not deserialize DustGenerationTreeInsertionPath');
+          },
+        }),
+    }),
+  );
+
+const HexedDustGenerationTreeInsertionPath: Schema.Schema<DustGenerationTreeInsertionPath, string> = pipe(
+  Schema.Uint8ArrayFromHex,
+  Schema.compose(DustGenerationTreeInsertionPathFromUInt8Array),
+);
+
+export const DustGenerationDtimeUpdateItemSchema = Schema.Struct({
+  type: Schema.Literal('DustGenerationDtimeUpdateItem'),
+  generationMtIndex: Schema.Number,
+  owner: Schema.String,
+  treeInsertionPath: HexedDustGenerationTreeInsertionPath,
+});
+
+export const DustGenerationsSubscriptionSchema = Schema.Union(
+  DustGenerationsUpdateSchema,
+  ProgressSchema,
+  DustGenerationDtimeUpdateItemSchema,
+);
 
 export type DustGenerationsSubscription = Schema.Schema.Type<typeof DustGenerationsSubscriptionSchema>;
 
@@ -147,7 +199,8 @@ export type DustNullifierTransactionsSubscription = Schema.Schema.Type<
 
 export type DustGenerationsSyncUpdate = {
   rawUpdates: DustGenerationsSubscription[];
-  generations: DustGenerationUpdate[];
+  newGenerations: NewDustGeneration[];
+  generationDtimeUpdates: DustGenerationDtimUpdate[];
   lastUpdateIndex: number | undefined;
 };
 export const DustGenerationsSyncUpdate = {
@@ -158,7 +211,7 @@ export const DustGenerationsSyncUpdate = {
   ): DustGenerationsSyncUpdate => {
     const publicKeyHex = Encoding.encodeHex(publicKey.toString());
 
-    const generations = rawUpdates
+    const newGenerations = rawUpdates
       .filter((u) => u.type === 'DustGenerationsItem')
       .filter((u) => u.owner === publicKeyHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
@@ -185,6 +238,16 @@ export const DustGenerationsSyncUpdate = {
         };
       });
 
+    const generationDtimeUpdates = rawUpdates
+      .filter((u) => u.type === 'DustGenerationDtimeUpdateItem')
+      .filter((u) => u.owner === publicKeyHex)
+      .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
+      .map((u) => ({
+        owner: publicKey,
+        generationIndex: u.generationMtIndex,
+        treeInsertionPath: u.treeInsertionPath,
+      }));
+
     const lastUpdateIndex = rawUpdates
       .filter((u) => u.type === 'DustGenerationsProgress')
       .map((u) => u.highestIndex)
@@ -193,7 +256,8 @@ export const DustGenerationsSyncUpdate = {
 
     return {
       rawUpdates,
-      generations,
+      newGenerations,
+      generationDtimeUpdates,
       lastUpdateIndex,
     };
   },

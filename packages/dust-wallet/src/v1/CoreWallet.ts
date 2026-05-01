@@ -30,7 +30,12 @@ import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
-import { type CollapsedMerkleTree, type DustGenerationUpdate, type DustUtxoUpdate } from './SyncSchema.js';
+import {
+  type CollapsedMerkleTree,
+  type NewDustGeneration,
+  type DustUtxoUpdate,
+  type DustGenerationDtimUpdate,
+} from './SyncSchema.js';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
@@ -123,12 +128,13 @@ export const CoreWallet = {
   applyDustGenerations(
     wallet: CoreWallet,
     updates: CollapsedMerkleTree[],
-    generationUpdates: DustGenerationUpdate[],
+    newGenerations: NewDustGeneration[],
+    generationDtimeUpdates: DustGenerationDtimUpdate[],
   ): CoreWallet {
     let updatedState = wallet.state;
 
     let lastUpdatedIndex = -1;
-    for (const { generationIndex, genInfo, qdo } of generationUpdates) {
+    for (const { generationIndex, genInfo, qdo } of newGenerations) {
       // apply updates prior to the current generation index
       updatedState = updates
         .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationIndex)
@@ -143,6 +149,12 @@ export const CoreWallet = {
     updatedState = updates
       .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
       .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+    // apply dtime updates
+    updatedState = generationDtimeUpdates.reduce(
+      (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
+      updatedState,
+    );
 
     return {
       ...wallet,

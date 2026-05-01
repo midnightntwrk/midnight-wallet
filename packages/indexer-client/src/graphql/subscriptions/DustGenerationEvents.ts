@@ -16,7 +16,7 @@ import { gql } from '../generated/index.js';
 export const DustGenerationEvents = Subscription.make(
   'DustGenerations',
   gql(`
-    subscription DustGenerations($dustAddress: HexEncoded!, $startIndex: Int!, $endIndex: Int!) {
+    subscription DustGenerations($dustAddress: DustAddress!, $startIndex: Int!, $endIndex: Int!) {
       dustGenerations(dustAddress: $dustAddress, startIndex: $startIndex, endIndex: $endIndex) {
         __typename
         ... on DustGenerationsItem {
@@ -43,6 +43,11 @@ export const DustGenerationEvents = Subscription.make(
             update
             protocolVersion
           }
+        }
+        ... on DustGenerationDtimeUpdateItem {
+          generationMtIndex
+          owner
+          treeInsertionPath
         }
       }
     }
