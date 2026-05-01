@@ -24,7 +24,6 @@ import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sd
 import { existsSync } from 'node:fs';
 import { exit } from 'node:process';
 import * as fsAsync from 'node:fs/promises';
-import type * as fs from 'node:fs';
 import { ShieldedWallet, type ShieldedWalletAPI, type ShieldedWalletClass } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
@@ -40,12 +39,6 @@ import { type DefaultV1Configuration } from '@midnight-ntwrk/wallet-sdk-dust-wal
 import { BlockHash } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 
-// place this somewhere better?
-export const Segments = {
-  guaranteed: 0,
-  fallible: 1,
-};
-
 export type WalletInit = {
   wallet: WalletFacade;
   shieldedSecretKeys: ledger.ZswapSecretKeys;
@@ -53,7 +46,7 @@ export type WalletInit = {
   unshieldedKeystore: UnshieldedKeystore;
 };
 
-export const waitForSyncProgress = async (wallet: WalletFacade) =>
+const waitForSyncProgress = async (wallet: WalletFacade) =>
   await rx.firstValueFrom(
     wallet.state().pipe(
       rx.throttleTime(5000),
@@ -61,28 +54,9 @@ export const waitForSyncProgress = async (wallet: WalletFacade) =>
         const applyGap = state.unshielded.progress.highestTransactionId - state.unshielded.progress.appliedId;
         logger.info(`Wallet facade behind by ${applyGap}`);
       }),
-      rx.filter((state) =>
-        // Let's allow progress only if syncProgress is defined
-        state.unshielded.progress.isStrictlyComplete(),
-      ),
+      rx.filter((state) => state.unshielded.progress.isStrictlyComplete()),
     ),
   );
-
-export const isAnotherChain = async (wallet: ShieldedWallet, offset: number) => {
-  const state = await wallet.waitForSyncedState();
-  // allow for situations when there's no new index in the network between runs
-  const applyGap = state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex;
-  return applyGap <= offset - 1;
-};
-
-export const streamToString = async (stream: fs.ReadStream): Promise<string> => {
-  const chunks: string[] = [];
-  return await new Promise((resolve, reject) => {
-    stream.on('data', (chunk) => chunks.push(chunk as string));
-    stream.on('error', (err) => reject(err));
-    stream.on('end', () => resolve(chunks.join('')));
-  });
-};
 
 const restoreShieldedWallet = async (
   path: string,
@@ -308,28 +282,6 @@ export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
         logger.info(`Wallet behind by ${applyGap} indices`);
       }),
       rx.filter((state) => state.state.progress.isStrictlyComplete()),
-    ),
-  );
-
-export const waitForSyncShielded = (wallet: ShieldedWallet) =>
-  rx.firstValueFrom(
-    wallet.state.pipe(
-      rx.throttleTime(5_000),
-      rx.tap((state) => {
-        const applyGap = state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex;
-        const sourceGap = state.state?.progress.highestIndex - state.state?.progress.highestRelevantIndex;
-        // const txs = state.transactionHistory.length;
-        logger.info(
-          `Wallet behind by ${applyGap} indices, source behind by ${sourceGap}, synced = ${state.state?.progress.isStrictlyComplete()}`,
-        );
-      }),
-      rx.filter(
-        (state) =>
-          state.state?.progress !== undefined &&
-          state.state?.progress.highestRelevantIndex - state.state?.progress.appliedIndex === 0n &&
-          state.state?.progress.highestIndex - state.state?.progress.highestRelevantIndex <= 50n &&
-          state.state?.progress.isStrictlyComplete() === true,
-      ),
     ),
   );
 
@@ -607,7 +559,7 @@ export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
 
 export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshielded']>['createdUtxos'][number]) {
+function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshielded']>['createdUtxos'][number]) {
   expect(typeof utxo.value).toBe('bigint');
   expect(typeof utxo.owner).toBe('string');
   expect(typeof utxo.tokenType).toBe('string');
@@ -639,13 +591,6 @@ export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
   expect(Array.isArray(entry.unshielded!.spentUtxos)).toBe(true);
   for (const utxo of [...entry.unshielded!.createdUtxos, ...entry.unshielded!.spentUtxos]) {
     expectValidUnshieldedUtxoFields(utxo);
-  }
-}
-
-export function expectValidUnshieldedTxHistoryEntries(entries: readonly WalletEntry[]) {
-  expect(entries.length).toBeGreaterThan(0);
-  for (const entry of entries) {
-    expectValidUnshieldedTxHistoryEntry(entry);
   }
 }
 
