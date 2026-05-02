@@ -629,18 +629,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/cluster@npm:^0.58.0":
-  version: 0.58.1
-  resolution: "@effect/cluster@npm:0.58.1"
+"@effect/cluster@npm:^0.58.1":
+  version: 0.58.2
+  resolution: "@effect/cluster@npm:0.58.2"
   dependencies:
     kubernetes-types: "npm:^1.30.0"
   peerDependencies:
-    "@effect/platform": ^0.96.0
-    "@effect/rpc": ^0.75.0
-    "@effect/sql": ^0.51.0
+    "@effect/platform": ^0.96.1
+    "@effect/rpc": ^0.75.1
+    "@effect/sql": ^0.51.1
     "@effect/workflow": ^0.18.0
-    effect: ^3.21.1
-  checksum: 10c0/55ed6c371b653ec40d26cf7c7047015eb5dd1008796254d30a6c06084c09793be64807e74d5e59f20254197e3fc55247f1ebee930aa074eabd4c5d3ad2fe8992
+    effect: ^3.21.2
+  checksum: 10c0/006a0e130b8f249cff8b07389ef614c77bb8fd2f7f5314804fad02d65d9d43af930046511d40f23cd445226b6e626a1d76aa5ba0e0429f14a1aa7c147c72ce7d
   languageName: node
   linkType: hard
 
@@ -2206,7 +2206,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-capabilities@workspace:packages/capabilities"
   dependencies:
-    "@effect/cluster": "npm:^0.58.0"
+    "@effect/cluster": "npm:^0.58.1"
     "@effect/experimental": "npm:^0.60.0"
     "@effect/platform": "npm:^0.96.0"
     "@effect/platform-node": "npm:^0.106.0"
@@ -2333,7 +2333,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@midnight-ntwrk/wallet-sdk-node-client@workspace:packages/node-client"
   dependencies:
-    "@effect/cluster": "npm:^0.58.0"
+    "@effect/cluster": "npm:^0.58.1"
     "@effect/experimental": "npm:^0.60.0"
     "@effect/platform": "npm:^0.96.0"
     "@effect/platform-node": "npm:^0.106.0"
@@ -2351,7 +2351,7 @@ __metadata:
     "@types/tar-stream": "npm:^3.1.4"
     bn.js: "npm:^5.2.3"
     effect: "npm:^3.19.19"
-    tar-stream: "npm:^3.1.7"
+    tar-stream: "npm:^3.2.0"
     tsx: "npm:^4.21.0"
   languageName: unknown
   linkType: soft
@@ -4606,6 +4606,24 @@ __metadata:
     bare-buffer:
       optional: true
   checksum: 10c0/b623c76d264017491667618055fdcebd5d3efe87768c06817bf29f912b77ce7f03f851eb7dc56810f5266f03927efafceded6b0911042d48dd3013b86c6bb79b
+  languageName: node
+  linkType: hard
+
+"bare-fs@npm:^4.5.5":
+  version: 4.7.1
+  resolution: "bare-fs@npm:4.7.1"
+  dependencies:
+    bare-events: "npm:^2.5.4"
+    bare-path: "npm:^3.0.0"
+    bare-stream: "npm:^2.6.4"
+    bare-url: "npm:^2.2.2"
+    fast-fifo: "npm:^1.3.2"
+  peerDependencies:
+    bare-buffer: "*"
+  peerDependenciesMeta:
+    bare-buffer:
+      optional: true
+  checksum: 10c0/4dc67f6dd0264b817941c2b8cbfc42b6abc3980984cdfd129c4d1f22517cb29f6b99a69fc1e3e87f3a9c997e8c94114604bb67fff10574b2adf0966510cf0222
   languageName: node
   linkType: hard
 
@@ -10367,7 +10385,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tar-stream@npm:^3.0.0, tar-stream@npm:^3.1.5, tar-stream@npm:^3.1.7":
+"tar-stream@npm:^3.0.0, tar-stream@npm:^3.1.5":
   version: 3.1.7
   resolution: "tar-stream@npm:3.1.7"
   dependencies:
@@ -10375,6 +10393,18 @@ __metadata:
     fast-fifo: "npm:^1.2.0"
     streamx: "npm:^2.15.0"
   checksum: 10c0/a09199d21f8714bd729993ac49b6c8efcb808b544b89f23378ad6ffff6d1cb540878614ba9d4cfec11a64ef39e1a6f009a5398371491eb1fda606ffc7f70f718
+  languageName: node
+  linkType: hard
+
+"tar-stream@npm:^3.2.0":
+  version: 3.2.0
+  resolution: "tar-stream@npm:3.2.0"
+  dependencies:
+    b4a: "npm:^1.6.4"
+    bare-fs: "npm:^4.5.5"
+    fast-fifo: "npm:^1.2.0"
+    streamx: "npm:^2.15.0"
+  checksum: 10c0/8a06c915f93c9b0906e79867e36a9cfe197da4d41b72e89ec0de99577ae755505d14815c1346b70c2410aa09d3145c3e3af2ff5802b6af84990cdd6c60dbb997
   languageName: node
   linkType: hard
 
