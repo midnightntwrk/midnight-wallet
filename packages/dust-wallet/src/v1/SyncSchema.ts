@@ -18,13 +18,13 @@ import {
   DustGenerationTreeInsertionPath,
   type DustCommitment,
   type DustNullifier,
-  type DustPublicKey,
   type QualifiedDustOutput,
   dustNonce,
   dustNullifier,
 } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
 import { type DustGenerationInfo } from './types/index.js';
+import { type PublicKey } from './CoreWallet.js';
 
 const DustStateMerkleTreeCollapsedUpdateSchema = Schema.declare(
   (input: unknown): input is DustStateMerkleTreeCollapsedUpdate => input instanceof DustStateMerkleTreeCollapsedUpdate,
@@ -207,18 +207,17 @@ export const DustGenerationsSyncUpdate = {
   create: (
     rawUpdates: DustGenerationsSubscription[],
     secretKey: DustSecretKey,
-    publicKey: DustPublicKey,
+    publicKey: PublicKey,
   ): DustGenerationsSyncUpdate => {
-    const publicKeyHex = Encoding.encodeHex(publicKey.toString());
-
+    const { addressHex: dustAddressHex, publicKey: dustPublicKey } = publicKey;
     const newGenerations = rawUpdates
       .filter((u) => u.type === 'DustGenerationsItem')
-      .filter((u) => u.owner === publicKeyHex)
+      .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => {
         const qdo = {
           initialValue: BigInt(u.initialValue),
-          owner: publicKey,
+          owner: dustPublicKey,
           nonce: dustNonce(u.backingNight, 0n, secretKey),
           seq: 0,
           ctime: u.ctime,
@@ -229,7 +228,7 @@ export const DustGenerationsSyncUpdate = {
           dustNullifier: dustNullifier(qdo, secretKey),
           genInfo: {
             value: BigInt(u.value),
-            owner: publicKey,
+            owner: dustPublicKey,
             nonce: u.backingNight,
             dtime: undefined,
           },
@@ -240,10 +239,10 @@ export const DustGenerationsSyncUpdate = {
 
     const generationDtimeUpdates = rawUpdates
       .filter((u) => u.type === 'DustGenerationDtimeUpdateItem')
-      .filter((u) => u.owner === publicKeyHex)
+      .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => ({
-        owner: publicKey,
+        owner: dustPublicKey,
         generationIndex: u.generationMtIndex,
         treeInsertionPath: u.treeInsertionPath,
       }));

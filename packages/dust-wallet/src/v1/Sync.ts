@@ -260,11 +260,7 @@ export const makeDustGenerationsSyncService = (
             Stream.runCollect,
             Effect.map(Chunk.toArray),
           );
-          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(
-            rawGenerations,
-            secretKey,
-            state.publicKey.publicKey,
-          );
+          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
           let newNullifiers = dustGenerationUpdates.newGenerations
             .map((n) => n.dustNullifier)
@@ -400,11 +396,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       latestBlock: number,
     ): Stream.Stream<DustGenerationsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
       const { appliedIndex } = state.progress;
-      const { publicKey } = state.publicKey;
+      const { address } = state.publicKey;
 
       return pipe(
         DustGenerationEvents.run({
-          dustAddress: publicKey.toString(16),
+          dustAddress: address,
           startIndex: Number(appliedIndex),
           endIndex: latestBlock,
         }),
@@ -521,8 +517,7 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
 };
 
 export const applyDustProjectionsUpdate = (wallet: CoreWallet, update: DustProjectionsUpdate): CoreWallet => {
-  const publicKey = Encoding.encodeHex(wallet.publicKey.publicKey.toString());
-  console.log(`Applying dust updates for wallet ${publicKey}`, update);
+  console.log(`Applying dust updates for wallet ${wallet.publicKey.addressHex}`, update);
   const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
 
   const dustGenTreeUpdates = dustGenerations.rawUpdates

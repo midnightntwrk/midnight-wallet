@@ -26,25 +26,25 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { Array as Arr, Option, pipe } from 'effect';
+import { Array as Arr, Encoding, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
-import {
-  type CollapsedMerkleTree,
-  type NewDustGeneration,
-  type DustUtxoUpdate,
-  type DustGenerationDtimUpdate,
-} from './SyncSchema.js';
+import { type CollapsedMerkleTree, type NewDustGeneration, type DustGenerationDtimUpdate } from './SyncSchema.js';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
+  addressHex: string;
+  address: string;
 };
 
 export const PublicKey = {
-  fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
+  fromSecretKey: (secretKey: DustSecretKey, networkId: NetworkId): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
+      addressHex: Encoding.encodeHex(secretKey.publicKey.toString()),
+      address: DustAddress.encodePublicKey(networkId, secretKey.publicKey),
     };
   },
 };
@@ -66,11 +66,15 @@ export type CoreWallet = Readonly<{
 
 export const CoreWallet = {
   init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey), networkId);
+    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey, networkId), networkId);
   },
 
   initEmpty(dustParameters: DustParameters, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
+    return CoreWallet.empty(
+      new DustLocalState(dustParameters),
+      PublicKey.fromSecretKey(secretKey, networkId),
+      networkId,
+    );
   },
 
   empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): CoreWallet {
