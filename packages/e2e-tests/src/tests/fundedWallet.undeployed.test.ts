@@ -15,7 +15,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
 import { inspect } from 'util';
-import { type WalletEntry, isPendingWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { isFinalizedWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 
 /**
  * Tests using a funded wallet
@@ -173,7 +173,7 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const confirmed = txHistory.filter((e): e is WalletEntry => !isPendingWalletEntry(e));
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
       const unshieldedEntries = confirmed.filter((e) => e.unshielded !== undefined);
       expect(unshieldedEntries.length).toBeGreaterThan(0);
       unshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
@@ -189,7 +189,7 @@ describe('Funded wallet', () => {
     async () => {
       await funded.wallet.waitForSyncedState();
       const txHistory = await funded.wallet.getAllFromTxHistory();
-      const confirmed = txHistory.filter((e): e is WalletEntry => !isPendingWalletEntry(e));
+      const confirmed = txHistory.filter(isFinalizedWalletEntry);
       const shieldedEntries = confirmed.filter((e) => e.shielded !== undefined);
       expect(shieldedEntries.length).toBeGreaterThan(0);
       shieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));

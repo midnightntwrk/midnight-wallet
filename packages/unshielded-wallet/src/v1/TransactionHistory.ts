@@ -16,17 +16,6 @@ import { type UnshieldedUpdate } from './SyncSchema.js';
 import { SafeBigInt } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { TransactionHistoryError } from './WalletError.js';
 
-const clearPendingForIdentifiers = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  identifiers: readonly string[],
-): Effect.Effect<void, TransactionHistoryError> =>
-  Effect.tryPromise({
-    // TODO Ian — temp, remove the `'unshielded-sync'` label (helper takes optional source for logging)
-    try: () => TransactionHistoryStorage.clearPendingMatching(txHistoryStorage, identifiers, 'unshielded-sync'),
-    // TODO Ian — end temp, remove
-    catch: (e) => new TransactionHistoryError({ message: 'Failed to clear pending entry on confirmation', cause: e }),
-  });
-
 const UtxoSchema = Schema.Struct({
   value: SafeBigInt.SafeBigInt,
   owner: Schema.String,
@@ -44,7 +33,7 @@ export const UnshieldedSectionSchema = Schema.Struct({
 type UnshieldedSection = Schema.Schema.Type<typeof UnshieldedSectionSchema>;
 
 export const UnshieldedTransactionHistoryEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  ...TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema.fields,
   unshielded: UnshieldedSectionSchema,
 });
 
@@ -54,12 +43,8 @@ export type TransactionHistoryService = {
   put(update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError>;
 };
 
-export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
-};
-
 type StorageEntryWithUnshielded = Omit<
-  TransactionHistoryStorage.TransactionHistoryCommon,
+  TransactionHistoryStorage.FinalizedTransactionHistoryCommon,
   'identifiers' | 'timestamp' | 'fees'
 > & {
   readonly identifiers: readonly string[];
@@ -68,18 +53,29 @@ type StorageEntryWithUnshielded = Omit<
   readonly unshielded: UnshieldedSection;
 };
 
-const convertUpdateToStorageEntry = ({
+export type UnshieldedHistoryStorage =
+  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
+    TransactionHistoryStorage.TransactionHistoryWriter<StorageEntryWithUnshielded>;
+
+type UnshieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<StorageEntryWithUnshielded>;
+
+export type DefaultTransactionHistoryConfiguration = {
+  txHistoryStorage: UnshieldedHistoryStorage;
+};
+
+const convertUpdateToFinalizedInput = ({
   transaction,
   createdUtxos,
   spentUtxos,
   status,
-}: UnshieldedUpdate): StorageEntryWithUnshielded => ({
+}: UnshieldedUpdate): UnshieldedFinalizedInput => ({
   hash: transaction.hash,
   protocolVersion: transaction.protocolVersion,
   status,
   identifiers: transaction.identifiers ?? [],
   timestamp: transaction.block.timestamp,
   fees: transaction.fees?.paidFees ?? null,
+  finalizedAt: transaction.block.timestamp,
   unshielded: {
     id: transaction.id,
     createdUtxos: createdUtxos.map(({ utxo }) => ({
@@ -106,15 +102,10 @@ export const makeDefaultTransactionHistoryService = (
   const txHistoryStorage = config.txHistoryStorage;
 
   return {
-    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> => {
-      const entry = convertUpdateToStorageEntry(update);
-      return Effect.gen(function* () {
-        yield* Effect.tryPromise({
-          try: () => txHistoryStorage.upsert(entry),
-          catch: (e) => new TransactionHistoryError({ message: 'Failed to put transaction history entry', cause: e }),
-        });
-        yield* clearPendingForIdentifiers(txHistoryStorage, entry.identifiers);
-      });
-    },
+    put: (update: UnshieldedUpdate): Effect.Effect<void, TransactionHistoryError> =>
+      Effect.tryPromise({
+        try: () => txHistoryStorage.gotFinalized(convertUpdateToFinalizedInput(update)),
+        catch: (e) => new TransactionHistoryError({ message: 'Failed to record finalized history entry', cause: e }),
+      }),
   };
 };

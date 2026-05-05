@@ -24,7 +24,7 @@ import { UnshieldedSectionSchema } from '../src/v1/TransactionHistory.js';
 import { type DefaultV1Configuration } from '../src/v1/index.js';
 
 const UnshieldedEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.TransactionHistoryCommonSchema.fields,
+  ...TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema.fields,
   unshielded: Schema.optional(UnshieldedSectionSchema),
 });
 import { type UnshieldedWallet, type UnshieldedWalletState } from '../src/UnshieldedWallet.js';

@@ -14,47 +14,40 @@ import {
   type TransactionHistoryStorage,
   type TransactionHash,
   type TransactionHistoryCommon,
-  type PendingTransactionHistoryCommon,
+  type FinalizedTransactionHistoryCommon,
+  type FinalizedEntryInput,
   type SerializedTransactionHistory,
 } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage<
-  T extends { hash: TransactionHash } = TransactionHistoryCommon,
-  P extends { hash: TransactionHash; identifiers: readonly string[] } = PendingTransactionHistoryCommon,
-> implements TransactionHistoryStorage<T, P> {
-  upsert(_entry: T): Promise<void> {
+  TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
+> implements TransactionHistoryStorage<TRead> {
+  gotPending(_hash: TransactionHash, _identifiers: readonly string[], _submittedAt: Date): Promise<void> {
     return Promise.resolve();
   }
 
-  getAll(): Promise<readonly T[]> {
+  gotFinalized(_entry: FinalizedEntryInput<Extract<TRead, FinalizedTransactionHistoryCommon>>): Promise<void> {
+    return Promise.resolve();
+  }
+
+  gotRejected(
+    _hash: TransactionHash,
+    _identifiers: readonly string[],
+    _rejectedAt: Date,
+    _reason?: string,
+  ): Promise<void> {
+    return Promise.resolve();
+  }
+
+  getAll(): Promise<readonly TRead[]> {
     return Promise.resolve([]);
   }
 
-  get(_hash: TransactionHash): Promise<T | undefined> {
+  get(_hash: TransactionHash): Promise<TRead | undefined> {
     return Promise.resolve(undefined);
   }
 
   serialize(): Promise<SerializedTransactionHistory> {
     return Promise.resolve('[]');
-  }
-
-  upsertPending(_entry: P): Promise<void> {
-    return Promise.resolve();
-  }
-
-  getPending(_hash: TransactionHash): Promise<P | undefined> {
-    return Promise.resolve(undefined);
-  }
-
-  getAllPending(): Promise<readonly P[]> {
-    return Promise.resolve([]);
-  }
-
-  deletePending(_hash: TransactionHash): Promise<void> {
-    return Promise.resolve();
-  }
-
-  findPendingMatching(_identifiers: readonly string[]): Promise<P | undefined> {
-    return Promise.resolve(undefined);
   }
 }

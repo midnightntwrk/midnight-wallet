@@ -36,17 +36,32 @@ export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
   protocolVersion: Schema.Number,
   status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
   identifiers: Schema.optional(Schema.Array(Schema.String)),
+  lifecycle: TransactionHistoryStorage.FinalizedLifecycleSchema,
   shielded: ShieldedSectionSchema,
 });
 
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
 
+type StorageEntryWithShielded = TransactionHistoryStorage.FinalizedTransactionHistoryCommon & {
+  readonly shielded: ShieldedSection;
+};
+
+export type ShieldedHistoryStorage =
+  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
+    TransactionHistoryStorage.TransactionHistoryWriter<StorageEntryWithShielded>;
+
+type ShieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<StorageEntryWithShielded>;
+
 export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
+  txHistoryStorage: ShieldedHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
 };
 
 const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
+
+const isFinalized: (u: unknown) => u is TransactionHistoryStorage.FinalizedTransactionHistoryCommon = Schema.is(
+  TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema,
+);
 
 export type TransactionDetails = {
   hash: string;
@@ -71,44 +86,31 @@ export const mergeShieldedSections = (existing: ShieldedSection, incoming: Shiel
   spentCoins: EArray.unionWith(existing.spentCoins, incoming.spentCoins, coinEquals),
 });
 
-type StorageEntryWithShielded = Omit<TransactionHistoryStorage.TransactionHistoryCommon, 'timestamp' | 'fees'> & {
-  readonly shielded: ShieldedSection;
-};
-
-const convertUpdateToStorageEntry = (
+const convertUpdateToFinalizedInput = (
   changes: ledger.ZswapStateChanges,
   metadata: TransactionDetails,
   protocolVersion: number,
-): StorageEntryWithShielded => ({
+  finalizedAt: Date,
+): ShieldedFinalizedInput => ({
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
   identifiers: metadata.identifiers,
+  finalizedAt,
   shielded: {
     receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
     spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
   } satisfies ShieldedSection,
 });
 
-const upsertShieldedEntry = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { shielded: ShieldedSection },
+const gotFinalizedShielded = (
+  txHistoryStorage: ShieldedHistoryStorage,
+  input: ShieldedFinalizedInput,
 ): Effect.Effect<void, TransactionHistoryError> =>
   Effect.tryPromise({
-    try: () => txHistoryStorage.upsert(entry),
+    try: () => txHistoryStorage.gotFinalized(input),
     catch: (e) =>
-      new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
-  });
-
-const clearPendingForIdentifiers = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  identifiers: readonly string[],
-): Effect.Effect<void, TransactionHistoryError> =>
-  Effect.tryPromise({
-    // TODO Ian — temp, remove the `'shielded-sync'` label (helper takes optional source for logging)
-    try: () => TransactionHistoryStorage.clearPendingMatching(txHistoryStorage, identifiers, 'shielded-sync'),
-    // TODO Ian — end temp, remove
-    catch: (e) => new TransactionHistoryError({ message: 'Failed to clear pending entry on confirmation', cause: e }),
+      new TransactionHistoryError({ message: `Failed to record finalized history entry for ${input.hash}`, cause: e }),
   });
 
 export const makeDefaultTransactionHistoryService = (
@@ -123,13 +125,11 @@ export const makeDefaultTransactionHistoryService = (
       changes: ledger.ZswapStateChanges,
       metadata: TransactionDetails,
       protocolVersion: number,
-    ): Effect.Effect<void, TransactionHistoryError> => {
-      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return Effect.gen(function* () {
-        yield* upsertShieldedEntry(txHistoryStorage, entry);
-        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
-      });
-    },
+    ): Effect.Effect<void, TransactionHistoryError> =>
+      gotFinalizedShielded(
+        txHistoryStorage,
+        convertUpdateToFinalizedInput(changes, metadata, protocolVersion, new Date(metadata.timestamp)),
+      ),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -176,11 +176,9 @@ export const makeSimulatorTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
-      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return Effect.gen(function* () {
-        yield* upsertShieldedEntry(txHistoryStorage, { ...entry, timestamp: new Date(metadata.timestamp) });
-        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
-      });
+      const finalizedAt = new Date(metadata.timestamp);
+      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion, finalizedAt);
+      return gotFinalizedShielded(txHistoryStorage, { ...input, timestamp: finalizedAt });
     },
 
     getTransactionDetails: (
@@ -192,7 +190,7 @@ export const makeSimulatorTransactionHistoryService = (
           new TransactionHistoryError({ message: `Failed to get transaction details for ${hash}`, cause: e }),
       }).pipe(
         Effect.flatMap((entry) =>
-          entry
+          isFinalized(entry)
             ? Effect.succeed({
                 hash: entry.hash,
                 timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),

@@ -37,17 +37,32 @@ export const DustTransactionHistoryEntrySchema = Schema.Struct({
   protocolVersion: Schema.Number,
   status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
   identifiers: Schema.optional(Schema.Array(Schema.String)),
+  lifecycle: TransactionHistoryStorage.FinalizedLifecycleSchema,
   dust: DustSectionSchema,
 });
 
 export type DustTransactionHistoryEntry = Schema.Schema.Type<typeof DustTransactionHistoryEntrySchema>;
 
+type StorageEntryWithDust = TransactionHistoryStorage.FinalizedTransactionHistoryCommon & {
+  readonly dust: DustSection;
+};
+
+export type DustHistoryStorage =
+  TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
+    TransactionHistoryStorage.TransactionHistoryWriter<StorageEntryWithDust>;
+
+type DustFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<StorageEntryWithDust>;
+
 export type DefaultTransactionHistoryConfiguration = {
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
+  txHistoryStorage: DustHistoryStorage;
   indexerClientConnection: { indexerHttpUrl: string };
 };
 
 const utxoEquals = Schema.equivalence(DustUtxoInfoSchema);
+
+const isFinalized: (u: unknown) => u is TransactionHistoryStorage.FinalizedTransactionHistoryCommon = Schema.is(
+  TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema,
+);
 
 export type TransactionDetails = {
   hash: string;
@@ -72,10 +87,6 @@ export const mergeDustSections = (existing: DustSection, incoming: DustSection):
   spentUtxos: EArray.unionWith(existing.spentUtxos, incoming.spentUtxos, utxoEquals),
 });
 
-type StorageEntryWithDust = Omit<TransactionHistoryStorage.TransactionHistoryCommon, 'timestamp' | 'fees'> & {
-  readonly dust: DustSection;
-};
-
 const convertQualifiedDustOutput = (utxo: ledger.QualifiedDustOutput) => ({
   initialValue: utxo.initialValue,
   nonce: utxo.nonce,
@@ -84,40 +95,31 @@ const convertQualifiedDustOutput = (utxo: ledger.QualifiedDustOutput) => ({
   mtIndex: utxo.mtIndex,
 });
 
-const convertUpdateToStorageEntry = (
+const convertUpdateToFinalizedInput = (
   changes: ledger.DustStateChanges,
   metadata: TransactionDetails,
   protocolVersion: number,
-): StorageEntryWithDust => ({
+  finalizedAt: Date,
+): DustFinalizedInput => ({
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
   identifiers: metadata.identifiers,
+  finalizedAt,
   dust: {
     receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
     spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
   } satisfies DustSection,
 });
 
-const upsertDustEntry = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  entry: TransactionHistoryStorage.TransactionHistoryEntryWithHash & { dust: DustSection },
+const gotFinalizedDust = (
+  txHistoryStorage: DustHistoryStorage,
+  input: DustFinalizedInput,
 ): Effect.Effect<void, TransactionHistoryError> =>
   Effect.tryPromise({
-    try: () => txHistoryStorage.upsert(entry),
+    try: () => txHistoryStorage.gotFinalized(input),
     catch: (e) =>
-      new TransactionHistoryError({ message: `Failed to upsert history entry for ${entry.hash}`, cause: e }),
-  });
-
-const clearPendingForIdentifiers = (
-  txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
-  identifiers: readonly string[],
-): Effect.Effect<void, TransactionHistoryError> =>
-  Effect.tryPromise({
-    // TODO Ian — temp, remove the `'dust-sync'` label (helper takes optional source for logging)
-    try: () => TransactionHistoryStorage.clearPendingMatching(txHistoryStorage, identifiers, 'dust-sync'),
-    // TODO Ian — end temp, remove
-    catch: (e) => new TransactionHistoryError({ message: 'Failed to clear pending entry on confirmation', cause: e }),
+      new TransactionHistoryError({ message: `Failed to record finalized history entry for ${input.hash}`, cause: e }),
   });
 
 export const makeDefaultTransactionHistoryService = (
@@ -132,13 +134,11 @@ export const makeDefaultTransactionHistoryService = (
       changes: ledger.DustStateChanges,
       metadata: TransactionDetails,
       protocolVersion: number,
-    ): Effect.Effect<void, TransactionHistoryError> => {
-      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return Effect.gen(function* () {
-        yield* upsertDustEntry(txHistoryStorage, entry);
-        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
-      });
-    },
+    ): Effect.Effect<void, TransactionHistoryError> =>
+      gotFinalizedDust(
+        txHistoryStorage,
+        convertUpdateToFinalizedInput(changes, metadata, protocolVersion, new Date(metadata.timestamp)),
+      ),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -185,11 +185,9 @@ export const makeSimulatorTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
-      const entry = convertUpdateToStorageEntry(changes, metadata, protocolVersion);
-      return Effect.gen(function* () {
-        yield* upsertDustEntry(txHistoryStorage, { ...entry, timestamp: new Date(metadata.timestamp) });
-        yield* clearPendingForIdentifiers(txHistoryStorage, metadata.identifiers);
-      });
+      const finalizedAt = new Date(metadata.timestamp);
+      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion, finalizedAt);
+      return gotFinalizedDust(txHistoryStorage, { ...input, timestamp: finalizedAt });
     },
 
     getTransactionDetails: (
@@ -201,7 +199,7 @@ export const makeSimulatorTransactionHistoryService = (
           new TransactionHistoryError({ message: `Failed to get transaction details for ${hash}`, cause: e }),
       }).pipe(
         Effect.flatMap((entry) =>
-          entry
+          isFinalized(entry)
             ? Effect.succeed({
                 hash: entry.hash,
                 timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),

@@ -22,9 +22,8 @@ import { logger } from './logger.js';
 import { ShieldedWallet } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   type CombinedTokenTransfer,
-  type WalletEntry,
   WalletEntrySchema,
-  isPendingWalletEntry,
+  isFinalizedWalletEntry,
   mergeWalletEntries,
 } from '@midnight-ntwrk/wallet-sdk-facade';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
@@ -177,7 +176,7 @@ describe('Smoke tests', () => {
 
       // Verify unshielded transaction history
       const senderTxHistory = await funded.wallet.getAllFromTxHistory();
-      const senderConfirmed = senderTxHistory.filter((e): e is WalletEntry => !isPendingWalletEntry(e));
+      const senderConfirmed = senderTxHistory.filter(isFinalizedWalletEntry);
       const senderUnshieldedEntries = senderConfirmed.filter((e) => e.unshielded !== undefined);
       expect(senderUnshieldedEntries.length).toBeGreaterThan(0);
       senderUnshieldedEntries.forEach((entry) => utils.expectValidUnshieldedTxHistoryEntry(entry));
@@ -192,7 +191,7 @@ describe('Smoke tests', () => {
       senderShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
 
       const receiverTxHistory = await receiver.wallet.getAllFromTxHistory();
-      const receiverConfirmed = receiverTxHistory.filter((e): e is WalletEntry => !isPendingWalletEntry(e));
+      const receiverConfirmed = receiverTxHistory.filter(isFinalizedWalletEntry);
       const receiverShieldedEntries = receiverConfirmed.filter((e) => e.shielded !== undefined);
       expect(receiverShieldedEntries.length).toBeGreaterThan(0);
       receiverShieldedEntries.forEach((entry) => utils.expectValidShieldedTxHistoryEntry(entry));
@@ -215,9 +214,7 @@ describe('Smoke tests', () => {
 
       // Verify tx history has shielded entries before serialization
       const txHistoryBeforeSerialize = await funded.wallet.getAllFromTxHistory();
-      const confirmedBeforeSerialize = txHistoryBeforeSerialize.filter(
-        (e): e is WalletEntry => !isPendingWalletEntry(e),
-      );
+      const confirmedBeforeSerialize = txHistoryBeforeSerialize.filter(isFinalizedWalletEntry);
       const shieldedEntries = confirmedBeforeSerialize.filter((e) => e.shielded !== undefined);
       expect(shieldedEntries.length).toBeGreaterThan(0);
 

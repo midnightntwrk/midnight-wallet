@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { describe, it, expect } from 'vitest';
-import { type WalletEntry, mergeWalletEntries } from '../src/index.js';
+import { type FinalizedWalletEntry, mergeWalletEntries } from '../src/index.js';
 
 const shieldedCoin = (type: string, nonce: string, value: bigint, mtIndex: bigint) => ({
   type,
@@ -36,10 +36,11 @@ const dustUtxo = (initialValue: bigint, nonce: bigint, seq: number, backingNight
   mtIndex,
 });
 
-const baseEntry = (hash: string, overrides: Partial<WalletEntry> = {}): WalletEntry => ({
+const baseEntry = (hash: string, overrides: Partial<FinalizedWalletEntry> = {}): FinalizedWalletEntry => ({
   hash,
   protocolVersion: 1,
   status: 'SUCCESS',
+  lifecycle: { status: 'finalized', finalizedAt: new Date(0) },
   ...overrides,
 });
 

@@ -20,24 +20,65 @@ export const TransactionHistoryStatusSchema = Schema.Literal('SUCCESS', 'FAILURE
 
 export type TransactionHistoryStatus = Schema.Schema.Type<typeof TransactionHistoryStatusSchema>;
 
-export const TransactionHistoryCommonSchema = Schema.Struct({
+export const PendingLifecycleSchema = Schema.Struct({
+  status: Schema.Literal('pending'),
+  submittedAt: Schema.Date,
+});
+
+export const FinalizedLifecycleSchema = Schema.Struct({
+  status: Schema.Literal('finalized'),
+  finalizedAt: Schema.Date,
+});
+
+export const RejectedLifecycleSchema = Schema.Struct({
+  status: Schema.Literal('rejected'),
+  rejectedAt: Schema.Date,
+  reason: Schema.optional(Schema.String),
+});
+
+export const TransactionLifecycleSchema = Schema.Union(
+  PendingLifecycleSchema,
+  FinalizedLifecycleSchema,
+  RejectedLifecycleSchema,
+);
+
+export type TransactionLifecycle = Schema.Schema.Type<typeof TransactionLifecycleSchema>;
+
+export const PendingTransactionHistoryCommonSchema = Schema.Struct({
+  hash: TransactionHashSchema,
+  identifiers: Schema.Array(Schema.String),
+  lifecycle: PendingLifecycleSchema,
+});
+
+export type PendingTransactionHistoryCommon = Schema.Schema.Type<typeof PendingTransactionHistoryCommonSchema>;
+
+export const RejectedTransactionHistoryCommonSchema = Schema.Struct({
+  hash: TransactionHashSchema,
+  identifiers: Schema.Array(Schema.String),
+  lifecycle: RejectedLifecycleSchema,
+});
+
+export type RejectedTransactionHistoryCommon = Schema.Schema.Type<typeof RejectedTransactionHistoryCommonSchema>;
+
+export const FinalizedTransactionHistoryCommonSchema = Schema.Struct({
   hash: TransactionHashSchema,
   protocolVersion: Schema.Number,
   status: TransactionHistoryStatusSchema,
   identifiers: Schema.optional(Schema.Array(Schema.String)),
   timestamp: Schema.optional(Schema.Date),
   fees: Schema.optional(Schema.NullOr(Schema.BigInt)),
+  lifecycle: FinalizedLifecycleSchema,
 });
+
+export type FinalizedTransactionHistoryCommon = Schema.Schema.Type<typeof FinalizedTransactionHistoryCommonSchema>;
+
+export const TransactionHistoryCommonSchema = Schema.Union(
+  PendingTransactionHistoryCommonSchema,
+  FinalizedTransactionHistoryCommonSchema,
+  RejectedTransactionHistoryCommonSchema,
+);
 
 export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHistoryCommonSchema>;
-
-export const PendingTransactionHistoryCommonSchema = Schema.Struct({
-  hash: TransactionHashSchema,
-  identifiers: Schema.Array(Schema.String),
-  submittedAt: Schema.Date,
-});
-
-export type PendingTransactionHistoryCommon = Schema.Schema.Type<typeof PendingTransactionHistoryCommonSchema>;
 
 export type SerializedTransactionHistory = string;
 
@@ -48,72 +89,78 @@ export type SerializedTransactionHistory = string;
 export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<string, unknown>;
 
 /**
- * Storage interface for transaction history entries keyed by their `hash` property.
- *
- * Pass a full entry schema to the implementation constructor to enable serialization.
+ * Input for `gotFinalized` — the finalized entry minus its `lifecycle` field, which the storage attaches itself.
+ * Carries `finalizedAt` directly so callers don't construct the lifecycle object.
  */
-export interface TransactionHistoryStorage<
-  T extends { hash: TransactionHash } = TransactionHistoryCommon,
-  P extends { hash: TransactionHash; identifiers: readonly string[] } = PendingTransactionHistoryCommon,
-> {
-  upsert(entry: T): Promise<void>;
+export type FinalizedEntryInput<T extends FinalizedTransactionHistoryCommon = FinalizedTransactionHistoryCommon> = Omit<
+  T,
+  'lifecycle'
+> & { readonly finalizedAt: Date };
+
+/**
+ * Read-side of a transaction history storage. T appears only in output position, so this interface is **covariant** in
+ * T: a `TransactionHistoryReader<Specific>` is assignable to `TransactionHistoryReader<Wider>`.
+ */
+export interface TransactionHistoryReader<T extends { hash: TransactionHash } = TransactionHistoryCommon> {
   getAll(): Promise<readonly T[]>;
   get(hash: TransactionHash): Promise<T | undefined>;
   serialize(): Promise<SerializedTransactionHistory>;
-
-  upsertPending(entry: P): Promise<void>;
-
-  getPending(hash: TransactionHash): Promise<P | undefined>;
-
-  getAllPending(): Promise<readonly P[]>;
-
-  deletePending(hash: TransactionHash): Promise<void>;
-
-  findPendingMatching(identifiers: readonly string[]): Promise<P | undefined>;
 }
 
-/** Looks up a pending entry whose identifiers are covered by `identifiers` and, if found, removes it. */
-export const clearPendingMatching = async <
-  T extends { hash: TransactionHash },
-  P extends { hash: TransactionHash; identifiers: readonly string[] },
->(
-  storage: TransactionHistoryStorage<T, P>,
-  identifiers: readonly string[],
-  // TODO Ian — temp, remove (the `source` parameter is purely for logging)
-  source: string = 'unknown',
-  // TODO Ian — end temp, remove
-): Promise<void> => {
-  // TODO Ian — temp, remove
-  const pendingBefore = await storage.getAllPending();
-  // eslint-disable-next-line no-console
-  console.log(`[pending-tx-history] CLEAR called by ${source}`, {
-    syncIdentifiers: identifiers,
-    pendingBefore: pendingBefore.map((e) => ({ key: e.hash, ids: e.identifiers })),
-    expectation:
-      pendingBefore.length === 0
-        ? 'no match (storage empty — no in-flight txs from this wallet)'
-        : 'will match if any pendingBefore entry.identifiers ⊆ syncIdentifiers',
-  });
-  // TODO Ian — end temp, remove
-  const match = await storage.findPendingMatching(identifiers);
-  // TODO Ian — temp, remove
-  if (match) {
-    // eslint-disable-next-line no-console
-    console.log(`[pending-tx-history] CLEAR (${source}) -> match found`, {
-      key: match.hash,
-      matchedIdentifiers: match.identifiers,
-    });
-  } else {
-    // eslint-disable-next-line no-console
-    console.log(`[pending-tx-history] CLEAR (${source}) -> no match`);
-  }
-  // TODO Ian — end temp, remove
+/**
+ * Write-side of a transaction history storage. Exposes lifecycle-aware methods only — `gotPending`, `gotFinalized`,
+ * `gotRejected`. Underlying primitives (upsert / delete / find-by-identifiers) are implementation details and are not
+ * part of the public contract.
+ *
+ * Each `got*` method represents a transition the facade or sync layer has observed. Implementations are responsible for
+ * keeping the storage internally consistent across keys (in particular: clearing a prior `pending` entry keyed by the
+ * first identifier when its `finalized` or `rejected` counterpart arrives keyed by the tx hash).
+ *
+ * T appears only in `gotFinalized`'s input position, so this interface is **contravariant** in T: a
+ * `TransactionHistoryWriter<Wider>` is assignable to `TransactionHistoryWriter<Narrower>`.
+ */
+export interface TransactionHistoryWriter<
+  T extends FinalizedTransactionHistoryCommon = FinalizedTransactionHistoryCommon,
+> {
+  /**
+   * Record that a tx has been submitted and is awaiting confirmation. Keyed by the tx's first identifier (the only
+   * stable id available before the tx appears on-chain).
+   */
+  gotPending(hash: TransactionHash, identifiers: readonly string[], submittedAt: Date): Promise<void>;
+  /**
+   * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears any earlier
+   * `pending` entry that was keyed by an identifier in the supplied set.
+   */
+  gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
+  /**
+   * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed by the tx's
+   * first identifier (matching the prior `pending` entry's key) so the lifecycle transition is in-place.
+   */
+  gotRejected(hash: TransactionHash, identifiers: readonly string[], rejectedAt: Date, reason?: string): Promise<void>;
+}
 
-  if (match) {
-    await storage.deletePending(match.hash);
-    // TODO Ian — temp, remove
-    // eslint-disable-next-line no-console
-    console.log(`[pending-tx-history] DELETE (${source})`, { key: match.hash });
-    // TODO Ian — end temp, remove
-  }
-};
+/**
+ * Combined read + write storage interface for transaction history entries keyed by their `hash` property.
+ *
+ * Lifecycle (pending → finalized | rejected) is carried on the entry's `lifecycle` field, but transitions are performed
+ * via the typed `gotPending` / `gotFinalized` / `gotRejected` methods on {@link TransactionHistoryWriter} — not by
+ * hand-rolling the entry shape. This keeps the lifecycle vocabulary centralised and prevents call sites from drifting
+ * back to ad-hoc `upsert + findByIdentifiers + delete` triples.
+ *
+ * Generic parameters:
+ *
+ * - `TRead` (the reader's view) covers the full lifecycle union (pending, finalized, rejected). Most callers only need to
+ *   specify this — `Storage<WalletEntry>` is the typical shape.
+ * - `TFinalized` (the writer's `gotFinalized` input shape) defaults to whichever arm of `TRead` is finalized via
+ *   `Extract<TRead, FinalizedTransactionHistoryCommon>`, so it normally doesn't need to be supplied explicitly.
+ *
+ * Pass a full entry schema to the implementation constructor to enable serialization.
+ *
+ * For variance reasons, consumers that only read OR only write should depend on the narrower
+ * {@link TransactionHistoryReader} / {@link TransactionHistoryWriter} interfaces directly.
+ */
+export interface TransactionHistoryStorage<
+  TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
+  TFinalized extends FinalizedTransactionHistoryCommon = Extract<TRead, FinalizedTransactionHistoryCommon>,
+>
+  extends TransactionHistoryReader<TRead>, TransactionHistoryWriter<TFinalized> {}
