@@ -193,7 +193,7 @@ export const makeDefaultSyncService = (
   };
 };
 
-export const makeDustGenerationsSyncService = (
+export const makeProjectionsBasedSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
   const defaultSyncService = makeDefaultSyncService(config);
@@ -404,13 +404,14 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           startIndex: Number(appliedIndex),
           endIndex: latestBlock,
         }),
-        Stream.mapEffect((subscription) =>
-          pipe(
+        Stream.mapEffect((subscription) => {
+          console.log('Dust generation subscription received:', subscription.dustGenerations);
+          return pipe(
             Schema.decodeUnknownEither(DustGenerationsSubscriptionSchema)(subscription.dustGenerations),
             Either.mapLeft((err) => new SyncWalletError(err)),
             EitherOps.toEffect,
-          ),
-        ),
+          );
+        }),
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
@@ -516,38 +517,47 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
   };
 };
 
-export const applyDustProjectionsUpdate = (wallet: CoreWallet, update: DustProjectionsUpdate): CoreWallet => {
-  console.log(`Applying dust updates for wallet ${wallet.publicKey.addressHex}`, update);
-  const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
+export const makeProjectionsBasedSyncCapability = (): SyncCapability<
+  CoreWallet,
+  DustProjectionsUpdate,
+  ChangesResult
+> => {
+  return {
+    applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
+      console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
+      const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
 
-  const dustGenTreeUpdates = dustGenerations.rawUpdates
-    .filter((u) => u.type === 'DustGenerationsItem' || u.type === 'DustGenerationsProgress')
-    .filter((u) => u.collapsedMerkleTree !== undefined)
-    .map((u) => u.collapsedMerkleTree as CollapsedMerkleTree)
-    .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
+      const dustGenTreeUpdates = dustGenerations.rawUpdates
+        .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
+        .filter((u) => u.collapsedMerkleTree !== null)
+        .map((u) => u.collapsedMerkleTree as CollapsedMerkleTree)
+        .toSorted((u1, u2) => u1.startIndex - u2.startIndex);
 
-  let updatedWallet = CoreWallet.applyDustGenerations(
-    wallet,
-    dustGenTreeUpdates,
-    dustGenerations.newGenerations,
-    dustGenerations.generationDtimeUpdates,
-  );
-  updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
-  updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
-  updatedWallet = CoreWallet.applySyncedNullifiers(updatedWallet, syncedNullifiers);
+      let updatedWallet = CoreWallet.applyDustGenerations(
+        state,
+        dustGenTreeUpdates,
+        dustGenerations.newGenerations,
+        dustGenerations.generationDtimeUpdates,
+      );
+      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
+      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
+      updatedWallet = CoreWallet.applySyncedNullifiers(updatedWallet, syncedNullifiers);
 
-  if (dustGenerations.lastUpdateIndex !== undefined) {
-    return CoreWallet.updateProgress(updatedWallet, {
-      appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
-      highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
-      isConnected: true,
-    });
-  }
+      if (dustGenerations.lastUpdateIndex !== undefined) {
+        updatedWallet = CoreWallet.updateProgress(updatedWallet, {
+          appliedIndex: BigInt(dustGenerations.lastUpdateIndex),
+          highestRelevantWalletIndex: BigInt(dustGenerations.lastUpdateIndex),
+          isConnected: true,
+        });
+      }
 
-  return updatedWallet;
+      // TODO: fill changes
+      return [updatedWallet, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+    },
+  };
 };
 
-export const createDustUtxoUpdates = (
+const createDustUtxoUpdates = (
   wallet: CoreWallet,
   nullifierTransactions: TransactionEventsUpdate[],
   secretKey: DustSecretKey,

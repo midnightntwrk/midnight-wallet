@@ -70,7 +70,7 @@ export const CollapsedMerkleTreeSchema = Schema.Struct({
 export type CollapsedMerkleTree = Schema.Schema.Type<typeof CollapsedMerkleTreeSchema>;
 
 export const WireDustGenerationsUpdateSchema = Schema.Struct({
-  type: Schema.Literal('DustGenerationsItem'),
+  __typename: Schema.Literal('DustGenerationsItem'),
   commitmentMtIndex: Schema.Number,
   generationMtIndex: Schema.Number,
   owner: Schema.String,
@@ -79,14 +79,14 @@ export const WireDustGenerationsUpdateSchema = Schema.Struct({
   backingNight: Schema.String,
   ctime: Schema.Number,
   transactionId: Schema.Number,
-  collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),
+  collapsedMerkleTree: Schema.Union(CollapsedMerkleTreeSchema, Schema.Null),
 });
 
 export const DustGenerationsUpdateSchema = Schema.transform(
   WireDustGenerationsUpdateSchema,
   Schema.typeSchema(
     Schema.Struct({
-      type: Schema.Literal('DustGenerationsItem'),
+      __typename: Schema.Literal('DustGenerationsItem'),
       commitmentMtIndex: Schema.Number,
       generationMtIndex: Schema.Number,
       owner: Schema.String,
@@ -95,7 +95,7 @@ export const DustGenerationsUpdateSchema = Schema.transform(
       backingNight: Schema.String,
       ctime: Schema.DateFromSelf,
       transactionId: Schema.Number,
-      collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),
+      collapsedMerkleTree: Schema.Union(CollapsedMerkleTreeSchema, Schema.Null),
     }),
   ),
   {
@@ -131,9 +131,9 @@ export type DustUtxoUpdate = {
 };
 
 export const ProgressSchema = Schema.Struct({
-  type: Schema.Literal('DustGenerationsProgress'),
+  __typename: Schema.Literal('DustGenerationsProgress'),
   highestIndex: Schema.Number,
-  collapsedMerkleTree: Schema.optional(CollapsedMerkleTreeSchema),
+  collapsedMerkleTree: Schema.Union(CollapsedMerkleTreeSchema, Schema.Null),
 });
 
 const DustGenerationTreeInsertionPathSchema = Schema.declare(
@@ -171,7 +171,7 @@ const HexedDustGenerationTreeInsertionPath: Schema.Schema<DustGenerationTreeInse
 );
 
 export const DustGenerationDtimeUpdateItemSchema = Schema.Struct({
-  type: Schema.Literal('DustGenerationDtimeUpdateItem'),
+  __typename: Schema.Literal('DustGenerationDtimeUpdateItem'),
   generationMtIndex: Schema.Number,
   owner: Schema.String,
   treeInsertionPath: HexedDustGenerationTreeInsertionPath,
@@ -211,7 +211,7 @@ export const DustGenerationsSyncUpdate = {
   ): DustGenerationsSyncUpdate => {
     const { addressHex: dustAddressHex, publicKey: dustPublicKey } = publicKey;
     const newGenerations = rawUpdates
-      .filter((u) => u.type === 'DustGenerationsItem')
+      .filter((u) => u.__typename === 'DustGenerationsItem')
       .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => {
@@ -238,7 +238,7 @@ export const DustGenerationsSyncUpdate = {
       });
 
     const generationDtimeUpdates = rawUpdates
-      .filter((u) => u.type === 'DustGenerationDtimeUpdateItem')
+      .filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem')
       .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => ({
@@ -248,7 +248,7 @@ export const DustGenerationsSyncUpdate = {
       }));
 
     const lastUpdateIndex = rawUpdates
-      .filter((u) => u.type === 'DustGenerationsProgress')
+      .filter((u) => u.__typename === 'DustGenerationsProgress')
       .map((u) => u.highestIndex)
       .toSorted()
       .at(-1);
