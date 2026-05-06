@@ -23,6 +23,8 @@ export const TransactionEvents = Query.make(
       transactions(offset: {identifier: $transactionId}) {
         __typename
         ... on RegularTransaction {
+          id
+          hash
           dustLedgerEvents {
             id
             raw

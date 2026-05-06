@@ -15,9 +15,9 @@ import {
   dustNullifier,
   type DustNullifier,
   type DustSecretKey,
-  type DustStateChanges,
-  type QualifiedDustOutput,
+  DustStateChanges,
   LedgerParameters,
+  type QualifiedDustOutput,
 } from '@midnight-ntwrk/ledger-v8';
 import {
   DustGenerationEvents,
@@ -56,12 +56,14 @@ import {
   type DustProjectionsUpdate,
   type DustSpendProcessedEvent,
   type DustUtxoUpdate,
+  type DustUtxoMap,
   SyncEventsUpdateSchema,
   type TransactionEventsUpdate,
   TransactionEventsUpdateSchema,
   type WalletSyncSubscription,
   WalletSyncUpdate,
 } from './SyncSchema.js';
+import { upsertArrayMap } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -212,7 +214,7 @@ export const makeProjectionsBasedSyncService = (
   const loadCollapsedCommitments = (
     fromBlock: bigint,
     toBlock: bigint,
-    newUtxos: Map<bigint, QualifiedDustOutput>,
+    newUtxos: DustUtxoMap,
   ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
     const skipMtIndexes = [...newUtxos.keys()];
 
@@ -264,14 +266,20 @@ export const makeProjectionsBasedSyncService = (
 
           let newNullifiers = dustGenerationUpdates.newGenerations
             .map((n) => n.dustNullifier)
-            .concat(state.dustNullifiers.filter((n) => !n.isSynced).map((n) => n.dustNullifier));
+            .concat(state.dustNullifiers.filter((n) => !n.isSpent).map((n) => n.dustNullifier));
 
           // track new utxos to calculate the successor utxo when the nullifier is spent
-          let newUtxos: Map<DustNullifier, QualifiedDustOutput> = new Map(
-            dustGenerationUpdates.newGenerations.map((u) => [u.dustNullifier, u.qdo]),
+          let newUtxos: DustUtxoMap = new Map(
+            dustGenerationUpdates.newGenerations.map((u) => [
+              u.dustNullifier,
+              {
+                qdo: u.qdo,
+                transactionId: u.transactionId,
+              },
+            ]),
           );
 
-          const syncedNullifiers = [];
+          const spentNullifiers = new Map();
 
           while (newNullifiers.length > 0) {
             const nullifierTransactions = yield* pipe(
@@ -283,20 +291,26 @@ export const makeProjectionsBasedSyncService = (
             const dustUtxoUpdates = yield* createDustUtxoUpdates(state, nullifierTransactions, secretKey, newUtxos);
 
             for (const update of dustUtxoUpdates) {
-              if (update.isSynced) {
-                syncedNullifiers.push(update.dustNullifier);
+              if (update.isSpent) {
+                spentNullifiers.set(update.dustNullifier, {
+                  qdo: update.qdo,
+                  transactionId: update.transactionId,
+                });
                 continue;
               }
-              newUtxos.set(update.dustNullifier, update.qdo);
+              newUtxos.set(update.dustNullifier, {
+                qdo: update.qdo,
+                transactionId: update.transactionId,
+              });
             }
 
-            newNullifiers = dustUtxoUpdates.filter((u) => !u.isSynced).map((u) => u.dustNullifier);
+            newNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
           }
 
-          if ([...newUtxos].some((u) => u[1].mtIndex <= lastSyncedCommitmentIndex)) {
+          if ([...newUtxos].some((u) => u[1].qdo.mtIndex <= lastSyncedCommitmentIndex)) {
             throw new OtherWalletError({ message: 'Spotted stale utxo' });
           }
-          newUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].mtIndex - b[1].mtIndex)));
+          newUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)));
 
           const collapsedCommitments = yield* loadCollapsedCommitments(
             lastSyncedCommitmentIndex,
@@ -306,7 +320,7 @@ export const makeProjectionsBasedSyncService = (
 
           return {
             dustGenerations: dustGenerationUpdates,
-            syncedNullifiers,
+            spentNullifiers,
             newUtxos,
             collapsedCommitments,
           };
@@ -525,7 +539,7 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
-      const { dustGenerations, syncedNullifiers, newUtxos, collapsedCommitments } = update;
+      const { dustGenerations, spentNullifiers, newUtxos, collapsedCommitments } = update;
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -541,7 +555,7 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
       );
       updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
       updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
-      updatedWallet = CoreWallet.applySyncedNullifiers(updatedWallet, syncedNullifiers);
+      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...spentNullifiers.keys()]);
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
         updatedWallet = CoreWallet.updateProgress(updatedWallet, {
@@ -551,8 +565,25 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
         });
       }
 
-      // TODO: fill changes
-      return [updatedWallet, { changes: [], protocolVersion: Number(state.protocolVersion) }];
+      const receivedUtxos = [...newUtxos.values()].reduce(
+        (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo.qdo),
+        new Map<number, QualifiedDustOutput[]>(), // <TransactionId, QualifiedDustOutput[]>
+      );
+
+      const spentUtxos = [...spentNullifiers.values()].reduce(
+        (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo.qdo),
+        new Map<number, QualifiedDustOutput[]>(), // <TransactionId, QualifiedDustOutput[]>
+      );
+
+      const txs = new Set([...receivedUtxos.keys()].concat(...spentUtxos.keys()));
+
+      const changes: DustStateChanges[] = [...txs].toSorted().map((txId) => {
+        const received = receivedUtxos.get(txId) ?? [];
+        const spent = spentUtxos.get(txId) ?? [];
+        return new DustStateChanges(Encoding.encodeHex(txId.toString()), received, spent);
+      });
+
+      return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
   };
 };
@@ -561,17 +592,18 @@ const createDustUtxoUpdates = (
   wallet: CoreWallet,
   nullifierTransactions: TransactionEventsUpdate[],
   secretKey: DustSecretKey,
-  knownUtxos: Map<DustNullifier, QualifiedDustOutput>,
+  knownUtxos: DustUtxoMap,
 ): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
   Effect.gen(function* () {
     const utxoUpdates: DustUtxoUpdate[] = [];
 
     for (const tx of nullifierTransactions) {
+      console.log('ID vs. hash:', Encoding.encodeHex(tx.id.toString()), tx.hash);
       const dustSpends = tx.dustLedgerEvents.filter((dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed');
 
       for (const dustSpend of dustSpends) {
         const { nullifier, vFee, commitmentIndex, blockTime } = dustSpend.raw.content as DustSpendProcessedEvent;
-        const qdo = knownUtxos.get(nullifier) ?? wallet.state.findUtxoByNullifier(nullifier);
+        const qdo = knownUtxos.get(nullifier)?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
         if (!qdo) {
           return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
         }
@@ -579,14 +611,16 @@ const createDustUtxoUpdates = (
         utxoUpdates.push({
           dustNullifier: nullifier,
           qdo,
-          isSynced: true,
+          isSpent: true,
+          transactionId: tx.id,
         });
 
         const newUtxo = wallet.state.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey);
         utxoUpdates.push({
           dustNullifier: dustNullifier(newUtxo, secretKey),
           qdo: newUtxo,
-          isSynced: false,
+          isSpent: false,
+          transactionId: tx.id,
         });
       }
     }

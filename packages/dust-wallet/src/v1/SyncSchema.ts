@@ -116,6 +116,7 @@ export type NewDustGeneration = {
   genInfo: DustGenerationInfo;
   generationIndex: number;
   qdo: QualifiedDustOutput;
+  transactionId: number;
 };
 
 export type DustGenerationDtimUpdate = {
@@ -127,7 +128,8 @@ export type DustGenerationDtimUpdate = {
 export type DustUtxoUpdate = {
   dustNullifier: DustNullifier;
   qdo: QualifiedDustOutput;
-  isSynced: boolean;
+  isSpent: boolean;
+  transactionId: number;
 };
 
 export const ProgressSchema = Schema.Struct({
@@ -234,6 +236,7 @@ export const DustGenerationsSyncUpdate = {
           },
           generationIndex: u.generationMtIndex,
           qdo,
+          transactionId: u.transactionId,
         };
       });
 
@@ -325,6 +328,8 @@ export const TransactionEvent = Schema.Struct({
 
 export const WireTransactionEventsUpdateSchema = Schema.Struct({
   __typename: Schema.Literal('RegularTransaction'),
+  id: Schema.Number,
+  hash: Schema.String,
   dustLedgerEvents: Schema.Array(TransactionEvent),
   zswapLedgerEvents: Schema.Array(TransactionEvent),
 });
@@ -334,19 +339,25 @@ export const TransactionEventsUpdateSchema = Schema.transform(
   Schema.typeSchema(
     Schema.Struct({
       type: Schema.Literal('TransactionEvents'),
+      id: Schema.Number,
+      hash: Schema.String,
       dustLedgerEvents: Schema.Array(TransactionEvent),
       zswapLedgerEvents: Schema.Array(TransactionEvent),
     }),
   ),
   {
     strict: true,
-    decode: ({ dustLedgerEvents, zswapLedgerEvents }) => ({
+    decode: ({ id, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
       type: 'TransactionEvents' as const,
+      id,
+      hash,
       dustLedgerEvents,
       zswapLedgerEvents,
     }),
-    encode: ({ dustLedgerEvents, zswapLedgerEvents }) => ({
+    encode: ({ id, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
       __typename: 'RegularTransaction' as const,
+      id,
+      hash,
       dustLedgerEvents,
       zswapLedgerEvents,
     }),
@@ -365,9 +376,17 @@ export type DustSpendProcessedEvent = {
   blockTime: Date;
 };
 
+export type DustUtxoMap = Map<
+  DustNullifier,
+  {
+    qdo: QualifiedDustOutput;
+    transactionId: number;
+  }
+>;
+
 export type DustProjectionsUpdate = {
   dustGenerations: DustGenerationsSyncUpdate;
-  syncedNullifiers: DustNullifier[];
-  newUtxos: Map<DustNullifier, QualifiedDustOutput>;
+  spentNullifiers: DustUtxoMap;
+  newUtxos: DustUtxoMap;
   collapsedCommitments: CollapsedMerkleTree[];
 };

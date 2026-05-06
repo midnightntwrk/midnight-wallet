@@ -21,7 +21,6 @@ import {
   type Proofish,
   type Signaturish,
   type Transaction,
-  type QualifiedDustOutput,
   type Event,
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -30,7 +29,12 @@ import { Array as Arr, Encoding, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
-import { type CollapsedMerkleTree, type NewDustGeneration, type DustGenerationDtimUpdate } from './SyncSchema.js';
+import {
+  type CollapsedMerkleTree,
+  type NewDustGeneration,
+  type DustGenerationDtimUpdate,
+  type DustUtxoMap,
+} from './SyncSchema.js';
 import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type PublicKey = {
@@ -51,7 +55,7 @@ export const PublicKey = {
 
 export type SyncedDustNullifier = {
   dustNullifier: DustNullifier;
-  isSynced: boolean;
+  isSpent: boolean;
 };
 
 export type CoreWallet = Readonly<{
@@ -166,31 +170,34 @@ export const CoreWallet = {
     };
   },
 
-  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: Map<DustNullifier, QualifiedDustOutput>): CoreWallet {
+  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: DustUtxoMap): CoreWallet {
     const updatedState = [...newDustUtxos].reduce(
-      (state, [dustNullifier, qdo]) => state.addUtxo(dustNullifier, qdo),
+      (state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo),
       wallet.state,
     );
     return {
       ...wallet,
       state: updatedState,
       dustNullifiers: wallet.dustNullifiers.concat(
-        [...newDustUtxos.keys()].map((dustNullifier) => ({ dustNullifier, isSynced: false })),
+        [...newDustUtxos.keys()].map((dustNullifier) => ({ dustNullifier, isSpent: false })),
       ),
     };
   },
 
   applyDustCommitments(
     wallet: CoreWallet,
-    newDustUtxos: Map<DustNullifier, QualifiedDustOutput>,
+    newDustUtxos: DustUtxoMap,
     collapsedCommitments: CollapsedMerkleTree[],
   ): CoreWallet {
     let updatedState = wallet.state;
     const newUtxos = [...newDustUtxos.values()];
     for (const { startIndex, update } of collapsedCommitments) {
       // apply utxos going before the current index
-      const utxos = newUtxos.filter((utxo) => Number(utxo.mtIndex) < startIndex);
-      updatedState = utxos.reduce((state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true), updatedState);
+      const utxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
+      updatedState = utxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
       // apply current update
       updatedState = updatedState.applyCommitmentCollapsedUpdate(update);
     }
@@ -198,30 +205,35 @@ export const CoreWallet = {
     // check utxos after the last index
     const lastCollapsedIndex = collapsedCommitments.at(-1);
     if (lastCollapsedIndex !== undefined) {
-      const utxosAfterLastIndex = newUtxos.filter((utxo) => Number(utxo.mtIndex) > lastCollapsedIndex.endIndex);
+      const utxosAfterLastIndex = newUtxos.filter(
+        (utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex,
+      );
       updatedState = utxosAfterLastIndex.reduce(
-        (state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true),
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
         updatedState,
       );
     }
 
     // edge-case: no collapsed commitments but new utxos
     if (!collapsedCommitments.length && newUtxos.length) {
-      updatedState = newUtxos.reduce((state, utxo) => state.insertCommitment(utxo.mtIndex, utxo, true), updatedState);
+      updatedState = newUtxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
     }
 
     return { ...wallet, state: updatedState };
   },
 
-  applySyncedNullifiers(wallet: CoreWallet, syncedNullifiers: Array<DustNullifier>): CoreWallet {
+  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: Array<DustNullifier>): CoreWallet {
     const dustNullifiers = wallet.dustNullifiers.map((r) => ({
       dustNullifier: r.dustNullifier,
-      isSynced: syncedNullifiers.includes(r.dustNullifier) ? true : r.isSynced,
+      isSpent: spentNullifiers.includes(r.dustNullifier) ? true : r.isSpent,
     }));
     const existingDustNullifiersMap = new Map(dustNullifiers.map((r) => [r.dustNullifier, r]));
-    const newNullifiers = syncedNullifiers
+    const newNullifiers = spentNullifiers
       .filter((n) => !existingDustNullifiersMap.has(n))
-      .map((n) => ({ dustNullifier: n, isSynced: false }));
+      .map((n) => ({ dustNullifier: n, isSpent: false }));
     return {
       ...wallet,
       dustNullifiers: dustNullifiers.concat(newNullifiers),

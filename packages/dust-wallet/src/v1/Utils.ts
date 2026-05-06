@@ -26,3 +26,9 @@ export const BindingMarker = {
   preBinding: 'pre-binding',
   noBinding: 'no-binding',
 } as const;
+
+export const upsertArrayMap = <K, V>(map: Map<K, V[]>, key: K, val: V): Map<K, V[]> => {
+  const current = map.get(key);
+  map.set(key, current ? current.concat(val) : [val]);
+  return map;
+};
