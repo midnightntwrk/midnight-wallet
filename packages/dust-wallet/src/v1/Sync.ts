@@ -433,7 +433,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       dustNullifiers: DustNullifier[],
       toBlock: number | null,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const fullNullifiers = new Set(dustNullifiers.map((n) => n.toString()));
+      const fullNullifiers = new Set(dustNullifiers.map((n) => n.toString(16)));
       return pipe(
         DustNullifierTransactions.run({
           nullifierPrefixes: [...fullNullifiers].map((n) => n.substring(0, n.length / 2)),
