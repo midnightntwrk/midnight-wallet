@@ -148,19 +148,18 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   /**
    * Fetches the latest block produced on chain.
    *
-   * Does not depend on wallet sync progress — the call hits the indexer (or simulator)
-   * directly for current chain state. Each invocation is a fresh fetch; the result is
-   * not cached.
+   * Does not depend on wallet sync progress — the call hits the indexer (or simulator) directly for current chain
+   * state. Each invocation is a fresh fetch; the result is not cached.
+   *
+   * @example
+   *   ```typescript
+   *   const blockData = await wallet.dust.getLatestBlockData();
+   *   console.log(`Chain time: ${blockData.timestamp.toISOString()}`);
+   *   console.log(`Block height: ${blockData.height}`);
+   *   ```
    *
    * @returns The latest block's hash, height, timestamp, and ledger parameters.
    * @throws If the chain has not yet produced any block, or the indexer is unreachable.
-   *
-   * @example
-   * ```typescript
-   * const blockData = await wallet.dust.getLatestBlockData();
-   * console.log(`Chain time: ${blockData.timestamp.toISOString()}`);
-   * console.log(`Block height: ${blockData.height}`);
-   * ```
    */
   getLatestBlockData(): Promise<BlockData>;
 
