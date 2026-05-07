@@ -274,6 +274,21 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
   dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
 };
 
+/** Thrown when a transaction fails the structural well-formedness check before being processed. */
+export class WellFormedError extends Error {
+  override readonly cause: unknown;
+  constructor(cause: unknown) {
+    super('Transaction is not well-formed');
+    this.cause = cause;
+  }
+}
+
+export type WellFormedStrictnessFlags = {
+  enforceBalancing: boolean;
+  verifySignatures: boolean;
+  enforceLimits: boolean;
+};
+
 export class WalletFacade {
   private static makeDefaultSubmissionService<TConfig extends DefaultSubmissionConfiguration>(
     config: TConfig,
@@ -365,6 +380,7 @@ export class WalletFacade {
       provingService,
       initParams.configuration.txHistoryStorage,
       clock,
+      initParams.configuration.networkId,
     );
   }
 
@@ -377,6 +393,7 @@ export class WalletFacade {
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
   readonly clock: Clock;
   #pendingSubscription: Subscription;
+  #networkId: string;
 
   private constructor(
     shieldedWallet: ShieldedWalletAPI,
@@ -387,6 +404,7 @@ export class WalletFacade {
     provingService: ProvingService<UnboundTransaction>,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
     clock: Clock = systemClock,
+    networkId: string,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
@@ -396,6 +414,7 @@ export class WalletFacade {
     this.provingService = provingService;
     this.#txHistoryStorage = txHistoryStorage;
     this.clock = clock;
+    this.#networkId = networkId;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
@@ -407,6 +426,66 @@ export class WalletFacade {
 
   private defaultTtl(): Date {
     return new Date(this.clock.now().getTime() + DEFAULT_TTL_MS);
+  }
+
+  /**
+   * Checks whether a transaction is structurally well-formed before passing it to a balance or submit method.
+   *
+   * Highly recommended in particular for transactions received from a 3rd party (e.g., a dApp or partner
+   * service) before forwarding them to a balance or submit method.
+   *
+   * TTL expiry, Network ID mismatch, and transaction structure are always enforced regardless of `flags`.
+   * All three configurable flags must be supplied explicitly — there are no defaults, so callers must be
+   * intentional about each check.
+   *
+   * Recommended flags per call site:
+   *
+   * | Method                        | enforceBalancing | verifySignatures | enforceLimits |
+   * | ----------------------------- | ---------------- | ---------------- | ------------- |
+   * | `submitTransaction`           | `true`           | `true`           | `true`        |
+   * | `balanceFinalizedTransaction` | `false`          | `true`           | `false`       |
+   * | `balanceUnboundTransaction`   | `false`          | `false`          | `false`       |
+   * | `balanceUnprovenTransaction`  | `false`          | `false`          | `false`       |
+   *
+   * When `enforceBalancing` is `true` the latest on-chain ledger parameters are fetched and used for the balance check;
+   * otherwise the initial parameters are used and no fetch is performed.
+   *
+   * @example
+   *   ```typescript
+   *   // Before submitTransaction — full strictness
+   *   await facade.validateTransaction(finalizedTx, { enforceBalancing: true, verifySignatures: true, enforceLimits: true });
+   *   await facade.submitTransaction(finalizedTx);
+   *
+   *   // Before balanceFinalizedTransaction
+   *   await facade.validateTransaction(finalizedTx, { enforceBalancing: false, verifySignatures: true, enforceLimits: false });
+   *   await facade.balanceFinalizedTransaction(finalizedTx, secretKeys, options);
+   *
+   *   // Before balanceUnboundTransaction or balanceUnprovenTransaction
+   *   await facade.validateTransaction(tx, { enforceBalancing: false, verifySignatures: false, enforceLimits: false });
+   *   await facade.balanceUnboundTransaction(tx, secretKeys, options);
+   *   ```;
+   *
+   * @param tx - The transaction to validate (`FinalizedTransaction`, `UnboundTransaction`, or `UnprovenTransaction`).
+   * @param flags - Strictness flags for the configurable checks.
+   * @throws {@link WellFormedError} If the transaction fails any enabled check.
+   */
+  async validateTransaction(
+    tx: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
+    flags: WellFormedStrictnessFlags,
+  ): Promise<void> {
+    const strictness = new ledger.WellFormedStrictness();
+    strictness.enforceBalancing = flags.enforceBalancing;
+    strictness.verifySignatures = flags.verifySignatures;
+    strictness.enforceLimits = flags.enforceLimits;
+    const ledgerState = ledger.LedgerState.blank(this.#networkId);
+    ledgerState.parameters = flags.enforceBalancing
+      ? (await this.dust.getLatestBlockData()).ledgerParameters
+      : ledger.LedgerParameters.initialParameters();
+    try {
+      tx.wellFormed(ledgerState, strictness, this.clock.now());
+    } catch (cause) {
+      throw new WellFormedError(cause);
+    }
   }
 
   private mergeUnprovenTransactions(
@@ -473,6 +552,16 @@ export class WalletFacade {
     return new FacadeState(shieldedState, unshieldedState, dustState, pending);
   }
 
+  /**
+   * Submits a finalized transaction to the network and tracks it as pending until finalized or discarded.
+   *
+   * Call {@link validateTransaction} with `{ enforceBalancing: true, verifySignatures: true, enforceLimits: true }`
+   * before this method to surface structural errors with a clear diagnostic instead of a cryptic network rejection.
+   *
+   * @param tx - The finalized transaction to submit.
+   * @returns The transaction identifier.
+   * @throws {@link WellFormedError} — call {@link validateTransaction} first to get this error early.
+   */
   async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
     try {
       await this.pendingTransactionsService.addPendingTransaction(tx);
@@ -485,6 +574,18 @@ export class WalletFacade {
     }
   }
 
+  /**
+   * Balances a finalized transaction by adding shielded, unshielded, and dust inputs/outputs as needed.
+   *
+   * Call {@link validateTransaction} with `{ enforceBalancing: false, verifySignatures: true, enforceLimits: false }`
+   * before this method to surface structural errors early. `enforceBalancing` is `false` because the transaction is not
+   * yet balanced at this stage; `verifySignatures` is `true` because signatures are already present and must be valid.
+   *
+   * @param tx - The finalized transaction to balance.
+   * @param secretKeys - Secret keys for shielded and dust coin selection.
+   * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
+   * @returns A {@link FinalizedTransactionRecipe} containing the original and balancing transactions.
+   */
   async balanceFinalizedTransaction(
     tx: ledger.FinalizedTransaction,
     secretKeys: {
@@ -533,6 +634,18 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Balances an unbound (proven, pre-binding) transaction by adding shielded, unshielded, and dust inputs/outputs.
+   *
+   * Call {@link validateTransaction} with `{ enforceBalancing: false, verifySignatures: false, enforceLimits: false }`
+   * before this method to surface structural errors early. All configurable flags are `false` because the transaction
+   * is not yet balanced and signatures are not yet present.
+   *
+   * @param tx - The unbound transaction to balance.
+   * @param secretKeys - Secret keys for shielded and dust coin selection.
+   * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
+   * @returns An {@link UnboundTransactionRecipe} containing the base and optional balancing transactions.
+   */
   async balanceUnboundTransaction(
     tx: UnboundTransaction,
     secretKeys: {
@@ -587,6 +700,18 @@ export class WalletFacade {
     };
   }
 
+  /**
+   * Balances an unproven transaction by adding shielded, unshielded, and dust inputs/outputs.
+   *
+   * Call {@link validateTransaction} with `{ enforceBalancing: false, verifySignatures: false, enforceLimits: false }`
+   * before this method to surface structural errors early. All configurable flags are `false` because the transaction
+   * is not yet balanced and signatures are not yet present.
+   *
+   * @param tx - The unproven transaction to balance.
+   * @param secretKeys - Secret keys for shielded and dust coin selection.
+   * @param options - TTL for the balancing transaction, and optional subset of token kinds to balance.
+   * @returns An {@link UnprovenTransactionRecipe} containing the balanced transaction.
+   */
   async balanceUnprovenTransaction(
     tx: ledger.UnprovenTransaction,
     secretKeys: {

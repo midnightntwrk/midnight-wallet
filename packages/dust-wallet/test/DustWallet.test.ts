@@ -228,6 +228,36 @@ describe('DustWallet', () => {
     }).pipe(Effect.runPromise);
   });
 
+  it('should expose the latest block data on demand', async () => {
+    return Effect.gen(function* () {
+      const nightVerifyingKey = keyStore.getPublicKey();
+      const awardTokens = 150_000n;
+
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
+      const stateAfterBlock1 = yield* simulator.getLatestState();
+      const block1 = getLastBlock(stateAfterBlock1);
+      expect(block1).toBeDefined();
+
+      const result1 = yield* wallet.getLatestBlockData();
+      expect(result1.height).toBe(Number(block1.number));
+      expect(result1.hash).toBe(block1.hash);
+      expect(result1.timestamp.getTime()).toBe(stateAfterBlock1.currentTime.getTime());
+      expect(result1.ledgerParameters.serialize()).toEqual(stateAfterBlock1.ledger.parameters.serialize());
+
+      yield* simulator.rewardNight(nightVerifyingKey, awardTokens);
+      const stateAfterBlock2 = yield* simulator.getLatestState();
+      const block2 = getLastBlock(stateAfterBlock2);
+      expect(block2).toBeDefined();
+      expect(block2.number).not.toBe(block1.number);
+
+      const result2 = yield* wallet.getLatestBlockData();
+      expect(result2.height).toBe(Number(block2.number));
+      expect(result2.hash).toBe(block2.hash);
+      expect(result2.timestamp.getTime()).toBe(stateAfterBlock2.currentTime.getTime());
+      expect(result2.ledgerParameters.serialize()).toEqual(stateAfterBlock2.ledger.parameters.serialize());
+    }).pipe(Effect.runPromise);
+  });
+
   it('should get the night tokens', async () => {
     return Effect.gen(function* () {
       const nightVerifyingKey = keyStore.getPublicKey();

@@ -31,7 +31,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type Dust, type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
@@ -284,6 +284,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         ),
       );
     });
+  }
+
+  /** Fetches the latest block on chain. Each call is a fresh fetch. */
+  getLatestBlockData(): Effect.Effect<BlockData, WalletError> {
+    return this.#v1Context.syncService.blockData();
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {

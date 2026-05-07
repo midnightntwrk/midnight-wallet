@@ -26,14 +26,6 @@ Registered night coins after deregistration: 4
 ]
 `;
 
-exports[`Snippet outputs > with network > should output the correct result for 'designation' 1`] = `
-[
-  "Generating dust before designation: false
-Generating dust after designation: true
-",
-]
-`;
-
 exports[`Snippet outputs > with network > should output the correct result for 'dust-sponsorship' 1`] = `
 [
   "User received night for main transaction 1000000000n
@@ -1190,6 +1182,16 @@ exports[`Snippet outputs > with network > should output the correct result for '
     }
   }
 }
+",
+]
+`;
+
+exports[`Snippet outputs > with network > should output the correct result for 'well-formed-validation' 1`] = `
+[
+  "Validated unproven transaction (structural checks only)
+Validated finalized transaction (signatures checked)
+Validated finalized transaction (full strictness)
+Transfer with full validation completed
 ",
 ]
 `;

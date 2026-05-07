@@ -33,7 +33,9 @@ import { type SerializationCapability } from './v1/Serialization.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
-import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type BlockData, type WalletSyncUpdate } from './v1/Sync.js';
+
+export type { BlockData } from './v1/Sync.js';
 
 import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 
@@ -142,6 +144,25 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     ttl: Date,
     currentTime?: Date,
   ): Promise<UnprovenTransaction>;
+
+  /**
+   * Fetches the latest block produced on chain.
+   *
+   * Does not depend on wallet sync progress — the call hits the indexer (or simulator)
+   * directly for current chain state. Each invocation is a fresh fetch; the result is
+   * not cached.
+   *
+   * @returns The latest block's hash, height, timestamp, and ledger parameters.
+   * @throws If the chain has not yet produced any block, or the indexer is unreachable.
+   *
+   * @example
+   * ```typescript
+   * const blockData = await wallet.dust.getLatestBlockData();
+   * console.log(`Chain time: ${blockData.timestamp.toISOString()}`);
+   * console.log(`Block height: ${blockData.height}`);
+   * ```
+   */
+  getLatestBlockData(): Promise<BlockData>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -329,6 +350,14 @@ export function CustomDustWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertTransaction(transaction),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    getLatestBlockData(): Promise<BlockData> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.getLatestBlockData(),
         })
         .pipe(Effect.runPromise);
     }
