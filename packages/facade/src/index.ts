@@ -276,17 +276,34 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
 
 /** Thrown when a transaction fails the structural well-formedness check before being processed. */
 export class WellFormedError extends Error {
-  override readonly cause: unknown;
   constructor(cause: unknown) {
-    super('Transaction is not well-formed');
-    this.cause = cause;
+    super(`Transaction is not well-formed: ${String(cause)}`, { cause });
+    this.name = 'WellFormedError';
   }
 }
 
-export type WellFormedStrictnessFlags = {
-  enforceBalancing: boolean;
-  verifySignatures: boolean;
-  enforceLimits: boolean;
+/**
+ * Configurable subset of {@link ledger.WellFormedStrictness}. Proof-verification flags (`verifyNativeProofs`,
+ * `verifyContractProofs`) are intentionally omitted — proof verification requires the complete ledger state and will be
+ * addressed in a future task.
+ */
+export type WellFormedStrictnessFlags = Pick<
+  ledger.WellFormedStrictness,
+  'enforceBalancing' | 'verifySignatures' | 'enforceLimits'
+>;
+
+const buildStrictness = (flags: WellFormedStrictnessFlags): ledger.WellFormedStrictness => {
+  const strictness = new ledger.WellFormedStrictness();
+  strictness.enforceBalancing = flags.enforceBalancing;
+  strictness.verifySignatures = flags.verifySignatures;
+  strictness.enforceLimits = flags.enforceLimits;
+  return strictness;
+};
+
+const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParameters): ledger.LedgerState => {
+  const state = ledger.LedgerState.blank(networkId);
+  state.parameters = parameters;
+  return state;
 };
 
 export class WalletFacade {
@@ -431,12 +448,12 @@ export class WalletFacade {
   /**
    * Checks whether a transaction is structurally well-formed before passing it to a balance or submit method.
    *
-   * Highly recommended in particular for transactions received from a 3rd party (e.g., a dApp or partner
-   * service) before forwarding them to a balance or submit method.
+   * Highly recommended in particular for transactions received from a 3rd party (e.g., a dApp or partner service)
+   * before forwarding them to a balance or submit method.
    *
-   * TTL expiry, Network ID mismatch, and transaction structure are always enforced regardless of `flags`.
-   * All three configurable flags must be supplied explicitly — there are no defaults, so callers must be
-   * intentional about each check.
+   * TTL expiry, Network ID mismatch, and transaction structure are always enforced regardless of `flags`. All three
+   * configurable flags must be supplied explicitly — there are no defaults, so callers must be intentional about each
+   * check.
    *
    * Recommended flags per call site:
    *
@@ -447,20 +464,19 @@ export class WalletFacade {
    * | `balanceUnboundTransaction`   | `false`          | `false`          | `false`       |
    * | `balanceUnprovenTransaction`  | `false`          | `false`          | `false`       |
    *
-   * When `enforceBalancing` is `true` the latest on-chain ledger parameters are fetched and used for the balance check;
-   * otherwise the initial parameters are used and no fetch is performed.
+   * Ledger parameters are selected automatically from `flags.enforceBalancing`:
+   *
+   * - `true` → fetches the current on-chain parameters via `this.dust.getLatestBlockData()` so the balance check uses the
+   *   actual cost model.
+   * - `false` → uses {@link ledger.LedgerParameters.initialParameters} and performs no fetch.
    *
    * @example
    *   ```typescript
-   *   // Before submitTransaction — full strictness
+   *   // Before submitTransaction — full strictness; fetches current on-chain parameters internally
    *   await facade.validateTransaction(finalizedTx, { enforceBalancing: true, verifySignatures: true, enforceLimits: true });
    *   await facade.submitTransaction(finalizedTx);
    *
-   *   // Before balanceFinalizedTransaction
-   *   await facade.validateTransaction(finalizedTx, { enforceBalancing: false, verifySignatures: true, enforceLimits: false });
-   *   await facade.balanceFinalizedTransaction(finalizedTx, secretKeys, options);
-   *
-   *   // Before balanceUnboundTransaction or balanceUnprovenTransaction
+   *   // Before balanceUnboundTransaction or balanceUnprovenTransaction — no fetch performed
    *   await facade.validateTransaction(tx, { enforceBalancing: false, verifySignatures: false, enforceLimits: false });
    *   await facade.balanceUnboundTransaction(tx, secretKeys, options);
    *   ```;
@@ -468,19 +484,19 @@ export class WalletFacade {
    * @param tx - The transaction to validate (`FinalizedTransaction`, `UnboundTransaction`, or `UnprovenTransaction`).
    * @param flags - Strictness flags for the configurable checks.
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
+   * @throws Any error raised by `this.dust.getLatestBlockData()` when `flags.enforceBalancing` is `true` — typically a
+   *   network/indexer failure. These propagate unwrapped so callers can distinguish a malformed transaction from an
+   *   inability to fetch ledger parameters.
    */
   async validateTransaction(
     tx: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
     flags: WellFormedStrictnessFlags,
   ): Promise<void> {
-    const strictness = new ledger.WellFormedStrictness();
-    strictness.enforceBalancing = flags.enforceBalancing;
-    strictness.verifySignatures = flags.verifySignatures;
-    strictness.enforceLimits = flags.enforceLimits;
-    const ledgerState = ledger.LedgerState.blank(this.#networkId);
-    ledgerState.parameters = flags.enforceBalancing
+    const parameters = flags.enforceBalancing
       ? (await this.dust.getLatestBlockData()).ledgerParameters
       : ledger.LedgerParameters.initialParameters();
+    const strictness = buildStrictness(flags);
+    const ledgerState = buildBlankLedgerState(this.#networkId, parameters);
     try {
       tx.wellFormed(ledgerState, strictness, this.clock.now());
     } catch (cause) {
