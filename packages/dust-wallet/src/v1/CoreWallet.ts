@@ -25,7 +25,7 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { Array as Arr, Encoding, Option, pipe } from 'effect';
+import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
@@ -47,7 +47,7 @@ export const PublicKey = {
   fromSecretKey: (secretKey: DustSecretKey, networkId: NetworkId): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
-      addressHex: Encoding.encodeHex(secretKey.publicKey.toString()),
+      addressHex: new DustAddress(secretKey.publicKey).hexString,
       address: DustAddress.encodePublicKey(networkId, secretKey.publicKey),
     };
   },
