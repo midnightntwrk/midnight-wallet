@@ -17,12 +17,13 @@ import {
   type FinalizedTransactionHistoryCommon,
   type FinalizedEntryInput,
   type SerializedTransactionHistory,
+  type TransactionRef,
 } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage<
   TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
 > implements TransactionHistoryStorage<TRead> {
-  gotPending(_hash: TransactionHash, _identifiers: readonly string[], _submittedAt: Date): Promise<void> {
+  gotPending(_tx: TransactionRef, _submittedAt: Date): Promise<void> {
     return Promise.resolve();
   }
 
@@ -30,12 +31,7 @@ export class NoOpTransactionHistoryStorage<
     return Promise.resolve();
   }
 
-  gotRejected(
-    _hash: TransactionHash,
-    _identifiers: readonly string[],
-    _rejectedAt: Date,
-    _reason?: string,
-  ): Promise<void> {
+  gotRejected(_tx: TransactionRef, _rejectedAt: Date, _reason?: string): Promise<void> {
     return Promise.resolve();
   }
 

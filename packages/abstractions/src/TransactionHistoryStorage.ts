@@ -98,6 +98,18 @@ export type FinalizedEntryInput<T extends FinalizedTransactionHistoryCommon = Fi
 > & { readonly finalizedAt: Date };
 
 /**
+ * View of a transaction the lifecycle methods need to derive a storage key. Kept ledger-agnostic so the abstractions
+ * package doesn't pull in a specific ledger version.
+ *
+ * - `identifiers()` is the stable, always-available list used as the entry's `identifiers` field and as the fallback key.
+ * - `transactionHash()` is optional because not every variant of an in-flight tx is hashable (e.g. unproven txs);
+ */
+export interface TransactionRef {
+  identifiers(): readonly string[];
+  transactionHash?(): { toString(): string };
+}
+
+/**
  * Read-side of a transaction history storage. T appears only in output position, so this interface is **covariant** in
  * T: a `TransactionHistoryReader<Specific>` is assignable to `TransactionHistoryReader<Wider>`.
  */
@@ -123,20 +135,21 @@ export interface TransactionHistoryWriter<
   T extends FinalizedTransactionHistoryCommon = FinalizedTransactionHistoryCommon,
 > {
   /**
-   * Record that a tx has been submitted and is awaiting confirmation. Keyed by the tx's first identifier (the only
-   * stable id available before the tx appears on-chain).
+   * Record that a tx has been submitted and is awaiting confirmation. The storage derives the entry key from the tx
+   * itself (preferring `transactionHash()` and falling back to the first identifier).
    */
-  gotPending(hash: TransactionHash, identifiers: readonly string[], submittedAt: Date): Promise<void>;
+  gotPending(tx: TransactionRef, submittedAt: Date): Promise<void>;
   /**
    * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears any earlier
    * `pending` entry that was keyed by an identifier in the supplied set.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
   /**
-   * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed by the tx's
-   * first identifier (matching the prior `pending` entry's key) so the lifecycle transition is in-place.
+   * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. The storage derives
+   * the entry key from the tx itself, matching the keying used by `gotPending` so the lifecycle transition is
+   * in-place.
    */
-  gotRejected(hash: TransactionHash, identifiers: readonly string[], rejectedAt: Date, reason?: string): Promise<void>;
+  gotRejected(tx: TransactionRef, rejectedAt: Date, reason?: string): Promise<void>;
 }
 
 /**

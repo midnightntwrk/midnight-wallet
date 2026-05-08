@@ -500,27 +500,11 @@ export class WalletFacade {
 
   async submitTransaction(tx: ledger.FinalizedTransaction): Promise<TransactionIdentifier> {
     const identifiers = tx.identifiers();
-    const firstIdentifier = identifiers[0];
-    // Prefer the locally-computed tx hash so pending and finalized entries share the same storage key in the common
-    // case — the merge function then handles the lifecycle transition in-place. We fall back to `firstIdentifier` if
-    // computing the hash fails (defensive — `transactionHash()` requires a proven+signed+bound tx, which is exactly
-    // what `FinalizedTransaction` is, but we don't want a hash failure to block submission). On the rare path where
-    // the indexer reports a different hash for the on-chain tx (e.g. intent merging), `gotFinalized` still falls
-    // back to identifier-subset matching to clear the stale pending entry.
-    const pendingHash = ((): TransactionHistoryStorage.TransactionHash | undefined => {
-      try {
-        return tx.transactionHash().toString();
-      } catch {
-        return firstIdentifier;
-      }
-    })();
     try {
       await this.pendingTransactionsService.addPendingTransaction(tx);
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
-      if (pendingHash !== undefined) {
-        await this.#txHistoryStorage.gotPending(pendingHash, identifiers, this.clock.now());
-      }
+      await this.#txHistoryStorage.gotPending(tx, this.clock.now());
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
       return identifiers.at(-1)!;
@@ -992,19 +976,7 @@ export class WalletFacade {
       this.dust.revertTransaction(tx),
     ]).then(async () => {
       await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
-      // Mirror submitTransaction's keying: prefer the locally-computed tx hash, fall back to firstIdentifier. This
-      // ensures gotRejected hits the same key the original gotPending used, so the lifecycle transition is in-place.
-      const identifiers = tx.identifiers();
-      const rejectedHash = ((): TransactionHistoryStorage.TransactionHash | undefined => {
-        try {
-          return (tx as ledger.FinalizedTransaction).transactionHash().toString();
-        } catch {
-          return identifiers[0];
-        }
-      })();
-      if (rejectedHash !== undefined) {
-        await this.#txHistoryStorage.gotRejected(rejectedHash, identifiers, this.clock.now());
-      }
+      await this.#txHistoryStorage.gotRejected(tx, this.clock.now());
     });
   }
 

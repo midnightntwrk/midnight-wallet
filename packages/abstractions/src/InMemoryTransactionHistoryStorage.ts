@@ -18,7 +18,19 @@ import {
   type FinalizedTransactionHistoryCommon,
   type FinalizedEntryInput,
   type SerializedTransactionHistory,
+  type TransactionRef,
 } from './TransactionHistoryStorage.js';
+
+const deriveKey = (tx: TransactionRef, identifiers: readonly string[]): TransactionHash | undefined => {
+  if (typeof tx.transactionHash === 'function') {
+    try {
+      return tx.transactionHash().toString();
+    } catch {
+      // fall through to identifier fallback
+    }
+  }
+  return identifiers[0];
+};
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
@@ -51,7 +63,10 @@ export class InMemoryTransactionHistoryStorage<
     this.#merge = merge ?? ((existing, incoming) => ({ ...existing, ...incoming }));
   }
 
-  async gotPending(hash: TransactionHash, identifiers: readonly string[], submittedAt: Date): Promise<void> {
+  async gotPending(tx: TransactionRef, submittedAt: Date): Promise<void> {
+    const identifiers = tx.identifiers();
+    const hash = deriveKey(tx, identifiers);
+    if (hash === undefined) return;
     const entry = {
       hash,
       identifiers,
@@ -67,12 +82,10 @@ export class InMemoryTransactionHistoryStorage<
     this.#clearPendingByIdentifiers((rest as { identifiers?: readonly string[] }).identifiers ?? [], entry.hash);
   }
 
-  async gotRejected(
-    hash: TransactionHash,
-    identifiers: readonly string[],
-    rejectedAt: Date,
-    reason?: string,
-  ): Promise<void> {
+  async gotRejected(tx: TransactionRef, rejectedAt: Date, reason?: string): Promise<void> {
+    const identifiers = tx.identifiers();
+    const hash = deriveKey(tx, identifiers);
+    if (hash === undefined) return;
     const lifecycle =
       reason !== undefined
         ? { status: 'rejected' as const, rejectedAt, reason }
