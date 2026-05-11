@@ -12,17 +12,17 @@
 // limitations under the License.
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, Scope, Stream } from 'effect';
+import { Chunk, Duration, Effect, Either, ParseResult, pipe, Schedule, Schema, type Scope, Stream } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import {
-  Simulator,
-  SimulatorState,
+  type Simulator,
+  type SimulatorState,
   getLastBlock,
   getBlockEventsFrom,
 } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ConnectionHelper, WsSubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, WalletError } from './WalletError.js';
+import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
@@ -47,18 +47,25 @@ export type IndexerClientConnection = {
 };
 
 export type BatchUpdatesConfig = {
-  /** Maximum number of events to collect into a single batch before emitting.
-   *  @default 10 */
+  /**
+   * Maximum number of events to collect into a single batch before emitting.
+   *
+   * @default 10
+   */
   readonly size?: number;
-  /** Maximum time in milliseconds to wait for a full batch before emitting a partial one.
-   *  Controls the `groupedWithin` timeout — lower values mean more responsive
-   *  (but smaller) batches when events arrive slowly.
-   *  @default 1 */
+  /**
+   * Maximum time in milliseconds to wait for a full batch before emitting a partial one. Controls the `groupedWithin`
+   * timeout — lower values mean more responsive (but smaller) batches when events arrive slowly.
+   *
+   * @default 1
+   */
   readonly timeout?: number;
-  /** Minimum delay in milliseconds injected between consecutive batches.
-   *  Prevents the sync stream from saturating downstream consumers when many
-   *  events are available at once. Set to 0 to disable spacing entirely.
-   *  @default 4 */
+  /**
+   * Minimum delay in milliseconds injected between consecutive batches. Prevents the sync stream from saturating
+   * downstream consumers when many events are available at once. Set to 0 to disable spacing entirely.
+   *
+   * @default 4
+   */
   readonly spacing?: number;
 };
 

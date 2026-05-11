@@ -1,5 +1,44 @@
 # @midnight-ntwrk/wallet-sdk-unshielded-wallet
 
+## 3.0.0
+
+### Major Changes
+
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+
+### Patch Changes
+
+- e57a94b: Unify Simulator into capabilities package with proper fee payment and block production model
+- c1ae369: Fix transaction history race condition by consolidating merge logic in the facade and delegating it to
+  storage at construction time.
+- 1f794fa: feat: deterministically set balancing tx segment id
+
+  Replaced `Transaction.fromPartsRandomized` with `Transaction.fromParts` + explicit `intents.set(segmentId, intent)`
+  when building balancing transactions, where `segmentId` is the lowest unused fallible segment in `[1, 65535]`. This
+  makes segment placement deterministic and reproducible instead of random.
+  - **dust-wallet**: `dryRunFee` and `balanceTransactions` now merge the existing (proof-erased) transactions first,
+    then pick a segment that doesn't collide with any of them before constructing the balancing tx. A new exported
+    `findAvailableSegmentId` helper in `Transacting.ts` drives the lookup.
+  - **unshielded-wallet**: `balanceFinalizedTransaction` picks a segment that doesn't collide with the passed-in
+    `FinalizedTransaction` before constructing the balancing tx. `findAvailableSegmentId` was added as a method on
+    `TransactionOps`.
+
+- 0db3290: chore: bump ledger version to 8.0.3
+- aaa0bf1: In certain cases valid transactions won't contain any intents, which would cause the
+  `WalletFacade.prototype.signRecipe` fail. Now it won't fail and return same recipe
+- Updated dependencies [e57a94b]
+- Updated dependencies [c1ae369]
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.0
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.1
+  - @midnight-ntwrk/wallet-sdk-abstractions@2.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.1
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+  - @midnight-ntwrk/wallet-sdk-runtime@1.0.3
+
 ## 2.1.0
 
 ### Minor Changes

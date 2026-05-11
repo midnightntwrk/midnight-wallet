@@ -10,7 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustInitialNonce, DustNullifier, DustNonce, DustPublicKey, Utxo } from '@midnight-ntwrk/ledger-v8';
+import {
+  type DustInitialNonce,
+  type DustNullifier,
+  type DustNonce,
+  type DustPublicKey,
+  type Utxo,
+} from '@midnight-ntwrk/ledger-v8';
 
 export type Dust = {
   initialValue: bigint;
@@ -30,31 +36,17 @@ export type DustFullInfo = DustGenerationDetails & {
   token: Dust;
 };
 
-/**
- * Details of Dust generation/decay
- */
+/** Details of Dust generation/decay */
 export type DustGenerationDetails = {
-  /**
-   * When the backing Night UTxO was spent
-   */
+  /** When the backing Night UTxO was spent */
   dtime: Date | undefined;
-  /**
-   * Maximum capacity (in Specks)
-   * `gen.value * night_dust_ratio`
-   */
+  /** Maximum capacity (in Specks) `gen.value * night_dust_ratio` */
   maxCap: bigint;
-  /**
-   * When the maximum capacity is reached.
-   * `ctime + timeToCapSeconds`
-   */
+  /** When the maximum capacity is reached. `ctime + timeToCapSeconds` */
   maxCapReachedAt: Date;
-  /**
-   * Current amount of Dust available (in Specks)
-   */
+  /** Current amount of Dust available (in Specks) */
   generatedNow: bigint;
-  /**
-   * The slope of generation and decay for this specific Dust UTxO (`gen.value * generation_decay_rate`)
-   */
+  /** The slope of generation and decay for this specific Dust UTxO (`gen.value * generation_decay_rate`) */
   rate: bigint;
 };
 

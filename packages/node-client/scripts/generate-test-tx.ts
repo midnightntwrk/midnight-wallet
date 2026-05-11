@@ -11,12 +11,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /**
- * IMPORTANT: This file isn't used in the current test setup as we generate the txs before running the tests (please see gen-txs.ts instead)
+ * IMPORTANT: This file isn't used in the current test setup as we generate the txs before running the tests (please see
+ * gen-txs.ts instead)
  *
- * This script uses midnight node toolkit to generate test transactions
- * Such approach, while potentially more involved when node version changes, has many benefits:
+ * This script uses midnight node toolkit to generate test transactions Such approach, while potentially more involved
+ * when node version changes, has many benefits:
+ *
  * 1. It does not create a cyclic dependency on wallet code for such foundational package
- * 2. Transaction generator does save transactions into file, so they can be re-generated only when node changes its ledger version
+ * 2. Transaction generator does save transactions into file, so they can be re-generated only when node changes its ledger
+ *    version
  */
 import { DateTime, Duration, Effect, Option, pipe } from 'effect';
 import { FileSystem } from '@effect/platform';

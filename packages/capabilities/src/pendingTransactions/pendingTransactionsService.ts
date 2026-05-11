@@ -14,7 +14,7 @@
  */
 
 import {
-  Clock,
+  type Clock,
   DateTime,
   DefaultServices,
   Duration,
@@ -22,7 +22,7 @@ import {
   Exit,
   Iterable,
   Option,
-  ParseResult,
+  type ParseResult,
   pipe,
   Schedule,
   Scope,
@@ -30,9 +30,9 @@ import {
   SubscriptionRef,
 } from 'effect';
 import * as PendingTransactions from './pendingTransactions.js';
-import * as rx from 'rxjs';
-import { HttpQueryClient, QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { TransactionStatus, TransactionStatusQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
+import type * as rx from 'rxjs';
+import { HttpQueryClient, type QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { TransactionStatus, type TransactionStatusQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { EitherOps, ObservableOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 
 export type PendingTransactionsService<TTransaction> = {

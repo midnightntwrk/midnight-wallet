@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { CoinRecipe, Imbalance, Imbalances, TokenType } from './Imbalances.js';
+import { type CoinRecipe, type Imbalance, Imbalances, type TokenType } from './Imbalances.js';
 
 export interface TransactionCostModel {
   inputFeeOverhead: bigint;

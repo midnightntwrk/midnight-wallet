@@ -1,5 +1,18 @@
 # @midnight-ntwrk/wallet-sdk-abstractions
 
+## 2.1.0
+
+### Minor Changes
+
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+
+### Patch Changes
+
+- c1ae369: Fix transaction history race condition by consolidating merge logic in the facade and delegating it to
+  storage at construction time.
+
 ## 2.0.0
 
 ### Major Changes

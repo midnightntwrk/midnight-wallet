@@ -14,7 +14,7 @@
 import { Buffer } from 'buffer';
 import * as rx from 'rxjs';
 import { initWalletWithSeed } from '../utils.ts';
-import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk-hd';
+import { generateRandomSeed } from '@midnight-ntwrk/wallet-sdk';
 
 const sender = await initWalletWithSeed(
   Buffer.from('0000000000000000000000000000000000000000000000000000000000000001', 'hex'),

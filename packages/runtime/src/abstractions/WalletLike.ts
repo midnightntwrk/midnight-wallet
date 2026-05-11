@@ -11,16 +11,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { Scope } from 'effect';
-import { Observable } from 'rxjs';
-import { Runtime } from '../Runtime.js';
-import { AnyVersionedVariantArray, StateOf, VariantRecord } from './Variant.js';
-import { HList, Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type Scope } from 'effect';
+import { type Observable } from 'rxjs';
+import { type Runtime } from '../Runtime.js';
+import { type AnyVersionedVariantArray, type StateOf, type VariantRecord } from './Variant.js';
+import { type HList, type Poly } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type ProtocolState } from '@midnight-ntwrk/wallet-sdk-abstractions';
 
-/**
- * Defines the static portion of base wallet class definition
- */
+/** Defines the static portion of base wallet class definition */
 export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TConfiguration = object> {
   readonly configuration: Readonly<TConfiguration>;
   new (runtime: Runtime<TVariants>, scope: Scope.CloseableScope): WalletLike<TVariants>;
@@ -38,9 +36,7 @@ export interface BaseWalletClass<TVariants extends AnyVersionedVariantArray, TCo
   ): WalletOf<T>;
 }
 
-/**
- * Defines the static portion of wallet-like definition
- */
+/** Defines the static portion of wallet-like definition */
 export interface WalletClassLike<
   TVariants extends AnyVersionedVariantArray,
   TWallet extends WalletLike<TVariants>,
@@ -60,13 +56,9 @@ export interface WalletLike<TVariants extends AnyVersionedVariantArray> {
   readonly runtime: Runtime<TVariants>;
   readonly runtimeScope: Scope.CloseableScope;
 
-  /**
-   * A stream of state changes over any amount of time that have been processed by the wallet.
-   */
+  /** A stream of state changes over any amount of time that have been processed by the wallet. */
   readonly rawState: Observable<ProtocolState.ProtocolState<StateOf<HList.Each<TVariants>>>>;
 
-  /**
-   * Stops the wallet
-   */
+  /** Stops the wallet */
   stop(): Promise<void>;
 }

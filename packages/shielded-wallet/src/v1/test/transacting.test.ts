@@ -25,10 +25,10 @@ import { makeDefaultKeysCapability } from '../Keys.js';
 import { makeSimulatorProvingServiceEffect } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { CoreWallet } from '../CoreWallet.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeSimulatorTransactingCapability,
-  TokenTransfer,
+  type TokenTransfer,
 } from '../Transacting.js';
 import { getNonDustImbalance } from '../../test/testUtils.js';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
@@ -885,10 +885,7 @@ describe('V1 Wallet Transacting', () => {
     });
   });
 
-  /**
-   *
-   * .applyFailed is missing from ZswapLocalState [https://shielded.atlassian.net/browse/PM-19678]
-   */
+  /** .applyFailed is missing from ZswapLocalState [https://shielded.atlassian.net/browse/PM-19678] */
   describe.skip('when reverting and cancelling transactions', () => {
     it('reverts a transaction (e.g. due to a submission failure), releasing booked coins', () => {
       const wallets = prepareWallets({

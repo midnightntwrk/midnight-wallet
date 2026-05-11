@@ -11,21 +11,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import { firstValueFrom } from 'rxjs';
-import { TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
+import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { exit } from 'node:process';
 import { logger } from './logger.js';
-import { CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
-/**
- * Tests performing a token transfer
- *
- * @group devnet
- * @group testnet
- */
+/** Tests performing a token transfer */
 
 // Purpose of this script is to setup up the test wallets used for remote tests.
 // SEED should be a wallet with funds e.g. faucet wallet

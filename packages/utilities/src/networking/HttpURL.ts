@@ -14,13 +14,9 @@ import { Either } from 'effect';
 import * as Brand from 'effect/Brand';
 import { InvalidProtocolSchemeError } from './URLError.js';
 
-/**
- * A 'HTTP' URL.
- */
+/** A 'HTTP' URL. */
 export type HttpUrl = Brand.Branded<URL, 'HttpURL'>;
-/**
- * Constructs a 'HTTP' URL from a source URL, ensuring that the protocol is correct.
- */
+/** Constructs a 'HTTP' URL from a source URL, ensuring that the protocol is correct. */
 export const HttpURL = Brand.refined<HttpUrl>(
   (url) => url.protocol === 'http:' || url.protocol === 'https:',
   (url) => Brand.error(`Invalid protocol scheme '${url.protocol}'. Expected 'http:' or 'https:'`),
@@ -31,7 +27,7 @@ export const HttpURL = Brand.refined<HttpUrl>(
  *
  * @param url The URL to be made into a HTTP URL.
  * @returns An `Either` that represents the valid HTTP URL constructed from `url`; or an
- * {@link InvalidProtocolSchemeError}.
+ *   {@link InvalidProtocolSchemeError}.
  */
 export const make: (url: URL | string) => Either.Either<HttpUrl, InvalidProtocolSchemeError> = (url) => {
   const targetURL = new URL(url);

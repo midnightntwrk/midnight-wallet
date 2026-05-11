@@ -10,17 +10,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
+import { Effect, type Scope, Stream, Schema, pipe, Either, HashMap } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { UtxoWithMeta } from './UnshieldedState.js';
-import { Simulator, SimulatorState, getCurrentBlockNumber } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
+import {
+  type Simulator,
+  type SimulatorState,
+  getCurrentBlockNumber,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { UnshieldedTransactions } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { WsSubscriptionClient, ConnectionHelper } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { SyncWalletError, WalletError } from './WalletError.js';
+import { SyncWalletError, type WalletError } from './WalletError.js';
 import { WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { TransactionHistoryService } from './TransactionHistory.js';
+import { type TransactionHistoryService } from './TransactionHistory.js';
 import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
+import { type WalletSyncUpdate, WalletSyncUpdateSchema } from './SyncSchema.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 export interface SyncService<TState, TUpdate> {
@@ -163,17 +167,17 @@ export const makeSimulatorSyncService = (
 };
 
 /**
- * Creates a sync capability that extracts UTXOs from the simulator's ledger state
- * and applies them to the wallet.
+ * Creates a sync capability that extracts UTXOs from the simulator's ledger state and applies them to the wallet.
  *
  * This capability:
+ *
  * 1. Extracts all UTXOs for the wallet's address from the simulator ledger
  * 2. Compares with the wallet's current UTXOs to determine created/spent
  * 3. Applies the update to the wallet state
  *
- * Note: The `registeredForDustGeneration` flag is set based on whether the address
- * appears in the ledger's dust delegation table. This is a heuristic that may not
- * perfectly match the indexer's behavior but provides reasonable accuracy.
+ * Note: The `registeredForDustGeneration` flag is set based on whether the address appears in the ledger's dust
+ * delegation table. This is a heuristic that may not perfectly match the indexer's behavior but provides reasonable
+ * accuracy.
  */
 export const makeSimulatorSyncCapability = (): SyncCapability<CoreWallet, SimulatorSyncUpdate> => {
   const utxoKey = (utxo: { intentHash: string; outputNo: number }) => `${utxo.intentHash}#${utxo.outputNo}`;

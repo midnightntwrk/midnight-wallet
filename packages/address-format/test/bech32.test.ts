@@ -32,9 +32,7 @@ describe('Bech32 addresses', () => {
     });
   });
 
-  /**
-   * addresses.json needs to be updated with the correct format for this test to pass
-   */
+  /** Addresses.json needs to be updated with the correct format for this test to pass */
   it.skip('ShieldedEncryptionSecretKey - Bech32 representation should match its Hex representation', () => {
     const zswapNetworkIds = ['dev', 'test', null];
     const filteredAddresses = addresses.filter((item) => zswapNetworkIds.includes(item.networkId));

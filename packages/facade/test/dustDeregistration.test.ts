@@ -16,7 +16,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getShieldedSeed, getUnshieldedSeed, getDustSeed, waitForFullySynced } from './utils/index.js';
+import { getShieldedSeed, getUnshieldedSeed, getDustSeed } from './utils/index.js';
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import * as rx from 'rxjs';
@@ -110,7 +110,7 @@ describe('Dust Deregistration', () => {
 
   it('deregisters from dust generation', async () => {
     // NOTE: by default, our test account is already registered for Dust generation
-    await waitForFullySynced(walletFacade);
+    await walletFacade.waitForSyncedState();
 
     const walletStateWithNight = await rx.firstValueFrom(
       walletFacade.state().pipe(rx.filter((s) => s.unshielded.availableCoins.length > 0)),

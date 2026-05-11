@@ -13,15 +13,17 @@
 /**
  * Simulation Mode Test for WalletFacade
  *
- * This test demonstrates how to use the Simulator for wallet testing without
- * requiring a real blockchain node, proving server, or indexer.
+ * This test demonstrates how to use the Simulator for wallet testing without requiring a real blockchain node, proving
+ * server, or indexer.
  *
  * Key components:
+ *
  * 1. Simulator - provides a simulated ledger with block production
  * 2. Custom wallets with simulator-based sync capabilities
  * 3. Promise-based wrappers for submission and proving services
  *
  * This pattern is suitable for:
+ *
  * - Unit tests that need wallet functionality
  * - Integration tests that don't need real chain interaction
  * - DApp connector reference implementation tests
@@ -60,6 +62,7 @@ describe('WalletFacade in simulation mode', () => {
    * This test demonstrates shielded token transfers in simulation mode with proper fee payment.
    *
    * The test:
+   *
    * 1. Creates shielded + Night tokens via genesis mints
    * 2. Registers Night tokens for Dust generation
    * 3. Fast-forwards time to accumulate Dust
@@ -202,8 +205,8 @@ describe('WalletFacade in simulation mode', () => {
   });
 
   /**
-   * Test that demonstrates the unshielded wallet simulator sync works.
-   * This test verifies that Night tokens from rewardNight are visible in the wallet.
+   * Test that demonstrates the unshielded wallet simulator sync works. This test verifies that Night tokens from
+   * rewardNight are visible in the wallet.
    */
   it('syncs Night tokens from rewardNight to unshielded wallet', async () => {
     return Effect.gen(function* () {

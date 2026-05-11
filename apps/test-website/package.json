@@ -17,12 +17,7 @@
     "url": "git+https://github.com/midnight-ntwrk/artifacts.git"
   },
   "dependencies": {
-    "@midnight-ntwrk/wallet-sdk-address-format": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-dust-wallet": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-facade": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-hd": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-shielded": "workspace:*",
-    "@midnight-ntwrk/wallet-sdk-unshielded-wallet": "workspace:*",
+    "@midnight-ntwrk/wallet-sdk": "workspace:*",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "buffer": "^6.0.3",
@@ -46,7 +41,7 @@
   "devDependencies": {
     "@types/lodash-es": "^4.17.12",
     "vite": "^7.3.1",
-    "vite-plugin-node-polyfills": "^0.25.0",
+    "vite-plugin-node-polyfills": "^0.26.0",
     "vite-plugin-wasm": "^3.5.0"
   }
 }

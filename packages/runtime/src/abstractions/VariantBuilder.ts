@@ -10,8 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { AnyVariant, VersionedVariant } from './Variant.js';
+import { type ProtocolVersion } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type AnyVariant, type VersionedVariant } from './Variant.js';
 
 /**
  * Builds a target {@link Variant} object from internal build state.
@@ -26,20 +26,15 @@ export interface VariantBuilder<TVariant extends AnyVariant, TConfiguration exte
    * Builds the target variant object from the internal build state.
    *
    * @param configuration The configuration to use when building the target variant.
-   *
    * @returns An instance of {@link Variant} that operates over `TState`.
    */
   build(configuration: TConfiguration): TVariant;
 }
 
-/**
- * Base type that represents variant configuration.
- */
+/** Base type that represents variant configuration. */
 export type AnyBuilderConfiguration = object;
 
-/**
- * A utility type that represents any {@link VariantBuilder}.
- */
+/** A utility type that represents any {@link VariantBuilder}. */
 export type AnyVariantBuilder = VariantBuilder<AnyVariant, AnyBuilderConfiguration>;
 
 export type VariantOf<T> =
@@ -74,7 +69,5 @@ export type ConfigurationOf<T> =
       ? ConfigurationOf<Builder>
       : never;
 
-/**
- * A type that associates a {@link VariantBuilder} with a given version of the Midnight protocol.
- */
+/** A type that associates a {@link VariantBuilder} with a given version of the Midnight protocol. */
 export type AnyVersionedVariantBuilder = VersionedVariantBuilder<AnyVariantBuilder>;

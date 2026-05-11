@@ -10,12 +10,12 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { DustPublicKey, EncryptionSecretKey, UserAddress } from '@midnight-ntwrk/ledger-v8';
+import { type DustPublicKey, EncryptionSecretKey, type UserAddress } from '@midnight-ntwrk/ledger-v8';
 import { bech32m } from '@scure/base';
 import * as subsquidScale from '@subsquid/scale-codec';
 
 export const mainnet: unique symbol = Symbol('Mainnet');
-export type NetworkId = string | typeof mainnet;
+type NetworkId = string | typeof mainnet;
 const NetworkId = {
   toString: (networkId: NetworkId): string => {
     return networkId === mainnet ? 'mainnet' : networkId;

@@ -136,8 +136,8 @@ describe.skip('Default Submission', () => {
   });
 
   /**
-   * Leaving only this test as these have become very memory intensive
-   * and also, practically this validates all of the above and below.
+   * Leaving only this test as these have become very memory intensive and also, practically this validates all of the
+   * above and below.
    */
   it('submits transactions waiting for finalized event', async () => {
     const { submissionResult, checkResult } = await pipe(

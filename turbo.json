@@ -108,6 +108,15 @@
       "outputs": [],
       "outputLogs": "new-only"
     },
+    "//#check-barrel-exports": {
+      "inputs": [
+        "scripts/check-barrel-exports.mjs",
+        "packages/wallet-sdk/src/**/*.ts",
+        "packages/wallet-sdk/package.json"
+      ],
+      "outputs": [],
+      "outputLogs": "new-only"
+    },
     "//#format:check:root": {
       "cache": false,
       "inputs": ["**/*.{ts,js,json,yaml,yml,md}", ".prettierrc.json", ".prettierignore.root"],
@@ -127,7 +136,7 @@
       "dependsOn": ["//#format:check:root"]
     },
     "verify:check": {
-      "dependsOn": ["typecheck", "format:check", "lint"]
+      "dependsOn": ["typecheck", "format:check", "lint", "//#check-barrel-exports"]
     },
     "verify:test": {
       "dependsOn": ["test"]

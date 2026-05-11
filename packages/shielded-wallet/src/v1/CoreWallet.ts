@@ -13,7 +13,7 @@
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Iterable, pipe, Record, Array as Arr } from 'effect';
-import { InvalidCoinHashesError, WalletError } from './WalletError.js';
+import { InvalidCoinHashesError, type WalletError } from './WalletError.js';
 
 export type PublicKeys = {
   coinPublicKey: ledger.CoinPublicKey;

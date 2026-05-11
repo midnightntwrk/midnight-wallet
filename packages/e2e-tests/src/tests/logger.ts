@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import pinoPretty from 'pino-pretty';
-import pino, { Logger } from 'pino';
+import pino, { type Logger } from 'pino';
 import fs, { createWriteStream } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'url';
