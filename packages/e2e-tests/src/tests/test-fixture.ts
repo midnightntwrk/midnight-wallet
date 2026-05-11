@@ -57,7 +57,6 @@ export function useTestContainersFixture() {
       }
       case 'devnet':
       case 'qanet':
-      case 'testnet':
       case 'preview':
       case 'preprod': {
         const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
@@ -136,20 +135,17 @@ export class TestContainersFixture {
 
   public getIndexerUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'https://indexer.testnet-02.midnight.network/api/v3/graphql';
-      }
       case 'devnet': {
-        return 'https://indexer.devnet.midnight.network/api/v3/graphql';
+        return 'https://indexer.devnet.midnight.network/api/v4/graphql';
       }
       case 'qanet': {
-        return 'https://indexer.qanet.midnight.network/api/v3/graphql';
+        return 'https://indexer.qanet.midnight.network/api/v4/graphql';
       }
       case 'preview': {
-        return 'https://indexer.preview.midnight.network/api/v3/graphql';
+        return 'https://indexer.preview.midnight.network/api/v4/graphql';
       }
       case 'preprod': {
-        return 'https://indexer.preprod.midnight.network/api/v3/graphql';
+        return 'https://indexer.preprod.midnight.network/api/v4/graphql';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -163,20 +159,17 @@ export class TestContainersFixture {
 
   public getIndexerWsUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'wss://indexer.testnet-02.midnight.network/api/v3/graphql/ws';
-      }
       case 'devnet': {
-        return 'wss://indexer.devnet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.devnet.midnight.network/api/v4/graphql/ws';
       }
       case 'qanet': {
-        return 'wss://indexer.qanet.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer-blue.qanet.midnight.network/api/v4/graphql/ws';
       }
       case 'preview': {
-        return 'wss://indexer.preview.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preview.midnight.network/api/v4/graphql/ws';
       }
       case 'preprod': {
-        return 'wss://indexer.preprod.midnight.network/api/v3/graphql/ws';
+        return 'wss://indexer.preprod.midnight.network/api/v4/graphql/ws';
       }
       case 'undeployed': {
         const indexerPort = this.getIndexerPort();
@@ -190,9 +183,6 @@ export class TestContainersFixture {
 
   public getNodeUri(): string {
     switch (TestContainersFixture.network) {
-      case 'testnet': {
-        return 'https://rpc.testnet-02.midnight.network';
-      }
       case 'devnet': {
         return 'wss://rpc.devnet.midnight.network';
       }
@@ -223,8 +213,6 @@ export class TestContainersFixture {
         return NetworkId.NetworkId.DevNet;
       case 'qanet':
         return NetworkId.NetworkId.QaNet;
-      case 'testnet':
-        return NetworkId.NetworkId.TestNet;
       case 'preview':
         return NetworkId.NetworkId.Preview;
       case 'preprod':

@@ -65,6 +65,7 @@
     "verify:check": "turbo run verify:check",
     "verify:test": "turbo run verify:test",
     "publint": "turbo run publint",
+    "check-barrel-exports": "node scripts/check-barrel-exports.mjs",
     "typecheck": "turbo run typecheck",
     "lint": "turbo run lint",
     "test": "turbo run test",

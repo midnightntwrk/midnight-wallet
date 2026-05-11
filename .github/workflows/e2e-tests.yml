@@ -17,8 +17,8 @@ on:
         required: true
         default: 'preview'
         options:
+          - devnet
           - qanet
-          - testnet
           - preview
           - prepod
       seed:
@@ -55,7 +55,7 @@ on:
     inputs:
       network:
         type: string
-        description: Midnight network to use (testnet/devnet/undeployed)
+        description: Midnight network to use (devnet/undeployed)
         required: true
         default: 'devnet'
       seed:

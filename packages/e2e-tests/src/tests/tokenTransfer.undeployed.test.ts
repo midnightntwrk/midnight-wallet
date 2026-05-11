@@ -19,11 +19,7 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
 
-/**
- * Tests performing a token transfer
- *
- * @group undeployed
- */
+/** Tests performing a token transfer */
 
 describe('Token transfer', () => {
   const getFixture = useTestContainersFixture();
