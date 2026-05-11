@@ -29,17 +29,33 @@ import { Array as Arr, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
+import {
+  type CollapsedMerkleTree,
+  type NewDustGeneration,
+  type DustGenerationDtimUpdate,
+  type DustUtxoMap,
+} from './SyncSchema.js';
+import { DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export type PublicKey = {
   publicKey: DustPublicKey;
+  addressHex: string;
+  address: string;
 };
 
 export const PublicKey = {
-  fromSecretKey: (secretKey: DustSecretKey): PublicKey => {
+  fromSecretKey: (secretKey: DustSecretKey, networkId: NetworkId): PublicKey => {
     return {
       publicKey: secretKey.publicKey,
+      addressHex: new DustAddress(secretKey.publicKey).hexString,
+      address: DustAddress.encodePublicKey(networkId, secretKey.publicKey),
     };
   },
+};
+
+export type SyncedDustNullifier = {
+  dustNullifier: DustNullifier;
+  isSpent: boolean;
 };
 
 export type CoreWallet = Readonly<{
@@ -49,15 +65,20 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
   pendingDust: Array<DustWithNullifier>;
+  dustNullifiers: Array<SyncedDustNullifier>;
 }>;
 
 export const CoreWallet = {
   init(localState: DustLocalState, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey), networkId);
+    return CoreWallet.empty(localState, PublicKey.fromSecretKey(secretKey, networkId), networkId);
   },
 
   initEmpty(dustParameters: DustParameters, secretKey: DustSecretKey, networkId: NetworkId): CoreWallet {
-    return CoreWallet.empty(new DustLocalState(dustParameters), PublicKey.fromSecretKey(secretKey), networkId);
+    return CoreWallet.empty(
+      new DustLocalState(dustParameters),
+      PublicKey.fromSecretKey(secretKey, networkId),
+      networkId,
+    );
   },
 
   empty(localState: DustLocalState, publicKey: PublicKey, networkId: NetworkId): CoreWallet {
@@ -66,6 +87,7 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: [],
+      dustNullifiers: [],
       progress: SyncProgress.createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -75,6 +97,7 @@ export const CoreWallet = {
     localState: DustLocalState,
     publicKey: PublicKey,
     pendingTokens: Array<DustWithNullifier>,
+    dustNullifiers: Array<SyncedDustNullifier>,
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
@@ -84,6 +107,7 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: pendingTokens,
+      dustNullifiers,
       progress: SyncProgress.createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -107,6 +131,113 @@ export const CoreWallet = {
       },
       stateWithChanges.changes,
     ];
+  },
+
+  applyDustGenerations(
+    wallet: CoreWallet,
+    updates: CollapsedMerkleTree[],
+    newGenerations: NewDustGeneration[],
+    generationDtimeUpdates: DustGenerationDtimUpdate[],
+  ): CoreWallet {
+    let updatedState = wallet.state;
+
+    let lastUpdatedIndex = -1;
+    for (const { generationIndex, genInfo, qdo } of newGenerations) {
+      // apply updates prior to the current generation index
+      updatedState = updates
+        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationIndex)
+        .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+      // now, insert the generation info
+      updatedState = updatedState.insertGenerationInfo(BigInt(generationIndex), genInfo, qdo.backingNight);
+      lastUpdatedIndex = generationIndex;
+    }
+
+    // apply the rest of the updates
+    updatedState = updates
+      .filter(({ startIndex }) => startIndex > lastUpdatedIndex)
+      .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
+
+    // apply dtime updates
+    updatedState = generationDtimeUpdates.reduce(
+      (state, update) => state.updateGenerationTreeFromEvidence(update.treeInsertionPath),
+      updatedState,
+    );
+
+    return {
+      ...wallet,
+      state: updatedState,
+    };
+  },
+
+  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: DustUtxoMap): CoreWallet {
+    const updatedState = [...newDustUtxos].reduce(
+      (state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo),
+      wallet.state,
+    );
+    return {
+      ...wallet,
+      state: updatedState,
+      dustNullifiers: wallet.dustNullifiers.concat(
+        [...newDustUtxos.keys()].map((dustNullifier) => ({ dustNullifier, isSpent: false })),
+      ),
+    };
+  },
+
+  applyDustCommitments(
+    wallet: CoreWallet,
+    newDustUtxos: DustUtxoMap,
+    collapsedCommitments: CollapsedMerkleTree[],
+  ): CoreWallet {
+    let updatedState = wallet.state;
+    const newUtxos = [...newDustUtxos.values()];
+    for (const { startIndex, update } of collapsedCommitments) {
+      // apply utxos going before the current index
+      const utxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
+      updatedState = utxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+      // apply current update
+      updatedState = updatedState.applyCommitmentCollapsedUpdate(update);
+    }
+
+    // check utxos after the last index
+    const lastCollapsedIndex = collapsedCommitments.at(-1);
+    if (lastCollapsedIndex !== undefined) {
+      const utxosAfterLastIndex = newUtxos.filter(
+        (utxoInfo) => Number(utxoInfo.qdo.mtIndex) > lastCollapsedIndex.endIndex,
+      );
+      updatedState = utxosAfterLastIndex.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+    }
+
+    // edge-case: no collapsed commitments but new utxos
+    if (!collapsedCommitments.length && newUtxos.length) {
+      updatedState = newUtxos.reduce(
+        (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
+        updatedState,
+      );
+    }
+
+    return { ...wallet, state: updatedState };
+  },
+
+  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: Array<DustNullifier>): CoreWallet {
+    const dustNullifiers = wallet.dustNullifiers.map((r) => ({
+      dustNullifier: r.dustNullifier,
+      isSpent: spentNullifiers.includes(r.dustNullifier) ? true : r.isSpent,
+    }));
+    const existingDustNullifiersMap = new Map(dustNullifiers.map((r) => [r.dustNullifier, r]));
+    const newNullifiers = spentNullifiers
+      .filter((n) => !existingDustNullifiersMap.has(n))
+      .map((n) => ({ dustNullifier: n, isSpent: false }));
+    return {
+      ...wallet,
+      dustNullifiers: dustNullifiers.concat(newNullifiers),
+    };
   },
 
   applyFailed(wallet: CoreWallet, tx: Transaction<Signaturish, Proofish, Bindingish>): CoreWallet {

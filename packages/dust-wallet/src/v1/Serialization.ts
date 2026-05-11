@@ -62,6 +62,8 @@ const HexedState: Schema.Schema<ledger.DustLocalState, string> = pipe(
 const SnapshotSchema = Schema.Struct({
   publicKey: Schema.Struct({
     publicKey: Schema.BigInt,
+    addressHex: Schema.String,
+    address: Schema.String,
   }),
   state: HexedState,
   protocolVersion: Schema.BigInt,
@@ -96,6 +98,7 @@ export const makeDefaultV1SerializationCapability = (): SerializationCapability<
                 snapshot.state,
                 snapshot.publicKey,
                 [],
+                [], // TODO: add support for recovery
                 {
                   appliedIndex: snapshot.offset ?? 0n,
                   highestRelevantWalletIndex: 0n,

@@ -10,11 +10,19 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './Connect.js';
-export * from './Disconnect.js';
-export * from './BlockHash.js';
-export * from './DustCommitmentMerkleTreeUpdate.js';
-export * from './FetchTermsAndConditions.js';
-export * from './TransactionEvents.js';
-export * from './TransactionStatus.js';
-export * from './TransactionHistoryDetail.js';
+import { Query } from '../../effect/index.js';
+import { gql } from '../generated/index.js';
+
+export const DustCommitmentMerkleTreeUpdate = Query.make(
+  'DustCommitmentMerkleTreeUpdate',
+  gql(`
+    query DustCommitmentMerkleTreeUpdate($startIndex: Int!, $endIndex: Int!) {
+      dustCommitmentMerkleTreeUpdate(startIndex: $startIndex, endIndex: $endIndex) {
+        startIndex
+        endIndex
+        update
+        protocolVersion
+      }
+    }
+  `),
+);
