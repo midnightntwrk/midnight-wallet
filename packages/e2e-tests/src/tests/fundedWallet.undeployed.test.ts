@@ -17,11 +17,7 @@ import { logger } from './logger.js';
 import { inspect } from 'util';
 import { isFinalizedWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 
-/**
- * Tests using a funded wallet
- *
- * @group undeployed
- */
+/** Tests using a funded wallet */
 
 describe('Funded wallet', () => {
   const getFixture = useTestContainersFixture();

@@ -20,12 +20,7 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
-/**
- * Tests performing a token transfer
- *
- * @group devnet
- * @group testnet
- */
+/** Tests performing a token transfer */
 
 describe('Token transfer', () => {
   if (process.env['SEED2'] === undefined || process.env['SEED'] === undefined) {

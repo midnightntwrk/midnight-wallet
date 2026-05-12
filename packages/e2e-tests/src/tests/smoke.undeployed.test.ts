@@ -29,11 +29,7 @@ import {
 import { createKeystore, PublicKey, UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustWallet, type DustWalletClass } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 
-/**
- * Smoke tests
- *
- * @group undeployed
- */
+/** Smoke tests */
 
 describe('Smoke tests', () => {
   const getFixture = useTestContainersFixture();

@@ -32,13 +32,7 @@ import { logger } from './logger.js';
 import { DustAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { inspect } from 'node:util';
 
-/**
- * Tests using an empty wallet
- *
- * @group undeployed
- * @group devnet
- * @group testnet
- */
+/** Tests using an empty wallet */
 describe('Fresh wallet with empty state', () => {
   const getFixture = useTestContainersFixture();
   const walletSeed = '0000000000000000000000000000000000000000000000000000000000000009';
