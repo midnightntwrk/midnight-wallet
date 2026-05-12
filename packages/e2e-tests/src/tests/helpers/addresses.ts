@@ -13,18 +13,12 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { expect } from 'vitest';
 import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
+import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
 import { TestContainersFixture } from '../test-fixture.js';
 
 export function validateNetworkInAddress(address: string) {
-  switch (TestContainersFixture.network) {
-    case 'devnet':
-      expect(address).toContain('dev');
-      break;
-    case 'undeployed':
-      expect(address).toContain('undeployed');
-      break;
-  }
+  const parsed = MidnightBech32m.parse(address);
+  expect(parsed.network).toBe(TestContainersFixture.network);
 }
 
 export function getShieldedAddress(networkId: NetworkId.NetworkId, walletAddress: ShieldedAddress): string {
