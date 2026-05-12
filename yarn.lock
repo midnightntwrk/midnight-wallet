@@ -720,28 +720,28 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@effect/rpc@npm:^0.75.0":
-  version: 0.75.0
-  resolution: "@effect/rpc@npm:0.75.0"
+"@effect/rpc@npm:^0.75.1":
+  version: 0.75.1
+  resolution: "@effect/rpc@npm:0.75.1"
   dependencies:
-    msgpackr: "npm:^1.11.4"
+    msgpackr: "npm:^1.11.10"
   peerDependencies:
-    "@effect/platform": ^0.96.0
-    effect: ^3.21.0
-  checksum: 10c0/2d57706203ef8c14b45bdf0814957e135af9d310137667d6c1ac6147152bc48dcf96404d154477632c85873ef65c85b1b51cdc365d0d35a492e51429d71938b1
+    "@effect/platform": ^0.96.1
+    effect: ^3.21.2
+  checksum: 10c0/d300116ccb0c0d5cfb465fa151a3074d68470631167a0956d9cd0f653e3a1884c25b1da97688a94200cc6220a9d7f94c7dd06e3828c4919a42a497f916cfea3a
   languageName: node
   linkType: hard
 
-"@effect/sql@npm:^0.51.0":
-  version: 0.51.0
-  resolution: "@effect/sql@npm:0.51.0"
+"@effect/sql@npm:^0.51.1":
+  version: 0.51.1
+  resolution: "@effect/sql@npm:0.51.1"
   dependencies:
     uuid: "npm:^11.0.3"
   peerDependencies:
     "@effect/experimental": ^0.60.0
-    "@effect/platform": ^0.96.0
-    effect: ^3.21.0
-  checksum: 10c0/dc440f6001bc71e9275224257f3b66e22eafd6b7efc7331abbd0faa6f8ba7ea257c2cf0ba3bca3a829591570f1c7822f7583b88162b9c8f815ec8fc719655ba5
+    "@effect/platform": ^0.96.1
+    effect: ^3.21.2
+  checksum: 10c0/cec1e03126687607fa31ef8c7ebe0ff05e1ca97a65bfeea83e03c35fab7386f6ff1b11c7a02106ec2ceeb6e0b03c8177392f3e9d26bd21d55f97b5e88b68e791
   languageName: node
   linkType: hard
 
@@ -2220,8 +2220,8 @@ __metadata:
     "@effect/experimental": "npm:^0.60.0"
     "@effect/platform": "npm:^0.96.0"
     "@effect/platform-node": "npm:^0.106.0"
-    "@effect/rpc": "npm:^0.75.0"
-    "@effect/sql": "npm:^0.51.0"
+    "@effect/rpc": "npm:^0.75.1"
+    "@effect/sql": "npm:^0.51.1"
     "@effect/workflow": "npm:^0.18.0"
     "@midnight-ntwrk/ledger-v8": "npm:^8.0.3"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:^2.1.0"
@@ -2347,8 +2347,8 @@ __metadata:
     "@effect/experimental": "npm:^0.60.0"
     "@effect/platform": "npm:^0.96.0"
     "@effect/platform-node": "npm:^0.106.0"
-    "@effect/rpc": "npm:^0.75.0"
-    "@effect/sql": "npm:^0.51.0"
+    "@effect/rpc": "npm:^0.75.1"
+    "@effect/sql": "npm:^0.51.1"
     "@effect/workflow": "npm:^0.18.0"
     "@midnight-ntwrk/ledger-v8": "npm:^8.0.3"
     "@midnight-ntwrk/wallet-sdk-abstractions": "npm:2.1.0"
@@ -8177,18 +8177,6 @@ __metadata:
     msgpackr-extract:
       optional: true
   checksum: 10c0/fa5b8b90661cc66127d4550bc3757d0e72fe3217a47f952acd0df647afb4593ffde0bbdb1c9f5a13b9df15d5a170a570a59728dd7ede9b0d711e20e4f970fa82
-  languageName: node
-  linkType: hard
-
-"msgpackr@npm:^1.11.4":
-  version: 1.11.5
-  resolution: "msgpackr@npm:1.11.5"
-  dependencies:
-    msgpackr-extract: "npm:^3.0.2"
-  dependenciesMeta:
-    msgpackr-extract:
-      optional: true
-  checksum: 10c0/f35ffd218661e8afc52490cde3dbf2656304e7940563c5313aa2f45e31ac5bdce3b58f27e55b785c700085ee76f26fc7afbae25ae5abe05068a8f000fd0ac6cd
   languageName: node
   linkType: hard
 
