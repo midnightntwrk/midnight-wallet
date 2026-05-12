@@ -13,33 +13,33 @@
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryCommon,
-  type FinalizedTransactionHistoryCommon,
+  type TransactionHistoryEntryCommon,
+  type PendingEntryInput,
   type FinalizedEntryInput,
+  type RejectedEntryInput,
   type SerializedTransactionHistory,
-  type TransactionRef,
 } from './TransactionHistoryStorage.js';
 
 export class NoOpTransactionHistoryStorage<
-  TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
-> implements TransactionHistoryStorage<TRead> {
-  gotPending(_tx: TransactionRef, _submittedAt: Date): Promise<void> {
+  T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon,
+> implements TransactionHistoryStorage<T> {
+  gotPending(_entry: PendingEntryInput<T>): Promise<void> {
     return Promise.resolve();
   }
 
-  gotFinalized(_entry: FinalizedEntryInput<Extract<TRead, FinalizedTransactionHistoryCommon>>): Promise<void> {
+  gotFinalized(_entry: FinalizedEntryInput<T>): Promise<void> {
     return Promise.resolve();
   }
 
-  gotRejected(_tx: TransactionRef, _rejectedAt: Date, _reason?: string): Promise<void> {
+  gotRejected(_entry: RejectedEntryInput<T>): Promise<void> {
     return Promise.resolve();
   }
 
-  getAll(): Promise<readonly TRead[]> {
+  getAll(): Promise<readonly T[]> {
     return Promise.resolve([]);
   }
 
-  get(_hash: TransactionHash): Promise<TRead | undefined> {
+  get(_hash: TransactionHash): Promise<T | undefined> {
     return Promise.resolve(undefined);
   }
 

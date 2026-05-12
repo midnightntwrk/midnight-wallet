@@ -21,10 +21,15 @@ export const TransactionHistoryDetail = Query.make(
         __typename
         hash
         block {
+          hash
+          height
           timestamp
         }
         ... on RegularTransaction {
           identifiers
+          fees {
+            paidFees
+          }
           transactionResult {
             status
           }

@@ -31,26 +31,29 @@ export const ShieldedSectionSchema = Schema.Struct({
 
 type ShieldedSection = Schema.Schema.Type<typeof ShieldedSectionSchema>;
 
-export const ShieldedTransactionHistoryEntrySchema = Schema.Struct({
-  hash: TransactionHistoryStorage.TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
-  identifiers: Schema.optional(Schema.Array(Schema.String)),
-  lifecycle: TransactionHistoryStorage.FinalizedLifecycleSchema,
-  shielded: ShieldedSectionSchema,
+/**
+ * Shielded entry schema. Extends the common entry shape with an optional `shielded` section. Tightening — required
+ * `shielded` plus required `protocolVersion`/`status` — happens at the writer-input type, not on the stored shape.
+ */
+export const ShieldedTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
+  shielded: Schema.optional(ShieldedSectionSchema),
 });
 
 export type ShieldedTransactionHistoryEntry = Schema.Schema.Type<typeof ShieldedTransactionHistoryEntrySchema>;
 
-type StorageEntryWithShielded = TransactionHistoryStorage.FinalizedTransactionHistoryCommon & {
-  readonly shielded: ShieldedSection;
-};
-
 export type ShieldedHistoryStorage =
   TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<StorageEntryWithShielded>;
+    TransactionHistoryStorage.TransactionHistoryWriter<ShieldedTransactionHistoryEntry>;
 
-type ShieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<StorageEntryWithShielded>;
+/**
+ * Writer input for shielded's `gotFinalized`. The stored shape leaves fields optional, but at write time we know
+ * `protocolVersion`, `status`, and the `shielded` section. Shielded does _not_ write `fees` — that's dust's concern.
+ */
+type ShieldedFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<ShieldedTransactionHistoryEntry> & {
+  readonly protocolVersion: number;
+  readonly status: TransactionHistoryStorage.TransactionHistoryStatus;
+  readonly shielded: ShieldedSection;
+};
 
 export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: ShieldedHistoryStorage;
@@ -59,13 +62,18 @@ export type DefaultTransactionHistoryConfiguration = {
 
 const coinEquals = Schema.equivalence(QualifiedShieldedCoinInfoSchema);
 
-const isFinalized: (u: unknown) => u is TransactionHistoryStorage.FinalizedTransactionHistoryCommon = Schema.is(
-  TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema,
-);
+const isFinalized = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryCommon | undefined,
+): entry is TransactionHistoryStorage.FinalizedTransactionHistoryCommon =>
+  entry !== undefined && entry.lifecycle.status === 'finalized';
 
 export type TransactionDetails = {
   hash: string;
-  timestamp: number;
+  block: {
+    hash: string;
+    height: number;
+    timestamp: number;
+  };
   status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
   identifiers: readonly string[];
 };
@@ -90,13 +98,16 @@ const convertUpdateToFinalizedInput = (
   changes: ledger.ZswapStateChanges,
   metadata: TransactionDetails,
   protocolVersion: number,
-  finalizedAt: Date,
 ): ShieldedFinalizedInput => ({
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
   identifiers: metadata.identifiers,
-  finalizedAt,
+  finalizedBlock: {
+    hash: metadata.block.hash,
+    height: metadata.block.height,
+    timestamp: new Date(metadata.block.timestamp),
+  },
   shielded: {
     receivedCoins: changes.receivedCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
     spentCoins: changes.spentCoins.map(({ mt_index, ...rest }) => ({ ...rest, mtIndex: mt_index })),
@@ -126,10 +137,7 @@ export const makeDefaultTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> =>
-      gotFinalizedShielded(
-        txHistoryStorage,
-        convertUpdateToFinalizedInput(changes, metadata, protocolVersion, new Date(metadata.timestamp)),
-      ),
+      gotFinalizedShielded(txHistoryStorage, convertUpdateToFinalizedInput(changes, metadata, protocolVersion)),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -145,7 +153,11 @@ export const makeDefaultTransactionHistoryService = (
 
         return {
           hash: tx.hash,
-          timestamp: tx.block.timestamp,
+          block: {
+            hash: tx.block.hash,
+            height: tx.block.height,
+            timestamp: tx.block.timestamp,
+          },
           status,
           identifiers,
         };
@@ -176,9 +188,8 @@ export const makeSimulatorTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
-      const finalizedAt = new Date(metadata.timestamp);
-      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion, finalizedAt);
-      return gotFinalizedShielded(txHistoryStorage, { ...input, timestamp: finalizedAt });
+      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion);
+      return gotFinalizedShielded(txHistoryStorage, { ...input, timestamp: input.finalizedBlock.timestamp });
     },
 
     getTransactionDetails: (
@@ -193,9 +204,13 @@ export const makeSimulatorTransactionHistoryService = (
           isFinalized(entry)
             ? Effect.succeed({
                 hash: entry.hash,
-                timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),
-                status: entry.status,
-                identifiers: entry.identifiers ?? [],
+                block: {
+                  hash: entry.lifecycle.finalizedBlock.hash,
+                  height: entry.lifecycle.finalizedBlock.height,
+                  timestamp: entry.lifecycle.finalizedBlock.timestamp.getTime(),
+                },
+                status: entry.status ?? 'SUCCESS',
+                identifiers: entry.identifiers,
               })
             : Effect.fail(
                 new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),

@@ -14,31 +14,19 @@ import { Schema } from 'effect';
 import {
   type TransactionHistoryStorage,
   type TransactionHash,
-  type TransactionHistoryCommon,
-  type FinalizedTransactionHistoryCommon,
+  type TransactionHistoryEntryCommon,
+  type PendingEntryInput,
   type FinalizedEntryInput,
+  type RejectedEntryInput,
   type SerializedTransactionHistory,
-  type TransactionRef,
 } from './TransactionHistoryStorage.js';
-
-const deriveKey = (tx: TransactionRef, identifiers: readonly string[]): TransactionHash | undefined => {
-  if (typeof tx.transactionHash === 'function') {
-    try {
-      return tx.transactionHash().toString();
-    } catch {
-      // fall through to identifier fallback
-    }
-  }
-  return identifiers[0];
-};
 
 /**
  * In-memory implementation of the TransactionHistoryStorage interface.
  *
- * `TRead` is the lifecycle union returned by reads (pending | finalized | rejected). The finalized entry shape accepted
- * by `gotFinalized` is derived automatically as `Extract<TRead, FinalizedTransactionHistoryCommon>` — there's no
- * separate type parameter for it, which keeps inference at call sites simple (`new
- * InMemoryTransactionHistoryStorage(WalletEntrySchema, mergeWalletEntries)` is sufficient).
+ * `T` is the entry shape — a {@link TransactionHistoryEntryCommon} extension carrying any wallet-specific sections. The
+ * reader returns `T` (with whichever lifecycle a given entry happens to be in); each writer method accepts a `T`-shaped
+ * input minus its `lifecycle` field, and the storage attaches the appropriate lifecycle.
  *
  * An optional `merge` function controls how an incoming write combines with an existing entry under the same hash.
  * Default is a shallow spread (`{ ...existing, ...incoming }`).
@@ -47,58 +35,50 @@ const deriveKey = (tx: TransactionRef, identifiers: readonly string[]): Transact
  * guarantees atomicity — no external semaphore is needed.
  */
 export class InMemoryTransactionHistoryStorage<
-  TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
+  T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon,
   // `Encoded` is the schema's encoded-side type. It's a class generic (not an interface generic) because
   // `Schema.Schema<A, I>` is invariant in `I`, so the encoded form has to be inferred at construction time from the
   // schema argument. Callers don't usually supply this — TypeScript infers it from `schema`.
-  Encoded = TRead,
-> implements TransactionHistoryStorage<TRead> {
-  #storage: Map<TransactionHash, TRead>;
-  readonly #schema: Schema.Schema<TRead, Encoded>;
-  readonly #merge: (existing: TRead, incoming: TRead) => TRead;
+  Encoded = T,
+> implements TransactionHistoryStorage<T> {
+  #storage: Map<TransactionHash, T>;
+  readonly #schema: Schema.Schema<T, Encoded>;
+  readonly #merge: (existing: T, incoming: T) => T;
 
-  constructor(schema: Schema.Schema<TRead, Encoded>, merge?: (existing: TRead, incoming: TRead) => TRead) {
-    this.#storage = new Map<TransactionHash, TRead>();
+  constructor(schema: Schema.Schema<T, Encoded>, merge?: (existing: T, incoming: T) => T) {
+    this.#storage = new Map<TransactionHash, T>();
     this.#schema = schema;
     this.#merge = merge ?? ((existing, incoming) => ({ ...existing, ...incoming }));
   }
 
-  async gotPending(tx: TransactionRef, submittedAt: Date): Promise<void> {
-    const identifiers = tx.identifiers();
-    const hash = deriveKey(tx, identifiers);
-    if (hash === undefined) return;
-    const entry = {
-      hash,
-      identifiers,
-      lifecycle: { status: 'pending', submittedAt },
-    } as unknown as TRead;
+  async gotPending(input: PendingEntryInput<T>): Promise<void> {
+    const { submittedAt, ...rest } = input;
+    const entry = { ...rest, lifecycle: { status: 'pending', submittedAt } } as unknown as T;
     await this.#upsert(entry);
   }
 
-  async gotFinalized(input: FinalizedEntryInput<Extract<TRead, FinalizedTransactionHistoryCommon>>): Promise<void> {
-    const { finalizedAt, ...rest } = input;
-    const entry = { ...rest, lifecycle: { status: 'finalized', finalizedAt } } as unknown as TRead;
+  async gotFinalized(input: FinalizedEntryInput<T>): Promise<void> {
+    const { finalizedBlock, ...rest } = input;
+    const entry = { ...rest, lifecycle: { status: 'finalized', finalizedBlock } } as unknown as T;
     await this.#upsert(entry);
     this.#clearPendingByIdentifiers((rest as { identifiers?: readonly string[] }).identifiers ?? [], entry.hash);
   }
 
-  async gotRejected(tx: TransactionRef, rejectedAt: Date, reason?: string): Promise<void> {
-    const identifiers = tx.identifiers();
-    const hash = deriveKey(tx, identifiers);
-    if (hash === undefined) return;
+  async gotRejected(input: RejectedEntryInput<T>): Promise<void> {
+    const { rejectedAt, reason, ...rest } = input;
     const lifecycle =
       reason !== undefined
         ? { status: 'rejected' as const, rejectedAt, reason }
         : { status: 'rejected' as const, rejectedAt };
-    const entry = { hash, identifiers, lifecycle } as unknown as TRead;
+    const entry = { ...rest, lifecycle } as unknown as T;
     await this.#upsert(entry);
   }
 
-  getAll(): Promise<readonly TRead[]> {
+  getAll(): Promise<readonly T[]> {
     return Promise.resolve([...this.#storage.values()]);
   }
 
-  get(hash: TransactionHash): Promise<TRead | undefined> {
+  get(hash: TransactionHash): Promise<T | undefined> {
     return Promise.resolve(this.#storage.get(hash));
   }
 
@@ -112,24 +92,21 @@ export class InMemoryTransactionHistoryStorage<
     return Promise.resolve(JSON.stringify(encode(allEntries)));
   }
 
-  static restore<TRead extends { hash: TransactionHash }, Encoded>(
+  static restore<T extends TransactionHistoryEntryCommon, Encoded>(
     serialized: SerializedTransactionHistory,
-    schema: Schema.Schema<TRead, Encoded>,
-    merge?: (existing: TRead, incoming: TRead) => TRead,
-  ): InMemoryTransactionHistoryStorage<TRead, Encoded> {
+    schema: Schema.Schema<T, Encoded>,
+    merge?: (existing: T, incoming: T) => T,
+  ): InMemoryTransactionHistoryStorage<T, Encoded> {
     const decode = Schema.decodeUnknownSync(Schema.Array(schema));
     const decoded = decode(JSON.parse(serialized));
-    const storage = new InMemoryTransactionHistoryStorage<TRead, Encoded>(schema, merge);
+    const storage = new InMemoryTransactionHistoryStorage<T, Encoded>(schema, merge);
     for (const entry of decoded) {
       storage.#storage.set(entry.hash, entry);
     }
     return storage;
   }
 
-  #upsert(entry: TRead): Promise<void> {
-    // TODO Ian - Temp needs removing
-    // eslint-disable-next-line no-console
-    console.log(entry.hash, (entry as { lifecycle?: unknown }).lifecycle);
+  #upsert(entry: T): Promise<void> {
     const existing = this.#storage.get(entry.hash);
     this.#storage.set(entry.hash, existing ? this.#merge(existing, entry) : entry);
     return Promise.resolve();
@@ -145,16 +122,11 @@ export class InMemoryTransactionHistoryStorage<
         Array.isArray(ids) &&
         ids.length > 0 &&
         ids.every((id: string) => provided.has(id)) &&
-        lifecycle?.status === 'pending'
+        lifecycle?.status === 'pending' &&
+        entry.hash !== newHash
       );
     });
     if (match) {
-      // TODO Ian - temp remove
-      // eslint-disable-next-line no-console
-      console.log('[txHistory] pending → finalized — replacing key', {
-        previousHash: match.hash,
-        newHash,
-      });
       this.#storage.delete(match.hash);
     }
   }

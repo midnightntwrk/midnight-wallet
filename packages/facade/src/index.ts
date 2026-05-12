@@ -39,7 +39,11 @@ import {
   mergeShieldedSections,
 } from '@midnight-ntwrk/wallet-sdk-shielded';
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
+import {
+  type UnshieldedWalletState,
+  UnshieldedSectionSchema,
+  mergeUnshieldedSections,
+} from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
@@ -59,59 +63,116 @@ import {
   type UnshieldedAddress,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
 
-/** Schema for a finalized wallet entry — common finalized fields + wallet sections. */
-export const FinalizedWalletEntrySchema = Schema.Struct({
-  ...TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema.fields,
+/**
+ * Full entry schema for transaction history. The common entry data and wallet-specific sections (`shielded`,
+ * `unshielded`, `dust`) live on every entry regardless of lifecycle; the `lifecycle` field is the only discriminator.
+ * Pass this to `InMemoryTransactionHistoryStorage` to enable serialize/restore.
+ */
+export const WalletEntrySchema = TransactionHistoryStorage.extendEntrySchema({
   shielded: Schema.optional(ShieldedSectionSchema),
   unshielded: Schema.optional(UnshieldedSectionSchema),
   dust: Schema.optional(DustSectionSchema),
 });
 
-export type FinalizedWalletEntry = Schema.Schema.Type<typeof FinalizedWalletEntrySchema>;
-
-/**
- * Full entry schema for transaction history — covers all three lifecycle variants. Pass this to
- * `InMemoryTransactionHistoryStorage` to enable serialize/restore of pending, finalized and rejected entries together.
- */
-export const WalletEntrySchema = Schema.Union(
-  FinalizedWalletEntrySchema,
-  TransactionHistoryStorage.PendingTransactionHistoryCommonSchema,
-  TransactionHistoryStorage.RejectedTransactionHistoryCommonSchema,
-);
-
 export type WalletEntry = Schema.Schema.Type<typeof WalletEntrySchema>;
 
-export type PendingWalletEntry = TransactionHistoryStorage.PendingTransactionHistoryCommon;
+/** A `WalletEntry` whose lifecycle is `pending`. */
+export type PendingWalletEntry = WalletEntry & { readonly lifecycle: TransactionHistoryStorage.PendingLifecycle };
 
-export const isPendingWalletEntry: (u: unknown) => u is PendingWalletEntry = Schema.is(
-  TransactionHistoryStorage.PendingTransactionHistoryCommonSchema,
-);
+/** A `WalletEntry` whose lifecycle is `finalized`. */
+export type FinalizedWalletEntry = WalletEntry & { readonly lifecycle: TransactionHistoryStorage.FinalizedLifecycle };
 
-export const isFinalizedWalletEntry: (u: unknown) => u is FinalizedWalletEntry = Schema.is(FinalizedWalletEntrySchema);
+export const isPendingWalletEntry = (entry: WalletEntry): entry is PendingWalletEntry =>
+  entry.lifecycle.status === 'pending';
 
-export function mergeWalletEntries(
-  existing: FinalizedWalletEntry,
-  incoming: FinalizedWalletEntry,
-): FinalizedWalletEntry;
-export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry): WalletEntry;
+export const isFinalizedWalletEntry = (entry: WalletEntry): entry is FinalizedWalletEntry =>
+  entry.lifecycle.status === 'finalized';
+
+/**
+ * Merge two wallet entries arriving under the same hash. Treats the entry as `T × lifecycle` per the storage model:
+ *
+ * - **Shared scalar facts about the tx** (`protocolVersion`, `status`, `timestamp`, `fees`) — first writer wins. Once any
+ *   wallet has set the value, later writes are no-ops for these fields. This is correct because the value is the same
+ *   across all wallets (it's a property of the on-chain tx, not the wallet's view of it).
+ * - **`identifiers`** — unioned (each wallet may surface a different identifier subset).
+ * - **`lifecycle`** — incoming wins (this is how `pending → finalized` transitions are recorded).
+ * - **Wallet sections** (`shielded`, `unshielded`, `dust`) — combined via per-section merge when both sides have them;
+ *   otherwise whichever side is present is used.
+ */
+/**
+ * Combine two optional values under a merge function: if both sides have it, delegate to `merge`; otherwise return
+ * whichever side is present (or `undefined` if neither). Encapsulates the four-way pattern used for every wallet
+ * section in {@link mergeWalletEntries}.
+ */
+const mergeOptionalSection = <T>(
+  existing: T | undefined,
+  incoming: T | undefined,
+  merge: (a: T, b: T) => T,
+): T | undefined => {
+  if (existing !== undefined && incoming !== undefined) return merge(existing, incoming);
+  return existing ?? incoming;
+};
+
 export function mergeWalletEntries(existing: WalletEntry, incoming: WalletEntry): WalletEntry {
-  if (!isFinalizedWalletEntry(existing) || !isFinalizedWalletEntry(incoming)) {
-    return { ...existing, ...incoming };
-  }
+  // identifiers: each wallet may surface a different subset, so union them
+  const identifiers = Array.from(new Set([...existing.identifiers, ...incoming.identifiers]));
+
+  // wallet sections: per-section merge when both sides have it; whichever side is present otherwise
+  const shielded = mergeOptionalSection(existing.shielded, incoming.shielded, mergeShieldedSections);
+  const unshielded = mergeOptionalSection(existing.unshielded, incoming.unshielded, mergeUnshieldedSections);
+  const dust = mergeOptionalSection(existing.dust, incoming.dust, mergeDustSections);
+
   return {
-    ...existing,
-    ...incoming,
-    ...(existing.shielded !== undefined && incoming.shielded !== undefined
-      ? { shielded: mergeShieldedSections(existing.shielded, incoming.shielded) }
-      : {}),
-    ...(existing.unshielded !== undefined && incoming.unshielded !== undefined
-      ? { unshielded: { ...existing.unshielded, ...incoming.unshielded } }
-      : {}),
-    ...(existing.dust !== undefined && incoming.dust !== undefined
-      ? { dust: mergeDustSections(existing.dust, incoming.dust) }
-      : {}),
+    hash: existing.hash,
+    identifiers,
+    // shared scalar facts about the on-chain tx — first writer wins (same value across all wallets)
+    protocolVersion: existing.protocolVersion ?? incoming.protocolVersion,
+    status: existing.status ?? incoming.status,
+    timestamp: existing.timestamp ?? incoming.timestamp,
+    fees: existing.fees ?? incoming.fees,
+    // lifecycle: incoming wins — this is how pending → finalized/rejected transitions are recorded
+    lifecycle: incoming.lifecycle,
+    ...(shielded !== undefined ? { shielded } : {}),
+    ...(unshielded !== undefined ? { unshielded } : {}),
+    ...(dust !== undefined ? { dust } : {}),
   };
 }
+
+/**
+ * Storage key for a tx we're about to submit. The TypeScript type promises the tx is signed + proven + bound, so
+ * `transactionHash()` should succeed — but ledger-v8's phantom type parameters can't witness the actual WASM-side state
+ * (the handle may have been consumed, or the caller may have cast through the type system), so we catch and return
+ * `undefined` rather than fabricate a key under an arbitrary identifier. A caller that gets `undefined` should skip
+ * writing the pending entry: papering over the type-contract violation here would hide a real upstream bug.
+ */
+const submitTxHistoryKey = (
+  tx: ledger.FinalizedTransaction,
+): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
+  try {
+    return { hash: tx.transactionHash().toString(), identifiers: tx.identifiers() };
+  } catch {
+    return undefined;
+  }
+};
+
+/**
+ * Storage key for a tx we're about to revert. Unlike submission, the input is `AnyTransaction` and may legitimately not
+ * be hashable — the union includes `UnprovenTransaction`, `ProofErasedTransaction`, and pre-binding variants whose
+ * chain hash doesn't exist yet. When `transactionHash()` throws (or the tx never reached a hashable state), we fall
+ * back to `identifiers[0]`, which is the same key the pending entry was inserted under by the corresponding
+ * `gotPending` path. Returns `undefined` only when the tx has no identifiers at all (nothing to revert).
+ */
+const revertTxHistoryKey = (
+  tx: AnyTransaction,
+): { readonly hash: string; readonly identifiers: readonly string[] } | undefined => {
+  const identifiers = tx.identifiers();
+  if (identifiers.length === 0) return undefined;
+  try {
+    return { hash: tx.transactionHash().toString(), identifiers };
+  } catch {
+    return { hash: identifiers[0], identifiers };
+  }
+};
 
 type TokenKind = 'dust' | 'shielded' | 'unshielded';
 
@@ -504,7 +565,10 @@ export class WalletFacade {
       await this.pendingTransactionsService.addPendingTransaction(tx);
       // Insert before awaiting submission so the entry exists while the tx is in flight — the per-wallet sync
       // handlers' gotFinalized call clears the pending entry on confirmation.
-      await this.#txHistoryStorage.gotPending(tx, this.clock.now());
+      const key = submitTxHistoryKey(tx);
+      if (key !== undefined) {
+        await this.#txHistoryStorage.gotPending({ ...key, submittedAt: this.clock.now() });
+      }
       await this.submissionService.submitTransaction(tx, 'Finalized');
 
       return identifiers.at(-1)!;
@@ -976,7 +1040,10 @@ export class WalletFacade {
       this.dust.revertTransaction(tx),
     ]).then(async () => {
       await this.pendingTransactionsService.clear(tx as unknown as ledger.FinalizedTransaction);
-      await this.#txHistoryStorage.gotRejected(tx, this.clock.now());
+      const key = revertTxHistoryKey(tx);
+      if (key !== undefined) {
+        await this.#txHistoryStorage.gotRejected({ ...key, rejectedAt: this.clock.now() });
+      }
     });
   }
 

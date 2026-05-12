@@ -32,26 +32,31 @@ export const DustSectionSchema = Schema.Struct({
 
 type DustSection = Schema.Schema.Type<typeof DustSectionSchema>;
 
-export const DustTransactionHistoryEntrySchema = Schema.Struct({
-  hash: TransactionHistoryStorage.TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  status: TransactionHistoryStorage.TransactionHistoryStatusSchema,
-  identifiers: Schema.optional(Schema.Array(Schema.String)),
-  lifecycle: TransactionHistoryStorage.FinalizedLifecycleSchema,
-  dust: DustSectionSchema,
+/**
+ * Dust entry schema. Extends the common entry shape with an optional `dust` section. Tightening — required `dust` plus
+ * required `protocolVersion`/`status`/`fees` — happens at the writer-input type, not on the stored shape.
+ */
+export const DustTransactionHistoryEntrySchema = TransactionHistoryStorage.extendEntrySchema({
+  dust: Schema.optional(DustSectionSchema),
 });
 
 export type DustTransactionHistoryEntry = Schema.Schema.Type<typeof DustTransactionHistoryEntrySchema>;
 
-type StorageEntryWithDust = TransactionHistoryStorage.FinalizedTransactionHistoryCommon & {
-  readonly dust: DustSection;
-};
-
 export type DustHistoryStorage =
   TransactionHistoryStorage.TransactionHistoryReader<TransactionHistoryStorage.TransactionHistoryEntryWithHash> &
-    TransactionHistoryStorage.TransactionHistoryWriter<StorageEntryWithDust>;
+    TransactionHistoryStorage.TransactionHistoryWriter<DustTransactionHistoryEntry>;
 
-type DustFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<StorageEntryWithDust>;
+/**
+ * Writer input for dust's `gotFinalized`. The stored shape leaves most fields optional, but at write time we know
+ * everything: `protocolVersion`, `status`, `fees`, and the `dust` section are required. (Dust is the canonical source
+ * for `fees` since fees are paid in dust.)
+ */
+type DustFinalizedInput = TransactionHistoryStorage.FinalizedEntryInput<DustTransactionHistoryEntry> & {
+  readonly protocolVersion: number;
+  readonly status: TransactionHistoryStorage.TransactionHistoryStatus;
+  readonly fees: bigint | null;
+  readonly dust: DustSection;
+};
 
 export type DefaultTransactionHistoryConfiguration = {
   txHistoryStorage: DustHistoryStorage;
@@ -60,15 +65,21 @@ export type DefaultTransactionHistoryConfiguration = {
 
 const utxoEquals = Schema.equivalence(DustUtxoInfoSchema);
 
-const isFinalized: (u: unknown) => u is TransactionHistoryStorage.FinalizedTransactionHistoryCommon = Schema.is(
-  TransactionHistoryStorage.FinalizedTransactionHistoryCommonSchema,
-);
+const isFinalized = (
+  entry: TransactionHistoryStorage.TransactionHistoryEntryCommon | undefined,
+): entry is TransactionHistoryStorage.FinalizedTransactionHistoryCommon =>
+  entry !== undefined && entry.lifecycle.status === 'finalized';
 
 export type TransactionDetails = {
   hash: string;
-  timestamp: number;
+  block: {
+    hash: string;
+    height: number;
+    timestamp: number;
+  };
   status: 'SUCCESS' | 'FAILURE' | 'PARTIAL_SUCCESS';
   identifiers: readonly string[];
+  fees: bigint | null;
 };
 
 export type TransactionHistoryService = {
@@ -99,13 +110,17 @@ const convertUpdateToFinalizedInput = (
   changes: ledger.DustStateChanges,
   metadata: TransactionDetails,
   protocolVersion: number,
-  finalizedAt: Date,
 ): DustFinalizedInput => ({
   hash: changes.source,
   protocolVersion,
   status: metadata.status,
   identifiers: metadata.identifiers,
-  finalizedAt,
+  fees: metadata.fees,
+  finalizedBlock: {
+    hash: metadata.block.hash,
+    height: metadata.block.height,
+    timestamp: new Date(metadata.block.timestamp),
+  },
   dust: {
     receivedUtxos: changes.receivedUtxos.map(convertQualifiedDustOutput),
     spentUtxos: changes.spentUtxos.map(convertQualifiedDustOutput),
@@ -135,10 +150,7 @@ export const makeDefaultTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> =>
-      gotFinalizedDust(
-        txHistoryStorage,
-        convertUpdateToFinalizedInput(changes, metadata, protocolVersion, new Date(metadata.timestamp)),
-      ),
+      gotFinalizedDust(txHistoryStorage, convertUpdateToFinalizedInput(changes, metadata, protocolVersion)),
 
     getTransactionDetails: (
       hash: TransactionHistoryStorage.TransactionHash,
@@ -151,12 +163,18 @@ export const makeDefaultTransactionHistoryService = (
         const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
         const identifiers = tx.__typename === 'RegularTransaction' ? tx.identifiers : [];
+        const fees: bigint | null = tx.__typename === 'RegularTransaction' ? BigInt(tx.fees.paidFees) : null;
 
         return {
           hash: tx.hash,
-          timestamp: tx.block.timestamp,
+          block: {
+            hash: tx.block.hash,
+            height: tx.block.height,
+            timestamp: tx.block.timestamp,
+          },
           status,
           identifiers,
+          fees,
         };
       }).pipe(
         Effect.provide(queryClientLayer),
@@ -185,9 +203,8 @@ export const makeSimulatorTransactionHistoryService = (
       metadata: TransactionDetails,
       protocolVersion: number,
     ): Effect.Effect<void, TransactionHistoryError> => {
-      const finalizedAt = new Date(metadata.timestamp);
-      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion, finalizedAt);
-      return gotFinalizedDust(txHistoryStorage, { ...input, timestamp: finalizedAt });
+      const input = convertUpdateToFinalizedInput(changes, metadata, protocolVersion);
+      return gotFinalizedDust(txHistoryStorage, { ...input, timestamp: input.finalizedBlock.timestamp });
     },
 
     getTransactionDetails: (
@@ -202,9 +219,14 @@ export const makeSimulatorTransactionHistoryService = (
           isFinalized(entry)
             ? Effect.succeed({
                 hash: entry.hash,
-                timestamp: entry.timestamp ? entry.timestamp.getTime() : Date.now(),
-                status: entry.status,
-                identifiers: entry.identifiers ?? [],
+                block: {
+                  hash: entry.lifecycle.finalizedBlock.hash,
+                  height: entry.lifecycle.finalizedBlock.height,
+                  timestamp: entry.lifecycle.finalizedBlock.timestamp.getTime(),
+                },
+                status: entry.status ?? 'SUCCESS',
+                identifiers: entry.identifiers,
+                fees: entry.fees ?? null,
               })
             : Effect.fail(
                 new TransactionHistoryError({ message: `No transaction found in storage for hash: ${hash}` }),

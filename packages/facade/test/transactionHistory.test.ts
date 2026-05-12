@@ -38,9 +38,13 @@ const dustUtxo = (initialValue: bigint, nonce: bigint, seq: number, backingNight
 
 const baseEntry = (hash: string, overrides: Partial<FinalizedWalletEntry> = {}): FinalizedWalletEntry => ({
   hash,
+  identifiers: [],
   protocolVersion: 1,
   status: 'SUCCESS',
-  lifecycle: { status: 'finalized', finalizedAt: new Date(0) },
+  lifecycle: {
+    status: 'finalized',
+    finalizedBlock: { hash: 'block-hash', height: 0, timestamp: new Date(0) },
+  },
   ...overrides,
 });
 
@@ -117,29 +121,53 @@ describe('mergeWalletEntries does not lose information', () => {
     expect(merged.shielded?.receivedCoins).toEqual([coin]);
   });
 
-  it('should update common fields from incoming while preserving merged sections', () => {
+  it('should preserve shared scalar fields from existing (first writer wins) and merge sections', () => {
+    // Shared facts about the tx (status/timestamp/fees/protocolVersion) are the same across all wallets observing
+    // it. Once any wallet has set them, later writes are no-ops for those fields. This test asserts that
+    // first-writer-wins semantics — except for `identifiers`, which is unioned, and `lifecycle`, where incoming wins
+    // (to record state transitions).
     const coin = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
 
     const existing = baseEntry('tx1', {
       status: 'FAILURE',
+      identifiers: ['id-existing'],
+      timestamp: new Date('2026-01-01'),
+      fees: 500n,
       shielded: { receivedCoins: [coin], spentCoins: [] },
     });
 
     const incoming = baseEntry('tx1', {
       status: 'SUCCESS',
-      identifiers: ['id-1'],
-      timestamp: new Date('2026-01-01'),
+      identifiers: ['id-incoming'],
+      timestamp: new Date('2026-02-01'),
       fees: 1000n,
       shielded: { receivedCoins: [], spentCoins: [] },
     });
 
     const merged = mergeWalletEntries(existing, incoming);
 
+    expect(merged.status).toBe('FAILURE'); // first writer wins
+    expect(merged.identifiers).toEqual(['id-existing', 'id-incoming']); // unioned
+    expect(merged.timestamp).toEqual(new Date('2026-01-01')); // first writer wins
+    expect(merged.fees).toBe(500n); // first writer wins
+    expect(merged.shielded?.receivedCoins).toEqual([coin]); // sections combined
+  });
+
+  it('should fill in shared scalar fields from incoming when existing has them undefined', () => {
+    // Pending → finalized: the pending entry has no status/timestamp/fees yet, so the finalized write fills them.
+    const existing = baseEntry('tx1', { status: undefined, timestamp: undefined, fees: undefined });
+
+    const incoming = baseEntry('tx1', {
+      status: 'SUCCESS',
+      timestamp: new Date('2026-01-01'),
+      fees: 1000n,
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
     expect(merged.status).toBe('SUCCESS');
-    expect(merged.identifiers).toEqual(['id-1']);
     expect(merged.timestamp).toEqual(new Date('2026-01-01'));
     expect(merged.fees).toBe(1000n);
-    expect(merged.shielded?.receivedCoins).toEqual([coin]);
   });
 
   it('should preserve dust section from existing when incoming has only shielded', () => {

@@ -13,43 +13,55 @@
 import { describe, it, expect } from 'vitest';
 import {
   type FinalizedEntryInput,
-  type FinalizedTransactionHistoryCommon,
-  type TransactionHistoryCommon,
-  type TransactionRef,
-  TransactionHistoryCommonSchema,
+  type PendingEntryInput,
+  type RejectedEntryInput,
+  type TransactionHistoryEntryCommon,
+  TransactionHistoryEntryCommonSchema,
 } from '../TransactionHistoryStorage.js';
 import { InMemoryTransactionHistoryStorage } from '../InMemoryTransactionHistoryStorage.js';
 
 const finalizedInput = (
   hash: string,
-  overrides: Partial<FinalizedEntryInput<FinalizedTransactionHistoryCommon>> = {},
-): FinalizedEntryInput<FinalizedTransactionHistoryCommon> => ({
+  overrides: Partial<FinalizedEntryInput<TransactionHistoryEntryCommon>> = {},
+): FinalizedEntryInput<TransactionHistoryEntryCommon> => ({
   hash,
+  identifiers: [],
   protocolVersion: 1,
   status: 'SUCCESS',
-  finalizedAt: new Date(0),
+  finalizedBlock: { hash: 'block-hash', height: 0, timestamp: new Date(0) },
   ...overrides,
 });
 
-const txRef = (identifiers: readonly string[], hash?: string): TransactionRef => ({
-  identifiers: () => identifiers,
-  ...(hash !== undefined ? { transactionHash: () => ({ toString: () => hash }) } : {}),
+const pendingInput = (
+  hash: string,
+  identifiers: readonly string[],
+  submittedAt: Date = new Date(0),
+): PendingEntryInput<TransactionHistoryEntryCommon> => ({ hash, identifiers, submittedAt });
+
+const rejectedInput = (
+  hash: string,
+  identifiers: readonly string[],
+  rejectedAt: Date,
+  reason?: string,
+): RejectedEntryInput<TransactionHistoryEntryCommon> => ({
+  hash,
+  identifiers,
+  rejectedAt,
+  ...(reason !== undefined ? { reason } : {}),
 });
 
 const mergeEntries = (
-  existing: TransactionHistoryCommon,
-  incoming: TransactionHistoryCommon,
-): TransactionHistoryCommon => ({
+  existing: TransactionHistoryEntryCommon,
+  incoming: TransactionHistoryEntryCommon,
+): TransactionHistoryEntryCommon => ({
   ...existing,
   ...incoming,
-  ...(existing.identifiers !== undefined && incoming.identifiers !== undefined
-    ? { identifiers: [...new Set([...existing.identifiers, ...incoming.identifiers])] }
-    : {}),
+  identifiers: [...new Set([...existing.identifiers, ...incoming.identifiers])],
 });
 
 describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge function', () => {
   it('should merge identifiers when two finalized entries arrive under the same hash', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-a'] }));
     await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-b'] }));
@@ -60,7 +72,7 @@ describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge func
   });
 
   it('should insert without merging when no prior entry exists for that hash', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-a'] }));
 
@@ -70,7 +82,7 @@ describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge func
   });
 
   it('should keep entries with different hashes independent', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-a'] }));
     await storage.gotFinalized(finalizedInput('tx2', { identifiers: ['id-b'] }));
@@ -83,23 +95,27 @@ describe('InMemoryTransactionHistoryStorage gotFinalized respects the merge func
   });
 
   it('should attach a finalized lifecycle to entries inserted via gotFinalized', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
-    const finalizedAt = new Date('2026-01-01T00:00:00.000Z');
-    await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-a'], finalizedAt }));
+    const finalizedBlock = {
+      hash: 'block-hash-1',
+      height: 42,
+      timestamp: new Date('2026-01-01T00:00:00.000Z'),
+    };
+    await storage.gotFinalized(finalizedInput('tx1', { identifiers: ['id-a'], finalizedBlock }));
 
     const result = await storage.get('tx1');
 
-    expect(result?.lifecycle).toEqual({ status: 'finalized', finalizedAt });
+    expect(result?.lifecycle).toEqual({ status: 'finalized', finalizedBlock });
   });
 });
 
 describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
-  it('should record a pending entry keyed by the tx hash when available', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+  it('should store a pending entry under its hash with a pending lifecycle', async () => {
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
     const submittedAt = new Date('2026-01-01T00:00:00.000Z');
-    await storage.gotPending(txRef(['first-id', 'second-id'], 'tx-hash'), submittedAt);
+    await storage.gotPending(pendingInput('tx-hash', ['first-id', 'second-id'], submittedAt));
 
     const result = await storage.get('tx-hash');
 
@@ -108,38 +124,11 @@ describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
     expect(result?.identifiers).toEqual(['first-id', 'second-id']);
   });
 
-  it('should fall back to the first identifier when transactionHash is unavailable', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
-
-    const submittedAt = new Date('2026-01-01T00:00:00.000Z');
-    await storage.gotPending(txRef(['first-id', 'second-id']), submittedAt);
-
-    const result = await storage.get('first-id');
-
-    expect(result).toBeDefined();
-    expect(result?.lifecycle).toEqual({ status: 'pending', submittedAt });
-    expect(result?.identifiers).toEqual(['first-id', 'second-id']);
-  });
-
-  it('should fall back to the first identifier when transactionHash throws', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
-
-    const submittedAt = new Date('2026-01-01T00:00:00.000Z');
-    const tx: TransactionRef = {
-      identifiers: () => ['first-id'],
-      transactionHash: () => {
-        throw new Error('not hashable');
-      },
-    };
-    await storage.gotPending(tx, submittedAt);
-
-    expect(await storage.get('first-id')).toBeDefined();
-  });
-
   it('should clear a pending entry when its finalized counterpart arrives via gotFinalized', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
-    await storage.gotPending(txRef(['first-id', 'second-id']), new Date(0));
+    // Pending was inserted under a fallback key (e.g. first identifier) because the tx wasn't yet hashable.
+    await storage.gotPending(pendingInput('first-id', ['first-id', 'second-id']));
     expect(await storage.get('first-id')).toBeDefined();
 
     await storage.gotFinalized(finalizedInput('chain-hash', { identifiers: ['first-id', 'second-id', 'extra-id'] }));
@@ -149,12 +138,12 @@ describe('InMemoryTransactionHistoryStorage gotPending / gotRejected', () => {
   });
 
   it('should transition a pending entry to rejected via gotRejected', async () => {
-    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryCommonSchema, mergeEntries);
+    const storage = new InMemoryTransactionHistoryStorage(TransactionHistoryEntryCommonSchema, mergeEntries);
 
-    await storage.gotPending(txRef(['first-id']), new Date(0));
+    await storage.gotPending(pendingInput('first-id', ['first-id']));
 
     const rejectedAt = new Date('2026-01-02T00:00:00.000Z');
-    await storage.gotRejected(txRef(['first-id']), rejectedAt, 'TTL expired');
+    await storage.gotRejected(rejectedInput('first-id', ['first-id'], rejectedAt, 'TTL expired'));
 
     const result = await storage.get('first-id');
 

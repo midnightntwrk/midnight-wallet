@@ -25,10 +25,22 @@ export const PendingLifecycleSchema = Schema.Struct({
   submittedAt: Schema.Date,
 });
 
+export type PendingLifecycle = Schema.Schema.Type<typeof PendingLifecycleSchema>;
+
+export const FinalizedBlockSchema = Schema.Struct({
+  hash: Schema.String,
+  height: Schema.Number,
+  timestamp: Schema.Date,
+});
+
+export type FinalizedBlock = Schema.Schema.Type<typeof FinalizedBlockSchema>;
+
 export const FinalizedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('finalized'),
-  finalizedAt: Schema.Date,
+  finalizedBlock: FinalizedBlockSchema,
 });
+
+export type FinalizedLifecycle = Schema.Schema.Type<typeof FinalizedLifecycleSchema>;
 
 export const RejectedLifecycleSchema = Schema.Struct({
   status: Schema.Literal('rejected'),
@@ -36,6 +48,12 @@ export const RejectedLifecycleSchema = Schema.Struct({
   reason: Schema.optional(Schema.String),
 });
 
+export type RejectedLifecycle = Schema.Schema.Type<typeof RejectedLifecycleSchema>;
+
+/**
+ * Lifecycle states a transaction history entry can be in. The `status` literal is the discriminator; the rest of the
+ * entry's data is the same shape regardless of lifecycle (see {@link TransactionHistoryEntryCommonSchema}).
+ */
 export const TransactionLifecycleSchema = Schema.Union(
   PendingLifecycleSchema,
   FinalizedLifecycleSchema,
@@ -44,41 +62,62 @@ export const TransactionLifecycleSchema = Schema.Union(
 
 export type TransactionLifecycle = Schema.Schema.Type<typeof TransactionLifecycleSchema>;
 
-export const PendingTransactionHistoryCommonSchema = Schema.Struct({
+/**
+ * The common shape of every transaction history entry, regardless of lifecycle. The `lifecycle` field is the only thing
+ * that distinguishes pending / finalized / rejected entries — every other field belongs to all variants.
+ *
+ * Fields that fill in over time (`protocolVersion`, `status`, `timestamp`, `fees`) are optional because they aren't
+ * known at submission time; they get populated once the chain confirms the tx. `identifiers` is required because every
+ * tx has identifiers and the storage's pending-clear logic depends on them.
+ *
+ * Wallet packages extend this shape with their own sections (`shielded`, `unshielded`, `dust`).
+ */
+export const TransactionHistoryEntryCommonSchema = Schema.Struct({
   hash: TransactionHashSchema,
   identifiers: Schema.Array(Schema.String),
-  lifecycle: PendingLifecycleSchema,
-});
-
-export type PendingTransactionHistoryCommon = Schema.Schema.Type<typeof PendingTransactionHistoryCommonSchema>;
-
-export const RejectedTransactionHistoryCommonSchema = Schema.Struct({
-  hash: TransactionHashSchema,
-  identifiers: Schema.Array(Schema.String),
-  lifecycle: RejectedLifecycleSchema,
-});
-
-export type RejectedTransactionHistoryCommon = Schema.Schema.Type<typeof RejectedTransactionHistoryCommonSchema>;
-
-export const FinalizedTransactionHistoryCommonSchema = Schema.Struct({
-  hash: TransactionHashSchema,
-  protocolVersion: Schema.Number,
-  status: TransactionHistoryStatusSchema,
-  identifiers: Schema.optional(Schema.Array(Schema.String)),
+  protocolVersion: Schema.optional(Schema.Number),
+  status: Schema.optional(TransactionHistoryStatusSchema),
   timestamp: Schema.optional(Schema.Date),
   fees: Schema.optional(Schema.NullOr(Schema.BigInt)),
-  lifecycle: FinalizedLifecycleSchema,
+  lifecycle: TransactionLifecycleSchema,
 });
 
-export type FinalizedTransactionHistoryCommon = Schema.Schema.Type<typeof FinalizedTransactionHistoryCommonSchema>;
+export type TransactionHistoryEntryCommon = Schema.Schema.Type<typeof TransactionHistoryEntryCommonSchema>;
 
-export const TransactionHistoryCommonSchema = Schema.Union(
-  PendingTransactionHistoryCommonSchema,
-  FinalizedTransactionHistoryCommonSchema,
-  RejectedTransactionHistoryCommonSchema,
-);
+/**
+ * Build a transaction-history entry schema by extending {@link TransactionHistoryEntryCommonSchema} with wallet-specific
+ * fields. This is the canonical way to declare a wallet package's entry schema — it keeps the common fields in one
+ * place and makes "the entry is `common × extension`" explicit at the type level.
+ *
+ * @example
+ *   ```ts
+ *   export const DustTransactionHistoryEntrySchema = extendEntrySchema({
+ *     dust: Schema.optional(DustSectionSchema),
+ *   });
+ *   ```;
+ */
+export const extendEntrySchema = <Ext extends Schema.Struct.Fields>(
+  extensionFields: Ext,
+): Schema.Struct<typeof TransactionHistoryEntryCommonSchema.fields & Ext> =>
+  Schema.Struct({
+    ...TransactionHistoryEntryCommonSchema.fields,
+    ...extensionFields,
+  });
 
-export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHistoryCommonSchema>;
+/** The common entry, narrowed to its pending lifecycle. Useful in writer-input positions and predicates. */
+export type PendingTransactionHistoryCommon = TransactionHistoryEntryCommon & {
+  readonly lifecycle: PendingLifecycle;
+};
+
+/** The common entry, narrowed to its finalized lifecycle. Used by `gotFinalized`'s input type. */
+export type FinalizedTransactionHistoryCommon = TransactionHistoryEntryCommon & {
+  readonly lifecycle: FinalizedLifecycle;
+};
+
+/** The common entry, narrowed to its rejected lifecycle. */
+export type RejectedTransactionHistoryCommon = TransactionHistoryEntryCommon & {
+  readonly lifecycle: RejectedLifecycle;
+};
 
 export type SerializedTransactionHistory = string;
 
@@ -86,70 +125,74 @@ export type SerializedTransactionHistory = string;
  * An entry with common fields plus any additional properties (wallet sections). Used by wallet packages for
  * projection/filtering when the exact type is not known.
  */
-export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<string, unknown>;
+export type TransactionHistoryEntryWithHash = TransactionHistoryEntryCommon & Record<string, unknown>;
 
 /**
- * Input for `gotFinalized` — the finalized entry minus its `lifecycle` field, which the storage attaches itself.
- * Carries `finalizedAt` directly so callers don't construct the lifecycle object.
+ * Input for `gotPending` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
+ * `submittedAt` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
+ * wallet-specific extensions (e.g. `shielded`, `dust`).
  */
-export type FinalizedEntryInput<T extends FinalizedTransactionHistoryCommon = FinalizedTransactionHistoryCommon> = Omit<
+export type PendingEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
   T,
   'lifecycle'
-> & { readonly finalizedAt: Date };
+> & { readonly submittedAt: Date };
 
 /**
- * View of a transaction the lifecycle methods need to derive a storage key. Kept ledger-agnostic so the abstractions
- * package doesn't pull in a specific ledger version.
- *
- * - `identifiers()` is the stable, always-available list used as the entry's `identifiers` field and as the fallback key.
- * - `transactionHash()` is optional because not every variant of an in-flight tx is hashable (e.g. unproven txs);
+ * Input for `gotFinalized` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
+ * `finalizedBlock` directly so callers don't construct the lifecycle object. `T` is the entry shape including any
+ * wallet-specific extensions (e.g. `shielded`, `dust`).
  */
-export interface TransactionRef {
-  identifiers(): readonly string[];
-  transactionHash?(): { toString(): string };
-}
+export type FinalizedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
+  T,
+  'lifecycle'
+> & { readonly finalizedBlock: FinalizedBlock };
+
+/**
+ * Input for `gotRejected` — the entry minus its `lifecycle` field, which the storage attaches itself. Carries
+ * `rejectedAt` and the optional `reason` directly so callers don't construct the lifecycle object.
+ */
+export type RejectedEntryInput<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> = Omit<
+  T,
+  'lifecycle'
+> & { readonly rejectedAt: Date; readonly reason?: string };
 
 /**
  * Read-side of a transaction history storage. T appears only in output position, so this interface is **covariant** in
  * T: a `TransactionHistoryReader<Specific>` is assignable to `TransactionHistoryReader<Wider>`.
  */
-export interface TransactionHistoryReader<T extends { hash: TransactionHash } = TransactionHistoryCommon> {
+export interface TransactionHistoryReader<T extends { hash: TransactionHash } = TransactionHistoryEntryCommon> {
   getAll(): Promise<readonly T[]>;
   get(hash: TransactionHash): Promise<T | undefined>;
   serialize(): Promise<SerializedTransactionHistory>;
 }
 
 /**
- * Write-side of a transaction history storage. Exposes lifecycle-aware methods only — `gotPending`, `gotFinalized`,
+ * Write-side of a transaction history storage. Exposes lifecycle-aware methods — `gotPending`, `gotFinalized`,
  * `gotRejected`. Underlying primitives (upsert / delete / find-by-identifiers) are implementation details and are not
  * part of the public contract.
  *
- * Each `got*` method represents a transition the facade or sync layer has observed. Implementations are responsible for
- * keeping the storage internally consistent across keys (in particular: clearing a prior `pending` entry keyed by the
- * first identifier when its `finalized` or `rejected` counterpart arrives keyed by the tx hash).
+ * Each `got*` method records a transaction-history entry. Per the schema, every entry has `T` (the data, including any
+ * wallet-specific sections) and a `lifecycle` (the discriminator); each method takes a `T`-shaped input and the storage
+ * attaches the lifecycle field. Implementations are responsible for keeping the storage internally consistent across
+ * keys (in particular: clearing a prior `pending` entry keyed by an identifier when its `finalized` or `rejected`
+ * counterpart arrives keyed by the tx hash).
  *
- * T appears only in `gotFinalized`'s input position, so this interface is **contravariant** in T: a
- * `TransactionHistoryWriter<Wider>` is assignable to `TransactionHistoryWriter<Narrower>`.
+ * `T` appears only in input position, so this interface is **contravariant** in T: a `TransactionHistoryWriter<Wider>`
+ * is assignable to `TransactionHistoryWriter<Narrower>`.
  */
-export interface TransactionHistoryWriter<
-  T extends FinalizedTransactionHistoryCommon = FinalizedTransactionHistoryCommon,
-> {
-  /**
-   * Record that a tx has been submitted and is awaiting confirmation. The storage derives the entry key from the tx
-   * itself (preferring `transactionHash()` and falling back to the first identifier).
-   */
-  gotPending(tx: TransactionRef, submittedAt: Date): Promise<void>;
+export interface TransactionHistoryWriter<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon> {
+  /** Record that a tx has been submitted and is awaiting confirmation. */
+  gotPending(entry: PendingEntryInput<T>): Promise<void>;
   /**
    * Record that a tx has been confirmed on-chain. Inserts/merges the entry under its tx hash and clears any earlier
-   * `pending` entry that was keyed by an identifier in the supplied set.
+   * `pending` entry whose identifiers are contained in this entry's identifier set.
    */
   gotFinalized(entry: FinalizedEntryInput<T>): Promise<void>;
   /**
-   * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. The storage derives
-   * the entry key from the tx itself, matching the keying used by `gotPending` so the lifecycle transition is
-   * in-place.
+   * Record that a tx will not land — failed, partial-success, TTL-expired, or otherwise reverted. Keyed the same way as
+   * `gotPending` so the lifecycle transition is in-place.
    */
-  gotRejected(tx: TransactionRef, rejectedAt: Date, reason?: string): Promise<void>;
+  gotRejected(entry: RejectedEntryInput<T>): Promise<void>;
 }
 
 /**
@@ -160,20 +203,14 @@ export interface TransactionHistoryWriter<
  * hand-rolling the entry shape. This keeps the lifecycle vocabulary centralised and prevents call sites from drifting
  * back to ad-hoc `upsert + findByIdentifiers + delete` triples.
  *
- * Generic parameters:
- *
- * - `TRead` (the reader's view) covers the full lifecycle union (pending, finalized, rejected). Most callers only need to
- *   specify this — `Storage<WalletEntry>` is the typical shape.
- * - `TFinalized` (the writer's `gotFinalized` input shape) defaults to whichever arm of `TRead` is finalized via
- *   `Extract<TRead, FinalizedTransactionHistoryCommon>`, so it normally doesn't need to be supplied explicitly.
+ * `T` is the entry shape (a `TransactionHistoryEntryCommon` extension carrying any wallet-specific sections). The
+ * reader returns `T` (with whichever lifecycle a given entry happens to be in); the writer accepts `T`-shaped finalized
+ * inputs.
  *
  * Pass a full entry schema to the implementation constructor to enable serialization.
  *
  * For variance reasons, consumers that only read OR only write should depend on the narrower
  * {@link TransactionHistoryReader} / {@link TransactionHistoryWriter} interfaces directly.
  */
-export interface TransactionHistoryStorage<
-  TRead extends { hash: TransactionHash } = TransactionHistoryCommon,
-  TFinalized extends FinalizedTransactionHistoryCommon = Extract<TRead, FinalizedTransactionHistoryCommon>,
->
-  extends TransactionHistoryReader<TRead>, TransactionHistoryWriter<TFinalized> {}
+export interface TransactionHistoryStorage<T extends TransactionHistoryEntryCommon = TransactionHistoryEntryCommon>
+  extends TransactionHistoryReader<T>, TransactionHistoryWriter<T> {}
