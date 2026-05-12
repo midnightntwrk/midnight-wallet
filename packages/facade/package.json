@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@midnight-ntwrk/wallet-sdk-hd": "^3.0.2",
-    "@midnight-ntwrk/wallet-sdk-utilities": "1.1.1"
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.1.1"
   },
   "scripts": {
     "typecheck": "tsc -b ./tsconfig.json --noEmit --force",
