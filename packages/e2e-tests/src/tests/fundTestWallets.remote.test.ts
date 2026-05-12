@@ -20,12 +20,7 @@ import { logger } from './logger.js';
 import { type CombinedTokenTransfer } from '@midnight-ntwrk/wallet-sdk-facade';
 import { inspect } from 'node:util';
 
-/**
- * Tests performing a token transfer
- *
- * @group devnet
- * @group testnet
- */
+/** Tests performing a token transfer */
 
 // Purpose of this script is to setup up the test wallets used for remote tests.
 // SEED should be a wallet with funds e.g. faucet wallet

@@ -18,9 +18,6 @@ import { TestContainersFixture } from '../test-fixture.js';
 
 export function validateNetworkInAddress(address: string) {
   switch (TestContainersFixture.network) {
-    case 'testnet':
-      expect(address).toContain('test');
-      break;
     case 'devnet':
       expect(address).toContain('dev');
       break;
