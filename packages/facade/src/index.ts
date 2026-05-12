@@ -260,6 +260,13 @@ export type DefaultConfiguration = DefaultUnshieldedConfiguration &
   Partial<DefaultProvingConfiguration>;
 
 type MaybePromise<T> = T | Promise<T>;
+
+/**
+ * Parameters object for {@link WalletFacade.init}. It features configuration and bunch of initializers for the wallets
+ * and services, all of them are in a form of a function that takes the configuration and returns proper implementation,
+ * either synchronously or wrapped in a Promise. Services are optional to provide ({@link WalletFacade.init} will provide
+ * default implementations), but all 3 wallets: shielded, unshielded and Dust one need to be present
+ */
 export type InitParams<TConfig extends DefaultConfiguration> = {
   configuration: TConfig;
   /** Optional factory for the clock abstraction. Defaults to system clock (`() => new Date()`). */
@@ -336,6 +343,27 @@ export class WalletFacade {
     return tc;
   }
 
+  /**
+   * Default initialization for {@link WalletFacade}. It is a static method, which takes an object holding configuration
+   * and initialization of necessary components. Specifically - it requires following fields:
+   *
+   * - `configuration` - holding a configuration, which needs to extend {@link DefaultConfiguration} - this way allows to
+   *   convey use-case-specific settings in the same way, as the SDK works by default
+   * - `shielded` - a function taking the configuration and returning shielded wallet (or a promise with such)
+   *   implementing {@link ShieldedWalletAPI}
+   * - `unshielded` - a function taking the configuration and returning unshielded wallet (or a promise with such)
+   *   implementing {@link UnshieldedWalletAPI}
+   * - `dust` - a function taking the configuration and returning Dust wallet (or a promise with such) implementing
+   *   {@link DustWalletAPI} There are some optional services/abstractions to provide, too. If not provided - default
+   *   implementations will be used, each of them is initialized by a function taking the configuration and returning
+   *   proper implementation (wrapped in a {@link Promise} or not).
+   * - `submissionService` - needs to implement {@link SubmissionService} for a {@link ledger.FinalizedTransaction} to
+   *   submit transactions to the network, default uses Node RPC connection
+   * - `pendingTransactionsService` - needs to implement {@link PendingTransactionsService} for a
+   *   {@link ledger.FinalizedTransaction} to keep track of pending transactions, default uses in-memory implementation
+   * - `provingService` - needs to implement {@link ProvingService} to prove it, default uses proving server
+   * - `clock` - needs to implement {@link Clock} for getting current time, default uses system clock
+   */
   static async init<TConfig extends DefaultConfiguration>(initParams: InitParams<TConfig>): Promise<WalletFacade> {
     const submissionService = await Promise.resolve(
       initParams.submissionService
@@ -378,6 +406,12 @@ export class WalletFacade {
   readonly clock: Clock;
   #pendingSubscription: Subscription;
 
+  /**
+   * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
+   * new parameters is a breaking change to the users Use {@link WalletFacade.init} instead
+   *
+   * @private
+   */
   private constructor(
     shieldedWallet: ShieldedWalletAPI,
     unshieldedWallet: UnshieldedWalletAPI,
