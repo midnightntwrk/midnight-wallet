@@ -130,8 +130,8 @@ jobs:
           name: build-artifacts-${{ github.run_id }}
           path: .
 
-      # The following 3 steps are the equivalent of running `yarn verify:check`/`turbo verify:check`
-      # They are separated into 3 steps to give better visibility of the errors in the ci.
+      # The following 4 steps are the equivalent of running `yarn verify:check`/`turbo verify:check`
+      # They are separated into individual steps to give better visibility of the errors in the ci.
       # Future changes to verify:check should be reflected in these steps.
       - name: Run typecheck
         run: yarn typecheck
@@ -141,6 +141,9 @@ jobs:
 
       - name: Run linter
         run: yarn lint
+
+      - name: Check barrel exports
+        run: yarn check-barrel-exports
 
       - name: Save turbo cache
         if: always()

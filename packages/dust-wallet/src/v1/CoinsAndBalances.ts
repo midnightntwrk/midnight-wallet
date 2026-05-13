@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type CoinRecipe } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { pipe, Array as Arr, Order } from 'effect';
 import { type CoreWallet } from './CoreWallet.js';
@@ -39,10 +40,13 @@ export type UtxoWithFullDustDetails = Readonly<{
   dust: DustGenerationDetails;
 }>;
 
-export type CoinSelection<TInput> = (coins: readonly CoinWithValue<TInput>[]) => CoinWithValue<TInput> | undefined;
+export type CoinSelection = <TCoin extends CoinRecipe>(coins: readonly TCoin[]) => TCoin | undefined;
 
-export const chooseCoin = <TInput>(coins: readonly CoinWithValue<TInput>[]): CoinWithValue<TInput> | undefined =>
-  coins.toSorted((a, b) => Number(a.value - b.value)).at(0);
+export const chooseCoin: CoinSelection = (coins) =>
+  coins
+    .filter((coin) => coin.value > 0n)
+    .toSorted((a, b) => Number(a.value - b.value))
+    .at(0);
 
 export type CoinsAndBalancesCapability<TState> = {
   getWalletBalance(state: TState, time: Date): Balance;

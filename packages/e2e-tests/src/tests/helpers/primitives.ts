@@ -10,14 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-//
-// Barrel re-exporting helpers/* so existing test files can keep their
-// `import * as utils from './utils.js'` namespace import unchanged.
-// Prefer importing directly from `./helpers/<module>` in new code.
-export * from './helpers/walletInit.js';
-export * from './helpers/seeds.js';
-export * from './helpers/addresses.js';
-export * from './helpers/stateWaiters.js';
-export * from './helpers/txHistoryAsserts.js';
-export * from './helpers/network.js';
-export * from './helpers/primitives.js';
+/* eslint-disable @typescript-eslint/explicit-module-boundary-types */
+
+export const tNightAmount = (amount: bigint): bigint => amount * 10n ** 6n;
+
+export const isArrayUnique = (arr: any[]) => Array.isArray(arr) && new Set(arr).size === arr.length; // eslint-disable-line @typescript-eslint/no-explicit-any
