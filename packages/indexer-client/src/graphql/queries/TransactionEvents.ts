@@ -19,8 +19,8 @@ import { Query } from '../../effect/index.js';
 export const TransactionEvents = Query.make(
   'TransactionEvents',
   gql(`
-    query TransactionEvents($transactionId: HexEncoded!) {
-      transactions(offset: {identifier: $transactionId}) {
+    query TransactionEvents($transactionHash: HexEncoded!) {
+      transactions(offset: {hash: $transactionHash}) {
         __typename
         ... on RegularTransaction {
           id

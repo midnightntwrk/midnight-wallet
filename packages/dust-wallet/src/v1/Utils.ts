@@ -32,3 +32,8 @@ export const upsertArrayMap = <K, V>(map: Map<K, V[]>, key: K, val: V): Map<K, V
   map.set(key, current ? current.concat(val) : [val]);
   return map;
 };
+
+export const toHex = (n: number | bigint | string): string => {
+  const str = BigInt(n).toString(16);
+  return str.length % 2 === 0 ? str : '0' + str;
+};

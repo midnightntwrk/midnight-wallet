@@ -22,6 +22,17 @@ export const BlockHash = Query.make(
         hash
         ledgerParameters
         timestamp
+        transactions {
+          __typename
+          ... on RegularTransaction {
+            zswapStartIndex
+            zswapEndIndex
+            dustGenerationStartIndex
+            dustGenerationEndIndex
+            dustCommitmentStartIndex
+            dustCommitmentEndIndex
+          }
+        }
       }
     }
   `),

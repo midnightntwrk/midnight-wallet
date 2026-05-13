@@ -21,6 +21,7 @@ export const DustNullifierTransactions = Subscription.make(
         nullifier
         commitment
         transactionId
+        transactionHash
         blockHeight
         blockHash
       }

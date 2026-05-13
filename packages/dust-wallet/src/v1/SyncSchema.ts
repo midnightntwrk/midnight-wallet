@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Encoding, ParseResult, pipe, Schema } from 'effect';
+import { Effect, ParseResult, pipe, Schema } from 'effect';
 import {
   type DustSecretKey,
   Event as LedgerEvent,
@@ -19,8 +19,10 @@ import {
   type DustCommitment,
   type DustNullifier,
   type QualifiedDustOutput,
-  dustNonce,
+  dustFirstNonce,
   dustNullifier,
+  type TransactionHash,
+  LedgerParameters,
 } from '@midnight-ntwrk/ledger-v8';
 import { Uint8ArraySchema } from './Serialization.js';
 import { type DustGenerationInfo } from './types/index.js';
@@ -79,6 +81,7 @@ export const WireDustGenerationsUpdateSchema = Schema.Struct({
   backingNight: Schema.String,
   ctime: Schema.Number,
   transactionId: Schema.Number,
+  transactionHash: Schema.String,
   collapsedMerkleTree: Schema.Union(CollapsedMerkleTreeSchema, Schema.Null),
 });
 
@@ -95,6 +98,7 @@ export const DustGenerationsUpdateSchema = Schema.transform(
       backingNight: Schema.String,
       ctime: Schema.DateFromSelf,
       transactionId: Schema.Number,
+      transactionHash: Schema.String,
       collapsedMerkleTree: Schema.Union(CollapsedMerkleTreeSchema, Schema.Null),
     }),
   ),
@@ -117,6 +121,7 @@ export type NewDustGeneration = {
   generationIndex: number;
   qdo: QualifiedDustOutput;
   transactionId: number;
+  transactionHash: TransactionHash;
 };
 
 export type DustGenerationDtimUpdate = {
@@ -130,6 +135,7 @@ export type DustUtxoUpdate = {
   qdo: QualifiedDustOutput;
   isSpent: boolean;
   transactionId: number;
+  transactionHash: TransactionHash;
 };
 
 export const ProgressSchema = Schema.Struct({
@@ -191,6 +197,7 @@ export const DustNullifierTransactionSubscriptionSchema = Schema.Struct({
   nullifier: Schema.String,
   commitment: Schema.String,
   transactionId: Schema.Number,
+  transactionHash: Schema.String,
   blockHeight: Schema.Number,
   blockHash: Schema.String,
 });
@@ -220,7 +227,7 @@ export const DustGenerationsSyncUpdate = {
         const qdo = {
           initialValue: BigInt(u.initialValue),
           owner: dustPublicKey,
-          nonce: dustNonce(u.backingNight, 0n, secretKey),
+          nonce: dustFirstNonce(u.backingNight, dustPublicKey),
           seq: 0,
           ctime: u.ctime,
           backingNight: u.backingNight,
@@ -237,6 +244,7 @@ export const DustGenerationsSyncUpdate = {
           generationIndex: u.generationMtIndex,
           qdo,
           transactionId: u.transactionId,
+          transactionHash: u.transactionHash,
         };
       });
 
@@ -264,6 +272,90 @@ export const DustGenerationsSyncUpdate = {
     };
   },
 };
+
+const LedgerParametersSchema = Schema.declare(
+  (input: unknown): input is LedgerParameters => input instanceof LedgerParameters,
+).annotations({
+  identifier: 'ledger.Parameters',
+});
+
+const LedgerParametersFromUint8Array: Schema.Schema<LedgerParameters, Uint8Array> = Schema.asSchema(
+  Schema.transformOrFail(Uint8ArraySchema, LedgerParametersSchema, {
+    encode: (e) => {
+      return Effect.try({
+        try: () => e.serialize(),
+        catch: (err) => {
+          return new ParseResult.Unexpected(err, 'Could not serialize Ledger Parameters');
+        },
+      });
+    },
+    decode: (bytes) =>
+      Effect.try({
+        try: () => LedgerParameters.deserialize(bytes),
+        catch: (err) => {
+          return new ParseResult.Unexpected(err, 'Could not deserialize Ledger Parameters');
+        },
+      }),
+  }),
+);
+
+const HexedLedgerParameters: Schema.Schema<LedgerParameters, string> = pipe(
+  Schema.Uint8ArrayFromHex,
+  Schema.compose(LedgerParametersFromUint8Array),
+);
+
+const BlockTransactionSchema = Schema.Union(
+  Schema.Struct({
+    __typename: Schema.Literal('SystemTransaction'),
+  }),
+  Schema.Struct({
+    __typename: Schema.Literal('RegularTransaction'),
+    zswapStartIndex: Schema.Number,
+    zswapEndIndex: Schema.Number,
+    dustGenerationStartIndex: Schema.Number,
+    dustGenerationEndIndex: Schema.Number,
+    dustCommitmentStartIndex: Schema.Number,
+    dustCommitmentEndIndex: Schema.Number,
+  }),
+);
+
+export const WireBlockDataSchema = Schema.Struct({
+  height: Schema.Number,
+  hash: Schema.String,
+  ledgerParameters: HexedLedgerParameters,
+  timestamp: Schema.Number,
+  transactions: Schema.Array(BlockTransactionSchema),
+});
+
+export const BlockDataSchema = Schema.transform(
+  WireBlockDataSchema,
+  Schema.typeSchema(
+    Schema.Struct({
+      height: Schema.Number,
+      hash: Schema.String,
+      ledgerParameters: HexedLedgerParameters,
+      timestamp: Schema.DateFromSelf,
+      transactions: Schema.Array(BlockTransactionSchema),
+    }),
+  ),
+  {
+    strict: true,
+    decode: (wire) => {
+      return {
+        ...wire,
+        // timestamp: new Date(wire.timestamp * 1000), // TODO: revert when indexer fixes the format
+        timestamp: new Date(wire.timestamp),
+      };
+    },
+    encode: (domain) => ({
+      ...domain,
+      // timestamp: Math.floor(domain.timestamp.getTime() / 1000), // TODO: revert when indexer fixes the format
+      timestamp: Math.floor(domain.timestamp.getTime() * 1000),
+    }),
+  },
+);
+
+export type BlockData = Schema.Schema.Type<typeof BlockDataSchema>;
 
 const LedgerEventSchema = Schema.declare(
   (input: unknown): input is LedgerEvent => input instanceof LedgerEvent,
@@ -381,6 +473,7 @@ export type DustUtxoMap = Map<
   {
     qdo: QualifiedDustOutput;
     transactionId: number;
+    transactionHash: string;
   }
 >;
 
@@ -389,4 +482,5 @@ export type DustProjectionsUpdate = {
   spentNullifiers: DustUtxoMap;
   newUtxos: DustUtxoMap;
   collapsedCommitments: CollapsedMerkleTree[];
+  lastBlockTime: Date;
 };

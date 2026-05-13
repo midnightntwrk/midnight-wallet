@@ -28,6 +28,7 @@ export const DustGenerationEvents = Subscription.make(
           backingNight
           ctime
           transactionId
+          transactionHash
           collapsedMerkleTree {
             startIndex
             endIndex
