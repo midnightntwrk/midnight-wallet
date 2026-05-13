@@ -50,7 +50,6 @@ import {
   type TransactingCapability,
 } from './Transacting.js';
 import { type NetworkId } from './types/ledger.js';
-import { type Dust } from './types/Dust.js';
 import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
 import { type TotalCostParameters } from './types/transaction.js';
 
@@ -249,7 +248,7 @@ export class V1Builder<
   }
 
   withCoinSelection<TCoinSelectionConfig, TCoinSelectionContext extends Partial<RunningV1Variant.AnyContext>>(
-    coinSelection: (config: TCoinSelectionConfig, getContext: () => TCoinSelectionContext) => CoinSelection<Dust>,
+    coinSelection: (config: TCoinSelectionConfig, getContext: () => TCoinSelectionContext) => CoinSelection,
   ): V1Builder<
     TConfig & TCoinSelectionConfig,
     TContext & TCoinSelectionContext,
@@ -485,7 +484,7 @@ declare namespace V1Builder {
   };
 
   type HasCoinSelection<TConfig, TContext> = {
-    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection<Dust>;
+    readonly coinSelection: (configuration: TConfig, getContext: () => TContext) => CoinSelection;
   };
 
   type HasCoinsAndBalances<TConfig, TContext> = {
