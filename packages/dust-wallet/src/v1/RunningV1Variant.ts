@@ -268,27 +268,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.syncService.blockData(),
-        Effect.flatMap((blockData) =>
-          this.#v1Context.transactingCapability.balanceTransactions(
-            secretKey,
-            state,
-            transactions,
-            ttl,
-            currentTime ?? blockData.timestamp,
-            blockData.ledgerParameters,
+  ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
+    return pipe(
+      this.#v1Context.syncService.blockData(),
+      Effect.flatMap((blockData) =>
+        pipe(
+          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+            this.#v1Context.transactingCapability.balanceTransactions(
+              secretKey,
+              state,
+              transactions,
+              ttl,
+              currentTime ?? blockData.timestamp,
+              blockData.ledgerParameters,
+            ),
           ),
+          Effect.map((transaction) => ({ transaction, blockData })),
         ),
-      );
-    });
-  }
-
-  /** Fetches the latest block on chain. Each call is a fresh fetch. */
-  getLatestBlockData(): Effect.Effect<BlockData, WalletError> {
-    return this.#v1Context.syncService.blockData();
+      ),
+    );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {

@@ -40,36 +40,23 @@ const unprovenTx = buildUnprovenTransaction();
 // Stage 1: validate the unproven transaction before balancing.
 // The same flag combination applies to balanceUnboundTransaction.
 await sender.wallet.validateTransaction(unprovenTx, {
-  enforceBalancing: false,
-  verifySignatures: false,
-  enforceLimits: false,
+  flags: { enforceBalancing: false, verifySignatures: false, enforceLimits: false },
 });
 console.log('Validated unproven transaction (structural checks only)');
 
-const finalizedTx = await sender.wallet
-  .balanceUnprovenTransaction(
-    unprovenTx,
-    { shieldedSecretKeys: sender.shieldedSecretKeys, dustSecretKey: sender.dustSecretKey },
-    { ttl: new Date(Date.now() + 30 * 60 * 1000) },
-  )
-  .then((recipe) => sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload)))
-  .then((recipe) => sender.wallet.finalizeRecipe(recipe));
+const recipe = await sender.wallet.balanceUnprovenTransaction(
+  unprovenTx,
+  { shieldedSecretKeys: sender.shieldedSecretKeys, dustSecretKey: sender.dustSecretKey },
+  { ttl: new Date(Date.now() + 30 * 60 * 1000) },
+);
+const signedRecipe = await sender.wallet.signRecipe(recipe, (payload) => sender.unshieldedKeystore.signData(payload));
+const finalizedTx = await sender.wallet.finalizeRecipe(signedRecipe);
 
-// Stage 2: validate before balanceFinalizedTransaction.
-// `verifySignatures: true` — signatures are present and must be valid.
+// Stage 2: validate before submitTransaction.
+// Full strictness on a fully-formed transaction. `recipe.blockData` is reused to skip a redundant fetch.
 await sender.wallet.validateTransaction(finalizedTx, {
-  enforceBalancing: false,
-  verifySignatures: true,
-  enforceLimits: false,
-});
-console.log('Validated finalized transaction (signatures checked)');
-
-// Stage 3: validate before submitTransaction.
-// Full strictness on a fully-formed transaction.
-await sender.wallet.validateTransaction(finalizedTx, {
-  enforceBalancing: true,
-  verifySignatures: true,
-  enforceLimits: true,
+  flags: { enforceBalancing: true, verifySignatures: true, enforceLimits: true },
+  blockData: signedRecipe.blockData,
 });
 console.log('Validated finalized transaction (full strictness)');
 

@@ -143,25 +143,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<UnprovenTransaction>;
-
-  /**
-   * Fetches the latest block produced on chain.
-   *
-   * Does not depend on wallet sync progress — the call hits the indexer (or simulator) directly for current chain
-   * state. Each invocation is a fresh fetch; the result is not cached.
-   *
-   * @example
-   *   ```typescript
-   *   const blockData = await wallet.dust.getLatestBlockData();
-   *   console.log(`Chain time: ${blockData.timestamp.toISOString()}`);
-   *   console.log(`Block height: ${blockData.height}`);
-   *   ```
-   *
-   * @returns The latest block's hash, height, timestamp, and ledger parameters.
-   * @throws If the chain has not yet produced any block, or the indexer is unreachable.
-   */
-  getLatestBlockData(): Promise<BlockData>;
+  ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -337,7 +319,7 @@ export function CustomDustWallet<
       transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<UnprovenTransaction> {
+    ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),
@@ -349,14 +331,6 @@ export function CustomDustWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.revertTransaction(transaction),
-        })
-        .pipe(Effect.runPromise);
-    }
-
-    getLatestBlockData(): Promise<BlockData> {
-      return this.runtime
-        .dispatch({
-          [V1Tag]: (v1) => v1.getLatestBlockData(),
         })
         .pipe(Effect.runPromise);
     }

@@ -44,7 +44,7 @@ import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
-import { TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type Clock, systemClock, TransactionHistoryStorage } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { combineLatest, map, type Observable, firstValueFrom, type Subscription, concatMap } from 'rxjs';
 import {
   type DefaultPendingTransactionsServiceConfiguration,
@@ -52,6 +52,17 @@ import {
   type PendingTransactionsService,
   PendingTransactionsServiceImpl,
 } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import {
+  type BlockData,
+  type BlockDataFetcher,
+  makeDefaultBlockDataFetcher,
+  makeDefaultValidationService,
+  type ValidateTxOptions,
+  ValidationFetchError,
+  type ValidationService,
+  WellFormedError,
+  type WellFormedStrictnessFlags,
+} from '@midnight-ntwrk/wallet-sdk-capabilities/validation';
 import { finalizedTransactionTrait } from './transaction.js';
 import {
   type DustAddress,
@@ -111,6 +122,7 @@ export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
   originalTransaction: ledger.FinalizedTransaction;
   balancingTransaction: ledger.UnprovenTransaction;
+  blockData?: BlockData;
 };
 
 export type UnboundTransactionRecipe = {
@@ -119,11 +131,13 @@ export type UnboundTransactionRecipe = {
   // balancingTransaction is optional because if the user decides to balance only the unshielded part,
   // it occurs "in place" so the baseTransaction is modified
   balancingTransaction?: ledger.UnprovenTransaction | undefined;
+  blockData?: BlockData;
 };
 
 export type UnprovenTransactionRecipe = {
   type: 'UNPROVEN_TRANSACTION';
   transaction: ledger.UnprovenTransaction;
+  blockData?: BlockData;
 };
 
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
@@ -218,16 +232,7 @@ export class FacadeState {
 
 const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 
-/**
- * A clock abstraction for obtaining the current time. By default, the facade uses the system clock. For testing with a
- * simulator, inject a custom clock (e.g., one backed by the simulator's time).
- */
-export type Clock = {
-  readonly now: () => Date;
-};
-
-/** Default clock using real system time. */
-export const systemClock: Clock = { now: () => new Date() };
+export { type Clock, systemClock };
 
 /**
  * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
@@ -276,41 +281,31 @@ export type InitParams<TConfig extends DefaultConfiguration> = {
     config: TConfig,
   ) => MaybePromise<PendingTransactionsService<ledger.FinalizedTransaction>>;
   provingService?: (config: TConfig) => MaybePromise<ProvingService<UnboundTransaction>>;
+  /**
+   * Optional factory for the block-data fetcher used by validation. Defaults to an HTTP indexer-backed fetcher built
+   * from `configuration.indexerClientConnection`. Override for simulator-based tests with
+   * `makeSimulatorBlockDataFetcher(simulator)` from `@midnight-ntwrk/wallet-sdk-capabilities/validation`.
+   */
+  fetchBlockData?: (config: TConfig) => MaybePromise<BlockDataFetcher>;
+  validationService?: (
+    config: TConfig,
+    deps: { fetchBlockData: BlockDataFetcher; clock: Clock },
+  ) => MaybePromise<ValidationService>;
   shielded: (config: TConfig) => MaybePromise<ShieldedWalletAPI>;
   unshielded: (config: TConfig) => MaybePromise<UnshieldedWalletAPI>;
   dust: (config: TConfig) => MaybePromise<DustWalletAPI>;
 };
 
-/** Thrown when a transaction fails the structural well-formedness check before being processed. */
-export class WellFormedError extends Error {
-  constructor(cause: unknown) {
-    super(`Transaction is not well-formed: ${String(cause)}`, { cause });
-    this.name = 'WellFormedError';
-  }
-}
-
-/**
- * Configurable subset of {@link ledger.WellFormedStrictness}. Proof-verification flags (`verifyNativeProofs`,
- * `verifyContractProofs`) are intentionally omitted — proof verification requires the complete ledger state and will be
- * addressed in a future task.
- */
-export type WellFormedStrictnessFlags = Pick<
-  ledger.WellFormedStrictness,
-  'enforceBalancing' | 'verifySignatures' | 'enforceLimits'
->;
-
-const buildStrictness = (flags: WellFormedStrictnessFlags): ledger.WellFormedStrictness => {
-  const strictness = new ledger.WellFormedStrictness();
-  strictness.enforceBalancing = flags.enforceBalancing;
-  strictness.verifySignatures = flags.verifySignatures;
-  strictness.enforceLimits = flags.enforceLimits;
-  return strictness;
-};
-
-const buildBlankLedgerState = (networkId: string, parameters: ledger.LedgerParameters): ledger.LedgerState => {
-  const state = ledger.LedgerState.blank(networkId);
-  state.parameters = parameters;
-  return state;
+// `BlockData` is not re-exported from the facade to avoid a name collision with the
+// `@midnight-ntwrk/wallet-sdk-dust-wallet` export. The two are structurally identical; users can name the type via
+// `@midnight-ntwrk/wallet-sdk-dust-wallet` or `@midnight-ntwrk/wallet-sdk-capabilities/validation`.
+export {
+  type BlockDataFetcher,
+  type ValidateTxOptions,
+  type ValidationService,
+  ValidationFetchError,
+  WellFormedError,
+  type WellFormedStrictnessFlags,
 };
 
 export class WalletFacade {
@@ -416,6 +411,20 @@ export class WalletFacade {
     const unshielded = await Promise.resolve(initParams.unshielded(initParams.configuration));
     const dust = await Promise.resolve(initParams.dust(initParams.configuration));
     const clock = await Promise.resolve(initParams.clock ? initParams.clock(initParams.configuration) : systemClock);
+    const fetchBlockData: BlockDataFetcher = await Promise.resolve(
+      initParams.fetchBlockData
+        ? initParams.fetchBlockData(initParams.configuration)
+        : makeDefaultBlockDataFetcher(initParams.configuration),
+    );
+    const validationService = await Promise.resolve(
+      initParams.validationService
+        ? initParams.validationService(initParams.configuration, { fetchBlockData, clock })
+        : makeDefaultValidationService({
+            fetchBlockData,
+            networkId: initParams.configuration.networkId,
+            clock,
+          }),
+    );
     return new WalletFacade(
       shielded,
       unshielded,
@@ -423,9 +432,9 @@ export class WalletFacade {
       submissionService,
       pendingTransactionsService,
       provingService,
+      validationService,
       initParams.configuration.txHistoryStorage,
       clock,
-      initParams.configuration.networkId,
     );
   }
 
@@ -435,10 +444,10 @@ export class WalletFacade {
   readonly submissionService: SubmissionService<ledger.FinalizedTransaction>;
   readonly pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>;
   readonly provingService: ProvingService<UnboundTransaction>;
+  readonly validationService: ValidationService;
   #txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>;
   readonly clock: Clock;
   #pendingSubscription: Subscription;
-  #networkId: string;
 
   /**
    * Constructor is private on purpose - much of initialization of the facade is potentially asynchronous, and adding
@@ -453,9 +462,9 @@ export class WalletFacade {
     submissionService: SubmissionService<ledger.FinalizedTransaction>,
     pendingTransactionsService: PendingTransactionsService<ledger.FinalizedTransaction>,
     provingService: ProvingService<UnboundTransaction>,
+    validationService: ValidationService,
     txHistoryStorage: TransactionHistoryStorage.TransactionHistoryStorage<TransactionHistoryStorage.TransactionHistoryEntryWithHash>,
     clock: Clock = systemClock,
-    networkId: string,
   ) {
     this.shielded = shieldedWallet;
     this.unshielded = unshieldedWallet;
@@ -463,9 +472,9 @@ export class WalletFacade {
     this.submissionService = submissionService;
     this.pendingTransactionsService = pendingTransactionsService;
     this.provingService = provingService;
+    this.validationService = validationService;
     this.#txHistoryStorage = txHistoryStorage;
     this.clock = clock;
-    this.#networkId = networkId;
     this.#pendingSubscription = this.pendingTransactionsService
       .state()
       .pipe(
@@ -498,44 +507,37 @@ export class WalletFacade {
    * | `balanceUnboundTransaction`   | `false`          | `false`          | `false`       |
    * | `balanceUnprovenTransaction`  | `false`          | `false`          | `false`       |
    *
-   * Ledger parameters are selected automatically from `flags.enforceBalancing`:
-   *
-   * - `true` → fetches the current on-chain parameters via `this.dust.getLatestBlockData()` so the balance check uses the
-   *   actual cost model.
-   * - `false` → uses {@link ledger.LedgerParameters.initialParameters} and performs no fetch.
+   * Real on-chain ledger parameters are always used — `options.blockData` is used if provided, otherwise the service
+   * fetches the latest block data via the configured fetcher. Pass `recipe.blockData` to reuse the fetch performed
+   * during balancing and avoid a redundant network call.
    *
    * @example
    *   ```typescript
-   *   // Before submitTransaction — full strictness; fetches current on-chain parameters internally
-   *   await facade.validateTransaction(finalizedTx, { enforceBalancing: true, verifySignatures: true, enforceLimits: true });
+   *   // Reuse the block data captured during balancing — no extra fetch
+   *   const recipe = await facade.balanceFinalizedTransaction(tx, secretKeys, options);
+   *   const finalizedTx = await facade.finalizeRecipe(recipe);
+   *   await facade.validateTransaction(finalizedTx, {
+   *     flags: { enforceBalancing: true, verifySignatures: true, enforceLimits: true },
+   *     blockData: recipe.blockData,
+   *   });
    *   await facade.submitTransaction(finalizedTx);
    *
-   *   // Before balanceUnboundTransaction or balanceUnprovenTransaction — no fetch performed
-   *   await facade.validateTransaction(tx, { enforceBalancing: false, verifySignatures: false, enforceLimits: false });
-   *   await facade.balanceUnboundTransaction(tx, secretKeys, options);
+   *   // No recipe to source blockData from — the service fetches automatically
+   *   await facade.validateTransaction(tx, {
+   *     flags: { enforceBalancing: false, verifySignatures: false, enforceLimits: false },
+   *   });
    *   ```;
    *
    * @param tx - The transaction to validate (`FinalizedTransaction`, `UnboundTransaction`, or `UnprovenTransaction`).
-   * @param flags - Strictness flags for the configurable checks.
+   * @param options - Strictness flags and optional `blockData` to skip the fetch.
    * @throws {@link WellFormedError} If the transaction fails any enabled check.
-   * @throws Any error raised by `this.dust.getLatestBlockData()` when `flags.enforceBalancing` is `true` — typically a
-   *   network/indexer failure. These propagate unwrapped so callers can distinguish a malformed transaction from an
-   *   inability to fetch ledger parameters.
+   * @throws {@link ValidationFetchError} If the block-data fetch fails.
    */
   async validateTransaction(
     tx: ledger.FinalizedTransaction | UnboundTransaction | ledger.UnprovenTransaction,
-    flags: WellFormedStrictnessFlags,
+    options: ValidateTxOptions,
   ): Promise<void> {
-    const parameters = flags.enforceBalancing
-      ? (await this.dust.getLatestBlockData()).ledgerParameters
-      : ledger.LedgerParameters.initialParameters();
-    const strictness = buildStrictness(flags);
-    const ledgerState = buildBlankLedgerState(this.#networkId, parameters);
-    try {
-      tx.wellFormed(ledgerState, strictness, this.clock.now());
-    } catch (cause) {
-      throw new WellFormedError(cause);
-    }
+    return this.validationService.validateTx(tx, options);
   }
 
   private mergeUnprovenTransactions(
@@ -666,9 +668,10 @@ export class WalletFacade {
     const mergedBalancingTx = this.mergeUnprovenTransactions(shieldedBalancingTx, unshieldedBalancingTx);
 
     // Step 3: Conditionally add dust/fee balancing
-    const feeBalancingTx = shouldBalanceDust
+    const dustResult = shouldBalanceDust
       ? await this.dust.balanceTransactions(dustSecretKey, mergedBalancingTx ? [tx, mergedBalancingTx] : [tx], ttl)
       : undefined;
+    const feeBalancingTx = dustResult?.transaction;
 
     // Step 4: Merge fee balancing and create final recipe
     const balancingTx = this.mergeUnprovenTransactions(mergedBalancingTx, feeBalancingTx);
@@ -681,6 +684,7 @@ export class WalletFacade {
       type: 'FINALIZED_TRANSACTION',
       originalTransaction: tx,
       balancingTransaction: balancingTx,
+      ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
@@ -727,13 +731,14 @@ export class WalletFacade {
     const baseTx = balancedUnshieldedTx ?? tx;
 
     // Step 3: Conditionally add dust/fee balancing
-    const feeBalancingTransaction = shouldBalanceDust
+    const dustResult = shouldBalanceDust
       ? await this.dust.balanceTransactions(
           dustSecretKey,
           shieldedBalancingTx ? [baseTx, shieldedBalancingTx] : [baseTx],
           ttl,
         )
       : undefined;
+    const feeBalancingTransaction = dustResult?.transaction;
 
     // Step 4: Create the final balancing transaction
     const balancingTransaction = this.mergeUnprovenTransactions(shieldedBalancingTx, feeBalancingTransaction);
@@ -747,6 +752,7 @@ export class WalletFacade {
       type: 'UNBOUND_TRANSACTION',
       baseTransaction: baseTx,
       balancingTransaction: balancingTransaction ?? undefined,
+      ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
@@ -796,9 +802,10 @@ export class WalletFacade {
     const mergedTx = this.mergeUnprovenTransactions(baseTx, shieldedBalancingTx)!;
 
     // Step 4: Conditionally add dust/fee balancing
-    const feeBalancingTx = shouldBalanceDust
+    const dustResult = shouldBalanceDust
       ? await this.dust.balanceTransactions(dustSecretKey, [mergedTx], ttl)
       : undefined;
+    const feeBalancingTx = dustResult?.transaction;
 
     // Step 5: Merge fee balancing if present
     const balancedTx = this.mergeUnprovenTransactions(mergedTx, feeBalancingTx)!;
@@ -806,6 +813,7 @@ export class WalletFacade {
     return {
       type: 'UNPROVEN_TRANSACTION',
       transaction: balancedTx,
+      ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
@@ -846,6 +854,7 @@ export class WalletFacade {
           type: 'FINALIZED_TRANSACTION',
           originalTransaction: recipe.originalTransaction,
           balancingTransaction: signedBalancingTx,
+          ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
         };
       }
       case 'UNBOUND_TRANSACTION': {
@@ -857,6 +866,7 @@ export class WalletFacade {
           type: 'UNBOUND_TRANSACTION',
           baseTransaction: signedBaseTx,
           balancingTransaction: signedBalancingTx,
+          ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
         };
       }
       case 'UNPROVEN_TRANSACTION': {
@@ -864,6 +874,7 @@ export class WalletFacade {
         return {
           type: 'UNPROVEN_TRANSACTION',
           transaction: signedTx,
+          ...(recipe.blockData ? { blockData: recipe.blockData } : {}),
         };
       }
     }
@@ -952,13 +963,15 @@ export class WalletFacade {
     const mergedTxs = this.mergeUnprovenTransactions(shieldedTx, unshieldedTx)!;
 
     // Add fee payment
-    const feeBalancingTx = payFees ? await this.dust.balanceTransactions(dustSecretKey, [mergedTxs], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [mergedTxs], ttl) : undefined;
+    const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(mergedTxs, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
       transaction: finalTx,
+      ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 
@@ -1054,13 +1067,15 @@ export class WalletFacade {
       throw Error('Unexpected transaction state.');
     }
 
-    const feeBalancingTx = payFees ? await this.dust.balanceTransactions(dustSecretKey, [combinedTx], ttl) : undefined;
+    const dustResult = payFees ? await this.dust.balanceTransactions(dustSecretKey, [combinedTx], ttl) : undefined;
+    const feeBalancingTx = dustResult?.transaction;
 
     const finalTx = this.mergeUnprovenTransactions(combinedTx, feeBalancingTx)!;
 
     return {
       type: 'UNPROVEN_TRANSACTION',
       transaction: finalTx,
+      ...(dustResult ? { blockData: dustResult.blockData } : {}),
     };
   }
 

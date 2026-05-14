@@ -67,9 +67,7 @@ describe('WalletFacade.validateTransaction', () => {
       yield* Effect.promise(() =>
         expect(
           facade.validateTransaction(wellFormedTx, {
-            enforceBalancing: false,
-            verifySignatures: false,
-            enforceLimits: false,
+            flags: { enforceBalancing: false, verifySignatures: false, enforceLimits: false },
           }),
         ).resolves.toBeUndefined(),
       );
@@ -79,7 +77,9 @@ describe('WalletFacade.validateTransaction', () => {
     Effect.gen(function* () {
       const facade = yield* setupFacade();
       yield* Effect.promise(() =>
-        expect(facade.validateTransaction(expiredFinalizedTx(), FULL_STRICTNESS)).rejects.toThrow(WellFormedError),
+        expect(facade.validateTransaction(expiredFinalizedTx(), { flags: FULL_STRICTNESS })).rejects.toThrow(
+          WellFormedError,
+        ),
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 
@@ -87,7 +87,9 @@ describe('WalletFacade.validateTransaction', () => {
     Effect.gen(function* () {
       const facade = yield* setupFacade();
       yield* Effect.promise(() =>
-        expect(facade.validateTransaction(wrongNetworkFinalizedTx(), FULL_STRICTNESS)).rejects.toThrow(WellFormedError),
+        expect(facade.validateTransaction(wrongNetworkFinalizedTx(), { flags: FULL_STRICTNESS })).rejects.toThrow(
+          WellFormedError,
+        ),
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 
@@ -97,7 +99,7 @@ describe('WalletFacade.validateTransaction', () => {
       const provingService = createSimulatorProvingService();
       const unboundTx = yield* Effect.promise(() => provingService.prove(wrongNetworkUnprovenTx()));
       yield* Effect.promise(() =>
-        expect(facade.validateTransaction(unboundTx, FULL_STRICTNESS)).rejects.toThrow(WellFormedError),
+        expect(facade.validateTransaction(unboundTx, { flags: FULL_STRICTNESS })).rejects.toThrow(WellFormedError),
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 
@@ -105,7 +107,9 @@ describe('WalletFacade.validateTransaction', () => {
     Effect.gen(function* () {
       const facade = yield* setupFacade();
       yield* Effect.promise(() =>
-        expect(facade.validateTransaction(wrongNetworkUnprovenTx(), FULL_STRICTNESS)).rejects.toThrow(WellFormedError),
+        expect(facade.validateTransaction(wrongNetworkUnprovenTx(), { flags: FULL_STRICTNESS })).rejects.toThrow(
+          WellFormedError,
+        ),
       );
     }).pipe(Effect.scoped, Effect.runPromise));
 });

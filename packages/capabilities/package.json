@@ -41,6 +41,10 @@
     "./simulation": {
       "types": "./dist/simulation/index.d.ts",
       "import": "./dist/simulation/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js"
     }
   },
   "dependencies": {
