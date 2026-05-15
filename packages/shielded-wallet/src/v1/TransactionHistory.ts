@@ -124,6 +124,10 @@ export const makeDefaultTransactionHistoryService = (
         const statusQuery = yield* TransactionHistoryDetail;
         const result = yield* statusQuery({ transactionHash: hash });
         const tx = result.transactions[0];
+        if (tx === undefined) {
+          // Indexer hasn't indexed this tx yet — retry will handle it
+          throw new Error(`Transaction ${hash} not yet indexed`);
+        }
         const rawStatus = tx.__typename === 'RegularTransaction' ? tx.transactionResult.status : undefined;
         const status: TransactionDetails['status'] =
           rawStatus === 'FAILURE' || rawStatus === 'PARTIAL_SUCCESS' ? rawStatus : 'SUCCESS';
