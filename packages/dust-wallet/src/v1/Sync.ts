@@ -71,7 +71,7 @@ import { toHex, upsertArrayMap } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
-  blockData: () => Effect.Effect<BlockData, WalletError>;
+  blockData: (height?: number) => Effect.Effect<BlockData, WalletError>;
 }
 
 export type ChangesResult = {
@@ -163,10 +163,10 @@ export const makeDefaultSyncService = (
         Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
       );
     },
-    blockData: (): Effect.Effect<BlockData, WalletError> => {
+    blockData: (height?: number): Effect.Effect<BlockData, WalletError> => {
       return Effect.gen(function* () {
         const query = yield* BlockHash;
-        const result = yield* query({ offset: null });
+        const result = yield* query({ offset: height !== undefined ? { height } : null });
         return result.block;
       }).pipe(
         Effect.provide(indexerSyncService.queryClient()),
@@ -206,29 +206,29 @@ export const makeProjectionsBasedSyncService = (
   };
 
   const loadCollapsedCommitments = (
-    fromBlock: bigint,
-    toBlock: bigint,
+    fromIndex: number,
+    toIndex: number,
     newUtxos: DustUtxoMap,
   ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
-    const skipMtIndexes = [...newUtxos.values()].map((u) => u.qdo.mtIndex);
+    const skipMtIndexes = [...newUtxos.values()].map((u) => Number(u.qdo.mtIndex));
 
     // 1: split into groups
     const groups = [];
     const firstSkipIndex = skipMtIndexes.at(0);
 
-    if (firstSkipIndex !== undefined && fromBlock < firstSkipIndex) {
-      groups.push({ start: fromBlock, end: firstSkipIndex - 1n });
+    if (firstSkipIndex !== undefined && fromIndex < firstSkipIndex) {
+      groups.push({ start: fromIndex, end: firstSkipIndex - 1 });
     } else if (firstSkipIndex === undefined) {
-      groups.push({ start: fromBlock, end: toBlock });
+      groups.push({ start: fromIndex, end: toIndex });
     }
 
     skipMtIndexes.forEach((skipMtIndex, index) => {
-      const start = skipMtIndex + 1n;
+      const start = skipMtIndex + 1;
       const end = skipMtIndexes.at(index + 1);
-      if (end !== undefined && end - start > 0n) {
-        groups.push({ start, end: end - 1n });
-      } else if (end === undefined && start <= toBlock) {
-        groups.push({ start, end: toBlock });
+      if (end !== undefined && end - start > 0) {
+        groups.push({ start, end: end - 1 });
+      } else if (end === undefined && start <= toIndex) {
+        groups.push({ start, end: toIndex });
       }
     });
     console.log(`Skipping:`, skipMtIndexes);
@@ -236,10 +236,41 @@ export const makeProjectionsBasedSyncService = (
 
     // 2: Query all groups in parallel
     return pipe(
-      groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(Number(start), Number(end))),
+      groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(start, end)),
       Effect.all,
     );
   };
+
+  const blockCache = new Map<number, BlockData>();
+
+  const getEndIndexes = (
+    blockData: BlockData,
+  ): Effect.Effect<{ maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number }, WalletError> =>
+    Effect.gen(function* () {
+      if (blockData.height === 0) {
+        return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84 };
+      }
+
+      const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
+
+      if (regularTxs.length > 0) {
+        return {
+          maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)),
+          maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)),
+        };
+      }
+
+      const prevBlock = blockData.height - 1;
+      if (blockCache.has(prevBlock)) {
+        const prevBlockData = blockCache.get(prevBlock)!;
+        return yield* getEndIndexes(prevBlockData);
+      }
+
+      console.log('going one block back:', prevBlock);
+      const prevBlockData = yield* defaultSyncService.blockData(prevBlock);
+      blockCache.set(prevBlock, prevBlockData);
+      return yield* getEndIndexes(prevBlockData);
+    });
 
   return {
     updates: (
@@ -249,15 +280,11 @@ export const makeProjectionsBasedSyncService = (
       return pipe(
         Effect.gen(function* () {
           const blockData = yield* defaultSyncService.blockData();
-          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
-
+          blockCache.set(blockData.height, blockData);
           // TODO: this will come as part of the blockData response
-          const dustGenerationEndIndexes = blockData.transactions
-            .filter((tx) => tx.__typename === 'RegularTransaction')
-            .map((tx) => tx.dustGenerationEndIndex);
-          const maxGeneratingTreeIndex = dustGenerationEndIndexes.length
-            ? Math.max(...dustGenerationEndIndexes)
-            : Number(state.state.generatingTreeFirstFree - 1n);
+          const { maxCommitmentTreeIndex, maxGeneratingTreeIndex } = yield* getEndIndexes(blockData);
+          console.log({ maxCommitmentTreeIndex, maxGeneratingTreeIndex });
+          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
           const rawGenerations = yield* pipe(
             indexerSyncService.subscribeDustGenerations(state, maxGeneratingTreeIndex),
@@ -318,8 +345,8 @@ export const makeProjectionsBasedSyncService = (
           newUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)));
 
           const collapsedCommitments = yield* loadCollapsedCommitments(
-            lastSyncedCommitmentIndex,
-            BigInt(blockData.height),
+            Number(lastSyncedCommitmentIndex),
+            maxCommitmentTreeIndex,
             newUtxos,
           );
 
