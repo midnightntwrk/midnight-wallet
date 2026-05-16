@@ -15,7 +15,7 @@ import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { type MidnightNetwork, sleep } from './helpers/network.js';
+import { type MidnightNetwork, sleep, waitForBlockAdvancement } from './helpers/network.js';
 import { logger } from './logger.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -81,8 +81,11 @@ export function useTestContainersFixture() {
         exit(1);
       }
     }
-    logger.info('Test environment started');
     fixture = new TestContainersFixture(composeEnvironment, uid);
+    if (network === 'undeployed') {
+      await waitForBlockAdvancement(fixture.getIndexerUri());
+    }
+    logger.info('Test environment started');
   }, 120_000);
 
   afterAll(async () => {
