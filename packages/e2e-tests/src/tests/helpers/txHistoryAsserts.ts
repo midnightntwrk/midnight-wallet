@@ -12,9 +12,11 @@
 // limitations under the License.
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { expect } from 'vitest';
-import { type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type FinalizedWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 
-function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshielded']>['createdUtxos'][number]) {
+function expectValidUnshieldedUtxoFields(
+  utxo: NonNullable<FinalizedWalletEntry['unshielded']>['createdUtxos'][number],
+) {
   expect(typeof utxo.value).toBe('bigint');
   expect(typeof utxo.owner).toBe('string');
   expect(typeof utxo.tokenType).toBe('string');
@@ -22,7 +24,9 @@ function expectValidUnshieldedUtxoFields(utxo: NonNullable<WalletEntry['unshield
   expect(typeof utxo.outputIndex).toBe('number');
 }
 
-export function expectValidShieldedCoinFields(coin: NonNullable<WalletEntry['shielded']>['receivedCoins'][number]) {
+export function expectValidShieldedCoinFields(
+  coin: NonNullable<FinalizedWalletEntry['shielded']>['receivedCoins'][number],
+) {
   expect(typeof coin.type).toBe('string');
   expect(coin.type.length).toBeGreaterThan(0);
   expect(typeof coin.nonce).toBe('string');
@@ -31,7 +35,7 @@ export function expectValidShieldedCoinFields(coin: NonNullable<WalletEntry['shi
   expect(typeof coin.mtIndex).toBe('bigint');
 }
 
-export function expectValidShieldedTxHistoryEntry(entry: WalletEntry) {
+export function expectValidShieldedTxHistoryEntry(entry: FinalizedWalletEntry) {
   expect(entry.shielded).toBeDefined();
   expect(Array.isArray(entry.shielded!.receivedCoins)).toBe(true);
   expect(Array.isArray(entry.shielded!.spentCoins)).toBe(true);
@@ -40,7 +44,7 @@ export function expectValidShieldedTxHistoryEntry(entry: WalletEntry) {
   }
 }
 
-export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
+export function expectValidUnshieldedTxHistoryEntry(entry: FinalizedWalletEntry) {
   expect(entry.unshielded).toBeDefined();
   expect(Array.isArray(entry.unshielded!.createdUtxos)).toBe(true);
   expect(Array.isArray(entry.unshielded!.spentUtxos)).toBe(true);
@@ -50,7 +54,7 @@ export function expectValidUnshieldedTxHistoryEntry(entry: WalletEntry) {
 }
 
 /** Asserts a sender's shielded tx history entry has valid spentCoins. */
-export function expectSenderShieldedTxHistory(entry: WalletEntry) {
+export function expectSenderShieldedTxHistory(entry: FinalizedWalletEntry) {
   expect(entry.shielded).toBeDefined();
   expect(entry.shielded!.spentCoins.length).toBeGreaterThan(0);
   expectValidShieldedTxHistoryEntry(entry);
@@ -60,7 +64,7 @@ export function expectSenderShieldedTxHistory(entry: WalletEntry) {
  * Asserts a receiver's shielded tx history entry has valid receivedCoins, and that a coin matching the expected value
  * exists with valid fields.
  */
-export function expectReceiverShieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
+export function expectReceiverShieldedTxHistory(entry: FinalizedWalletEntry, expectedValue: bigint) {
   expect(entry.shielded).toBeDefined();
   expect(entry.shielded!.receivedCoins.length).toBeGreaterThan(0);
   const receivedCoin = entry.shielded!.receivedCoins.find((c) => c.value === expectedValue);
@@ -70,7 +74,7 @@ export function expectReceiverShieldedTxHistory(entry: WalletEntry, expectedValu
 }
 
 /** Asserts a sender's unshielded tx history entry has valid spentUtxos. */
-export function expectSenderUnshieldedTxHistory(entry: WalletEntry) {
+export function expectSenderUnshieldedTxHistory(entry: FinalizedWalletEntry) {
   expect(entry.unshielded).toBeDefined();
   expect(entry.unshielded!.spentUtxos.length).toBeGreaterThan(0);
   expectValidUnshieldedTxHistoryEntry(entry);
@@ -80,7 +84,7 @@ export function expectSenderUnshieldedTxHistory(entry: WalletEntry) {
  * Asserts a receiver's unshielded tx history entry has valid createdUtxos, and that a UTXO matching the expected value
  * exists with valid fields.
  */
-export function expectReceiverUnshieldedTxHistory(entry: WalletEntry, expectedValue: bigint) {
+export function expectReceiverUnshieldedTxHistory(entry: FinalizedWalletEntry, expectedValue: bigint) {
   expect(entry.unshielded).toBeDefined();
   expect(entry.unshielded!.createdUtxos.length).toBeGreaterThan(0);
   const receivedUtxo = entry.unshielded!.createdUtxos.find((u) => u.value === expectedValue);

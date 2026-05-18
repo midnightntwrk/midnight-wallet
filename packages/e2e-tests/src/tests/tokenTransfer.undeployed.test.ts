@@ -16,7 +16,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import * as utils from './utils.js';
 import { logger } from './logger.js';
-import { type CombinedTokenTransfer, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type CombinedTokenTransfer, type FinalizedWalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
 import { randomBytes } from 'node:crypto';
 
 /** Tests performing a token transfer */
@@ -544,7 +544,7 @@ describe('Token transfer', () => {
       expect(finalReceiver2State.unshielded.balances[shieldedTokenRaw]).toBe(outputValue);
 
       // Verify sender tx history for combined shielded+unshielded transfer
-      const bothSectionsReady = (e: WalletEntry) => e.shielded !== undefined && e.unshielded !== undefined;
+      const bothSectionsReady = (e: FinalizedWalletEntry) => e.shielded !== undefined && e.unshielded !== undefined;
       const senderTxEntry = await utils.waitForTxInHistory(txHash, funded.wallet, bothSectionsReady);
       utils.expectSenderShieldedTxHistory(senderTxEntry);
       utils.expectSenderUnshieldedTxHistory(senderTxEntry);

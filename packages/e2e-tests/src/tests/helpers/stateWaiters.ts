@@ -16,7 +16,12 @@ import { expect } from 'vitest';
 import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import { type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
 import { type UnshieldedWallet } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
-import { type WalletFacade, type WalletEntry } from '@midnight-ntwrk/wallet-sdk-facade';
+import {
+  type WalletFacade,
+  type FinalizedWalletEntry,
+  isPendingWalletEntry,
+  isFinalizedWalletEntry,
+} from '@midnight-ntwrk/wallet-sdk-facade';
 import { logger } from '../logger.js';
 
 export const waitForSyncUnshielded = (wallet: UnshieldedWallet) =>
@@ -136,10 +141,10 @@ export const waitForRegisteredTokens = (wallet: WalletFacade) =>
 export const waitForTxInHistory = async (
   txHash: string,
   wallet: WalletFacade,
-  ready?: (entry: WalletEntry) => boolean,
+  ready?: (entry: FinalizedWalletEntry) => boolean,
 ) => {
   const isReady = ready ?? (() => true);
-  const describeSections = (e: WalletEntry): string =>
+  const describeSections = (e: FinalizedWalletEntry): string =>
     (['shielded', 'unshielded', 'dust'] as const).filter((k) => e[k] !== undefined).join(',');
   let pollsSinceDump = 0;
   const txEntry = await rx.firstValueFrom(
@@ -161,12 +166,28 @@ export const waitForTxInHistory = async (
         }
         if (needsDump) {
           const all = await wallet.getAllFromTxHistory();
-          const summary = all.map((e) => ({
-            hash: e.hash,
-            status: e.status,
-            sections: describeSections(e),
-            identifiers: e.identifiers ?? [],
-          }));
+          const summary = all.map((e) =>
+            isPendingWalletEntry(e)
+              ? {
+                  hash: e.hash,
+                  status: 'PENDING',
+                  sections: '(pending placeholder)',
+                  identifiers: e.identifiers,
+                }
+              : isFinalizedWalletEntry(e)
+                ? {
+                    hash: e.hash,
+                    status: e.status,
+                    sections: describeSections(e),
+                    identifiers: e.identifiers ?? [],
+                  }
+                : {
+                    hash: e.hash,
+                    status: e.lifecycle.status.toUpperCase(),
+                    sections: '(rejected)',
+                    identifiers: e.identifiers,
+                  },
+          );
           logger.info(`Storage snapshot (${all.length} entries): ${JSON.stringify(summary, null, 2)}`);
           pollsSinceDump = 0;
         } else {
@@ -174,7 +195,9 @@ export const waitForTxInHistory = async (
         }
         return entry;
       }),
-      rx.filter((entry): entry is WalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry))),
+      rx.filter(
+        (entry): entry is FinalizedWalletEntry => entry !== undefined && (entry.status !== 'SUCCESS' || isReady(entry)),
+      ),
     ),
   );
   expect(txEntry).toBeDefined();
