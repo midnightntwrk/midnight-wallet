@@ -284,6 +284,7 @@ export const saveState = async (wallet: WalletFacade, filename: string) => {
 };
 
 export type CustomWallets = {
+  // TODO: add others
   dustWallet?: (config: DefaultDustConfiguration) => DustWalletClass;
 };
 
@@ -419,7 +420,7 @@ export const waitForUnshieldedCoinUpdate = (wallet: WalletFacade, initialNumAvai
       rx.tap((state) => {
         const currentNumAvailableCoins = state.unshielded.availableCoins.length;
         logger.info(
-          `Unshielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableCoins}...`,
+          `Unshielded available coins: ${currentNumAvailableCoins}, waiting for more than ${initialNumAvailableCoins}... synced: ${state.isSynced}`,
         );
       }),
       rx.debounceTime(10_000),

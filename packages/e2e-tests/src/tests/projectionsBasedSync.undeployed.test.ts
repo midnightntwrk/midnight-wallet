@@ -39,9 +39,12 @@ describe('Projections-based synchronisation model', () => {
 
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
+  let fundedOld: utils.WalletInit;
   let receiver: utils.WalletInit;
+  let tryIndex = 0;
 
   beforeEach(async () => {
+    ++tryIndex;
     fixture = getFixture();
     // TODO: we can add another wallet with the same seed, but default sync mode and verify the dust data
     funded = await utils.initWalletWithSeed(seedFunded, fixture, {
@@ -51,22 +54,31 @@ describe('Projections-based synchronisation model', () => {
           new V1Builder().withDefaults().withSync(makeProjectionsBasedSyncService, makeProjectionsBasedSyncCapability),
         ),
     });
+    fundedOld = await utils.initWalletWithSeed(seedFunded, fixture);
     receiver = await utils.initWalletWithSeed(seed, fixture);
     logger.info('Two wallets started');
   });
 
   afterEach(async () => {
     await funded.wallet.stop();
+    await fundedOld.wallet.stop();
     await receiver.wallet.stop();
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {
+    const initialStateOld = await fundedOld.wallet.waitForSyncedState();
+    if (tryIndex === 2) {
+      console.log('dust state', initialStateOld.dust.state.state.toString());
+    }
     const initialState = await funded.wallet.waitForSyncedState();
     const receiverInitialState = await receiver.wallet.waitForSyncedState();
     const receiverInitialAvailableCoins = receiverInitialState.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
     logger.info(`Wallet 1 total unshielded coins: ${initialState.unshielded.totalCoins.length}`);
+
+    // console.log('shielded.address', receiverInitialState.shielded.address);
+    // console.log('unshielded.address', receiverInitialState.unshielded.address);
 
     const outputsToCreate: CombinedTokenTransfer[] = [
       {
@@ -100,7 +112,15 @@ describe('Projections-based synchronisation model', () => {
         ],
       },
     ];
+    const statesEqual = initialState.dust.state.state.toString() === initialStateOld.dust.state.state.toString();
+    console.log('dust states equal', statesEqual);
+    if (!statesEqual) {
+      console.log('dust state1', initialState.dust.state.state.toString());
+    }
+    // console.log('dust state1', initialState.dust.state.state.toString());
+    // console.log('dust state1 (old way)', initialStateOld.dust.state.state.toString());
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    // console.log('dust state2 (old way)', state2.dust.state.state.toString());
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const txRecipe = await funded.wallet.transferTransaction(
       outputsToCreate,
@@ -110,17 +130,29 @@ describe('Projections-based synchronisation model', () => {
       },
       { ttl },
     );
+    // console.log('txRecipes equal', txRecipe.transaction.toString() === txRecipe2.transaction.toString());
+    // console.log('txRecipe1', txRecipe.transaction.toString());
+    // console.log('txRecipe2', txRecipe2.transaction.toString());
     const signedTxRecipe = await funded.wallet.signRecipe(txRecipe, (payload) =>
       funded.unshieldedKeystore.signData(payload),
     );
     const finalizedTx = await funded.wallet.finalizeRecipe(signedTxRecipe);
     const txId = await funded.wallet.submitTransaction(finalizedTx);
     logger.info('Transaction id: ' + txId);
+
     logger.info('Waiting for finalized balance...');
     const receiverState2 = await utils.waitForUnshieldedCoinUpdate(receiver.wallet, receiverInitialAvailableCoins);
     const finalUnshieldedBalance = receiverState2.unshielded.balances[unshieldedTokenRaw];
     logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
+
+    //
+    // await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    // await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    // await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    // await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    // await utils.waitForBlockAdvancement(fixture.getIndexerUri());
+    //
 
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
@@ -158,7 +190,13 @@ describe('Projections-based synchronisation model', () => {
   test(
     'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
     async () => {
+      // const initialState1 = await funded.wallet.waitForSyncedState();
+      // const initialState2 = await fundedOld.wallet.waitForSyncedState();
+      // console.log('new sync', initialState1.dust.state.state.toString());
+      // console.log('old sync', initialState2.dust.state.state.toString());
+
       await sendAndRegisterNightUtxos();
+      console.log('!!! >>> after send and register');
       const initialWalletState = await receiver.wallet.waitForSyncedState();
       const receiverDustBalance = await rx.firstValueFrom(
         receiver.wallet.state().pipe(

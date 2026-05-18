@@ -31,6 +31,15 @@ export const BlockHash = Query.make(
             dustGenerationEndIndex
             dustCommitmentStartIndex
             dustCommitmentEndIndex
+            dustLedgerEvents {
+              id
+              raw
+              maxId
+              protocolVersion
+            }
+            transactionResult {
+              status
+            }
           }
         }
       }

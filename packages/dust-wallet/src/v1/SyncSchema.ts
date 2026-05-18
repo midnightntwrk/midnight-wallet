@@ -248,9 +248,15 @@ export const DustGenerationsSyncUpdate = {
         };
       });
 
+    console.log(
+      'generationDtimeUpdates',
+      dustAddressHex,
+      rawUpdates.filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem'),
+    );
+
     const generationDtimeUpdates = rawUpdates
       .filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem')
-      .filter((u) => u.owner === dustAddressHex)
+      // .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
       .map((u) => ({
         owner: dustPublicKey,
@@ -303,59 +309,6 @@ const HexedLedgerParameters: Schema.Schema<LedgerParameters, string> = pipe(
   Schema.Uint8ArrayFromHex,
   Schema.compose(LedgerParametersFromUint8Array),
 );
-
-const BlockTransactionSchema = Schema.Union(
-  Schema.Struct({
-    __typename: Schema.Literal('SystemTransaction'),
-  }),
-  Schema.Struct({
-    __typename: Schema.Literal('RegularTransaction'),
-    zswapStartIndex: Schema.Number,
-    zswapEndIndex: Schema.Number,
-    dustGenerationStartIndex: Schema.Number,
-    dustGenerationEndIndex: Schema.Number,
-    dustCommitmentStartIndex: Schema.Number,
-    dustCommitmentEndIndex: Schema.Number,
-  }),
-);
-
-export const WireBlockDataSchema = Schema.Struct({
-  height: Schema.Number,
-  hash: Schema.String,
-  ledgerParameters: HexedLedgerParameters,
-  timestamp: Schema.Number,
-  transactions: Schema.Array(BlockTransactionSchema),
-});
-
-export const BlockDataSchema = Schema.transform(
-  WireBlockDataSchema,
-  Schema.typeSchema(
-    Schema.Struct({
-      height: Schema.Number,
-      hash: Schema.String,
-      ledgerParameters: HexedLedgerParameters,
-      timestamp: Schema.DateFromSelf,
-      transactions: Schema.Array(BlockTransactionSchema),
-    }),
-  ),
-  {
-    strict: true,
-    decode: (wire) => {
-      return {
-        ...wire,
-        // timestamp: new Date(wire.timestamp * 1000), // TODO: revert when indexer fixes the format
-        timestamp: new Date(wire.timestamp),
-      };
-    },
-    encode: (domain) => ({
-      ...domain,
-      // timestamp: Math.floor(domain.timestamp.getTime() / 1000), // TODO: revert when indexer fixes the format
-      timestamp: Math.floor(domain.timestamp.getTime() * 1000),
-    }),
-  },
-);
-
-export type BlockData = Schema.Schema.Type<typeof BlockDataSchema>;
 
 const LedgerEventSchema = Schema.declare(
   (input: unknown): input is LedgerEvent => input instanceof LedgerEvent,
@@ -484,3 +437,66 @@ export type DustProjectionsUpdate = {
   collapsedCommitments: CollapsedMerkleTree[];
   lastBlockTime: Date;
 };
+
+const BlockTransactionSchema = Schema.Union(
+  Schema.Struct({
+    __typename: Schema.Literal('SystemTransaction'),
+  }),
+  Schema.Struct({
+    __typename: Schema.Literal('RegularTransaction'),
+    zswapStartIndex: Schema.Number,
+    zswapEndIndex: Schema.Number,
+    dustGenerationStartIndex: Schema.Number,
+    dustGenerationEndIndex: Schema.Number,
+    dustCommitmentStartIndex: Schema.Number,
+    dustCommitmentEndIndex: Schema.Number,
+    dustLedgerEvents: Schema.Array(TransactionEvent),
+    transactionResult: Schema.Struct({
+      segments: Schema.optional(
+        Schema.Array(
+          Schema.Struct({
+            id: Schema.Number,
+            success: Schema.Boolean,
+          }),
+        ),
+      ),
+      status: Schema.String,
+    }),
+  }),
+);
+
+export const WireBlockDataSchema = Schema.Struct({
+  height: Schema.Number,
+  hash: Schema.String,
+  ledgerParameters: HexedLedgerParameters,
+  timestamp: Schema.Number,
+  transactions: Schema.Array(BlockTransactionSchema),
+});
+
+export const BlockDataSchema = Schema.transform(
+  WireBlockDataSchema,
+  Schema.typeSchema(
+    Schema.Struct({
+      height: Schema.Number,
+      hash: Schema.String,
+      ledgerParameters: HexedLedgerParameters,
+      timestamp: Schema.DateFromSelf,
+      transactions: Schema.Array(BlockTransactionSchema),
+    }),
+  ),
+  {
+    strict: true,
+    decode: (wire) => {
+      return {
+        ...wire,
+        timestamp: new Date(wire.timestamp),
+      };
+    },
+    encode: (domain) => ({
+      ...domain,
+      timestamp: Math.floor(domain.timestamp.getTime() * 1000),
+    }),
+  },
+);
+
+export type BlockData = Schema.Schema.Type<typeof BlockDataSchema>;
