@@ -1194,6 +1194,15 @@ exports[`Snippet outputs > with network > should output the correct result for '
 ]
 `;
 
+exports[`Snippet outputs > with network > should output the correct result for 'well-formed-validation' 1`] = `
+[
+  "Validated unproven transaction (structural checks only)
+Validated finalized transaction (full strictness)
+Transfer with full validation completed
+",
+]
+`;
+
 exports[`Snippet outputs > without network > should output the correct result for 'addresses' 1`] = `
 [
   "unshielded address mn_addr_undeployed13h0e3c2m7rcfem6wvjljnyjmxy5rkg9kkwcldzt73ya5pv7c4p8skzgqwj

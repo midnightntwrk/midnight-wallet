@@ -33,7 +33,9 @@ import { type SerializationCapability } from './v1/Serialization.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
-import { type WalletSyncUpdate } from './v1/Sync.js';
+import { type BlockData, type WalletSyncUpdate } from './v1/Sync.js';
+
+export type { BlockData } from './v1/Sync.js';
 
 import { type TransactionHistoryService } from './v1/TransactionHistory.js';
 
@@ -141,7 +143,7 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Promise<UnprovenTransaction>;
+  ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }>;
 
   serializeState(): Promise<TSerialized>;
 
@@ -317,7 +319,7 @@ export function CustomDustWallet<
       transactions: ReadonlyArray<AnyTransaction>,
       ttl: Date,
       currentTime?: Date,
-    ): Promise<UnprovenTransaction> {
+    ): Promise<{ transaction: UnprovenTransaction; blockData: BlockData }> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.balanceTransactions(secretKey, transactions, ttl, currentTime),

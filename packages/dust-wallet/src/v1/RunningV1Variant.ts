@@ -31,7 +31,7 @@ import {
 } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
 import { type UtxoWithMeta } from './types/Dust.js';
 import { type KeysCapability } from './Keys.js';
-import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
+import { type BlockData, type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import {
   type CoinsAndBalancesCapability,
@@ -268,22 +268,25 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     transactions: ReadonlyArray<AnyTransaction>,
     ttl: Date,
     currentTime?: Date,
-  ): Effect.Effect<UnprovenTransaction, WalletError> {
-    return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
-      return pipe(
-        this.#v1Context.syncService.blockData(),
-        Effect.flatMap((blockData) =>
-          this.#v1Context.transactingCapability.balanceTransactions(
-            secretKey,
-            state,
-            transactions,
-            ttl,
-            currentTime ?? blockData.timestamp,
-            blockData.ledgerParameters,
+  ): Effect.Effect<{ transaction: UnprovenTransaction; blockData: BlockData }, WalletError> {
+    return pipe(
+      this.#v1Context.syncService.blockData(),
+      Effect.flatMap((blockData) =>
+        pipe(
+          SubscriptionRef.modifyEffect(this.#context.stateRef, (state) =>
+            this.#v1Context.transactingCapability.balanceTransactions(
+              secretKey,
+              state,
+              transactions,
+              ttl,
+              currentTime ?? blockData.timestamp,
+              blockData.ledgerParameters,
+            ),
           ),
+          Effect.map((transaction) => ({ transaction, blockData })),
         ),
-      );
-    });
+      ),
+    );
   }
 
   revertTransaction(transaction: AnyTransaction): Effect.Effect<void, WalletError> {
