@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-indexer-client
 
+## 1.2.2
+
+### Patch Changes
+
+- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+  consumers can dedupe shared sibling packages into a single installed copy.
+
 ## 1.2.1
 
 ### Patch Changes

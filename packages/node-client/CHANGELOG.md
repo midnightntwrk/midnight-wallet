@@ -1,5 +1,12 @@
 # @midnight-ntwrk/wallet-sdk-node-client
 
+## 1.1.2
+
+### Patch Changes
+
+- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+  consumers can dedupe shared sibling packages into a single installed copy.
+
 ## 1.1.1
 
 ### Patch Changes
