@@ -98,7 +98,7 @@ export type DefaultTransactingConfiguration = {
 };
 
 export type DefaultTransactingContext = {
-  coinSelection: CoinSelection<Dust>;
+  coinSelection: CoinSelection;
   coinsAndBalancesCapability: CoinsAndBalancesCapability<CoreWallet>;
   keysCapability: KeysCapability<CoreWallet>;
 };
@@ -170,14 +170,14 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 > {
   public readonly networkId: string;
   public readonly costParams: TotalCostParameters;
-  public readonly getCoinSelection: () => CoinSelection<Dust>;
+  public readonly getCoinSelection: () => CoinSelection;
   readonly getCoins: () => CoinsAndBalancesCapability<CoreWallet>;
   readonly getKeys: () => KeysCapability<CoreWallet>;
 
   constructor(
     networkId: NetworkId,
     costParams: TotalCostParameters,
-    getCoinSelection: () => CoinSelection<Dust>,
+    getCoinSelection: () => CoinSelection,
     getCoins: () => CoinsAndBalancesCapability<CoreWallet>,
     getKeys: () => KeysCapability<CoreWallet>,
   ) {
@@ -458,15 +458,16 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
                   })),
                   initialImbalances: CapImbalances.fromEntry('dust', currentFee),
                   feeTokenType: 'dust',
+                  coinSelection: this.getCoinSelection(),
                   transactionCostModel: {
                     inputFeeOverhead: 0n,
                     outputFeeOverhead: 0n,
                   },
                   createOutput: (coin) => coin,
-                  isCoinEqual: (a, b) => a.type === b.type && a.value === b.value,
+                  isCoinEqual: (a, b) => a.token.nonce === b.token.nonce,
                 });
 
-                const recipeInputs = recipe.inputs.map((input) => ({ token: input.token, value: input.value }));
+                const recipeInputs = recipe.inputs.map(({ token, value }) => ({ token, value }));
 
                 const newFee = this.dryRunFee(
                   recipeInputs,
