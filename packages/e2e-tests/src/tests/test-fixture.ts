@@ -13,9 +13,10 @@
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
 import { exit } from 'process';
 import { randomUUID } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { DockerComposeEnvironment, type StartedDockerComposeEnvironment, Wait } from 'testcontainers';
 import { type StartedGenericContainer } from 'testcontainers/build/generic-container/started-generic-container';
-import { type MidnightNetwork, sleep } from './helpers/network.js';
+import { type MidnightNetwork, sleep, waitForBlockAdvancement } from './helpers/network.js';
 import { logger } from './logger.js';
 import { InMemoryTransactionHistoryStorage, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { WalletEntrySchema, mergeWalletEntries } from '@midnight-ntwrk/wallet-sdk-facade';
@@ -24,6 +25,26 @@ import { type DefaultV1Configuration as DefaultDustV1Configuration } from '@midn
 import { buildTestEnvironmentVariables, getComposeDirectory } from '@midnight-ntwrk/wallet-sdk-utilities/testing';
 import { type DefaultProvingConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/proving';
 import { type DefaultSubmissionConfiguration } from '@midnight-ntwrk/wallet-sdk-capabilities/submission';
+
+const dumpComposeDiagnostics = (uid: string, network: MidnightNetwork): void => {
+  const names =
+    network === 'undeployed' ? [`proof-server_${uid}`, `node_${uid}`, `indexer_${uid}`] : [`proof-server_${uid}`];
+  for (const name of names) {
+    try {
+      const state = execSync(
+        `docker inspect --format='status={{.State.Status}} exit={{.State.ExitCode}} oom={{.State.OOMKilled}} error={{.State.Error}}' ${name}`,
+        { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] },
+      ).trim();
+      const logs = execSync(`docker logs --tail=300 ${name}`, {
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      logger.error(`=== ${name} (${state}) ===\n${logs}`);
+    } catch (err) {
+      logger.error(`Could not inspect/log container ${name}: ${(err as Error).message}`);
+    }
+  }
+};
 
 export function useTestContainersFixture() {
   let fixture: TestContainersFixture | undefined;
@@ -36,53 +57,65 @@ export function useTestContainersFixture() {
 
     const envVarsToPass = ['APP_INFRA_SECRET'] as const;
 
-    switch (network) {
-      case 'undeployed': {
-        const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
-          additionalVars: {
-            TESTCONTAINERS_UID: uid,
-          },
-        });
+    try {
+      switch (network) {
+        case 'undeployed': {
+          const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
+            additionalVars: {
+              TESTCONTAINERS_UID: uid,
+            },
+          });
 
-        composeEnvironment = await new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
-          .withWaitStrategy(`proof-server_${uid}`, Wait.forListeningPorts())
-          .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
-          .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())
-          .withEnvironment(environmentVars)
-          .up();
+          composeEnvironment = await new DockerComposeEnvironment(getComposeDirectory(), 'docker-compose-dynamic.yml')
+            .withWaitStrategy(`proof-server_${uid}`, Wait.forListeningPorts())
+            .withWaitStrategy(`node_${uid}`, Wait.forListeningPorts())
+            .withWaitStrategy(`indexer_${uid}`, Wait.forListeningPorts())
+            .withEnvironment(environmentVars)
+            .up();
 
-        // wait for another block to be produced
-        await sleep(6);
-        break;
-      }
-      case 'devnet':
-      case 'qanet':
-      case 'preview':
-      case 'preprod': {
-        const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
-          additionalVars: {
-            TESTCONTAINERS_UID: uid,
-            NETWORK_ID: network,
-          },
-        });
+          // wait for another block to be produced
+          await sleep(6);
+          break;
+        }
+        case 'devnet':
+        case 'qanet':
+        case 'preview':
+        case 'preprod': {
+          const environmentVars = buildTestEnvironmentVariables(envVarsToPass, {
+            additionalVars: {
+              TESTCONTAINERS_UID: uid,
+              NETWORK_ID: network,
+            },
+          });
 
-        composeEnvironment = await new DockerComposeEnvironment(
-          getComposeDirectory(),
-          'docker-compose-remote-dynamic.yml',
-        )
-          .withWaitStrategy(`proof-server_${uid}`, Wait.forLogMessage('Actix runtime found; starting in Actix runtime'))
-          .withEnvironment(environmentVars)
-          .withStartupTimeout(100_000)
-          .up();
-        break;
+          composeEnvironment = await new DockerComposeEnvironment(
+            getComposeDirectory(),
+            'docker-compose-remote-dynamic.yml',
+          )
+            .withWaitStrategy(
+              `proof-server_${uid}`,
+              Wait.forLogMessage('Actix runtime found; starting in Actix runtime'),
+            )
+            .withEnvironment(environmentVars)
+            .withStartupTimeout(100_000)
+            .up();
+          break;
+        }
+        default: {
+          logger.warn(`Unrecognized network: ${String(network)}`);
+          exit(1);
+        }
       }
-      default: {
-        logger.warn(`Unrecognized network: ${String(network)}`);
-        exit(1);
+      fixture = new TestContainersFixture(composeEnvironment, uid);
+      if (network === 'undeployed') {
+        await waitForBlockAdvancement(fixture.getIndexerUri());
       }
+      logger.info('Test environment started');
+    } catch (err) {
+      logger.error(`Test environment setup failed: ${(err as Error).message}`);
+      dumpComposeDiagnostics(uid, network);
+      throw err;
     }
-    logger.info('Test environment started');
-    fixture = new TestContainersFixture(composeEnvironment, uid);
   }, 120_000);
 
   afterAll(async () => {
