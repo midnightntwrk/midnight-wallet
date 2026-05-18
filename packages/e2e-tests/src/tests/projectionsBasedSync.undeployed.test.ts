@@ -188,7 +188,7 @@ describe('Projections-based synchronisation model', () => {
   };
 
   test(
-    'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
+    'Able to register Night tokens for Dust generation after receiving unshielded tokens using new sync model @healthcheck',
     async () => {
       // const initialState1 = await funded.wallet.waitForSyncedState();
       // const initialState2 = await fundedOld.wallet.waitForSyncedState();
