@@ -30,6 +30,7 @@ import { CoreWallet } from './v1/CoreWallet.js';
 import { type KeysCapability } from './v1/Keys.js';
 import { V1Tag } from './v1/RunningV1Variant.js';
 import { type SerializationCapability } from './v1/Serialization.js';
+import { type NightUtxoSplitForDustActionWithCurrentTime } from './v1/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
@@ -123,6 +124,20 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     nightUtxos: Array<UtxoWithMeta>,
     nightVerifyingKey: SignatureVerifyingKey,
     dustReceiverAddress: DustAddress | undefined,
+  ): Promise<UnprovenTransaction>;
+
+  splitNightUtxosForDustAction(
+    currentTime: Date | undefined,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    isRegistration: boolean,
+  ): Promise<NightUtxoSplitForDustActionWithCurrentTime>;
+
+  attachDustRegistration(
+    transaction: UnprovenTransaction,
+    currentTime: Date,
+    nightVerifyingKey: SignatureVerifyingKey,
+    dustReceiverAddress: DustAddress | undefined,
+    feePayment: bigint,
   ): Promise<UnprovenTransaction>;
 
   addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
@@ -278,6 +293,33 @@ export function CustomDustWallet<
         .dispatch({
           [V1Tag]: (v1) =>
             v1.createDustGenerationTransaction(currentTime, ttl, nightUtxos, nightVerifyingKey, dustReceiverAddress),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    async splitNightUtxosForDustAction(
+      currentTime: Date | undefined,
+      nightUtxos: ReadonlyArray<UtxoWithMeta>,
+      isRegistration: boolean,
+    ): Promise<NightUtxoSplitForDustActionWithCurrentTime> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.splitNightUtxosForDustAction(currentTime, nightUtxos, isRegistration),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    async attachDustRegistration(
+      transaction: UnprovenTransaction,
+      currentTime: Date,
+      nightVerifyingKey: SignatureVerifyingKey,
+      dustReceiverAddress: DustAddress | undefined,
+      feePayment: bigint,
+    ): Promise<UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) =>
+            v1.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
         })
         .pipe(Effect.runPromise);
     }
