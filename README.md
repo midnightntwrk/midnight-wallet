@@ -12,11 +12,21 @@ It provides components for:
 - syncing state with [indexer](https://github.com/midnightntwrk/midnight-indexer)
 - testing without external infrastructure
 
+## Examples and documentation
+
+[Docs](./docs) directory features some design documentation and development guidelines.
+
+Example usage can be found at [docs snippets](./packages/docs-snippets/src/snippets) (always up-to-date with the recent
+changes) or at the [SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned
+with the recent release)
+
 ## Modules structure
 
 This project is a Yarn workspaces monorepo combined with Turborepo. Packages are organized under `packages/` and
 applications under `apps/`. Main packages are:
 
+- `wallet-sdk` - **barrel package** re-exporting all wallet SDK packages through a single dependency (recommended for
+  consumers)
 - `facade` - unified wallet API combining shielded, unshielded, and dust wallet types into a single interface
 - `shielded-wallet` - shielded token operations with zero-knowledge proof support
 - `unshielded-wallet` - unshielded token operations on the ledger

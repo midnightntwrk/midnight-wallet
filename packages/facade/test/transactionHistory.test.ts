@@ -28,6 +28,14 @@ const unshieldedUtxo = (value: bigint, owner: string, tokenType: string, intentH
   outputIndex,
 });
 
+const dustUtxo = (initialValue: bigint, nonce: bigint, seq: number, backingNight: string, mtIndex: bigint) => ({
+  initialValue,
+  nonce,
+  seq,
+  backingNight,
+  mtIndex,
+});
+
 const baseEntry = (hash: string, overrides: Partial<WalletEntry> = {}): WalletEntry => ({
   hash,
   protocolVersion: 1,
@@ -131,5 +139,98 @@ describe('mergeWalletEntries does not lose information', () => {
     expect(merged.timestamp).toEqual(new Date('2026-01-01'));
     expect(merged.fees).toBe(1000n);
     expect(merged.shielded?.receivedCoins).toEqual([coin]);
+  });
+
+  it('should preserve dust section from existing when incoming has only shielded', () => {
+    const dust = dustUtxo(500n, 1n, 0, 'night-1', 10n);
+    const coin = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
+
+    const existing = baseEntry('tx1', {
+      dust: { receivedUtxos: [dust], spentUtxos: [] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      shielded: { receivedCoins: [coin], spentCoins: [] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.dust).toEqual({ receivedUtxos: [dust], spentUtxos: [] });
+    expect(merged.shielded).toEqual({ receivedCoins: [coin], spentCoins: [] });
+  });
+
+  it('should preserve shielded section from existing when incoming has only dust', () => {
+    const coin = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
+    const dust = dustUtxo(500n, 1n, 0, 'night-1', 10n);
+
+    const existing = baseEntry('tx1', {
+      shielded: { receivedCoins: [coin], spentCoins: [] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      dust: { receivedUtxos: [dust], spentUtxos: [] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.shielded).toEqual({ receivedCoins: [coin], spentCoins: [] });
+    expect(merged.dust).toEqual({ receivedUtxos: [dust], spentUtxos: [] });
+  });
+
+  it('should union dust utxos when both entries have dust sections', () => {
+    const dustA = dustUtxo(500n, 1n, 0, 'night-1', 10n);
+    const spentDustA = dustUtxo(300n, 2n, 1, 'night-2', 11n);
+    const dustB = dustUtxo(700n, 3n, 0, 'night-3', 12n);
+    const spentDustB = dustUtxo(400n, 4n, 1, 'night-4', 13n);
+
+    const existing = baseEntry('tx1', {
+      dust: { receivedUtxos: [dustA], spentUtxos: [spentDustA] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      dust: { receivedUtxos: [dustB], spentUtxos: [spentDustB] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.dust?.receivedUtxos).toEqual([dustA, dustB]);
+    expect(merged.dust?.spentUtxos).toEqual([spentDustA, spentDustB]);
+  });
+
+  it('should deduplicate identical dust utxos', () => {
+    const dust = dustUtxo(500n, 1n, 0, 'night-1', 10n);
+
+    const existing = baseEntry('tx1', {
+      dust: { receivedUtxos: [dust], spentUtxos: [] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      dust: { receivedUtxos: [dust], spentUtxos: [] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.dust?.receivedUtxos).toEqual([dust]);
+  });
+
+  it('should preserve all three sections across merges', () => {
+    const coin = shieldedCoin('token-a', 'nonce-a', 100n, 1n);
+    const utxo = unshieldedUtxo(50n, 'owner-1', 'night', 'intent-1', 0);
+    const dust = dustUtxo(500n, 1n, 0, 'night-1', 10n);
+
+    const existing = baseEntry('tx1', {
+      shielded: { receivedCoins: [coin], spentCoins: [] },
+      unshielded: { id: 1, createdUtxos: [utxo], spentUtxos: [] },
+    });
+
+    const incoming = baseEntry('tx1', {
+      dust: { receivedUtxos: [dust], spentUtxos: [] },
+    });
+
+    const merged = mergeWalletEntries(existing, incoming);
+
+    expect(merged.shielded).toEqual({ receivedCoins: [coin], spentCoins: [] });
+    expect(merged.unshielded).toEqual({ id: 1, createdUtxos: [utxo], spentUtxos: [] });
+    expect(merged.dust).toEqual({ receivedUtxos: [dust], spentUtxos: [] });
   });
 });

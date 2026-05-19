@@ -10,38 +10,42 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { Effect, Either, Scope, Types } from 'effect';
-import { WalletSeed, NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
-import { Variant, VariantBuilder, WalletRuntimeError } from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
-import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
-import { makeDefaultV1SerializationCapability, SerializationCapability } from './Serialization.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { Effect, type Either, Scope, type Types } from 'effect';
+import { WalletSeed, type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
-  DefaultSyncContext,
-  DefaultSyncConfiguration,
-  SyncCapability,
-  SyncService,
+  type Variant,
+  type VariantBuilder,
+  type WalletRuntimeError,
+} from '@midnight-ntwrk/wallet-sdk-runtime/abstractions';
+import { RunningV1Variant, V1Tag } from './RunningV1Variant.js';
+import { makeDefaultV1SerializationCapability, type SerializationCapability } from './Serialization.js';
+import {
+  type DefaultSyncContext,
+  type DefaultSyncConfiguration,
+  type SyncCapability,
+  type SyncService,
   makeDefaultSyncService,
   makeDefaultSyncCapability,
 } from './Sync.js';
-import { WalletSyncUpdate } from './SyncSchema.js';
+import { type WalletSyncUpdate } from './SyncSchema.js';
 import {
-  DefaultTransactingConfiguration,
-  DefaultTransactingContext,
+  type DefaultTransactingConfiguration,
+  type DefaultTransactingContext,
   makeDefaultTransactingCapability,
-  TransactingCapability,
+  type TransactingCapability,
 } from './Transacting.js';
-import { WalletError } from './WalletError.js';
-import { CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
-import { KeysCapability, makeDefaultKeysCapability } from './Keys.js';
-import { CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
+import { type WalletError } from './WalletError.js';
+import { type CoinsAndBalancesCapability, makeDefaultCoinsAndBalancesCapability } from './CoinsAndBalances.js';
+import { type KeysCapability, makeDefaultKeysCapability } from './Keys.js';
+import { type CoinSelection, chooseCoin } from '@midnight-ntwrk/wallet-sdk-capabilities';
 import { CoreWallet } from './CoreWallet.js';
 import {
-  DefaultTransactionHistoryConfiguration,
-  TransactionHistoryService,
+  type DefaultTransactionHistoryConfiguration,
+  type TransactionHistoryService,
   makeDefaultTransactionHistoryService,
 } from './TransactionHistory.js';
-import { Expect, Equal, ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
+import { type Expect, type Equal, type ItemType } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { createKeystore, PublicKey } from '../KeyStore.js';
 
 export type BaseV1Configuration = {
@@ -367,9 +371,7 @@ declare namespace V1Builder {
     readonly keysCapability: (configuration: TConfig, getContext: () => TContext) => KeysCapability<CoreWallet>;
   };
 
-  /**
-   * The internal build state of {@link V1Builder}.
-   */
+  /** The internal build state of {@link V1Builder}. */
   type FullBuildState<TConfig, TContext, TSerialized, TSyncUpdate> = Types.Simplify<
     HasSync<TConfig, TContext, TSyncUpdate> &
       HasSerialization<TConfig, TContext, TSerialized> &
@@ -385,9 +387,7 @@ declare namespace V1Builder {
       | undefined;
   };
 
-  /**
-   * Utility interface that manages the type variance of {@link V1Builder}.
-   */
+  /** Utility interface that manages the type variance of {@link V1Builder}. */
   interface Variance<R> {
     readonly [V1BuilderSymbol.typeId]: {
       readonly _R: Types.Covariant<R>;
@@ -408,9 +408,7 @@ const isBuildStateFull = <TConfig, TContext, TSerialized, TSyncUpdate>(
     'keysCapability',
     'transactionHistoryService',
   ] as const;
-  /**
-   * This type will fail compilation if any key is omitted, letting the `isFull` check work properly
-   */
+  /** This type will fail compilation if any key is omitted, letting the `isFull` check work properly */
   type _1 = Expect<
     Equal<keyof V1Builder.FullBuildState<never, never, never, never>, ItemType<typeof allBuildStateKeys>>
   >;

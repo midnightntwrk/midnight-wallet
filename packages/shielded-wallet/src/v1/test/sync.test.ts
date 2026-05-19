@@ -27,8 +27,8 @@ import {
   Ref,
   Number as Num,
 } from 'effect';
-import { ClientError, ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import { SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type ClientError, type ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import { type SubscriptionClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { describe, expect, it } from 'vitest';
 import { ZswapEvents } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import type {

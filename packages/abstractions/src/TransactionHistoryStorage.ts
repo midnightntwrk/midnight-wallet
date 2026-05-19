@@ -34,8 +34,8 @@ export type TransactionHistoryCommon = Schema.Schema.Type<typeof TransactionHist
 export type SerializedTransactionHistory = string;
 
 /**
- * An entry with common fields plus any additional properties (wallet sections).
- * Used by wallet packages for projection/filtering when the exact type is not known.
+ * An entry with common fields plus any additional properties (wallet sections). Used by wallet packages for
+ * projection/filtering when the exact type is not known.
  */
 export type TransactionHistoryEntryWithHash = TransactionHistoryCommon & Record<string, unknown>;
 

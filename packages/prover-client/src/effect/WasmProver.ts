@@ -11,10 +11,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import Worker from 'web-worker';
-import { Context, Effect, Layer, Schema, pipe } from 'effect';
-import { InvalidProtocolSchemeError, ClientError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
+import { type Context, Effect, Layer, Schema, pipe } from 'effect';
+import { type InvalidProtocolSchemeError, ClientError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { type KeyMaterialProvider, type ProvingKeyMaterial } from '@midnight-ntwrk/zkir-v2';
 import { ProverClient } from './ProverClient.js';
 
 /**

@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { type ProtocolState, ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
+import { type ProtocolState, ProtocolVersion, type SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import {
   type BaseV1Configuration,
   type DefaultV1Configuration,
@@ -314,8 +314,8 @@ export function CustomShieldedWallet<
     }
 
     /**
-     * Serializes the most recent state
-     * It's preferable to use [[ShieldedWalletState.serialize]] instead, to know exactly, which state is serialized
+     * Serializes the most recent state It's preferable to use [[ShieldedWalletState.serialize]] instead, to know
+     * exactly, which state is serialized
      */
     serializeState(): Promise<TSerialized> {
       return rx.firstValueFrom(this.state).then((state) => state.serialize());

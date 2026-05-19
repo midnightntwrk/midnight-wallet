@@ -10,21 +10,21 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { HList } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { type HList } from '@midnight-ntwrk/wallet-sdk-utilities';
 import type { Equal, Expect } from '@midnight-ntwrk/wallet-sdk-utilities/types';
 import { describe, it } from 'vitest';
 import {
-  InterceptingVariant,
-  InterceptingVariantBuilder,
-  NumericRange,
-  NumericRangeBuilder,
-  NumericRangeMultiplier,
-  NumericRangeMultiplierBuilder,
-  RangeConfig,
-  RangeMultiplierConfig,
+  type InterceptingVariant,
+  type InterceptingVariantBuilder,
+  type NumericRange,
+  type NumericRangeBuilder,
+  type NumericRangeMultiplier,
+  type NumericRangeMultiplierBuilder,
+  type RangeConfig,
+  type RangeMultiplierConfig,
 } from '../../testing/variants.js';
-import { VersionedVariant } from '../Variant.js';
-import { ConfigurationOf, VersionedVariantBuilder, VersionedVariantsOf } from '../VariantBuilder.js';
+import { type VersionedVariant } from '../Variant.js';
+import { type ConfigurationOf, type VersionedVariantBuilder, type VersionedVariantsOf } from '../VariantBuilder.js';
 
 describe('VariantBuilder', () => {
   type Builders = [NumericRangeBuilder, InterceptingVariantBuilder<string, string>, NumericRangeMultiplierBuilder];

@@ -51,6 +51,7 @@ reports
 test-runner-profile/
 
 # user files
+/.scratch
 **/.sync_cache
 /packages/e2e-tests/res
 

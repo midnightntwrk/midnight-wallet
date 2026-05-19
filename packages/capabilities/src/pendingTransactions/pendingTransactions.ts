@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { Array as Arr, DateTime, Either, Order, ParseResult, pipe, Schema } from 'effect';
+import { Array as Arr, type DateTime, Either, Order, type ParseResult, pipe, Schema } from 'effect';
 
 export type TransactionTrait<TTransaction> = {
   ids: (tx: TTransaction) => readonly string[];

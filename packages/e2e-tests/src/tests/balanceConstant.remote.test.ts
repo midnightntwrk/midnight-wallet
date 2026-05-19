@@ -17,12 +17,7 @@ import { logger } from './logger.js';
 import { exit } from 'node:process';
 import { inspect } from 'node:util';
 
-/**
- * Tests checking balance is constant
- *
- * @group devnet
- * @group testnet
- */
+/** Tests checking balance is constant */
 
 describe('Balance constant', () => {
   if (process.env['SEED_STABLE'] === undefined) {
@@ -41,7 +36,7 @@ describe('Balance constant', () => {
   const expectedUnshieldedBalance = utils.tNightAmount(10n);
   const expectedDustBalance = expectedShieldedBalance;
   const filename = `stable-${seed.substring(seed.length - 7)}-${TestContainersFixture.network}.state`;
-  const syncTimeout = TestContainersFixture.network === 'testnet' ? 3_000_000 : 1_800_000;
+  const syncTimeout = 1_800_000;
 
   let wallet: utils.WalletInit;
   let fixture: TestContainersFixture;

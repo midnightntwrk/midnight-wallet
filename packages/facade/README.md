@@ -1,5 +1,8 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+> **Note:** It is recommended to use the [`@midnight-ntwrk/wallet-sdk`](../wallet-sdk/README.md) barrel package, which
+> re-exports this and all other wallet SDK packages through a single dependency.
+
 Unified facade for the Midnight Wallet SDK that combines all wallet types into a single API.
 
 ## Installation
@@ -20,6 +23,11 @@ The Wallet Facade provides a high-level unified interface that aggregates the fu
 - Dust registration management
 
 ## Usage
+
+More detailed and complete examples can be found at [docs snippets](../docs-snippets/src/snippets) (always up-to-date
+with the recent changes) or at the
+[SDK documentation site](https://docs.midnight.network/sdks/official/wallet-developer-guide) (aligned with the recent
+release)
 
 ### Initializing the Facade
 

@@ -10,20 +10,15 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Either, pipe, Array as Arr } from 'effect';
+import { Either, type Option, pipe, Array as Arr, Iterable as IterableOps } from 'effect';
 import { Imbalances } from '@midnight-ntwrk/wallet-sdk-capabilities';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
-import { TransactingError, WalletError } from './WalletError.js';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
+import { TransactingError, type WalletError } from './WalletError.js';
 
-/**
- * Unbound transaction type. This is a transaction that has no signatures and is not bound yet.
- */
+/** Unbound transaction type. This is a transaction that has no signatures and is not bound yet. */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-/**
- * Utility type to extract the Intent type from a Transaction type.
- * Maps Transaction<S, P, B> to Intent<S, P, B>.
- */
+/** Utility type to extract the Intent type from a Transaction type. Maps Transaction<S, P, B> to Intent<S, P, B>. */
 export type IntentOf<T> = T extends ledger.Transaction<infer S, infer P, infer B> ? ledger.Intent<S, P, B> : never;
 
 export type TransactionOps = {
@@ -32,6 +27,9 @@ export type TransactionOps = {
     segment: number,
   ) => Either.Either<Uint8Array, WalletError>;
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[];
+  findAvailableSegmentId(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Option.Option<number>;
   addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(
     transaction: TTransaction,
     signature: ledger.Signature,
@@ -76,6 +74,15 @@ export const TransactionOps: TransactionOps = {
   },
   getSegments(transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>): number[] {
     return transaction.intents?.keys().toArray() ?? [];
+  },
+  findAvailableSegmentId(
+    transaction: ledger.Transaction<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish>,
+  ): Option.Option<number> {
+    const used = new Set(transaction.intents?.keys() ?? []);
+    return pipe(
+      IterableOps.range(1, 65535),
+      IterableOps.findFirst((segmentId) => !used.has(segmentId)),
+    );
   },
   // @TODO - https://shielded.atlassian.net/browse/PM-21260
   addSignature<TTransaction extends ledger.UnprovenTransaction | UnboundTransaction>(

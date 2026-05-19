@@ -1,5 +1,17 @@
 # @midnight-ntwrk/wallet-sdk-indexer-client
 
+## 1.2.1
+
+### Patch Changes
+
+- e57a94b: Unify Simulator into capabilities package with proper fee payment and block production model
+- 7f82432: Introduce a shared transaction history storage layer with support for wallet-specific augmentation.
+  Reimplement shielded wallet transaction history and refactor unshielded wallet transaction history to use the new
+  shared storage.
+- Updated dependencies [0db3290]
+- Updated dependencies [7f82432]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.1.1
+
 ## 1.2.0
 
 ### Minor Changes

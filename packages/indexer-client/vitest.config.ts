@@ -17,6 +17,7 @@ import { fileURLToPath, URL } from 'node:url';
 
 export default defineConfig({
   test: {
+    fileParallelism: false,
     exclude: [...configDefaults.exclude, '**/dist/**'],
     setupFiles: ['../../setup-env.ts'],
     environment: 'node',

@@ -91,8 +91,7 @@ export type ContractActionOffset =
   | { readonly blockOffset?: never; readonly transactionOffset: TransactionOffset };
 
 /**
- * Represents a token balance held by a contract.
- * This type is exposed through the GraphQL API to allow clients to query
+ * Represents a token balance held by a contract. This type is exposed through the GraphQL API to allow clients to query
  * unshielded token balances for any contract action (Deploy, Call, Update).
  */
 export type ContractBalance = {
@@ -531,10 +530,7 @@ export type RelevantTransaction = {
   readonly transaction: RegularTransaction;
 };
 
-/**
- * One of many segments for a partially successful transaction result showing success for some
- * segment.
- */
+/** One of many segments for a partially successful transaction result showing success for some segment. */
 export type Segment = {
   /** Segment ID. */
   readonly id: Scalars['Int']['output'];
@@ -548,23 +544,23 @@ export type ShieldedTransactionsEvent = RelevantTransaction | ShieldedTransactio
 /** Information about the shielded transactions indexing progress. */
 export type ShieldedTransactionsProgress = {
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions
-   * checked for relevance. Initially less than and eventually (when some wallet has been fully
-   * indexed) equal to `highest_end_index`. A value of zero (very unlikely) means that no wallet
-   * has subscribed before and indexing for the subscribing wallet has not yet started.
+   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions checked for relevance.
+   * Initially less than and eventually (when some wallet has been fully indexed) equal to `highest_end_index`. A value
+   * of zero (very unlikely) means that no wallet has subscribed before and indexing for the subscribing wallet has not
+   * yet started.
    */
   readonly highestCheckedEndIndex: Scalars['Int']['output'];
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions. It
-   * represents the known state of the blockchain. A value of zero (completely unlikely) means
-   * that no shielded transactions have been indexed yet.
+   * The highest zswap state end index (see `endIndex` of `Transaction`) of all transactions. It represents the known
+   * state of the blockchain. A value of zero (completely unlikely) means that no shielded transactions have been
+   * indexed yet.
    */
   readonly highestEndIndex: Scalars['Int']['output'];
   /**
-   * The highest zswap state end index (see `endIndex` of `Transaction`) of all relevant
-   * transactions for the subscribing wallet. Usually less than `highest_checked_end_index`
-   * unless the latest checked transaction is relevant for the subscribing wallet. A value of
-   * zero means that no relevant transactions have been indexed for the subscribing wallet.
+   * The highest zswap state end index (see `endIndex` of `Transaction`) of all relevant transactions for the
+   * subscribing wallet. Usually less than `highest_checked_end_index` unless the latest checked transaction is relevant
+   * for the subscribing wallet. A value of zero means that no relevant transactions have been indexed for the
+   * subscribing wallet.
    */
   readonly highestRelevantEndIndex: Scalars['Int']['output'];
 };
@@ -630,27 +626,21 @@ export type StakeShare = {
 };
 
 export type Subscription = {
-  /**
-   * Subscribe to blocks starting at the given offset or at the latest block if the offset is
-   * omitted.
-   */
+  /** Subscribe to blocks starting at the given offset or at the latest block if the offset is omitted. */
   readonly blocks: Block;
   /**
-   * Subscribe to contract actions with the given address starting at the given offset or at the
-   * latest block if the offset is omitted.
+   * Subscribe to contract actions with the given address starting at the given offset or at the latest block if the
+   * offset is omitted.
    */
   readonly contractActions: ContractAction;
   /** Subscribe to dust ledger events starting at the given ID or at the very start if omitted. */
   readonly dustLedgerEvents: DustLedgerEvent;
   /**
-   * Subscribe to shielded transaction events for the given session ID starting at the given
-   * index or at zero if omitted.
+   * Subscribe to shielded transaction events for the given session ID starting at the given index or at zero if
+   * omitted.
    */
   readonly shieldedTransactions: ShieldedTransactionsEvent;
-  /**
-   * Subscribe unshielded transaction events for the given address and the given transaction ID
-   * or zero if omitted.
-   */
+  /** Subscribe unshielded transaction events for the given address and the given transaction ID or zero if omitted. */
   readonly unshieldedTransactions: UnshieldedTransactionsEvent;
   /** Subscribe to zswap ledger events starting at the given ID or at the very start if omitted. */
   readonly zswapLedgerEvents: ZswapLedgerEvent;
@@ -769,8 +759,8 @@ export type TransactionOffset =
   | { readonly hash?: never; readonly identifier: Scalars['HexEncoded']['input'] };
 
 /**
- * The result of applying a transaction to the ledger state. In case of a partial success (status),
- * there will be segments.
+ * The result of applying a transaction to the ledger state. In case of a partial success (status), there will be
+ * segments.
  */
 export type TransactionResult = {
   readonly segments: Maybe<ReadonlyArray<Segment>>;

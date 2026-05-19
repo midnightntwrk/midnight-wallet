@@ -10,13 +10,13 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, Stream, Context, Layer, Scope } from 'effect';
+import { Effect, Stream, type Context, Layer, type Scope } from 'effect';
 import { createClient, type Client, type SubscribePayload } from 'graphql-ws';
 import { type GraphQLError, print } from 'graphql';
 import { SubscriptionClient } from './SubscriptionClient.js';
-import { Query } from './Query.js';
+import { type Query } from './Query.js';
 import {
-  InvalidProtocolSchemeError,
+  type InvalidProtocolSchemeError,
   WsURL,
   ClientError,
   ServerError,

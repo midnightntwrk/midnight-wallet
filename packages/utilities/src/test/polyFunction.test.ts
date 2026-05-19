@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import type { Equal, Expect } from '../testUtils.js';
-import { dispatch, PolyFunction, TagOf } from '../polyFunction.js';
+import { dispatch, type PolyFunction, type TagOf } from '../polyFunction.js';
 import { describe, expect, it } from 'vitest';
 
 describe('PolyFunction', () => {

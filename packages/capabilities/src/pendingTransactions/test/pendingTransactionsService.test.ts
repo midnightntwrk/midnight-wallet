@@ -37,12 +37,12 @@ import {
 import { PendingTransactionsServiceEffectImpl } from '../pendingTransactionsService.js';
 import * as PendingTransactions from '../pendingTransactions.js';
 import * as fc from 'fast-check';
-import { Query, QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
+import { type Query, QueryClient } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import {
-  TransactionResult,
+  type TransactionResult,
   TransactionStatus,
-  TransactionStatusQuery,
-  TransactionStatusQueryVariables,
+  type TransactionStatusQuery,
+  type TransactionStatusQueryVariables,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { ServerError } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 
