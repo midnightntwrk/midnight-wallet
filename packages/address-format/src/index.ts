@@ -194,6 +194,9 @@ export class ShieldedEncryptionSecretKey {
     (repr) => new ShieldedEncryptionSecretKey(EncryptionSecretKey.deserialize(repr)),
   );
 
+  static readonly [Bech32mSymbol]: Bech32mCodec<ShieldedEncryptionSecretKey> = ShieldedEncryptionSecretKey.codec;
+  readonly [Bech32mSymbol]: Bech32mCodec<ShieldedEncryptionSecretKey> = ShieldedEncryptionSecretKey.codec;
+
   // There are some bits in serialization of field elements and elliptic curve points, that are hard to replicate
   // Thus using zswap implementation directly for serialization purposes
   public readonly zswap: EncryptionSecretKey;
@@ -211,6 +214,9 @@ export class ShieldedCoinPublicKey {
     (cpk) => cpk.data,
     (repr) => new ShieldedCoinPublicKey(repr),
   );
+
+  static readonly [Bech32mSymbol]: Bech32mCodec<ShieldedCoinPublicKey> = ShieldedCoinPublicKey.codec;
+  readonly [Bech32mSymbol]: Bech32mCodec<ShieldedCoinPublicKey> = ShieldedCoinPublicKey.codec;
 
   static fromHexString(hexString: string): ShieldedCoinPublicKey {
     return new ShieldedCoinPublicKey(Buffer.from(hexString, 'hex'));
@@ -244,6 +250,9 @@ export class ShieldedEncryptionPublicKey {
     (cpk) => cpk.data,
     (repr) => new ShieldedEncryptionPublicKey(repr),
   );
+
+  static readonly [Bech32mSymbol]: Bech32mCodec<ShieldedEncryptionPublicKey> = ShieldedEncryptionPublicKey.codec;
+  readonly [Bech32mSymbol]: Bech32mCodec<ShieldedEncryptionPublicKey> = ShieldedEncryptionPublicKey.codec;
 
   static fromHexString(hexString: string): ShieldedEncryptionPublicKey {
     return new ShieldedEncryptionPublicKey(Buffer.from(hexString, 'hex'));
