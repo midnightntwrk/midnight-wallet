@@ -1,7 +1,7 @@
 import type { Configuration, TxStatus, KeyMaterialProvider, ProvingProvider } from '@midnight-ntwrk/dapp-connector-api';
 import type { Observable } from 'rxjs';
 import type { ShieldedAddress, UnshieldedAddress, DustAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 
 // =============================================================================
 // Transaction Recipe Types
@@ -211,8 +211,8 @@ export interface DustCoinInfo {
  */
 export interface DustWalletStateView {
   readonly address: DustAddress;
+  readonly availableCoins: readonly DustCoinInfo[];
   balance(time: Date): bigint;
-  availableCoinsWithFullInfo(time: Date): readonly DustCoinInfo[];
 }
 
 /**
@@ -248,7 +248,7 @@ export interface DustWalletView {
  *
  * IMPORTANT: If WalletFacade changes in ways that affect the shielded/unshielded/dust
  * wallet APIs used here (state observable, getAddress method, or state properties like
- * balances and availableCoinsWithFullInfo), this interface must be updated accordingly.
+ * balances and availableCoins), this interface must be updated accordingly.
  *
  * @see WalletFacade in @midnight-ntwrk/wallet-sdk-facade for the full implementation
  */

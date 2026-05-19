@@ -140,7 +140,11 @@ export const createWasmProvingProviderFactory = (): ProvingProviderFactory => {
  */
 export const createMockProvingProviderFactory = (
   mockCheck?: (serializedPreimage: Uint8Array, keyLocation: string) => Promise<(bigint | undefined)[]>,
-  mockProve?: (serializedPreimage: Uint8Array, keyLocation: string, overwriteBindingInput?: bigint) => Promise<Uint8Array>,
+  mockProve?: (
+    serializedPreimage: Uint8Array,
+    keyLocation: string,
+    overwriteBindingInput?: bigint,
+  ) => Promise<Uint8Array>,
 ): ProvingProviderFactory => {
   return (_keyMaterialProvider: KeyMaterialProvider): ProvingProvider => ({
     check: mockCheck ?? (async () => []),

@@ -12,7 +12,7 @@ import type {
   WalletConnectedAPI,
 } from '@midnight-ntwrk/dapp-connector-api';
 import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as rx from 'rxjs';
 import type {
   ConnectorConfiguration,
@@ -35,10 +35,7 @@ import { ShieldedCoinPublicKey, ShieldedEncryptionPublicKey } from '@midnight-nt
  * Uses structural matching for robustness across package boundaries.
  */
 const isInsufficientFundsError = (error: unknown): error is { _tag: 'InsufficientFundsError'; message: string } =>
-  error !== null &&
-  typeof error === 'object' &&
-  '_tag' in error &&
-  error._tag === 'InsufficientFundsError';
+  error !== null && typeof error === 'object' && '_tag' in error && error._tag === 'InsufficientFundsError';
 
 /**
  * Maps InsufficientFundsError to APIError, re-throws other errors unchanged.
@@ -251,8 +248,7 @@ export class ConnectedAPI implements ConnectedAPIType {
     }
     const state = await rx.firstValueFrom(this.facade.dust.state);
     const now = new Date();
-    const coinsInfo = state.availableCoinsWithFullInfo(now);
-    const cap = coinsInfo.reduce((sum, coin) => sum + coin.maxCap, 0n);
+    const cap = state.availableCoins.reduce((sum, coin) => sum + coin.maxCap, 0n);
     const balance = state.balance(now);
 
     return Object.freeze({ cap, balance });

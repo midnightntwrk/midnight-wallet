@@ -5,9 +5,7 @@
 
 import { describe, expect, it, vi } from 'vitest';
 import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
-import type { ConnectedAPITestContext } from '../context.js';
-import { testShieldedAddress, testUnshieldedAddress } from '../testUtils.js';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
+import type { TransactionTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
@@ -17,10 +15,9 @@ const validTokenType = '00000000000000000000000000000000000000000000000000000000
 /**
  * Run input validation tests against the provided context.
  */
-export const runValidationTests = (context: ConnectedAPITestContext): void => {
-  // Bech32m encoded addresses for API calls
-  const shieldedAddress = MidnightBech32m.encode('testnet', testShieldedAddress).asString();
-  const unshieldedAddress = MidnightBech32m.encode('testnet', testUnshieldedAddress).asString();
+export const runValidationTests = (context: TransactionTestContext): void => {
+  const shieldedAddress = context.environment.addresses.shielded;
+  const unshieldedAddress = context.environment.addresses.unshielded;
 
   describe('makeTransfer validation', () => {
     describe('empty outputs', () => {
@@ -137,9 +134,7 @@ export const runValidationTests = (context: ConnectedAPITestContext): void => {
         const { api, disconnect } = await context.createConnectedAPI();
 
         try {
-          const outputs: DesiredOutput[] = [
-            { kind: 'shielded', type: validTokenType, value: 100n, recipient: '' },
-          ];
+          const outputs: DesiredOutput[] = [{ kind: 'shielded', type: validTokenType, value: 100n, recipient: '' }];
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',

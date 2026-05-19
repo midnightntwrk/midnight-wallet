@@ -6,8 +6,6 @@
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { DappConnectorTestContext } from '../context.js';
-import { buildMockSealedTransaction, serializeTransaction, testShieldedAddress } from '../testUtils.js';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 /**
  * Run transaction submission tests against the provided context.
@@ -59,10 +57,16 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
 
   describe('successful submission', () => {
     it('should submit a valid sealed transaction', async () => {
+      const buildSealedTransaction = context.environment.buildSealedTransaction;
+      const serializeTransaction = context.environment.serializeTransaction;
+      if (buildSealedTransaction === undefined || serializeTransaction === undefined) {
+        return; // Skip when the implementation can't produce strictly-proven sealed transactions
+      }
+
       const { api, disconnect, networkId } = await context.createConnectedAPI();
 
       try {
-        const tx = buildMockSealedTransaction({ networkId });
+        const tx = buildSealedTransaction({ networkId });
         const txHex = serializeTransaction(tx);
 
         // Should resolve without error
@@ -72,95 +76,18 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
       }
     });
 
-    it('should accept transaction from makeTransfer', async () => {
-      const withBalances = context.withBalances;
-      if (withBalances === undefined) {
-        return; // Skip if implementation doesn't support balance mocking
-      }
-
-      const tokenType = '0000000000000000000000000000000000000000000000000000000000000000';
-      const testContext = withBalances({
-        shielded: { [tokenType]: 10000n },
-        dust: [{ maxCap: 1000n, balance: 1000n }],
-      });
-      const { api, disconnect, networkId } = await testContext.createConnectedAPI();
-
-      try {
-        const shieldedAddress = MidnightBech32m.encode(networkId, testShieldedAddress).asString();
-
-        // Create a transfer transaction
-        const { tx } = await api.makeTransfer([
-          {
-            kind: 'shielded',
-            type: tokenType,
-            value: 100n,
-            recipient: shieldedAddress,
-          },
-        ]);
-
-        // Submit the transaction from makeTransfer
-        await expect(api.submitTransaction(tx)).resolves.toBeUndefined();
-      } finally {
-        await disconnect();
-      }
-    });
-
-    it('should accept transaction from balanceSealedTransaction', async () => {
-      const withBalances = context.withBalances;
-      if (withBalances === undefined) {
-        return; // Skip if implementation doesn't support balance mocking
-      }
-
-      const testContext = withBalances({
-        dust: [{ maxCap: 1000n, balance: 1000n }],
-      });
-      const { api, disconnect, networkId } = await testContext.createConnectedAPI();
-
-      try {
-        // Create a sealed transaction and balance it
-        const sealedTx = buildMockSealedTransaction({ networkId });
-        const { tx } = await api.balanceSealedTransaction(serializeTransaction(sealedTx));
-
-        // Submit the balanced transaction
-        await expect(api.submitTransaction(tx)).resolves.toBeUndefined();
-      } finally {
-        await disconnect();
-      }
-    });
   });
 
   describe('disconnection', () => {
     it('should reject when disconnected', async () => {
-      const { api, disconnect, networkId } = await context.createConnectedAPI();
+      const { api, disconnect } = await context.createConnectedAPI();
       await disconnect();
 
-      const tx = buildMockSealedTransaction({ networkId });
-      const txHex = serializeTransaction(tx);
-
-      await expect(api.submitTransaction(txHex)).rejects.toMatchObject({
+      // The disconnected check runs before any tx deserialization, so any
+      // non-empty hex string suffices to exercise this path.
+      await expect(api.submitTransaction('00')).rejects.toMatchObject({
         code: ErrorCodes.Disconnected,
       });
-    });
-  });
-
-  describe('submission errors', () => {
-    it('should propagate submission errors from facade', async () => {
-      const withSubmissionError = context.withSubmissionError;
-      if (withSubmissionError === undefined) {
-        return; // Skip if implementation doesn't support error mocking
-      }
-
-      const testContext = withSubmissionError(new Error('Network unavailable'));
-      const { api, disconnect, networkId } = await testContext.createConnectedAPI();
-
-      try {
-        const tx = buildMockSealedTransaction({ networkId });
-        const txHex = serializeTransaction(tx);
-
-        await expect(api.submitTransaction(txHex)).rejects.toThrow('Network unavailable');
-      } finally {
-        await disconnect();
-      }
     });
   });
 };

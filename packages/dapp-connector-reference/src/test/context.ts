@@ -6,9 +6,9 @@
  */
 
 import type { WalletConnectedAPI, InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
-import type * as ledger from '@midnight-ntwrk/ledger-v7';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import type { Connector } from '../index.js';
-import type { MockBalancesConfig, MockHistoryEntry, ShieldedAddressWithKeys, UnshieldedAddressWithKeys } from './testUtils.js';
+import type { ShieldedAddressWithKeys, UnshieldedAddressWithKeys } from './testUtils.js';
 
 /**
  * Options for creating a connected API instance.
@@ -122,30 +122,6 @@ export interface DappConnectorTestContext {
    * For browser tests, this would be globalThis.
    */
   readonly installTarget: { midnight?: Record<string, InitialAPI> };
-
-  /**
-   * Configure mock balances for transfer/intent tests.
-   * Only available for implementations that support mocking.
-   *
-   * @returns The same context with configured balances (for chaining).
-   */
-  readonly withBalances?: (config: MockBalancesConfig) => DappConnectorTestContext;
-
-  /**
-   * Configure transaction history for history tests.
-   * Only available for implementations that support mocking.
-   *
-   * @returns The same context with configured history (for chaining).
-   */
-  readonly withTransactionHistory?: (entries: MockHistoryEntry[]) => DappConnectorTestContext;
-
-  /**
-   * Configure submission error for submission tests.
-   * Only available for implementations that support mocking.
-   *
-   * @returns The same context with configured error (for chaining).
-   */
-  readonly withSubmissionError?: (error: Error) => DappConnectorTestContext;
 }
 
 /**
@@ -163,17 +139,17 @@ export type InstallationTestContext = Pick<
 >;
 
 /**
- * Helper type for transaction tests (transfer, intent) that need environment and balances.
+ * Helper type for transaction tests (transfer, intent) that need environment access.
  */
 export type TransactionTestContext = Pick<
   DappConnectorTestContext,
-  'implementationName' | 'createConnectedAPI' | 'environment' | 'withBalances'
+  'implementationName' | 'createConnectedAPI' | 'environment'
 >;
 
 /**
- * Helper type for balancing tests that need environment and transaction builders.
+ * Helper type for balancing tests that need environment access.
  */
 export type BalancingTestContext = Pick<
   DappConnectorTestContext,
-  'implementationName' | 'createConnectedAPI' | 'environment' | 'withBalances'
+  'implementationName' | 'createConnectedAPI' | 'environment'
 >;

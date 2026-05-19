@@ -7,7 +7,7 @@
  */
 import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
 import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 import type {
   CombinedTokenTransfer,
   ShieldedTokenTransfer,

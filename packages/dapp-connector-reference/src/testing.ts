@@ -115,7 +115,7 @@ import {
   UnshieldedAddress,
   MidnightBech32m,
 } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v7';
+import * as ledger from '@midnight-ntwrk/ledger-v8';
 
 // =============================================================================
 // Test Address Infrastructure with Secret Keys
@@ -150,9 +150,7 @@ const testUnshieldedSeed1 = new Uint8Array(32).fill(3);
 
 // Create shielded address with retained secret keys
 const testShieldedSecretKeys = ledger.ZswapSecretKeys.fromSeed(testShieldedSeed1);
-const testShieldedCoinPublicKey = new ShieldedCoinPublicKey(
-  Buffer.from(testShieldedSecretKeys.coinPublicKey, 'hex'),
-);
+const testShieldedCoinPublicKey = new ShieldedCoinPublicKey(Buffer.from(testShieldedSecretKeys.coinPublicKey, 'hex'));
 const testShieldedEncryptionPublicKey = new ShieldedEncryptionPublicKey(
   Buffer.from(testShieldedSecretKeys.encryptionPublicKey, 'hex'),
 );
@@ -298,15 +296,17 @@ export function getAllImbalances(tx: ledger.FinalizedTransaction): TokenImbalanc
   const hasRaw = (tokenType: ledger.TokenType): tokenType is ledger.ShieldedTokenType | ledger.UnshieldedTokenType =>
     tokenType.tag !== 'dust';
 
-  return allImbalanceEntries.filter(([tokenType]) => hasRaw(tokenType)).reduce(
-    (acc, [tokenType, imbalance]) => {
-      const narrowedType = tokenType as ledger.ShieldedTokenType | ledger.UnshieldedTokenType;
-      return narrowedType.tag === 'shielded'
-        ? { ...acc, shielded: addToRecord(acc.shielded, narrowedType.raw, imbalance) }
-        : { ...acc, unshielded: addToRecord(acc.unshielded, narrowedType.raw, imbalance) };
-    },
-    { shielded: {}, unshielded: {} } as TokenImbalances,
-  );
+  return allImbalanceEntries
+    .filter(([tokenType]) => hasRaw(tokenType))
+    .reduce(
+      (acc, [tokenType, imbalance]) => {
+        const narrowedType = tokenType as ledger.ShieldedTokenType | ledger.UnshieldedTokenType;
+        return narrowedType.tag === 'shielded'
+          ? { ...acc, shielded: addToRecord(acc.shielded, narrowedType.raw, imbalance) }
+          : { ...acc, unshielded: addToRecord(acc.unshielded, narrowedType.raw, imbalance) };
+      },
+      { shielded: {}, unshielded: {} } as TokenImbalances,
+    );
 }
 
 /**
@@ -537,10 +537,7 @@ function decryptAllShieldedOffers(
     ...Array.from(tx.fallibleOffer?.values() ?? []),
   ];
 
-  const finalState = allOffers.reduce(
-    (state, offer) => state.apply(secretKeys, offer),
-    new ledger.ZswapLocalState(),
-  );
+  const finalState = allOffers.reduce((state, offer) => state.apply(secretKeys, offer), new ledger.ZswapLocalState());
 
   return {
     coins: Array.from(finalState.coins).map((coin) => ({
@@ -877,10 +874,7 @@ export function decryptShieldedOutputs(
     ...Array.from(tx.fallibleOffer?.values() ?? []),
   ];
 
-  const finalState = allOffers.reduce(
-    (state, offer) => state.apply(secretKeys, offer),
-    new ledger.ZswapLocalState(),
-  );
+  const finalState = allOffers.reduce((state, offer) => state.apply(secretKeys, offer), new ledger.ZswapLocalState());
 
   return Array.from(finalState.coins).map((coin) => ({
     tokenType: coin.type,

@@ -90,25 +90,22 @@ export const runInstallationTests = (context: InstallationTestContext): void => 
 
     it('should install multiple connectors independently', async () => {
       await fc.assert(
-        fc.asyncProperty(
-          fc.array(fc.constant(null), { minLength: 0, maxLength: 5 }),
-          async (items) => {
-            const target: { midnight?: Record<string, InitialAPI> } = { midnight: {} };
-            const installedConnectors = await Promise.all(
-              items.map(() => context.createConnector().install({ location: target })),
-            );
+        fc.asyncProperty(fc.array(fc.constant(null), { minLength: 0, maxLength: 5 }), async (items) => {
+          const target: { midnight?: Record<string, InitialAPI> } = { midnight: {} };
+          const installedConnectors = await Promise.all(
+            items.map(() => context.createConnector().install({ location: target })),
+          );
 
-            for (const installedConnector of installedConnectors) {
-              expect(target.midnight).toHaveProperty(installedConnector.uuid);
-              expectMatchObjectTyped(target.midnight![installedConnector.uuid], {
-                name: installedConnector.connector.name,
-                icon: installedConnector.connector.icon,
-                apiVersion: installedConnector.connector.apiVersion,
-                rdns: installedConnector.connector.rdns,
-              });
-            }
-          },
-        ),
+          for (const installedConnector of installedConnectors) {
+            expect(target.midnight).toHaveProperty(installedConnector.uuid);
+            expectMatchObjectTyped(target.midnight![installedConnector.uuid], {
+              name: installedConnector.connector.name,
+              icon: installedConnector.connector.icon,
+              apiVersion: installedConnector.connector.apiVersion,
+              rdns: installedConnector.connector.rdns,
+            });
+          }
+        }),
       );
     });
 

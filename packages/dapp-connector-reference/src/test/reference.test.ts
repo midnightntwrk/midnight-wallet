@@ -2,25 +2,11 @@
  * Reference implementation test runner.
  *
  * Runs all test suites against the reference DApp Connector implementation
- * using mock facade and keystore.
+ * backed by a real WalletFacade using the Simulator.
  */
 
-import { describe } from 'vitest';
-import { Connector, createMockProvingProviderFactory } from '../index.js';
-import type { ConnectorConfiguration } from '../types.js';
-import { defaultConnectorMetadataArbitrary, randomValue } from '../testing.js';
-import {
-  prepareMockFacade,
-  prepareMockUnshieldedKeystore,
-  testShieldedWithKeys,
-  testShieldedWithKeys2,
-  testUnshieldedWithKeys,
-  testUnshieldedWithKeys2,
-  buildMockSealedTransaction,
-  serializeTransaction,
-} from './testUtils.js';
-import { MidnightBech32m } from '@midnight-ntwrk/wallet-sdk-address-format';
-import type { DappConnectorTestContext, CreateConnectedAPIOptions, ConnectedAPIInstance, TestEnvironment } from './context.js';
+import { afterAll, beforeAll, describe, vi } from 'vitest';
+import { initSimulatorEnv, createSimulatorContext, type SimulatorEnv } from './simulatorTestUtils.js';
 
 // Import test suites
 import {
@@ -41,180 +27,78 @@ import {
   runBalancingTests,
 } from './suites/index.js';
 
-// Mock proving provider factory for tests
-const mockProvingProviderFactory = createMockProvingProviderFactory(
-  // check: return empty array (no constraint violations)
-  async () => [],
-  // prove: return dummy proof bytes
-  async () => new Uint8Array([0x00, 0x01, 0x02, 0x03]),
-);
+vi.setConfig({ testTimeout: 30_000, hookTimeout: 60_000 });
 
-// Default configuration for reference implementation tests
-const defaultConfig: ConnectorConfiguration = {
-  networkId: 'testnet',
-  indexerUri: 'http://localhost:8080',
-  indexerWsUri: 'ws://localhost:8080',
-  substrateNodeUri: 'ws://localhost:9944',
-  provingProviderFactory: mockProvingProviderFactory,
-};
+// =============================================================================
+// Simulator Environment (shared across all suites)
+// =============================================================================
 
-// Standard token types for testing (64-char hex strings representing 256-bit hashes)
-const standardTokenType = '0000000000000000000000000000000000000000000000000000000000000000';
-const alternateTokenType = '0000000000000000000000000000000000000000000000000000000000000001';
+let env: SimulatorEnv;
 
-/**
- * Create test environment for the reference implementation.
- * Provides Bech32m-encoded addresses and token types for transaction tests.
- */
-const createTestEnvironment = (): TestEnvironment => ({
-  networkId: 'testnet',
+beforeAll(async () => {
+  env = await initSimulatorEnv();
+}, 60_000);
 
-  addresses: {
-    shielded: MidnightBech32m.encode('testnet', testShieldedWithKeys.address).asString(),
-    shielded2: MidnightBech32m.encode('testnet', testShieldedWithKeys2.address).asString(),
-    unshielded: MidnightBech32m.encode('testnet', testUnshieldedWithKeys.address).asString(),
-    unshielded2: MidnightBech32m.encode('testnet', testUnshieldedWithKeys2.address).asString(),
-  },
-
-  addressKeys: {
-    shielded: testShieldedWithKeys,
-    shielded2: testShieldedWithKeys2,
-    unshielded: testUnshieldedWithKeys,
-    unshielded2: testUnshieldedWithKeys2,
-  },
-
-  tokenTypes: {
-    standard: standardTokenType,
-    alternate: alternateTokenType,
-  },
-
-  buildSealedTransaction: (options) => buildMockSealedTransaction(options),
-  serializeTransaction: (tx) => serializeTransaction(tx),
+afterAll(async () => {
+  await env?.cleanup();
 });
 
-/**
- * Create a reference implementation test context.
- *
- * Each call creates fresh mocks, so tests are isolated.
- * The withBalances/withTransactionHistory/withSubmissionError methods
- * configure the mocks and return the same context, allowing chaining
- * before calling createConnectedAPI.
- */
-const createReferenceContext = (): DappConnectorTestContext => {
-  // Create fresh mocks for this context
-  const facade = prepareMockFacade();
-  const keystore = prepareMockUnshieldedKeystore();
-  const environment = createTestEnvironment();
-
-  const context: DappConnectorTestContext = {
-    implementationName: 'reference',
-    environment,
-    installTarget: {},
-
-    createConnector: () => {
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      return new Connector(metadata, facade, keystore, defaultConfig);
-    },
-
-    createConnectedAPI: async (options?: CreateConnectedAPIOptions): Promise<ConnectedAPIInstance> => {
-      const networkId = options?.networkId ?? defaultConfig.networkId;
-      const config: ConnectorConfiguration = { ...defaultConfig, networkId };
-      const metadata = randomValue(defaultConnectorMetadataArbitrary);
-      const connector = new Connector(metadata, facade, keystore, config);
-      const api = await connector.connect(networkId);
-
-      // Type assertion: We know our implementation has disconnect() internally,
-      // but WalletConnectedAPI doesn't expose it (disconnect is wallet-side, not DApp-side).
-      // Test contexts need access to disconnect for proper cleanup.
-      const internalApi = api as unknown as { disconnect(): Promise<void> };
-
-      return {
-        api,
-        disconnect: () => internalApi.disconnect(),
-        networkId,
-      };
-    },
-
-    // Configure methods return the same context (same mocks) for chaining
-    withBalances: (balancesConfig) => {
-      facade.withBalances(balancesConfig);
-      return context;
-    },
-
-    withTransactionHistory: (entries) => {
-      facade.withTransactionHistory(entries);
-      return context;
-    },
-
-    withSubmissionError: (error) => {
-      facade.withSubmissionError(error);
-      return context;
-    },
-  };
-
-  return context;
-};
-
-// =============================================================================
-// Run all test suites
-// =============================================================================
-
 describe('installation', () => {
-  runInstallationTests(createReferenceContext());
+  runInstallationTests(createSimulatorContext(() => env));
 });
 
 describe('connection', () => {
-  runConnectionTests(createReferenceContext());
+  runConnectionTests(createSimulatorContext(() => env));
 });
 
 describe('configuration', () => {
-  runConfigurationTests(createReferenceContext());
+  runConfigurationTests(createSimulatorContext(() => env));
 });
 
 describe('addresses', () => {
-  runAddressTests(createReferenceContext());
-});
-
-describe('balances', () => {
-  runBalanceTests(createReferenceContext());
+  runAddressTests(createSimulatorContext(() => env));
 });
 
 describe('signing', () => {
-  runSigningTests(createReferenceContext());
+  runSigningTests(createSimulatorContext(() => env));
 });
 
 describe('hintUsage', () => {
-  runHintUsageTests(createReferenceContext());
-});
-
-describe('submission', () => {
-  runSubmissionTests(createReferenceContext());
-});
-
-describe('proving', () => {
-  runProvingTests(createReferenceContext());
-});
-
-describe('history', () => {
-  runHistoryTests(createReferenceContext());
+  runHintUsageTests(createSimulatorContext(() => env));
 });
 
 describe('disconnection', () => {
-  runDisconnectionTests(createReferenceContext());
+  runDisconnectionTests(createSimulatorContext(() => env));
+});
+
+describe('proving', () => {
+  runProvingTests(createSimulatorContext(() => env));
 });
 
 describe('validation', () => {
-  runValidationTests(createReferenceContext());
+  runValidationTests(createSimulatorContext(() => env));
+});
+
+describe('balances', () => {
+  runBalanceTests(createSimulatorContext(() => env));
+});
+
+describe('submission', () => {
+  runSubmissionTests(createSimulatorContext(() => env));
+});
+
+describe('history', () => {
+  runHistoryTests(createSimulatorContext(() => env));
 });
 
 describe('transfer', () => {
-  runTransferTests(createReferenceContext());
+  runTransferTests(createSimulatorContext(() => env));
 });
 
 describe('intent', () => {
-  runIntentTests(createReferenceContext());
+  runIntentTests(createSimulatorContext(() => env));
 });
 
 describe('balancing', () => {
-  runBalancingTests(createReferenceContext());
+  runBalancingTests(createSimulatorContext(() => env));
 });
