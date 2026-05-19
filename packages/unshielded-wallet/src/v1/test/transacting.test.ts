@@ -30,6 +30,7 @@ import {
   type TokenTransfer,
 } from '../Transacting.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
+import { InsufficientFundsError, SpendUtxoError } from '../WalletError.js';
 
 const NIGHT = ledger.nativeToken().raw;
 const tokenA = ledger.sampleRawTokenType();
@@ -401,17 +402,11 @@ describe('Unshielded wallet transacting', () => {
         meta: { ctime: new Date(0), registeredForDustGeneration: false },
       });
 
-      const result = transacting.createDustActionBookingTransaction(
-        wallet,
-        [unknownUtxo],
-        [],
-        wallet.publicKey.publicKey,
-        ttl,
-      );
+      const error = transacting
+        .createDustActionBookingTransaction(wallet, [unknownUtxo], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
 
-      expect(result._tag).toBe('Left');
-      const error = (result as { left: { _tag: string } }).left;
-      expect(['UtxoNotFoundError', 'Wallet.SpendUtxo']).toContain(error._tag);
+      expect(error).toBeInstanceOf(SpendUtxoError);
     });
 
     it('fails when a provided UTxO is already pending from a prior call', () => {
@@ -422,17 +417,11 @@ describe('Unshielded wallet transacting', () => {
         .createDustActionBookingTransaction(wallet, [first], [], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
-      const secondResult = transacting.createDustActionBookingTransaction(
-        newState,
-        [first],
-        [second],
-        wallet.publicKey.publicKey,
-        ttl,
-      );
+      const error = transacting
+        .createDustActionBookingTransaction(newState, [first], [second], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
 
-      expect(secondResult._tag).toBe('Left');
-      const error = (secondResult as { left: { _tag: string } }).left;
-      expect(['UtxoNotFoundError', 'Wallet.SpendUtxo']).toContain(error._tag);
+      expect(error).toBeInstanceOf(SpendUtxoError);
     });
 
     it('booked UTxOs cannot be reused by a subsequent makeTransfer (race fix)', () => {
@@ -449,21 +438,21 @@ describe('Unshielded wallet transacting', () => {
         ArrayOps.sumBigInt,
       );
 
-      const transferResult = transacting.makeTransfer(
-        newState,
-        [
-          {
-            amount: totalNightInPending,
-            type: NIGHT,
-            receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 1)),
-          },
-        ],
-        ttl,
-      );
+      const error = transacting
+        .makeTransfer(
+          newState,
+          [
+            {
+              amount: totalNightInPending,
+              type: NIGHT,
+              receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 1)),
+            },
+          ],
+          ttl,
+        )
+        .pipe(EitherOps.getOrThrowRight);
 
-      expect(transferResult._tag).toBe('Left');
-      const error = (transferResult as { left: { _tag: string } }).left;
-      expect(error._tag).toBe('Wallet.InsufficientFunds');
+      expect(error).toBeInstanceOf(InsufficientFundsError);
     });
 
     it('revertTransaction restores booked UTxOs from pending back to available', () => {
