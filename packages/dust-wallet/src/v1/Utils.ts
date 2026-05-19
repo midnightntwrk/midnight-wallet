@@ -10,6 +10,8 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { ScaleBigInt } from '@midnight-ntwrk/wallet-sdk-address-format';
+
 export const SignatureMarker = {
   signature: 'signature',
   signatureErased: 'signature-erased',
@@ -33,7 +35,9 @@ export const upsertArrayMap = <K, V>(map: Map<K, V[]>, key: K, val: V): Map<K, V
   return map;
 };
 
-export const toHex = (n: number | bigint | string): string => {
-  const str = BigInt(n).toString(16);
+// Little-endian hex, no length prefix
+export const nullifierToHex = (n: bigint): string => {
+  const bytes = Buffer.from(ScaleBigInt.encode(n)).slice(1); // drop the 0x73 prefix byte
+  const str = bytes.toString('hex');
   return str.length % 2 === 0 ? str : '0' + str;
 };
