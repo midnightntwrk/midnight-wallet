@@ -29,8 +29,7 @@ export class InstallationError extends Data.TaggedError('InstallationError')<{
 }> {}
 
 /**
- * Metadata for a connector, derived from InitialAPI.
- * Using Pick ensures this type evolves with the API specification -
+ * Metadata for a connector, derived from InitialAPI. Using Pick ensures this type evolves with the API specification -
  * if InitialAPI adds new metadata fields, they must be explicitly added here.
  */
 export type ConnectorMetadata = Readonly<Pick<InitialAPI, 'rdns' | 'name' | 'icon' | 'apiVersion'>>;

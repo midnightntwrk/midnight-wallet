@@ -1,7 +1,4 @@
-/**
- * Input validation test suite.
- * Tests validation of makeTransfer and makeIntent inputs.
- */
+/** Input validation test suite. Tests validation of makeTransfer and makeIntent inputs. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
@@ -12,9 +9,7 @@ vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 // Valid test data
 const validTokenType = '0000000000000000000000000000000000000000000000000000000000000000';
 
-/**
- * Run input validation tests against the provided context.
- */
+/** Run input validation tests against the provided context. */
 export const runValidationTests = (context: TransactionTestContext): void => {
   const shieldedAddress = context.environment.addresses.shielded;
   const unshieldedAddress = context.environment.addresses.unshielded;

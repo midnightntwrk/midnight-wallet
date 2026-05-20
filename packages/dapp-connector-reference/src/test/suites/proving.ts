@@ -1,17 +1,11 @@
-/**
- * Proving delegation test suite.
- * Tests getProvingProvider method.
- */
+/** Proving delegation test suite. Tests getProvingProvider method. */
 
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
 import type { KeyMaterialProvider } from '@midnight-ntwrk/dapp-connector-api';
 
-/**
- * Mock KeyMaterialProvider for testing.
- * In production, DApps provide this to resolve circuit keys.
- */
+/** Mock KeyMaterialProvider for testing. In production, DApps provide this to resolve circuit keys. */
 const createMockKeyMaterialProvider = (): KeyMaterialProvider => ({
   getZKIR: async (_circuitKeyLocation: string): Promise<Uint8Array> => {
     return new Uint8Array([1, 2, 3, 4]);
@@ -24,9 +18,7 @@ const createMockKeyMaterialProvider = (): KeyMaterialProvider => ({
   },
 });
 
-/**
- * Run proving delegation tests against the provided context.
- */
+/** Run proving delegation tests against the provided context. */
 export const runProvingTests = (context: ConnectedAPITestContext): void => {
   describe('disconnection', () => {
     it('should reject when disconnected', async () => {

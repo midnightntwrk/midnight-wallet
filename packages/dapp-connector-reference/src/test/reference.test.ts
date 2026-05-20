@@ -1,8 +1,8 @@
 /**
  * Reference implementation test runner.
  *
- * Runs all test suites against the reference DApp Connector implementation
- * backed by a real WalletFacade using the Simulator.
+ * Runs all test suites against the reference DApp Connector implementation backed by a real WalletFacade using the
+ * Simulator.
  */
 
 import { afterAll, beforeAll, describe, vi } from 'vitest';

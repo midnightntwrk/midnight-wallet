@@ -125,9 +125,7 @@ import * as ledger from '@midnight-ntwrk/ledger-v8';
 // - Proper cryptographic address derivation
 // =============================================================================
 
-/**
- * A shielded address with its corresponding secret keys for testing.
- */
+/** A shielded address with its corresponding secret keys for testing. */
 export interface ShieldedAddressWithKeys {
   readonly secretKeys: ledger.ZswapSecretKeys;
   readonly address: ShieldedAddress;
@@ -135,9 +133,7 @@ export interface ShieldedAddressWithKeys {
   readonly encryptionPublicKey: ShieldedEncryptionPublicKey;
 }
 
-/**
- * An unshielded address with its corresponding secret key for testing.
- */
+/** An unshielded address with its corresponding secret key for testing. */
 export interface UnshieldedAddressWithKeys {
   readonly secretKey: string;
   readonly verifyingKey: string;
@@ -156,10 +152,7 @@ const testShieldedEncryptionPublicKey = new ShieldedEncryptionPublicKey(
 );
 const testShieldedAddressInstance = new ShieldedAddress(testShieldedCoinPublicKey, testShieldedEncryptionPublicKey);
 
-/**
- * Primary test shielded address with retained secret keys.
- * Use this when you need to verify output decryptability.
- */
+/** Primary test shielded address with retained secret keys. Use this when you need to verify output decryptability. */
 export const testShieldedWithKeys: ShieldedAddressWithKeys = {
   secretKeys: testShieldedSecretKeys,
   address: testShieldedAddressInstance,
@@ -177,10 +170,7 @@ const testUnshieldedSecretKey = Buffer.from(createPaddedSeed(testUnshieldedSeed1
 const testUnshieldedVerifyingKey = ledger.signatureVerifyingKey(testUnshieldedSecretKey);
 const testUnshieldedAddressInstance = new UnshieldedAddress(Buffer.from(testUnshieldedVerifyingKey, 'hex'));
 
-/**
- * Primary test unshielded address with retained secret key.
- * Use this when you need to verify recipient addresses.
- */
+/** Primary test unshielded address with retained secret key. Use this when you need to verify recipient addresses. */
 export const testUnshieldedWithKeys: UnshieldedAddressWithKeys = {
   secretKey: testUnshieldedSecretKey,
   verifyingKey: testUnshieldedVerifyingKey,
@@ -188,8 +178,8 @@ export const testUnshieldedWithKeys: UnshieldedAddressWithKeys = {
 };
 
 /**
- * Creates a DesiredOutput arbitrary for the specified network.
- * The recipient addresses are valid Bech32m encoded addresses for the network.
+ * Creates a DesiredOutput arbitrary for the specified network. The recipient addresses are valid Bech32m encoded
+ * addresses for the network.
  */
 export const desiredOutputArbitrary = (networkId: string): fc.Arbitrary<DesiredOutput> => {
   const shieldedAddress = MidnightBech32m.encode(networkId, testShieldedAddressInstance).asString();
@@ -211,9 +201,7 @@ export const desiredOutputArbitrary = (networkId: string): fc.Arbitrary<DesiredO
   );
 };
 
-/**
- * Creates a DesiredInput arbitrary for generating random inputs.
- */
+/** Creates a DesiredInput arbitrary for generating random inputs. */
 export const desiredInputArbitrary: fc.Arbitrary<DesiredInput> = fc.oneof(
   fc.record({
     kind: fc.constant('shielded' as const),
@@ -231,16 +219,12 @@ export const desiredInputArbitrary: fc.Arbitrary<DesiredInput> = fc.oneof(
 // Transaction Verification Helpers
 // ============================================================================
 
-/**
- * Deserializes a finalized transaction from hex string.
- */
+/** Deserializes a finalized transaction from hex string. */
 export function deserializeTransaction(txHex: string): ledger.FinalizedTransaction {
   return ledger.Transaction.deserialize('signature', 'proof', 'binding', Buffer.from(txHex, 'hex'));
 }
 
-/**
- * Gets all segment IDs in a transaction (always includes guaranteed section 0).
- */
+/** Gets all segment IDs in a transaction (always includes guaranteed section 0). */
 export function getSegmentIds(tx: ledger.FinalizedTransaction): number[] {
   return [
     0, // Always include guaranteed section
@@ -250,36 +234,29 @@ export function getSegmentIds(tx: ledger.FinalizedTransaction): number[] {
 }
 
 /**
- * Checks if transaction has DustActions indicating fees will be paid.
- * Note: In mock transactions, dustActions may be present but with empty spends array.
- * For production, spends.length > 0 would be expected.
+ * Checks if transaction has DustActions indicating fees will be paid. Note: In mock transactions, dustActions may be
+ * present but with empty spends array. For production, spends.length > 0 would be expected.
  */
 export function hasDustSpend(tx: ledger.FinalizedTransaction): boolean {
   return Array.from(tx.intents?.values() ?? []).some((intent) => intent.dustActions !== undefined);
 }
 
-/**
- * Gets total fees paid in transaction.
- */
+/** Gets total fees paid in transaction. */
 export function getTotalFees(tx: ledger.FinalizedTransaction): bigint {
   return Array.from(tx.intents?.values() ?? [])
     .flatMap((intent) => intent.dustActions?.spends ?? [])
     .reduce((sum, spend) => sum + spend.vFee, 0n);
 }
 
-/**
- * Token imbalances by kind (shielded/unshielded).
- * Each is a Record of raw token type (64-char hex) to imbalance value.
- */
+/** Token imbalances by kind (shielded/unshielded). Each is a Record of raw token type (64-char hex) to imbalance value. */
 export interface TokenImbalances {
   readonly shielded: Readonly<Record<ledger.RawTokenType, bigint>>;
   readonly unshielded: Readonly<Record<ledger.RawTokenType, bigint>>;
 }
 
 /**
- * Gets all imbalances across all segments, separated by token kind.
- * Returns Records (plain objects) for easy comparison with toEqual().
- * Note: Dust token imbalances are excluded since DustTokenType has no raw representation.
+ * Gets all imbalances across all segments, separated by token kind. Returns Records (plain objects) for easy comparison
+ * with toEqual(). Note: Dust token imbalances are excluded since DustTokenType has no raw representation.
  */
 export function getAllImbalances(tx: ledger.FinalizedTransaction): TokenImbalances {
   const allImbalanceEntries = getSegmentIds(tx).flatMap((segmentId) => Array.from(tx.imbalances(segmentId)));
@@ -309,9 +286,7 @@ export function getAllImbalances(tx: ledger.FinalizedTransaction): TokenImbalanc
     );
 }
 
-/**
- * Checks if transaction is balanced (all imbalances are zero).
- */
+/** Checks if transaction is balanced (all imbalances are zero). */
 export function isTransactionBalanced(tx: ledger.FinalizedTransaction): boolean {
   const imbalances = getAllImbalances(tx);
   const allShieldedZero = Object.values(imbalances.shielded).every((v) => v === 0n);
@@ -319,9 +294,7 @@ export function isTransactionBalanced(tx: ledger.FinalizedTransaction): boolean 
   return allShieldedZero && allUnshieldedZero;
 }
 
-/**
- * Counts shielded outputs in transaction.
- */
+/** Counts shielded outputs in transaction. */
 export function countShieldedOutputs(tx: ledger.FinalizedTransaction): number {
   return (
     (tx.guaranteedOffer?.outputs.length ?? 0) +
@@ -329,9 +302,7 @@ export function countShieldedOutputs(tx: ledger.FinalizedTransaction): number {
   );
 }
 
-/**
- * Counts unshielded outputs in transaction.
- */
+/** Counts unshielded outputs in transaction. */
 export function countUnshieldedOutputs(tx: ledger.FinalizedTransaction): number {
   return Array.from(tx.intents?.values() ?? []).reduce(
     (sum, intent) =>
@@ -342,9 +313,7 @@ export function countUnshieldedOutputs(tx: ledger.FinalizedTransaction): number 
   );
 }
 
-/**
- * Checks if unshielded offers have signatures.
- */
+/** Checks if unshielded offers have signatures. */
 export function hasUnshieldedSignatures(tx: ledger.FinalizedTransaction): boolean {
   return Array.from(tx.intents?.values() ?? []).some(
     (intent) =>
@@ -354,9 +323,8 @@ export function hasUnshieldedSignatures(tx: ledger.FinalizedTransaction): boolea
 }
 
 /**
- * Gets shielded deltas by token type from ZswapOffers.
- * Note: Individual shielded outputs don't expose value/type directly (they're committed).
- * We use the offer's deltas map which tracks the net value change per token type.
+ * Gets shielded deltas by token type from ZswapOffers. Note: Individual shielded outputs don't expose value/type
+ * directly (they're committed). We use the offer's deltas map which tracks the net value change per token type.
  */
 export function getShieldedDeltas(tx: ledger.FinalizedTransaction): Map<ledger.RawTokenType, bigint> {
   const guaranteedDeltas = Array.from(tx.guaranteedOffer?.deltas ?? []);
@@ -369,9 +337,7 @@ export function getShieldedDeltas(tx: ledger.FinalizedTransaction): Map<ledger.R
   }, new Map<ledger.RawTokenType, bigint>());
 }
 
-/**
- * Gets all unshielded output values by token type.
- */
+/** Gets all unshielded output values by token type. */
 export function getUnshieldedOutputsByTokenType(tx: ledger.FinalizedTransaction): Map<ledger.RawTokenType, bigint[]> {
   const allOutputs = Array.from(tx.intents?.values() ?? []).flatMap((intent) => [
     ...(intent.guaranteedUnshieldedOffer?.outputs ?? []),
@@ -385,9 +351,8 @@ export function getUnshieldedOutputsByTokenType(tx: ledger.FinalizedTransaction)
 }
 
 /**
- * Computes expected imbalances from desired inputs and outputs.
- * Inputs: wallet provides → negative imbalance
- * Outputs: wallet wants to receive (creates output for counterparty) → positive imbalance
+ * Computes expected imbalances from desired inputs and outputs. Inputs: wallet provides → negative imbalance Outputs:
+ * wallet wants to receive (creates output for counterparty) → positive imbalance
  *
  * Returns TokenImbalances with shielded and unshielded separated.
  */
@@ -425,16 +390,12 @@ export function computeExpectedImbalances(
   );
 }
 
-/**
- * Checks if all intents have valid TTL (non-null Date).
- */
+/** Checks if all intents have valid TTL (non-null Date). */
 export function hasValidTtl(tx: ledger.FinalizedTransaction): boolean {
   return Array.from(tx.intents?.values() ?? []).every((intent) => intent.ttl instanceof Date);
 }
 
-/**
- * Gets all TTLs from intents.
- */
+/** Gets all TTLs from intents. */
 export function getIntentTtls(tx: ledger.FinalizedTransaction): Date[] {
   return Array.from(tx.intents?.values() ?? []).map((intent) => intent.ttl);
 }
@@ -443,27 +404,21 @@ export function getIntentTtls(tx: ledger.FinalizedTransaction): Date[] {
 // Unshielded Output Info (with full recipient details)
 // ============================================================================
 
-/**
- * Full information about an unshielded output.
- */
+/** Full information about an unshielded output. */
 export interface UnshieldedOutputInfo {
   readonly tokenType: ledger.RawTokenType;
   readonly value: bigint;
   readonly owner: string; // Hex string of verifying key
 }
 
-/**
- * Unshielded outputs grouped by intent ID.
- */
+/** Unshielded outputs grouped by intent ID. */
 export interface UnshieldedOutputsByIntent {
   readonly intentId: number;
   readonly guaranteed: readonly UnshieldedOutputInfo[];
   readonly fallible: readonly UnshieldedOutputInfo[];
 }
 
-/**
- * Extracts all unshielded outputs grouped by intent ID.
- */
+/** Extracts all unshielded outputs grouped by intent ID. */
 function extractUnshieldedOutputsByIntent(tx: ledger.FinalizedTransaction): Map<number, UnshieldedOutputsByIntent> {
   const mapOutput = (o: { type: ledger.RawTokenType; value: bigint; owner: string }): UnshieldedOutputInfo => ({
     tokenType: o.type,
@@ -487,24 +442,20 @@ function extractUnshieldedOutputsByIntent(tx: ledger.FinalizedTransaction): Map<
 // Decrypted Shielded Coin Info
 // ============================================================================
 
-/**
- * A decrypted shielded coin with token type and value.
- */
+/** A decrypted shielded coin with token type and value. */
 export interface DecryptedCoin {
   readonly tokenType: ledger.RawTokenType;
   readonly value: bigint;
 }
 
-/**
- * Result of decrypting a shielded offer.
- */
+/** Result of decrypting a shielded offer. */
 export interface DecryptedShieldedOffer {
   readonly coins: readonly DecryptedCoin[];
 }
 
 /**
- * Decrypts the guaranteed shielded offer using the recipient's secret keys.
- * Returns the coins that can be decrypted (owned by this recipient).
+ * Decrypts the guaranteed shielded offer using the recipient's secret keys. Returns the coins that can be decrypted
+ * (owned by this recipient).
  */
 function decryptGuaranteedOffer(
   tx: ledger.FinalizedTransaction,
@@ -525,9 +476,7 @@ function decryptGuaranteedOffer(
   };
 }
 
-/**
- * Decrypts all shielded offers (guaranteed + fallible) using the recipient's secret keys.
- */
+/** Decrypts all shielded offers (guaranteed + fallible) using the recipient's secret keys. */
 function decryptAllShieldedOffers(
   tx: ledger.FinalizedTransaction,
   secretKeys: ledger.ZswapSecretKeys,
@@ -554,8 +503,9 @@ function decryptAllShieldedOffers(
 /**
  * Rich transaction verification result with query methods.
  *
- * Captures all verifiable data from a transaction and provides methods
- * to query specific aspects. The structure is designed to:
+ * Captures all verifiable data from a transaction and provides methods to query specific aspects. The structure is
+ * designed to:
+ *
  * - Allow non-exact matching (wallet may add balancing inputs/outputs)
  * - Support decryption-based verification for shielded outputs
  * - Group data by intent ID for targeted assertions
@@ -570,8 +520,8 @@ export interface TransactionVerification {
   /** @deprecated Use getAllUnshieldedOutputs() or getUnshieldedOutputsForIntent() for exact verification */
   readonly unshieldedOutputs: Map<ledger.RawTokenType, bigint[]>;
   /**
-   * Token imbalances separated by kind (shielded/unshielded).
-   * Use with computeExpectedImbalances() for direct toEqual() comparison.
+   * Token imbalances separated by kind (shielded/unshielded). Use with computeExpectedImbalances() for direct toEqual()
+   * comparison.
    */
   readonly imbalances: TokenImbalances;
   readonly isBalanced: boolean;
@@ -584,20 +534,15 @@ export interface TransactionVerification {
   readonly totalFees: bigint;
 
   // ---- Unshielded outputs by intent ----
-  /**
-   * Gets unshielded outputs for a specific intent ID.
-   * Returns undefined if intent doesn't exist.
-   */
+  /** Gets unshielded outputs for a specific intent ID. Returns undefined if intent doesn't exist. */
   getUnshieldedOutputsForIntent(intentId: number): UnshieldedOutputsByIntent | undefined;
 
-  /**
-   * Gets all unshielded outputs across all intents (flattened).
-   */
+  /** Gets all unshielded outputs across all intents (flattened). */
   getAllUnshieldedOutputs(): readonly UnshieldedOutputInfo[];
 
   /**
-   * Checks if a specific unshielded output exists in an intent's guaranteed section.
-   * Allows non-exact matching - additional outputs may exist due to balancing.
+   * Checks if a specific unshielded output exists in an intent's guaranteed section. Allows non-exact matching -
+   * additional outputs may exist due to balancing.
    */
   containsGuaranteedUnshieldedOutput(
     intentId: number,
@@ -606,19 +551,17 @@ export interface TransactionVerification {
 
   // ---- Shielded offer decryption ----
   /**
-   * Decrypts the guaranteed shielded offer using the recipient's secret keys.
-   * Returns the coins that the recipient can claim.
+   * Decrypts the guaranteed shielded offer using the recipient's secret keys. Returns the coins that the recipient can
+   * claim.
    */
   decryptGuaranteedShieldedOffer(secretKeys: ledger.ZswapSecretKeys): DecryptedShieldedOffer;
 
-  /**
-   * Decrypts all shielded offers (guaranteed + fallible) using the recipient's secret keys.
-   */
+  /** Decrypts all shielded offers (guaranteed + fallible) using the recipient's secret keys. */
   decryptAllShieldedOffers(secretKeys: ledger.ZswapSecretKeys): DecryptedShieldedOffer;
 
   /**
-   * Checks if a specific coin exists in the decrypted guaranteed shielded offer.
-   * Allows non-exact matching - additional coins may exist due to balancing.
+   * Checks if a specific coin exists in the decrypted guaranteed shielded offer. Allows non-exact matching - additional
+   * coins may exist due to balancing.
    */
   containsDecryptedCoin(
     secretKeys: ledger.ZswapSecretKeys,
@@ -628,28 +571,32 @@ export interface TransactionVerification {
   // ---- Batch verification methods ----
 
   /**
-   * Checks if ALL expected unshielded outputs exist in the transaction.
-   * Allows non-exact matching - additional outputs may exist due to balancing.
+   * Checks if ALL expected unshielded outputs exist in the transaction. Allows non-exact matching - additional outputs
+   * may exist due to balancing.
    *
    * @example
-   * expect(verification.containsUnshieldedOutputs([
-   *   { owner: recipient.verifyingKey, tokenType: tokenA, value: 100n },
-   *   { owner: recipient.verifyingKey, tokenType: tokenB, value: 50n },
-   * ])).toBe(true);
+   *   expect(
+   *     verification.containsUnshieldedOutputs([
+   *       { owner: recipient.verifyingKey, tokenType: tokenA, value: 100n },
+   *       { owner: recipient.verifyingKey, tokenType: tokenB, value: 50n },
+   *     ]),
+   *   ).toBe(true);
    */
   containsUnshieldedOutputs(
     expected: ReadonlyArray<{ owner: string; tokenType: ledger.RawTokenType; value: bigint }>,
   ): boolean;
 
   /**
-   * Checks if ALL expected shielded outputs can be decrypted by the recipient.
-   * Allows non-exact matching - additional coins may exist due to balancing.
+   * Checks if ALL expected shielded outputs can be decrypted by the recipient. Allows non-exact matching - additional
+   * coins may exist due to balancing.
    *
    * @example
-   * expect(verification.containsShieldedOutputs(recipient.secretKeys, [
-   *   { tokenType: tokenA, value: 100n },
-   *   { tokenType: tokenB, value: 50n },
-   * ])).toBe(true);
+   *   expect(
+   *     verification.containsShieldedOutputs(recipient.secretKeys, [
+   *       { tokenType: tokenA, value: 100n },
+   *       { tokenType: tokenB, value: 50n },
+   *     ]),
+   *   ).toBe(true);
    */
   containsShieldedOutputs(
     secretKeys: ledger.ZswapSecretKeys,
@@ -657,19 +604,19 @@ export interface TransactionVerification {
   ): boolean;
 
   /**
-   * Combined check for both shielded and unshielded outputs.
-   * Verifies that all expected outputs exist in the transaction.
+   * Combined check for both shielded and unshielded outputs. Verifies that all expected outputs exist in the
+   * transaction.
    *
    * @example
-   * expect(verification.containsOutputs({
-   *   unshielded: [
-   *     { owner: unshieldedRecipient.verifyingKey, tokenType: tokenA, value: 100n },
-   *   ],
-   *   shielded: {
-   *     secretKeys: shieldedRecipient.secretKeys,
-   *     outputs: [{ tokenType: tokenB, value: 50n }],
-   *   },
-   * })).toBe(true);
+   *   expect(
+   *     verification.containsOutputs({
+   *       unshielded: [{ owner: unshieldedRecipient.verifyingKey, tokenType: tokenA, value: 100n }],
+   *       shielded: {
+   *         secretKeys: shieldedRecipient.secretKeys,
+   *         outputs: [{ tokenType: tokenB, value: 50n }],
+   *       },
+   *     }),
+   *   ).toBe(true);
    */
   containsOutputs(expected: {
     unshielded?: ReadonlyArray<{ owner: string; tokenType: ledger.RawTokenType; value: bigint }>;
@@ -680,9 +627,7 @@ export interface TransactionVerification {
   }): boolean;
 }
 
-/**
- * Creates a TransactionVerification from a finalized transaction.
- */
+/** Creates a TransactionVerification from a finalized transaction. */
 export function verifyTransaction(tx: ledger.FinalizedTransaction): TransactionVerification {
   const unshieldedByIntent = extractUnshieldedOutputsByIntent(tx);
   const intentIds = Array.from(tx.intents?.keys() ?? []);
@@ -799,18 +744,14 @@ export function verifyTransaction(tx: ledger.FinalizedTransaction): TransactionV
 // Legacy Helpers (for backwards compatibility)
 // ============================================================================
 
-/**
- * Unshielded output with its recipient address (owner hex string).
- */
+/** Unshielded output with its recipient address (owner hex string). */
 export interface UnshieldedOutputWithRecipient {
   readonly tokenType: ledger.RawTokenType;
   readonly value: bigint;
   readonly owner: string; // Hex string of the owner's verifying key
 }
 
-/**
- * Gets all unshielded outputs with their recipient addresses.
- */
+/** Gets all unshielded outputs with their recipient addresses. */
 export function getUnshieldedOutputsWithRecipients(tx: ledger.FinalizedTransaction): UnshieldedOutputWithRecipient[] {
   return Array.from(tx.intents?.values() ?? []).flatMap((intent) => [
     ...(intent.guaranteedUnshieldedOffer?.outputs ?? []).map((output) => ({
@@ -827,8 +768,8 @@ export function getUnshieldedOutputsWithRecipients(tx: ledger.FinalizedTransacti
 }
 
 /**
- * Verifies that all unshielded outputs have the expected recipient address.
- * Returns true if all outputs match the expected address (by verifying key).
+ * Verifies that all unshielded outputs have the expected recipient address. Returns true if all outputs match the
+ * expected address (by verifying key).
  */
 export function verifyUnshieldedRecipient(
   tx: ledger.FinalizedTransaction,
@@ -837,9 +778,7 @@ export function verifyUnshieldedRecipient(
   return getUnshieldedOutputsWithRecipients(tx).every((output) => output.owner === expectedAddress.verifyingKey);
 }
 
-/**
- * Verifies that all unshielded outputs for a specific token type have the expected recipient.
- */
+/** Verifies that all unshielded outputs for a specific token type have the expected recipient. */
 export function verifyUnshieldedRecipientForToken(
   tx: ledger.FinalizedTransaction,
   tokenType: ledger.RawTokenType,
@@ -850,20 +789,18 @@ export function verifyUnshieldedRecipientForToken(
     .every((output) => output.owner === expectedAddress.verifyingKey);
 }
 
-/**
- * A decrypted shielded coin with its token type and value.
- */
+/** A decrypted shielded coin with its token type and value. */
 export interface DecryptedShieldedCoin {
   readonly tokenType: ledger.RawTokenType;
   readonly value: bigint;
 }
 
 /**
- * Decrypts shielded outputs from a transaction using the recipient's secret keys.
- * Returns the coins that the recipient can decrypt and claim.
+ * Decrypts shielded outputs from a transaction using the recipient's secret keys. Returns the coins that the recipient
+ * can decrypt and claim.
  *
- * This is the proper way to verify shielded outputs - by actually decrypting them
- * with the recipient's keys, which proves ownership and reveals the (tokenType, value).
+ * This is the proper way to verify shielded outputs - by actually decrypting them with the recipient's keys, which
+ * proves ownership and reveals the (tokenType, value).
  */
 export function decryptShieldedOutputs(
   tx: ledger.FinalizedTransaction,
@@ -883,14 +820,13 @@ export function decryptShieldedOutputs(
 }
 
 /**
- * Verifies that a recipient received the expected shielded outputs.
- * Decrypts the outputs using the recipient's secret keys and checks that
- * the decrypted coins match the expected (tokenType, value) pairs exactly.
+ * Verifies that a recipient received the expected shielded outputs. Decrypts the outputs using the recipient's secret
+ * keys and checks that the decrypted coins match the expected (tokenType, value) pairs exactly.
  *
  * @param tx - The finalized transaction to verify
  * @param secretKeys - The recipient's secret keys for decryption
  * @param expectedOutputs - Array of expected (tokenType, value) pairs
- * @returns true if the decrypted coins match expected outputs exactly
+ * @returns True if the decrypted coins match expected outputs exactly
  */
 export function verifyShieldedOutputsReceived(
   tx: ledger.FinalizedTransaction,
@@ -918,9 +854,7 @@ export function verifyShieldedOutputsReceived(
   );
 }
 
-/**
- * Expected output specification for verification.
- */
+/** Expected output specification for verification. */
 export interface ExpectedOutput {
   readonly kind: 'shielded' | 'unshielded';
   readonly tokenType: ledger.RawTokenType;
@@ -930,9 +864,9 @@ export interface ExpectedOutput {
 }
 
 /**
- * Verifies that all expected outputs are present in the transaction.
- * For shielded outputs: decrypts using the recipient's keys and verifies (tokenType, value)
- * For unshielded outputs: verifies the exact (owner, tokenType, value) tuple
+ * Verifies that all expected outputs are present in the transaction. For shielded outputs: decrypts using the
+ * recipient's keys and verifies (tokenType, value) For unshielded outputs: verifies the exact (owner, tokenType, value)
+ * tuple
  *
  * @param tx - The finalized transaction to verify
  * @param expectedOutputs - Array of expected outputs with recipient info

@@ -1,16 +1,11 @@
-/**
- * Intent test suite.
- * Tests makeIntent method for creating swap/intent transactions.
- */
+/** Intent test suite. Tests makeIntent method for creating swap/intent transactions. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { TransactionTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run intent tests against the provided context.
- */
+/** Run intent tests against the provided context. */
 export const runIntentTests = (context: TransactionTestContext): void => {
   describe('API contract', () => {
     it('should have makeIntent method on ConnectedAPI', async () => {

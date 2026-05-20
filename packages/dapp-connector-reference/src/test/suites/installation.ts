@@ -1,7 +1,4 @@
-/**
- * Connector installation test suite.
- * Tests Connector creation and injection into global namespace.
- */
+/** Connector installation test suite. Tests Connector creation and injection into global namespace. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
@@ -13,9 +10,7 @@ import type { InstallationTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run connector installation tests against the provided context.
- */
+/** Run connector installation tests against the provided context. */
 export const runInstallationTests = (context: InstallationTestContext): void => {
   describe('connector creation', () => {
     it('should create a connector instance with metadata', () => {

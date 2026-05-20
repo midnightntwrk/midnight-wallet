@@ -1,15 +1,15 @@
 /**
  * Simulator-backed test infrastructure for the DApp Connector reference implementation.
  *
- * Creates a real WalletFacade backed by an in-memory Simulator, replacing the
- * mock infrastructure that previously hand-reimplemented facade behavior.
+ * Creates a real WalletFacade backed by an in-memory Simulator, replacing the mock infrastructure that previously
+ * hand-reimplemented facade behavior.
  *
  * Adapted from packages/facade/test/utils/helpers.ts (test code, not importable).
  */
 
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import { HDWallet, Roles } from '@midnight-ntwrk/wallet-sdk-hd';
-import { FacadeState, WalletFacade, type Clock } from '@midnight-ntwrk/wallet-sdk-facade';
+import { type FacadeState, WalletFacade, type Clock } from '@midnight-ntwrk/wallet-sdk-facade';
 import { CustomShieldedWallet, type ShieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-shielded';
 import {
   Sync as ShieldedSync,
@@ -17,7 +17,11 @@ import {
   V1Builder as ShieldedV1Builder,
 } from '@midnight-ntwrk/wallet-sdk-shielded/v1';
 import { CustomDustWallet, type DustWalletAPI } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
-import { SyncService as DustSyncService, V1Builder as DustV1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
+import {
+  SyncService as DustSyncService,
+  TransactionHistory as DustTransactionHistory,
+  V1Builder as DustV1Builder,
+} from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 import {
   CustomUnshieldedWallet,
   createKeystore,
@@ -194,6 +198,7 @@ const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalle
       .withSerializationDefaults()
       .withTransactingDefaults()
       .withCoinsAndBalancesDefaults()
+      .withTransactionHistory(DustTransactionHistory.makeSimulatorTransactionHistoryService)
       .withKeysDefaults()
       .withCoinSelectionDefaults(),
   );
@@ -324,8 +329,8 @@ export interface SimulatorEnv {
 /**
  * Initialize a complete simulator environment with a funded wallet.
  *
- * Creates a Simulator with genesis mints for two shielded token types plus Night,
- * registers Night for Dust generation, and fast-forwards time to accumulate Dust.
+ * Creates a Simulator with genesis mints for two shielded token types plus Night, registers Night for Dust generation,
+ * and fast-forwards time to accumulate Dust.
  */
 export const initSimulatorEnv = async (): Promise<SimulatorEnv> => {
   const keys = deriveWalletKeys(WALLET_SEED, NETWORK_ID);
@@ -493,10 +498,9 @@ const staticEnvironment: TestEnvironment = {
 /**
  * Create a DappConnectorTestContext backed by the simulator environment.
  *
- * Accepts a lazy getter for the SimulatorEnv so the context can be created
- * during describe() registration (synchronous) while the actual env is
- * initialized later in beforeAll (asynchronous). The env is only accessed
- * inside createConnector/createConnectedAPI which run during it() blocks.
+ * Accepts a lazy getter for the SimulatorEnv so the context can be created during describe() registration (synchronous)
+ * while the actual env is initialized later in beforeAll (asynchronous). The env is only accessed inside
+ * createConnector/createConnectedAPI which run during it() blocks.
  */
 export const createSimulatorContext = (getEnv: () => SimulatorEnv): DappConnectorTestContext => {
   const context: DappConnectorTestContext = {

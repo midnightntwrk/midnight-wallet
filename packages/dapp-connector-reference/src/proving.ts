@@ -1,9 +1,9 @@
 /**
  * Proving provider factories for the DApp Connector.
  *
- * This module provides factory functions that create ProvingProvider instances
- * from DApp-provided KeyMaterialProvider. The factories abstract away the
- * proving implementation, allowing easy swapping between:
+ * This module provides factory functions that create ProvingProvider instances from DApp-provided KeyMaterialProvider.
+ * The factories abstract away the proving implementation, allowing easy swapping between:
+ *
  * - WASM-based proving (in-browser)
  * - HTTP-based proving (remote server)
  * - Mock proving (testing)
@@ -17,20 +17,13 @@ import type { ProvingProviderFactory } from './types.js';
 // BLS Parameters Provider
 // =============================================================================
 
-/**
- * S3 bucket URL for BLS parameters.
- * These are universal parameters needed for PLONK proving.
- */
+/** S3 bucket URL for BLS parameters. These are universal parameters needed for PLONK proving. */
 const PARAMS_S3_URL = 'https://midnight-s3-fileshare-dev-eu-west-1.s3.eu-west-1.amazonaws.com';
 
-/**
- * Cache for BLS parameters to avoid repeated fetches.
- */
+/** Cache for BLS parameters to avoid repeated fetches. */
 const paramsCache = new Map<number, Uint8Array>();
 
-/**
- * Fetch BLS parameters from S3 with retry logic.
- */
+/** Fetch BLS parameters from S3 with retry logic. */
 const fetchParams = async (k: number): Promise<Uint8Array> => {
   const cached = paramsCache.get(k);
   if (cached !== undefined) {
@@ -68,13 +61,15 @@ const fetchParams = async (k: number): Promise<Uint8Array> => {
  * Adapt a dapp-connector-api KeyMaterialProvider to zkir-v2's KeyMaterialProvider.
  *
  * The dapp-connector-api interface provides separate methods for each key component:
- * - getZKIR(keyLocation) -> Uint8Array
- * - getProverKey(keyLocation) -> Uint8Array
- * - getVerifierKey(keyLocation) -> Uint8Array
+ *
+ * - GetZKIR(keyLocation) -> Uint8Array
+ * - GetProverKey(keyLocation) -> Uint8Array
+ * - GetVerifierKey(keyLocation) -> Uint8Array
  *
  * The zkir-v2 interface expects:
- * - lookupKey(keyLocation) -> { ir, proverKey, verifierKey } | undefined
- * - getParams(k) -> Uint8Array (BLS parameters)
+ *
+ * - LookupKey(keyLocation) -> { ir, proverKey, verifierKey } | undefined
+ * - GetParams(k) -> Uint8Array (BLS parameters)
  */
 const adaptKeyMaterialProvider = (provider: KeyMaterialProvider): zkir.KeyMaterialProvider => ({
   lookupKey: async (keyLocation: string): Promise<zkir.ProvingKeyMaterial | undefined> => {
@@ -100,26 +95,24 @@ const adaptKeyMaterialProvider = (provider: KeyMaterialProvider): zkir.KeyMateri
 /**
  * Create a WASM-based ProvingProviderFactory.
  *
- * This factory uses zkir-v2's WASM implementation to prove circuits directly
- * in the browser/Node.js environment. It adapts the DApp-provided
- * KeyMaterialProvider to the format expected by zkir-v2.
+ * This factory uses zkir-v2's WASM implementation to prove circuits directly in the browser/Node.js environment. It
+ * adapts the DApp-provided KeyMaterialProvider to the format expected by zkir-v2.
  *
- * Note: WASM proving can be CPU-intensive. For production use in browsers,
- * consider using Web Workers (which the WasmProver from prover-client does).
- * This implementation runs synchronously on the main thread for simplicity.
- *
- * @returns A ProvingProviderFactory that creates zkir-v2 based ProvingProviders
+ * Note: WASM proving can be CPU-intensive. For production use in browsers, consider using Web Workers (which the
+ * WasmProver from prover-client does). This implementation runs synchronously on the main thread for simplicity.
  *
  * @example
- * ```typescript
- * const config: ConnectorConfiguration = {
- *   networkId: 'testnet',
- *   indexerUri: 'http://localhost:8080',
- *   indexerWsUri: 'ws://localhost:8080',
- *   substrateNodeUri: 'ws://localhost:9944',
- *   provingProviderFactory: createWasmProvingProviderFactory(),
- * };
- * ```
+ *   ```typescript
+ *   const config: ConnectorConfiguration = {
+ *     networkId: 'testnet',
+ *     indexerUri: 'http://localhost:8080',
+ *     indexerWsUri: 'ws://localhost:8080',
+ *     substrateNodeUri: 'ws://localhost:9944',
+ *     provingProviderFactory: createWasmProvingProviderFactory(),
+ *   };
+ *   ```;
+ *
+ * @returns A ProvingProviderFactory that creates zkir-v2 based ProvingProviders
  */
 export const createWasmProvingProviderFactory = (): ProvingProviderFactory => {
   return (keyMaterialProvider: KeyMaterialProvider): ProvingProvider => {
@@ -131,8 +124,8 @@ export const createWasmProvingProviderFactory = (): ProvingProviderFactory => {
 /**
  * Create a mock ProvingProviderFactory for testing.
  *
- * This factory creates ProvingProviders that return dummy proofs.
- * Useful for testing DApp integration without actual proving overhead.
+ * This factory creates ProvingProviders that return dummy proofs. Useful for testing DApp integration without actual
+ * proving overhead.
  *
  * @param mockCheck - Optional custom check implementation
  * @param mockProve - Optional custom prove implementation

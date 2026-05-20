@@ -1,16 +1,11 @@
-/**
- * Transaction history test suite.
- * Tests getTxHistory method.
- */
+/** Transaction history test suite. Tests getTxHistory method. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { DappConnectorTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run transaction history tests against the provided context.
- */
+/** Run transaction history tests against the provided context. */
 export const runHistoryTests = (context: DappConnectorTestContext): void => {
   describe('return type', () => {
     it('should return an array', async () => {

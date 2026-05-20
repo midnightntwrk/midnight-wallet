@@ -1,7 +1,4 @@
-/**
- * Address retrieval test suite.
- * Tests getShieldedAddresses, getUnshieldedAddress, and getDustAddress.
- */
+/** Address retrieval test suite. Tests getShieldedAddresses, getUnshieldedAddress, and getDustAddress. */
 
 import { describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
@@ -45,9 +42,7 @@ const decodeAddress = <T>(
   return addressClass.codec.decode(networkId, parsed);
 };
 
-/**
- * Run address retrieval tests against the provided context.
- */
+/** Run address retrieval tests against the provided context. */
 export const runAddressTests = (context: ConnectedAPITestContext): void => {
   describe('getShieldedAddresses', () => {
     it('should return a frozen object with all required fields as valid Bech32m addresses', async () => {

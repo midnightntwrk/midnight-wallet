@@ -1,16 +1,11 @@
-/**
- * Configuration test suite.
- * Tests getConfiguration and getConnectionStatus methods.
- */
+/** Configuration test suite. Tests getConfiguration and getConnectionStatus methods. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedAPITestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run configuration tests against the provided context.
- */
+/** Run configuration tests against the provided context. */
 export const runConfigurationTests = (context: ConnectedAPITestContext): void => {
   describe('getConfiguration', () => {
     it('should return a promise', async () => {

@@ -13,92 +13,68 @@ import type * as ledger from '@midnight-ntwrk/ledger-v8';
 // 3. finalizeRecipe → FinalizedTransaction
 // =============================================================================
 
-/**
- * An unbound transaction (proven but not yet cryptographically bound).
- */
+/** An unbound transaction (proven but not yet cryptographically bound). */
 export type UnboundTransaction = ledger.Transaction<ledger.SignatureEnabled, ledger.Proof, ledger.PreBinding>;
 
-/**
- * Recipe containing a finalized transaction from external source.
- */
+/** Recipe containing a finalized transaction from external source. */
 export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
   originalTransaction: ledger.FinalizedTransaction;
   balancingTransaction: ledger.UnprovenTransaction;
 };
 
-/**
- * Recipe containing an unbound transaction (proven, ready for binding).
- */
+/** Recipe containing an unbound transaction (proven, ready for binding). */
 export type UnboundTransactionRecipe = {
   type: 'UNBOUND_TRANSACTION';
   baseTransaction: UnboundTransaction;
   balancingTransaction?: ledger.UnprovenTransaction | undefined;
 };
 
-/**
- * Recipe containing an unproven transaction.
- */
+/** Recipe containing an unproven transaction. */
 export type UnprovenTransactionRecipe = {
   type: 'UNPROVEN_TRANSACTION';
   transaction: ledger.UnprovenTransaction;
 };
 
-/**
- * Union of all recipe types for the balancing workflow.
- */
+/** Union of all recipe types for the balancing workflow. */
 export type BalancingRecipe = FinalizedTransactionRecipe | UnboundTransactionRecipe | UnprovenTransactionRecipe;
 
 // =============================================================================
 // Token Transfer Types
 // =============================================================================
 
-/**
- * A single token transfer to a recipient address.
- */
+/** A single token transfer to a recipient address. */
 export interface TokenTransfer<AddressType extends ShieldedAddress | UnshieldedAddress> {
   type: ledger.RawTokenType;
   receiverAddress: AddressType;
   amount: bigint;
 }
 
-/**
- * Shielded token transfer specification.
- */
+/** Shielded token transfer specification. */
 export type ShieldedTokenTransfer = {
   type: 'shielded';
   outputs: TokenTransfer<ShieldedAddress>[];
 };
 
-/**
- * Unshielded token transfer specification.
- */
+/** Unshielded token transfer specification. */
 export type UnshieldedTokenTransfer = {
   type: 'unshielded';
   outputs: TokenTransfer<UnshieldedAddress>[];
 };
 
-/**
- * Combined transfer supporting both shielded and unshielded outputs.
- */
+/** Combined transfer supporting both shielded and unshielded outputs. */
 export type CombinedTokenTransfer = ShieldedTokenTransfer | UnshieldedTokenTransfer;
 
-/**
- * Inputs for a swap transaction, specifying amounts by token type.
- */
+/** Inputs for a swap transaction, specifying amounts by token type. */
 export type CombinedSwapInputs = {
   shielded?: Record<ledger.RawTokenType, bigint>;
   unshielded?: Record<ledger.RawTokenType, bigint>;
 };
 
-/**
- * Outputs for a swap transaction.
- */
+/** Outputs for a swap transaction. */
 export type CombinedSwapOutputs = CombinedTokenTransfer;
 
-/**
- * Secret keys required for transaction building.
- */
+/** Secret keys required for transaction building. */
 export interface TransactionSecretKeys {
   shieldedSecretKeys: ledger.ZswapSecretKeys;
   dustSecretKey: ledger.DustSecretKey;
@@ -108,42 +84,28 @@ export interface TransactionSecretKeys {
  * Keystore interface providing all keys needed for wallet operations.
  *
  * This abstraction unifies access to:
+ *
  * - Shielded secret keys (for ZK proof generation)
  * - Dust secret key (for fee payment)
  * - Unshielded signing (for public ledger transactions)
  *
- * Implementations may derive keys from HD wallets, hardware wallets,
- * or other secure key storage mechanisms.
+ * Implementations may derive keys from HD wallets, hardware wallets, or other secure key storage mechanisms.
  */
 export interface WalletKeystore {
-  /**
-   * Get shielded wallet secret keys for ZK proof generation.
-   * These keys are used to create and spend shielded coins.
-   */
+  /** Get shielded wallet secret keys for ZK proof generation. These keys are used to create and spend shielded coins. */
   getShieldedSecretKeys(): ledger.ZswapSecretKeys;
 
-  /**
-   * Get dust wallet secret key for fee payment.
-   * This key is used to spend dust coins for transaction fees.
-   */
+  /** Get dust wallet secret key for fee payment. This key is used to spend dust coins for transaction fees. */
   getDustSecretKey(): ledger.DustSecretKey;
 
-  /**
-   * Get the unshielded wallet secret key.
-   * Used for deriving the verifying key for signature verification.
-   */
+  /** Get the unshielded wallet secret key. Used for deriving the verifying key for signature verification. */
   getUnshieldedSecretKey(): string;
 
-  /**
-   * Sign data with the unshielded wallet key.
-   * Used for signing unshielded transaction intents.
-   */
+  /** Sign data with the unshielded wallet key. Used for signing unshielded transaction intents. */
   signData(data: Uint8Array): ledger.Signature;
 }
 
-/**
- * Options for transfer and swap transactions.
- */
+/** Options for transfer and swap transactions. */
 export interface TransactionOptions {
   /** Time-to-live for the transaction */
   ttl: Date;
@@ -151,89 +113,66 @@ export interface TransactionOptions {
   payFees?: boolean;
 }
 
-/**
- * Extended options for swap transactions with intent ID support.
- */
+/** Extended options for swap transactions with intent ID support. */
 export interface SwapTransactionOptions extends TransactionOptions {
   /**
-   * Segment ID for the intent.
-   * If not specified, a random segment ID is used.
-   * Must be > 0 (segment 0 is reserved for guaranteed section).
+   * Segment ID for the intent. If not specified, a random segment ID is used. Must be > 0 (segment 0 is reserved for
+   * guaranteed section).
    */
   intentId?: number;
 }
 
-/**
- * Token kinds that can be balanced.
- */
+/** Token kinds that can be balanced. */
 export type TokenKind = 'dust' | 'shielded' | 'unshielded';
 
-/**
- * Options for transaction balancing.
- */
+/** Options for transaction balancing. */
 export interface BalancingOptions {
   /** Time-to-live for the balancing transaction */
   ttl: Date;
   /**
-   * Which token kinds to balance.
-   * 'all' balances all token types (default).
-   * Array specifies which kinds to balance (e.g., ['shielded', 'dust']).
+   * Which token kinds to balance. 'all' balances all token types (default). Array specifies which kinds to balance
+   * (e.g., ['shielded', 'dust']).
    */
   tokenKindsToBalance?: 'all' | TokenKind[];
 }
 
-/**
- * Minimal shielded wallet state interface required by ConnectedAPI.
- * Implementations can provide additional properties.
- */
+/** Minimal shielded wallet state interface required by ConnectedAPI. Implementations can provide additional properties. */
 export interface ShieldedWalletStateView {
   readonly address: ShieldedAddress;
   readonly balances: Record<string, bigint>;
 }
 
-/**
- * Minimal unshielded wallet state interface required by ConnectedAPI.
- */
+/** Minimal unshielded wallet state interface required by ConnectedAPI. */
 export interface UnshieldedWalletStateView {
   readonly address: UnshieldedAddress;
   readonly balances: Record<string, bigint>;
 }
 
-/**
- * Minimal dust coin info required by ConnectedAPI.
- */
+/** Minimal dust coin info required by ConnectedAPI. */
 export interface DustCoinInfo {
   readonly maxCap: bigint;
 }
 
-/**
- * Minimal dust wallet state interface required by ConnectedAPI.
- */
+/** Minimal dust wallet state interface required by ConnectedAPI. */
 export interface DustWalletStateView {
   readonly address: DustAddress;
   readonly availableCoins: readonly DustCoinInfo[];
   balance(time: Date): bigint;
 }
 
-/**
- * Minimal shielded wallet API required by ConnectedAPI.
- */
+/** Minimal shielded wallet API required by ConnectedAPI. */
 export interface ShieldedWalletView {
   readonly state: Observable<ShieldedWalletStateView>;
   getAddress(): Promise<ShieldedAddress>;
 }
 
-/**
- * Minimal unshielded wallet API required by ConnectedAPI.
- */
+/** Minimal unshielded wallet API required by ConnectedAPI. */
 export interface UnshieldedWalletView {
   readonly state: Observable<UnshieldedWalletStateView>;
   getAddress(): Promise<UnshieldedAddress>;
 }
 
-/**
- * Minimal dust wallet API required by ConnectedAPI.
- */
+/** Minimal dust wallet API required by ConnectedAPI. */
 export interface DustWalletView {
   readonly state: Observable<DustWalletStateView>;
   getAddress(): Promise<DustAddress>;
@@ -242,13 +181,12 @@ export interface DustWalletView {
 /**
  * Minimal wallet facade interface required by the DApp Connector.
  *
- * This is a narrowed-down view of WalletFacade from @midnight-ntwrk/wallet-sdk-facade,
- * capturing only the subset of functionality that the DApp Connector actually uses.
- * The full WalletFacade implements this interface.
+ * This is a narrowed-down view of WalletFacade from @midnight-ntwrk/wallet-sdk-facade, capturing only the subset of
+ * functionality that the DApp Connector actually uses. The full WalletFacade implements this interface.
  *
- * IMPORTANT: If WalletFacade changes in ways that affect the shielded/unshielded/dust
- * wallet APIs used here (state observable, getAddress method, or state properties like
- * balances and availableCoins), this interface must be updated accordingly.
+ * IMPORTANT: If WalletFacade changes in ways that affect the shielded/unshielded/dust wallet APIs used here (state
+ * observable, getAddress method, or state properties like balances and availableCoins), this interface must be updated
+ * accordingly.
  *
  * @see WalletFacade in @midnight-ntwrk/wallet-sdk-facade for the full implementation
  */
@@ -258,8 +196,8 @@ export interface WalletFacadeView {
   readonly dust: DustWalletView;
 
   /**
-   * Transaction history service. Optional because the current WalletFacade
-   * doesn't provide this API (see critical gaps documentation below).
+   * Transaction history service. Optional because the current WalletFacade doesn't provide this API (see critical gaps
+   * documentation below).
    */
   readonly transactionHistory?: TransactionHistoryServiceView;
 
@@ -329,8 +267,7 @@ export interface WalletFacadeView {
   // ===========================================================================
 
   /**
-   * Balance an unbound (unsealed) transaction.
-   * Takes a transaction with proofs but not yet cryptographically bound,
+   * Balance an unbound (unsealed) transaction. Takes a transaction with proofs but not yet cryptographically bound,
    * adds necessary inputs/outputs, and returns a finalized transaction recipe.
    *
    * @param tx - The unbound transaction to balance
@@ -345,9 +282,8 @@ export interface WalletFacadeView {
   ): Promise<UnboundTransactionRecipe>;
 
   /**
-   * Balance a finalized (sealed) transaction.
-   * Takes a transaction with proofs and cryptographic binding,
-   * adds necessary inputs/outputs in a separate balancing transaction.
+   * Balance a finalized (sealed) transaction. Takes a transaction with proofs and cryptographic binding, adds necessary
+   * inputs/outputs in a separate balancing transaction.
    *
    * @param tx - The finalized transaction to balance
    * @param secretKeys - Shielded and dust secret keys
@@ -381,19 +317,17 @@ export interface WalletFacadeView {
  * Factory function that creates a ProvingProvider from a DApp-provided KeyMaterialProvider.
  *
  * This abstraction allows swapping the proving implementation:
+ *
  * - WASM-based proving (in-browser, using zkir-v2)
  * - HTTP-based proving (remote prover server)
  * - Mock proving (for testing)
  *
- * The factory receives a KeyMaterialProvider from the DApp that knows how to fetch
- * circuit keys (ZKIR, prover key, verifier key) for specific circuits.
+ * The factory receives a KeyMaterialProvider from the DApp that knows how to fetch circuit keys (ZKIR, prover key,
+ * verifier key) for specific circuits.
  */
 export type ProvingProviderFactory = (keyMaterialProvider: KeyMaterialProvider) => ProvingProvider;
 
-/**
- * Configuration required for the DApp Connector.
- * Contains network information and service URIs.
- */
+/** Configuration required for the DApp Connector. Contains network information and service URIs. */
 export type ConnectorConfiguration = {
   /** The network ID this connector is configured for */
   networkId: string;
@@ -406,18 +340,17 @@ export type ConnectorConfiguration = {
   /** URI for the Substrate RPC node */
   substrateNodeUri: string;
   /**
-   * Factory for creating ProvingProvider instances.
-   * If not provided, getProvingProvider will throw an error.
+   * Factory for creating ProvingProvider instances. If not provided, getProvingProvider will throw an error.
    *
-   * Use createWasmProvingProviderFactory() for WASM-based proving,
-   * or provide a custom factory for other proving backends.
+   * Use createWasmProvingProviderFactory() for WASM-based proving, or provide a custom factory for other proving
+   * backends.
    */
   provingProviderFactory?: ProvingProviderFactory | undefined;
 };
 
 /**
- * Convert internal connector configuration to the API Configuration type.
- * Returns a frozen object to ensure immutability.
+ * Convert internal connector configuration to the API Configuration type. Returns a frozen object to ensure
+ * immutability.
  */
 export const toAPIConfiguration = (config: ConnectorConfiguration): Configuration =>
   Object.freeze({
@@ -447,46 +380,38 @@ export const toAPIConfiguration = (config: ConnectorConfiguration): Configuratio
 // TransactionHistoryServiceView interface should be updated to match.
 // =============================================================================
 
-/**
- * Transaction hash as hex string.
- */
+/** Transaction hash as hex string. */
 export type TransactionHash = string;
 
 /**
- * A single transaction history entry as expected by the DApp Connector API.
- * This matches the HistoryEntry type from @midnight-ntwrk/dapp-connector-api.
+ * A single transaction history entry as expected by the DApp Connector API. This matches the HistoryEntry type from
+ * @midnight-ntwrk/dapp-connector-api.
  */
 export interface TransactionHistoryEntryView {
-  /**
-   * Hex-encoded transaction hash.
-   */
+  /** Hex-encoded transaction hash. */
   readonly txHash: TransactionHash;
 
-  /**
-   * Transaction lifecycle status with execution details for finalized/confirmed.
-   */
+  /** Transaction lifecycle status with execution details for finalized/confirmed. */
   readonly txStatus: TxStatus;
 }
 
-/**
- * Result of a paginated query for transaction history.
- */
+/** Result of a paginated query for transaction history. */
 export interface PaginatedHistoryResult {
   readonly entries: readonly TransactionHistoryEntryView[];
   readonly totalCount: number;
 }
 
 /**
- * Service interface for querying transaction history.
- * This is the "ideal" API that the DApp Connector expects from the wallet.
+ * Service interface for querying transaction history. This is the "ideal" API that the DApp Connector expects from the
+ * wallet.
  *
- * IMPORTANT: This interface addresses critical gaps in the current wallet
- * implementation. When WalletFacade is updated to support these features,
- * this interface should be updated to match.
+ * IMPORTANT: This interface addresses critical gaps in the current wallet implementation. When WalletFacade is updated
+ * to support these features, this interface should be updated to match.
  */
 export interface TransactionHistoryServiceView {
   /**
    * Get paginated transaction history.
+   *
    * @param pageNumber - Zero-based page number
    * @param pageSize - Number of entries per page
    * @returns Paginated history entries with lifecycle status

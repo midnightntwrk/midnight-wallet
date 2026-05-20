@@ -1,16 +1,11 @@
-/**
- * Balance retrieval test suite.
- * Tests getShieldedBalances, getUnshieldedBalances, and getDustBalance.
- */
+/** Balance retrieval test suite. Tests getShieldedBalances, getUnshieldedBalances, and getDustBalance. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { DappConnectorTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run balance retrieval tests against the provided context.
- */
+/** Run balance retrieval tests against the provided context. */
 export const runBalanceTests = (context: DappConnectorTestContext): void => {
   describe('getShieldedBalances', () => {
     it('should return a frozen Record with string keys and bigint values', async () => {
@@ -33,7 +28,6 @@ export const runBalanceTests = (context: DappConnectorTestContext): void => {
         await disconnect();
       }
     });
-
   });
 
   describe('getUnshieldedBalances', () => {
@@ -57,7 +51,6 @@ export const runBalanceTests = (context: DappConnectorTestContext): void => {
         await disconnect();
       }
     });
-
   });
 
   describe('getDustBalance', () => {
@@ -90,6 +83,5 @@ export const runBalanceTests = (context: DappConnectorTestContext): void => {
         await disconnect();
       }
     });
-
   });
 };

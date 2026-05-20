@@ -1,16 +1,11 @@
-/**
- * Balancing test suite.
- * Tests balanceUnsealedTransaction and balanceSealedTransaction methods.
- */
+/** Balancing test suite. Tests balanceUnsealedTransaction and balanceSealedTransaction methods. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { BalancingTestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run balancing tests against the provided context.
- */
+/** Run balancing tests against the provided context. */
 export const runBalancingTests = (context: BalancingTestContext): void => {
   describe('balanceUnsealedTransaction', () => {
     describe('API contract', () => {

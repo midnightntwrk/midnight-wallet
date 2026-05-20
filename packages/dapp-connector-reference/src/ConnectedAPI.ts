@@ -31,22 +31,18 @@ import { ShieldedCoinPublicKey, ShieldedEncryptionPublicKey } from '@midnight-nt
 // =============================================================================
 
 /**
- * Type guard for InsufficientFundsError using _tag discriminator.
- * Uses structural matching for robustness across package boundaries.
+ * Type guard for InsufficientFundsError using _tag discriminator. Uses structural matching for robustness across
+ * package boundaries.
  */
 const isInsufficientFundsError = (error: unknown): error is { _tag: 'InsufficientFundsError'; message: string } =>
   error !== null && typeof error === 'object' && '_tag' in error && error._tag === 'InsufficientFundsError';
 
-/**
- * Maps InsufficientFundsError to APIError, re-throws other errors unchanged.
- */
+/** Maps InsufficientFundsError to APIError, re-throws other errors unchanged. */
 const mapInsufficientFundsError = (error: unknown): never => {
   throw isInsufficientFundsError(error) ? APIError.insufficientFunds(error.message) : error;
 };
 
-/**
- * Parse hex string to bytes, throwing APIError on invalid input.
- */
+/** Parse hex string to bytes, throwing APIError on invalid input. */
 const parseHexToBytes = (hex: string, context: string): Uint8Array => {
   if (hex === '') {
     throw APIError.invalidRequest(`${context} hex is empty`);
@@ -58,9 +54,7 @@ const parseHexToBytes = (hex: string, context: string): Uint8Array => {
   return bytes;
 };
 
-/**
- * Safely deserialize a transaction, throwing APIError on failure.
- */
+/** Safely deserialize a transaction, throwing APIError on failure. */
 const safeDeserialize = <T>(deserialize: () => T, errorMessage: string): T => {
   try {
     return deserialize();
@@ -69,20 +63,14 @@ const safeDeserialize = <T>(deserialize: () => T, errorMessage: string): T => {
   }
 };
 
-/**
- * Create TTL 1 hour from now.
- */
+/** Create TTL 1 hour from now. */
 const createDefaultTTL = (): Date => new Date(Date.now() + 60 * 60 * 1000);
 
-/**
- * Determine token kinds to balance based on payFees option.
- */
+/** Determine token kinds to balance based on payFees option. */
 const getTokenKindsToBalance = (payFees: boolean): 'all' | ('shielded' | 'unshielded')[] =>
   payFees ? 'all' : ['shielded', 'unshielded'];
 
-/**
- * Execute the recipe workflow: sign → finalize → serialize to hex.
- */
+/** Execute the recipe workflow: sign → finalize → serialize to hex. */
 const finalizeRecipeToHex = async (
   facade: WalletFacadeView,
   keystore: WalletKeystore,
@@ -93,9 +81,7 @@ const finalizeRecipeToHex = async (
   return Buffer.from(finalizedTx.serialize()).toString('hex');
 };
 
-/**
- * Decode signing data based on encoding type.
- */
+/** Decode signing data based on encoding type. */
 const decodeSigningData = (data: string, encoding: 'hex' | 'base64' | 'text'): Uint8Array => {
   switch (encoding) {
     case 'hex': {
@@ -120,13 +106,11 @@ const decodeSigningData = (data: string, encoding: 'hex' | 'base64' | 'text'): U
 };
 
 /**
- * Reference implementation of the ConnectedAPI interface.
- * Provides wallet functionality to connected DApps.
+ * Reference implementation of the ConnectedAPI interface. Provides wallet functionality to connected DApps.
  *
- * Note: This class includes an internal `disconnect()` method for testing purposes.
- * The public API (WalletConnectedAPI from dapp-connector-api) does not include disconnect -
- * disconnection is a wallet-side operation, not something DApps can trigger.
- * Test contexts can access disconnect() by keeping a reference to the concrete class.
+ * Note: This class includes an internal `disconnect()` method for testing purposes. The public API (WalletConnectedAPI
+ * from dapp-connector-api) does not include disconnect - disconnection is a wallet-side operation, not something DApps
+ * can trigger. Test contexts can access disconnect() by keeping a reference to the concrete class.
  */
 export class ConnectedAPI implements ConnectedAPIType {
   private readonly facade: WalletFacadeView;

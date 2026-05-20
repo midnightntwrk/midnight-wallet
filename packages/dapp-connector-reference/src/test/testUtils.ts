@@ -20,8 +20,8 @@ export const expectMatchObjectTyped = <T>(actual: T, expected: Partial<T>): void
 // =============================================================================
 
 /**
- * A shielded address with its corresponding secret keys retained for testing.
- * Enables verification that outputs can be decrypted by the address owner.
+ * A shielded address with its corresponding secret keys retained for testing. Enables verification that outputs can be
+ * decrypted by the address owner.
  */
 export interface ShieldedAddressWithKeys {
   readonly secretKeys: ledger.ZswapSecretKeys;
@@ -31,8 +31,8 @@ export interface ShieldedAddressWithKeys {
 }
 
 /**
- * An unshielded address with its corresponding secret key retained for testing.
- * Enables signature verification and address ownership checks.
+ * An unshielded address with its corresponding secret key retained for testing. Enables signature verification and
+ * address ownership checks.
  */
 export interface UnshieldedAddressWithKeys {
   readonly secretKey: string; // Hex string for ledger compatibility
@@ -40,9 +40,7 @@ export interface UnshieldedAddressWithKeys {
   readonly address: UnshieldedAddress;
 }
 
-/**
- * Create a shielded address with retained secret keys from a deterministic seed.
- */
+/** Create a shielded address with retained secret keys from a deterministic seed. */
 export const createShieldedAddressWithKeys = (seed: Uint8Array): ShieldedAddressWithKeys => {
   const secretKeys = ledger.ZswapSecretKeys.fromSeed(seed);
   const coinPublicKey = new ShieldedCoinPublicKey(Buffer.from(secretKeys.coinPublicKey, 'hex'));
@@ -51,9 +49,7 @@ export const createShieldedAddressWithKeys = (seed: Uint8Array): ShieldedAddress
   return { secretKeys, address, coinPublicKey, encryptionPublicKey };
 };
 
-/**
- * Create an unshielded address with retained secret key from a deterministic seed.
- */
+/** Create an unshielded address with retained secret key from a deterministic seed. */
 export const createUnshieldedAddressWithKeys = (seed: Uint8Array): UnshieldedAddressWithKeys => {
   // Create a deterministic secret key from the seed (padded to 32 bytes, non-zero)
   const paddedSeed = new Uint8Array(32);

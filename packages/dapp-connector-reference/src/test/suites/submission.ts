@@ -1,15 +1,10 @@
-/**
- * Transaction submission test suite.
- * Tests submitTransaction method.
- */
+/** Transaction submission test suite. Tests submitTransaction method. */
 
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { DappConnectorTestContext } from '../context.js';
 
-/**
- * Run transaction submission tests against the provided context.
- */
+/** Run transaction submission tests against the provided context. */
 export const runSubmissionTests = (context: DappConnectorTestContext): void => {
   describe('input validation', () => {
     it('should reject empty transaction hex', async () => {
@@ -75,7 +70,6 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
         await disconnect();
       }
     });
-
   });
 
   describe('disconnection', () => {

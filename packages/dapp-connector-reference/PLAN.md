@@ -54,21 +54,21 @@
 - `src/test/simulatorTestUtils.ts` boots an in-memory `Simulator` with HD-derived keys, genesis mints (1M of two
   shielded token types + 100k Night), and Night-to-Dust registration; provides a `createSimulatorContext(getEnv)` that
   builds a `DappConnectorTestContext` against a real `WalletFacade`
-- Transaction history adapter wraps `WalletFacade.getAllFromTxHistory()` into the
-  `TransactionHistoryServiceView` shape via a `Proxy` over the facade
-- `MockWalletFacade`/`MockShieldedWallet`/`MockUnshieldedWallet`/`MockDustWallet`,
-  `MockTransactionHistoryService`, `buildMock*Transaction`, `MockBalancesConfig`/`MockDustCoin`/`MockHistoryEntry`
-  and the `prepareMock*` helpers all deleted from `testUtils.ts` (1194 → 81 lines)
-- `withBalances` / `withTransactionHistory` / `withSubmissionError` removed from `DappConnectorTestContext`;
-  suites that depended on mock injection deleted their now-unreachable test bodies (65 skip-only tests removed)
+- Transaction history adapter wraps `WalletFacade.getAllFromTxHistory()` into the `TransactionHistoryServiceView` shape
+  via a `Proxy` over the facade
+- `MockWalletFacade`/`MockShieldedWallet`/`MockUnshieldedWallet`/`MockDustWallet`, `MockTransactionHistoryService`,
+  `buildMock*Transaction`, `MockBalancesConfig`/`MockDustCoin`/`MockHistoryEntry` and the `prepareMock*` helpers all
+  deleted from `testUtils.ts` (1194 → 81 lines)
+- `withBalances` / `withTransactionHistory` / `withSubmissionError` removed from `DappConnectorTestContext`; suites that
+  depended on mock injection deleted their now-unreachable test bodies (65 skip-only tests removed)
 - Latent production bug fixed: `ConnectedAPI.getDustBalance` used `state.availableCoinsWithFullInfo(now)` (a mock
   invention); now uses `state.availableCoins` from the real `DustWalletState`
 - **Constraint:** the simulator's proving service erases proofs, so the connector's strict
-  `Transaction.deserialize('signature','proof','binding', ...)` cannot round-trip simulator-produced transactions.
-  The `submission > should submit a valid sealed transaction` test is gated on
-  `context.environment.buildSealedTransaction`/`serializeTransaction` being defined; the simulator context omits
-  these and the test skips. Real-proving implementations (e.g. a future browser-extension impl) can opt in by
-  providing those environment fields.
+  `Transaction.deserialize('signature','proof','binding', ...)` cannot round-trip simulator-produced transactions. The
+  `submission > should submit a valid sealed transaction` test is gated on
+  `context.environment.buildSealedTransaction`/`serializeTransaction` being defined; the simulator context omits these
+  and the test skips. Real-proving implementations (e.g. a future browser-extension impl) can opt in by providing those
+  environment fields.
 
 ---
 

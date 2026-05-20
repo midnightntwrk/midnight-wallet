@@ -1,14 +1,9 @@
-/**
- * Hint usage test suite.
- * Tests hintUsage method (no-op in reference implementation).
- */
+/** Hint usage test suite. Tests hintUsage method (no-op in reference implementation). */
 
 import { describe, expect, it } from 'vitest';
 import type { ConnectedAPITestContext } from '../context.js';
 
-/**
- * Run hint usage tests against the provided context.
- */
+/** Run hint usage tests against the provided context. */
 export const runHintUsageTests = (context: ConnectedAPITestContext): void => {
   describe('basic behavior', () => {
     it('should resolve without error for empty array', async () => {

@@ -1,16 +1,11 @@
-/**
- * Connection test suite.
- * Tests connection establishment and ConnectedAPI structure.
- */
+/** Connection test suite. Tests connection establishment and ConnectedAPI structure. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { ConnectedAPITestContext } from '../context.js';
 
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
-/**
- * Run connection tests against the provided context.
- */
+/** Run connection tests against the provided context. */
 export const runConnectionTests = (context: ConnectedAPITestContext): void => {
   describe('connection establishment', () => {
     it('should create a ConnectedAPI successfully', async () => {

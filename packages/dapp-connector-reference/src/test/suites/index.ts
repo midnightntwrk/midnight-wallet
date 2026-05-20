@@ -1,6 +1,4 @@
-/**
- * Re-export all test suites for easy importing.
- */
+/** Re-export all test suites for easy importing. */
 
 export { runInstallationTests } from './installation.js';
 export { runConnectionTests } from './connection.js';

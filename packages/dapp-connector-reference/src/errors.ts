@@ -1,9 +1,7 @@
 import type { APIError as APIErrorType, ErrorCode } from '@midnight-ntwrk/dapp-connector-api';
 import { ErrorCodes as APIErrorCodes } from '@midnight-ntwrk/dapp-connector-api';
 
-/**
- * Re-export error codes from the DApp Connector API specification.
- */
+/** Re-export error codes from the DApp Connector API specification. */
 export const ErrorCodes = APIErrorCodes;
 
 class APIErrorImpl extends Error implements APIErrorType {
@@ -32,6 +30,7 @@ export const APIError = {
 
   /**
    * Creates an InsufficientFunds error for when wallet lacks balance to complete a transaction.
+   *
    * @param reason - Description of what funds are insufficient (e.g., "Insufficient shielded balance for token X")
    */
   insufficientFunds: (reason: string): APIErrorType => new APIErrorImpl('InsufficientFunds', reason),

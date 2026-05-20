@@ -1,7 +1,4 @@
-/**
- * Disconnection behavior test suite.
- * Tests behavior of API methods after disconnect.
- */
+/** Disconnection behavior test suite. Tests behavior of API methods after disconnect. */
 
 import { describe, expect, it, vi } from 'vitest';
 import type { WalletConnectedAPI } from '@midnight-ntwrk/dapp-connector-api';
@@ -11,8 +8,8 @@ import type { ConnectedAPITestContext } from '../context.js';
 vi.setConfig({ testTimeout: 1_000, hookTimeout: 1_000 });
 
 /**
- * API methods that should reject with Disconnected error after disconnect.
- * Each entry is [methodName, invoker function].
+ * API methods that should reject with Disconnected error after disconnect. Each entry is [methodName, invoker
+ * function].
  */
 const methodsThatRejectWhenDisconnected: Array<[string, (api: WalletConnectedAPI) => Promise<unknown>]> = [
   ['getConfiguration', (api) => api.getConfiguration()],
@@ -40,18 +37,13 @@ const methodsThatRejectWhenDisconnected: Array<[string, (api: WalletConnectedAPI
   ],
 ];
 
-/**
- * API methods that should still work after disconnect.
- * Each entry is [methodName, invoker function].
- */
+/** API methods that should still work after disconnect. Each entry is [methodName, invoker function]. */
 const methodsThatWorkWhenDisconnected: Array<[string, (api: WalletConnectedAPI) => Promise<unknown>]> = [
   ['getConnectionStatus', (api) => api.getConnectionStatus()],
   ['hintUsage', (api) => api.hintUsage(['getConfiguration'])],
 ];
 
-/**
- * Run disconnection behavior tests against the provided context.
- */
+/** Run disconnection behavior tests against the provided context. */
 export const runDisconnectionTests = (context: ConnectedAPITestContext): void => {
   describe('disconnect behavior', () => {
     it('should resolve successfully when disconnecting', async () => {

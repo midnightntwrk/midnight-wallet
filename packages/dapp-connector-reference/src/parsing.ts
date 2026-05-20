@@ -1,13 +1,12 @@
 /**
  * Parsing functions for DApp Connector API inputs.
  *
- * These are standalone pure functions that can be reused by any DApp Connector
- * implementation. They parse API inputs into internal types, throwing APIError
- * on validation failures.
+ * These are standalone pure functions that can be reused by any DApp Connector implementation. They parse API inputs
+ * into internal types, throwing APIError on validation failures.
  */
 import type { DesiredInput, DesiredOutput } from '@midnight-ntwrk/dapp-connector-api';
 import { MidnightBech32m, ShieldedAddress, UnshieldedAddress } from '@midnight-ntwrk/wallet-sdk-address-format';
-import * as ledger from '@midnight-ntwrk/ledger-v8';
+import type * as ledger from '@midnight-ntwrk/ledger-v8';
 import type {
   CombinedTokenTransfer,
   ShieldedTokenTransfer,
@@ -18,6 +17,7 @@ import { APIError } from './errors.js';
 
 /**
  * Parses a token type string into a validated RawTokenType.
+ *
  * @throws APIError.invalidRequest if the token type is invalid
  */
 export const parseTokenType = (tokenType: string, fieldName: string): ledger.RawTokenType => {
@@ -32,11 +32,12 @@ export const parseTokenType = (tokenType: string, fieldName: string): ledger.Raw
   if (!/^[0-9a-fA-F]+$/.test(tokenType)) {
     throw APIError.invalidRequest(`${fieldName}: token type must be a valid hex string`);
   }
-  return tokenType as ledger.RawTokenType;
+  return tokenType;
 };
 
 /**
  * Parses an amount into a validated positive bigint.
+ *
  * @throws APIError.invalidRequest if the amount is invalid
  */
 export const parsePositiveAmount = (amount: bigint, fieldName: string): bigint => {
@@ -51,6 +52,7 @@ export const parsePositiveAmount = (amount: bigint, fieldName: string): bigint =
 
 /**
  * Parses a Bech32m string into a ShieldedAddress.
+ *
  * @throws APIError.invalidRequest if the address is invalid
  */
 export const parseShieldedAddress = (address: string, networkId: string, fieldName: string): ShieldedAddress => {
@@ -74,6 +76,7 @@ export const parseShieldedAddress = (address: string, networkId: string, fieldNa
 
 /**
  * Parses a Bech32m string into an UnshieldedAddress.
+ *
  * @throws APIError.invalidRequest if the address is invalid
  */
 export const parseUnshieldedAddress = (address: string, networkId: string, fieldName: string): UnshieldedAddress => {
@@ -96,8 +99,9 @@ export const parseUnshieldedAddress = (address: string, networkId: string, field
 };
 
 /**
- * Parses an intentId into a valid segment ID or undefined for 'random'.
- * Segment 0 is reserved for the guaranteed section and cannot be used for intents.
+ * Parses an intentId into a valid segment ID or undefined for 'random'. Segment 0 is reserved for the guaranteed
+ * section and cannot be used for intents.
+ *
  * @throws APIError.invalidRequest if the intentId is invalid
  */
 export const parseIntentId = (intentId: number | 'random'): number | undefined => {
@@ -112,6 +116,7 @@ export const parseIntentId = (intentId: number | 'random'): number | undefined =
 
 /**
  * Parses DesiredOutput[] into CombinedTokenTransfer[].
+ *
  * @throws APIError.invalidRequest if any output is invalid
  */
 export const parseDesiredOutputs = (
@@ -156,6 +161,7 @@ export const parseDesiredOutputs = (
 
 /**
  * Parses DesiredInput[] into CombinedSwapInputs.
+ *
  * @throws APIError.invalidRequest if any input is invalid
  */
 export const parseDesiredInputs = (inputs: DesiredInput[]): CombinedSwapInputs => {

@@ -1,15 +1,10 @@
-/**
- * Data signing test suite.
- * Tests signData with various encodings.
- */
+/** Data signing test suite. Tests signData with various encodings. */
 
 import { describe, expect, it } from 'vitest';
 import { ErrorCodes } from '../../errors.js';
 import type { ConnectedAPITestContext } from '../context.js';
 
-/**
- * Run data signing tests against the provided context.
- */
+/** Run data signing tests against the provided context. */
 export const runSigningTests = (context: ConnectedAPITestContext): void => {
   describe('encoding: hex', () => {
     it('should sign hex-encoded data', async () => {
