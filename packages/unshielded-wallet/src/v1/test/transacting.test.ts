@@ -302,7 +302,7 @@ describe('Unshielded wallet transacting', () => {
     });
   });
 
-  describe('createDustActionBookingTransaction', () => {
+  describe('bookNightUtxosForDustRegistration', () => {
     const buildWalletWithNightUtxos = (count: number): { wallet: CoreWallet; utxos: ReadonlyArray<UtxoWithMeta> } => {
       const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
       const ownerPK = PublicKey.fromKeyStore(keystore);
@@ -341,7 +341,7 @@ describe('Unshielded wallet transacting', () => {
       const [guaranteedUtxo, ...fallibleUtxos] = utxos;
 
       const { newState } = transacting
-        .createDustActionBookingTransaction(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       expect(HashMap.size(newState.state.availableUtxos)).toBe(0);
@@ -353,7 +353,7 @@ describe('Unshielded wallet transacting', () => {
       const [guaranteedUtxo, ...fallibleUtxos] = utxos;
 
       const { transaction } = transacting
-        .createDustActionBookingTransaction(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       expect(transaction.intents).toBeDefined();
@@ -376,7 +376,7 @@ describe('Unshielded wallet transacting', () => {
       const { wallet, utxos } = buildWalletWithNightUtxos(1);
 
       const { transaction } = transacting
-        .createDustActionBookingTransaction(wallet, utxos, [], wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, utxos, [], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       const intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
@@ -403,7 +403,7 @@ describe('Unshielded wallet transacting', () => {
       });
 
       const error = transacting
-        .createDustActionBookingTransaction(wallet, [unknownUtxo], [], wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [unknownUtxo], [], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowRight);
 
       expect(error).toBeInstanceOf(SpendUtxoError);
@@ -414,11 +414,11 @@ describe('Unshielded wallet transacting', () => {
       const [first, second] = utxos;
 
       const { newState } = transacting
-        .createDustActionBookingTransaction(wallet, [first], [], wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [first], [], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       const error = transacting
-        .createDustActionBookingTransaction(newState, [first], [second], wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(newState, [first], [second], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowRight);
 
       expect(error).toBeInstanceOf(SpendUtxoError);
@@ -429,7 +429,7 @@ describe('Unshielded wallet transacting', () => {
       const [guaranteedUtxo, fallibleUtxo] = utxos;
 
       const { newState } = transacting
-        .createDustActionBookingTransaction(wallet, [guaranteedUtxo], [fallibleUtxo], wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [guaranteedUtxo], [fallibleUtxo], wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       const totalNightInPending = pipe(
@@ -460,7 +460,7 @@ describe('Unshielded wallet transacting', () => {
       const [guaranteedUtxo, ...fallibleUtxos] = utxos;
 
       const { newState: bookedState, transaction } = transacting
-        .createDustActionBookingTransaction(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .bookNightUtxosForDustRegistration(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
         .pipe(EitherOps.getOrThrowLeft);
 
       // Sanity check: booking did move every UTxO from available to pending.
@@ -471,7 +471,7 @@ describe('Unshielded wallet transacting', () => {
 
       // Revert contract: every booked UTxO returns to availableUtxos, pendingUtxos drains to empty.
       // This is the primitive the facade's catch block relies on when a later build step fails after
-      // createDustActionBookingTransaction has already booked.
+      // bookNightUtxosForDustRegistration has already booked.
       expect(HashMap.size(restoredState.state.availableUtxos)).toBe(utxos.length);
       expect(HashMap.size(restoredState.state.pendingUtxos)).toBe(0);
     });

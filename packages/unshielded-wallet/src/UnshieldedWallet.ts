@@ -133,7 +133,7 @@ export type UnshieldedWalletAPI<TSerialized = string> = {
    * owner, split between the guaranteed and fallible sections of a single intent. Used by the Dust registration flow so
    * that Night UTxOs cannot be reused by a concurrent build call.
    */
-  createDustActionBookingTransaction(
+  bookNightUtxosForDustRegistration(
     guaranteedUtxos: readonly UtxoWithMeta[],
     fallibleUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
@@ -282,7 +282,7 @@ export function CustomUnshieldedWallet<
         .pipe(Effect.runPromise);
     }
 
-    createDustActionBookingTransaction(
+    bookNightUtxosForDustRegistration(
       guaranteedUtxos: readonly UtxoWithMeta[],
       fallibleUtxos: readonly UtxoWithMeta[],
       nightVerifyingKey: ledger.SignatureVerifyingKey,
@@ -290,8 +290,7 @@ export function CustomUnshieldedWallet<
     ): Promise<ledger.UnprovenTransaction> {
       return this.runtime
         .dispatch({
-          [V1Tag]: (v1) =>
-            v1.createDustActionBookingTransaction(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
+          [V1Tag]: (v1) => v1.bookNightUtxosForDustRegistration(guaranteedUtxos, fallibleUtxos, nightVerifyingKey, ttl),
         })
         .pipe(Effect.runPromise);
     }

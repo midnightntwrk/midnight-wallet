@@ -102,7 +102,7 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
 
   /**
    * Attaches a Dust registration / deregistration action onto the intent (at segment 1) of an unproven transaction
-   * whose offers have already been built (typically by the unshielded wallet's `createDustActionBookingTransaction`).
+   * whose offers have already been built (typically by the unshielded wallet's `bookNightUtxosForDustRegistration`).
    * The Night UTxOs are assumed to already appear in the intent's guaranteed/fallible offers and to already be booked
    * in the unshielded wallet state.
    */
@@ -378,7 +378,7 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
       if (!intent) {
         return yield* Either.left(
           new TransactingError({
-            message: 'No intent found at segment 1; expected an intent built by createDustActionBookingTransaction',
+            message: 'No intent found at segment 1; expected an intent built by bookNightUtxosForDustRegistration',
           }),
         );
       }

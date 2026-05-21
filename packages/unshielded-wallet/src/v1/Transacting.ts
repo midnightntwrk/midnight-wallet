@@ -77,7 +77,7 @@ export interface TransactingCapability<TState> {
    * @param ttl - The TTL for the transaction
    * @returns The new wallet state (with all provided UTxOs booked) and the unproven transaction
    */
-  createDustActionBookingTransaction(
+  bookNightUtxosForDustRegistration(
     wallet: CoreWallet,
     guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
     fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
@@ -297,7 +297,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
     });
   }
 
-  createDustActionBookingTransaction(
+  bookNightUtxosForDustRegistration(
     wallet: CoreWallet,
     guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
     fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
@@ -309,7 +309,7 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
 
       if (guaranteedUtxos.length === 0 && fallibleUtxos.length === 0) {
         return yield* Either.left(
-          new TransactingError({ message: 'At least one UTxO must be provided to createDustActionBookingTransaction' }),
+          new TransactingError({ message: 'At least one UTxO must be provided to bookNightUtxosForDustRegistration' }),
         );
       }
 
