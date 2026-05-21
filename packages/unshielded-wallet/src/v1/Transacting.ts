@@ -208,9 +208,10 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       balancingIntent.guaranteedUnshieldedOffer = offer;
 
       const segmentId = Option.getOrElse(this.txOps.findAvailableSegmentId(transaction), () => 1);
-      // @TODO in ledger 8.1.0 will be able to set the segment id when constructing the tx
-      const balancingTx = ledger.Transaction.fromParts(this.networkId, undefined, undefined, undefined);
-      balancingTx.intents = new Map([[segmentId, balancingIntent]]);
+      const balancingTx = ledger.Transaction.fromParts(this.networkId).addIntent(
+        { tag: 'specific', value: segmentId },
+        balancingIntent,
+      );
       return [balancingTx, newState];
     });
   }
