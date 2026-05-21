@@ -477,13 +477,14 @@ export class WalletFacade {
     signDustRegistration: (payload: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
+    const now = this.clock.now();
     const isRegistration = action.type === 'registration';
     const dustReceiverAddress = isRegistration ? action.dustReceiverAddress : undefined;
 
     // Step 1 — Dust decides which Night UTxO belongs in the guaranteed slot (the one whose dust
     // generation can pay the fee) and computes the fee-payment allowance.
     const split = await this.dust.splitNightUtxosForDustRegistration(
-      undefined,
+      now,
       nightUtxos.map(({ utxo, meta }) => ({
         ...utxo,
         ctime: meta.ctime,
@@ -524,7 +525,7 @@ export class WalletFacade {
     try {
       txWithDustActions = await this.dust.attachDustRegistration(
         txWithOffers,
-        split.currentTime,
+        now,
         nightVerifyingKey,
         dustReceiverAddress,
         split.feePayment,

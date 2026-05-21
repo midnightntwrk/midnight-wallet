@@ -64,17 +64,6 @@ export type NightUtxoSplitForDustRegistration = {
   readonly feePayment: bigint;
 };
 
-/**
- * A {@link NightUtxoSplitForDustRegistration} together with the `currentTime` used to evaluate dust generation.
- *
- * The variant resolves `currentTime` from indexer block data (or accepts a caller-supplied override) and returns it so
- * the orchestrator can pass the same time to `attachDustRegistration` — keeping dust generation math consistent across
- * the two-step build.
- */
-export type NightUtxoSplitForDustRegistrationWithCurrentTime = NightUtxoSplitForDustRegistration & {
-  readonly currentTime: Date;
-};
-
 // This interface should abstract over the transaction types used
 // It does not do so now for historical reasons
 export interface TransactingCapability<TSecrets, TState, _TTransaction> {

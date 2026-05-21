@@ -30,7 +30,7 @@ import { CoreWallet } from './v1/CoreWallet.js';
 import { type KeysCapability } from './v1/Keys.js';
 import { V1Tag } from './v1/RunningV1Variant.js';
 import { type SerializationCapability } from './v1/Serialization.js';
-import { type NightUtxoSplitForDustRegistrationWithCurrentTime } from './v1/Transacting.js';
+import { type NightUtxoSplitForDustRegistration } from './v1/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
@@ -127,10 +127,10 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
   ): Promise<UnprovenTransaction>;
 
   splitNightUtxosForDustRegistration(
-    currentTime: Date | undefined,
+    currentTime: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
-  ): Promise<NightUtxoSplitForDustRegistrationWithCurrentTime>;
+  ): Promise<NightUtxoSplitForDustRegistration>;
 
   attachDustRegistration(
     transaction: UnprovenTransaction,
@@ -306,10 +306,10 @@ export function CustomDustWallet<
     }
 
     async splitNightUtxosForDustRegistration(
-      currentTime: Date | undefined,
+      currentTime: Date,
       nightUtxos: ReadonlyArray<UtxoWithMeta>,
       isRegistration: boolean,
-    ): Promise<NightUtxoSplitForDustRegistrationWithCurrentTime> {
+    ): Promise<NightUtxoSplitForDustRegistration> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),

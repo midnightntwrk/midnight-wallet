@@ -34,7 +34,7 @@ import { type KeysCapability } from './Keys.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
-import { type NightUtxoSplitForDustRegistrationWithCurrentTime, type TransactingCapability } from './Transacting.js';
+import { type NightUtxoSplitForDustRegistration, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
@@ -212,27 +212,24 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
   }
 
   splitNightUtxosForDustRegistration(
-    currentTime: Date | undefined,
+    currentTime: Date,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
-  ): Effect.Effect<NightUtxoSplitForDustRegistrationWithCurrentTime, WalletError> {
+  ): Effect.Effect<NightUtxoSplitForDustRegistration, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
     return Effect.gen(this, function* () {
       const currentState = yield* SubscriptionRef.get(this.#context.stateRef);
-      const blockData = yield* this.#v1Context.syncService.blockData();
-      const resolvedTime = currentTime ?? blockData.timestamp;
       const utxosWithDustValue = this.#v1Context.coinsAndBalancesCapability.estimateDustGeneration(
         currentState,
         nightUtxos,
-        resolvedTime,
+        currentTime,
       );
-      const split = this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
+      return this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
         utxosWithDustValue,
         isRegistration,
       );
-      return { ...split, currentTime: resolvedTime };
     });
   }
 
