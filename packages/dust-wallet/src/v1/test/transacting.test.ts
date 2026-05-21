@@ -51,7 +51,7 @@ const makeUtxoWithDust = (
   },
 });
 
-describe('splitNightUtxosForDustAction', () => {
+describe('splitNightUtxosForDustRegistration', () => {
   const config: DefaultTransactingConfiguration = {
     networkId: NetworkId.NetworkId.Undeployed,
     costParameters: { feeBlocksMargin: 5 },
@@ -72,7 +72,7 @@ describe('splitNightUtxosForDustAction', () => {
     const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, false); // highest dust → guaranteed
     const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
 
-    const result = transacting.splitNightUtxosForDustAction([guaranteed, fallible], true);
+    const result = transacting.splitNightUtxosForDustRegistration([guaranteed, fallible], true);
 
     expect(result.feePayment).toBe(200n);
     expect(result.guaranteedUtxos).toEqual([guaranteed]);
@@ -83,7 +83,7 @@ describe('splitNightUtxosForDustAction', () => {
     const guaranteed = makeUtxoWithDust(0, 1_000n, 200n, true); // already registered → excluded from fee
     const fallible = makeUtxoWithDust(1, 1_000n, 100n, false);
 
-    const result = transacting.splitNightUtxosForDustAction([guaranteed, fallible], true);
+    const result = transacting.splitNightUtxosForDustRegistration([guaranteed, fallible], true);
 
     expect(result.feePayment).toBe(0n);
     expect(result.guaranteedUtxos).toEqual([guaranteed]);
@@ -93,7 +93,7 @@ describe('splitNightUtxosForDustAction', () => {
     const u1 = makeUtxoWithDust(0, 1_000n, 200n, false);
     const u2 = makeUtxoWithDust(1, 1_000n, 100n, false);
 
-    const result = transacting.splitNightUtxosForDustAction([u1, u2], false);
+    const result = transacting.splitNightUtxosForDustRegistration([u1, u2], false);
 
     expect(result.feePayment).toBe(0n);
   });

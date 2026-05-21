@@ -58,20 +58,20 @@ import {
  *
  * For deregistration, `feePayment` is always `0n`.
  */
-export type NightUtxoSplitForDustAction = {
+export type NightUtxoSplitForDustRegistration = {
   readonly guaranteedUtxos: ReadonlyArray<UtxoWithFullDustDetails>;
   readonly fallibleUtxos: ReadonlyArray<UtxoWithFullDustDetails>;
   readonly feePayment: bigint;
 };
 
 /**
- * A {@link NightUtxoSplitForDustAction} together with the `currentTime` used to evaluate dust generation.
+ * A {@link NightUtxoSplitForDustRegistration} together with the `currentTime` used to evaluate dust generation.
  *
  * The variant resolves `currentTime` from indexer block data (or accepts a caller-supplied override) and returns it so
  * the orchestrator can pass the same time to `attachDustRegistration` — keeping dust generation math consistent across
  * the two-step build.
  */
-export type NightUtxoSplitForDustActionWithCurrentTime = NightUtxoSplitForDustAction & {
+export type NightUtxoSplitForDustRegistrationWithCurrentTime = NightUtxoSplitForDustRegistration & {
   readonly currentTime: Date;
 };
 
@@ -95,10 +95,10 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
    *
    * For deregistration (`isRegistration === false`) the fee-payment allowance is always `0n`.
    */
-  splitNightUtxosForDustAction(
+  splitNightUtxosForDustRegistration(
     utxosWithDustValue: ReadonlyArray<UtxoWithFullDustDetails>,
     isRegistration: boolean,
-  ): NightUtxoSplitForDustAction;
+  ): NightUtxoSplitForDustRegistration;
 
   /**
    * Attaches a Dust registration / deregistration action onto the intent (at segment 1) of an unproven transaction
@@ -344,10 +344,10 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
     });
   }
 
-  splitNightUtxosForDustAction(
+  splitNightUtxosForDustRegistration(
     utxosWithDustValue: ReadonlyArray<UtxoWithFullDustDetails>,
     isRegistration: boolean,
-  ): NightUtxoSplitForDustAction {
+  ): NightUtxoSplitForDustRegistration {
     const splitResult = this.getCoins().splitNightUtxos(utxosWithDustValue);
     // Deregistration must not claim dust as fee payment (matches the historical
     // `dustReceiverAddress === undefined` branch of createDustGenerationTransaction).

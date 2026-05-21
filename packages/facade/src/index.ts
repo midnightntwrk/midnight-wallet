@@ -482,7 +482,7 @@ export class WalletFacade {
 
     // Step 1 — Dust decides which Night UTxO belongs in the guaranteed slot (the one whose dust
     // generation can pay the fee) and computes the fee-payment allowance.
-    const split = await this.dust.splitNightUtxosForDustAction(
+    const split = await this.dust.splitNightUtxosForDustRegistration(
       undefined,
       nightUtxos.map(({ utxo, meta }) => ({
         ...utxo,

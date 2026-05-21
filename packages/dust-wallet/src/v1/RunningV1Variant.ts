@@ -34,7 +34,7 @@ import { type KeysCapability } from './Keys.js';
 import { type ChangesResult, type SyncCapability, type SyncService } from './Sync.js';
 import { type SimulatorState } from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
 import { type CoinsAndBalancesCapability, type CoinSelection } from './CoinsAndBalances.js';
-import { type NightUtxoSplitForDustActionWithCurrentTime, type TransactingCapability } from './Transacting.js';
+import { type NightUtxoSplitForDustRegistrationWithCurrentTime, type TransactingCapability } from './Transacting.js';
 import { type CoreWallet } from './CoreWallet.js';
 import { type SerializationCapability } from './Serialization.js';
 import { type AnyTransaction } from './types/ledger.js';
@@ -211,11 +211,11 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
     });
   }
 
-  splitNightUtxosForDustAction(
+  splitNightUtxosForDustRegistration(
     currentTime: Date | undefined,
     nightUtxos: ReadonlyArray<UtxoWithMeta>,
     isRegistration: boolean,
-  ): Effect.Effect<NightUtxoSplitForDustActionWithCurrentTime, WalletError> {
+  ): Effect.Effect<NightUtxoSplitForDustRegistrationWithCurrentTime, WalletError> {
     if (nightUtxos.some((utxo) => utxo.type !== nativeToken().raw)) {
       return Effect.fail(new OtherWalletError({ message: 'Token of a non-Night type received' }));
     }
@@ -228,7 +228,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         nightUtxos,
         resolvedTime,
       );
-      const split = this.#v1Context.transactingCapability.splitNightUtxosForDustAction(
+      const split = this.#v1Context.transactingCapability.splitNightUtxosForDustRegistration(
         utxosWithDustValue,
         isRegistration,
       );
