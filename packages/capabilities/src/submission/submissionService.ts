@@ -95,7 +95,6 @@ export const makeDefaultSubmissionServiceEffect = <
   void pipe(scopeAndClientDeferred, Deferred.complete(makeScopeAndClient), Effect.runPromise);
 
   const submit = (transaction: TTransaction, waitForStatus: SubmissionEvent['_tag'] = 'InBlock') => {
-    // console.log('Submitting transaction', transaction.toString());
     return pipe(
       NodeClient.sendMidnightTransactionAndWait(SerializedTransaction.from(transaction), waitForStatus),
       Effect.provideServiceEffect(
@@ -106,11 +105,7 @@ export const makeDefaultSubmissionServiceEffect = <
           Effect.map(({ client }) => client),
         ),
       ),
-      Effect.mapError((err) => {
-        console.error('Transaction submission error', err);
-        // 138 = BalanceCheckOverspend
-        return new SubmissionError({ message: 'Transaction submission error', cause: err });
-      }),
+      Effect.mapError((err) => new SubmissionError({ message: 'Transaction submission error', cause: err })),
     );
   };
 

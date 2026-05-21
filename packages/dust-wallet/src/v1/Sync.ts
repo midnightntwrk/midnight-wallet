@@ -14,9 +14,7 @@ import {
   type Array as Arr,
   Effect,
   Either,
-  Encoding,
   Layer,
-  Option,
   pipe,
   Schema,
   type Scope,
@@ -269,12 +267,6 @@ export const makeProjectionsBasedSyncService = (
       const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
 
       if (regularTxs.length > 0) {
-        // if (blockData.height === 5) {
-        //   console.log(
-        //     `block ${blockData.height} txs`,
-        //     regularTxs.map((t) => t.dustLedgerEvents.map((e) => e.raw.toString())),
-        //   );
-        // }
         return {
           maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)) - 1,
           maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)) - 1,
@@ -305,13 +297,6 @@ export const makeProjectionsBasedSyncService = (
           // TODO: this will come as part of the blockData response
           const { maxCommitmentTreeIndex, maxGeneratingTreeIndex } = yield* getEndIndexes(blockData);
           const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
-          // console.log({
-          //   maxCommitmentTreeIndex,
-          //   maxGeneratingTreeIndex,
-          //   lastSyncedCommitmentIndex,
-          //   block: blockData.height,
-          // });
-          // try to revert back the getEndIndexes() and re-run the test
 
           const rawGenerations = yield* pipe(
             indexerSyncService.subscribeDustGenerations(state, maxGeneratingTreeIndex),
@@ -475,7 +460,6 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       const { appliedIndex } = state.progress;
       const { address } = state.publicKey;
 
-      // mn_dust_undeployed1w0l54txthpu8q05j9j9ttk3j5dyu5766dc9zkz2s435vdglzwdr35dw790y
       console.log(
         'Subscribing to dust generations for address:',
         address,
@@ -491,9 +475,6 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           endIndex,
         }),
         Stream.mapEffect((subscription) => {
-          // if (endIndex > 84) {
-          //   console.log('Dust generation subscription received:', subscription.dustGenerations);
-          // }
           return pipe(
             Schema.decodeUnknownEither(DustGenerationsSubscriptionSchema)(subscription.dustGenerations),
             Either.mapLeft((err) => new SyncWalletError(err)),
@@ -576,26 +557,10 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
   };
 };
 
-// TODO: remove
-type DustInitialUtxoEvent = {
-  tag: 'dustInitialUtxo';
-  generation: DustGenerationInfo;
-  generationIndex: bigint;
-  blockTime: Date;
-};
-
 export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSyncUpdate, ChangesResult> => {
   return {
     applyUpdate(state: CoreWallet, wrappedUpdate: WalletSyncUpdate): [CoreWallet, ChangesResult] {
       const { updates, secretKey } = wrappedUpdate;
-      // console.log(
-      //   'Applying state update:',
-      //   state.progress.appliedIndex,
-      //   updates.map(
-      //     (u) =>
-      //       `${u.raw.content.tag}: ${u.raw.content.tag === 'dustInitialUtxo' ? (u.raw.content as DustInitialUtxoEvent).generationIndex.toString() + ' -> ' + u.raw.source.transactionHash : ''}`,
-      //   ),
-      // );
 
       // Nothing to update yet
       if (updates.length === 0) {
@@ -624,8 +589,6 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
         highestRelevantWalletIndex,
         isConnected: true,
       });
-
-      // console.log(updatedState.state.toString());
 
       return [updatedState, { changes, protocolVersion: Number(updatedState.protocolVersion) }];
     },
@@ -666,7 +629,6 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
         });
       }
 
-      // TODO: convert to Set()
       type TransactionUtxos = Map<
         number, // TransactionId
         Array<{
@@ -702,8 +664,6 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
       });
 
       updatedWallet.state.syncTime = lastBlockTime;
-      // console.log(updatedWallet.state.toString());
-      console.log('new gen tree first free', updatedWallet.state.generatingTreeFirstFree); // 21n
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
