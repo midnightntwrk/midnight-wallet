@@ -24,8 +24,8 @@ import {
   Schedule,
 } from 'effect';
 import {
-  type DustGenerationInfo,
   dustNullifier,
+  successorDustUtxo,
   type DustNullifier,
   type DustSecretKey,
   DustStateChanges,
@@ -47,7 +47,7 @@ import {
   type SubscriptionClient,
   type QueryClient,
 } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
-import { EitherOps, LedgerOps } from '@midnight-ntwrk/wallet-sdk-utilities';
+import { EitherOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { type URLError, WsURL } from '@midnight-ntwrk/wallet-sdk-utilities/networking';
 import { OtherWalletError, SyncWalletError, type WalletError } from './WalletError.js';
 import {
@@ -77,8 +77,9 @@ import {
   WalletSyncUpdate,
   BlockDataSchema,
   type BlockData,
+  type DustGenerationDtimUpdate,
 } from './SyncSchema.js';
-import { nullifierToHex, upsertArrayMap } from './Utils.js';
+import { nullifierToHex, uniqueArray, upsertArrayMap } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -223,7 +224,7 @@ export const makeProjectionsBasedSyncService = (
   ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
     console.log('loadCollapsedCommitments()', fromIndex, toIndex);
     const skipMtIndexes = [...newUtxos.values()].map((u) => Number(u.qdo.mtIndex));
-    console.log('skipMtIndexes', skipMtIndexes);
+    console.log('skipMtIndexes:', skipMtIndexes);
 
     // 1: split into groups
     const groups = [];
@@ -318,6 +319,7 @@ export const makeProjectionsBasedSyncService = (
                 qdo: u.qdo,
                 transactionId: u.transactionId,
                 transactionHash: u.transactionHash,
+                genInfo: u.genInfo,
               },
             ]),
           );
@@ -333,8 +335,13 @@ export const makeProjectionsBasedSyncService = (
             );
             console.log('nullifierTransactions received', nullifierTransactions);
 
-            const dustUtxoUpdates = yield* createDustUtxoUpdates(state, nullifierTransactions, secretKey, newUtxos);
-            console.log('dustUtxoUpdates:', dustUtxoUpdates);
+            const dustUtxoUpdates = yield* createDustUtxoUpdates(
+              state,
+              nullifierTransactions,
+              secretKey,
+              newUtxos,
+              dustGenerationUpdates.generationDtimeUpdates,
+            );
 
             for (const update of dustUtxoUpdates) {
               if (update.isSpent) {
@@ -349,6 +356,7 @@ export const makeProjectionsBasedSyncService = (
                 qdo: update.qdo,
                 transactionId: update.transactionId,
                 transactionHash: update.transactionHash,
+                genInfo: update.genInfo,
               });
             }
 
@@ -516,17 +524,17 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       );
     },
     transactionEvents(
-      txHash: TransactionHash,
+      transactionHash: TransactionHash,
     ): Effect.Effect<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient> {
       return pipe(
-        TransactionEvents.run({ transactionHash: txHash }),
+        TransactionEvents.run({ transactionHash }),
         Effect.catchAll((err) =>
           Effect.fail(new OtherWalletError({ message: `Encountered unexpected error: ${err.message}`, cause: err })),
         ),
         Effect.flatMap((result) => {
           const regularTransaction = result.transactions.find((tx) => tx.__typename === 'RegularTransaction');
           if (!regularTransaction) {
-            throw new OtherWalletError({ message: `Unable to find a transaction by hash: ${txHash}` });
+            throw new OtherWalletError({ message: `Unable to find a transaction by hash: ${transactionHash}` });
           }
           return pipe(
             Schema.decodeUnknownEither(TransactionEventsUpdateSchema)(regularTransaction),
@@ -647,9 +655,9 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
         new Map() as TransactionUtxos,
       );
 
-      const transactionIds = new Set([...receivedUtxos.keys()].concat(...spentUtxos.keys()));
+      const transactionIds = uniqueArray([...receivedUtxos.keys(), ...spentUtxos.keys()]).toSorted();
 
-      const changes: DustStateChanges[] = [...transactionIds].toSorted().map((txId) => {
+      const changes: DustStateChanges[] = transactionIds.map((txId) => {
         const received = receivedUtxos.get(txId) ?? [];
         const spent = spentUtxos.get(txId) ?? [];
         const txHash = received.at(0)?.transactionHash || spent.at(0)?.transactionHash;
@@ -675,25 +683,34 @@ const createDustUtxoUpdates = (
   nullifierTransactions: TransactionEventsUpdate[],
   secretKey: DustSecretKey,
   knownUtxos: DustUtxoMap,
-): Effect.Effect<DustUtxoUpdate[], SyncWalletError | LedgerOps.LedgerError> =>
+  generationDtimeUpdates: DustGenerationDtimUpdate[],
+): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
   Effect.gen(function* () {
     const utxoUpdates: DustUtxoUpdate[] = [];
 
     for (const tx of nullifierTransactions) {
-      const dustSpends = tx.dustLedgerEvents.filter((dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed');
-      console.log(
-        'tx dustSpends',
-        dustSpends.map((dustSpend) => dustSpend.raw.toString()),
+      const dustSpendEvents = tx.dustLedgerEvents.filter(
+        (dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed',
       );
 
-      for (const dustSpend of dustSpends) {
-        const { nullifier, vFee, commitmentIndex, blockTime } = dustSpend.raw.content as DustSpendProcessedEvent;
-        console.log('raw.content:', dustSpend.raw.content as DustSpendProcessedEvent);
-        console.log('nullifier search 1', knownUtxos.get(nullifier)?.qdo);
-        console.log('nullifier search 2', wallet.state.findUtxoByNullifier(nullifier));
+      for (const dustSpend of dustSpendEvents) {
+        const { nullifier, vFee, commitmentIndex, blockTime, declaredTime } = dustSpend.raw
+          .content as DustSpendProcessedEvent;
         const qdo = knownUtxos.get(nullifier)?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
         if (!qdo) {
           return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
+        }
+        let genInfo = knownUtxos.get(nullifier)?.genInfo ?? wallet.state.generationInfo(qdo);
+        if (!genInfo) {
+          return yield* Effect.fail(
+            new SyncWalletError({ message: `Failed to find genInfo for: ${qdo.backingNight}` }),
+          );
+        }
+        // apply dtime changes
+        const dtimeUpdate = generationDtimeUpdates.find((up) => up.nightUtxoHash === genInfo!.nonce);
+        if (dtimeUpdate) {
+          console.log('Dtime change detected', dtimeUpdate);
+          genInfo = { ...genInfo, dtime: dtimeUpdate.newDtime };
         }
 
         utxoUpdates.push({
@@ -702,28 +719,27 @@ const createDustUtxoUpdates = (
           isSpent: true,
           transactionId: tx.id,
           transactionHash: tx.hash,
-        });
-        console.log('utxoUpdates updated 1');
-        console.log(qdo);
-        console.log({
-          blockTime,
-          vFee,
-          commitmentIndex,
-          secretKey,
+          genInfo,
         });
 
-        const newUtxo = yield* LedgerOps.ledgerTry(() =>
-          wallet.state.successorUtxo(qdo, blockTime, vFee, commitmentIndex, secretKey),
+        const newUtxo = successorDustUtxo(
+          qdo,
+          declaredTime,
+          vFee,
+          commitmentIndex,
+          genInfo,
+          secretKey,
+          tx.block.ledgerParameters.dust,
         );
-        console.log('newUtxo calculated', newUtxo);
+
         utxoUpdates.push({
           dustNullifier: dustNullifier(newUtxo, secretKey),
           qdo: newUtxo,
           isSpent: false,
           transactionId: tx.id,
           transactionHash: tx.hash,
+          genInfo,
         });
-        console.log('utxoUpdates updated 2');
       }
     }
 

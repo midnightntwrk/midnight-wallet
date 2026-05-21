@@ -142,15 +142,15 @@ export const CoreWallet = {
     let updatedState = wallet.state;
 
     let lastUpdatedIndex = -1;
-    for (const { generationIndex, genInfo, qdo } of newGenerations) {
+    for (const { generationMtIndex, genInfo, qdo } of newGenerations) {
       // apply updates prior to the current generation index
       updatedState = updates
-        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationIndex)
+        .filter(({ startIndex, endIndex }) => startIndex > lastUpdatedIndex && endIndex < generationMtIndex)
         .reduce((state, update) => state.applyGenerationCollapsedUpdate(update.update), updatedState);
 
       // now, insert the generation info
-      updatedState = updatedState.insertGenerationInfo(BigInt(generationIndex), genInfo, qdo.backingNight);
-      lastUpdatedIndex = generationIndex;
+      updatedState = updatedState.insertGenerationInfo(BigInt(generationMtIndex), genInfo, qdo.backingNight);
+      lastUpdatedIndex = generationMtIndex;
     }
 
     // apply the rest of the updates

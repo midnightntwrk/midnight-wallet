@@ -22,6 +22,9 @@ export const TransactionEvents = Query.make(
     query TransactionEvents($transactionHash: HexEncoded!) {
       transactions(offset: {hash: $transactionHash}) {
         __typename
+        block {
+          ledgerParameters
+        }
         ... on RegularTransaction {
           id
           hash

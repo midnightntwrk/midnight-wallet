@@ -118,15 +118,16 @@ export const DustGenerationsUpdateSchema = Schema.transform(
 export type NewDustGeneration = {
   dustNullifier: DustNullifier;
   genInfo: DustGenerationInfo;
-  generationIndex: number;
+  generationMtIndex: number;
   qdo: QualifiedDustOutput;
   transactionId: number;
   transactionHash: TransactionHash;
 };
 
 export type DustGenerationDtimUpdate = {
-  owner: bigint;
-  generationIndex: number;
+  generationMtIndex: number;
+  nightUtxoHash: string;
+  newDtime: Date;
   treeInsertionPath: DustGenerationTreeInsertionPath;
 };
 
@@ -136,6 +137,7 @@ export type DustUtxoUpdate = {
   isSpent: boolean;
   transactionId: number;
   transactionHash: TransactionHash;
+  genInfo: DustGenerationInfo;
 };
 
 export const ProgressSchema = Schema.Struct({
@@ -178,12 +180,35 @@ const HexedDustGenerationTreeInsertionPath: Schema.Schema<DustGenerationTreeInse
   Schema.compose(DustGenerationTreeInsertionPathFromUInt8Array),
 );
 
-export const DustGenerationDtimeUpdateItemSchema = Schema.Struct({
-  __typename: Schema.Literal('DustGenerationDtimeUpdateItem'),
-  generationMtIndex: Schema.Number,
-  owner: Schema.String,
-  treeInsertionPath: HexedDustGenerationTreeInsertionPath,
-});
+export const DustGenerationDtimeUpdateItemSchema = Schema.transform(
+  Schema.Struct({
+    __typename: Schema.Literal('DustGenerationDtimeUpdateItem'),
+    generationMtIndex: Schema.Number,
+    nightUtxoHash: Schema.String,
+    newDtime: Schema.Number,
+    treeInsertionPath: HexedDustGenerationTreeInsertionPath,
+  }),
+  Schema.typeSchema(
+    Schema.Struct({
+      __typename: Schema.Literal('DustGenerationDtimeUpdateItem'),
+      generationMtIndex: Schema.Number,
+      nightUtxoHash: Schema.String,
+      newDtime: Schema.DateFromSelf,
+      treeInsertionPath: HexedDustGenerationTreeInsertionPath,
+    }),
+  ),
+  {
+    strict: true,
+    decode: (wire) => ({
+      ...wire,
+      newDtime: new Date(wire.newDtime * 1000),
+    }),
+    encode: (domain) => ({
+      ...domain,
+      newDtime: Math.floor(domain.newDtime.getTime() / 1000),
+    }),
+  },
+);
 
 export const DustGenerationsSubscriptionSchema = Schema.Union(
   DustGenerationsUpdateSchema,
@@ -241,7 +266,7 @@ export const DustGenerationsSyncUpdate = {
             nonce: u.backingNight,
             dtime: undefined,
           },
-          generationIndex: u.generationMtIndex,
+          generationMtIndex: u.generationMtIndex,
           qdo,
           transactionId: u.transactionId,
           transactionHash: u.transactionHash,
@@ -256,13 +281,8 @@ export const DustGenerationsSyncUpdate = {
 
     const generationDtimeUpdates = rawUpdates
       .filter((u) => u.__typename === 'DustGenerationDtimeUpdateItem')
-      // .filter((u) => u.owner === dustAddressHex)
       .toSorted((u1, u2) => u1.generationMtIndex - u2.generationMtIndex)
-      .map((u) => ({
-        owner: dustPublicKey,
-        generationIndex: u.generationMtIndex,
-        treeInsertionPath: u.treeInsertionPath,
-      }));
+      .map(({ __typename, ...rest }) => rest);
 
     const lastUpdateIndex = rawUpdates
       .filter((u) => u.__typename === 'DustGenerationsProgress')
@@ -373,6 +393,9 @@ export const TransactionEvent = Schema.Struct({
 
 export const WireTransactionEventsUpdateSchema = Schema.Struct({
   __typename: Schema.Literal('RegularTransaction'),
+  block: Schema.Struct({
+    ledgerParameters: HexedLedgerParameters,
+  }),
   id: Schema.Number,
   hash: Schema.String,
   dustLedgerEvents: Schema.Array(TransactionEvent),
@@ -384,6 +407,9 @@ export const TransactionEventsUpdateSchema = Schema.transform(
   Schema.typeSchema(
     Schema.Struct({
       type: Schema.Literal('TransactionEvents'),
+      block: Schema.Struct({
+        ledgerParameters: HexedLedgerParameters,
+      }),
       id: Schema.Number,
       hash: Schema.String,
       dustLedgerEvents: Schema.Array(TransactionEvent),
@@ -392,16 +418,18 @@ export const TransactionEventsUpdateSchema = Schema.transform(
   ),
   {
     strict: true,
-    decode: ({ id, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
+    decode: ({ id, block, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
       type: 'TransactionEvents' as const,
       id,
+      block,
       hash,
       dustLedgerEvents,
       zswapLedgerEvents,
     }),
-    encode: ({ id, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
+    encode: ({ id, block, hash, dustLedgerEvents, zswapLedgerEvents }) => ({
       __typename: 'RegularTransaction' as const,
       id,
+      block,
       hash,
       dustLedgerEvents,
       zswapLedgerEvents,
@@ -427,6 +455,7 @@ export type DustUtxoMap = Map<
     qdo: QualifiedDustOutput;
     transactionId: number;
     transactionHash: string;
+    genInfo: DustGenerationInfo;
   }
 >;
 

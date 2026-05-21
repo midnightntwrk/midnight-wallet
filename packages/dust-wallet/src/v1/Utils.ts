@@ -41,3 +41,5 @@ export const nullifierToHex = (n: bigint): string => {
   const str = bytes.toString('hex');
   return str.length % 2 === 0 ? str : '0' + str;
 };
+
+export const uniqueArray = <T>(arr: T[]): T[] => [...new Set(arr)];

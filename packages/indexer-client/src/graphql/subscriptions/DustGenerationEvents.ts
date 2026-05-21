@@ -47,7 +47,8 @@ export const DustGenerationEvents = Subscription.make(
         }
         ... on DustGenerationDtimeUpdateItem {
           generationMtIndex
-          owner
+          newDtime
+          nightUtxoHash
           treeInsertionPath
         }
       }
