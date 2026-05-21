@@ -186,7 +186,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
     });
   }
 
-  bookNightUtxosForDustRegistration(
+  rotateUtxos(
     guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
     fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
     nightVerifyingKey: ledger.SignatureVerifyingKey,
@@ -194,7 +194,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate> implements Variant.Runni
   ): Effect.Effect<ledger.UnprovenTransaction, WalletError> {
     return SubscriptionRef.modifyEffect(this.#context.stateRef, (state) => {
       return pipe(
-        this.#v1Context.transactingCapability.bookNightUtxosForDustRegistration(
+        this.#v1Context.transactingCapability.rotateUtxos(
           state,
           guaranteedUtxos,
           fallibleUtxos,

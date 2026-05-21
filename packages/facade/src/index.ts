@@ -512,7 +512,7 @@ export class WalletFacade {
     // Step 2 — Unshielded books the Night UTxOs (move available -> pending) and builds the intent
     // with the two offers. After this point, a concurrent build call that wants any of these UTxOs
     // will fail fast.
-    const txWithOffers = await this.unshielded.bookNightUtxosForDustRegistration(
+    const txWithOffers = await this.unshielded.rotateUtxos(
       guaranteedForUnshielded,
       fallibleForUnshielded,
       nightVerifyingKey,
