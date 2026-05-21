@@ -257,6 +257,15 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
       .pipe(EitherOps.toEffect);
   }
 
+  addDustRegistrationSignature(
+    transaction: UnprovenTransaction,
+    signature: Signature,
+  ): Effect.Effect<UnprovenTransaction, WalletError> {
+    return this.#v1Context.transactingCapability
+      .addDustRegistrationSignature(transaction, signature)
+      .pipe(EitherOps.toEffect);
+  }
+
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Effect.Effect<bigint, WalletError> {
     return pipe(
       this.#v1Context.syncService.blockData(),

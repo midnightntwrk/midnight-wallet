@@ -119,6 +119,17 @@ export interface TransactingCapability<TSecrets, TState, _TTransaction> {
     signature: Signature,
   ): Either.Either<UnprovenTransaction, WalletError>;
 
+  /**
+   * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
+   * {@link addDustGenerationSignature}, this does NOT touch the unshielded offers — those are expected to be signed via
+   * the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g. the
+   * facade's `signRecipe`).
+   */
+  addDustRegistrationSignature(
+    transaction: UnprovenTransaction,
+    signature: Signature,
+  ): Either.Either<UnprovenTransaction, WalletError>;
+
   calculateFee(transaction: AnyTransaction, ledgerParams: LedgerParameters): bigint;
 
   estimateFee(
@@ -407,6 +418,66 @@ export class TransactingCapabilityImplementation<TTransaction extends AnyTransac
 
         const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
           SignatureMarker.signature,
+          ProofMarker.preProof,
+          BindingMarker.preBinding,
+          transaction.serialize(),
+        );
+        newTransaction.intents = newTransaction.intents!.set(1, newIntent);
+
+        return newTransaction;
+      });
+    });
+  }
+
+  addDustRegistrationSignature(
+    transaction: UnprovenTransaction,
+    signatureData: Signature,
+  ): Either.Either<UnprovenTransaction, WalletError> {
+    return Either.gen(this, function* () {
+      const intent = transaction.intents?.get(1);
+      if (!intent) {
+        return yield* Either.left(
+          new TransactingError({ message: 'No intent found in the transaction intents with segment = 1' }),
+        );
+      }
+
+      const { dustActions } = intent;
+      if (!dustActions) {
+        return yield* Either.left(new TransactingError({ message: 'No dustActions found in intent' }));
+      }
+
+      const [registration, ...restRegistrations] = dustActions.registrations;
+      if (!registration) {
+        return yield* Either.left(new TransactingError({ message: 'No registrations found in dustActions' }));
+      }
+
+      return yield* LedgerOps.ledgerTry(() => {
+        const signature = new SignatureEnabled(signatureData);
+        const registrationWithSignature = new DustRegistration(
+          signature.instance,
+          registration.nightKey,
+          registration.dustAddress,
+          registration.allowFeePayment,
+          signature,
+        );
+        const newDustActions = new DustActions(
+          signature.instance,
+          ProofMarker.preProof,
+          dustActions.ctime,
+          dustActions.spends,
+          [registrationWithSignature, ...restRegistrations],
+        );
+
+        const newIntent = Intent.deserialize<SignatureEnabled, PreProof, PreBinding>(
+          signature.instance,
+          ProofMarker.preProof,
+          BindingMarker.preBinding,
+          intent.serialize(),
+        );
+        newIntent.dustActions = newDustActions;
+
+        const newTransaction = Transaction.deserialize<SignatureEnabled, PreProof, PreBinding>(
+          signature.instance,
           ProofMarker.preProof,
           BindingMarker.preBinding,
           transaction.serialize(),

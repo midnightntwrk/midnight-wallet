@@ -142,6 +142,14 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
 
   addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
 
+  /**
+   * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
+   * {@link addDustGenerationSignature}, this does NOT touch the unshielded offers — those should be signed separately
+   * via the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g.
+   * the facade's `signRecipe`).
+   */
+  addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
+
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
   estimateFee(
@@ -328,6 +336,14 @@ export function CustomDustWallet<
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.addDustRegistrationSignature(transaction, signature),
         })
         .pipe(Effect.runPromise);
     }
