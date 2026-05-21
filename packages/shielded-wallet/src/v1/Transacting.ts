@@ -155,9 +155,10 @@ export class TransactingCapabilityImplementation<
         Imbalances.empty(),
       );
 
-      const balancedTx = ledger.Transaction.fromParts(this.networkId, guaranteed);
-      // workaround as Transaction.fromParts does not accept fallible offers with specific segments
-      balancedTx.fallibleOffer = fallibleOffers.size > 0 ? fallibleOffers : undefined;
+      const balancedTx = Array.from(fallibleOffers.entries()).reduce(
+        (tx, [segment, offer]) => tx.addZswapOffer({ tag: 'specific', value: segment }, offer),
+        ledger.Transaction.fromParts(this.networkId, guaranteed),
+      );
       return [balancedTx, afterGuaranteed];
     });
   }
