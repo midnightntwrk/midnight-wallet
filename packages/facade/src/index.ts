@@ -107,25 +107,6 @@ const TokenKindsToBalance = new (class {
   };
 })();
 
-// Memoize so signSegment runs at most once per unique payload. The same segment-1 signature can
-// need to land on both unshielded offers and a DustRegistration; without this, hardware-wallet
-// signers would prompt the user twice.
-const memoizeSignSegment = (
-  signSegment: (data: Uint8Array) => ledger.Signature,
-): ((data: Uint8Array) => ledger.Signature) => {
-  const cache = new Map<string, ledger.Signature>();
-  return (data) => {
-    const key = Buffer.from(data).toString('hex');
-    const cached = cache.get(key);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const signature = signSegment(data);
-    cache.set(key, signature);
-    return signature;
-  };
-};
-
 export type FinalizedTransactionRecipe = {
   type: 'FINALIZED_TRANSACTION';
   originalTransaction: ledger.FinalizedTransaction;
@@ -768,14 +749,10 @@ export class WalletFacade {
     recipe: BalancingRecipe,
     signSegment: (data: Uint8Array) => ledger.Signature,
   ): Promise<BalancingRecipe> {
-    // Memoize so signSegment runs at most once per unique payload. The same segment-1 signature
-    // may need to land on both unshielded offers and a dust registration; without memoization a
-    // hardware-wallet user would be prompted twice.
-    const cachedSign = memoizeSignSegment(signSegment);
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
-        const signedBalancingTx = await this.signUnprovenTransaction(recipe.balancingTransaction, cachedSign);
-        const withDustSig = await this.#signDustRegistrationIfPresent(signedBalancingTx, cachedSign);
+        const signedBalancingTx = await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment);
+        const withDustSig = await this.#signDustRegistrationIfPresent(signedBalancingTx, signSegment);
         return {
           type: 'FINALIZED_TRANSACTION',
           originalTransaction: recipe.originalTransaction,
@@ -784,11 +761,11 @@ export class WalletFacade {
       }
       case 'UNBOUND_TRANSACTION': {
         const signedBalancingTx = recipe.balancingTransaction
-          ? await this.signUnprovenTransaction(recipe.balancingTransaction, cachedSign).then((tx) =>
-              this.#signDustRegistrationIfPresent(tx, cachedSign),
+          ? await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment).then((tx) =>
+              this.#signDustRegistrationIfPresent(tx, signSegment),
             )
           : undefined;
-        const signedBaseTx = await this.signUnboundTransaction(recipe.baseTransaction, cachedSign);
+        const signedBaseTx = await this.signUnboundTransaction(recipe.baseTransaction, signSegment);
         return {
           type: 'UNBOUND_TRANSACTION',
           baseTransaction: signedBaseTx,
@@ -796,8 +773,8 @@ export class WalletFacade {
         };
       }
       case 'UNPROVEN_TRANSACTION': {
-        const signedTx = await this.signUnprovenTransaction(recipe.transaction, cachedSign);
-        const withDustSig = await this.#signDustRegistrationIfPresent(signedTx, cachedSign);
+        const signedTx = await this.signUnprovenTransaction(recipe.transaction, signSegment);
+        const withDustSig = await this.#signDustRegistrationIfPresent(signedTx, signSegment);
         return {
           type: 'UNPROVEN_TRANSACTION',
           transaction: withDustSig,
