@@ -22,7 +22,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
         try {
           await expect(api.makeTransfer([])).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('At least one output is required'),
+            reason: expect.stringContaining('At least one output is required') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -41,7 +41,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('64 hex characters'),
+            reason: expect.stringContaining('64 hex characters') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -58,7 +58,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('64 hex characters'),
+            reason: expect.stringContaining('64 hex characters') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -80,7 +80,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('valid hex string'),
+            reason: expect.stringContaining('valid hex string') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -99,7 +99,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('must be positive'),
+            reason: expect.stringContaining('must be positive') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -116,7 +116,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('must be positive'),
+            reason: expect.stringContaining('must be positive') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -133,7 +133,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('non-empty string'),
+            reason: expect.stringContaining('non-empty string') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -150,7 +150,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('invalid Bech32m'),
+            reason: expect.stringContaining('invalid Bech32m') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -167,7 +167,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('expected shielded address'),
+            reason: expect.stringContaining('expected shielded address') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -184,7 +184,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('expected unshielded address'),
+            reason: expect.stringContaining('expected unshielded address') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -204,7 +204,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('outputs[1].type'),
+            reason: expect.stringContaining('outputs[1].type') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -221,7 +221,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
         try {
           await expect(api.makeIntent([], [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('At least one input or output is required'),
+            reason: expect.stringContaining('At least one input or output is required') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -238,7 +238,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('inputs[0].type'),
+            reason: expect.stringContaining('inputs[0].type') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -253,7 +253,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: 'random', payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('inputs[0].value'),
+            reason: expect.stringContaining('inputs[0].value') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -270,7 +270,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: -1, payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('intentId must be an integer between 1 and 65535'),
+            reason: expect.stringContaining('intentId must be an integer between 1 and 65535') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -285,7 +285,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: 65536, payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('intentId must be an integer between 1 and 65535'),
+            reason: expect.stringContaining('intentId must be an integer between 1 and 65535') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -300,7 +300,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: 1.5, payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('intentId must be an integer between 1 and 65535'),
+            reason: expect.stringContaining('intentId must be an integer between 1 and 65535') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -315,7 +315,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent(inputs, [], { intentId: 0, payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('segment 0 is reserved'),
+            reason: expect.stringContaining('segment 0 is reserved') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -334,7 +334,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
 
           await expect(api.makeIntent([], outputs, { intentId: 'random', payFees: false })).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('expected shielded address'),
+            reason: expect.stringContaining('expected shielded address') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -354,7 +354,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
         ];
 
         await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
-          reason: expect.stringMatching(/outputs\[1\]\.type/),
+          reason: expect.stringMatching(/outputs\[1\]\.type/) as unknown as string,
         });
       } finally {
         await disconnect();
@@ -370,7 +370,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
         ];
 
         await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
-          reason: expect.stringContaining('-42'),
+          reason: expect.stringContaining('-42') as unknown as string,
         });
       } finally {
         await disconnect();
@@ -386,7 +386,7 @@ export const runValidationTests = (context: TransactionTestContext): void => {
         ];
 
         await expect(api.makeTransfer(outputs)).rejects.toMatchObject({
-          reason: expect.stringContaining('got 8'),
+          reason: expect.stringContaining('got 8') as unknown as string,
         });
       } finally {
         await disconnect();

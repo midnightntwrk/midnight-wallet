@@ -10,6 +10,19 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": ".claude/bin/verify-after-turn.sh",
+            "asyncRewake": true,
+            "timeout": 600,
+            "statusMessage": "Verifying changed packages with yarn lint + yarn test"
+          }
+        ]
+      }
     ]
   }
 }

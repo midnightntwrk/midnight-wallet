@@ -216,11 +216,9 @@ const createSimulatorWalletFactories = (config: SimulatorConfig): SimulatorWalle
   );
 
   return {
-    // Type casts required because: wallet factory return types have additional generics but are structurally compatible
-    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys) as unknown as ShieldedWalletAPI,
-    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params) as unknown as DustWalletAPI,
-    createUnshieldedWallet: (keystore) =>
-      UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)) as unknown as UnshieldedWalletAPI,
+    createShieldedWallet: (keys) => ShieldedWalletFactory.startWithSecretKeys(keys),
+    createDustWallet: (key, params) => DustWalletFactory.startWithSecretKey(key, params),
+    createUnshieldedWallet: (keystore) => UnshieldedWalletFactory.startWithPublicKey(PublicKey.fromKeyStore(keystore)),
   };
 };
 
@@ -440,6 +438,9 @@ const facadeAsView = (facade: WalletFacade): WalletFacadeView => {
   const baseView = facade as unknown as WalletFacadeView;
   return new Proxy(baseView, {
     get: (target, prop, receiver) =>
+      // Type cast required because: Reflect.get returns `any` by spec; structurally we
+      // return the same shape Proxy expects.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
       prop === 'transactionHistory' ? transactionHistory : Reflect.get(target, prop, receiver),
   });
 };
@@ -449,12 +450,12 @@ const facadeAsView = (facade: WalletFacade): WalletFacadeView => {
 // =============================================================================
 
 const mockProvingProviderFactory = createMockProvingProviderFactory(
-  async () => [],
-  async () => new Uint8Array([0x00, 0x01, 0x02, 0x03]),
+  () => Promise.resolve([]),
+  () => Promise.resolve(new Uint8Array([0x00, 0x01, 0x02, 0x03])),
 );
 
 // Pre-computed constants (don't depend on simulator instance)
-const SHIELDED_TOKEN_TYPE = (ledger.shieldedToken() as { tag: 'shielded'; raw: string }).raw;
+const SHIELDED_TOKEN_TYPE = ledger.shieldedToken().raw;
 const ALTERNATE_TOKEN_TYPE = ledger.sampleRawTokenType();
 const NIGHT_TOKEN_TYPE = ledger.nativeToken().raw;
 const NETWORK_ID_STRING: string = NETWORK_ID;

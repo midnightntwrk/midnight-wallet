@@ -44,7 +44,7 @@ const fetchParams = async (k: number): Promise<Uint8Array> => {
       return result;
     } catch (e) {
       if (attempt === maxRetries - 1) {
-        throw new Error(`Failed to fetch BLS parameters after ${maxRetries} attempts: ${e}`);
+        throw new Error(`Failed to fetch BLS parameters after ${maxRetries} attempts: ${String(e)}`, { cause: e });
       }
       // Exponential backoff
       await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt + 1)));
@@ -140,7 +140,7 @@ export const createMockProvingProviderFactory = (
   ) => Promise<Uint8Array>,
 ): ProvingProviderFactory => {
   return (_keyMaterialProvider: KeyMaterialProvider): ProvingProvider => ({
-    check: mockCheck ?? (async () => []),
-    prove: mockProve ?? (async () => new Uint8Array(0)),
+    check: mockCheck ?? (() => Promise.resolve([])),
+    prove: mockProve ?? (() => Promise.resolve(new Uint8Array(0))),
   });
 };

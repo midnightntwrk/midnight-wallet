@@ -13,7 +13,7 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
       try {
         await expect(api.submitTransaction('')).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('empty'),
+          message: expect.stringContaining('empty') as unknown as string,
         });
       } finally {
         await disconnect();
@@ -26,7 +26,7 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
       try {
         await expect(api.submitTransaction('not-valid-hex!')).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('malformed'),
+          message: expect.stringContaining('malformed') as unknown as string,
         });
       } finally {
         await disconnect();
@@ -42,7 +42,7 @@ export const runSubmissionTests = (context: DappConnectorTestContext): void => {
 
         await expect(api.submitTransaction(invalidTxHex)).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('deserialize'),
+          message: expect.stringContaining('deserialize') as unknown as string,
         });
       } finally {
         await disconnect();

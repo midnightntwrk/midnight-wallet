@@ -43,7 +43,7 @@ export const runSigningTests = (context: ConnectedAPITestContext): void => {
       try {
         await expect(api.signData('not-valid-hex!', { encoding: 'hex', keyType: 'unshielded' })).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('hex'),
+          message: expect.stringContaining('hex') as unknown as string,
         });
       } finally {
         await disconnect();
@@ -100,7 +100,7 @@ export const runSigningTests = (context: ConnectedAPITestContext): void => {
           api.signData('!!!invalid!!!', { encoding: 'base64', keyType: 'unshielded' }),
         ).rejects.toMatchObject({
           code: ErrorCodes.InvalidRequest,
-          message: expect.stringContaining('base64'),
+          message: expect.stringContaining('base64') as unknown as string,
         });
       } finally {
         await disconnect();

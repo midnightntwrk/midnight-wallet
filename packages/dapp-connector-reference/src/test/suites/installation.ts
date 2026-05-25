@@ -4,7 +4,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import * as fc from 'fast-check';
 import type { InitialAPI } from '@midnight-ntwrk/dapp-connector-api';
 import { InstallationError } from '../../index.js';
-import { defaultConnectorMetadataArbitrary, randomValue } from '../../testing.js';
 import { expectMatchObjectTyped } from '../testUtils.js';
 import type { InstallationTestContext } from '../context.js';
 

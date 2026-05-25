@@ -7,15 +7,10 @@ import type { KeyMaterialProvider } from '@midnight-ntwrk/dapp-connector-api';
 
 /** Mock KeyMaterialProvider for testing. In production, DApps provide this to resolve circuit keys. */
 const createMockKeyMaterialProvider = (): KeyMaterialProvider => ({
-  getZKIR: async (_circuitKeyLocation: string): Promise<Uint8Array> => {
-    return new Uint8Array([1, 2, 3, 4]);
-  },
-  getProverKey: async (_circuitKeyLocation: string): Promise<Uint8Array> => {
-    return new Uint8Array([5, 6, 7, 8]);
-  },
-  getVerifierKey: async (_circuitKeyLocation: string): Promise<Uint8Array> => {
-    return new Uint8Array([9, 10, 11, 12]);
-  },
+  getZKIR: (_circuitKeyLocation: string): Promise<Uint8Array> => Promise.resolve(new Uint8Array([1, 2, 3, 4])),
+  getProverKey: (_circuitKeyLocation: string): Promise<Uint8Array> => Promise.resolve(new Uint8Array([5, 6, 7, 8])),
+  getVerifierKey: (_circuitKeyLocation: string): Promise<Uint8Array> =>
+    Promise.resolve(new Uint8Array([9, 10, 11, 12])),
 });
 
 /** Run proving delegation tests against the provided context. */

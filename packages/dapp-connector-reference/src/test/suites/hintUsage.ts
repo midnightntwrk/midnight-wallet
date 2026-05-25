@@ -42,7 +42,7 @@ export const runHintUsageTests = (context: ConnectedAPITestContext): void => {
       const { api, disconnect } = await context.createConnectedAPI();
 
       try {
-        // All WalletConnectedAPI methods
+        // All WalletConnectedAPI methods (hintUsage itself is on HintUsage, not a valid argument)
         const allMethods = [
           'getConfiguration',
           'getConnectionStatus',
@@ -60,7 +60,6 @@ export const runHintUsageTests = (context: ConnectedAPITestContext): void => {
           'submitTransaction',
           'signData',
           'getProvingProvider',
-          'hintUsage',
         ] as const;
 
         await expect(api.hintUsage([...allMethods])).resolves.toBeUndefined();

@@ -27,7 +27,7 @@ export const runBalancingTests = (context: BalancingTestContext): void => {
         try {
           await expect(api.balanceUnsealedTransaction('not-valid-hex')).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('malformed'),
+            reason: expect.stringContaining('malformed') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -40,7 +40,7 @@ export const runBalancingTests = (context: BalancingTestContext): void => {
         try {
           await expect(api.balanceUnsealedTransaction('')).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('empty'),
+            reason: expect.stringContaining('empty') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -69,7 +69,7 @@ export const runBalancingTests = (context: BalancingTestContext): void => {
         try {
           await expect(api.balanceSealedTransaction('not-valid-hex')).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('malformed'),
+            reason: expect.stringContaining('malformed') as unknown as string,
           });
         } finally {
           await disconnect();
@@ -82,7 +82,7 @@ export const runBalancingTests = (context: BalancingTestContext): void => {
         try {
           await expect(api.balanceSealedTransaction('')).rejects.toMatchObject({
             code: 'InvalidRequest',
-            reason: expect.stringContaining('empty'),
+            reason: expect.stringContaining('empty') as unknown as string,
           });
         } finally {
           await disconnect();

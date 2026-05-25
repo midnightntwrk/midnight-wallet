@@ -24,7 +24,6 @@ import type {
 import { toAPIConfiguration } from './types.js';
 import { APIError } from './errors.js';
 import { parseDesiredOutputs, parseDesiredInputs, parseIntentId } from './parsing.js';
-import { ShieldedCoinPublicKey, ShieldedEncryptionPublicKey } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 // =============================================================================
 // Pure Helper Functions
@@ -432,7 +431,9 @@ export class ConnectedAPI implements ConnectedAPIType {
       return Promise.resolve(provider);
     } catch (error) {
       return Promise.reject(
-        APIError.invalidRequest(`Failed to create proving provider: ${error instanceof Error ? error.message : error}`),
+        APIError.invalidRequest(
+          `Failed to create proving provider: ${error instanceof Error ? error.message : String(error)}`,
+        ),
       );
     }
   }
