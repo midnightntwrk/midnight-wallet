@@ -30,6 +30,7 @@ import {
   type TokenTransfer,
 } from '../Transacting.js';
 import { UnshieldedState, UtxoWithMeta } from '../UnshieldedState.js';
+import { InsufficientFundsError, SpendUtxoError } from '../WalletError.js';
 
 const NIGHT = ledger.nativeToken().raw;
 const tokenA = ledger.sampleRawTokenType();
@@ -298,6 +299,181 @@ describe('Unshielded wallet transacting', () => {
         .pipe(EitherOps.getOrThrowLeft);
 
       expect(result).toBe(emptyTx);
+    });
+  });
+
+  describe('rotateUtxos', () => {
+    const buildWalletWithNightUtxos = (count: number): { wallet: CoreWallet; utxos: ReadonlyArray<UtxoWithMeta> } => {
+      const keystore = createKeystore(Buffer.from(ledger.sampleSigningKey(), 'hex'), NetworkId.NetworkId.Undeployed);
+      const ownerPK = PublicKey.fromKeyStore(keystore);
+      const utxos: ReadonlyArray<UtxoWithMeta> = pipe(
+        Arr.range(0, count - 1),
+        Arr.map(
+          (i) =>
+            new UtxoWithMeta({
+              utxo: {
+                value: 1_000n + BigInt(i),
+                owner: ownerPK.addressHex,
+                type: NIGHT,
+                intentHash: ledger.sampleIntentHash(),
+                outputNo: i,
+              },
+              meta: { ctime: new Date(0), registeredForDustGeneration: false },
+            }),
+        ),
+      );
+      const state = UnshieldedState.restore(utxos, []);
+      const wallet = CoreWallet.restore(
+        state,
+        ownerPK,
+        { appliedId: 0n, highestTransactionId: 0n },
+        ProtocolVersion.ProtocolVersion(1n),
+        NetworkId.NetworkId.Undeployed,
+      );
+      return { wallet, utxos };
+    };
+
+    const transacting = makeDefaultTransactingCapability(config, () => context);
+    const ttl = DateOps.addSeconds(new Date(), 1800);
+
+    it('books all provided UTxOs into pendingUtxos and removes them from availableUtxos', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(4);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      expect(HashMap.size(newState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(newState.state.pendingUtxos)).toBe(utxos.length);
+    });
+
+    it('builds an intent with the guaranteed UTxO in the guaranteed offer and the rest in the fallible offer', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(3);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      expect(transaction.intents).toBeDefined();
+      expect(transaction.intents!.size).toBe(1);
+
+      const intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+        .intents!.values()
+        .take(1)
+        .next().value!;
+
+      expect(intent.guaranteedUnshieldedOffer).toBeDefined();
+      expect(intent.guaranteedUnshieldedOffer!.inputs.length).toBe(1);
+      expect(intent.guaranteedUnshieldedOffer!.inputs[0].intentHash).toBe(guaranteedUtxo.utxo.intentHash);
+
+      expect(intent.fallibleUnshieldedOffer).toBeDefined();
+      expect(intent.fallibleUnshieldedOffer!.inputs.length).toBe(fallibleUtxos.length);
+    });
+
+    it('omits the fallible offer when no fallible UTxOs are provided', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(1);
+
+      const { transaction } = transacting
+        .rotateUtxos(wallet, utxos, [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const intent: ledger.Intent<ledger.SignatureEnabled, ledger.Proofish, ledger.Bindingish> = transaction
+        .intents!.values()
+        .take(1)
+        .next().value!;
+
+      expect(intent.guaranteedUnshieldedOffer).toBeDefined();
+      expect(intent.guaranteedUnshieldedOffer!.inputs.length).toBe(1);
+      expect(intent.fallibleUnshieldedOffer).toBeUndefined();
+    });
+
+    it('fails when a provided UTxO is not in availableUtxos', () => {
+      const { wallet } = buildWalletWithNightUtxos(2);
+      const unknownUtxo = new UtxoWithMeta({
+        utxo: {
+          value: 999n,
+          owner: wallet.publicKey.addressHex,
+          type: NIGHT,
+          intentHash: ledger.sampleIntentHash(),
+          outputNo: 999,
+        },
+        meta: { ctime: new Date(0), registeredForDustGeneration: false },
+      });
+
+      const error = transacting
+        .rotateUtxos(wallet, [unknownUtxo], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(SpendUtxoError);
+    });
+
+    it('fails when a provided UTxO is already pending from a prior call', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [first, second] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [first], [], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const error = transacting
+        .rotateUtxos(newState, [first], [second], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(SpendUtxoError);
+    });
+
+    it('booked UTxOs cannot be reused by a subsequent makeTransfer (race fix)', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(2);
+      const [guaranteedUtxo, fallibleUtxo] = utxos;
+
+      const { newState } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], [fallibleUtxo], wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      const totalNightInPending = pipe(
+        utxos,
+        Arr.map((u) => u.utxo.value),
+        ArrayOps.sumBigInt,
+      );
+
+      const error = transacting
+        .makeTransfer(
+          newState,
+          [
+            {
+              amount: totalNightInPending,
+              type: NIGHT,
+              receiverAddress: new UnshieldedAddress(Buffer.alloc(32, 1)),
+            },
+          ],
+          ttl,
+        )
+        .pipe(EitherOps.getOrThrowRight);
+
+      expect(error).toBeInstanceOf(InsufficientFundsError);
+    });
+
+    it('revertTransaction restores booked UTxOs from pending back to available', () => {
+      const { wallet, utxos } = buildWalletWithNightUtxos(3);
+      const [guaranteedUtxo, ...fallibleUtxos] = utxos;
+
+      const { newState: bookedState, transaction } = transacting
+        .rotateUtxos(wallet, [guaranteedUtxo], fallibleUtxos, wallet.publicKey.publicKey, ttl)
+        .pipe(EitherOps.getOrThrowLeft);
+
+      // Sanity check: booking did move every UTxO from available to pending.
+      expect(HashMap.size(bookedState.state.availableUtxos)).toBe(0);
+      expect(HashMap.size(bookedState.state.pendingUtxos)).toBe(utxos.length);
+
+      const restoredState = transacting.revertTransaction(bookedState, transaction).pipe(EitherOps.getOrThrowLeft);
+
+      // Revert contract: every booked UTxO returns to availableUtxos, pendingUtxos drains to empty.
+      // This is the primitive the facade's catch block relies on when a later build step fails after
+      // rotateUtxos has already booked.
+      expect(HashMap.size(restoredState.state.availableUtxos)).toBe(utxos.length);
+      expect(HashMap.size(restoredState.state.pendingUtxos)).toBe(0);
     });
   });
 });

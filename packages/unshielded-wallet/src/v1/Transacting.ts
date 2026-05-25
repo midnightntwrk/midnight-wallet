@@ -15,6 +15,7 @@ import { type NetworkId } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { Either, Option, pipe, Array as Arr } from 'effect';
 import { CoreWallet } from './CoreWallet.js';
 import { InsufficientFundsError, OtherWalletError, TransactingError, type WalletError } from './WalletError.js';
+import { type UtxoWithMeta } from './UnshieldedState.js';
 import {
   type BalanceRecipe,
   type CoinSelection,
@@ -57,6 +58,30 @@ export interface TransactingCapability<TState> {
     wallet: CoreWallet,
     desiredInputs: Record<string, bigint>,
     outputs: ReadonlyArray<TokenTransfer>,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
+
+  /**
+   * Builds an unproven transaction that moves a caller-supplied set of Night UTxOs back to their current owner,
+   * splitting them between the guaranteed and fallible sections of a single intent. The provided UTxOs are booked in
+   * the wallet state (moved from available to pending) so that no subsequent build call can pick them.
+   *
+   * Used by the Dust wallet's registration/deregistration flow, where the Dust wallet picks the guaranteed slot (based
+   * on dust generation) and hands both sets here for booking and intent construction. The Dust wallet then attaches its
+   * DustActions onto the returned intent.
+   *
+   * @param wallet - The wallet whose UTxOs are being passed through
+   * @param guaranteedUtxos - UTxOs to place in the guaranteed offer (segment 0)
+   * @param fallibleUtxos - UTxOs to place in the fallible offer (segment 1+)
+   * @param nightVerifyingKey - The verifying key used as the input owner and the address for the consolidating output
+   * @param ttl - The TTL for the transaction
+   * @returns The new wallet state (with all provided UTxOs booked) and the unproven transaction
+   */
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
     ttl: Date,
   ): Either.Either<TransactingResult<ledger.UnprovenTransaction, TState>, WalletError>;
 
@@ -269,6 +294,85 @@ export class TransactingCapabilityImplementation implements TransactingCapabilit
       return {
         newState,
         transaction: ledger.Transaction.fromParts(networkId, undefined, undefined, intent),
+      };
+    });
+  }
+
+  rotateUtxos(
+    wallet: CoreWallet,
+    guaranteedUtxos: ReadonlyArray<UtxoWithMeta>,
+    fallibleUtxos: ReadonlyArray<UtxoWithMeta>,
+    nightVerifyingKey: ledger.SignatureVerifyingKey,
+    ttl: Date,
+  ): Either.Either<TransactingResult<ledger.UnprovenTransaction, CoreWallet>, WalletError> {
+    return Either.gen(this, function* () {
+      const { networkId } = this;
+
+      if (guaranteedUtxos.length === 0 && fallibleUtxos.length === 0) {
+        return yield* Either.left(
+          new TransactingError({ message: 'At least one UTxO must be provided to rotateUtxos' }),
+        );
+      }
+
+      const ownerAddress = ledger.addressFromKey(nightVerifyingKey);
+
+      const makeOffer = (
+        utxos: ReadonlyArray<UtxoWithMeta>,
+      ): Option.Option<ledger.UnshieldedOffer<ledger.SignatureEnabled>> => {
+        if (utxos.length === 0) {
+          return Option.none();
+        }
+        const inputs: ledger.UtxoSpend[] = utxos.map(({ utxo }) => ({
+          value: utxo.value,
+          type: utxo.type,
+          intentHash: utxo.intentHash,
+          outputNo: utxo.outputNo,
+          owner: nightVerifyingKey,
+        }));
+        const totalValue = pipe(
+          utxos,
+          Arr.map(({ utxo }) => utxo.value),
+          Arr.reduce(0n, (a, b) => a + b),
+        );
+        const output: ledger.UtxoOutput = {
+          owner: ownerAddress,
+          type: ledger.nativeToken().raw,
+          value: totalValue,
+        };
+        return Option.some(ledger.UnshieldedOffer.new(inputs, [output], []));
+      };
+
+      const allUtxos = [...guaranteedUtxos, ...fallibleUtxos].map(({ utxo }) => utxo);
+      const [, walletAfterBooking] = yield* CoreWallet.spendUtxos(wallet, allUtxos);
+
+      const guaranteedOffer = makeOffer(guaranteedUtxos);
+      const fallibleOffer = makeOffer(fallibleUtxos);
+
+      const intent = pipe(
+        ledger.Intent.new(ttl),
+        (i) =>
+          Option.match(guaranteedOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.guaranteedUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+        (i) =>
+          Option.match(fallibleOffer, {
+            onNone: () => i,
+            onSome: (offer) => {
+              i.fallibleUnshieldedOffer = offer;
+              return i;
+            },
+          }),
+      );
+
+      const transaction = ledger.Transaction.fromParts(networkId, undefined, undefined, intent);
+
+      return {
+        newState: walletAfterBooking,
+        transaction,
       };
     });
   }

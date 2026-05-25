@@ -30,6 +30,7 @@ import { CoreWallet } from './v1/CoreWallet.js';
 import { type KeysCapability } from './v1/Keys.js';
 import { V1Tag } from './v1/RunningV1Variant.js';
 import { type SerializationCapability } from './v1/Serialization.js';
+import { type NightUtxoSplitForDustRegistration } from './v1/Transacting.js';
 import { type DustFullInfo, type UtxoWithMeta } from './v1/types/Dust.js';
 import { type AnyTransaction } from './v1/types/ledger.js';
 import { type BaseV1Configuration, type DefaultV1Configuration, type V1Variant, V1Builder } from './v1/V1Builder.js';
@@ -125,7 +126,29 @@ export type DustWalletAPI<TStartAux = DustSecretKey, TSerialized = string> = {
     dustReceiverAddress: DustAddress | undefined,
   ): Promise<UnprovenTransaction>;
 
+  splitNightUtxosForDustRegistration(
+    currentTime: Date,
+    nightUtxos: ReadonlyArray<UtxoWithMeta>,
+    isRegistration: boolean,
+  ): Promise<NightUtxoSplitForDustRegistration>;
+
+  attachDustRegistration(
+    transaction: UnprovenTransaction,
+    currentTime: Date,
+    nightVerifyingKey: SignatureVerifyingKey,
+    dustReceiverAddress: DustAddress | undefined,
+    feePayment: bigint,
+  ): Promise<UnprovenTransaction>;
+
   addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
+
+  /**
+   * Attaches a signature to the DustRegistration in segment 1's `dustActions` only. Unlike
+   * {@link addDustGenerationSignature}, this does NOT touch the unshielded offers — those should be signed separately
+   * via the unshielded-wallet signing path. Use this when the caller orchestrates signing across both packages (e.g.
+   * the facade's `signRecipe`).
+   */
+  addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction>;
 
   calculateFee(transactions: ReadonlyArray<AnyTransaction>): Promise<bigint>;
 
@@ -282,10 +305,45 @@ export function CustomDustWallet<
         .pipe(Effect.runPromise);
     }
 
+    async splitNightUtxosForDustRegistration(
+      currentTime: Date,
+      nightUtxos: ReadonlyArray<UtxoWithMeta>,
+      isRegistration: boolean,
+    ): Promise<NightUtxoSplitForDustRegistration> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.splitNightUtxosForDustRegistration(currentTime, nightUtxos, isRegistration),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    async attachDustRegistration(
+      transaction: UnprovenTransaction,
+      currentTime: Date,
+      nightVerifyingKey: SignatureVerifyingKey,
+      dustReceiverAddress: DustAddress | undefined,
+      feePayment: bigint,
+    ): Promise<UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) =>
+            v1.attachDustRegistration(transaction, currentTime, nightVerifyingKey, dustReceiverAddress, feePayment),
+        })
+        .pipe(Effect.runPromise);
+    }
+
     addDustGenerationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
       return this.runtime
         .dispatch({
           [V1Tag]: (v1) => v1.addDustGenerationSignature(transaction, signature),
+        })
+        .pipe(Effect.runPromise);
+    }
+
+    addDustRegistrationSignature(transaction: UnprovenTransaction, signature: Signature): Promise<UnprovenTransaction> {
+      return this.runtime
+        .dispatch({
+          [V1Tag]: (v1) => v1.addDustRegistrationSignature(transaction, signature),
         })
         .pipe(Effect.runPromise);
     }

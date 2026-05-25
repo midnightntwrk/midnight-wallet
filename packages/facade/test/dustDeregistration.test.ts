@@ -170,4 +170,49 @@ describe('Dust Deregistration', () => {
     expect(availableCoinsWithInfo.filter((coin) => coin.dtime !== undefined).length).toBe(deregisterTokens);
     expect(nightUtxosNotRegisteredForDustGeneration).toHaveLength(2);
   });
+
+  it('books Night UTxOs at build time so a concurrent overlapping deregistration fails fast', async () => {
+    await walletFacade.waitForSyncedState();
+
+    const stateWithRegisteredNight = await rx.firstValueFrom(
+      walletFacade
+        .state()
+        .pipe(
+          rx.filter(
+            (s) =>
+              s.isSynced &&
+              s.unshielded.availableCoins.some(
+                (c) => c.meta.registeredForDustGeneration === true && c.utxo.type === ledger.nativeToken().raw,
+              ),
+          ),
+        ),
+    );
+
+    const nightUtxos = stateWithRegisteredNight.unshielded.availableCoins
+      .filter((c) => c.meta.registeredForDustGeneration === true && c.utxo.type === ledger.nativeToken().raw)
+      .slice(0, 2);
+
+    expect(nightUtxos.length).toBeGreaterThan(0);
+
+    // First call: build a deregistration recipe without submitting it.
+    await walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
+      unshieldedWalletKeystore.signData(payload),
+    );
+
+    // Booking contract: the just-deregistered UTxOs must no longer appear as available
+    // before any on-chain submission has happened.
+    const stateAfterDeregistration = await rx.firstValueFrom(walletFacade.state());
+    const deregisteredHashes = new Set(nightUtxos.map((c) => `${c.utxo.intentHash}#${c.utxo.outputNo}`));
+    const stillAvailable = stateAfterDeregistration.unshielded.availableCoins.filter((c) =>
+      deregisteredHashes.has(`${c.utxo.intentHash}#${c.utxo.outputNo}`),
+    );
+    expect(stillAvailable).toHaveLength(0);
+
+    // Fail-fast contract: a second deregistration over the same UTxOs must reject at build time.
+    await expect(
+      walletFacade.deregisterFromDustGeneration(nightUtxos, unshieldedWalletKeystore.getPublicKey(), (payload) =>
+        unshieldedWalletKeystore.signData(payload),
+      ),
+    ).rejects.toThrow();
+  });
 });

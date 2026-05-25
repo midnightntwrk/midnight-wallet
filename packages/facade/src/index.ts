@@ -455,31 +455,82 @@ export class WalletFacade {
     action: { type: 'registration'; dustReceiverAddress: DustAddress } | { type: 'deregistration' },
     nightUtxos: readonly UtxoWithMeta[],
     nightVerifyingKey: ledger.SignatureVerifyingKey,
-    signDustRegistration: (payload: Uint8Array) => Promise<ledger.Signature> | ledger.Signature,
+    signDustRegistration: (payload: Uint8Array) => ledger.Signature,
   ): Promise<ledger.UnprovenTransaction> {
     const ttl = this.defaultTtl();
+    const now = this.clock.now();
+    const isRegistration = action.type === 'registration';
+    const dustReceiverAddress = isRegistration ? action.dustReceiverAddress : undefined;
 
-    const transaction = await this.dust.createDustGenerationTransaction(
-      undefined,
-      ttl,
+    // Step 1 — Dust decides which Night UTxO belongs in the guaranteed slot (the one whose dust
+    // generation can pay the fee) and computes the fee-payment allowance.
+    const split = await this.dust.splitNightUtxosForDustRegistration(
+      now,
       nightUtxos.map(({ utxo, meta }) => ({
         ...utxo,
         ctime: meta.ctime,
         registeredForDustGeneration: meta.registeredForDustGeneration,
       })),
-      nightVerifyingKey,
-      action.type === 'registration' ? action.dustReceiverAddress : undefined,
+      isRegistration,
     );
 
-    const intent = transaction.intents?.get(1);
-    if (!intent) {
-      throw Error('Dust generation transaction is missing intent segment 1.');
+    const toUnshieldedUtxoWithMeta = (u: DustCoinsAndBalances.UtxoWithFullDustDetails): UtxoWithMeta => ({
+      utxo: {
+        value: u.utxo.value,
+        type: u.utxo.type,
+        owner: u.utxo.owner,
+        intentHash: u.utxo.intentHash,
+        outputNo: u.utxo.outputNo,
+      },
+      meta: {
+        ctime: u.utxo.ctime,
+        registeredForDustGeneration: u.utxo.registeredForDustGeneration,
+      },
+    });
+    const guaranteedForUnshielded = split.guaranteedUtxos.map(toUnshieldedUtxoWithMeta);
+    const fallibleForUnshielded = split.fallibleUtxos.map(toUnshieldedUtxoWithMeta);
+
+    // Step 2 — Unshielded books the Night UTxOs (move available -> pending) and builds the intent
+    // with the two offers. After this point, a concurrent build call that wants any of these UTxOs
+    // will fail fast.
+    const txWithOffers = await this.unshielded.rotateUtxos(
+      guaranteedForUnshielded,
+      fallibleForUnshielded,
+      nightVerifyingKey,
+      ttl,
+    );
+
+    // Step 3 — Dust attaches its DustActions onto the intent the unshielded wallet just built.
+    // If this fails we must unbook the UTxOs so the caller can retry.
+    let txWithDustActions: ledger.UnprovenTransaction;
+    try {
+      txWithDustActions = await this.dust.attachDustRegistration(
+        txWithOffers,
+        now,
+        nightVerifyingKey,
+        dustReceiverAddress,
+        split.feePayment,
+      );
+    } catch (error) {
+      await this.unshielded.revertTransaction(txWithOffers);
+      throw error;
     }
 
-    const signatureData = intent.signatureData(1);
-    const signature = await Promise.resolve(signDustRegistration(signatureData));
-
-    return await this.dust.addDustGenerationSignature(transaction, signature);
+    // Step 4 — Sign via the standard signRecipe pathway, which now stamps both the unshielded
+    // offers and the dust registration. Signing failures also need to release the booking.
+    try {
+      const signedRecipe = await this.signRecipe(
+        { type: 'UNPROVEN_TRANSACTION', transaction: txWithDustActions },
+        signDustRegistration,
+      );
+      if (signedRecipe.type !== 'UNPROVEN_TRANSACTION') {
+        throw Error('signRecipe returned unexpected recipe type for dust action transaction.');
+      }
+      return signedRecipe.transaction;
+    } catch (error) {
+      await this.unshielded.revertTransaction(txWithOffers);
+      throw error;
+    }
   }
 
   state(): Observable<FacadeState> {
@@ -701,15 +752,18 @@ export class WalletFacade {
     switch (recipe.type) {
       case 'FINALIZED_TRANSACTION': {
         const signedBalancingTx = await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment);
+        const withDustSig = await this.#signDustRegistrationIfPresent(signedBalancingTx, signSegment);
         return {
           type: 'FINALIZED_TRANSACTION',
           originalTransaction: recipe.originalTransaction,
-          balancingTransaction: signedBalancingTx,
+          balancingTransaction: withDustSig,
         };
       }
       case 'UNBOUND_TRANSACTION': {
         const signedBalancingTx = recipe.balancingTransaction
-          ? await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment)
+          ? await this.signUnprovenTransaction(recipe.balancingTransaction, signSegment).then((tx) =>
+              this.#signDustRegistrationIfPresent(tx, signSegment),
+            )
           : undefined;
         const signedBaseTx = await this.signUnboundTransaction(recipe.baseTransaction, signSegment);
         return {
@@ -720,12 +774,26 @@ export class WalletFacade {
       }
       case 'UNPROVEN_TRANSACTION': {
         const signedTx = await this.signUnprovenTransaction(recipe.transaction, signSegment);
+        const withDustSig = await this.#signDustRegistrationIfPresent(signedTx, signSegment);
         return {
           type: 'UNPROVEN_TRANSACTION',
-          transaction: signedTx,
+          transaction: withDustSig,
         };
       }
     }
+  }
+
+  async #signDustRegistrationIfPresent(
+    tx: ledger.UnprovenTransaction,
+    signSegment: (data: Uint8Array) => ledger.Signature,
+  ): Promise<ledger.UnprovenTransaction> {
+    const intent = tx.intents?.get(1);
+    const registrations = intent?.dustActions?.registrations ?? [];
+    if (!intent || registrations.length === 0) {
+      return tx;
+    }
+    const signature = signSegment(intent.signatureData(1));
+    return await this.dust.addDustRegistrationSignature(tx, signature);
   }
 
   async signUnprovenTransaction(
@@ -847,13 +915,31 @@ export class WalletFacade {
     );
     const fakeSigningKey = ledger.sampleSigningKey();
     const fakeVerifyingKey = ledger.signatureVerifyingKey(fakeSigningKey);
-    const fakeRegistrationRecipe = await this.registerNightUtxosForDustGeneration(
-      nightUtxos,
+
+    // Use the legacy dust-only construction path here so estimation does NOT book real UTxOs in the
+    // unshielded wallet state. (The race-fix path in createDustActionTransaction books on purpose;
+    // estimation is meant to be observation-only.)
+    const ttl = this.defaultTtl();
+    const fakeUnsignedTx = await this.dust.createDustGenerationTransaction(
+      undefined,
+      ttl,
+      nightUtxos.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
       fakeVerifyingKey,
-      (payload) => ledger.signData(fakeSigningKey, payload),
       dustState.address,
     );
-    const finalizedFakeTx = fakeRegistrationRecipe.transaction.mockProve().bind();
+    const intent = fakeUnsignedTx.intents?.get(1);
+    if (!intent) {
+      throw Error('Dust generation transaction is missing intent segment 1.');
+    }
+    const signatureData = intent.signatureData(1);
+    const signature = ledger.signData(fakeSigningKey, signatureData);
+    const fakeSignedTx = await this.dust.addDustGenerationSignature(fakeUnsignedTx, signature);
+
+    const finalizedFakeTx = fakeSignedTx.mockProve().bind();
 
     const fee = await this.calculateTransactionFee(finalizedFakeTx);
 
