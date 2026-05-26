@@ -222,9 +222,7 @@ export const makeProjectionsBasedSyncService = (
     toIndex: number,
     newUtxos: DustUtxoMap,
   ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
-    console.log('loadCollapsedCommitments()', fromIndex, toIndex);
     const skipMtIndexes = [...newUtxos.values()].map((u) => Number(u.qdo.mtIndex));
-    console.log('skipMtIndexes:', skipMtIndexes);
 
     // 1: split into groups
     const groups = [];
@@ -245,8 +243,6 @@ export const makeProjectionsBasedSyncService = (
         groups.push({ start, end: toIndex });
       }
     });
-    console.log(`Skipping:`, skipMtIndexes);
-    console.log(`Fetching groups:`, groups);
 
     // 2: Query all groups in parallel
     return pipe(
@@ -702,8 +698,7 @@ const createDustUtxoUpdates = (
       );
 
       for (const dustSpend of dustSpendEvents) {
-        const { nullifier, vFee, commitmentIndex, blockTime, declaredTime } = dustSpend.raw
-          .content as DustSpendProcessedEvent;
+        const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend.raw.content as DustSpendProcessedEvent;
         const qdo = knownUtxos.get(nullifier)?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
         if (!qdo) {
           return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
@@ -717,7 +712,6 @@ const createDustUtxoUpdates = (
         // apply dtime changes
         const dtimeUpdate = generationDtimeUpdates.find((up) => up.nightUtxoHash === genInfo!.nonce);
         if (dtimeUpdate) {
-          console.log('Dtime change detected', dtimeUpdate);
           genInfo = { ...genInfo, dtime: dtimeUpdate.newDtime };
         }
 
