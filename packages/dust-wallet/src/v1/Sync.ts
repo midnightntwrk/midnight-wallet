@@ -202,7 +202,7 @@ export const makeDefaultSyncService = (
   };
 };
 
-export const makeProjectionsBasedSyncService = (
+export const makeEventLessSyncService = (
   config: DefaultSyncConfiguration,
 ): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
   const defaultSyncService = makeDefaultSyncService(config);
@@ -601,11 +601,7 @@ export const makeDefaultSyncCapability = (): SyncCapability<CoreWallet, WalletSy
   };
 };
 
-export const makeProjectionsBasedSyncCapability = (): SyncCapability<
-  CoreWallet,
-  DustProjectionsUpdate,
-  ChangesResult
-> => {
+export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustProjectionsUpdate, ChangesResult> => {
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);

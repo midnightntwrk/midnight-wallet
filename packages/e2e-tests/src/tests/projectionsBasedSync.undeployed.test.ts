@@ -21,8 +21,8 @@ import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 import {
   CustomDustWallet,
-  makeProjectionsBasedSyncCapability,
-  makeProjectionsBasedSyncService,
+  makeEventLessSyncCapability,
+  makeEventLessSyncService,
 } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 
@@ -51,7 +51,7 @@ describe('Projections-based synchronisation model', () => {
       dustWallet: (config) =>
         CustomDustWallet(
           config,
-          new V1Builder().withDefaults().withSync(makeProjectionsBasedSyncService, makeProjectionsBasedSyncCapability),
+          new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
         ),
     });
     fundedOld = await utils.initWalletWithSeed(seedFunded, fixture);
@@ -60,7 +60,7 @@ describe('Projections-based synchronisation model', () => {
       dustWallet: (config) =>
         CustomDustWallet(
           config,
-          new V1Builder().withDefaults().withSync(makeProjectionsBasedSyncService, makeProjectionsBasedSyncCapability),
+          new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
         ),
     });
     logger.info('Two wallets started');
