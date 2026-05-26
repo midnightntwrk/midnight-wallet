@@ -69,7 +69,7 @@ import {
   type DustProjectionsUpdate,
   type DustSpendProcessedEvent,
   type DustUtxoUpdate,
-  type DustUtxoMap,
+  DustUtxoMap,
   SyncEventsUpdateSchema,
   type TransactionEventsUpdate,
   TransactionEventsUpdateSchema,
@@ -78,6 +78,7 @@ import {
   BlockDataSchema,
   type BlockData,
   type DustGenerationDtimUpdate,
+  type NewDustGeneration,
 } from './SyncSchema.js';
 import { nullifierToHex, uniqueArray, upsertArrayMap } from './Utils.js';
 
@@ -220,9 +221,11 @@ export const makeProjectionsBasedSyncService = (
   const loadCollapsedCommitments = (
     fromIndex: number,
     toIndex: number,
-    newUtxos: DustUtxoMap,
+    newUtxos: Readonly<DustUtxoMap>,
   ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
-    const skipMtIndexes = [...newUtxos.values()].map((u) => Number(u.qdo.mtIndex));
+    const skipMtIndexes = [...newUtxos]
+      .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
+      .map(([_, u]) => Number(u.qdo.mtIndex));
 
     // 1: split into groups
     const groups = [];
@@ -286,6 +289,12 @@ export const makeProjectionsBasedSyncService = (
       return yield* getEndIndexes(prevBlockData);
     });
 
+  const getUnsyncedNullifiers = (newGenerations: ReadonlyArray<NewDustGeneration>, state: CoreWallet) => {
+    return newGenerations
+      .map((n) => n.dustNullifier)
+      .concat(state.dustNullifiers.filter((n) => !n.isSpent).map((n) => n.dustNullifier));
+  };
+
   return {
     updates: (
       state: CoreWallet,
@@ -309,33 +318,19 @@ export const makeProjectionsBasedSyncService = (
           console.log('dust generations received', rawGenerations.length);
           const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-          let newNullifiers = dustGenerationUpdates.newGenerations
-            .map((n) => n.dustNullifier)
-            .concat(state.dustNullifiers.filter((n) => !n.isSpent).map((n) => n.dustNullifier));
+          let newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
 
           // track new utxos to calculate the successor utxo when the nullifier is spent
-          let newUtxos: DustUtxoMap = new Map(
-            dustGenerationUpdates.newGenerations.map((u) => [
-              u.dustNullifier,
-              {
-                qdo: u.qdo,
-                transactionId: u.transactionId,
-                transactionHash: u.transactionHash,
-                genInfo: u.genInfo,
-              },
-            ]),
-          );
+          const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
           const spentNullifiers = new Map();
 
           while (newNullifiers.length > 0) {
-            console.log('newNullifiers loop', newNullifiers.length, newNullifiers, blockData.height);
             const nullifierTransactions = yield* pipe(
               nullifierTransactionsSubscription(newNullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
               Stream.runCollect,
               Effect.map(Chunk.toArray),
             );
-            console.log('nullifierTransactions received', nullifierTransactions);
 
             const dustUtxoUpdates = yield* createDustUtxoUpdates(
               state,
@@ -365,10 +360,10 @@ export const makeProjectionsBasedSyncService = (
             newNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
           }
 
+          // sanity check
           if ([...newUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
             return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
           }
-          newUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)));
 
           const collapsedCommitments = yield* loadCollapsedCommitments(
             Number(lastSyncedCommitmentIndex),
@@ -381,6 +376,7 @@ export const makeProjectionsBasedSyncService = (
             spentNullifiers,
             newUtxos,
             collapsedCommitments,
+            // TODO: pass the whole block and verify the roots after applying the txs
             lastBlockTime: lastBlockWithTxsTime,
             // lastBlockTime: blockData.timestamp,
           };
@@ -513,7 +509,6 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
           toBlock,
         }),
         Stream.mapEffect((subscription) => {
-          console.log('Dust nullifier transaction subscription received:', subscription.dustNullifierTransactions);
           return pipe(
             Schema.decodeUnknownEither(DustNullifierTransactionSubscriptionSchema)(
               subscription.dustNullifierTransactions,
@@ -615,6 +610,7 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
       const { dustGenerations, spentNullifiers, newUtxos, collapsedCommitments, lastBlockTime } = update;
+      const sortedNewUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)));
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -628,8 +624,8 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
         dustGenerations.newGenerations,
         dustGenerations.generationDtimeUpdates,
       );
-      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
-      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
+      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, sortedNewUtxos);
+      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, sortedNewUtxos, collapsedCommitments);
       updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...spentNullifiers.keys()]);
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
@@ -648,7 +644,7 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
           transactionHash: TransactionHash;
         }>
       >;
-      const receivedUtxos = [...newUtxos.values()].reduce(
+      const receivedUtxos = [...sortedNewUtxos.values()].reduce(
         (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
         new Map() as TransactionUtxos,
       );
@@ -684,10 +680,10 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
 
 const createDustUtxoUpdates = (
   wallet: CoreWallet,
-  nullifierTransactions: TransactionEventsUpdate[],
+  nullifierTransactions: ReadonlyArray<TransactionEventsUpdate>,
   secretKey: DustSecretKey,
-  knownUtxos: DustUtxoMap,
-  generationDtimeUpdates: DustGenerationDtimUpdate[],
+  knownUtxos: Readonly<DustUtxoMap>,
+  generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
 ): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
   Effect.gen(function* () {
     const utxoUpdates: DustUtxoUpdate[] = [];

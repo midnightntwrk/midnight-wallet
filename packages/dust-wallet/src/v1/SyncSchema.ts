@@ -459,6 +459,22 @@ export type DustUtxoMap = Map<
   }
 >;
 
+export const DustUtxoMap = {
+  create: (generations: ReadonlyArray<NewDustGeneration>): DustUtxoMap => {
+    return new Map(
+      generations.map((u) => [
+        u.dustNullifier,
+        {
+          qdo: u.qdo,
+          transactionId: u.transactionId,
+          transactionHash: u.transactionHash,
+          genInfo: u.genInfo,
+        },
+      ]),
+    );
+  },
+};
+
 export type DustProjectionsUpdate = {
   dustGenerations: DustGenerationsSyncUpdate;
   spentNullifiers: DustUtxoMap;
