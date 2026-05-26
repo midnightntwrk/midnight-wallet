@@ -39,11 +39,14 @@ describe('Projections-based synchronisation model', () => {
 
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
+  let fundedOld: utils.WalletInit;
   let receiver: utils.WalletInit;
+  let receiverNew: utils.WalletInit;
+  let retryIndex = 0;
 
   beforeEach(async () => {
+    ++retryIndex;
     fixture = getFixture();
-    // TODO: we can add another wallet with the same seed, but default sync mode and verify the dust data
     funded = await utils.initWalletWithSeed(seedFunded, fixture, {
       dustWallet: (config) =>
         CustomDustWallet(
@@ -51,18 +54,30 @@ describe('Projections-based synchronisation model', () => {
           new V1Builder().withDefaults().withSync(makeProjectionsBasedSyncService, makeProjectionsBasedSyncCapability),
         ),
     });
+    fundedOld = await utils.initWalletWithSeed(seedFunded, fixture);
     receiver = await utils.initWalletWithSeed(seed, fixture);
+    receiverNew = await utils.initWalletWithSeed(seed, fixture, {
+      dustWallet: (config) =>
+        CustomDustWallet(
+          config,
+          new V1Builder().withDefaults().withSync(makeProjectionsBasedSyncService, makeProjectionsBasedSyncCapability),
+        ),
+    });
     logger.info('Two wallets started');
   });
 
   afterEach(async () => {
     await funded.wallet.stop();
+    await fundedOld.wallet.stop();
     await receiver.wallet.stop();
+    await receiverNew.wallet.stop();
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {
+    const initialStateOld = await fundedOld.wallet.waitForSyncedState();
     const initialState = await funded.wallet.waitForSyncedState();
     const receiverInitialState = await receiver.wallet.waitForSyncedState();
+    const receiverinitialStateNew = await receiverNew.wallet.waitForSyncedState();
     const receiverInitialAvailableCoins = receiverInitialState.unshielded.availableCoins.length;
     const initialUnshieldedBalance = initialState.unshielded.balances[unshieldedTokenRaw];
     logger.info(`Wallet 1: ${initialUnshieldedBalance} unshielded tokens`);
@@ -100,6 +115,21 @@ describe('Projections-based synchronisation model', () => {
         ],
       },
     ];
+    const fundedStatesEqual = initialState.dust.state.state.toString() === initialStateOld.dust.state.state.toString();
+    console.log('dust states equal for "funded" wallets', fundedStatesEqual);
+    if (!fundedStatesEqual) {
+      console.log('funded dust state1 new', initialState.dust.state.state.toString());
+      console.log('funded dust state1 old', initialStateOld.dust.state.state.toString());
+    }
+
+    const receiverStatesEqual =
+      receiverInitialState.dust.state.state.toString() === receiverinitialStateNew.dust.state.state.toString();
+    console.log('dust states equal for "receiver" wallets', receiverStatesEqual);
+    if (!receiverStatesEqual) {
+      console.log('receiver dust state1 new', receiverinitialStateNew.dust.state.state.toString());
+      console.log('receiver dust state1 old', receiverInitialState.dust.state.state.toString());
+    }
+
     await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const ttl = new Date(Date.now() + 30 * 60 * 1000);
     const txRecipe = await funded.wallet.transferTransaction(
@@ -156,7 +186,7 @@ describe('Projections-based synchronisation model', () => {
   };
 
   test(
-    'Able to register Night tokens for Dust generation after receiving unshielded tokens @healthcheck',
+    'Able to register Night tokens for Dust generation after receiving unshielded tokens using new sync model @healthcheck',
     async () => {
       await sendAndRegisterNightUtxos();
       const initialWalletState = await receiver.wallet.waitForSyncedState();
