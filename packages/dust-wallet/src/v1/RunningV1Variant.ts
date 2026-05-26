@@ -175,7 +175,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
         ),
       ),
       Stream.tapError((error) => Console.error(error)),
-      Stream.retry(
+      /*Stream.retry(
         pipe(
           Schedule.exponential(Duration.seconds(1), 2),
           Schedule.map((delay) => {
@@ -186,7 +186,7 @@ export class RunningV1Variant<TSerialized, TSyncUpdate, TTransaction, TStartAux>
             return Duration.millis(Math.min(delayWithJitter, Duration.toMillis(maxDelay)));
           }),
         ),
-      ),
+      ),*/
     );
   }
 
