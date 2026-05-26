@@ -1,5 +1,21 @@
 # @midnight-ntwrk/wallet-sdk-capabilities
 
+## 3.3.1
+
+### Patch Changes
+
+- 7452e96: Bump `@midnight-ntwrk/ledger-v8` from `^8.0.3` to `^8.1.0`. Internal balancing flows in `dust-wallet`,
+  `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
+  (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
+  `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
+- Updated dependencies [6e187fe]
+- Updated dependencies [7452e96]
+- Updated dependencies [25f58b4]
+  - @midnight-ntwrk/wallet-sdk-utilities@1.2.0
+  - @midnight-ntwrk/wallet-sdk-node-client@1.1.2
+  - @midnight-ntwrk/wallet-sdk-prover-client@1.2.2
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.2
+
 ## 3.3.0
 
 ### Minor Changes

@@ -1,6 +1,6 @@
 {
   "name": "@midnight-ntwrk/wallet-sdk-node-client",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "type": "module",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -32,7 +32,7 @@
   },
   "dependencies": {
     "@midnight-ntwrk/wallet-sdk-abstractions": "^2.1.0",
-    "@midnight-ntwrk/wallet-sdk-utilities": "^1.1.1",
+    "@midnight-ntwrk/wallet-sdk-utilities": "^1.2.0",
     "@polkadot/api": "^16.5.4",
     "@polkadot/types": "^16.5.4",
     "@polkadot/util": "^14.0.1",
@@ -49,7 +49,7 @@
     "@effect/sql": "^0.51.1",
     "@effect/workflow": "^0.18.0",
     "@midnight-ntwrk/ledger-v8": "^8.1.0",
-    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.1",
+    "@midnight-ntwrk/wallet-sdk-prover-client": "^1.2.2",
     "@types/tar-stream": "^3.1.4",
     "tar-stream": "^3.2.0",
     "tsx": "^4.21.0"
