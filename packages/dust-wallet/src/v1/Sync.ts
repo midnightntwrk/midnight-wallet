@@ -672,6 +672,7 @@ export const makeProjectionsBasedSyncCapability = (): SyncCapability<
       });
 
       updatedWallet.state.syncTime = lastBlockTime;
+      updatedWallet = { ...updatedWallet, state: updatedWallet.state.processTtls(lastBlockTime) };
 
       return [updatedWallet, { changes, protocolVersion: Number(state.protocolVersion) }];
     },
