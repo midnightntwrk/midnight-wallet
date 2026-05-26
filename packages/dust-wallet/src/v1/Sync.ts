@@ -259,10 +259,13 @@ export const makeProjectionsBasedSyncService = (
 
   const getEndIndexes = (
     blockData: BlockData,
-  ): Effect.Effect<{ maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number }, WalletError> =>
+  ): Effect.Effect<
+    { maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number; lastBlockWithTxsTime: Date },
+    WalletError
+  > =>
     Effect.gen(function* () {
       if (blockData.height === 0) {
-        return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84 };
+        return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84, lastBlockWithTxsTime: blockData.timestamp };
       }
 
       const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
@@ -271,6 +274,7 @@ export const makeProjectionsBasedSyncService = (
         return {
           maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)) - 1,
           maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)) - 1,
+          lastBlockWithTxsTime: blockData.timestamp,
         };
       }
 
@@ -296,7 +300,9 @@ export const makeProjectionsBasedSyncService = (
           const blockData = yield* defaultSyncService.blockData();
           blockCache.set(blockData.height, blockData);
           // TODO: this will come as part of the blockData response
-          const { maxCommitmentTreeIndex, maxGeneratingTreeIndex } = yield* getEndIndexes(blockData);
+          // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
+          const { maxCommitmentTreeIndex, maxGeneratingTreeIndex, lastBlockWithTxsTime } =
+            yield* getEndIndexes(blockData);
           const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
           const rawGenerations = yield* pipe(
@@ -379,7 +385,8 @@ export const makeProjectionsBasedSyncService = (
             spentNullifiers,
             newUtxos,
             collapsedCommitments,
-            lastBlockTime: blockData.timestamp,
+            lastBlockTime: lastBlockWithTxsTime,
+            // lastBlockTime: blockData.timestamp,
           };
         }),
         Stream.fromEffect,
