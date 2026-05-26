@@ -234,8 +234,10 @@ export const CoreWallet = {
     const newNullifiers = spentNullifiers
       .filter((n) => !existingDustNullifiersMap.has(n))
       .map((n) => ({ dustNullifier: n, isSpent: false }));
+    const updatedState = spentNullifiers.reduce((state, nullifier) => state.removeUtxo(nullifier), wallet.state);
     return {
       ...wallet,
+      state: updatedState,
       dustNullifiers: dustNullifiers.concat(newNullifiers),
     };
   },
