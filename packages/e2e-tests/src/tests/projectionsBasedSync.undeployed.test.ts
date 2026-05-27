@@ -12,6 +12,7 @@
 // limitations under the License.
 import { describe, test, expect } from 'vitest';
 import * as rx from 'rxjs';
+import { Effect, Stream, Queue } from 'effect';
 import { type TestContainersFixture, useTestContainersFixture } from './test-fixture.js';
 import * as ledger from '@midnight-ntwrk/ledger-v8';
 import * as utils from './utils.js';
@@ -21,8 +22,11 @@ import { ArrayOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { inspect } from 'node:util';
 import {
   CustomDustWallet,
+  type DefaultDustConfiguration,
+  type DustWalletClass,
   makeEventLessSyncCapability,
   makeEventLessSyncService,
+  Trigger,
 } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
 import { V1Builder } from '@midnight-ntwrk/wallet-sdk-dust-wallet/v1';
 
@@ -36,6 +40,18 @@ describe('Projections-based synchronisation model', () => {
   const unshieldedTokenRaw = ledger.unshieldedToken().raw;
   const timeout = 300_000;
   const outputValue = utils.tNightAmount(1000n);
+  const triggerFundedQueue = Effect.runSync(Queue.bounded<typeof Trigger>(1));
+  const triggerReceiverQueue = Effect.runSync(Queue.bounded<typeof Trigger>(1));
+
+  const eventLessDustWallet =
+    (queue: Queue.Queue<typeof Trigger>): ((config: DefaultDustConfiguration) => DustWalletClass) =>
+    (config) =>
+      CustomDustWallet(
+        config,
+        new V1Builder()
+          .withDefaults()
+          .withSync(makeEventLessSyncService(Stream.fromQueue(queue)), makeEventLessSyncCapability),
+      );
 
   let fixture: TestContainersFixture;
   let funded: utils.WalletInit;
@@ -48,20 +64,12 @@ describe('Projections-based synchronisation model', () => {
     ++retryIndex;
     fixture = getFixture();
     funded = await utils.initWalletWithSeed(seedFunded, fixture, {
-      dustWallet: (config) =>
-        CustomDustWallet(
-          config,
-          new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
-        ),
+      dustWallet: eventLessDustWallet(triggerFundedQueue),
     });
     fundedOld = await utils.initWalletWithSeed(seedFunded, fixture);
     receiver = await utils.initWalletWithSeed(seed, fixture);
     receiverNew = await utils.initWalletWithSeed(seed, fixture, {
-      dustWallet: (config) =>
-        CustomDustWallet(
-          config,
-          new V1Builder().withDefaults().withSync(makeEventLessSyncService, makeEventLessSyncCapability),
-        ),
+      dustWallet: eventLessDustWallet(triggerReceiverQueue),
     });
     logger.info('Two wallets started');
   });
@@ -74,6 +82,8 @@ describe('Projections-based synchronisation model', () => {
   }, 20_000);
 
   const sendAndRegisterNightUtxos = async () => {
+    Effect.runSync(Queue.offer(triggerFundedQueue, Trigger));
+    Effect.runSync(Queue.offer(triggerReceiverQueue, Trigger));
     const initialStateOld = await fundedOld.wallet.waitForSyncedState();
     const initialState = await funded.wallet.waitForSyncedState();
     const receiverInitialState = await receiver.wallet.waitForSyncedState();

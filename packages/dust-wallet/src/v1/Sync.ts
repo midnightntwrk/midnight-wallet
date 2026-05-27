@@ -202,193 +202,200 @@ export const makeDefaultSyncService = (
   };
 };
 
-export const makeEventLessSyncService = (
-  config: DefaultSyncConfiguration,
-): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
-  const defaultSyncService = makeDefaultSyncService(config);
-  const indexerSyncService = makeIndexerSyncService(config);
+const blockCache = new Map<number, BlockData>();
+export const Trigger = Symbol('SyncTrigger');
 
-  const nullifierTransactionsSubscription = (
-    dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
-    blockHeight: number | null,
-  ): Stream.Stream<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
-    return pipe(
-      indexerSyncService.subscribeDustNullifierTransactions(dustNullifiers, blockHeight),
-      Stream.mapEffect((subscription) => indexerSyncService.transactionEvents(subscription.transactionHash)),
-    );
-  };
+export const makeEventLessSyncService =
+  (trigger: Stream.Stream<typeof Trigger>) =>
+  (config: DefaultSyncConfiguration): SyncService<CoreWallet, DustSecretKey, DustProjectionsUpdate> => {
+    const defaultSyncService = makeDefaultSyncService(config);
+    const indexerSyncService = makeIndexerSyncService(config);
 
-  const loadCollapsedCommitments = (
-    fromIndex: number,
-    toIndex: number,
-    newUtxos: Readonly<DustUtxoMap>,
-  ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
-    const skipMtIndexes = [...newUtxos]
-      .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
-      .map(([_, u]) => Number(u.qdo.mtIndex));
+    const nullifierTransactionsSubscription = (
+      dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
+      blockHeight: number | null,
+    ): Stream.Stream<TransactionEventsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+      return pipe(
+        indexerSyncService.subscribeDustNullifierTransactions(dustNullifiers, blockHeight),
+        Stream.mapEffect((subscription) => indexerSyncService.transactionEvents(subscription.transactionHash)),
+      );
+    };
 
-    // 1: split into groups
-    const groups = [];
-    const firstSkipIndex = skipMtIndexes.at(0);
+    const loadCollapsedCommitments = (
+      fromIndex: number,
+      toIndex: number,
+      newUtxos: Readonly<DustUtxoMap>,
+    ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
+      const skipMtIndexes = [...newUtxos]
+        .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
+        .map(([_, u]) => Number(u.qdo.mtIndex));
 
-    if (firstSkipIndex !== undefined && fromIndex < firstSkipIndex) {
-      groups.push({ start: fromIndex, end: firstSkipIndex - 1 });
-    } else if (firstSkipIndex === undefined) {
-      groups.push({ start: fromIndex, end: toIndex });
-    }
+      // 1: split into groups
+      const groups = [];
+      const firstSkipIndex = skipMtIndexes.at(0);
 
-    skipMtIndexes.forEach((skipMtIndex, index) => {
-      const start = skipMtIndex + 1;
-      const end = skipMtIndexes.at(index + 1);
-      if (end !== undefined && end - start > 0) {
-        groups.push({ start, end: end - 1 });
-      } else if (end === undefined && start <= toIndex) {
-        groups.push({ start, end: toIndex });
-      }
-    });
-
-    // 2: Query all groups in parallel
-    return pipe(
-      groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(start, end)),
-      Effect.all,
-    );
-  };
-
-  const blockCache = new Map<number, BlockData>();
-
-  const getEndIndexes = (
-    blockData: BlockData,
-  ): Effect.Effect<
-    { maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number; lastBlockWithTxsTime: Date },
-    WalletError
-  > =>
-    Effect.gen(function* () {
-      if (blockData.height === 0) {
-        return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84, lastBlockWithTxsTime: blockData.timestamp };
+      if (firstSkipIndex !== undefined && fromIndex < firstSkipIndex) {
+        groups.push({ start: fromIndex, end: firstSkipIndex - 1 });
+      } else if (firstSkipIndex === undefined) {
+        groups.push({ start: fromIndex, end: toIndex });
       }
 
-      const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
+      skipMtIndexes.forEach((skipMtIndex, index) => {
+        const start = skipMtIndex + 1;
+        const end = skipMtIndexes.at(index + 1);
+        if (end !== undefined && end - start > 0) {
+          groups.push({ start, end: end - 1 });
+        } else if (end === undefined && start <= toIndex) {
+          groups.push({ start, end: toIndex });
+        }
+      });
 
-      if (regularTxs.length > 0) {
-        return {
-          maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)) - 1,
-          maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)) - 1,
-          lastBlockWithTxsTime: blockData.timestamp,
-        };
-      }
+      // 2: Query all groups in parallel
+      return pipe(
+        groups.map(({ start, end }) => indexerSyncService.dustCommitmentMerkleTreeUpdate(start, end)),
+        Effect.all,
+      );
+    };
 
-      const prevBlock = blockData.height - 1;
-      if (blockCache.has(prevBlock)) {
-        const prevBlockData = blockCache.get(prevBlock)!;
+    const getEndIndexes = (
+      blockData: BlockData,
+    ): Effect.Effect<
+      { maxCommitmentTreeIndex: number; maxGeneratingTreeIndex: number; lastBlockWithTxsTime: Date },
+      WalletError
+    > =>
+      Effect.gen(function* () {
+        if (blockData.height === 0) {
+          return { maxCommitmentTreeIndex: 84, maxGeneratingTreeIndex: 84, lastBlockWithTxsTime: blockData.timestamp };
+        }
+
+        const regularTxs = blockData.transactions.filter((tx) => tx.__typename === 'RegularTransaction');
+
+        if (regularTxs.length > 0) {
+          return {
+            maxCommitmentTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustCommitmentEndIndex)) - 1,
+            maxGeneratingTreeIndex: Math.max(...regularTxs.map((tx) => tx.dustGenerationEndIndex)) - 1,
+            lastBlockWithTxsTime: blockData.timestamp,
+          };
+        }
+
+        const prevBlock = blockData.height - 1;
+        if (blockCache.has(prevBlock)) {
+          const prevBlockData = blockCache.get(prevBlock)!;
+          return yield* getEndIndexes(prevBlockData);
+        }
+
+        console.log('going one block back:', prevBlock);
+        const prevBlockData = yield* defaultSyncService.blockData(prevBlock);
+        blockCache.set(prevBlock, prevBlockData);
         return yield* getEndIndexes(prevBlockData);
-      }
+      });
 
-      console.log('going one block back:', prevBlock);
-      const prevBlockData = yield* defaultSyncService.blockData(prevBlock);
-      blockCache.set(prevBlock, prevBlockData);
-      return yield* getEndIndexes(prevBlockData);
-    });
+    const getUnsyncedNullifiers = (newGenerations: ReadonlyArray<NewDustGeneration>, state: CoreWallet) => {
+      return newGenerations
+        .map((n) => n.dustNullifier)
+        .concat(state.dustNullifiers.filter((n) => !n.isSpent).map((n) => n.dustNullifier));
+    };
 
-  const getUnsyncedNullifiers = (newGenerations: ReadonlyArray<NewDustGeneration>, state: CoreWallet) => {
-    return newGenerations
-      .map((n) => n.dustNullifier)
-      .concat(state.dustNullifiers.filter((n) => !n.isSpent).map((n) => n.dustNullifier));
-  };
-
-  return {
-    updates: (
+    const doSync = (
       state: CoreWallet,
       secretKey: DustSecretKey,
-    ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> => {
-      return pipe(
-        Effect.gen(function* () {
-          const blockData = yield* defaultSyncService.blockData();
-          blockCache.set(blockData.height, blockData);
-          // TODO: this will come as part of the blockData response
-          // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
-          const { maxCommitmentTreeIndex, maxGeneratingTreeIndex, lastBlockWithTxsTime } =
-            yield* getEndIndexes(blockData);
-          const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
+    ): Effect.Effect<DustProjectionsUpdate, WalletError, Scope.Scope | QueryClient | SubscriptionClient> => {
+      console.log('syncing for: ', state.publicKey.addressHex);
+      return Effect.gen(function* () {
+        const blockData = yield* defaultSyncService.blockData();
+        blockCache.set(blockData.height, blockData);
+        // TODO: this will come as part of the blockData response
+        // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
+        const { maxCommitmentTreeIndex, maxGeneratingTreeIndex, lastBlockWithTxsTime } =
+          yield* getEndIndexes(blockData);
+        const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
-          const rawGenerations = yield* pipe(
-            indexerSyncService.subscribeDustGenerations(state, maxGeneratingTreeIndex),
+        const rawGenerations = yield* pipe(
+          indexerSyncService.subscribeDustGenerations(state, maxGeneratingTreeIndex),
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+        );
+        console.log('dust generations received', rawGenerations.length);
+        const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
+
+        let newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
+
+        // track new utxos to calculate the successor utxo when the nullifier is spent
+        const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+
+        const spentNullifiers = new Map();
+
+        while (newNullifiers.length > 0) {
+          const nullifierTransactions = yield* pipe(
+            nullifierTransactionsSubscription(newNullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
             Stream.runCollect,
             Effect.map(Chunk.toArray),
           );
-          console.log('dust generations received', rawGenerations.length);
-          const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-          let newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
+          const dustUtxoUpdates = yield* createDustUtxoUpdates(
+            state,
+            nullifierTransactions,
+            secretKey,
+            newUtxos,
+            dustGenerationUpdates.generationDtimeUpdates,
+          );
 
-          // track new utxos to calculate the successor utxo when the nullifier is spent
-          const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-
-          const spentNullifiers = new Map();
-
-          while (newNullifiers.length > 0) {
-            const nullifierTransactions = yield* pipe(
-              nullifierTransactionsSubscription(newNullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
-              Stream.runCollect,
-              Effect.map(Chunk.toArray),
-            );
-
-            const dustUtxoUpdates = yield* createDustUtxoUpdates(
-              state,
-              nullifierTransactions,
-              secretKey,
-              newUtxos,
-              dustGenerationUpdates.generationDtimeUpdates,
-            );
-
-            for (const update of dustUtxoUpdates) {
-              if (update.isSpent) {
-                spentNullifiers.set(update.dustNullifier, {
-                  qdo: update.qdo,
-                  transactionId: update.transactionId,
-                  transactionHash: update.transactionHash,
-                });
-                continue;
-              }
-              newUtxos.set(update.dustNullifier, {
+          for (const update of dustUtxoUpdates) {
+            if (update.isSpent) {
+              spentNullifiers.set(update.dustNullifier, {
                 qdo: update.qdo,
                 transactionId: update.transactionId,
                 transactionHash: update.transactionHash,
-                genInfo: update.genInfo,
               });
+              continue;
             }
-
-            newNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
+            newUtxos.set(update.dustNullifier, {
+              qdo: update.qdo,
+              transactionId: update.transactionId,
+              transactionHash: update.transactionHash,
+              genInfo: update.genInfo,
+            });
           }
 
-          // sanity check
-          if ([...newUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
-            return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
-          }
+          newNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
+        }
 
-          const collapsedCommitments = yield* loadCollapsedCommitments(
-            Number(lastSyncedCommitmentIndex),
-            maxCommitmentTreeIndex,
-            newUtxos,
-          );
+        // sanity check
+        if ([...newUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
+          return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
+        }
 
-          return {
-            dustGenerations: dustGenerationUpdates,
-            spentNullifiers,
-            newUtxos,
-            collapsedCommitments,
-            // TODO: pass the whole block and verify the roots after applying the txs
-            lastBlockTime: lastBlockWithTxsTime,
-            // lastBlockTime: blockData.timestamp,
-          };
-        }),
-        Stream.fromEffect,
-        Stream.provideSomeLayer(indexerSyncService.connectionLayer()),
-        Stream.provideSomeLayer(indexerSyncService.queryClient()),
-      );
-    },
-    blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
+        const collapsedCommitments = yield* loadCollapsedCommitments(
+          Number(lastSyncedCommitmentIndex),
+          maxCommitmentTreeIndex,
+          newUtxos,
+        );
+
+        return {
+          dustGenerations: dustGenerationUpdates,
+          spentNullifiers,
+          newUtxos,
+          collapsedCommitments,
+          // TODO: pass the whole block and verify the roots after applying the txs
+          lastBlockTime: lastBlockWithTxsTime,
+          // lastBlockTime: blockData.timestamp,
+        };
+      });
+    };
+
+    return {
+      updates: (
+        state: CoreWallet,
+        secretKey: DustSecretKey,
+      ): Stream.Stream<DustProjectionsUpdate, WalletError, Scope.Scope> =>
+        pipe(
+          trigger,
+          Stream.mapEffect(() => doSync(state, secretKey)),
+          Stream.provideSomeLayer(Layer.merge(indexerSyncService.connectionLayer(), indexerSyncService.queryClient())),
+        ),
+      blockData: (): Effect.Effect<BlockData, WalletError> => defaultSyncService.blockData(),
+    };
   };
-};
 
 export type IndexerSyncService = {
   connectionLayer: () => Layer.Layer<SubscriptionClient, WalletError, Scope.Scope>;
