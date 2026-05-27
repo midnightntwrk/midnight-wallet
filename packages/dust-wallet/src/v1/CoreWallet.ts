@@ -25,7 +25,7 @@ import {
 } from '@midnight-ntwrk/ledger-v8';
 import { ProtocolVersion, SyncProgress } from '@midnight-ntwrk/wallet-sdk-abstractions';
 import { DateOps } from '@midnight-ntwrk/wallet-sdk-utilities';
-import { Array as Arr, Option, pipe } from 'effect';
+import { Array as Arr, HashMap, Option, pipe } from 'effect';
 import { type Dust, type DustWithNullifier } from './types/Dust.js';
 import { type CoinWithValue } from './CoinsAndBalances.js';
 import { type NetworkId, type UnprovenDustSpend } from './types/ledger.js';
@@ -179,7 +179,7 @@ export const CoreWallet = {
       ...wallet,
       state: updatedState,
       dustNullifiers: wallet.dustNullifiers.concat(
-        [...newDustUtxos.keys()].map((dustNullifier) => ({ dustNullifier, isSpent: false })),
+        [...HashMap.keys(newDustUtxos)].map((dustNullifier) => ({ dustNullifier, isSpent: false })),
       ),
     };
   },
@@ -190,7 +190,7 @@ export const CoreWallet = {
     collapsedCommitments: CollapsedMerkleTree[],
   ): CoreWallet {
     let updatedState = wallet.state;
-    const newUtxos = [...newDustUtxos.values()];
+    const newUtxos = [...HashMap.values(newDustUtxos)];
     for (const { startIndex, update } of collapsedCommitments) {
       // apply utxos going before the current index
       const utxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);

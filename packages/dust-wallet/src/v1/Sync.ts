@@ -14,7 +14,10 @@ import {
   type Array as Arr,
   Effect,
   Either,
+  HashMap,
+  HashSet,
   Layer,
+  Option,
   pipe,
   Schema,
   type Scope,
@@ -80,6 +83,7 @@ import {
   type DustGenerationDtimUpdate,
   type NewDustGeneration,
 } from './SyncSchema.js';
+import { type DustGenerationInfo } from './types/index.js';
 import { nullifierToHex, uniqueArray, upsertArrayMap } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
@@ -202,7 +206,7 @@ export const makeDefaultSyncService = (
   };
 };
 
-const blockCache = new Map<number, BlockData>();
+const blockCacheRef = { value: HashMap.empty<number, BlockData>() };
 export const Trigger = Symbol('SyncTrigger');
 
 export const makeEventLessSyncService =
@@ -279,14 +283,14 @@ export const makeEventLessSyncService =
         }
 
         const prevBlock = blockData.height - 1;
-        if (blockCache.has(prevBlock)) {
-          const prevBlockData = blockCache.get(prevBlock)!;
-          return yield* getEndIndexes(prevBlockData);
+        const cached = HashMap.get(blockCacheRef.value, prevBlock);
+        if (Option.isSome(cached)) {
+          return yield* getEndIndexes(cached.value);
         }
 
         console.log('going one block back:', prevBlock);
         const prevBlockData = yield* defaultSyncService.blockData(prevBlock);
-        blockCache.set(prevBlock, prevBlockData);
+        blockCacheRef.value = HashMap.set(blockCacheRef.value, prevBlock, prevBlockData);
         return yield* getEndIndexes(prevBlockData);
       });
 
@@ -303,7 +307,7 @@ export const makeEventLessSyncService =
       console.log('syncing for: ', state.publicKey.addressHex);
       return Effect.gen(function* () {
         const blockData = yield* defaultSyncService.blockData();
-        blockCache.set(blockData.height, blockData);
+        blockCacheRef.value = HashMap.set(blockCacheRef.value, blockData.height, blockData);
         // TODO: this will come as part of the blockData response
         // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
         const { maxCommitmentTreeIndex, maxGeneratingTreeIndex, lastBlockWithTxsTime } =
@@ -321,9 +325,17 @@ export const makeEventLessSyncService =
         let newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
 
         // track new utxos to calculate the successor utxo when the nullifier is spent
-        const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+        let newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
-        const spentNullifiers = new Map();
+        let spentNullifiers = HashMap.empty<
+          DustNullifier,
+          {
+            qdo: QualifiedDustOutput;
+            transactionId: number;
+            transactionHash: TransactionHash;
+            genInfo: DustGenerationInfo;
+          }
+        >();
 
         while (newNullifiers.length > 0) {
           const nullifierTransactions = yield* pipe(
@@ -342,14 +354,15 @@ export const makeEventLessSyncService =
 
           for (const update of dustUtxoUpdates) {
             if (update.isSpent) {
-              spentNullifiers.set(update.dustNullifier, {
+              spentNullifiers = HashMap.set(spentNullifiers, update.dustNullifier, {
                 qdo: update.qdo,
                 transactionId: update.transactionId,
                 transactionHash: update.transactionHash,
+                genInfo: update.genInfo,
               });
               continue;
             }
-            newUtxos.set(update.dustNullifier, {
+            newUtxos = HashMap.set(newUtxos, update.dustNullifier, {
               qdo: update.qdo,
               transactionId: update.transactionId,
               transactionHash: update.transactionHash,
@@ -502,7 +515,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
       dustNullifiers: Arr.NonEmptyReadonlyArray<DustNullifier>,
       toBlock: number | null,
     ): Stream.Stream<DustNullifierTransactionsSubscription, WalletError, Scope.Scope | SubscriptionClient> {
-      const hexedNullifiers = new Set(dustNullifiers.map(nullifierToHex));
+      const hexedNullifiers = HashSet.fromIterable(dustNullifiers.map(nullifierToHex));
       console.log(`Subscribing to dust nullifier transactions from block 0 to block ${toBlock}`);
 
       // TODO: replace with some specific number
@@ -524,7 +537,7 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
             EitherOps.toEffect,
           );
         }),
-        Stream.filter((record) => hexedNullifiers.has(record.nullifier)),
+        Stream.filter((record) => HashSet.has(hexedNullifiers, record.nullifier)),
         Stream.mapError((error) => new SyncWalletError(error)),
       );
     },
@@ -613,7 +626,9 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
       const { dustGenerations, spentNullifiers, newUtxos, collapsedCommitments, lastBlockTime } = update;
-      const sortedNewUtxos = new Map([...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)));
+      const sortedNewUtxos = HashMap.fromIterable(
+        [...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)),
+      );
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -629,7 +644,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       );
       updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, sortedNewUtxos);
       updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, sortedNewUtxos, collapsedCommitments);
-      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...spentNullifiers.keys()]);
+      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentNullifiers)]);
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
         updatedWallet = CoreWallet.updateProgress(updatedWallet, {
@@ -639,7 +654,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         });
       }
 
-      type TransactionUtxos = Map<
+      type TransactionUtxos = HashMap.HashMap<
         number, // TransactionId
         Array<{
           qdo: QualifiedDustOutput;
@@ -647,21 +662,33 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
           transactionHash: TransactionHash;
         }>
       >;
-      const receivedUtxos = [...sortedNewUtxos.values()].reduce(
+      const receivedUtxos = [...HashMap.values(sortedNewUtxos)].reduce(
         (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
-        new Map() as TransactionUtxos,
+        HashMap.empty<
+          number,
+          Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>
+        >() as TransactionUtxos,
       );
 
-      const spentUtxos = [...spentNullifiers.values()].reduce(
+      const spentUtxos = [...HashMap.values(spentNullifiers)].reduce(
         (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
-        new Map() as TransactionUtxos,
+        HashMap.empty<
+          number,
+          Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>
+        >() as TransactionUtxos,
       );
 
-      const transactionIds = uniqueArray([...receivedUtxos.keys(), ...spentUtxos.keys()]).toSorted();
+      const transactionIds = uniqueArray([...HashMap.keys(receivedUtxos), ...HashMap.keys(spentUtxos)]).toSorted();
 
       const changes: DustStateChanges[] = transactionIds.map((txId) => {
-        const received = receivedUtxos.get(txId) ?? [];
-        const spent = spentUtxos.get(txId) ?? [];
+        const received = Option.getOrElse(
+          HashMap.get(receivedUtxos, txId),
+          () => [] as Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>,
+        );
+        const spent = Option.getOrElse(
+          HashMap.get(spentUtxos, txId),
+          () => [] as Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>,
+        );
         const txHash = received.at(0)?.transactionHash || spent.at(0)?.transactionHash;
         console.log(
           `Processing transaction ${txHash} with ${received.length} received and ${spent.length} spent UTXOs`,
@@ -698,11 +725,12 @@ const createDustUtxoUpdates = (
 
       for (const dustSpend of dustSpendEvents) {
         const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend.raw.content as DustSpendProcessedEvent;
-        const qdo = knownUtxos.get(nullifier)?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
+        const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
+        const qdo = knownUtxo?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
         if (!qdo) {
           return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
         }
-        let genInfo = knownUtxos.get(nullifier)?.genInfo ?? wallet.state.generationInfo(qdo);
+        let genInfo = knownUtxo?.genInfo ?? wallet.state.generationInfo(qdo);
         if (!genInfo) {
           return yield* Effect.fail(
             new SyncWalletError({ message: `Failed to find genInfo for: ${qdo.backingNight}` }),

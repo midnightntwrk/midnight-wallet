@@ -10,7 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-import { Effect, ParseResult, pipe, Schema } from 'effect';
+import { Effect, HashMap, ParseResult, pipe, Schema } from 'effect';
 import {
   type DustSecretKey,
   Event as LedgerEvent,
@@ -449,7 +449,7 @@ export type DustSpendProcessedEvent = {
   blockTime: Date;
 };
 
-export type DustUtxoMap = Map<
+export type DustUtxoMap = HashMap.HashMap<
   DustNullifier,
   {
     qdo: QualifiedDustOutput;
@@ -460,8 +460,8 @@ export type DustUtxoMap = Map<
 >;
 
 export const DustUtxoMap = {
-  create: (generations: ReadonlyArray<NewDustGeneration>): DustUtxoMap => {
-    return new Map(
+  create: (generations: ReadonlyArray<NewDustGeneration>): DustUtxoMap =>
+    HashMap.fromIterable(
       generations.map((u) => [
         u.dustNullifier,
         {
@@ -470,9 +470,8 @@ export const DustUtxoMap = {
           transactionHash: u.transactionHash,
           genInfo: u.genInfo,
         },
-      ]),
-    );
-  },
+      ] as const),
+    ),
 };
 
 export type DustProjectionsUpdate = {

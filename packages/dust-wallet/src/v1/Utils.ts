@@ -10,6 +10,7 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+import { HashMap, HashSet, Option } from 'effect';
 import { ScaleBigInt } from '@midnight-ntwrk/wallet-sdk-address-format';
 
 export const SignatureMarker = {
@@ -29,11 +30,15 @@ export const BindingMarker = {
   noBinding: 'no-binding',
 } as const;
 
-export const upsertArrayMap = <K, V>(map: Map<K, V[]>, key: K, val: V): Map<K, V[]> => {
-  const current = map.get(key);
-  map.set(key, current ? current.concat(val) : [val]);
-  return map;
-};
+export const upsertArrayMap = <K, V>(map: HashMap.HashMap<K, V[]>, key: K, val: V): HashMap.HashMap<K, V[]> =>
+  HashMap.set(
+    map,
+    key,
+    Option.match(HashMap.get(map, key), {
+      onNone: () => [val],
+      onSome: (arr) => arr.concat(val),
+    }),
+  );
 
 // Little-endian hex, no length prefix
 export const nullifierToHex = (n: bigint): string => {
@@ -42,4 +47,4 @@ export const nullifierToHex = (n: bigint): string => {
   return str.length % 2 === 0 ? str : '0' + str;
 };
 
-export const uniqueArray = <T>(arr: T[]): T[] => [...new Set(arr)];
+export const uniqueArray = <T>(arr: ReadonlyArray<T>): T[] => Array.from(HashSet.fromIterable(arr));
