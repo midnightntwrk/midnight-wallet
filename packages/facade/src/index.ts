@@ -516,7 +516,20 @@ export class WalletFacade {
       throw error;
     }
 
-    // Step 4 — Sign via the standard signRecipe pathway, which now stamps both the unshielded
+    // Step 4 (registration only) — Fail fast if the dust generated so far by the guaranteed UTxOs
+    // is below the registration's own fee. Submitting would fail on-chain with BalanceCheckOverspend.
+    if (isRegistration) {
+      const fee = await this.dust.calculateFee([txWithDustActions]);
+      if (split.feePayment < fee) {
+        await this.unshielded.revertTransaction(txWithOffers);
+        throw Error(
+          `Insufficient generated dust to cover registration fee (have ${split.feePayment}, need ${fee}). ` +
+            `Use WalletFacade.waitForGeneratedDust(utxos, ${fee}) before retrying.`,
+        );
+      }
+    }
+
+    // Step 5 — Sign via the standard signRecipe pathway, which now stamps both the unshielded
     // offers and the dust registration. Signing failures also need to release the booking.
     try {
       const signedRecipe = await this.signRecipe(
@@ -1032,6 +1045,23 @@ export class WalletFacade {
       type: 'UNPROVEN_TRANSACTION',
       transaction: dustRegistrationTx,
     };
+  }
+
+  /** See `DustWalletAPI.waitForGeneratedDust`. */
+  async waitForGeneratedDust(
+    nightUtxos: readonly UtxoWithMeta[],
+    requiredAmount: bigint,
+    opts?: { timeoutMs?: number },
+  ): Promise<void> {
+    await this.dust.waitForGeneratedDust(
+      nightUtxos.map(({ utxo, meta }) => ({
+        ...utxo,
+        ctime: meta.ctime,
+        registeredForDustGeneration: meta.registeredForDustGeneration,
+      })),
+      requiredAmount,
+      { ...opts, now: () => this.clock.now() },
+    );
   }
 
   async deregisterFromDustGeneration(

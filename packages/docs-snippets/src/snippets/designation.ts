@@ -62,12 +62,16 @@ await sender.wallet
   );
 
 await sender.wallet.stop();
-await new Promise((resolve) => setTimeout(resolve, 1 * 60 * 1000));
 
 // #endregion
 
 const stateBefore = await rx.firstValueFrom(wallet.state().pipe(rx.filter((s) => s.isSynced)));
 console.log('Generating dust before designation:', stateBefore.dust.availableCoins.length > 0);
+
+// Wait until the freshly-received Night UTxOs have generated enough Dust to cover the
+// registration's own fee — otherwise registerNightUtxosForDustGeneration will refuse to submit.
+const { fee } = await wallet.estimateRegistration(stateBefore.unshielded.availableCoins);
+await wallet.waitForGeneratedDust(stateBefore.unshielded.availableCoins, fee);
 
 await wallet
   .registerNightUtxosForDustGeneration(
