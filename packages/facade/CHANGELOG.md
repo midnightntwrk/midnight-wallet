@@ -1,5 +1,34 @@
 # @midnight-ntwrk/wallet-sdk-facade
 
+## 4.0.1
+
+### Patch Changes
+
+- 6e187fe: Fix a race where Dust registration / deregistration would double-use Night UTxOs that another in-flight
+  transaction was already trying to spend. The build flow now books the chosen Night UTxOs (available → pending) at
+  build time, so a conflicting concurrent build fails immediately with `SpendUtxoError` instead of only at submission.
+  Adds new methods on `UnshieldedWallet` (`rotateUtxos`) and `DustWallet` (`splitNightUtxosForDustRegistration`,
+  `attachDustRegistration`) to support the split build.
+- 8004393: Fix `@midnight-ntwrk/wallet-sdk-abstractions` being declared as a devDependency despite being imported at
+  runtime from `src/index.ts`. Consumers of the facade now correctly receive `wallet-sdk-abstractions` on install,
+  resolving Vite/esbuild dep-optimization failures with `No matching export ... for import "TransactionHistoryStorage"`.
+- 7452e96: Bump `@midnight-ntwrk/ledger-v8` from `^8.0.3` to `^8.1.0`. Internal balancing flows in `dust-wallet`,
+  `unshielded-wallet`, and `shielded-wallet` are refactored to use the new ledger 8.1.0 builder API
+  (`Transaction.addIntent`, `Transaction.addZswapOffer`) instead of post-construction field mutation on
+  `Transaction.fromParts(...)`. No public API changes; consumers must resolve `@midnight-ntwrk/ledger-v8` to `>=8.1.0`.
+- 25f58b4: Widen ranges for internal `@midnight-ntwrk/wallet-sdk-*` dependencies from exact versions to caret ranges so
+  consumers can dedupe shared sibling packages into a single installed copy.
+- Updated dependencies [0fd0062]
+- Updated dependencies [6e187fe]
+- Updated dependencies [7452e96]
+- Updated dependencies [25f58b4]
+  - @midnight-ntwrk/wallet-sdk-dust-wallet@4.1.0
+  - @midnight-ntwrk/wallet-sdk-unshielded-wallet@3.1.0
+  - @midnight-ntwrk/wallet-sdk-address-format@3.1.2
+  - @midnight-ntwrk/wallet-sdk-capabilities@3.3.1
+  - @midnight-ntwrk/wallet-sdk-shielded@3.0.1
+  - @midnight-ntwrk/wallet-sdk-indexer-client@1.2.2
+
 ## 4.0.0
 
 ### Major Changes
