@@ -230,6 +230,10 @@ export const makeEventLessSyncService =
       toIndex: number,
       newUtxos: Readonly<DustUtxoMap>,
     ): Effect.Effect<CollapsedMerkleTree[], WalletError, Scope.Scope | QueryClient> => {
+      if (toIndex < 0) {
+        return Effect.succeed([]);
+      }
+
       const skipMtIndexes = [...newUtxos]
         .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
         .map(([_, u]) => Number(u.qdo.mtIndex));
@@ -310,9 +314,9 @@ export const makeEventLessSyncService =
         blockCacheRef.value = HashMap.set(blockCacheRef.value, blockData.height, blockData);
         // TODO: this will come as part of the blockData response
         // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
+        const { lastBlockWithTxsTime } = yield* getEndIndexes(blockData);
         const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
         const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
-        const { lastBlockWithTxsTime } = yield* getEndIndexes(blockData);
         const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
         const rawGenerations = yield* pipe(
@@ -496,6 +500,11 @@ export const makeIndexerSyncService = (config: DefaultSyncConfiguration): Indexe
         'to index:',
         endIndex,
       );
+
+      if (endIndex < 0) {
+        return Stream.empty;
+      }
+
       return pipe(
         DustGenerationEvents.run({
           dustAddress: address,
