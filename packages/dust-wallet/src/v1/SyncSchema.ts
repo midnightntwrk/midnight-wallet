@@ -514,6 +514,9 @@ export const WireBlockDataSchema = Schema.Struct({
   hash: Schema.String,
   ledgerParameters: HexedLedgerParameters,
   timestamp: Schema.Number,
+  zswapEndIndex: Schema.Number,
+  dustCommitmentEndIndex: Schema.Number,
+  dustGenerationEndIndex: Schema.Number,
   transactions: Schema.Array(BlockTransactionSchema),
 });
 
@@ -525,6 +528,9 @@ export const BlockDataSchema = Schema.transform(
       hash: Schema.String,
       ledgerParameters: HexedLedgerParameters,
       timestamp: Schema.DateFromSelf,
+      zswapEndIndex: Schema.Number,
+      dustCommitmentEndIndex: Schema.Number,
+      dustGenerationEndIndex: Schema.Number,
       transactions: Schema.Array(BlockTransactionSchema),
     }),
   ),

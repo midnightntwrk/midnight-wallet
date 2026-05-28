@@ -310,8 +310,9 @@ export const makeEventLessSyncService =
         blockCacheRef.value = HashMap.set(blockCacheRef.value, blockData.height, blockData);
         // TODO: this will come as part of the blockData response
         // TODO: use `blockData.timestamp` instead of lastBlockWithTxsTime
-        const { maxCommitmentTreeIndex, maxGeneratingTreeIndex, lastBlockWithTxsTime } =
-          yield* getEndIndexes(blockData);
+        const maxCommitmentTreeIndex = blockData.dustCommitmentEndIndex - 1;
+        const maxGeneratingTreeIndex = blockData.dustGenerationEndIndex - 1;
+        const { lastBlockWithTxsTime } = yield* getEndIndexes(blockData);
         const lastSyncedCommitmentIndex = state.state.commitmentTreeFirstFree;
 
         const rawGenerations = yield* pipe(
@@ -816,6 +817,9 @@ export const makeSimulatorSyncService = (
           height: Number(lastBlock.number),
           ledgerParameters: state.ledger.parameters,
           timestamp: state.currentTime,
+          zswapEndIndex: 1, //lastBlock.zswapEndIndex, // TODO: implement
+          dustCommitmentEndIndex: 1, //lastBlock.dustCommitmentEndIndex,
+          dustGenerationEndIndex: 1, //,
           transactions: [], // TODO: add txs from lastBlock.transactions
         };
       });

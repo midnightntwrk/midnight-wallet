@@ -95,7 +95,16 @@ describe('BlockHash query', () => {
 
   it('should support query function injection', async () => {
     const block = {
-      block: { height: 1_000, hash: 'SOME_HASH', ledgerParameters: '0x0', timestamp: 1, transactions: [] },
+      block: {
+        height: 1_000,
+        hash: 'SOME_HASH',
+        ledgerParameters: '0x0',
+        timestamp: 1,
+        zswapEndIndex: 1,
+        dustCommitmentEndIndex: 1,
+        dustGenerationEndIndex: 1,
+        transactions: [],
+      },
     };
     const blockExpectation = expect.objectContaining({
       block: expect.objectContaining({
