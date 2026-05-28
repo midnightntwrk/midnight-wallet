@@ -462,15 +462,18 @@ export type DustUtxoMap = HashMap.HashMap<
 export const DustUtxoMap = {
   create: (generations: ReadonlyArray<NewDustGeneration>): DustUtxoMap =>
     HashMap.fromIterable(
-      generations.map((u) => [
-        u.dustNullifier,
-        {
-          qdo: u.qdo,
-          transactionId: u.transactionId,
-          transactionHash: u.transactionHash,
-          genInfo: u.genInfo,
-        },
-      ] as const),
+      generations.map(
+        (u) =>
+          [
+            u.dustNullifier,
+            {
+              qdo: u.qdo,
+              transactionId: u.transactionId,
+              transactionHash: u.transactionHash,
+              genInfo: u.genInfo,
+            },
+          ] as const,
+      ),
     ),
 };
 

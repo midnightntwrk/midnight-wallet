@@ -636,9 +636,6 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
       const { dustGenerations, spentNullifiers, newUtxos, collapsedCommitments, lastBlockTime } = update;
-      const sortedNewUtxos = HashMap.fromIterable(
-        [...newUtxos].toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex)),
-      );
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -652,8 +649,8 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         dustGenerations.newGenerations,
         dustGenerations.generationDtimeUpdates,
       );
-      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, sortedNewUtxos);
-      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, sortedNewUtxos, collapsedCommitments);
+      updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
+      updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
       updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentNullifiers)]);
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
@@ -672,7 +669,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
           transactionHash: TransactionHash;
         }>
       >;
-      const receivedUtxos = [...HashMap.values(sortedNewUtxos)].reduce(
+      const receivedUtxos = [...HashMap.values(newUtxos)].reduce(
         (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
         HashMap.empty<
           number,

@@ -170,11 +170,10 @@ export const CoreWallet = {
     };
   },
 
-  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: DustUtxoMap): CoreWallet {
-    const updatedState = [...newDustUtxos].reduce(
-      (state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo),
-      wallet.state,
-    );
+  applyNewDustUtxos(wallet: CoreWallet, newDustUtxos: Readonly<DustUtxoMap>): CoreWallet {
+    const updatedState = [...newDustUtxos]
+      .toSorted((a, b) => Number(a[1].qdo.mtIndex - b[1].qdo.mtIndex))
+      .reduce((state, [dustNullifier, utxoInfo]) => state.addUtxo(dustNullifier, utxoInfo.qdo), wallet.state);
     return {
       ...wallet,
       state: updatedState,
@@ -186,15 +185,15 @@ export const CoreWallet = {
 
   applyDustCommitments(
     wallet: CoreWallet,
-    newDustUtxos: DustUtxoMap,
-    collapsedCommitments: CollapsedMerkleTree[],
+    newDustUtxos: Readonly<DustUtxoMap>,
+    collapsedCommitments: ReadonlyArray<CollapsedMerkleTree>,
   ): CoreWallet {
     let updatedState = wallet.state;
-    const newUtxos = [...HashMap.values(newDustUtxos)];
+    const newUtxos = [...HashMap.values(newDustUtxos)].toSorted((a, b) => Number(a.qdo.mtIndex - b.qdo.mtIndex));
     for (const { startIndex, update } of collapsedCommitments) {
       // apply utxos going before the current index
-      const utxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
-      updatedState = utxos.reduce(
+      const priorUtxos = newUtxos.filter((utxoInfo) => Number(utxoInfo.qdo.mtIndex) < startIndex);
+      updatedState = priorUtxos.reduce(
         (state, utxoInfo) => state.insertCommitment(utxoInfo.qdo.mtIndex, utxoInfo.qdo, true),
         updatedState,
       );
@@ -225,7 +224,7 @@ export const CoreWallet = {
     return { ...wallet, state: updatedState };
   },
 
-  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: Array<DustNullifier>): CoreWallet {
+  applySpentNullifiers(wallet: CoreWallet, spentNullifiers: ReadonlyArray<DustNullifier>): CoreWallet {
     const dustNullifiers = wallet.dustNullifiers.map((r) => ({
       dustNullifier: r.dustNullifier,
       isSpent: spentNullifiers.includes(r.dustNullifier) ? true : r.isSpent,
