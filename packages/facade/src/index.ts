@@ -516,9 +516,13 @@ export class WalletFacade {
       throw error;
     }
 
-    // Step 4 (registration only) — Fail fast if the dust generated so far by the guaranteed UTxOs
-    // is below the registration's own fee. Submitting would fail on-chain with BalanceCheckOverspend.
-    if (isRegistration) {
+    // Step 4 (first-time registration only) — Fail fast if the dust generated so far by the
+    // unregistered guaranteed UTxOs is below the registration's own fee. Submitting would fail
+    // on-chain with BalanceCheckOverspend. Skip for re-registration (all guaranteed UTxOs already
+    // registered) since `feePayment` is 0 by design and the caller is expected to balance the fee
+    // externally via `balanceUnprovenTransaction({ tokenKindsToBalance: ['dust'] })`.
+    const hasUnregisteredGuaranteed = split.guaranteedUtxos.some((u) => !u.utxo.registeredForDustGeneration);
+    if (isRegistration && hasUnregisteredGuaranteed) {
       const fee = await this.dust.calculateFee([txWithDustActions]);
       if (split.feePayment < fee) {
         await this.unshielded.revertTransaction(txWithOffers);
