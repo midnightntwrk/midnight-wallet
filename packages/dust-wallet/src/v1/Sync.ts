@@ -11,7 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 import {
-  type Array as Arr,
+  Array as Arr,
   Effect,
   Either,
   HashMap,
@@ -722,65 +722,66 @@ const createDustUtxoUpdates = (
   knownUtxos: Readonly<DustUtxoMap>,
   generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
 ): Effect.Effect<DustUtxoUpdate[], SyncWalletError> =>
-  Effect.gen(function* () {
-    const utxoUpdates: DustUtxoUpdate[] = [];
-
-    for (const tx of nullifierTransactions) {
-      const dustSpendEvents = tx.dustLedgerEvents.filter(
-        (dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed',
-      );
-
-      for (const dustSpend of dustSpendEvents) {
+  pipe(
+    nullifierTransactions,
+    Arr.flatMap((tx) => {
+      return tx.dustLedgerEvents
+        .filter((dustEvent) => dustEvent.raw.content.tag === 'dustSpendProcessed')
+        .map((dustSpend) => ({ tx, dustSpend }));
+    }),
+    Arr.map(({ tx, dustSpend }) =>
+      Effect.gen(function* () {
         const { nullifier, vFee, commitmentIndex, declaredTime } = dustSpend.raw.content as DustSpendProcessedEvent;
         const knownUtxo = Option.getOrUndefined(HashMap.get(knownUtxos, nullifier));
         const qdo = knownUtxo?.qdo ?? wallet.state.findUtxoByNullifier(nullifier);
         if (!qdo) {
-          return yield* Effect.fail(new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` }));
+          return yield* new SyncWalletError({ message: `Failed to find qdo by nullifier: ${nullifier}` });
         }
-        let genInfo = knownUtxo?.genInfo ?? wallet.state.generationInfo(qdo);
+        const genInfo = knownUtxo?.genInfo ?? wallet.state.generationInfo(qdo);
         if (!genInfo) {
-          return yield* Effect.fail(
-            new SyncWalletError({ message: `Failed to find genInfo for: ${qdo.backingNight}` }),
-          );
+          return yield* new SyncWalletError({ message: `Failed to find generation info for: ${qdo.backingNight}` });
         }
         // apply dtime changes
-        const dtimeUpdate = generationDtimeUpdates.find((up) => up.nightUtxoHash === genInfo!.nonce);
+        const dtimeUpdate = generationDtimeUpdates.find((upd) => upd.nightUtxoHash === genInfo.nonce);
+        const updatedGenInfo = { ...genInfo };
         if (dtimeUpdate) {
-          genInfo = { ...genInfo, dtime: dtimeUpdate.newDtime };
+          updatedGenInfo.dtime = dtimeUpdate.newDtime;
         }
 
-        utxoUpdates.push({
+        const spentUpdate: DustUtxoUpdate = {
           dustNullifier: nullifier,
           qdo,
           isSpent: true,
           transactionId: tx.id,
           transactionHash: tx.hash,
-          genInfo,
-        });
+          genInfo: updatedGenInfo,
+        };
 
         const newUtxo = successorDustUtxo(
           qdo,
           declaredTime,
           vFee,
           commitmentIndex,
-          genInfo,
+          updatedGenInfo,
           secretKey,
           tx.block.ledgerParameters.dust,
         );
 
-        utxoUpdates.push({
+        const newUtxoUpdate: DustUtxoUpdate = {
           dustNullifier: dustNullifier(newUtxo, secretKey),
           qdo: newUtxo,
           isSpent: false,
           transactionId: tx.id,
           transactionHash: tx.hash,
-          genInfo,
-        });
-      }
-    }
+          genInfo: updatedGenInfo,
+        };
 
-    return utxoUpdates;
-  });
+        return [spentUpdate, newUtxoUpdate];
+      }),
+    ),
+    Effect.all,
+    Effect.map(Arr.flatten),
+  );
 
 export const makeSimulatorSyncService = (
   config: SimulatorSyncConfiguration,

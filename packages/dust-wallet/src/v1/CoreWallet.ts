@@ -135,9 +135,9 @@ export const CoreWallet = {
 
   applyDustGenerations(
     wallet: CoreWallet,
-    updates: CollapsedMerkleTree[],
-    newGenerations: NewDustGeneration[],
-    generationDtimeUpdates: DustGenerationDtimUpdate[],
+    updates: ReadonlyArray<CollapsedMerkleTree>,
+    newGenerations: ReadonlyArray<NewDustGeneration>,
+    generationDtimeUpdates: ReadonlyArray<DustGenerationDtimUpdate>,
   ): CoreWallet {
     let updatedState = wallet.state;
 
