@@ -327,10 +327,10 @@ export const makeEventLessSyncService =
         console.log('dust generations received', rawGenerations.length);
         const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-        const newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
+        const unsyncedNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
 
         // track new utxos to calculate the successor utxo when the nullifier is spent
-        const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+        const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
         const initialSpentNullifiers = HashMap.empty<
           DustNullifier,
@@ -344,14 +344,17 @@ export const makeEventLessSyncService =
 
         const [finalUtxos, finalSpentNullifiers] = yield* pipe(
           Stream.unfoldEffect(
-            [newNullifiers, newUtxos, initialSpentNullifiers] as const,
-            ([nullifiers, knownUtxos, spentNullifiers]) => {
-              if (nullifiers.length === 0) {
+            [unsyncedNullifiers, initialNewUtxos, initialSpentNullifiers] as const,
+            ([nullifiersToCheck, knownUtxos, spentNullifiers]) => {
+              if (nullifiersToCheck.length === 0) {
                 return Effect.succeed(Option.none());
               }
               return Effect.gen(function* () {
                 const nullifierTransactions = yield* pipe(
-                  nullifierTransactionsSubscription(nullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
+                  nullifierTransactionsSubscription(
+                    nullifiersToCheck as Arr.NonEmptyArray<DustNullifier>,
+                    blockData.height,
+                  ),
                   Stream.runCollect,
                   Effect.map(Chunk.toArray),
                 );
@@ -386,7 +389,7 @@ export const makeEventLessSyncService =
           Effect.map((results) =>
             pipe(
               Arr.last(results),
-              Option.getOrElse(() => [newUtxos, initialSpentNullifiers] as const),
+              Option.getOrElse(() => [initialNewUtxos, initialSpentNullifiers] as const),
             ),
           ),
         );
