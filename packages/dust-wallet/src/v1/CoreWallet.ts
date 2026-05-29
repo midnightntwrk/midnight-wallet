@@ -53,11 +53,6 @@ export const PublicKey = {
   },
 };
 
-export type SyncedDustNullifier = {
-  dustNullifier: DustNullifier;
-  isSpent: boolean;
-};
-
 export type CoreWallet = Readonly<{
   state: DustLocalState;
   publicKey: PublicKey;
@@ -65,7 +60,6 @@ export type CoreWallet = Readonly<{
   progress: SyncProgress.SyncProgress;
   networkId: NetworkId;
   pendingDust: Array<DustWithNullifier>;
-  dustNullifiers: Array<SyncedDustNullifier>;
 }>;
 
 export const CoreWallet = {
@@ -87,7 +81,6 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: [],
-      dustNullifiers: [],
       progress: SyncProgress.createSyncProgress(),
       protocolVersion: ProtocolVersion.MinSupportedVersion,
     };
@@ -97,7 +90,6 @@ export const CoreWallet = {
     localState: DustLocalState,
     publicKey: PublicKey,
     pendingTokens: Array<DustWithNullifier>,
-    dustNullifiers: Array<SyncedDustNullifier>,
     syncProgress: Omit<SyncProgress.SyncProgressData, 'isConnected'>,
     protocolVersion: bigint,
     networkId: NetworkId,
@@ -107,7 +99,6 @@ export const CoreWallet = {
       publicKey,
       networkId,
       pendingDust: pendingTokens,
-      dustNullifiers,
       progress: SyncProgress.createSyncProgress(syncProgress),
       protocolVersion: ProtocolVersion.ProtocolVersion(protocolVersion),
     };
@@ -177,9 +168,6 @@ export const CoreWallet = {
     return {
       ...wallet,
       state: updatedState,
-      dustNullifiers: wallet.dustNullifiers.concat(
-        [...HashMap.keys(newDustUtxos)].map((dustNullifier) => ({ dustNullifier, isSpent: false })),
-      ),
     };
   },
 
@@ -225,19 +213,10 @@ export const CoreWallet = {
   },
 
   applySpentNullifiers(wallet: CoreWallet, spentNullifiers: ReadonlyArray<DustNullifier>): CoreWallet {
-    const dustNullifiers = wallet.dustNullifiers.map((r) => ({
-      dustNullifier: r.dustNullifier,
-      isSpent: spentNullifiers.includes(r.dustNullifier) ? true : r.isSpent,
-    }));
-    const existingDustNullifiersMap = new Map(dustNullifiers.map((r) => [r.dustNullifier, r]));
-    const newNullifiers = spentNullifiers
-      .filter((n) => !existingDustNullifiersMap.has(n))
-      .map((n) => ({ dustNullifier: n, isSpent: false }));
     const updatedState = spentNullifiers.reduce((state, nullifier) => state.removeUtxo(nullifier), wallet.state);
     return {
       ...wallet,
       state: updatedState,
-      dustNullifiers: dustNullifiers.concat(newNullifiers),
     };
   },
 
