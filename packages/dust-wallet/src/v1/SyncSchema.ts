@@ -479,8 +479,8 @@ export const DustUtxoMap = {
 
 export type DustProjectionsUpdate = {
   dustGenerations: DustGenerationsSyncUpdate;
-  spentNullifiers: DustUtxoMap;
   newUtxos: DustUtxoMap;
+  spentUtxos: DustUtxoMap;
   collapsedCommitments: CollapsedMerkleTree[];
   lastBlockTime: Date;
 };

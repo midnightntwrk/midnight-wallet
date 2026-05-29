@@ -30,15 +30,18 @@ export const BindingMarker = {
   noBinding: 'no-binding',
 } as const;
 
-export const upsertArrayMap = <K, V>(map: HashMap.HashMap<K, V[]>, key: K, val: V): HashMap.HashMap<K, V[]> =>
-  HashMap.set(
-    map,
-    key,
-    Option.match(HashMap.get(map, key), {
-      onNone: () => [val],
-      onSome: (arr) => arr.concat(val),
-    }),
-  );
+export const hashMapGroupBy = <K, V>(arr: ReadonlyArray<V>, keyFn: (v: V) => K): HashMap.HashMap<K, V[]> =>
+  arr.reduce((map, v) => {
+    const key = keyFn(v);
+    return HashMap.set(
+      map,
+      key,
+      Option.match(HashMap.get(map, key), {
+        onNone: () => [v],
+        onSome: (existing) => existing.concat(v),
+      }),
+    );
+  }, HashMap.empty<K, V[]>());
 
 // Little-endian hex, no length prefix
 export const nullifierToHex = (n: bigint): string => {

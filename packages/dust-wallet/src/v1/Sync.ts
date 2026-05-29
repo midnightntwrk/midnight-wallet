@@ -83,8 +83,7 @@ import {
   type DustGenerationDtimUpdate,
   type NewDustGeneration,
 } from './SyncSchema.js';
-import { type DustGenerationInfo } from './types/index.js';
-import { nullifierToHex, uniqueArray, upsertArrayMap } from './Utils.js';
+import { hashMapGroupBy, nullifierToHex, uniqueArray } from './Utils.js';
 
 export interface SyncService<TState, TStartAux, TUpdate> {
   updates: (state: TState, auxData: TStartAux) => Stream.Stream<TUpdate, WalletError, Scope.Scope>;
@@ -338,12 +337,11 @@ export const makeEventLessSyncService =
 
         // track new utxos to calculate the successor utxo when the nullifier is spent
         const initialNewUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
-        const initialSpentNullifiers: DustUtxoMap = HashMap.empty();
 
-        const [finalUtxos, finalSpentNullifiers] = yield* pipe(
+        const [finalUtxos, finalSpentUtxos] = yield* pipe(
           Stream.unfoldEffect(
-            [unsyncedNullifiers, initialNewUtxos, initialSpentNullifiers] as const,
-            ([nullifiersToCheck, newUtxos, spentNullifiers]) => {
+            [unsyncedNullifiers, initialNewUtxos, HashMap.empty() as DustUtxoMap] as const,
+            ([nullifiersToCheck, newUtxos, spentUtxos]) => {
               if (nullifiersToCheck.length === 0) {
                 return Effect.succeed(Option.none());
               }
@@ -363,8 +361,8 @@ export const makeEventLessSyncService =
                   newUtxos,
                   dustGenerationUpdates.generationDtimeUpdates,
                 );
-                const { nextUtxos, nextSpentNullifiers } = dustUtxoUpdates.reduce(
-                  ({ nextUtxos, nextSpentNullifiers }, update) => {
+                const { nextUtxos, nextSpentUtxos } = dustUtxoUpdates.reduce(
+                  ({ nextUtxos, nextSpentUtxos }, update) => {
                     const entry = {
                       qdo: update.qdo,
                       transactionId: update.transactionId,
@@ -374,16 +372,16 @@ export const makeEventLessSyncService =
                     return update.isSpent
                       ? {
                           nextUtxos,
-                          nextSpentNullifiers: HashMap.set(nextSpentNullifiers, update.dustNullifier, entry),
+                          nextSpentUtxos: HashMap.set(nextSpentUtxos, update.dustNullifier, entry),
                         }
-                      : { nextUtxos: HashMap.set(nextUtxos, update.dustNullifier, entry), nextSpentNullifiers };
+                      : { nextUtxos: HashMap.set(nextUtxos, update.dustNullifier, entry), nextSpentUtxos };
                   },
-                  { nextUtxos: newUtxos, nextSpentNullifiers: spentNullifiers },
+                  { nextUtxos: newUtxos, nextSpentUtxos: spentUtxos },
                 );
                 const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
                 return Option.some([
-                  [nextUtxos, nextSpentNullifiers] as const,
-                  [nextNullifiers, nextUtxos, nextSpentNullifiers] as const,
+                  [nextUtxos, nextSpentUtxos] as const,
+                  [nextNullifiers, nextUtxos, nextSpentUtxos] as const,
                 ]);
               });
             },
@@ -393,7 +391,7 @@ export const makeEventLessSyncService =
           Effect.map((results) =>
             pipe(
               Arr.last(results),
-              Option.getOrElse(() => [initialNewUtxos, initialSpentNullifiers] as const),
+              Option.getOrElse(() => [initialNewUtxos, HashMap.empty()] as const),
             ),
           ),
         );
@@ -411,7 +409,7 @@ export const makeEventLessSyncService =
 
         return {
           dustGenerations: dustGenerationUpdates,
-          spentNullifiers: finalSpentNullifiers,
+          spentUtxos: finalSpentUtxos,
           newUtxos: finalUtxos,
           collapsedCommitments,
           // TODO: pass the whole block and verify the roots after applying the txs
@@ -654,7 +652,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
   return {
     applyUpdate(state: CoreWallet, update: DustProjectionsUpdate): [CoreWallet, ChangesResult] {
       console.log(`Applying dust updates for wallet ${state.publicKey.addressHex}`, update);
-      const { dustGenerations, spentNullifiers, newUtxos, collapsedCommitments, lastBlockTime } = update;
+      const { dustGenerations, spentUtxos, newUtxos, collapsedCommitments, lastBlockTime } = update;
 
       const dustGenTreeUpdates = dustGenerations.rawUpdates
         .filter((u) => u.__typename === 'DustGenerationsItem' || u.__typename === 'DustGenerationsProgress')
@@ -670,7 +668,7 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
       );
       updatedWallet = CoreWallet.applyNewDustUtxos(updatedWallet, newUtxos);
       updatedWallet = CoreWallet.applyDustCommitments(updatedWallet, newUtxos, collapsedCommitments);
-      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentNullifiers)]);
+      updatedWallet = CoreWallet.applySpentNullifiers(updatedWallet, [...HashMap.keys(spentUtxos)]);
 
       if (dustGenerations.lastUpdateIndex !== undefined) {
         updatedWallet = CoreWallet.updateProgress(updatedWallet, {
@@ -680,36 +678,17 @@ export const makeEventLessSyncCapability = (): SyncCapability<CoreWallet, DustPr
         });
       }
 
-      type TransactionUtxos = HashMap.HashMap<
-        number, // TransactionId
-        Array<{
-          qdo: QualifiedDustOutput;
-          transactionId: number;
-          transactionHash: TransactionHash;
-        }>
-      >;
+      const groupedNewUtxos = hashMapGroupBy([...HashMap.values(newUtxos)], (u) => u.transactionId);
+      const groupedSpentUtxos = hashMapGroupBy([...HashMap.values(spentUtxos)], (u) => u.transactionId);
 
-      const receivedUtxos = [...HashMap.values(newUtxos)].reduce(
-        (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
-        HashMap.empty() as TransactionUtxos,
-      );
-
-      const spentUtxos = [...HashMap.values(spentNullifiers)].reduce(
-        (map, utxoInfo) => upsertArrayMap(map, utxoInfo.transactionId, utxoInfo),
-        HashMap.empty() as TransactionUtxos,
-      );
-
-      const transactionIds = uniqueArray([...HashMap.keys(receivedUtxos), ...HashMap.keys(spentUtxos)]).toSorted();
+      const transactionIds = uniqueArray([
+        ...HashMap.keys(groupedNewUtxos),
+        ...HashMap.keys(groupedSpentUtxos),
+      ]).toSorted();
 
       const changes: DustStateChanges[] = transactionIds.map((txId) => {
-        const received = Option.getOrElse(
-          HashMap.get(receivedUtxos, txId),
-          () => [] as Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>,
-        );
-        const spent = Option.getOrElse(
-          HashMap.get(spentUtxos, txId),
-          () => [] as Array<{ qdo: QualifiedDustOutput; transactionId: number; transactionHash: TransactionHash }>,
-        );
+        const received = Option.getOrElse(HashMap.get(groupedNewUtxos, txId), () => []);
+        const spent = Option.getOrElse(HashMap.get(groupedSpentUtxos, txId), () => []);
         const txHash = received.at(0)?.transactionHash || spent.at(0)?.transactionHash;
         console.log(
           `Processing transaction ${txHash} with ${received.length} received and ${spent.length} spent UTXOs`,
