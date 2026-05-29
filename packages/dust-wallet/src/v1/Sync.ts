@@ -327,12 +327,12 @@ export const makeEventLessSyncService =
         console.log('dust generations received', rawGenerations.length);
         const dustGenerationUpdates = DustGenerationsSyncUpdate.create(rawGenerations, secretKey, state.publicKey);
 
-        let newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
+        const newNullifiers = getUnsyncedNullifiers(dustGenerationUpdates.newGenerations, state);
 
         // track new utxos to calculate the successor utxo when the nullifier is spent
-        let newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
+        const newUtxos = DustUtxoMap.create(dustGenerationUpdates.newGenerations);
 
-        let spentNullifiers = HashMap.empty<
+        const initialSpentNullifiers = HashMap.empty<
           DustNullifier,
           {
             qdo: QualifiedDustOutput;
@@ -342,57 +342,70 @@ export const makeEventLessSyncService =
           }
         >();
 
-        while (newNullifiers.length > 0) {
-          const nullifierTransactions = yield* pipe(
-            nullifierTransactionsSubscription(newNullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
-            Stream.runCollect,
-            Effect.map(Chunk.toArray),
-          );
-
-          const dustUtxoUpdates = yield* createDustUtxoUpdates(
-            state,
-            nullifierTransactions,
-            secretKey,
-            newUtxos,
-            dustGenerationUpdates.generationDtimeUpdates,
-          );
-
-          for (const update of dustUtxoUpdates) {
-            if (update.isSpent) {
-              spentNullifiers = HashMap.set(spentNullifiers, update.dustNullifier, {
-                qdo: update.qdo,
-                transactionId: update.transactionId,
-                transactionHash: update.transactionHash,
-                genInfo: update.genInfo,
+        const [finalUtxos, finalSpentNullifiers] = yield* pipe(
+          Stream.unfoldEffect(
+            [newNullifiers, newUtxos, initialSpentNullifiers] as const,
+            ([nullifiers, knownUtxos, spentNullifiers]) => {
+              if (nullifiers.length === 0) {
+                return Effect.succeed(Option.none());
+              }
+              return Effect.gen(function* () {
+                const nullifierTransactions = yield* pipe(
+                  nullifierTransactionsSubscription(nullifiers as Arr.NonEmptyArray<DustNullifier>, blockData.height),
+                  Stream.runCollect,
+                  Effect.map(Chunk.toArray),
+                );
+                const dustUtxoUpdates = yield* createDustUtxoUpdates(
+                  state,
+                  nullifierTransactions,
+                  secretKey,
+                  knownUtxos,
+                  dustGenerationUpdates.generationDtimeUpdates,
+                );
+                const { nextUtxos, nextSpent } = dustUtxoUpdates.reduce(
+                  ({ nextUtxos, nextSpent }, update) => {
+                    const entry = {
+                      qdo: update.qdo,
+                      transactionId: update.transactionId,
+                      transactionHash: update.transactionHash,
+                      genInfo: update.genInfo,
+                    };
+                    return update.isSpent
+                      ? { nextUtxos, nextSpent: HashMap.set(nextSpent, update.dustNullifier, entry) }
+                      : { nextUtxos: HashMap.set(nextUtxos, update.dustNullifier, entry), nextSpent };
+                  },
+                  { nextUtxos: knownUtxos, nextSpent: spentNullifiers },
+                );
+                const nextNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
+                return Option.some([[nextUtxos, nextSpent] as const, [nextNullifiers, nextUtxos, nextSpent] as const]);
               });
-              continue;
-            }
-            newUtxos = HashMap.set(newUtxos, update.dustNullifier, {
-              qdo: update.qdo,
-              transactionId: update.transactionId,
-              transactionHash: update.transactionHash,
-              genInfo: update.genInfo,
-            });
-          }
-
-          newNullifiers = dustUtxoUpdates.filter((u) => !u.isSpent).map((u) => u.dustNullifier);
-        }
+            },
+          ),
+          Stream.runCollect,
+          Effect.map(Chunk.toArray),
+          Effect.map((results) =>
+            pipe(
+              Arr.last(results),
+              Option.getOrElse(() => [newUtxos, initialSpentNullifiers] as const),
+            ),
+          ),
+        );
 
         // sanity check
-        if ([...newUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
+        if ([...finalUtxos].some((u) => u[1].qdo.mtIndex < lastSyncedCommitmentIndex)) {
           return yield* Effect.fail(new OtherWalletError({ message: 'Spotted stale utxo' }));
         }
 
         const collapsedCommitments = yield* loadCollapsedCommitments(
           Number(lastSyncedCommitmentIndex),
           maxCommitmentTreeIndex,
-          newUtxos,
+          finalUtxos,
         );
 
         return {
           dustGenerations: dustGenerationUpdates,
-          spentNullifiers,
-          newUtxos,
+          spentNullifiers: finalSpentNullifiers,
+          newUtxos: finalUtxos,
           collapsedCommitments,
           // TODO: pass the whole block and verify the roots after applying the txs
           lastBlockTime: lastBlockWithTxsTime,
