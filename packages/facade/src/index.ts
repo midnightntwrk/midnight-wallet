@@ -41,6 +41,7 @@ import {
 import type { DefaultUnshieldedConfiguration, UnshieldedWalletAPI } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { type UnshieldedWalletState, UnshieldedSectionSchema } from '@midnight-ntwrk/wallet-sdk-unshielded-wallet';
 import { DustSectionSchema, mergeDustSections } from '@midnight-ntwrk/wallet-sdk-dust-wallet';
+import { ClockOps } from '@midnight-ntwrk/wallet-sdk-utilities';
 import { FetchTermsAndConditions as FetchTermsAndConditionsQuery } from '@midnight-ntwrk/wallet-sdk-indexer-client';
 import { QueryRunner } from '@midnight-ntwrk/wallet-sdk-indexer-client/effect';
 import { Array as Arr, pipe, Schema } from 'effect';
@@ -221,13 +222,14 @@ const DEFAULT_TTL_MS = 60 * 60 * 1000; // 1 hour
 /**
  * A clock abstraction for obtaining the current time. By default, the facade uses the system clock. For testing with a
  * simulator, inject a custom clock (e.g., one backed by the simulator's time).
+ *
+ * Re-exported from `@midnight-ntwrk/wallet-sdk-utilities` so it can be shared with lower-level packages (e.g.
+ * dust-wallet) without a circular dependency.
  */
-export type Clock = {
-  readonly now: () => Date;
-};
+export type Clock = ClockOps.Clock;
 
 /** Default clock using real system time. */
-export const systemClock: Clock = { now: () => new Date() };
+export const systemClock: Clock = ClockOps.systemClock;
 
 /**
  * The Terms and Conditions returned by the indexer, containing a URL for display and a SHA-256 hash for content
@@ -1073,7 +1075,7 @@ export class WalletFacade {
         registeredForDustGeneration: meta.registeredForDustGeneration,
       })),
       requiredAmount,
-      () => this.clock.now(),
+      this.clock,
       opts,
     );
   }

@@ -10,15 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * as ArrayOps from './ArrayOps.js';
-export * as BlobOps from './BlobOps.js';
-export * as ClockOps from './ClockOps.js';
-export * as DateOps from './DateOps.js';
-export * as EitherOps from './EitherOps.js';
-export * as Fluent from './Fluent.js';
-export * as HList from './hlist.js';
-export * as LedgerOps from './LedgerOps.js';
-export * as ObservableOps from './ObservableOps.js';
-export * as Poly from './polyFunction.js';
-export * as RecordOps from './RecordOps.js';
-export * as SafeBigInt from './SafeBigInt.js';
+
+/**
+ * A clock abstraction for obtaining the current time. By default the system clock is used; inject a custom clock (e.g.
+ * one backed by a simulator's time) for testing time-dependent behaviour.
+ */
+export type Clock = {
+  readonly now: () => Date;
+};
+
+/** Default {@link Clock} backed by real system time. */
+export const systemClock: Clock = { now: () => new Date() };
