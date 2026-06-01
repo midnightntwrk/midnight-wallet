@@ -10,15 +10,14 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-export * from './CoreWallet.js';
-export * from '../DustWallet.js';
-export * as Keys from './Keys.js';
-export * as Simulator from '@midnight-ntwrk/wallet-sdk-capabilities/simulation';
-export * as SyncService from './Sync.js';
-export * as Transacting from './Transacting.js';
-export * from './RunningV1Variant.js';
-export * from './V1Builder.js';
-export * from './types/index.js';
-export * as CoinsAndBalances from './CoinsAndBalances.js';
-export * as TransactionHistory from './TransactionHistory.js';
-export * as WalletError from './WalletError.js';
+
+/**
+ * A clock abstraction for obtaining the current time. By default the system clock is used; inject a custom clock (e.g.
+ * one backed by a simulator's time) for testing time-dependent behaviour.
+ */
+export type Clock = {
+  readonly now: () => Date;
+};
+
+/** Default {@link Clock} backed by real system time. */
+export const systemClock: Clock = { now: () => new Date() };

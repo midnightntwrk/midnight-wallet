@@ -107,7 +107,6 @@ describe('Dust tests', () => {
     logger.info(inspect(receiverState2.unshielded.availableCoins, { depth: null }));
     logger.info(`Wallet 2: ${finalUnshieldedBalance} unshielded tokens`);
 
-    await utils.waitForBlockAdvancement(fixture.getIndexerUri());
     const nightUtxos = receiverState2.unshielded.availableCoins.filter(
       (coin) => coin.meta.registeredForDustGeneration === false,
     );
@@ -118,6 +117,14 @@ describe('Dust tests', () => {
 
     expect(ArrayOps.sumBigInt(nightUtxos.map((coin) => coin.utxo.value))).toEqual(finalUnshieldedBalance);
     logger.info(`utxo length: ${nightUtxos.length}`);
+
+    // Wait until the Night UTxOs have generated enough Dust to cover the registration's own fee.
+    // Without this, registerNightUtxosForDustGeneration would fail with "Insufficient generated
+    // dust to cover registration fee" (or, before the SDK guard, the chain would reject the tx
+    // with BalanceCheckOverspend).
+    const { fee: estimatedRegistrationFee } = await receiver.wallet.estimateRegistration(nightUtxos);
+    logger.info(`Estimated registration fee: ${estimatedRegistrationFee} stroke; waiting for generation to cover it`);
+    await receiver.wallet.waitForGeneratedDust(nightUtxos, estimatedRegistrationFee);
 
     const dustRegistrationRecipe = await receiver.wallet.registerNightUtxosForDustGeneration(
       nightUtxos,
